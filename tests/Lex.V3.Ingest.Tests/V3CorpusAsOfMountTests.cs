@@ -265,7 +265,9 @@ public sealed class V3CorpusAsOfMountTests
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
 
-        foreach (var identifier in new[] { "/lu-legilux/no-such-work", fixture.Permalink, "eli/unknown" })
+        // A state's hash-pinned permalink is no longer among them: as_of answers the state it pins (R64,
+        // V3CorpusPinnedPermalinkMountTests); a permalink at a coordinate holding no state is still unknown.
+        foreach (var identifier in new[] { "/lu-legilux/no-such-work", "eli/unknown" })
         {
             var envelope = await AsOfAsync(mount, identifier, fixture.ApplicabilityDate);
             Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict, identifier);
@@ -277,6 +279,13 @@ public sealed class V3CorpusAsOfMountTests
                 envelope.Refusal.HelpfulPayload.GetProperty("what_would_answer_detail").GetString(),
                 "Luxembourg work identifier");
         }
+
+        var elsewhere = $"/lu-legilux/{fixture.WorkKey}/1999-01-01--{fixture.StateSha256}/fra";
+        var nowhere = await AsOfAsync(mount, elsewhere, "1999-01-01");
+        Assert.AreEqual("identifier_unknown", nowhere.Refusal!.Code);
+        Assert.AreEqual(PublisherId.LuLegilux, nowhere.Context.Publisher);
+        var pinned = await AsOfAsync(mount, fixture.Permalink, fixture.ApplicabilityDate);
+        Assert.AreEqual(V3Verdicts.Answer, pinned.Verdict, pinned.Refusal?.Code);
     }
 
     [TestMethod]
@@ -319,7 +328,8 @@ public sealed class V3CorpusAsOfMountTests
                          "eli/etat/leg/loi/2004/07/30/n1/jo",
                      })
             {
-                var onEuropeOnly = await AsOfAsync(europeMount, luxembourgIdentifier, "2024-01-01");
+                // A permalink is asked at its own date, which it names (R64).
+                var onEuropeOnly = await AsOfAsync(europeMount, luxembourgIdentifier, luxembourgIdentifier == luxembourg.Permalink ? luxembourg.ApplicabilityDate : "2024-01-01");
                 Assert.AreEqual(V3Verdicts.Refuse, onEuropeOnly.Verdict, luxembourgIdentifier);
                 Assert.AreEqual("no_corpus_mounted", onEuropeOnly.Refusal!.Code, luxembourgIdentifier);
                 Assert.AreEqual("lu", onEuropeOnly.Refusal.HelpfulPayload.GetProperty("required_corpus").GetString());

@@ -288,9 +288,10 @@ export const REQUIRED_PAYLOAD = Object.freeze({
       'stable_coordinate',
       'current_hash_pinned_url',
     ]),
-    // The registry mandates the four above; the mount sends a fifth. Optional, because the mandate
-    // is the floor and this producer happens to stand above it.
-    optional: Object.freeze(['rule_profile_sha256s']),
+    // The registry mandates the four above; the mount sends a fifth: a Luxembourg state's rule profiles, or the rule an EU
+    // wording's digest is computed by (`digest_rule`; an EU permalink's page shows this card, R64). Optional, because the
+    // mandate is the floor and this producer happens to stand above it.
+    optional: Object.freeze(['rule_profile_sha256s', 'digest_rule']),
     basis:
       'lex-v3-operation-registry/1: pinned_digest_mismatch carries requested_digest, ' +
       'current_digest, stable_coordinate, current_hash_pinned_url',

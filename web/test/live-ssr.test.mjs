@@ -33,6 +33,10 @@ const envelopeOf = (operation, scenarioStart) => census.envelopes.find((entry) =
 const READING = envelopeOf("evidence_bundle", "the work on its state's date");
 const COVERAGE = census.envelopes.find((entry) => entry.operation === "coverage" && entry.envelope.result !== null).envelope;
 const STATE = READING.result.value.states[0];
+// The reading the page at the state's permalink is rendered from (R64: asked by the permalink itself), and the refusal a
+// permalink whose digest is not the one held at its date gets, with the current link.
+const PINNED = envelopeOf("evidence_bundle", "a state's permalink at its own date");
+const MISMATCH = envelopeOf("evidence_bundle", "a state's permalink whose digest is not the one held at its date");
 
 /** The root's inner markup in a whole page: what the browser hydrates. */
 function rootOf(html, id) {
@@ -83,14 +87,33 @@ test("a reading's page names as canonical an address the platform mints, never t
       `${path}: each language once, and x-default`,
     );
     // The page as a browser loads it names the same once its answer is read (`LiveReading.jsx`), and before that, as built,
-    // the state's permalink with no article (`client.jsx`), an address the platform mints as well.
+    // the state's permalink (or the act's readable address) with no article (`client.jsx`), an address the platform mints.
+    const named = parseSitePath(path);
+    const before = named.kind === "state" ? named.permalink : named.act;
     assert.equal(readingAddressShown(view, lawPathOf(path)), law, `${path}: once loaded`);
-    assert.equal(addressBeforeAnswer(path), parseSitePath(path).permalink, `${path}: as built`);
+    assert.equal(addressBeforeAnswer(path), before, `${path}: as built`);
     assert.equal(parseSitePath(addressBeforeAnswer(path)).anchor, null, `${path}: as built, no article`);
-    // A refusal shows no state: its page names the state's permalink the address pins, with no article.
+    // A refusal shows no state: its page names the state's permalink the address pins (or the act's readable address),
+    // with no article.
     const refusal = renderLiveReadingPage({ initial: { envelope: refused, path } });
-    assert.ok(refusal.includes(`<link rel="canonical" href="${origin}${parseSitePath(path).permalink}"/>`), `${path}: a refusal's page`);
+    assert.ok(refusal.includes(`<link rel="canonical" href="${origin}${before}"/>`), `${path}: a refusal's page`);
   }
+  assert.ok(rows.some((row) => parseSitePath(row.path).kind === "current"), "the table names a readable address's canonical too");
+
+  // A permalink refused because its digest is not the version held at its date names the current version's permalink the
+  // refusal gives (R64: "with the current link"), never the digest it was opened at.
+  const current = MISMATCH.refusal.helpful_payload.current_hash_pinned_url;
+  const stalePath = `/en${current.replace(/--[0-9a-f]{64}\//, `--${"0".repeat(64)}/`)}/art_15`;
+  const staleHtml = renderLiveReadingPage({ initial: { envelope: MISMATCH, path: stalePath } });
+  assert.ok(staleHtml.includes(`<link rel="canonical" href="${origin}${current}"/>`), "a mismatch's page names the current version");
+  assert.ok(!staleHtml.slice(0, staleHtml.indexOf("</head>")).includes("0".repeat(64)), "and never the digest it was opened at");
+  assert.equal(readingAddressShown(null, lawPathOf(stalePath), { code: "pinned_digest_mismatch", payload: MISMATCH.refusal.helpful_payload }), current);
+  assert.equal(readingAddressShown(null, lawPathOf(stalePath), { code: "text_withheld", payload: {} }), parseSitePath(stalePath).permalink, "another refusal: the pinned state's");
+  assert.equal(
+    readingAddressShown(null, lawPathOf(stalePath), { code: "pinned_digest_mismatch", payload: { current_hash_pinned_url: "/en/lu-legilux/x/2024-01-01--" + "a".repeat(64) + "/fra" } }),
+    parseSitePath(stalePath).permalink,
+    "a current link under an interface language is no address the platform mints: the pinned state's",
+  );
 
   // An article the state holds without text is minted as a segment too, and so is an EU wording's provision; an article
   // neither holds is the state's (or wording's) permalink.
@@ -112,7 +135,7 @@ test("each law's address under a language is rendered from what the page itself 
   const served = TABLE.paths.filter(({ render }) => render !== null);
   assert.ok(served.length >= 12, "the table the API is held to as well");
   for (const { path, render } of TABLE.paths) {
-    const page = sitePageFor(path);
+    const page = sitePageFor(path, { today: TABLE.today });
     assert.deepEqual(page === null ? null : { ...page, parameters: { ...page.parameters } }, render, path);
   }
 });
@@ -129,15 +152,54 @@ test("the answer a page carries is JSON that cannot end its block, read back as 
 });
 
 test("a permalink's reading is rendered complete, and the browser renders the same tree from the answer the page carries", () => {
-  const initial = { envelope: READING, path: `/en${STATE.permalink}/${STATE.articles[14].publisher_id}` };
+  const cited = STATE.articles[14];
+  const initial = { envelope: PINNED, path: `/en${STATE.permalink}/${cited.publisher_id}` };
   const html = renderLiveReadingPage({ initial });
   assert.match(html, /<section data-answer-state="success">/, "the reading, without any script");
-  assert.equal((html.match(/<blockquote/g) ?? []).length, STATE.articles.length, "every article quoted in the page itself");
+  assert.equal((html.match(/<blockquote/g) ?? []).length, STATE.articles.length + 1, "every article quoted in the page itself, the cited one first");
+  // R64: the cited article first, under its own title, with a link to the whole act at that version; the page's own title.
+  const lead = html.indexOf("data-pinned-lead");
+  assert.ok(lead > 0 && lead < html.indexOf('<section data-answer-state="success">'), "the cited article comes before the reading");
+  assert.ok(html.includes(`<section class="cited-article" data-cited-article="${cited.publisher_id}"><h2>${cited.publisher_id}</h2>`), "under its own title");
+  assert.ok(html.indexOf(cited.text.slice(0, 40)) < html.indexOf('<section data-answer-state="success">'), "its text first");
+  assert.ok(html.includes(`<p data-whole-act=""><a href="/en${STATE.permalink}">The whole act at this version</a></p>`), "and the whole act at that version");
+  assert.ok(html.includes(`<title>loi-1991-08-10-n3, ${cited.publisher_id} - Lex</title>`), "the page's own title is the article's");
+  assert.ok(!html.includes("data-changed-since"), "the one state held has no newer version");
   assert.ok(html.includes(`value="${STATE.applicability_date}"`), "the form names the date the address names");
+  assert.ok(html.includes(`value="/lu-legilux/loi-1991-08-10-n3"`), "and the work, which a reader asks another date of");
   assert.ok(!html.includes("data-pin-replaced"), "the state served is the one the permalink pins");
   assert.equal(rootOf(html, LIVE_READING_ROOT), renderToString(liveReadingTree(initial)), "hydration changes nothing");
   const block = html.slice(html.indexOf(`id="${INITIAL_ANSWER_ID}">`) + `id="${INITIAL_ANSWER_ID}">`.length, html.indexOf("</script>", html.indexOf(INITIAL_ANSWER_ID)));
-  assert.deepEqual(JSON.parse(block), READING, "the page carries the answer it was rendered from");
+  assert.deepEqual(JSON.parse(block), PINNED, "the page carries the answer it was rendered from");
+
+  // A version that is not the latest held says so (R64), in the publisher's words (R21), with the act at today's date.
+  const older = structuredClone(PINNED);
+  older.result.value.states[0].next_applicability_date = "2025-03-07";
+  const olderHtml = renderLiveReadingPage({ initial: { envelope: older, path: initial.path } });
+  const banner = olderHtml.slice(olderHtml.indexOf("<p data-changed-since"), olderHtml.indexOf("</p>", olderHtml.indexOf("<p data-changed-since")));
+  assert.ok(olderHtml.indexOf("<p data-changed-since") < olderHtml.indexOf("data-cited-article"), "the banner, first");
+  assert.ok(banner.includes("A newer version is applicable from 2025-03-07 (publisher)."), banner);
+  assert.ok(banner.includes(`<a href="/en/lu-legilux/loi-1991-08-10-n3/fra/${cited.publisher_id}">Read this act at today&#x27;s date</a>`), "the act at today's date, at its readable address");
+  assert.equal(rootOf(olderHtml, LIVE_READING_ROOT), renderToString(liveReadingTree({ envelope: older, path: initial.path })));
+
+  // A permalink whose digest is not the version held at its date: the refusal, with the notice and the current link first.
+  const refusedPath = `/en${STATE.permalink.replace(/--[0-9a-f]{64}\//, `--${"0".repeat(64)}/`)}/${cited.publisher_id}`;
+  const refusedHtml = renderLiveReadingPage({ initial: { envelope: MISMATCH, path: refusedPath } });
+  assert.match(refusedHtml, /<section data-answer-state="refusal">/);
+  assert.ok(refusedHtml.includes('data-pin-not-held=""'), "the notice");
+  assert.ok(refusedHtml.includes(`<a href="/en${MISMATCH.refusal.helpful_payload.current_hash_pinned_url}"><code>${MISMATCH.refusal.helpful_payload.current_hash_pinned_url}</code></a>`), "the current link");
+  assert.ok(refusedHtml.includes("pinned_digest_mismatch"), "the refusal card, with its payload");
+  assert.equal(rootOf(refusedHtml, LIVE_READING_ROOT), renderToString(liveReadingTree({ envelope: MISMATCH, path: refusedPath })));
+
+  // An act's readable address (R67): the reading at today's date (the answer's own), the cited article first, and its
+  // readable address as canonical.
+  const readable = { envelope: READING, path: `/en/lu-legilux/loi-1991-08-10-n3/fra/${cited.publisher_id}` };
+  const readableHtml = renderLiveReadingPage({ initial: readable });
+  assert.ok(readableHtml.includes(`data-cited-article="${cited.publisher_id}"`), "the cited article first at a readable address too");
+  assert.ok(readableHtml.includes(`<p data-whole-act=""><a href="/en/lu-legilux/loi-1991-08-10-n3/fra">`), "the whole act at its readable address");
+  assert.ok(readableHtml.includes(`<link rel="canonical" href="https://law.soufien.lu/lu-legilux/loi-1991-08-10-n3/fra/${cited.publisher_id}"/>`));
+  assert.ok(readableHtml.includes(`value="${STATE.applicability_date}"`), "the form names the date the answer was asked for");
+  assert.equal(rootOf(readableHtml, LIVE_READING_ROOT), renderToString(liveReadingTree(readable)), "hydration changes nothing");
 
   const stale = { envelope: READING, path: `/en${STATE.permalink.replace(/--[0-9a-f]{64}\//, `--${"0".repeat(64)}/`)}` };
   const staleHtml = renderLiveReadingPage({ initial: stale });
@@ -258,7 +320,7 @@ test("the live server renders a law's address from the API's answer, refuses to 
       const value = JSON.parse(envelope);
       return '<!doctype html><p>' + kind + ' ' + (value.refusal ? value.refusal.code : 'answer') + ' ' + path + '</p>';
     } };`);
-    const live = createLiveServer({ root, apiOrigin: `http://127.0.0.1:${api.address().port}` });
+    const live = createLiveServer({ root, apiOrigin: `http://127.0.0.1:${api.address().port}`, now: () => "2026-10-15T23:30:00Z" });
     const origin = await new Promise((resolve) => live.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${live.address().port}`)));
     try {
       const permalink = `/en/lu-legilux/loi-1991-08-10-n3/2024-02-01--${"a".repeat(64)}/fra/art_15`;
@@ -266,7 +328,17 @@ test("the live server renders a law's address from the API's answer, refuses to 
       const page = await fetch(`${origin}${permalink}`);
       assert.equal(page.status, 200);
       assert.equal(await page.text(), `<!doctype html><p>reading answer ${permalink}</p>`, "rendered from the API's answer");
-      assert.deepEqual(JSON.parse(asked.at(-1).body), { operation_id: "evidence_bundle", parameters: { identifier: "/lu-legilux/loi-1991-08-10-n3", date: "2024-02-01", language: "fra" } }, "asked as the page itself would ask, in the text's language the permalink names");
+      assert.deepEqual(
+        JSON.parse(asked.at(-1).body),
+        { operation_id: "evidence_bundle", parameters: { identifier: `/lu-legilux/loi-1991-08-10-n3/2024-02-01--${"a".repeat(64)}/fra`, date: "2024-02-01", language: "fra" } },
+        "asked as the page itself would ask: by the permalink, its date and the text's language it names (R64)",
+      );
+
+      // An act's readable address (R67): asked at today's date in Luxembourg by the server's clock (R13): 23:30 UTC on
+      // 2026-10-15 is 2026-10-16 in Luxembourg, in summer time.
+      const readable = "/en/lu-legilux/loi-1991-08-10-n3/fra/art_15";
+      assert.equal((await fetch(`${origin}${readable}`)).status, 200);
+      assert.deepEqual(JSON.parse(asked.at(-1).body), { operation_id: "evidence_bundle", parameters: { identifier: "/lu-legilux/loi-1991-08-10-n3", date: "2026-10-16", language: "fra" } });
 
       // R64: the EU shape before it has moved for good, its interface language and query kept; the Luxembourg shape before it
       // names no language, so it is answered as any address the server does not hold.

@@ -63,6 +63,17 @@
 // applicable from the date or an earlier one, an act held only as published searched as published) and that only
 // Luxembourg acts were searched, and `search.noHitLuxembourg`, `search.luxembourgOnly` and `search.searchPage` say the
 // home page's box searches Luxembourg law and lead to the search page for an EU act.
+// The reading's lead at a law's address (the plan's item 3.2b; R64, R67): a stale permalink's notice with the current link
+// (`reading.pinNotHeld`, `reading.europePinNotHeld`), the cited article's title, its source and its whole act
+// (`reading.citedTitle`, `reading.citedFrom`, `reading.citedWithoutText`, `reading.wholeAct`, `reading.europeWholeAct`),
+// the changed-since banner and its link (`reading.newerVersion`, `reading.europeNewerWording`, `reading.openToday`), and
+// the two refusal sentences for `pinned_digest_mismatch` in `REFUSALS_FR.sentences`, were reviewed by the same reviewer
+// under the same delegation in the addendum of 2026-10-16 (11 forms, 1 changed in review: a quotation is "cité d’après" its
+// version, never "extrait de", the table's word for Lex's own extraction; `reading.citedWithoutText` is the review's own
+// rendering, given for the article held without text, which the review found the page said "quoted from"). What the EU
+// banner says of a next wording whose text this site does not hold in the page's language (`reading.europeLaterWordingNotHeld`;
+// the review of #972's finding F1) was reviewed by the same reviewer under the same delegation in the addendum of 2026-10-17
+// (1 form, changed in review: "pour cet acte" before the wording, so its date and its text cannot be read as the act's).
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -145,6 +156,17 @@ export const LIVE_CHROME_FR = Object.freeze({
   reading: Object.freeze({
     pinReplaced: 'Ce lien épingle {pinned}, qui n’est pas la version que ce site communique pour cette date ; la version qu’il communique est affichée ci-dessous.',
     europePinReplaced: 'Ce lien épingle {pinned}, qui n’est pas le libellé qui sert de réponse pour cette date sur ce site ; celui qui sert de réponse est affiché ci-dessous.',
+    pinNotHeld: 'Ce lien épingle {pinned}, qui n’est pas la version que ce site détient pour cette date ; la version qu’il détient est {current}.',
+    europePinNotHeld: 'Ce lien épingle {pinned}, qui n’est pas un libellé que ce site détient pour cette date ; le libellé qui sert de réponse pour cette date sur ce site est {current}.',
+    citedTitle: '{work}, {article}',
+    citedFrom: 'Cité d’après {source}.',
+    citedWithoutText: 'Détenu sans texte dans {source}.',
+    wholeAct: 'L’acte entier dans cette version',
+    europeWholeAct: 'L’acte entier dans ce libellé',
+    newerVersion: 'Une version plus récente est applicable à partir du {date} (éditeur).',
+    europeNewerWording: 'Un libellé ultérieur de cet acte est détenu : le libellé du {date}.',
+    europeLaterWordingNotHeld: 'Les données de l’éditeur nomment, pour cet acte, un libellé ultérieur du {date}, dont ce site ne détient pas le texte dans cette langue.',
+    openToday: 'Lire cet acte à la date du jour',
     title: 'Lecture',
     eyebrow: 'Lecture',
     heading: 'Le texte à une date',
@@ -654,6 +676,10 @@ export const REFUSALS_FR = Object.freeze({
       'Le texte de ce libellé n’est pas communiqué : ses droits ne le permettaient pas.',
     'This index knows this wording of the EU act but holds no text for it.':
       'Cet index connaît ce libellé de l’acte de l’UE, mais n’en contient aucun texte.',
+    'The version this permalink pins is not the one this index holds for its date.':
+      'La version que ce permalien épingle n’est pas celle que cet index contient pour sa date.',
+    'The wording this permalink pins is not one this index holds for its date.':
+      'Le libellé que ce permalien épingle n’est pas un libellé que cet index contient pour sa date.',
   }),
   templates: Object.freeze({
     coverage: Object.freeze({

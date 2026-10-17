@@ -47,6 +47,8 @@ export const LIVE_READING_REFUSAL_SENTENCES = Object.freeze({
   text_withheld: "This state's text is withheld: its rights did not admit it.",
   text_not_available: "This index holds this state but no text for it.",
   retrieval_mode_unavailable: "This index cannot read this work's text.",
+  // A permalink whose digest is not the state this index holds at its date (R64); the page says the current link above.
+  pinned_digest_mismatch: "The version this permalink pins is not the one this index holds for its date.",
 });
 
 /**
@@ -62,6 +64,7 @@ export const LIVE_READING_EUROPE_REFUSAL_SENTENCES = Object.freeze({
   text_withheld: "This wording's text is withheld: its rights did not admit it.",
   text_not_available: "This index knows this wording of the EU act but holds no text for it.",
   retrieval_mode_unavailable: "This index cannot read this work's text.",
+  pinned_digest_mismatch: "The wording this permalink pins is not one this index holds for its date.",
 });
 
 /** The refusal sentences for a refusal's publisher, as its envelope context names it. */

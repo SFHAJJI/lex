@@ -175,12 +175,14 @@ export const REFUSAL_EXAMPLES = Object.freeze({
     sentence: 'The rights recorded for this text do not admit serving it.',
     // What `evidence_bundle` sends when a source's two rights channels did not agree CC BY in the
     // same run: the registry's three (official identity, official link, the retained body digest),
-    // the recorded rights disposition and outcome, the rule that decided, and the coordinate. The
-    // `licence` this example carried was nobody's field.
+    // the state's own digest beside it (R64: a withheld text answers with the hashes), the recorded
+    // rights disposition and outcome, the rule that decided, and the coordinate. The `licence` this
+    // example carried was nobody's field.
     payload: {
       official_identity: 'https://preview.invalid/synthetic-preview-work/jo',
       official_link: 'https://preview.invalid/synthetic-preview-work',
       content_sha256: CANDIDATE_B,
+      state_sha256: CANDIDATE_A,
       stable_coordinate: `/${PUBLISHER}/${WORK}/2001-01-01`,
       permalink: `/${PUBLISHER}/${WORK}/2001-01-01--${CANDIDATE_A}/fra`,
       language: 'fr',

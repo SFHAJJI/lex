@@ -5,6 +5,7 @@ using Lex.V3.Contracts;
 using Lex.V3.Contracts.Index;
 using Lex.V3.Contracts.Platform;
 using Lex.V3.Contracts.Source.Core;
+using Microsoft.AspNetCore.Http;
 using static Lex.V3.Ingest.Tests.V3CorpusClassificationMountTests;
 using static Lex.V3.Ingest.Tests.V3CorpusEuropeTimeViewTests;
 
@@ -126,6 +127,7 @@ public sealed class V3CorpusEuropeCapabilityMountTests
             var wording = asOf.Result!.Value.GetProperty("states")[0].GetProperty("wording");
             var coordinate = wording.GetProperty("stable_coordinate").GetString()!;
             var permalink = wording.GetProperty("permalink").GetString()!;
+            var wordingDate = wording.GetProperty("wording_date").GetString()!;
 
             // as_observed by time refuses an EU identifier the mode with EU context, as by snapshot (review of #913: it answered
             // snapshot_unknown with Luxembourg context).
@@ -155,22 +157,39 @@ public sealed class V3CorpusEuropeCapabilityMountTests
 
             // An EU identifier no index holds is unknown, with EU context, in as_of and timeline as in dossier: an unknown CELEX, a
             // provision coordinate naming an article its expression does not hold, and this service's own coordinates, which name
-            // a wording rather than an act (as Luxembourg's as_of refuses its own permalinks). Every absence is typed (reviews of
-            // #913).
+            // a wording rather than an act. Every absence is typed (reviews of #913). A wording's hash-pinned permalink is the one
+            // exception for as_of since the plan's 3.2b (R64, V3CorpusMount.Pinned.cs): as_of answers the wording it pins, at its
+            // own date, below; timeline, which names an act's wordings, still takes no permalink.
             var expression = provision[..provision.IndexOf("#lex-provision=", StringComparison.Ordinal)];
             foreach (var identifier in new[] { "32099R9999", expression + "#lex-provision=no-such-article", coordinate, permalink })
             {
-                foreach (var (operation, request) in new (string, object)[]
-                         {
-                             ("as_of", new { identifier, date = "2025-03-01", language = "eng" }),
-                             ("timeline", new { identifier, language = "eng" }),
-                         })
+                var requests = new List<(string, object)> { ("timeline", new { identifier, language = "eng" }) };
+                if (identifier != permalink)
+                {
+                    requests.Add(("as_of", new { identifier, date = "2025-03-01", language = "eng" }));
+                }
+
+                foreach (var (operation, request) in requests)
                 {
                     var envelope = await EnvelopeAsync(mount, "/api/v3/" + operation, operation, request);
                     Assert.AreEqual("identifier_unknown", envelope.Refusal?.Code, $"{operation} {identifier}");
                     Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher, $"{operation} {identifier}");
                 }
             }
+
+            // as_of at the wording's permalink, at its own date, answers the wording it pins, with EU context (R64) ...
+            var pinned = await EnvelopeAsync(mount, "/api/v3/as_of", "as_of", new { identifier = permalink, date = wordingDate, language = "eng" });
+            Assert.IsNull(pinned.Refusal, $"{permalink}: {pinned.Refusal?.Code}");
+            Assert.AreEqual(PublisherId.EuEurLex, pinned.Context.Publisher);
+            Assert.AreEqual(permalink, pinned.Result!.Value.GetProperty("states")[0].GetProperty("wording").GetProperty("permalink").GetString());
+
+            // ... and at another date it is a malformed request: a permalink names its own date, and any other would ask for
+            // another wording than the one it pins.
+            var otherDate = await PostAsync(mount, "/api/v3/as_of",
+                JsonSerializer.Serialize(new { operation_id = "as_of", parameters = new { identifier = permalink, date = "2025-03-01", language = "eng" } }));
+            Assert.AreEqual(StatusCodes.Status400BadRequest, otherDate.Response.StatusCode);
+            using var problem = JsonDocument.Parse(((MemoryStream)otherDate.Response.Body).ToArray());
+            Assert.AreEqual("request_schema_invalid", problem.RootElement.GetProperty("code").GetString());
 
             var dossier = await EnvelopeAsync(mount, "/api/v3/dossier", "dossier", new { identifier = "32099R9999" });
             Assert.AreEqual("identifier_unknown", dossier.Refusal?.Code);

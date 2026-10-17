@@ -258,7 +258,10 @@ test("no interface text on a live page or a census answer bypasses the chrome ta
       answered.add(name);
       if (name === "export") {
         const { exportState, pinKey } = await import(new URL("scripts/live-export.mjs", web).href);
-        const pins = new Set(outcome.view.states.flatMap((held) => [...held.articles, ...held.articlesWithoutText].map((article) => pinKey(held.stateSha256, article.publisherId))));
+        // The census holds an EU bundle too (the time view's, review of #972): its pins are its wordings' articles.
+        const pins = outcome.view.publisher === "eu-eurlex"
+          ? everyEuropePin(outcome.view, pinKey)
+          : new Set(outcome.view.states.flatMap((held) => [...held.articles, ...held.articlesWithoutText].map((article) => pinKey(held.stateSha256, article.publisherId))));
         const panel = renderToStaticMarkup(h(app.ExportPanel, { outcome, pins, onSave: () => {} }));
         const composed = exportState(outcome, pins);
         assert.equal(composed.state, "composed", `export: ${entry.scenario}`);
@@ -365,7 +368,9 @@ test("no interface text on a French page or a census answer bypasses the French 
       assert.equal(outcome.state, "success", `${name}: ${entry.scenario}`);
       scan(`${name}: ${entry.scenario}`, renderToStaticMarkup(h(View, props(outcome))), dataOf(entry.envelope));
       if (name === "export") {
-        const pins = new Set(outcome.view.states.flatMap((held) => [...held.articles, ...held.articlesWithoutText].map((article) => app.pinKey(held.stateSha256, article.publisherId))));
+        const pins = outcome.view.publisher === "eu-eurlex"
+          ? everyEuropePin(outcome.view, app.pinKey)
+          : new Set(outcome.view.states.flatMap((held) => [...held.articles, ...held.articlesWithoutText].map((article) => app.pinKey(held.stateSha256, article.publisherId))));
         const composed = app.exportState(outcome, pins);
         assert.equal(composed.state, "composed", `export: ${entry.scenario}`);
         scan(`export panel: ${entry.scenario}`, renderToStaticMarkup(h(app.ExportPanel, { outcome, pins, onSave: () => {} })).replace(/<pre>[\s\S]*?<\/pre>/, ""), dataOf(entry.envelope, composed.model));

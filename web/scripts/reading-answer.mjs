@@ -353,6 +353,12 @@ function readEuropeWording(wording, index, { celex, date }) {
   if (typeof nextDate === 'string' && !(date < nextDate)) {
     throw new Error(`${where} holds until ${nextDate}, and the bundle was asked for ${date}; the next wording answers that date`);
   }
+  // Beside a next date, whether that wording's text is held in this language (review of #972: its date bounds this wording
+  // whether or not its text is held, so a page that said a later wording "is held" said what the answer does not).
+  const nextTextHeld = Object.hasOwn(wording, 'next_text_held') ? wording.next_text_held : null;
+  if (typeof nextDate === 'string' ? typeof nextTextHeld !== 'boolean' : nextTextHeld !== null) {
+    throw new Error(`${where} says next_text_held is ${JSON.stringify(nextTextHeld)} beside the next date ${JSON.stringify(nextDate ?? null)}; it is true or false beside a date, and null with none`);
+  }
   const wordingSha256 = requireDigest(requireOwn(wording, 'wording_sha256', where), `${where} wording_sha256`);
   const permalink = requireText(requireOwn(wording, 'permalink', where), `${where} permalink`);
   const expected = europePermalink({ celex, date: wordingDate, wordingSha256, language });
@@ -435,7 +441,7 @@ function readEuropeWording(wording, index, { celex, date }) {
   // The annexes of the wording's sources, never quoted: each disposition's count, reason and official source.
   const annexesNotServed = readAnnexesNotServed(wording, where);
   return Object.freeze({
-    expressionIri, language, kind, wordingDate, nextDate, wordingSha256, permalink, stableCoordinate, sources, articles, articlesWithoutText,
+    expressionIri, language, kind, wordingDate, nextDate, nextTextHeld, wordingSha256, permalink, stableCoordinate, sources, articles, articlesWithoutText,
     sameDateWorks, unplacedVersions, annexesNotServed,
   });
 }

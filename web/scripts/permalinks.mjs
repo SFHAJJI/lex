@@ -6,13 +6,25 @@
 //
 //   /lu-legilux/{work}                                              a Luxembourg work's dossier
 //   /lu-legilux/{work}/{yyyy-mm-dd}--{state sha256}/{lng}[/{art}]   a Luxembourg state's reading, at an article
+//   /lu-legilux/{work}/{lng}[/{art}]                                the work's current version, at an article
 //   /eu-eurlex/{celex}                                              an EU act's dossier
 //   /eu-eurlex/{celex}/{yyyy-mm-dd}--{sha256}/{lng}[/{provision}]   an EU wording's reading, at a provision
+//   /eu-eurlex/{celex}/{lng}[/{provision}]                          the act's current wording, at a provision
 //
 // `{lng}` is the text's language, the publisher's three letters (`fra`, `deu`, `eng`), and the digest is that language's:
 // a Luxembourg state is one expression in one language, and an EU wording one expression too. The article (or provision)
 // is a path segment, escaped as the platform escapes it (`escapeSegment`); "#" is left for a position inside an article.
 // The interface language never enters a permalink.
+//
+// The readable address of an act and of an article (the specification of record's R67: "Every work and article has a
+// readable address that resolves to its current version") names the work and the text's language, with no date and no
+// digest, and opens the reading of the version that answers today in Luxembourg (R13): its third segment is a language,
+// never a pin, so it cannot be taken for a permalink. Its article is never a calendar date, with or without a digest after
+// it: `/eu-eurlex/{celex}/{lng}/{date}` is an EU stable coordinate and `/eu-eurlex/{celex}/{lng}/{date}--{sha256}` the EU
+// permalink shape before R64 (`movedFor`), and neither names an article. A permalink cites one version for good; a
+// readable address follows the act. A consolidated version's CELEX (`0{yyyy}{type}{number}-{yyyymmdd}`) names one wording, not
+// the act today, so its readable address has moved for good to its act's (`3{yyyy}{type}{number}`), whose reading answers
+// today (review of #972: it quoted another wording under its own address).
 //
 // Every page stands under its interface language, /fr/ or /en/ (the specification of record's R61): /fr/search.html,
 // /en/lu-legilux/{work}. An address the API mints names no interface language, so it, and the site's root, are answered
@@ -44,16 +56,29 @@ const LANGUAGE = '([a-z]{3})';
  * server resolve away (review of #967: the API served `%2E%2E` as an article).
  */
 const ANCHOR = "(?!(?:\\.|%2[eE]){1,2}$)((?:[0-9A-Za-z._~!$&'()*+,;=:@-]|%[0-9A-Fa-f]{2})+)";
+/** A readable address's article: an article segment that is never a calendar date, with or without a digest after it. */
+const CURRENT_ANCHOR = `(?![0-9]{4}-[0-9]{2}-[0-9]{2}(?:--[0-9a-f]{64})?$)${ANCHOR}`;
 
 export const PERMALINK_PATTERNS = Object.freeze({
   luxembourgWork: new RegExp(`^/lu-legilux/(${WORK})$`),
   luxembourgState: new RegExp(`^/lu-legilux/(${WORK})/${PIN}/${LANGUAGE}(?:/${ANCHOR})?$`),
+  luxembourgCurrent: new RegExp(`^/lu-legilux/(${WORK})/${LANGUAGE}(?:/${CURRENT_ANCHOR})?$`),
   europeWork: new RegExp(`^/eu-eurlex/(${CELEX})$`),
   europeWording: new RegExp(`^/eu-eurlex/(${CELEX})/${PIN}/${LANGUAGE}(?:/${ANCHOR})?$`),
+  europeCurrent: new RegExp(`^/eu-eurlex/(${CELEX})/${LANGUAGE}(?:/${CURRENT_ANCHOR})?$`),
 });
 
 /** An EU wording's permalink in the shape before R64, `/eu-eurlex/{celex}/{lng}/{date}--{sha256}`, moved to R64's. */
 const EUROPE_WORDING_BEFORE_R64 = new RegExp(`^/eu-eurlex/(${CELEX})/${LANGUAGE}/${PIN}$`);
+
+/**
+ * A consolidated version's CELEX as EUR-Lex writes it: sector 0, the consolidated act's year, type and number (with a
+ * corrigendum's suffix), and the consolidation's date; the act's own CELEX is the same in sector 3.
+ */
+const CONSOLIDATED_CELEX = /^0([0-9]{4}[A-Z]{1,2}[0-9]{4,}(?:\([0-9]{2}\))?)-[0-9]{8}$/;
+
+/** A readable address under a consolidated version's CELEX, moved to its act's (`movedFor`). */
+const EUROPE_CONSOLIDATED_CURRENT = new RegExp(`^/eu-eurlex/0([0-9]{4}[A-Z]{1,2}[0-9]{4,}(?:\\([0-9]{2}\\))?)-[0-9]{8}/${LANGUAGE}(?:/${CURRENT_ANCHOR})?$`);
 
 /** The interface languages, each under its own path (R61); the first is the one a reader with no preference gets. */
 export const INTERFACE_LANGUAGES = Object.freeze(['fr', 'en']);
@@ -79,6 +104,16 @@ export function europePermalink({ celex, date, wordingSha256, language }) {
 /** An article's (or provision's) permalink, as the API mints it: its state's (or wording's), and the id as a segment. */
 export function articlePermalink(permalink, publisherId) {
   return `${permalink}/${escapeSegment(publisherId)}`;
+}
+
+/**
+ * The readable address of an act's current version in a text's language (R67), and of one of its articles when `publisherId`
+ * is given: `/lu-legilux/{work}/{lng}[/{art}]` for a Luxembourg work key, `/eu-eurlex/{celex}/{lng}[/{provision}]` for an EU
+ * act, the article escaped as a permalink's is.
+ */
+export function currentAddress({ publisher, work, language, publisherId = null }) {
+  const act = `/${publisher === 'eu-eurlex' ? 'eu-eurlex' : 'lu-legilux'}/${work}/${language}`;
+  return publisherId === null ? act : articlePermalink(act, publisherId);
 }
 
 /** A header value's optional whitespace taken off its ends: HTTP's own, space and tab, as `V3WebRoot` takes it off. */
@@ -119,13 +154,15 @@ function withoutLocale(pathname) {
 }
 
 /**
- * What a site path names, or null: `{ kind: 'work' | 'state', publisher, identifier, locale, date?, digest?, language?,
- * anchor?, permalink?, address? }`. `locale` is the interface language the path stands under, or null for an address with
- * none (as the API mints it). `identifier` is what the API is asked with: a Luxembourg work's coordinate
+ * What a site path names, or null: `{ kind: 'work' | 'state' | 'current', publisher, identifier, locale, date?, digest?,
+ * language?, anchor?, permalink?, work?, act?, address? }`. `locale` is the interface language the path stands under, or null for
+ * an address with none (as the API mints it). `identifier` is what the API is asked with: a Luxembourg work's coordinate
  * (`/lu-legilux/{work}`), or an EU act's CELEX (the EU index resolves a CELEX, a work or expression IRI, not
  * `/eu-eurlex/{celex}`). For a state (or an EU wording): `language` is the text's, `anchor` the article's segment as the
  * path writes it (escaped; `anchorText` reads it) or null, `permalink` the state's permalink and `address` the whole
- * address, the article's included, both without the interface language. The fragment (`#…`) is not part of a path.
+ * address, the article's included, both without the interface language. For an act's readable address (`current`, R67):
+ * `language`, `anchor` and `address` as for a state, `work` the work key or CELEX, and `act` the act's readable address in
+ * that language, with no article. The fragment (`#…`) is not part of a path.
  */
 export function parseSitePath(pathname) {
   if (typeof pathname !== 'string') return null;
@@ -147,6 +184,24 @@ export function parseSitePath(pathname) {
       address: path,
     });
   }
+  for (const [publisher, pattern] of [['lu-legilux', PERMALINK_PATTERNS.luxembourgCurrent], ['eu-eurlex', PERMALINK_PATTERNS.europeCurrent]]) {
+    const match = pattern.exec(path);
+    if (match === null) continue;
+    const [, work, language, anchor = null] = match;
+    // A consolidated version's readable address names no page here: it has moved to its act's (`movedFor`).
+    if (publisher === 'eu-eurlex' && CONSOLIDATED_CELEX.test(work)) return null;
+    return Object.freeze({
+      kind: 'current',
+      publisher,
+      work,
+      identifier: publisher === 'lu-legilux' ? `/lu-legilux/${work}` : work,
+      language,
+      anchor,
+      locale,
+      act: anchor === null ? path : path.slice(0, path.length - anchor.length - 1),
+      address: path,
+    });
+  }
   if (PERMALINK_PATTERNS.luxembourgWork.test(path)) return Object.freeze({ kind: 'work', publisher: 'lu-legilux', identifier: path, locale });
   const match = PERMALINK_PATTERNS.europeWork.exec(path);
   if (match) return Object.freeze({ kind: 'work', publisher: 'eu-eurlex', identifier: match[1], locale });
@@ -161,18 +216,20 @@ export function parseSitePath(pathname) {
 export function pageForSitePath(pathname) {
   const named = parseSitePath(pathname);
   if (named === null || named.locale === null) return null;
-  return `${named.locale}/${named.kind === 'state' ? 'reading.html' : 'dossier.html'}`;
+  return `${named.locale}/${named.kind === 'work' ? 'dossier.html' : 'reading.html'}`;
 }
 
 /**
  * What the server renders a law's address under an interface language from (R67): the page (`reading`, `dossier`), the
- * operation and the parameters the page itself would ask, exactly as its form sends them (a reading asks by the work (a
- * Luxembourg coordinate or an EU CELEX), the date and the text's language the permalink names; a dossier by the work), so
- * the page the server renders and the page a reader asks show one answer. An interface language's home page (`/en/`,
- * `/en/index.html`) is rendered from `coverage`, asked with no parameters, as the page as built asks it once loaded
- * (`live-home.mjs`). Null for any other path.
+ * operation and the parameters the page itself would ask (`readingRequestFor`), so the page the server renders and the page
+ * a reader asks show one answer. A permalink's reading asks by the permalink itself (R64: the version it pins, or why
+ * not), with the date and the text's language it names; a readable address's reading asks by the work (a Luxembourg
+ * coordinate or an EU CELEX), `today` (Luxembourg's date, R13, which the server's clock gives) and the text's language it
+ * names, and with no `today` it is not rendered (the page as built asks for itself); a dossier asks by the work. An
+ * interface language's home page (`/en/`, `/en/index.html`) is rendered from `coverage`, asked with no parameters, as the
+ * page as built asks it once loaded (`live-home.mjs`). Null for any other path.
  */
-export function sitePageFor(pathname) {
+export function sitePageFor(pathname, { today = null } = {}) {
   const home = INTERFACE_LANGUAGES.find((language) => pathname === `/${language}/` || pathname === `/${language}/index.html`);
   if (home !== undefined) return Object.freeze({ language: home, kind: 'home', operation: 'coverage', parameters: Object.freeze({}) });
   const named = parseSitePath(pathname);
@@ -180,8 +237,20 @@ export function sitePageFor(pathname) {
   if (named.kind === 'work') {
     return Object.freeze({ language: named.locale, kind: 'dossier', operation: 'dossier', parameters: Object.freeze({ identifier: named.identifier }) });
   }
-  const parameters = { identifier: named.identifier, date: named.date, language: named.language };
-  return Object.freeze({ language: named.locale, kind: 'reading', operation: 'evidence_bundle', parameters: Object.freeze(parameters) });
+  const parameters = readingRequestFor(named, today);
+  if (parameters === null) return null;
+  return Object.freeze({ language: named.locale, kind: 'reading', operation: 'evidence_bundle', parameters });
+}
+
+/**
+ * The request a reading at a law's address sends (`parseSitePath`'s answer): at a permalink, the permalink with no article,
+ * its date and its language; at a readable address, the work, `today` and the language, or null with no `today`. Null for
+ * a work's address.
+ */
+export function readingRequestFor(named, today = null) {
+  if (named?.kind === 'state') return Object.freeze({ identifier: named.permalink, date: named.date, language: named.language });
+  if (named?.kind !== 'current' || typeof today !== 'string' || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(today)) return null;
+  return Object.freeze({ identifier: named.identifier, date: today, language: named.language });
 }
 
 /**
@@ -200,18 +269,28 @@ export function redirectFor(pathname, search, acceptLanguage) {
 }
 
 /**
- * Where a permalink of the shape before R64 has moved for good: an EU wording's `/eu-eurlex/{celex}/{lng}/{date}--{sha256}`
- * to `/eu-eurlex/{celex}/{date}--{sha256}/{lng}`, under the interface language it stood under, if any (a browser keeps the
- * `#provision` it carried, which the reading page still brings into view). The query goes along. Null for any other path,
- * a Luxembourg state's of that time included: it names no language, so its new address cannot be computed from it alone.
+ * Where an address has moved for good, computed from it alone: an EU wording's permalink of the shape before R64,
+ * `/eu-eurlex/{celex}/{lng}/{date}--{sha256}`, to `/eu-eurlex/{celex}/{date}--{sha256}/{lng}` (a browser keeps the
+ * `#provision` it carried, which the reading page still brings into view); and a consolidated version's readable address,
+ * `/eu-eurlex/0{act}-{yyyymmdd}/{lng}[/{provision}]`, to its act's, `/eu-eurlex/3{act}/{lng}[/{provision}]` (review of
+ * #972). Each under the interface language it stood under, if any, the query along. Null for any other path, a Luxembourg
+ * state's permalink before R64 included: it names no language, so its new address cannot be computed from it alone.
  */
 export function movedFor(pathname, search) {
   if (typeof pathname !== 'string') return null;
   const { locale, path } = withoutLocale(pathname);
-  const match = EUROPE_WORDING_BEFORE_R64.exec(path);
-  if (match === null) return null;
-  const [, celex, language, date, wordingSha256] = match;
-  return `${locale === null ? '' : `/${locale}`}${europePermalink({ celex, date, wordingSha256, language })}${search ?? ''}`;
+  const prefix = locale === null ? '' : `/${locale}`;
+  const before = EUROPE_WORDING_BEFORE_R64.exec(path);
+  if (before !== null) {
+    const [, celex, language, date, wordingSha256] = before;
+    return `${prefix}${europePermalink({ celex, date, wordingSha256, language })}${search ?? ''}`;
+  }
+  const consolidated = EUROPE_CONSOLIDATED_CURRENT.exec(path);
+  if (consolidated !== null) {
+    const [, act, language, anchor = null] = consolidated;
+    return `${prefix}/eu-eurlex/3${act}/${language}${anchor === null ? '' : `/${anchor}`}${search ?? ''}`;
+  }
+  return null;
 }
 
 /**

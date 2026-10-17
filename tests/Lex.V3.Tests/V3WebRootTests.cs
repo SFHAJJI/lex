@@ -302,6 +302,11 @@ public sealed class V3WebRootTests
             await handler.HandleAsync(before, CancellationToken.None);
             Assert.AreEqual(StatusCodes.Status301MovedPermanently, before.Response.StatusCode);
             Assert.AreEqual($"/en/eu-eurlex/32016R0679/2016-05-04--{digest}/fra?from=card", before.Response.Headers.Location.ToString());
+            // A consolidated version's readable address has moved to its act's, for good, its query along (review of #972).
+            var consolidated = Request("GET", "/en/eu-eurlex/02016R0679-20240101/eng/005?from=card", "fr");
+            await handler.HandleAsync(consolidated, CancellationToken.None);
+            Assert.AreEqual(StatusCodes.Status301MovedPermanently, consolidated.Response.StatusCode);
+            Assert.AreEqual("/en/eu-eurlex/32016R0679/eng/005?from=card", consolidated.Response.Headers.Location.ToString());
             var luxembourgBefore = Request("GET", $"/en/lu-legilux/loi-1991-08-10-n3/2024-02-01--{digest}");
             await handler.HandleAsync(luxembourgBefore, CancellationToken.None);
             var unknown = Request("GET", "/en/no-such-page.html");
@@ -321,11 +326,13 @@ public sealed class V3WebRootTests
     {
         using var table = SiteTable();
         var rows = table.RootElement.GetProperty("paths").EnumerateArray().ToArray();
+        // The date in Luxembourg the table is held at: a readable address is rendered at today (R13, R67).
+        var today = table.RootElement.GetProperty("today").GetString()!;
         Assert.IsGreaterThanOrEqualTo(12, rows.Count(row => row.GetProperty("render").ValueKind != JsonValueKind.Null));
         foreach (var row in rows)
         {
             var path = row.GetProperty("path").GetString()!;
-            var page = V3WebRoot.SitePageFor(path);
+            var page = V3WebRoot.SitePageFor(path, today);
             var render = row.GetProperty("render");
             if (render.ValueKind == JsonValueKind.Null)
             {
@@ -381,9 +388,26 @@ public sealed class V3WebRootTests
             Assert.AreEqual("text/html; charset=utf-8", answered.Response.ContentType);
             AssertPageHeaders(root, answered, permalink);
             Assert.AreEqual("evidence_bundle", asked!.OperationId);
+            Assert.AreEqual($"/lu-legilux/loi-1991-08-10-n3/2024-02-01--{new string('a', 64)}/fra", asked.Parameters["identifier"], "asked by the permalink itself, with no article (R64)");
             Assert.AreEqual("2024-02-01", asked.Parameters["date"], "asked as the page itself would ask");
             Assert.AreEqual("fra", asked.Parameters["language"], "in the text's language the permalink names (R64)");
             Assert.IsFalse(asked.Parameters.ContainsKey("anchor"), "the whole reading: the page brings the article into view");
+
+            // An act's readable address (R67) is rendered at today in Luxembourg by the caller's clock; with none, as built.
+            var readable = "/en/lu-legilux/loi-1991-08-10-n3/fra/art_15";
+            var current = Request("GET", readable);
+            Assert.IsTrue(await root.TryServeAsync(current, readable, CancellationToken.None, (page, _) =>
+            {
+                asked = page;
+                return "{\"result\":{},\"refusal\":null}"u8.ToArray();
+            }, static () => "2026-10-16"));
+            Assert.AreEqual($"<!doctype html><p>reading answer {readable}</p>", Body(current));
+            CollectionAssert.AreEquivalent(
+                new[] { "identifier=/lu-legilux/loi-1991-08-10-n3", "date=2026-10-16", "language=fra" },
+                asked.Parameters.Select(pair => $"{pair.Key}={pair.Value}").ToArray());
+            var unclocked = Request("GET", readable);
+            Assert.IsTrue(await root.TryServeAsync(unclocked, readable, CancellationToken.None, (_, _) => "{\"result\":{}}"u8.ToArray()));
+            Assert.AreEqual("<!doctype html><p>the reading page as built</p>", Body(unclocked), "no clock: the page as built, which asks for itself");
 
             var unknown = Request("GET", "/en/lu-legilux/no-such-work");
             Assert.IsTrue(await root.TryServeAsync(unknown, "/en/lu-legilux/no-such-work", CancellationToken.None,

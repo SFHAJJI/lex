@@ -60,6 +60,18 @@ internal sealed class V3ApiHandler
 
     private V3EnvelopeContext UnmountedLuxembourgContext() => UnmountedLuxembourgContext(_utcNow);
 
+    /// <summary>
+    /// Today in Luxembourg by this server's clock (R13, <see cref="LuxembourgCalendar"/>), as <c>yyyy-MM-dd</c>; null for a
+    /// clock outside the range the rule is held for, when a readable address's page is served as built.
+    /// </summary>
+    private string? LuxembourgToday()
+    {
+        var now = _utcNow();
+        return now >= LuxembourgCalendar.ValidFrom && now < LuxembourgCalendar.ValidUntil
+            ? LuxembourgCalendar.DateAt(now).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
+            : null;
+    }
+
     /// <summary>Shared with <see cref="V3McpJsonRpc"/> so the MCP transport refuses a call with no corpus mounted the same way REST does.</summary>
     internal static V3EnvelopeContext UnmountedLuxembourgContext(Func<DateTimeOffset> utcNow) =>
         new(
@@ -134,8 +146,9 @@ internal sealed class V3ApiHandler
 
         // The live pages, when this server holds them: only the files its web root recorded, and a law's
         // address (V3WebRoot.PageForSitePath) served the page that reads it; every other path goes on to the 404 page
-        // below, the synthetic routes, or with no preview the unknown route.
-        if (_webRoot is not null && await _webRoot.TryServeAsync(context, rawTarget, cancellationToken, AnswerFor(context)).ConfigureAwait(false))
+        // below, the synthetic routes, or with no preview the unknown route. A readable address asks for today in Luxembourg
+        // (R13), by this server's clock.
+        if (_webRoot is not null && await _webRoot.TryServeAsync(context, rawTarget, cancellationToken, AnswerFor(context), LuxembourgToday).ConfigureAwait(false))
         {
             return;
         }

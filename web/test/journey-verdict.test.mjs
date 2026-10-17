@@ -317,8 +317,8 @@ test("a work's address and a state's permalink open their pages with nothing typ
   assert.equal(address.typed, undefined);
   assert.deepEqual(address.body, JOURNEY_STEPS.dossier.body);
   assert.equal(permalink.typed, undefined);
-  // R64: the permalink names its text's language, and the page asks the reading in it.
-  assert.deepEqual(permalink.body, { operation_id: "evidence_bundle", parameters: { identifier: DOSSIER_IDENTIFIER, date: READING_DATE, language: READING_LANGUAGE } });
+  // R64: the page asks the reading by the permalink itself, with no article, its date and the text's language it names.
+  assert.deepEqual(permalink.body, { operation_id: "evidence_bundle", parameters: { identifier: `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"0".repeat(64)}/fra`, date: READING_DATE, language: READING_LANGUAGE } });
   assert.equal(READING_LANGUAGE, "fra");
   assert.deepEqual(permalink.pins, { identifier: DOSSIER_IDENTIFIER, date: READING_DATE, anchor: HISTORY_ANCHOR, language: READING_LANGUAGE });
   assert.equal(permalink.path, `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${"0".repeat(64)}/fra/${HISTORY_ANCHOR}`, "a placeholder that pins nothing, the article a segment of it");
@@ -326,6 +326,12 @@ test("a work's address and a state's permalink open their pages with nothing typ
   assert.equal(held.address.path, "/en/lu-legilux/rgd-2017-12-13-a1050");
   assert.equal(held.permalink.path, `/en/lu-legilux/rgd-2017-12-13-a1050/2018-01-01--${"0".repeat(64)}/deu/art_2`);
   assert.equal(held.permalink.body.parameters.language, "deu");
+  // R67: the work's readable address at the article, asked at today's date in Luxembourg, in its language.
+  const today = journeyStepsFor({ identifier: DOSSIER_IDENTIFIER, date: READING_DATE, anchor: HISTORY_ANCHOR, today: "2026-10-16" }).current;
+  assert.equal(today.path, `/en${DOSSIER_IDENTIFIER}/fra/${HISTORY_ANCHOR}`);
+  assert.deepEqual(today.body, { operation_id: "evidence_bundle", parameters: { identifier: DOSSIER_IDENTIFIER, date: "2026-10-16", language: "fra" } });
+  assert.deepEqual(today.current, { anchor: HISTORY_ANCHOR });
+  assert.equal(today.rendered, true);
 });
 
 test("a permalink step opens the permalink the server's dossier names for its date, and keeps its placeholder otherwise", async () => {
@@ -344,7 +350,8 @@ test("a permalink step opens the permalink the server's dossier names for its da
   const pinned = await pinnedStep(ORIGIN, permalink, { ask });
   assert.deepEqual(asked, [[ORIGIN, "dossier", { identifier: DOSSIER_IDENTIFIER }]], "one dossier, of the same server");
   assert.equal(pinned.path, `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${digest}/fra/${HISTORY_ANCHOR}`, "the state of its language on the date, at the article, under the interface language");
-  assert.deepEqual({ ...pinned, path: permalink.path }, { ...permalink }, "nothing else changes");
+  assert.deepEqual(pinned.body.parameters, { ...permalink.body.parameters, identifier: `${DOSSIER_IDENTIFIER}/${READING_DATE}--${digest}/fra` }, "the page asks by that permalink (R64)");
+  assert.deepEqual({ ...pinned, path: permalink.path, body: permalink.body }, { ...permalink }, "nothing else changes");
   assert.equal(await pinnedStep(ORIGIN, JOURNEY_STEPS.reading, { ask }), JOURNEY_STEPS.reading, "a step that pins nothing is left as it is");
   assert.equal(asked.length, 1, "and asks nothing");
   const twoOnTheDate = [...states, { applicability_date: READING_DATE, language: "fra", permalink: `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"f".repeat(64)}/fra` }];
@@ -390,9 +397,9 @@ test("a permalink run passes when its page shows the pinned state with the artic
     ["another version shown", { pinReplaced: true }, /not the one served \(true\)/],
     ["the notice not observed", { pinReplaced: undefined }, /not the one served \(not observed\)/],
     ["the article off-screen", { inView: "at 2400 px of a 600 px window" }, /not in view \(at 2400 px of a 600 px window\)/],
-    ["the article missing", { inView: "absent" }, /art_15 the permalink names is not on the page/],
+    ["the article missing", { inView: "absent" }, /art_15 the address names is not on the page, first/],
     ["the article not observed", { inView: undefined }, /not in view \(not observed\)/],
-    ["the article in view without the focus", { targetFocused: false }, /art_15 the permalink names is in view without the focus/],
+    ["the article in view without the focus", { targetFocused: false }, /art_15 the address names is in view without the focus/],
     ["the article dropped from the address", { location: `${ORIGIN}${step.path.slice(0, step.path.lastIndexOf("/"))}` }, /ended at/],
     ["a form submitted as well", { requests: [...observed().requests, observed().requests[2]] }, /2 requests to the API/],
   ]) {
@@ -403,34 +410,68 @@ test("a permalink run passes when its page shows the pinned state with the artic
   assert.deepEqual(journeyVerdict(refused, { origin: ORIGIN, step, state: "refusal", refusalCode: "no_corpus_mounted" }), [], "a refusal holds no state to show");
 });
 
-test("a stale permalink run passes when its page says, in view, that the version shown is not the one the link pins", () => {
+test("a stale permalink run passes when it is refused, and its page says, in view, that the link pins no version held, with the current link", () => {
   const step = JOURNEY_STEPS.stale;
   assert.equal(step.path, `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${"0".repeat(64)}/fra/${HISTORY_ANCHOR}`, "a digest no state has");
   assert.equal(step.pins, undefined, "opened as it is, never replaced by the dossier's permalink");
   assert.deepEqual(step.body, JOURNEY_STEPS.permalink.body);
+  const current = `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}/fra`;
   const observed = () => ({
     ...goodSearch(),
+    answerState: "refusal",
+    refusalCodes: ["pinned_digest_mismatch"],
     requests: [
       { url: `${ORIGIN}${step.path.split("#")[0]}`, method: "GET", headers: {} },
       { url: `${ORIGIN}/api/v3/evidence_bundle`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(step.body) },
     ],
     location: `${ORIGIN}${step.path}`,
-    text: "This link pins …, which is not the version this site serves for that date",
-    pinReplaced: true,
+    text: "This link pins …, which is not the version this site holds for that date; the version it holds is … pinned_digest_mismatch",
+    pinReplaced: false,
+    pinNotHeld: true,
+    pinCurrent: `/en${current}`,
     inView: "shown",
     targetFocused: true,
     pinNamed: step.path.slice("/en".length, step.path.lastIndexOf("/")),
     pinVerification: { identifier: step.path.slice("/en".length, step.path.lastIndexOf("/")), refusal: "pinned_digest_mismatch", verdict: null },
   });
-  const expected = { origin: ORIGIN, step, state: "success", texts: ["which is not the version this site serves for that date"] };
+  const expected = { origin: ORIGIN, step, state: "refusal", refusalCode: "pinned_digest_mismatch", texts: ["which is not the version this site holds for that date"] };
   assert.deepEqual(journeyVerdict(observed(), expected), []);
   for (const [what, change, reason] of [
-    ["no notice", { pinReplaced: false }, /does not say that the version shown is not the one the link pins \(false\)/],
-    ["the notice not observed", { pinReplaced: undefined }, /does not say .* \(not observed\)/],
+    ["no notice", { pinNotHeld: false }, /does not say that the link pins no version held at its date \(false\)/],
+    ["the notice not observed", { pinNotHeld: undefined }, /does not say .* \(not observed\)/],
     ["the notice scrolled past", { inView: "at -1180 px of a 844 px window" }, /notice .* is not in view \(at -1180 px/],
     ["the notice in view without the focus", { targetFocused: false }, /notice .* is in view without the focus/],
-    ["a notice naming the version served", { pinVerification: { refusal: null, verdict: "digest_matches" } }, /with digest_matches, not pinned_digest_mismatch/],
+    ["no current link", { pinCurrent: null }, /the notice links no current version \(none\)/],
+    ["a current link to a work, not a version", { pinCurrent: `/en${DOSSIER_IDENTIFIER}` }, /the notice links no current version/],
+    ["a notice naming the version held", { pinVerification: { refusal: null, verdict: "digest_matches" } }, /with digest_matches, not pinned_digest_mismatch/],
     ["a notice verify was not asked about", { pinNamed: null, pinVerification: undefined }, /\(none\) with nothing, not pinned_digest_mismatch/],
+    ["another version shown in its place", { answerState: "success" }, /ended in success, not refusal/],
+  ]) {
+    const failures = journeyVerdict({ ...observed(), ...change }, expected);
+    assert.ok(failures.some((failure) => reason.test(failure)), `${what}: ${failures.join(" | ")}`);
+  }
+});
+
+test("a readable address run passes when its page shows the article it names first, in view and focused (R67)", () => {
+  const step = JOURNEY_STEPS.current;
+  const observed = () => ({
+    ...goodSearch(),
+    requests: [
+      { url: `${ORIGIN}${step.path}`, method: "GET", headers: {} },
+      { url: `${ORIGIN}/en/client-live-reading.js`, method: "GET", headers: {} },
+    ],
+    location: `${ORIGIN}${step.path}`,
+    text: "Quoted from loi-1991-08-10-n3, fra, the state applying from 2024-02-01. 49 articles quoted",
+    inView: "shown",
+    targetFocused: true,
+    serverRendered: true,
+    withoutScripts: { answerState: "success" },
+  });
+  const expected = { origin: ORIGIN, step, state: "success", texts: ["Quoted from loi-1991-08-10-n3"], mustRender: true };
+  assert.deepEqual(journeyVerdict(observed(), expected), []);
+  for (const [what, change, reason] of [
+    ["the article not first", { inView: "absent" }, /art_15 the address names is not on the page, first/],
+    ["the article without the focus", { targetFocused: false }, /in view without the focus/],
   ]) {
     const failures = journeyVerdict({ ...observed(), ...change }, expected);
     assert.ok(failures.some((failure) => reason.test(failure)), `${what}: ${failures.join(" | ")}`);
@@ -438,7 +479,7 @@ test("a stale permalink run passes when its page says, in view, that the version
 });
 
 test("a page at a law's address the server renders asks nothing as it loads and shows its answer with no script (R67)", () => {
-  for (const name of ["address", "permalink", "stale"]) assert.equal(JOURNEY_STEPS[name].rendered, true, `${name} is rendered by the server`);
+  for (const name of ["address", "permalink", "stale", "current"]) assert.equal(JOURNEY_STEPS[name].rendered, true, `${name} is rendered by the server`);
   assert.equal(JOURNEY_STEPS.reading.rendered, undefined, "a page the reader asks from its form is not");
   const step = { ...JOURNEY_STEPS.permalink, path: `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}/fra/${HISTORY_ANCHOR}` };
   const observed = () => ({
@@ -507,17 +548,18 @@ test("a law's page names the permalink with no interface language as canonical, 
     assert.ok(failures.some((failure) => reason.test(failure)), `${what}: ${failures.join(" | ")}`);
   }
 
-  // A stale permalink's page names the version it shows, never the digest it was opened at.
+  // A stale permalink's page names the current version the refusal links (R64), never the digest it was opened at.
   const stale = JOURNEY_STEPS.stale;
   const shown = `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}/fra`;
   const staleObserved = (address) => ({
-    ...observed(links(address)), location: `${ORIGIN}${stale.path}`, pinReplaced: true, pinNamed: shown,
+    ...observed(links(address)), answerState: "refusal", refusalCodes: ["pinned_digest_mismatch"], location: `${ORIGIN}${stale.path}`,
+    text: "pinned_digest_mismatch", pinNotHeld: true, pinCurrent: `/en${shown}`, pinNamed: stale.path.slice("/en".length, stale.path.lastIndexOf("/")),
     pinVerification: { identifier: shown, refusal: "pinned_digest_mismatch", verdict: null },
   });
-  const staleExpected = { origin: ORIGIN, step: stale, state: "success", texts: ["49 articles quoted"], mustRender: true };
-  assert.deepEqual(journeyVerdict(staleObserved(shown), staleExpected), []);
+  const staleExpected = { origin: ORIGIN, step: stale, state: "refusal", refusalCode: "pinned_digest_mismatch", mustRender: true, withoutScripts: undefined };
+  assert.deepEqual(journeyVerdict({ ...staleObserved(shown), withoutScripts: { answerState: "refusal" } }, staleExpected), []);
   assert.ok(journeyVerdict(staleObserved(stale.path.slice("/en".length)), staleExpected).some((failure) => /canonical, not the version it shows/.test(failure)));
-  // The version it shows, with no article: the article the stale address names is not the answer's to mint (review of #967).
+  // The version it links, with no article: the article the stale address names is not the answer's to mint (review of #967).
   assert.ok(journeyVerdict(staleObserved(`${shown}/${HISTORY_ANCHOR}`), staleExpected).some((failure) => /canonical, not the version it shows/.test(failure)));
 });
 
@@ -830,7 +872,8 @@ test("on the fixture mount every step must answer, and coverage must name the mo
   const mount = { corpus_sha256: "a".repeat(64), index_sha256: "b".repeat(64), work_key: "lu-legilux/loi-1991-08-10-n3" };
   const expectations = fixtureMountExpectations(mount);
   assert.deepEqual(expectations.map(([name]) => name).sort(), Object.keys(JOURNEY_STEPS).sort(), "each of the eight steps, once");
-  assert.ok(expectations.every(([name, expected]) => expected.step === JOURNEY_STEPS[name] && expected.state === "success"), "each is its own step, answered");
+  assert.ok(expectations.every(([name, expected]) => expected.step === JOURNEY_STEPS[name] && expected.state === (name === "stale" ? "refusal" : "success")), "each is its own step, answered");
+  assert.equal(expectations.find(([name]) => name === "stale")[1].refusalCode, "pinned_digest_mismatch", "a stale permalink is refused with the current link (R64)");
   const [, coverage] = expectations[0];
   assert.equal(coverage.corpusSha256, mount.corpus_sha256);
   assert.equal(coverage.indexSha256, mount.index_sha256);
