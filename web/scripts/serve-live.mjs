@@ -22,8 +22,8 @@
 // What it says to search engines is the release's switch (`search-engines.mjs`, R67), as the API says it
 // (`V3WebRoot.SearchEngines.cs`): `/robots.txt` in the switch's state, `/sitemap.xml` only with the site indexed, and
 // `X-Robots-Tag: noindex` on every page, file and 404 it answers but a page the switch opened, whose kept-out marker it
-// removed, and on a redirect while the site is kept out. The switch is `LEX_V3_SEARCH_ENGINES` when the server is made, unless the caller names one; the indexing
-// record (R92's outcome) is a file the caller names, none by default.
+// removed, and on a redirect while the site is kept out. The switch is `LEX_V3_SEARCH_ENGINES` when the server is made,
+// unless the caller names one; the indexing record (R92's outcome) is a file the caller names, none by default.
 
 import { INTERFACE_LANGUAGES, movedFor, pageForSitePath, redirectFor, sitePageFor } from "./permalinks.mjs";
 import { luxembourgDate } from "./temporal.mjs";
@@ -179,7 +179,8 @@ async function notFound(response, root, pathname, method, acceptLanguage) {
  * opened. Any other file is served as it is, with the header.
  */
 function forSearchEngines(bytes, type, pathname, searchEngines) {
-  if (type !== CONTENT_TYPES[".html"]) return { bytes, headers: { "x-robots-tag": X_ROBOTS_TAG } };
+  // Kept out, nothing is opened, so a page is never read as text here.
+  if (type !== CONTENT_TYPES[".html"] || searchEngines.state !== INDEXED) return { bytes, headers: { "x-robots-tag": X_ROBOTS_TAG } };
   const served = servedPage(bytes.toString("utf8"), { state: searchEngines.state, pathname, record: searchEngines.record });
   return served.opened ? { bytes: Buffer.from(served.html, "utf8"), headers: {} } : { bytes, headers: { "x-robots-tag": X_ROBOTS_TAG } };
 }
@@ -297,8 +298,6 @@ export function createLiveServer({
         problem(response, 405, "method_not_allowed");
         return;
       }
-      // An EU permalink of the shape before R64 has moved for good to R64's, under the interface language it had, the same
-      // answer for every reader, as the API moves it (V3WebRoot.MovedFor).
       // robots.txt in the switch's state, and the sitemap only with the site indexed (R67); kept out, the sitemap is an
       // address this site does not hold.
       if (url.pathname === ROBOTS_PATH || (url.pathname === SITEMAP_PATH && engines.state === INDEXED)) {
@@ -312,6 +311,8 @@ export function createLiveServer({
         response.end(request.method === "HEAD" ? undefined : bytes);
         return;
       }
+      // An EU permalink of the shape before R64 has moved for good to R64's, under the interface language it had, the same
+      // answer for every reader, as the API moves it (V3WebRoot.MovedFor).
       const moved = movedFor(url.pathname, url.search);
       if (moved !== null) {
         response.writeHead(301, { ...BASE_HEADERS, ...redirectRobots, location: moved, "content-length": 0 });

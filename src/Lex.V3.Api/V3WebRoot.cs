@@ -270,7 +270,8 @@ internal sealed partial class V3WebRoot
         }
 
         var bytes = await File.ReadAllBytesAsync(file, cancellationToken).ConfigureAwait(false);
-        if (string.Equals(Path.GetExtension(file), ".html", StringComparison.Ordinal))
+        // Kept out, nothing is opened, so a page is never read as text here.
+        if (string.Equals(Path.GetExtension(file), ".html", StringComparison.Ordinal) && string.Equals(SearchEngines, Indexed, StringComparison.Ordinal))
         {
             var built = Encoding.UTF8.GetString(bytes);
             var served = ForSearchEngines(response, built, path);

@@ -50,6 +50,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { readLargeFile, sha256Hex } from "./large-bytes.mjs";
 import { pageForSitePath, redirectFor } from "./permalinks.mjs";
+import { INDEXED, KEPT_OUT, ROBOTS_PATH, SITEMAP_PATH, robotsTxt } from "./search-engines.mjs";
 import { UNSERVED_DIRECTORIES } from "./not-found.mjs";
 
 const repository = resolve(fileURLToPath(new URL("../../", import.meta.url)));
@@ -233,6 +234,9 @@ export const V2_ROUTES = Object.freeze([
   ...["/api/ask", "/api/ask/stream", "/api/ask/thread/reset", "/api/ask/evaluation/admission"].map((path) => ["POST", path]),
 ]);
 
+/** The first two lines of V3's sitemap (`sitemapXml`), which no V2 sitemap wrote. */
+const SITEMAP_HEAD = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n';
+
 /** A Lex assembly, symbol file or documentation file that is not V3's. */
 const NOT_V3 = /^Lex\.(?!V3\.)[^/]*\.(?:dll|exe|pdb|xml)$/;
 
@@ -267,14 +271,22 @@ export function v2Failures(image) {
  * The V2 routes a running image answers, as failures (empty when V2 answers none), asked of the image's
  * own origin. Each must answer 404, except where V3 answers the path itself: the root and a law's address
  * with no interface language with V3's own redirect to the reader's language, to the exact address
- * (`redirectFor`, R61), and a file of V3's live pages (`v3Files`, URL path to bytes: a font V2 also had)
- * with 200 and that file, byte for byte. Redirects are not followed: a V2 redirect is an answer.
+ * (`redirectFor`, R61), a file of V3's live pages (`v3Files`, URL path to bytes: a font V2 also had)
+ * with 200 and that file, byte for byte, and `/robots.txt` with V3's own in the release's switch state (`searchEngines`, kept
+ * out unless the release says `indexed`; R67, `search-engines.mjs`), as `/sitemap.xml` with V3's sitemap once indexed (kept
+ * out, V3 holds none, so it is a 404). Redirects are not followed: a V2 redirect is an answer.
  */
-export async function v2RouteFailures(origin, { v3Files = new Map(), routes = V2_ROUTES } = {}) {
+export async function v2RouteFailures(origin, { v3Files = new Map(), routes = V2_ROUTES, searchEngines = KEPT_OUT } = {}) {
   const failures = [];
   for (const [method, path] of routes) {
     const response = await fetch(`${origin}${path}`, { method, headers: { "content-type": "application/json" }, body: method === "POST" ? "{}" : undefined, redirect: "manual" });
     const body = Buffer.from(await response.arrayBuffer());
+    // V3's own robots.txt, and its sitemap with the site indexed, stand where V2 had its own (R67).
+    if (method === "GET" && (path === ROBOTS_PATH || (path === SITEMAP_PATH && searchEngines === INDEXED))) {
+      const own = path === ROBOTS_PATH ? body.toString("utf8") === robotsTxt(searchEngines) : body.toString("utf8").startsWith(SITEMAP_HEAD);
+      if (response.status !== 200 || !own) failures.push(`${method} ${path} answered ${response.status}, not V3's own ${path.slice(1)} (${searchEngines})`);
+      continue;
+    }
     // V3's own answer at a path V2 also used is V3's, not V2's: the root and a law's address with no interface language
     // (V2 served pages at /, /lu-legilux/{work} and /eu-eurlex/{celex}) are V3's redirect to the reader's language, French
     // for a request naming none (`redirectFor`, R61), to the exact address; a law's address under a language is V3's
