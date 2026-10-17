@@ -1,6 +1,6 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-17.
+Updated 2026-10-18.
 
 ## Index /9: every catalogue state of a served work, held or textless, dated by role, with ends, boundaries and intervals (Claude, 2026-10-17)
 
@@ -83,7 +83,8 @@ Updated 2026-10-17.
     and the logical rows with the intervals.
   - `RecordsBuilds` is true for /8 and /9; `RecordsCatalogueStates` for /9 only. `ResolveObservations` gives `DerivedAt`.
   - Every state query not keyed by a digest takes `text_status='held'` on /9 (`HeldOnly`, and the `HeldWorksNine`,
-    `StatesOfExpressionsNine` and `WorkRecordsNine` texts); the as_observed fold keeps held states. New:
+    `StatesOfExpressionsNine` and `WorkRecordsNine` texts), #974's `ResolveWorksUnder` among them (the exact references'
+    "held works" under a prefix); the as_observed fold keeps held states. New:
     `ResolveCatalogueStates(workKey)` and `ResolveIntervals(workKey)`, each a range of its table's primary key.
   - Provenance on an index 9 states digest /2 (`ProvenanceDerivationNine`), and says the row facts after the language are
     not carried in the answer yet, so a caller cannot recompute it from the answer alone (S7a serves them); /8 and /6 keep
