@@ -80,11 +80,14 @@ public sealed class V3CorpusEuropeReferenceMountTests
             var reference = Opened(await SearchAsync(mount, query, language: "eng"), query);
             var opens = reference.GetProperty("opens");
             Assert.AreEqual("reading", opens.GetProperty("page").GetString(), query);
-            Assert.AreEqual(pinned + "/" + provision, opens.GetProperty("address").GetString(), query);
+            Assert.AreEqual($"/eu-eurlex/{Celex}/eng/{provision}", opens.GetProperty("address").GetString(), $"{query}: no date given, the act's readable address");
+            Assert.AreEqual("readable", opens.GetProperty("address_kind").GetString(), query);
             Assert.AreEqual(provision, opens.GetProperty("article_id").GetString(), query);
             Assert.AreEqual(number, reference.GetProperty("recognised").GetProperty("article").GetProperty("number").GetString(), query);
         }
 
+        var typed = Opened(await SearchAsync(mount, $"/en/eu-eurlex/{Celex}/eng/099", language: "fra"), "readable typed").GetProperty("opens");
+        Assert.AreEqual($"/eu-eurlex/{Celex}/eng/099", typed.GetProperty("address").GetString(), "a readable address opens as it names its language");
         var dated = Opened(await SearchAsync(mount, "Article 99 of Regulation (EU) 2016/679, 15 March 2021", language: "eng"), "dated");
         Assert.AreEqual(pinned + "/099", dated.GetProperty("opens").GetProperty("address").GetString());
         Assert.AreEqual("2016-04-27", dated.GetProperty("opens").GetProperty("state_date").GetString(), "the wording the date selects");

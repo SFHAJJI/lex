@@ -66,6 +66,9 @@ public sealed class V3CorpusReferenceMountTests
 
     private static string[] Strings(JsonElement array) => array.EnumerateArray().Select(static value => value.GetString()!).ToArray();
 
+    /// <summary>The readable address (R67) of one of the fixture act's articles in its French text.</summary>
+    private static string Readable(MountedFixture fixture, string articleId) => $"/lu-legilux/{fixture.WorkKey}/fra/{articleId}";
+
     private static async Task<(MountedFixture Fixture, V3CorpusMount Mount)> MountAsync(Func<MountedFixture, Task>? prepare = null)
     {
         var fixture = await MountedFixture.CreateAsync();
@@ -126,6 +129,7 @@ public sealed class V3CorpusReferenceMountTests
         var dated = Opened(await SearchAsync(mount, "article 5 de la loi du 10 août 1991, 15 mars 2024"), "dated");
         var opens = dated.GetProperty("opens");
         Assert.AreEqual("reading", opens.GetProperty("page").GetString());
+        Assert.AreEqual("permalink", opens.GetProperty("address_kind").GetString(), "a date given opens the version it selects, pinned");
         Assert.AreEqual(fixture.Permalink + "/art_5", opens.GetProperty("address").GetString());
         Assert.AreEqual(fixture.ApplicabilityDate, opens.GetProperty("state_date").GetString());
         Assert.AreEqual("art_5", opens.GetProperty("article_id").GetString());
@@ -141,13 +145,25 @@ public sealed class V3CorpusReferenceMountTests
         Assert.AreEqual(fixture.WorkKey, recognised.GetProperty("act").GetProperty("work").GetString());
         StringAssert.Contains(recognised.GetProperty("article_rule").GetString(), "42bis, 42ter and 42-1 are four numbers");
 
-        // 1 = 1er = premier, at any date the one version applies on.
-        foreach (var query in new[] { "article 1er de la loi du 10 août 1991", "article premier de la loi du 10 août 1991",
-                     "loi du 10 août 1991, art. 1", "art. 1er de la loi modifiée du 10 août 1991 le 1er mars 2025" })
+        // 1 = 1er = premier. With no date given, the act's readable address opens today's version (R67); with one, the
+        // permalink of the version the date selects (R64).
+        foreach (var (query, address) in new[]
+                 {
+                     ("article 1er de la loi du 10 août 1991", Readable(fixture, "art_1er")),
+                     ("article premier de la loi du 10 août 1991", Readable(fixture, "art_1er")),
+                     ("loi du 10 août 1991, art. 1", Readable(fixture, "art_1er")),
+                     ("art. 1er de la loi modifiée du 10 août 1991 le 1er mars 2025", fixture.Permalink + "/art_1er"),
+                 })
         {
-            Assert.AreEqual(fixture.Permalink + "/art_1er",
-                Opened(await SearchAsync(mount, query), query).GetProperty("opens").GetProperty("address").GetString(), query);
+            Assert.AreEqual(address, Opened(await SearchAsync(mount, query), query).GetProperty("opens").GetProperty("address").GetString(), query);
         }
+
+        var readable = Opened(await SearchAsync(mount, "article 5 de la loi du 10 août 1991", date: Today), "the box's today").GetProperty("opens");
+        Assert.AreEqual("readable", readable.GetProperty("address_kind").GetString(), "the home page's box sends today, which is no date given");
+        Assert.AreEqual(Readable(fixture, "art_5"), readable.GetProperty("address").GetString());
+        Assert.AreEqual(fixture.Permalink + "/art_5",
+            Opened(await SearchAsync(mount, "article 5 de la loi du 10 août 1991", date: "2024-06-01"), "another day")
+                .GetProperty("opens").GetProperty("address").GetString(), "a search date that is not today is a date given");
 
         // The date: the citation's, else the search's, else today in Luxembourg (R13).
         var searchDated = Opened(await SearchAsync(mount, "article 5 de la loi du 10 août 1991", date: "2024-06-01"), "search date")
@@ -203,12 +219,12 @@ public sealed class V3CorpusReferenceMountTests
 
         // The act holds Art. 42 and, here, an Art. 42ter beside it: each opens its own, and 42bis neither.
         CollectionAssert.Contains(fixture.ArticlesOfOwnState().Select(static article => article.PublisherId).ToArray(), "art_42");
-        Assert.AreEqual(fixture.Permalink + "/art_42",
+        Assert.AreEqual(Readable(fixture, "art_42"),
             Opened(await SearchAsync(mount, "article 42 de la loi du 10 août 1991"), "42").GetProperty("opens").GetProperty("address").GetString());
-        Assert.AreEqual(fixture.Permalink + "/art_42ter",
+        Assert.AreEqual(Readable(fixture, "art_42ter"),
             Opened(await SearchAsync(mount, "article 42ter de la loi du 10 août 1991"), "42ter").GetProperty("opens").GetProperty("address").GetString());
         Assert.AreEqual(fixture.Permalink + "/art_42ter",
-            Opened(await SearchAsync(mount, "loi du 10 août 1991, art. 42 ter"), "42 ter").GetProperty("opens").GetProperty("address").GetString());
+            Opened(await SearchAsync(mount, "loi du 10 août 1991, art. 42 ter, 15 mars 2024"), "42 ter").GetProperty("opens").GetProperty("address").GetString());
         const string fortyTwoBis = "article 42bis de la loi du 10 août 1991";
         var never = Refused(await SearchAsync(mount, fortyTwoBis), "anchor_not_in_version", fortyTwoBis);
         CollectionAssert.IsSubsetOf(new[] { "art_42", "art_42ter" }, Strings(never.GetProperty("nearest_anchors")), "named as neighbours, never opened");
@@ -299,7 +315,8 @@ public sealed class V3CorpusReferenceMountTests
         Assert.AreEqual(later + "/art_l_121-6",
             Address("2025", await SearchAsync(mount, "Code du travail, article L. 121-6, 15 March 2025")));
         var undated = Opened(await SearchAsync(mount, "Code du travail, article L. 121-6"), "undated");
-        Assert.AreEqual(later + "/art_l_121-6", undated.GetProperty("opens").GetProperty("address").GetString(), "today's version");
+        Assert.AreEqual(Readable(fixture, "art_l_121-6"), undated.GetProperty("opens").GetProperty("address").GetString(), "today's version, by its readable address");
+        Assert.AreEqual("2025-01-01", undated.GetProperty("opens").GetProperty("state_date").GetString(), "the article is read in today's version");
         Assert.AreEqual("Code du travail", undated.GetProperty("recognised").GetProperty("act").GetProperty("title").GetString());
         Assert.AreEqual("L. 121-6", undated.GetProperty("recognised").GetProperty("article").GetProperty("number").GetString());
         Assert.AreEqual(fixture.Permalink + "/art_L.121-6-1",
@@ -361,7 +378,7 @@ public sealed class V3CorpusReferenceMountTests
         const string otherDay = "Mémorial A n° 58 du 28 août 1991";
         Refused(await SearchAsync(mount, otherDay), "identifier_unknown", otherDay);
         Assert.AreEqual(fixture.Permalink + "/art_5",
-            Opened(await SearchAsync(mount, "Mém. A n° 58 de 1991, article 5"), "memorial article").GetProperty("opens").GetProperty("address").GetString());
+            Opened(await SearchAsync(mount, "Mém. A n° 58 de 1991, article 5, 15 mars 2024"), "memorial article").GetProperty("opens").GetProperty("address").GetString());
     }
 
     [TestMethod]
@@ -380,6 +397,9 @@ public sealed class V3CorpusReferenceMountTests
                      (WorkIri + "/jo", fixture.Permalink),
                      (WorkIri + "/jo/fr", fixture.Permalink),
                      (WorkIri + "/jo/fr, article 5", fixture.Permalink + "/art_5"),
+                     (Readable(fixture, "art_5"), Readable(fixture, "art_5")),
+                     ("/fr" + Readable(fixture, "art_1er"), Readable(fixture, "art_1er")),
+                     ($"/lu-legilux/{fixture.WorkKey}/fra", $"/lu-legilux/{fixture.WorkKey}/fra"),
                  })
         {
             var reference = Opened(await SearchAsync(mount, query), query);

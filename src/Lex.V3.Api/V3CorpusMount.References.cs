@@ -263,6 +263,7 @@ internal sealed partial class V3CorpusMount
             return ReferenceAnswer(request, query, language, requestedDate, mode, observedAt, recognition, new
             {
                 page = "dossier",
+                address_kind = "dossier",
                 publisher = "lu-legilux",
                 address = "/lu-legilux/" + workKey,
                 work = workKey,
@@ -364,17 +365,30 @@ internal sealed partial class V3CorpusMount
             articleId = opened[0];
         }
 
+        // No date given (the reference names none, and the search's is today's or none): the act's readable address, which
+        // follows the act and opens today's version (R67); a date given: the permalink of the version the date selects (R64).
+        var readable = IsToday(source, date, observedAt);
+        var target = readable ? $"/lu-legilux/{workKey}/{state.Language}" : permalink;
         return ReferenceAnswer(request, query, language, requestedDate, mode, observedAt, recognition, new
         {
             page = "reading",
+            address_kind = readable ? "readable" : "permalink",
             publisher = "lu-legilux",
-            address = articleId is null ? permalink : ArticlePermalink(permalink, articleId),
+            address = articleId is null ? target : ArticlePermalink(target, articleId),
             work = workKey,
             language = state.Language,
             state_date = state.ApplicabilityDate,
             article_id = articleId,
         });
     }
+
+    /// <summary>
+    /// Whether a reference's date is no date the reader gave: today in Luxembourg, or the search's own date when it is today's (the
+    /// home page's box starts at today). A date the reference names, or a search's other date, is a date given.
+    /// </summary>
+    private static bool IsToday(string source, string date, DateTimeOffset observedAt) =>
+        source == "today_in_luxembourg" ||
+        (source == "search_date" && string.Equals(date, TodayInLuxembourg(observedAt), StringComparison.Ordinal));
 
     /// <summary>
     /// A Luxembourg ELI's parts: the work (the path up to its version, language or format segment), the legal resource it names
@@ -512,7 +526,9 @@ internal sealed partial class V3CorpusMount
         string celex,
         DateTimeOffset observedAt,
         string? pinnedLanguage = null,
-        string? pinnedDate = null)
+        string? pinnedDate = null,
+        string? heldProvision = null,
+        bool reading = false)
     {
         var recognition = new Recognition(reference, "eu-eurlex");
         if (_europeReader is null)
@@ -550,11 +566,12 @@ internal sealed partial class V3CorpusMount
             return ReferenceAnswer(request, query, language, requestedDate, mode, observedAt, recognition, opens: null, reason: "two_dates_disagree");
         }
 
-        if (reference.Article is null && reference.Date is null && versionDate is null)
+        if (!reading && reference.Article is null && reference.Date is null && versionDate is null && heldProvision is null)
         {
             return ReferenceAnswer(request, query, language, requestedDate, mode, observedAt, recognition, new
             {
                 page = "dossier",
+                address_kind = "dossier",
                 publisher = "eu-eurlex",
                 address = "/eu-eurlex/" + act,
                 work = act,
@@ -568,6 +585,7 @@ internal sealed partial class V3CorpusMount
         string permalink;
         string wordingDate;
         IReadOnlyList<string> provisions;
+        var readable = false;
         if (seed is not null && HasEuropeCensus())
         {
             var (date, source) = reference.Date is { } own ? (own.Date, "citation")
@@ -584,6 +602,9 @@ internal sealed partial class V3CorpusMount
             var entry = answered[0].Entry!;
             var pin = EuropeStatePin(seed, entry.Answer!, entry.Date);
             (permalink, wordingDate, provisions) = (pin.Permalink, entry.Date, pin.Provisions);
+
+            // No date given: the act's readable address, which opens the wording that answers today (R67).
+            readable = IsToday(source, date, observedAt);
         }
         else
         {
@@ -627,7 +648,17 @@ internal sealed partial class V3CorpusMount
         }
 
         string? provision = null;
-        if (reference.Article is { } article)
+        if (heldProvision is not null)
+        {
+            if (!provisions.Contains(heldProvision, StringComparer.Ordinal))
+            {
+                return WithRecognition(request, AnchorNotInVersion(request, observedAt, PublisherId.EuEurLex, heldProvision,
+                    NearestAnchors(provisions, heldProvision)), recognition);
+            }
+
+            provision = heldProvision;
+        }
+        else if (reference.Article is { } article)
         {
             var (opened, withinGroup) = ArticleNumbers.Opened(article, provisions, ArticleNumbers.FromEuropeId);
             recognition = recognition with { ArticleMatchedBy = withinGroup ? "within_grouped_article" : "number" };
@@ -652,11 +683,13 @@ internal sealed partial class V3CorpusMount
             provision = opened[0];
         }
 
+        var target = readable ? $"/eu-eurlex/{act}/{textLanguage}" : permalink;
         return ReferenceAnswer(request, query, language, requestedDate, mode, observedAt, recognition, new
         {
             page = "reading",
+            address_kind = readable ? "readable" : "permalink",
             publisher = "eu-eurlex",
-            address = provision is null ? permalink : EuropeProvisionPermalink(permalink, provision),
+            address = provision is null ? target : EuropeProvisionPermalink(target, provision),
             work = act,
             language = textLanguage,
             state_date = wordingDate,
@@ -713,6 +746,14 @@ internal sealed partial class V3CorpusMount
             {
                 return EuropeReference(request, query, language, requestedDate, mode, reference, segments[2], observedAt,
                     pinnedLanguage: segments[3], pinnedDate: segments[4]);
+            }
+
+            // An act's readable address (/eu-eurlex/{celex}/{language}[/{provision}]): the wording that answers today, at that provision.
+            if (segments.Length is 4 or 5 && segments[2].Length > 0 && segments[3].Length == 3 && segments[3].All(char.IsAsciiLetterLower) &&
+                (segments.Length == 4 || IsAnchorSegment(segments[4])))
+            {
+                return EuropeReference(request, query, language, requestedDate, mode, reference, segments[2], observedAt,
+                    pinnedLanguage: segments[3], heldProvision: segments.Length == 5 ? Uri.UnescapeDataString(segments[4]) : null, reading: true);
             }
 
             return WithRecognition(request, Unknown(request, query, observedAt, PublisherId.EuEurLex,
@@ -788,6 +829,7 @@ internal sealed partial class V3CorpusMount
             recognition with { Date = stateDate, DateSource = "identifier", Language = textLanguage }, new
             {
                 page = "reading",
+                address_kind = "permalink",
                 publisher,
                 address,
                 work,
