@@ -4,7 +4,7 @@
 // release path; production signing, credentials and deployment stay with the owner).
 //
 //   node scripts/image-rehearsal.mjs --mount <a v3-corpus directory with its build-report.json, or the
-//     journey's fixture mount with its journey-mount.json> [--keep] [--no-reproduce] [--no-probe] [--platform-card]
+//     journey's fixture mount with its journey-mount.json> [--keep] [--no-reproduce] [--no-probe | --no-browser] [--platform-card]
 //
 // The image is built without a container daemon, by the .NET SDK (`dotnet publish -t:PublishContainer`,
 // the base image pinned by digest in `Lex.V3.Api.csproj`), as an OCI image layout archive. Then:
@@ -35,8 +35,13 @@
 // The image is reproducible: each build restores and compiles every project afresh in its own directory,
 // the SDK's time stamps are replaced by the source date (`image-reproducible.mjs`), and a second build
 // from scratch must give the same manifest digest (`--no-reproduce` skips it). The image then runs in
-// WSL as a hardened container would, and the zero-traffic probes run against it (`image-run.mjs`;
-// `--no-probe` skips them). Nothing is pushed anywhere, and the work directory (both builds, their
+// WSL as a hardened container would, and the zero-traffic probes run against it (`image-run.mjs`, `probeImage`;
+// `--no-probe` skips them): every probe that needs no browser on one start of the image (its API's journeys, the
+// deployment probe's checks of its pages, card and headers, V2's routes, its readiness, and what it records), then the
+// browser's walk of its pages. `--no-browser` keeps every probe but the walk, for a machine where no browser may run
+// (the driver's, since 2026-10-16: headless Chrome runs there locked the owner's Windows account): no browser is looked
+// for or started, and the report says `browserProbes: "skipped: --no-browser"` and names each page step not walked
+// (`stepsNotWalked`). Nothing is pushed anywhere, and the work directory (both builds, their
 // archives), the build's artifacts directory and the container's run directory are removed at the end,
 // which the report records.
 
@@ -533,8 +538,165 @@ async function mountedCard({ mountPath, into, log }) {
   return readFile(output);
 }
 
+/** What a report says in place of the browser's walk on a machine where no browser may run (the owner's order of 2026-10-16). */
+export const NO_BROWSER = "skipped: --no-browser";
+
+/**
+ * The page steps a browser walks over the image, by the labels a walk reports them under: the real mount's
+ * (`realMountSteps`, the EU steps with them when its build report names an EU index) or the fixture mount's
+ * (`fixtureMountExpectations`). What a report without the browser lists as not walked; reading them asks nothing of a
+ * browser.
+ */
+export async function browserSteps(mountPath, mountKind) {
+  const { fixtureMountExpectations, realMountSteps } = await import("./journey.mjs");
+  if (mountKind === "fixture") {
+    const journeyMount = JSON.parse(await readFile(join(mountPath, "journey-mount.json"), "utf8"));
+    return fixtureMountExpectations(journeyMount).map(([name]) => `${name}, with the fixture mount`);
+  }
+  const report = JSON.parse(await readFile(join(mountPath, "build-report.json"), "utf8"));
+  return realMountSteps(report).map(([name]) => `${name}, with the real mount`);
+}
+
+/** The string values of a JSON request body's parameters (REST) or arguments (MCP), the texts a probe sent. */
+function sentTexts(body) {
+  let parsed = null;
+  try { parsed = typeof body === "string" ? JSON.parse(body) : null; } catch { parsed = null; }
+  const texts = [];
+  const walk = (value) => {
+    if (typeof value === "string") texts.push(value);
+    else if (value !== null && typeof value === "object") Object.values(value).forEach(walk);
+  };
+  walk(parsed?.parameters ?? parsed?.params?.arguments ?? null);
+  return texts;
+}
+
+/**
+ * Runs `during` and answers `{ value, record }`: what it answered, and every request this process sent meanwhile, as
+ * `record`, `{ requests, otherOrigins, cookies, texts }`: how many, the origins other than `origin` asked, the answers that
+ * set a cookie (`METHOD path`), and the texts the requests sent (at least eight characters: identifiers, dates, phrases).
+ * The probes all ask through the global `fetch`, which is wrapped for that while and put back after.
+ */
+export async function recordedRequests(origin, during) {
+  const record = { requests: 0, otherOrigins: new Set(), cookies: [], texts: new Set() };
+  const original = globalThis.fetch;
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+    const method = init.method ?? (typeof input === "object" && "method" in input ? input.method : "GET");
+    record.requests += 1;
+    if (url.origin !== origin) record.otherOrigins.add(url.origin);
+    for (const text of sentTexts(init.body)) if (text.length >= 8) record.texts.add(text);
+    const response = await original(input, init);
+    if (response.headers.get("set-cookie") !== null) record.cookies.push(`${method} ${url.pathname}`);
+    return response;
+  };
+  try {
+    const value = await during();
+    return { value, record: { requests: record.requests, otherOrigins: [...record.otherOrigins], cookies: record.cookies, texts: [...record.texts] } };
+  } finally {
+    globalThis.fetch = original;
+  }
+}
+
+/**
+ * The probes of a running image (`startServer` starts it and answers the journey's server shape: `{ origin, output(),
+ * outputAtStart, fileWatch, changedFiles(), close() }`), as a report. First every probe that needs no browser, against one
+ * start of the image:
+ * - journeys J6, J7 and J8 at its API (`apiJourneyRuns`): the contained assistant's card, every page's request and ask,
+ *   events and answer drift through REST and MCP alike, and the event log polled (on a real mount its first
+ *   `REAL_MOUNT_EVENTS_VERIFIED` permalinks verified, on the fixture's every one);
+ * - what the deployment probe holds a candidate to (`servedPageFailures`, `deploy-probe.mjs`): the root's redirect to
+ *   `/fr/`, the home page as built or as the release's renderer renders the image's own coverage answer, its security
+ *   headers (CSP with `frame-ancestors 'none'`, HSTS, `Referrer-Policy`, `nosniff`), the 404 page byte for byte, the card
+ *   at its stable route, coverage from the mount's corpus, the clock, and an accented title found as typed;
+ * - V2's routes (`v2RouteFailures`), the server's readiness and no synthetic preview (`serverFailures`), and the card's
+ *   bytes at its route;
+ * - privacy, as far as it shows: what the container recorded once it first answered (nothing on its output, no file on its
+ *   /tmp: `processRecordFailures`), and over HTTP, no answer setting a cookie and no request to another origin.
+ * Then, with `browser`, the browser's walk: the real mount's steps (`realMountRuns`, its API journeys already asked above)
+ * or the fixture mount's (`fixtureMountRuns`), each step its own start. Without it no browser is looked for or started
+ * (`findBrowser` is never called), the report says `browserProbes: "skipped: --no-browser"`, and `stepsNotWalked` names
+ * each page step a walk would have reported, so no report reads as browser-probed when it was not.
+ */
+export async function probeImage({ startServer, mountPath, mountKind, web, card, corpusSha256, browser = true, log = () => {} }) {
+  const { apiJourneyRuns, processRecordFailures, REAL_MOUNT_EVENTS_VERIFIED } = await import("./journey.mjs");
+  const { servedPageFailures } = await import("./deploy-probe.mjs");
+  const { CARD_ROUTE } = await import("./evaluation-card.mjs");
+  const report = { browserProbes: browser ? "walked" : NO_BROWSER };
+  log("probing the image over HTTP: its API's journeys, its pages, card and headers, V2's routes, its readiness and what it records");
+  const server = await startServer();
+  try {
+    const { value, record } = await recordedRequests(server.origin, async () => {
+      const kept = { ...server, close: async () => {} };
+      const journeys = await apiJourneyRuns(null, mountPath, {
+        startServer: async () => kept, eventsToVerify: mountKind === "fixture" ? Number.POSITIVE_INFINITY : REAL_MOUNT_EVENTS_VERIFIED,
+      });
+      const notes = [];
+      const servedPages = { failures: await servedPageFailures(server.origin, { web, card, corpusSha256, notes }), notes };
+      const v2Routes = { routesAsked: V2_ROUTES.length, routeFailures: await v2RouteFailures(server.origin, { v3Files: servedPaths(web) }) };
+      // Ready with its mount, and no synthetic preview (plan 0.7).
+      const serverAnswers = { failures: await serverFailures(server.origin) };
+      // The card for machines at its stable route: the bytes the release carries and signs.
+      const answer = await fetch(`${server.origin}${CARD_ROUTE}`);
+      const bytes = Buffer.from(await answer.arrayBuffer());
+      const cardRoute = { route: CARD_ROUTE, status: answer.status, contentType: answer.headers.get("content-type"), sha256: sha256(bytes), isTheReleaseCard: bytes.equals(card) };
+      cardRoute.failures = answer.status !== 200 || !bytes.equals(card) || !/^application\/json/.test(cardRoute.contentType ?? "")
+        ? [`the image does not serve the card at ${CARD_ROUTE}: ${JSON.stringify(cardRoute)}`] : [];
+      return { journeys, servedPages, v2Routes, serverAnswers, cardRoute };
+    });
+    report.probes = value.journeys.map(([label, failures]) => ({ step: `${label}, with the ${mountKind} mount`, state: "api", failures, paintedElements: 0, citationsVerified: 0 }));
+    Object.assign(report, { servedPages: value.servedPages, v2Routes: value.v2Routes, server: value.serverAnswers, cardRoute: value.cardRoute });
+    // What the container recorded once it first answered, all these probes long.
+    const output = server.output();
+    const recorded = { startup: output.slice(0, server.outputAtStart), output: output.slice(server.outputAtStart), fileEvents: await server.fileWatch.stop(), changedFiles: await server.changedFiles() };
+    report.privacy = {
+      requests: record.requests, textsSent: record.texts.length, outputBytes: recorded.output.length, fileEvents: recorded.fileEvents.length,
+      cookiesSet: record.cookies.length, otherOrigins: record.otherOrigins,
+      failures: [
+        ...processRecordFailures(recorded, { typed: record.texts }),
+        ...record.cookies.map((request) => `${request} answered with a cookie`),
+        ...record.otherOrigins.map((other) => `the probes asked ${other}, not the image's own origin`),
+      ],
+    };
+  } finally {
+    await server.close();
+  }
+
+  if (!browser) {
+    report.stepsNotWalked = await browserSteps(mountPath, mountKind);
+    log(`the browser probes are skipped (--no-browser): ${report.stepsNotWalked.length} page steps were not walked`);
+    return report;
+  }
+  // The browser's walk: on a real mount each page held to what the image's API answers; on the fixture mount every page
+  // to the texts the fixture's one work gives it, and its citations verified.
+  log("walking the image's pages in a browser");
+  const { fixtureMountRuns, realMountRuns } = await import("./journey.mjs");
+  const { findBrowser } = await import("./browser-evidence.mjs");
+  const found = await findBrowser();
+  const options = { servedByApi: true, keyboard: false, startServer };
+  const runs = mountKind === "fixture"
+    ? await fixtureMountRuns(null, mountPath, options, found, null)
+    : await realMountRuns(null, mountPath, options, found, null, { apiRuns: async () => [] });
+  report.probes = [...runs.map(([label, { observed, failures }]) => ({
+    step: label, state: observed.answerState, failures,
+    paintedElements: observed.paint?.painted ?? 0, citationsVerified: observed.verifications?.length ?? 0,
+  })), ...report.probes];
+  return report;
+}
+
+/** A probe report's failures (`probeImage`), each prefixed with what it belongs to; empty when every probe held. */
+export function probeFailures(report) {
+  return [
+    ...report.probes.filter((one) => one.failures.length > 0).map((one) => `${one.step}: ${one.failures.join("; ")}`),
+    ...report.servedPages.failures.map((failure) => `the served pages: ${failure}`),
+    ...report.v2Routes.routeFailures.map((failure) => `V2's routes: ${failure}`),
+    ...report.server.failures.map((failure) => `the server: ${failure}`),
+    ...report.cardRoute.failures,
+    ...report.privacy.failures.map((failure) => `privacy: ${failure}`),
+  ];
+}
+
 /** The rehearsal, end to end. Returns its report; throws on the first step that fails. */
-export async function rehearse({ mount, keep = false, probe = true, reproduce = true, platformCard = false, signer = null, log = () => {} }) {
+export async function rehearse({ mount, keep = false, probe = true, browser = true, reproduce = true, platformCard = false, signer = null, log = () => {} }) {
   const mountPath = resolve(mount);
   const { kind: mountKind, report, bytes: mountBytes } = await mountReport(mountPath);
   const work = await mkdtemp(join(tmpdir(), "lex-image-rehearsal-"));
@@ -619,14 +781,11 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
     image = { manifestDigest: image.manifestDigest, manifest: image.manifest, config: image.config, layers: image.layers.map(({ digest }) => ({ digest })) };
 
     if (probe) {
-      // The zero-traffic probes, against the image itself: health (it answers), the API (each page's
-      // request, answered from the mount it carries), the browser (every live screen, served by the
-      // image), privacy (nothing written after its first answer, on its output or its /tmp) and the
-      // security headers the page arrives with.
-      log("running the image in WSL and probing it");
+      // The zero-traffic probes, against the image itself, running in WSL as a hardened container: every probe that needs
+      // no browser on one start of it (`probeImage`), then, unless `--no-browser`, the browser's walk of every live screen
+      // the image serves, each step its own start.
+      log(browser ? "running the image in WSL and probing it" : "running the image in WSL and probing it without a browser (--no-browser)");
       const { unpackImage, startImage, tmpMebibytesFor, TMP_MARGIN_MEBIBYTES } = await import("./image-run.mjs");
-      const { fixtureMountRuns, realMountRuns } = await import("./journey.mjs");
-      const { findBrowser } = await import("./browser-evidence.mjs");
       // Collected here, where `rehearse`'s frame no longer holds the old image (a collection on the line after it was let
       // go still found it reachable; the review of #952), and only where the process allows it (`node --expose-gc`).
       globalThis.gc?.();
@@ -636,37 +795,16 @@ export async function rehearse({ mount, keep = false, probe = true, reproduce = 
       result.containerTmpMebibytes = tmpMebibytes;
       // A minute and a half, and a minute more per GiB of indexes the container verifies before it listens.
       const deadlineMs = 90_000 + Math.ceil(((tmpMebibytes - TMP_MARGIN_MEBIBYTES) / 1024) * 60_000);
-      // On a real mount each page is held to what the image's API answers; on the fixture mount every
-      // page must answer with the texts the fixture's one work gives it, and its citations verify.
-      const probeRuns = mountKind === "fixture" ? fixtureMountRuns : realMountRuns;
-      const runs = await probeRuns(null, mountPath, { servedByApi: true, keyboard: false, startServer: () => startImage({ run: container, config: image.config, tmpMebibytes, deadlineMs }) }, await findBrowser(), null);
-      result.probes = runs.map(([label, { observed, failures }]) => ({
-        step: label, state: observed.answerState, failures,
-        paintedElements: observed.paint?.painted ?? 0, citationsVerified: observed.verifications?.length ?? 0,
-      }));
-      const failing = result.probes.filter((one) => one.failures.length > 0);
-      if (failing.length > 0) throw new Error(`the image failed its probes:\n${failing.map((one) => `- ${one.step}: ${one.failures.join("; ")}`).join("\n")}`);
-
-      // V2 unreachable in the image: each route the retired product served answers 404, or V3's own
-      // file where V3 serves the same path.
-      const server = await startImage({ run: container, config: image.config, tmpMebibytes, deadlineMs });
-      try {
-        const routeFailures = await v2RouteFailures(server.origin, { v3Files: servedPaths(web) });
-        Object.assign(result.v2Absent, { routesAsked: V2_ROUTES.length, routeFailures });
-        if (routeFailures.length > 0) throw new Error(`the image answers V2's routes:\n- ${routeFailures.join("\n- ")}`);
-        // Ready with its mount, and no synthetic preview (plan 0.7).
-        result.server = { failures: await serverFailures(server.origin) };
-        if (result.server.failures.length > 0) throw new Error(`the image's server does not answer for itself:\n- ${result.server.failures.join("\n- ")}`);
-        // The card for machines at its stable route: the bytes the release carries and signs.
-        const answer = await fetch(`${server.origin}${CARD_ROUTE}`);
-        const bytes = Buffer.from(await answer.arrayBuffer());
-        result.cardRoute = { route: CARD_ROUTE, status: answer.status, contentType: answer.headers.get("content-type"), sha256: sha256(bytes), isTheReleaseCard: bytes.equals(servedCard) };
-        if (answer.status !== 200 || !bytes.equals(servedCard) || !/^application\/json/.test(answer.headers.get("content-type") ?? "")) {
-          throw new Error(`the image does not serve the card at ${CARD_ROUTE}: ${JSON.stringify(result.cardRoute)}`);
-        }
-      } finally {
-        await server.close();
-      }
+      const { v2Routes, ...probed } = await probeImage({
+        startServer: () => startImage({ run: container, config: image.config, tmpMebibytes, deadlineMs }),
+        mountPath, mountKind, web, card: servedCard, corpusSha256: report.corpus?.Sha256 ?? null, browser, log,
+      });
+      Object.assign(result, probed);
+      Object.assign(result.v2Absent, v2Routes);
+      const failing = probeFailures({ ...probed, v2Routes });
+      if (failing.length > 0) throw new Error(`the image failed its probes:\n- ${failing.join("\n- ")}`);
+    } else {
+      result.browserProbes = "skipped: --no-probe";
     }
 
     log("publishing the release assets, reading them back and verifying them");
@@ -745,7 +883,7 @@ export async function toolBinding(toolPath, checkoutHead = null) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const argv = process.argv.slice(2);
   const value = (name) => { const at = argv.indexOf(name); return at < 0 || at + 1 >= argv.length ? null : argv[at + 1]; };
-  const options = { keep: argv.includes("--keep"), probe: !argv.includes("--no-probe"), reproduce: !argv.includes("--no-reproduce"), platformCard: argv.includes("--platform-card"), log: (line) => console.error(`- ${line}`) };
+  const options = { keep: argv.includes("--keep"), probe: !argv.includes("--no-probe"), browser: !argv.includes("--no-browser"), reproduce: !argv.includes("--no-reproduce"), platformCard: argv.includes("--platform-card"), log: (line) => console.error(`- ${line}`) };
   // The release signer: the owner's key and the identity it signs as, both or neither.
   const signingKey = value("--signing-key");
   const signerIdentity = value("--signer");
@@ -768,7 +906,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       : null)
     : value("--mount") !== null ? rehearse({ mount: value("--mount"), ...options }) : null;
   if (run === null) {
-    console.error("usage: node scripts/image-rehearsal.mjs (--mount <v3-corpus directory or journey fixture mount> | --custody <custody directory> --checkpoint <mount-inputs.json> --tool <this commit's CI runtime artifact runtime/Lex.V3.Tool.dll> [--custody-encoding raw|brotli] [--allow-unbound-tool]) [--signing-key <PEM file, or - for standard input> --signer <identity>] [--keep] [--no-reproduce] [--no-probe] [--platform-card]");
+    console.error("usage: node scripts/image-rehearsal.mjs (--mount <v3-corpus directory or journey fixture mount> | --custody <custody directory> --checkpoint <mount-inputs.json> --tool <this commit's CI runtime artifact runtime/Lex.V3.Tool.dll> [--custody-encoding raw|brotli] [--allow-unbound-tool]) [--signing-key <PEM file, or - for standard input> --signer <identity>] [--keep] [--no-reproduce] [--no-probe | --no-browser] [--platform-card]");
     process.exit(2);
   }
   run.then(
