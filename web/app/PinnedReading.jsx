@@ -120,7 +120,8 @@ export function Citations({ view, version, article, observedAt }) {
         <dt>{COPY.citeWithPermalink}</dt>
         <dd data-citation-form="permalink" lang={lang}>{forms.withPermalink}</dd>
         <dt>{COPY.citeEvidence}</dt>
-        <dd data-citation-form="evidence" lang={lang}>
+        {/* The permalink and text digest the form carries, which a check of it asks `verify` to confirm (the journeys). */}
+        <dd data-citation-form="evidence" lang={lang} data-permalink={forms.permalink} data-text-sha256={forms.textSha256 ?? ''}>
           {forms.evidenceLines.map((line, index) => (
             <span key={index}>
               {index === 0 ? null : <br />}

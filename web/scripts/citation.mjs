@@ -18,9 +18,9 @@
 //     (`/eli/etat/leg/code/{name}`) is named by its one held title. Any other type is given no usual form. "modifiée" is
 //     never written: the index does not hold whether an act was amended.
 //   - The article's number is read from the publisher's id by a fixed rule (`art_15`, `art_1er`, `art_30-2`, `art_40bis`,
-//     `art_iii`, `art_unique`, a code's `art_l_121-6`); an id of no shape here (a quoted article of an amending act, a
-//     heading) is given no usual form. An EU provision is named by its own heading when it reads "Article ..." (the text's
-//     words, "Article 32 bis"), else by its id's number (`006` is 6).
+//     `art_iii`, `art_unique`, a code's `art_l_121-6`, a number before a heading); an id of no shape here (a quoted article
+//     of an amending act, a heading alone) is given no usual form. An EU provision is named by its own heading when it reads
+//     "Article ..." (the text's words, "Article 32 bis"), else by its id's number (`006` is 6).
 //   - An EU act is named as EUR-Lex numbers it, from its CELEX's type (R, L, D), year and number: "Regulation (EU)
 //     2016/679", "Regulation (EU) No 575/2013", "Directive 2006/112/EC", a year before 1999 on two digits. The domain is
 //     the numbering's for the act's year (EEC before 1993, EC from 1994 to 2008, EU from 2010); in 1993 and 2009, whose acts
@@ -68,6 +68,8 @@ const FIRST_ID = new RegExp(`^${ARTICLE_PREFIX}(1|i)er$`);
 const ROMAN_ID = new RegExp(`^${ARTICLE_PREFIX}([ivxlc]+)$`);
 const UNIQUE_ID = new RegExp(`^${ARTICLE_PREFIX}unique$`);
 const CODE_ID = /^art_([lrda])_(\d+(?:-\d+)*)$/;
+/** A number the publisher's id follows with the article's heading (`art_2_champ_d'application` is article 2). */
+const HEADED_ID = /^(?:art_|article_)(\d+(?:-\d+)*)_\p{L}/u;
 
 /** The Mémorial A issue an act as published is part of, as the publisher's isPartOf names it. */
 const MEMORIAL_ISSUE = /^http:\/\/data\.legilux\.public\.lu\/eli\/etat\/leg\/memorial\/(\d{4})\/a0*(\d+)$/;
@@ -106,6 +108,8 @@ export function luxembourgArticle(publisherId, words) {
   if (roman !== null) return fillText(own.article, { number: roman[1].toUpperCase() });
   const code = CODE_ID.exec(publisherId);
   if (code !== null) return fillText(own.article, { number: `${code[1].toUpperCase()}. ${code[2]}` });
+  const headed = HEADED_ID.exec(publisherId);
+  if (headed !== null) return fillText(own.article, { number: headed[1] });
   return null;
 }
 

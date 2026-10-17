@@ -446,6 +446,20 @@ export function journeyVerdict(observed, expected) {
     if (step.pins !== undefined && observed.pinReplaced !== false) failures.push(`the page says the permalink's state is not the one served (${observed.pinReplaced ?? "not observed"})`);
     if (observed.inView !== "shown") failures.push(`the article ${cites} the address names is ${observed.inView === "absent" ? "not on the page, first" : `not in view (${observed.inView ?? "not observed"})`}`);
     else if (observed.targetFocused !== true) failures.push(`the article ${cites} the address names is in view without the focus`);
+    // The cited article carries its citations, and `verify` confirms its evidence form by both its hashes: the version's, in
+    // the permalink it prints, and the text's (R65: "verify resolves every form").
+    if (observed.citedEvidence !== undefined) {
+      if (observed.citedEvidence.length === 0) failures.push(`the article ${cites} the address names carries no evidence form`);
+      const checks = observed.evidenceVerifications ?? [];
+      if (checks.length !== observed.citedEvidence.length) failures.push(`${observed.citedEvidence.length - checks.length} evidence forms were not verified`);
+      for (const check of checks) {
+        if (check.refusal !== null) failures.push(`verify refused the evidence form's permalink ${check.identifier} with ${check.refusal}`);
+        else if (check.verdict !== "digest_matches") failures.push(`verify found the evidence form's permalink ${check.identifier} ${check.verdict}, not digest_matches`);
+        else if (check.articleTextSha256 !== check.textSha256) {
+          failures.push(`verify names the text digest ${check.articleTextSha256} at ${check.identifier}, and its evidence form carries ${check.textSha256}`);
+        }
+      }
+    }
   }
   if (step.stale === true && expected.state !== "success" && expected.refusalCode === "pinned_digest_mismatch") {
     if (observed.pinNotHeld !== true) failures.push(`the page does not say that the link pins no version held at its date (${observed.pinNotHeld ?? "not observed"})`);
@@ -1266,6 +1280,9 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
         await evaluate("[...document.querySelectorAll('[data-live-answer] a[href]')].map((node) => node.getAttribute('href'))"),
       ),
       pinNamed: await evaluate("document.querySelector('[data-live-answer] [data-pin-replaced] code, [data-live-answer] [data-pin-not-held] > code')?.textContent.trim() ?? null"),
+      // The cited article's evidence form (`Citations`; R65): the permalink it prints and the text digest it carries, which
+      // `verify` must both confirm once the run is recorded (`verifyEvidence`).
+      citedEvidence: await evaluate("[...document.querySelectorAll('[data-live-answer] [data-citation-form=evidence]')].map((node) => ({ permalink: node.dataset.permalink ?? null, textSha256: node.dataset.textSha256 || null }))"),
       // At a stale permalink: whether the page says the link pins no version held at its date, and the current link it gives.
       pinNotHeld: step.stale === true ? await evaluate("document.querySelector('[data-pin-not-held]') !== null") : undefined,
       pinCurrent: step.stale === true ? await evaluate("document.querySelector('[data-pin-not-held] a[href]')?.getAttribute('href') ?? null") : undefined,
@@ -1371,6 +1388,29 @@ async function verifyCitations(origin, citations) {
 }
 
 /**
+ * Asks the API's `verify` for each evidence form a page printed (its permalink, as printed, under the site's origin), and
+ * keeps what it said beside the text digest the form carries: the form is verified by both its hashes (R65).
+ */
+export async function verifyEvidence(origin, cited, fetchImpl = fetch) {
+  const checks = [];
+  for (const { permalink, textSha256 } of cited) {
+    const answer = await fetchImpl(`${origin}/api/v3/verify`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation_id: "verify", parameters: { identifier: permalink } }),
+    });
+    const envelope = await answer.json();
+    const value = envelope.result?.value ?? null;
+    checks.push({
+      identifier: permalink,
+      textSha256,
+      refusal: envelope.refusal?.code ?? (value === null ? `HTTP ${answer.status}` : null),
+      verdict: value?.verdict ?? null,
+      articleTextSha256: value?.article_text_sha256 ?? null,
+    });
+  }
+  return checks;
+}
+
+/**
  * One step: a server (the API from its build output, or whatever `expected.startServer` starts, such as
  * the release image), the page asked through the browser, and the verdict. A server answers
  * `{ origin, output(), outputAtStart, fileWatch, changedFiles(), close() }`.
@@ -1399,6 +1439,8 @@ export async function run(apiOutput, mount, expected, browser, liveRoot) {
     observed.verifications = await verifyCitations(api.origin, observed.citations.filter((citation) => pinnedCitation(citation) !== null));
     // What `verify` says of the permalink a notice names as not the version served.
     if (observed.pinNamed) observed.pinVerification = (await verifyCitations(api.origin, [observed.pinNamed]))[0];
+    // And of the cited article's evidence form, by its permalink under the site's origin as printed.
+    if (Array.isArray(observed.citedEvidence) && observed.citedEvidence.length > 0) observed.evidenceVerifications = await verifyEvidence(api.origin, observed.citedEvidence);
     // What a reader with no script receives: the page's own bytes, as the server sends them.
     if (expected.mustRender === true) {
       const bytes = await (await fetch(`${pageOrigin}${expected.step.path.split("#")[0]}`)).text();

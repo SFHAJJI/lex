@@ -55,6 +55,7 @@ public sealed class V3EnvelopeSamplesTests
         // original wording's permalink, whose next wording's text this site does not hold in English. Captured first, so the
         // derived mount is gone before the rest is asked.
         JsonObject laterNotHeld;
+        JsonObject laterNotHeldVerified;
         var (branchRoot, branchDirectory) = await V3CorpusEuropeTimeViewTests.ConsolidatedWorksMountAsync(
             new EuFirstMountAcquisitionTests.ConsolidatedWorkSpec(
                 V3CorpusEuropeTimeViewBranchTests.WorkB, V3CorpusEuropeTimeViewTests.ConsolidationDate, V3CorpusEuropeTimeViewBranchTests.Designated,
@@ -75,16 +76,18 @@ public sealed class V3EnvelopeSamplesTests
                 branchMount, "evidence_bundle", scenario, parameters);
             // Its custody records each body's receipt per run too.
             WithFixed(laterNotHeld["envelope"]!, "body_receipt_sha256", FixedReceiptDigest);
+            // A citation's evidence form is verified by both its hashes (R65): verify at the first provision's permalink names
+            // the wording's digest and the provision text's, which the web's generator checks against the bundle above.
+            laterNotHeldVerified = await CaptureAsync(
+                probe["context"]!["snapshot"]!["snapshot_sha256"]!.GetValue<string>(),
+                probe["result"]!["value"]!["index_sha256"]!.GetValue<string>(),
+                branchMount, "verify", "an EU provision's permalink: digest_matches, with the provision's text digest",
+                new { identifier = originalPermalink + "/001" });
         }
         finally
         {
             Directory.Delete(branchRoot, recursive: true);
         }
-
-        // The GDPR's pinned English wording, whose provision permalink verify answers with its text digest (the evidence form's
-        // second hash, R65).
-        var europeWording = (await CaptureAsync(europe.CorpusSha256, europe.IndexSha256, europeMount, "dossier", "probe", new { identifier = "32016R0679" }))
-            ["envelope"]!["result"]!["value"]!["expressions"]![0]!["pinned_wording"]!["permalink"]!.GetValue<string>();
 
         var envelopes = new JsonArray
         {
@@ -114,7 +117,7 @@ public sealed class V3EnvelopeSamplesTests
             laterNotHeld,
             // A citation's evidence form is verified by both its hashes (R65): the version's, in its permalink, and the text's.
             await CaptureAsync(fixture, mount, "verify", "an article's permalink: digest_matches, with the article's text digest", new { identifier = fixture.Permalink + "/art_15" }),
-            await CaptureAsync(europe.CorpusSha256, europe.IndexSha256, europeMount, "verify", "an EU provision's permalink: digest_matches, with the provision's text digest", new { identifier = europeWording + "/033" }),
+            laterNotHeldVerified,
             await CaptureAsync(fixture, mount, "article_history", "one article of the work, in the language it is held in: an answer", new { identifier = $"/lu-legilux/{fixture.WorkKey}", anchor = "art_15", language = "fra" }),
             await CaptureAsync(fixture, mount, "article_history", "an article id no held state carries: a refusal with a payload", new { identifier = $"/lu-legilux/{fixture.WorkKey}", anchor = "art_44" }),
             await CaptureAsync(fixture, mount, "article_history", "a work the index does not hold: a refusal with a payload", new { identifier = "/lu-legilux/no-such-work", anchor = "art_15" }),
@@ -134,8 +137,8 @@ public sealed class V3EnvelopeSamplesTests
             ["note"] = "Whole REST envelopes the real handler sent, each verified by V3EnvelopeJson.ParseAndVerify before it was recorded, " +
                 "and the reviewed registry's contract a reader needs to verify one. The fixture's per-run corpus and index digests are replaced " +
                 $"by {FixedCorpusDigest[..8]}... and {FixedIndexDigest[..8]}... (same shape, every occurrence), and every object_ref_sha256 " +
-                $"(the corpus's per-run reference to the object holding a source's bytes) by {FixedObjectRefDigest[..8]}...; in the one envelope from a " +
-                $"mount derived from custody (the EU time view whose next wording's text is not held in English), every body_receipt_sha256 (that " +
+                $"(the corpus's per-run reference to the object holding a source's bytes) by {FixedObjectRefDigest[..8]}...; in the two envelopes from a " +
+                $"mount derived from custody (the EU time view whose next wording's text is not held in English, and verify at its first provision), every body_receipt_sha256 (that " +
                 $"custody's per-run receipt) by {FixedReceiptDigest[..8]}...; nothing else is edited. " +
                 "THE PRODUCER IS REAL AND THE MOUNT IS A FIXTURE.",
             ["contract"] = Contract(),
