@@ -25,7 +25,8 @@ internal static class OfflineNetwork
         + $"publisher_requests={network.Total}";
 
     /// <summary>
-    /// Null when nothing was measured; otherwise prints the refusal and returns <see cref="NetworkActivityMeasured"/>.
+    /// Null when the guard is entered and nothing was measured; otherwise prints the refusal and returns
+    /// <see cref="NetworkActivityMeasured"/>. A guard that is not entered refuses too: the command fails closed.
     /// </summary>
     internal static int? Refusal(V3NetworkActivityListener network, string command)
     {
@@ -34,8 +35,10 @@ internal static class OfflineNetwork
             return null;
         }
 
-        Console.Error.WriteLine($"{command} refused: an offline process measured network activity ({Line(network)}); "
-            + "nothing it wrote is to be used");
+        var reason = network.Total == 0
+            ? "the offline guard was not entered, so nothing kept a publisher session out of this process"
+            : "an offline process measured network activity";
+        Console.Error.WriteLine($"{command} refused: {reason} ({Line(network)}); nothing it wrote is to be used");
         return NetworkActivityMeasured;
     }
 }
