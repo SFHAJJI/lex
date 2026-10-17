@@ -74,7 +74,7 @@ test("a Luxembourg act held only as published is cited in French legal usage, da
     // The fixture's index holds no isPartOf fact for its act: said, never guessed.
     `Publication${NB}: le numéro du Mémorial A n’est pas détenu par cet index.`,
     `Empreinte du texte (SHA-256)${NB}: ${article.textSha256}`,
-    "Consulté sur Lex le 2026-09-18 (Luxembourg).",
+    "Consulté sur Lex le 2026-09-18 (date au Luxembourg).",
     `Tel que publié${NB}; peut avoir été modifié depuis${NB}; aucun texte consolidé détenu.`,
     FR.common.asPublished.authenticity.publication_date_not_stated.replace("{act}", `${WORK}/jo`),
   ]);
@@ -194,12 +194,37 @@ test("a consolidated Luxembourg version is cited with its date only when a later
   assert.equal(citationForms({ view: decree.view, version: decree.state, article: article(decree.state), observedAt: "2026-10-17T10:00:00Z" }).conventional, null);
 });
 
+test("an act published since 2017, whose ELI ends a{n}, is named too, and a long or multi-line title stays in the evidence form only", () => {
+  // Every held act since 2017 (1,701 of the population's 1,730 works) ends its ELI a{n}, the others n{n} (review of the French).
+  const omnibus = consolidated({ work: "http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/03/a318", date: "2017-03-07" });
+  const article = (state) => ({ publisherId: "art_1er", textSha256: "a".repeat(64), permalink: `${state.permalink}/art_1er` });
+  assert.equal(citationForms({ view: omnibus.view, version: omnibus.state, article: article(omnibus.state), observedAt: "2026-10-17T10:00:00Z" }).conventional,
+    "Art. 1er de la loi du 3 mars 2017");
+  const rgd = consolidated({ work: "http://data.legilux.public.lu/eli/etat/leg/rgd/2018/06/06/a464", date: "2018-06-12" });
+  assert.equal(citationForms({ view: rgd.view, version: rgd.state, article: { publisherId: "art_unique", textSha256: "a".repeat(64), permalink: `${rgd.state.permalink}/art_unique` }, observedAt: "2026-10-17T10:00:00Z" }).conventional,
+    "Art. unique du règlement grand-ducal du 6 juin 2018");
+  // A title whose words run on several lines (the publisher writes a line break as backslash and n), or past 200
+  // characters, is no usual citation's: the type and date stand alone, and the evidence form quotes the title whole.
+  const listed = "Loi du 3 mars 2017 dite « Omnibus » portant modification :\\n- de la loi modifiée du 19 juillet 2004 ;\\n- de la loi du 21 mai 1999.";
+  const titled = consolidated({ work: "http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/03/a318", date: "2017-03-07", titles: [listed] });
+  const forms = citationForms({ view: titled.view, version: titled.state, article: article(titled.state), observedAt: "2026-10-17T10:00:00Z" });
+  assert.equal(forms.conventional, "Art. 1er de la loi du 3 mars 2017");
+  assert.ok(forms.evidenceLines.includes(`Intitulé (éditeur)${NB}: ${listed}`), "the title, verbatim, in the evidence form");
+  const long = `Loi du 3 mars 2017 portant ${"modification de diverses dispositions ".repeat(6).trim()}.`;
+  const longer = consolidated({ work: "http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/03/a318", date: "2017-03-07", titles: [long] });
+  assert.ok(long.length - "Loi du 3 mars 2017 ".length > 200);
+  assert.equal(citationForms({ view: longer.view, version: longer.state, article: article(longer.state), observedAt: "2026-10-17T10:00:00Z" }).conventional, "Art. 1er de la loi du 3 mars 2017");
+  const short = consolidated({ work: "http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/03/a318", date: "2017-03-07", titles: ["Loi du 3 mars 2017 portant modification de la loi électorale."] });
+  assert.equal(citationForms({ view: short.view, version: short.state, article: article(short.state), observedAt: "2026-10-17T10:00:00Z" }).conventional,
+    "Art. 1er de la loi du 3 mars 2017 portant modification de la loi électorale");
+});
+
 test("an article's number is read from the publisher's id by a fixed rule, and an id of no shape is given no usual form", () => {
   const french = citationWords("fra");
   const english = citationWords("eng");
   for (const [id, said] of [
     ["art_15", "Art. 15"], ["art_1er", "Art. 1er"], ["art_ier", "Art. Ier"], ["art_iii", "Art. III"], ["art_xxxviii", "Art. XXXVIII"],
-    ["art_unique", "Article unique"], ["article_unique", "Article unique"], ["art_40bis", "Art. 40bis"], ["art12", "Art. 12"], ["art1er", "Art. 1er"],
+    ["art_unique", "Art. unique"], ["article_unique", "Art. unique"], ["art_40bis", "Art. 40bis"], ["art12", "Art. 12"], ["art1er", "Art. 1er"],
     ["article_17", "Art. 17"], ["art_30-2", "Art. 30-2"], ["art_l_121-6", "Art. L. 121-6"], ["art_2_champ_d'application", "Art. 2"],
     ["art_4)_art_13", null], ["art__art_1er", null], ["section_1", null],
   ]) {
@@ -245,7 +270,7 @@ test("an EU act is cited as EUR-Lex numbers it, at its wording's date when anoth
     "Wording: the original wording of 2016-04-27",
     "Published in: the Official Journal reference is not held by this index.",
     `Text digest (SHA-256): ${article.textSha256}`,
-    "Consulted on Lex on 2026-09-18 (Luxembourg).",
+    "Consulted on Lex on 2026-09-18 (date in Luxembourg).",
     EU.result.value.authenticity,
   ]);
   for (const line of forms.evidenceLines) assertTimeVocabulary(line, "an EU evidence line");
@@ -277,15 +302,15 @@ test("an EU consolidation in French is cited in French, with its own CELEX and t
     `Libellé${NB}: le libellé consolidé du 2024-01-01`,
     `Publication${NB}: la référence au Journal officiel n’est pas détenue par cet index.`,
     `Empreinte du texte (SHA-256)${NB}: ${"b".repeat(64)}`,
-    "Consulté sur Lex le 2026-10-17 (Luxembourg).",
+    "Consulté sur Lex le 2026-10-17 (date au Luxembourg).",
     FR.citation.europe.authenticity,
   ]);
   const later = europeConsolidation({ next: "2025-06-01" });
   assert.equal(citationForms({ view: later.view, version: later.wording, article: later.article, observedAt: "2026-10-17T10:00:00Z" }).conventional,
     "Article 33 du règlement (UE) 2016/679, au 1er janvier 2024");
-  // The provision's own heading, as the text prints it.
+  // The provision's own heading, as the text prints it, its no-break spaces plain in a citation that is copied.
   const bis = europeConsolidation({ heading: `Article${NB}32${NB}bis` });
-  assert.equal(citationForms({ view: bis.view, version: bis.wording, article: bis.article, observedAt: "2026-10-17T10:00:00Z" }).conventional, `Article${NB}32${NB}bis du règlement (UE) 2016/679`);
+  assert.equal(citationForms({ view: bis.view, version: bis.wording, article: bis.article, observedAt: "2026-10-17T10:00:00Z" }).conventional, "Article 32 bis du règlement (UE) 2016/679");
   // A statement the table does not hold word for word is said as the platform served it.
   const other = europeConsolidation({ authenticity: "Another statement." });
   assert.equal(citationForms({ view: other.view, version: other.wording, article: other.article, observedAt: "2026-10-17T10:00:00Z" }).evidenceLines.at(-1), "Another statement.");
@@ -369,7 +394,7 @@ test("the export keeps the evidence form: each item and exclusion carries the th
 
   const pdf = Buffer.from(exportPdf(model)).toString("latin1");
   assert.ok(pdf.includes("Citation \\(evidence form\\)"), "the PDF labels each item's evidence form");
-  assert.ok(pdf.includes("Consult\\351 sur Lex le 2026-09-18 \\(Luxembourg\\)."), "and sets its lines, in the text's language");
+  assert.ok(pdf.includes("Consult\\351 sur Lex le 2026-09-18 \\(date au Luxembourg\\)."), "and sets its lines, in the text's language");
   assert.equal(pdfRefusal(model), null, "the French forms' characters are the standard fonts' (the no-break space, ’, é, °)");
 
   // An EU export keeps its forms too, and its PDF is offered.

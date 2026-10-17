@@ -74,6 +74,15 @@
 // banner says of a next wording whose text this site does not hold in the page's language (`reading.europeLaterWordingNotHeld`;
 // the review of #972's finding F1) was reviewed by the same reviewer under the same delegation in the addendum of 2026-10-17
 // (1 form, changed in review: "pour cet acte" before the wording, so its date and its text cannot be read as the act's).
+// The one citation generator's words and labels (the plan's item 3.3; R65): the cited article's citation labels
+// (`reading.cite`, `reading.citeConventional`, `reading.citeWithPermalink`, `reading.citeEvidence`,
+// `reading.citeNotComposed`), each exported article's usual citation (`export.usualCitation`), and the whole `citation`
+// section, said in the language of the text cited (`citation.months.*`, `citation.date`, `citation.firstOfMonth`,
+// `citation.withPermalink`, `citation.luxembourg.*`, `citation.europe.*`, `citation.evidence.*`), were reviewed by the
+// same reviewer under the same delegation in the addendum of 2026-10-17 on the citation generator (65 forms, 3 changed in
+// review: the evidence form's label is "Avec ses éléments de vérification", never "probante", which would claim the
+// probative value its own authenticity line denies; a Luxembourg sole article is "Art. unique", as the act prints it; and
+// the date Lex was consulted is "(date au Luxembourg)", never a place).
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -204,7 +213,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     cite: 'Citer cet article',
     citeConventional: 'Citation usuelle',
     citeWithPermalink: 'Avec son permalien',
-    citeEvidence: 'Forme probante',
+    citeEvidence: 'Avec ses éléments de vérification',
     citeNotComposed: 'Lex ne compose pas de citation usuelle pour cet article ; son permalien le cite.',
   }),
   history: Object.freeze({
@@ -601,7 +610,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     luxembourg: Object.freeze({
       article: 'Art. {number}',
       articleFirst: 'Art. {number}er',
-      articleUnique: 'Article unique',
+      articleUnique: 'Art. unique',
       acts: Object.freeze({
         loi: '{article} de la loi du {date}',
         rgd: '{article} du règlement grand-ducal du {date}',
@@ -650,7 +659,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       officialJournalNotHeld: 'Publication : la référence au Journal officiel n’est pas détenue par cet index.',
       textSha256: 'Empreinte du texte (SHA-256) : {digest}',
       noText: 'Empreinte du texte (SHA-256) : aucune, l’article est détenu sans texte.',
-      consulted: 'Consulté sur Lex le {date} (Luxembourg).',
+      consulted: 'Consulté sur Lex le {date} (date au Luxembourg).',
     }),
   }),
   form: Object.freeze({

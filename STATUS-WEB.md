@@ -18,7 +18,8 @@ text. `verify` resolves every form."), with R18 to R21 and R64.
   of the text's language whatever the page's; a text in another language gets no form (its permalink cites it).
   - Luxembourg, French legal usage: "Art. 15 de la loi du 10 août 1991 sur la profession d’avocat, dans sa version
     applicable au 1er février 2024"; "Art. L. 121-6 du Code du travail". The act by its type and date read from its ELI (loi,
-    rgd, agd, rmin, amin), the title's words after them when the one title held for the text's expression starts with them;
+    rgd, agd, rmin, amin; its last segment `n{n}`, or `a{n}` for every act published since 2017), the title's words after
+    them when the one title held for the text's expression starts with them and they are at most 200 characters on one line;
     a code by its one held title; the article's number by a fixed rule over the publisher's ids (`art_1er`, `art_iii`,
     `art_unique`, `art_30-2`, `art_l_121-6`, a number before a heading). Any other act type or id shape: no usual form, and
     the page says so ("Lex composes no usual citation for this article; its permalink cites it.").
@@ -53,7 +54,24 @@ text. `verify` resolves every form."), with R18 to R21 and R64.
   provision's permalink from the mounts that sent its two bundles, and the web tests check the generator's forms against
   them; the journeys verify the cited article's evidence form on every permalink and readable-address step (CI's lane). The
   usual form alone is read by the exact-reference reader of the plan's item 4.2, not merged yet (next, below).
-- **French**: the new entries (five reading labels, `export.usualCitation`, the `citation` section) are drafts under an independent review (the addendum of 2026-10-17 of `C:\lex-v3\lanesr-revieweview.md`), to be applied and named in `live-chrome-fr.mjs`'s header before this pull request is opened.
+- **French**: the 65 new forms (five reading labels, `export.usualCitation`, the `citation` section, the twelve months among
+  them) were reviewed by an independent reviewer in the addendum of 2026-10-17 on the citation generator of
+  `C:\lex-v3\lanes\fr-review\review.md`: 3 changed, 62 approved, and named in `live-chrome-fr.mjs`'s header.
+  - The evidence form's label is "Avec ses éléments de vérification" (the English stays "Evidence form"): "Forme
+    probante" claimed the probative value the form's own authenticity line denies ("il ne fait pas foi", R18 to R20),
+    and "éléments de preuve", said of a citation, claims it too.
+  - A Luxembourg sole article is "Art. unique", as the act prints it and as every other form says "Art.".
+  - The date Lex was consulted is "(date au Luxembourg)", never a place a reader consulted it from; the English changed
+    with it ("(date in Luxembourg)").
+  - Approved as drafted, after the driver's questions: "dans sa version applicable au {date}" for Luxembourg, ", au
+    {date}" for the EU (not "à la date du", which introduces the date of an event), "Publication : Mémorial A n° {number}
+    de {year}", "Art. 1er" and "Art. Ier", and the EU's statement in French, word for word against the platform's
+    English. The regulation's own French (216/2013, art. 1(2)) is not on this machine, so that check stays with O4.
+  - The review found, in the generator, that 1,701 of the 1,730 held Luxembourg works (every act published since 2017,
+    whose ELI ends `a{n}`) got no usual form, and that titles run to 3,229 characters, 289 of them with escaped line
+    breaks. Both repaired here (driver decisions, below). A first review run under the same brief agreed on every
+    entry but two (it gave the label as "Avec ses éléments de preuve" and kept "(Luxembourg)"); the addendum applied is
+    the second run's, as the record's driver's note says.
 - **Driver decisions** (reversible):
   - One source for each part: the platform serves the facts (`citation_facts`, `article_text_sha256`) and composes no
     citation; the web generator composes the forms and invents no field. A machine client composes from the same facts;
@@ -63,6 +81,11 @@ text. `verify` resolves every form."), with R18 to R21 and R64.
   - The version date is added whenever Lex cannot say the version answers today, including every act held only as
     published, since Lex holds no later version of it. "modifiée" is never written: the index does not hold whether an
     act was amended.
+  - A title's words follow the act's type and date only when they are at most 200 characters and on one line: in
+    `derive-c`, 662 of the 1,926 French titles that start with a type and date run past 200 characters after it (the
+    longest 3,229, an omnibus act listing the acts it amends) and 289 works' titles hold escaped line breaks. Otherwise the
+    type and date stand alone ("Art. 1er de la loi du 3 mars 2017"), as French usage cites an act, and the evidence form
+    quotes the title whole, verbatim. A heading's no-break spaces are plain ones in the usual form, which is copied.
   - An EU act's domain is the numbering's for its year (EEC to 1992, EC 1994 to 2008, EU from 2010), and none is written for
     1993 and 2009, whose acts carry either. The index holds no EU title, author or domain, so a Euratom or CFSP act would be
     named as the Union's. Of the population's 82 EU acts (the census's seeds, `derive-c` read-only), 76 are regulations and
@@ -85,7 +108,7 @@ text. `verify` resolves every form."), with R18 to R21 and R64.
   act's title and Official Journal reference, which no index holds; a consolidated Luxembourg state's title, which starts
   "Version consolidée applicable au …" and is not read into the usual form; the treaties' usual forms ("Article 6 TUE");
   the clipboard button.
-- **Measured** (this branch, from `v3/integration` at #972's merge, 1608c737), with no browser started: the web build; the web suite over 108 of its 111 files (all but `keyboard-walk`, `launch-browser` and `paint-check`), 1,195 of 1,195; `dotnet build Lex.V3.slnx -c Release` (and `--no-incremental`) 0 warnings, 0 errors; `Lex.V3.Tests` 3,181 (3,175 passed, 6 skipped); the `Lex.V3.Ingest.Tests` classes touched with Census, `PublicRequestRecordingTests`, the answer, envelope and refusal samples, verify, citation, citation facts, as-published, dossier, evidence bundle, pinned permalink, EU time view, EU permalink, generation quote and MCP, 181 (178 passed, 3 skipped), and the mounted and machine gates, replay, events, locator, resolve, EU capability and journey mounts, 105 (99 passed, 6 skipped); the answer and envelope censuses rendered again and verified without the variables; `eng/verify-v3-tree.ps1` 1,585 tracked paths. The journeys are CI's.
+- **Measured** (this branch, from `v3/integration` at #972's merge, 1608c737), with no browser started: the web build; the web suite over 108 of its 111 files (all but `keyboard-walk`, `launch-browser` and `paint-check`), 1,196 of 1,196 after the French review's changes and the generator's repairs (1,195 of 1,195 before them); `dotnet build Lex.V3.slnx -c Release` (and `--no-incremental`) 0 warnings, 0 errors; `Lex.V3.Tests` 3,181 (3,175 passed, 6 skipped); the `Lex.V3.Ingest.Tests` classes touched with Census, `PublicRequestRecordingTests`, the answer, envelope and refusal samples, verify, citation, citation facts, as-published, dossier, evidence bundle, pinned permalink, EU time view, EU permalink, generation quote and MCP, 181 (178 passed, 3 skipped), and the mounted and machine gates, replay, events, locator, resolve, EU capability and journey mounts, 105 (99 passed, 6 skipped); the answer and envelope censuses rendered again and verified without the variables; `eng/verify-v3-tree.ps1` 1,585 tracked paths. The journeys are CI's.
 
 ## The cited article first, what changed since, a stale permalink's current link, and readable addresses (sole driver, 2026-10-16)
 

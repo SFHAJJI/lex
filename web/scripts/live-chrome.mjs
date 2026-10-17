@@ -523,7 +523,7 @@ const EN = Object.freeze({
       officialJournalNotHeld: "Published in: the Official Journal reference is not held by this index.",
       textSha256: "Text digest (SHA-256): {digest}",
       noText: "Text digest (SHA-256): none, the article is held without text.",
-      consulted: "Consulted on Lex on {date} (Luxembourg).",
+      consulted: "Consulted on Lex on {date} (date in Luxembourg).",
     }),
   }),
   form: Object.freeze({

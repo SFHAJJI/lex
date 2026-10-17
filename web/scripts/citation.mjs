@@ -12,15 +12,19 @@
 //   - Language. A citation is said in the language of the text it cites, never the interface's: `fra` in the French table's
 //     `citation` words, `eng` in the English table's. A text in another language is cited by its permalink alone (no form).
 //   - A Luxembourg act is named in French legal usage by its type and date, read from its ELI (`/eli/etat/leg/{type}/{yyyy}/
-//     {mm}/{dd}/n{n}`: loi, rgd, agd, rmin, amin); its title words follow when the publisher's title held for the text's
-//     expression, in its language, is one title that starts with that type and date (`citation.luxembourg.titles`), and are
-//     left out otherwise (a consolidated version's title, which starts "Version consolidée ...", is not read). A code
+//     {mm}/{dd}/{n}`: loi, rgd, agd, rmin, amin, its last segment `n{n}` or, for every act published since 2017, `a{n}`);
+//     its title words follow when the publisher's title held for the text's expression, in its language, is one title that
+//     starts with that type and date (`citation.luxembourg.titles`) and whose words after them are short and on one line (at
+//     most 200 characters, and no line break, which the publisher's titles write as the two characters backslash and n);
+//     otherwise the type and date stand alone, as French usage cites an act, and the evidence form quotes the title whole
+//     (a consolidated version's title, which starts "Version consolidée ...", is not read into the usual form). A code
 //     (`/eli/etat/leg/code/{name}`) is named by its one held title. Any other type is given no usual form. "modifiée" is
 //     never written: the index does not hold whether an act was amended.
 //   - The article's number is read from the publisher's id by a fixed rule (`art_15`, `art_1er`, `art_30-2`, `art_40bis`,
 //     `art_iii`, `art_unique`, a code's `art_l_121-6`, a number before a heading); an id of no shape here (a quoted article
 //     of an amending act, a heading alone) is given no usual form. An EU provision is named by its own heading when it reads
-//     "Article ..." (the text's words, "Article 32 bis"), else by its id's number (`006` is 6).
+//     "Article ..." (the text's words, "Article 32 bis", its no-break spaces as plain ones, since a citation is copied), else
+//     by its id's number (`006` is 6).
 //   - An EU act is named as EUR-Lex numbers it, from its CELEX's type (R, L, D), year and number: "Regulation (EU)
 //     2016/679", "Regulation (EU) No 575/2013", "Directive 2006/112/EC", a year before 1999 on two digits. The domain is
 //     the numbering's for the act's year (EEC before 1993, EC from 1994 to 2008, EU from 2010); in 1993 and 2009, whose acts
@@ -57,8 +61,11 @@ export const CITATION_ORIGIN = `https://${CANONICAL_HOST}`;
 export const CITATION_LANGUAGES = Object.freeze({ fra: 'fr', eng: 'en' });
 
 /** The Luxembourg act types a usual citation names by type and date, as their ELIs write them. */
-const LUXEMBOURG_DATED = /^http:\/\/data\.legilux\.public\.lu\/eli\/etat\/leg\/(loi|rgd|agd|rmin|amin)\/(\d{4})\/(\d{2})\/(\d{2})\/n\d+$/;
+const LUXEMBOURG_DATED = /^http:\/\/data\.legilux\.public\.lu\/eli\/etat\/leg\/(loi|rgd|agd|rmin|amin)\/(\d{4})\/(\d{2})\/(\d{2})\/[na]\d+$/;
 const LUXEMBOURG_CODE = /^http:\/\/data\.legilux\.public\.lu\/eli\/etat\/leg\/code\/[a-z0-9_]+$/;
+
+/** The most title words a usual citation carries after the act's type and date: a longer title is quoted by the evidence form alone. */
+export const TITLE_WORDS_AT_MOST = 200;
 
 /** The Latin suffixes of an article number, as an id writes them after its digits (`art_40bis`). */
 const LATIN_SUFFIX = '(?:bis|ter|quater|quinquies|sexies|septies|octies|novies|nonies|decies|undecies|duodecies)';
@@ -125,7 +132,8 @@ export function luxembourgArticle(publisherId, words) {
 /** An EU provision as its usual citation names it: its own heading when it reads "Article ...", else its id's number. */
 export function europeArticle(article, words) {
   const heading = (article.heading ?? '').trim();
-  if (/^Article[\s\u00a0]+\S/.test(heading)) return heading;
+  // A citation is copied text: the heading's no-break spaces ("Article\u00a0premier") are plain ones in it.
+  if (/^Article[\s\u00a0]+\S/.test(heading)) return heading.replace(/\u00a0/g, ' ');
   const numbered = /^0*(\d+)([A-Z]*)$/.exec(article.publisherId);
   return numbered === null ? null : fillText(words.europe.article, { number: `${numbered[1]}${numbered[2].toLowerCase()}` });
 }
@@ -195,7 +203,9 @@ function luxembourgConventional(state, articleText, facts, words) {
   const prefix = starts.find((start) => folded(plain).startsWith(start) && (folded(plain).length === start.length || /^[\s,]/.test(plain.slice(start.length))));
   if (prefix === undefined) return act;
   const rest = plain.slice(prefix.length).trim();
-  if (rest.length === 0) return act;
+  // Words long or on several lines (an omnibus act's list of the acts it amends) are no usual citation's: the type and date
+  // stand alone, and the evidence form quotes the title whole.
+  if (rest.length === 0 || rest.length > TITLE_WORDS_AT_MOST || /\\n|[\r\n]/.test(rest)) return act;
   return rest.startsWith(',') ? `${act}${rest}` : `${act} ${rest}`;
 }
 
