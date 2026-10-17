@@ -155,6 +155,13 @@ the site stays out.
     the API's do not); the live server serves a file only at the build's own path (no final slash, percent-escape or
     capital), and answers a target of two slashes with its 404 page, as the API does.
   - Measured after the repairs (no rebase: `v3/integration` still at #975's merge), with no browser started: the web build; the web suite over 109 of its 112 files (all but the three that start a browser), 1,207 of 1,207; `dotnet build Lex.V3.slnx -c Release` 0 warnings, 0 errors; `Lex.V3.Tests` 3,186 (3,180 passed, 6 skipped; `V3WebRootSearchEnginesTests` 5); the `Lex.V3.Ingest.Tests` censuses, `PublicRequestRecordingTests` (its three startup writes stand) and the answer, envelope and refusal samples with the EU permalink tests, 58 (55 passed, 3 skipped); `eng/verify-v3-tree.ps1` 1,596 tracked paths.
+  - Rebased on `v3/integration` at #974's merge (f9565335; one conflict, this file's top, both sections kept, this one
+    first). The exact references' refusal cards (plan 4.2) are shown by script on the search screens, the search page and the
+    404 page never opened and the home page as served carrying none; a test holds it. Nothing it changed moves a census or
+    sample (they verify without the render switch). Measured again, with no browser started: the web build; the web suite over
+    110 of its 113 files, 1,223 of 1,223; `dotnet build Lex.V3.slnx -c Release` 0 warnings, 0 errors; `Lex.V3.Tests` 3,321
+    (3,315 passed, 6 skipped); the `Lex.V3.Ingest.Tests` censuses, `PublicRequestRecordingTests` and the samples with the EU
+    permalink tests, 60 (57 passed, 3 skipped); `eng/verify-v3-tree.ps1` 1,608 tracked paths.
 - **Measured** (this branch, from `v3/integration` at #975's merge, 32a9522e), with no browser started: the web build; the web suite over 109 of its 112 files (all but `keyboard-walk`, `launch-browser` and `paint-check`, which start a browser), 1,206 of 1,206; `dotnet build Lex.V3.slnx -c Release` 0 warnings, 0 errors; `Lex.V3.Tests` 3,185 (3,179 passed, 6 skipped; `V3WebRootSearchEnginesTests` 4, the web root's 20 with it); no `Lex.V3.Ingest` class was touched, and the `Lex.V3.Ingest.Tests` classes the brief names (the censuses, `PublicRequestRecordingTests`, whose three startup writes stand, and the answer, envelope and refusal samples) with the EU permalink tests, 58 (55 passed, 3 skipped); no census or sample was rendered again (no answer, envelope or registry changed); `eng/verify-v3-tree.ps1` 1,596 tracked paths. The journeys are CI's lane.
 
 ## Exact references first: the one box opens the act a reference names (sole driver, 2026-10-17)
