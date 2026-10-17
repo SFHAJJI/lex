@@ -357,7 +357,9 @@ internal sealed class V3ApiHandler
         IReadOnlyDictionary<string, string> parameters)
     {
         ArgumentNullException.ThrowIfNull(corpusMount);
-        var page = new V3SitePage(V3WebRoot.InterfaceLanguages[0], "startup", operationId, parameters);
+        // A site page's parameters are strings and a reading's page number (the plan's item 3.7); these are strings.
+        var page = new V3SitePage(V3WebRoot.InterfaceLanguages[0], "startup", operationId,
+            parameters.ToDictionary(static pair => pair.Key, static pair => (object)pair.Value, StringComparer.Ordinal));
         try
         {
             return new V3PlatformHost().AnswerRest(page.RequestUtf8, RequestReference("startup"), operationId, ExecuteFor(corpusMount, utcNow, operationId), CancellationToken.None);

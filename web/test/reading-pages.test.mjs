@@ -217,3 +217,17 @@ test("a page of one article names it once, in the contents and in the pages show
   assert.ok(markup.includes(">Page 2: art_60</a>"));
   assert.ok(markup.includes(">Page 1: art_1er to art_59</a>"));
 });
+
+test("a page of today's version may open to search engines as its first page may, and names itself in the page's language", () => {
+  // The census's long act: its one state applies from 2024-02-01 with none after, so it is the version its act's readable
+  // address shows on the census's day (the plan's item 3.6: its canonical is that readable address, and the switch may open it).
+  const permalink = SECOND.result.value.states[0].permalink;
+  const today = "2026-09-17";
+  assert.equal(readingAddressShown(viewFrom(SECOND), permalink, null, today), "/lu-legilux/loi-1991-08-10-n3/fra?page=2", "today's version's second page: the readable address, with its page");
+  assert.equal(readingAddressShown(viewFrom(FIRST), permalink, null, today), "/lu-legilux/loi-1991-08-10-n3/fra", "its first page: the readable address alone");
+  assert.equal(readingAddressShown(viewFrom(SECOND), `${permalink}/art_55`, null, today), "/lu-legilux/loi-1991-08-10-n3/fra/art_55", "an article: its readable address, no page");
+  const html = renderLiveReadingPage({ initial: { envelope: SECOND, path: `/en${permalink}` } });
+  const head = html.slice(0, html.indexOf("</head>"));
+  assert.ok(head.includes('<link rel="canonical" href="https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3/fra?page=2"/>'), head);
+  assert.ok(head.includes('data-search-engines="kept-out"'), "today's version: kept out until the switch opens it, as its first page is");
+});

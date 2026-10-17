@@ -1490,12 +1490,13 @@ test("the long act's journeys: the cited article on its second page, that page w
   assert.ok(journeyVerdict({ ...observed, requests: observed.requests.slice(0, 1) }, expected).some((failure) => /not exactly one/.test(failure)), "the next page must be asked, once");
   assert.ok(journeyVerdict({ ...observed, location: `${ORIGIN}${second.step.path}` }, expected).some((failure) => /ended at/.test(failure)), "in place: no navigation");
 
-  // A page after the first names itself canonical with its page, and nothing else after it.
+  // A page after the first names itself canonical with its page, in the page's own language (the plan's item 3.6), and
+  // nothing else after it.
   const page = { ...observed, then: undefined, text: "Page 2 of 3: art_51 to art_100. Previous articles 130 articles quoted", requests: observed.requests.slice(0, 1), location: `${ORIGIN}${second.step.path}`,
-    canonical: `https://law.soufien.lu${permalink}?page=2`,
+    canonical: `https://law.soufien.lu/en${permalink}?page=2`,
     alternates: [["fr", `https://law.soufien.lu/fr${permalink}?page=2`], ["en", `https://law.soufien.lu/en${permalink}?page=2`], ["x-default", `https://law.soufien.lu${permalink}?page=2`]] };
   const secondExpected = { origin: ORIGIN, ...second, mustRender: true };
   assert.deepEqual(journeyVerdict(page, secondExpected), []);
-  assert.ok(journeyVerdict({ ...page, canonical: `https://law.soufien.lu${permalink}?page=2&x=1` }, secondExpected).some((failure) => /canonical/.test(failure)), "a canonical with another query fails");
-  assert.ok(journeyVerdict({ ...page, canonical: `https://law.soufien.lu${permalink}` }, secondExpected).some((failure) => /canonical/.test(failure)), "page 2 named as page 1 fails");
+  assert.ok(journeyVerdict({ ...page, canonical: `https://law.soufien.lu/en${permalink}?page=2&x=1` }, secondExpected).some((failure) => /canonical/.test(failure)), "a canonical with another query fails");
+  assert.ok(journeyVerdict({ ...page, canonical: `https://law.soufien.lu/en${permalink}` }, secondExpected).some((failure) => /canonical/.test(failure)), "page 2 named as page 1 fails");
 });
