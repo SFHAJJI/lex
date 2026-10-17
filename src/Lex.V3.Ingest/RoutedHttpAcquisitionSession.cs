@@ -103,6 +103,8 @@ internal sealed class RoutedHttpAcquisitionSession : IDisposable
         bool usesPinnedHandler,
         WireRequestBudget wireBudget)
     {
+        // Every session on every transport is built here, so an offline process (V3OfflineProcess) refuses here first.
+        V3OfflineProcess.RefuseSession();
         ArgumentNullException.ThrowIfNull(sourceWitness);
         ArgumentNullException.ThrowIfNull(custodyStore);
         ArgumentNullException.ThrowIfNull(wireBudget);

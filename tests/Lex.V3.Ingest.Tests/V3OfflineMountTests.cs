@@ -8,6 +8,7 @@ using Lex.V3.Artifacts;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Custody;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Luxembourg;
 
 namespace Lex.V3.Ingest.Tests;
@@ -204,6 +205,135 @@ public sealed partial class V3FirstMountBuildTests
         Assert.IsFalse(Directory.Exists(output));
     }
 
+    /// <summary>
+    /// Inputs /3 through the tool's own steps, each in its own process with every proxy pointed at a local trap:
+    /// <c>rederive-inputs</c> over the acquisition's retained inputs, <c>derive</c> (R0 then R1), <c>rederive-seal</c> with the
+    /// record that derive printed, and <c>derive</c> of the sealed inputs. Both derives write the files an in-process build
+    /// over R1 writes, and inputs sealed with another record refuse.
+    /// </summary>
+    /// <remarks>
+    /// Zero wire budget is measured in each process, not inferred from the trap: the trap catches only clients that use the
+    /// default proxy, and the code base's own session builds its handler with <c>UseProxy = false</c>. Each command enters
+    /// the offline guard (no publisher session can be built in its process) and prints what its
+    /// <see cref="V3NetworkActivityListener"/> counted; this test requires the guard on and every count at zero.
+    /// </remarks>
+    [TestMethod]
+    public async Task TheReDerivationStepsRoundTripThroughTheToolWithNoPublisherTraffic()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "lex-v3-rederive-tool-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var custody = Path.Combine(root, "custody");
+            var store = new FileSystemCustodyStore(custody);
+            var (europe, luxembourg) = await AcquireAsync(store, CheckoutRoot(), LuxembourgRederivationTests.SyntheticConsolidation());
+            Assert.IsTrue(europe.Delivered, europe.Detail);
+            Assert.IsTrue(luxembourg.Delivered, luxembourg.Detail);
+            var time = new DateTimeOffset(2026, 10, 12, 18, 17, 5, TimeSpan.Zero);
+            var baseInputs = await V3OfflineMount.CaptureAsync(store, europe, luxembourg, [EuAxiomWiringHarness.Seed(null).Celex],
+                LuxembourgFirstMountAcquisitionTests.ActRange, time, null, CancellationToken.None);
+            var basePath = Path.Combine(root, "base-inputs.json");
+            await File.WriteAllTextAsync(basePath, ContractJson.Serialize(baseInputs));
+
+            // What the derive must reproduce: an in-process build over R1, at the acquisition's build time.
+            var rederived = await LuxembourgRederivation.ApplyAsync(store, luxembourg, LuxembourgRederivationTests.Release1(), CancellationToken.None);
+            var build = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, rederived, CancellationToken.None);
+            Assert.IsTrue(build.Delivered, build.Detail);
+            var expected = Path.Combine(root, "expected");
+            await V3CorpusMountWriter.WriteAsync(build, expected, null, CancellationToken.None, time);
+
+            var first = Path.Combine(root, "first");
+            var second = Path.Combine(root, "second");
+            var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            try
+            {
+                var attemptedNetwork = listener.AcceptTcpClientAsync();
+                var proxy = "http://127.0.0.1:" + ((IPEndPoint)listener.LocalEndpoint).Port;
+
+                var inputs = await RunToolAsync(proxy, "rederive-inputs", "--custody", custody, "--base", basePath, "--rules",
+                    LuxembourgRederivation.Release1RuleSet, "--policy", LuxembourgRightsAdmissionPolicies.Policy1Sha256,
+                    "--derived-at", "2026-10-17T06:00:00Z");
+                Assert.AreEqual(0, inputs.ExitCode, inputs.Transcript);
+                StringAssert.Contains(inputs.StandardOutput, OfflineMeasuredNothing, inputs.Transcript);
+                var unsealed = Pointer(inputs.StandardOutput, "re-derivation inputs (unsealed): ");
+
+                var derive = await RunToolAsync(proxy, "derive", "--custody", custody, "--checkpoint", unsealed, "--out", first);
+                Assert.AreEqual(0, derive.ExitCode, derive.Transcript);
+                StringAssert.Contains(derive.StandardOutput, OfflineMeasuredNothing, derive.Transcript);
+                StringAssert.Contains(derive.StandardOutput, "verified offline mount; publisher_requests=0");
+                StringAssert.Contains(derive.StandardOutput, "luxembourg_rederivation=" + rederived.Rederivation!.Sha256 + "\n");
+
+                var seal = await RunToolAsync(proxy, "rederive-seal", "--custody", custody, "--inputs", unsealed, "--record", rederived.Rederivation.Sha256);
+                Assert.AreEqual(0, seal.ExitCode, seal.Transcript);
+                StringAssert.Contains(seal.StandardOutput, OfflineMeasuredNothing, seal.Transcript);
+                var sealedPointer = Pointer(seal.StandardOutput, "re-derivation inputs (sealed): ");
+                var sealedDerive = await RunToolAsync(proxy, "derive", "--custody", custody, "--checkpoint", sealedPointer, "--out", second);
+                Assert.AreEqual(0, sealedDerive.ExitCode, sealedDerive.Transcript);
+                StringAssert.Contains(sealedDerive.StandardOutput, OfflineMeasuredNothing, sealedDerive.Transcript);
+
+                var wrongSeal = await RunToolAsync(proxy, "rederive-seal", "--custody", custody, "--inputs", unsealed, "--record", new string('0', 64));
+                Assert.AreEqual(0, wrongSeal.ExitCode, wrongSeal.Transcript);
+                var refused = await RunToolAsync(proxy, "derive", "--custody", custody, "--checkpoint",
+                    Pointer(wrongSeal.StandardOutput, "re-derivation inputs (sealed): "), "--out", Path.Combine(root, "refused"));
+                Assert.AreEqual(3, refused.ExitCode, refused.Transcript);
+                StringAssert.Contains(refused.StandardError, "its sealed inputs expect");
+
+                var resealed = await RunToolAsync(proxy, "rederive-seal", "--custody", custody, "--inputs", sealedPointer, "--record", rederived.Rederivation.Sha256);
+                Assert.AreEqual(3, resealed.ExitCode, "sealed inputs are never sealed again\n" + resealed.Transcript);
+                var unknownSet = await RunToolAsync(proxy, "rederive-inputs", "--custody", custody, "--base", basePath, "--rules", "lu-release-9",
+                    "--policy", LuxembourgRightsAdmissionPolicies.Policy1Sha256, "--derived-at", "2026-10-17T06:00:00Z");
+                Assert.AreEqual(3, unknownSet.ExitCode, unknownSet.Transcript);
+                var badTime = await RunToolAsync(proxy, "rederive-inputs", "--custody", custody, "--base", basePath, "--rules",
+                    LuxembourgRederivation.Release1RuleSet, "--policy", LuxembourgRightsAdmissionPolicies.Policy1Sha256, "--derived-at", "2026-10-17");
+                Assert.AreEqual(2, badTime.ExitCode, badTime.Transcript);
+                var missing = await RunToolAsync(proxy, "rederive-seal", "--custody", custody, "--inputs", unsealed);
+                Assert.AreEqual(2, missing.ExitCode, missing.Transcript);
+
+                Assert.IsFalse(attemptedNetwork.IsCompleted, "The offline processes must not attempt publisher traffic.");
+            }
+            finally { listener.Stop(); }
+
+            CollectionAssert.AreEqual(MountDigests(expected), MountDigests(first),
+                "In-process build over R1 and the tool's derive of inputs /3\nExpected:\n" + string.Join("\n", MountDigests(expected))
+                + "\nActual:\n" + string.Join("\n", MountDigests(first)));
+            CollectionAssert.AreEqual(MountDigests(first), MountDigests(second), "the sealed inputs derive the same files");
+            Assert.IsFalse(Directory.Exists(Path.Combine(root, "refused")) && Directory.EnumerateFileSystemEntries(Path.Combine(root, "refused")).Any());
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
+
+        static string Pointer(string output, string prefix)
+        {
+            var line = output.Split('\n').Single(line => line.StartsWith(prefix, StringComparison.Ordinal));
+            return line[prefix.Length..line.IndexOf(';', StringComparison.Ordinal)];
+        }
+    }
+
+    /// <summary>Runs the built tool in its own process with every proxy pointed at <paramref name="proxy"/>.</summary>
+    internal static async Task<ToolRun> RunToolAsync(string proxy, params string[] arguments)
+    {
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        var tool = Path.Combine(CheckoutRoot(), "src", "Lex.V3.Tool", "bin", configuration, "net10.0", "Lex.V3.Tool.dll");
+        Assert.IsTrue(File.Exists(tool), tool);
+        var start = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
+        start.ArgumentList.Add(tool);
+        foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        foreach (var name in new[] { "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy" }) start.Environment[name] = proxy;
+        start.Environment["NO_PROXY"] = ""; start.Environment["no_proxy"] = "";
+        using var process = Process.Start(start)!;
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        try { await process.WaitForExitAsync(timeout.Token); }
+        catch { process.Kill(entireProcessTree: true); throw; }
+        return new ToolRun(process.ExitCode, (await stdout).Replace("\r\n", "\n", StringComparison.Ordinal), await stderr);
+    }
+
+    internal sealed record ToolRun(int ExitCode, string StandardOutput, string StandardError)
+    {
+        public string Transcript => $"exit {ExitCode}\n--- stdout ---\n{StandardOutput}\n--- stderr ---\n{StandardError}";
+    }
+
     internal static string[] MountDigests(string directory) => Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
         .Select(path => Path.GetRelativePath(directory, path).Replace('\\', '/') + " " + Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))))
         .Order(StringComparer.Ordinal).ToArray();
@@ -225,6 +355,14 @@ public sealed partial class V3FirstMountBuildTests
         try { await process.WaitForExitAsync(timeout.Token); }
         catch { process.Kill(entireProcessTree: true); throw; }
         Assert.AreEqual(0, process.ExitCode, await stderr + "\n" + await stdout);
+        // Measured, not printed as a constant: the derive's own process entered the offline guard and its listener counted
+        // no socket connect, no name resolution and no HTTP request, on any transport (the trap sees only default-proxy
+        // clients, and the code base's own session does not use the default proxy).
+        StringAssert.Contains(await stdout, OfflineMeasuredNothing);
         StringAssert.Contains(await stdout, "publisher_requests=0");
     }
+
+    /// <summary>What an offline command prints when its guard held and its listener counted nothing.</summary>
+    internal const string OfflineMeasuredNothing =
+        "offline_guard=on; network measured: socket connects 0, name resolutions 0, HTTP requests 0; publisher_requests=0";
 }

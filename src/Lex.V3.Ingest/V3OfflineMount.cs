@@ -12,6 +12,7 @@ namespace Lex.V3.Ingest;
 public static class V3OfflineMount
 {
     private const string Schema = "lex-v3-offline-mount-inputs/1";
+    private const string RederivationSchema = "lex-v3-offline-mount-inputs/3";
 
     public sealed class BuildClock(DateTimeOffset instant) : TimeProvider
     {
@@ -77,7 +78,12 @@ public static class V3OfflineMount
                 throw new CustodyIntegrityException("Predecessor holds an unexpected mount file.");
     }
 
-    /// <summary>The input clock describes the original build, never a fresh publisher observation.</summary>
+    /// <summary>
+    /// Derives the mount from retained inputs, with no publisher traffic: inputs /1 or /2 reopen the acquisitions (R0) and
+    /// build from their own derivations; inputs /3 reopen the same way and then re-derive the Luxembourg profiles over R0's
+    /// population (R1, <see cref="LuxembourgRederivation"/>). The input clock describes the original build, never a fresh
+    /// publisher observation, and a re-derivation keeps it.
+    /// </summary>
     public static async Task<V3CorpusMountWrite> DeriveAsync(ICustodyStore store, SourceArtifactRef checkpoint,
         string outputDirectory, CancellationToken cancellationToken)
     {
@@ -89,14 +95,172 @@ public static class V3OfflineMount
         if (Directory.Exists(target) && Directory.EnumerateFileSystemEntries(target).Any())
             throw new ArgumentException("Offline derivation requires an empty output directory.", nameof(outputDirectory));
         var bytes = await CustodyRestore.ReadByDigestCheckedAsync(store, checkpoint.Sha256, cancellationToken).ConfigureAwait(false);
+        var (root, populationScope, rederivation) = await ReadInputsAsync(store, bytes, cancellationToken).ConfigureAwait(false);
+        var staging = Path.Combine(Path.GetTempPath(), "lex-v3-offline-predecessor-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            LuxembourgIndexPredecessor? predecessor = null;
+            V3GenerationSource? generations = null;
+            if (root.Predecessor.Length != 0)
+            {
+                foreach (var file in root.Predecessor)
+                {
+                    var retained = await CustodyRestore.ReadByDigestCheckedAsync(store, file.Sha256, cancellationToken).ConfigureAwait(false);
+                    var path = Path.Combine(staging, file.Path.Replace('/', Path.DirectorySeparatorChar));
+                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                    await File.WriteAllBytesAsync(path, retained.ToArray(), cancellationToken).ConfigureAwait(false);
+                }
+                var verified = await V3CorpusMountWriter.VerifyAsync(staging, cancellationToken).ConfigureAwait(false);
+                if (!verified.Verified) throw new CustodyIntegrityException("Retained predecessor fails mount verification: " + verified.Detail);
+                predecessor = V3FirstMountBuild.ReadPredecessor(staging, out var refusal, out var detail)
+                    ?? throw new CustodyIntegrityException($"Retained predecessor refused: {refusal}: {detail}");
+                generations = new(staging, root.Referenced.ToHashSet(StringComparer.Ordinal));
+            }
+            var europe = await EuFirstMountAcquisition.ReopenAsync(store, root.Europe, root.Seeds, cancellationToken).ConfigureAwait(false);
+            // R0: the acquisition reopened byte for byte, its frozen derivations verified against its catalog. For inputs /3,
+            // R1 then runs the later rules over R0's own population; R0's result is handed straight to it and held nowhere
+            // here, so its frozen inventory and content populations are released once R1 has read what it records of them.
+            var luxembourg = rederivation is null
+                ? await ReopenLuxembourgAsync(store, root, populationScope, cancellationToken).ConfigureAwait(false)
+                : await LuxembourgRederivation.ApplyAsync(store,
+                    await ReopenLuxembourgAsync(store, root, populationScope, cancellationToken).ConfigureAwait(false),
+                    rederivation.Request(), cancellationToken).ConfigureAwait(false);
+
+            // The build time stays the acquisition's: a derivation never moves freshness forward.
+            var build = await new V3FirstMountBuild(store, new BuildClock(root.BuildTime))
+                .RunAsync(europe, luxembourg, predecessor, cancellationToken).ConfigureAwait(false);
+            if (!build.Delivered) throw new CustodyIntegrityException($"Offline mount derivation refused: {build.Refusal}: {build.Detail}");
+            var write = await V3CorpusMountWriter.WriteAsync(build, target, generations, cancellationToken, root.BuildTime).ConfigureAwait(false);
+            var verification = await V3CorpusMountWriter.VerifyAsync(target, cancellationToken).ConfigureAwait(false);
+            if (!verification.Verified) throw new CustodyIntegrityException("Derived mount does not reopen: " + verification.Detail);
+            return write;
+        }
+        finally
+        {
+            // This unpredictable directory is created solely for this invocation's verified inputs.
+            if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Writes inputs <c>lex-v3-offline-mount-inputs/3</c>: the retained inputs /1 or /2 of an acquisition (its base), the rule
+    /// set this build implements with its exact rule digests, the admission policy, and when the re-derivation is stated to
+    /// run (a whole UTC second, not before the base's build time). The inputs are unsealed: <c>expected_rederivation</c> is
+    /// null until <see cref="SealRederivationAsync"/>. They are held in custody under a resource identity derived from their
+    /// bytes, so the same arguments give the same reference. Nothing here reopens the acquisition or reads a body.
+    /// </summary>
+    public static async Task<SourceArtifactRef> CaptureRederivationAsync(ICustodyStore store, SourceArtifactRef baseInputs,
+        string ruleSet, string admissionPolicySha256, DateTimeOffset derivedAt, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(baseInputs);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (ruleSet is null || !LuxembourgRederivation.ImplementedRuleSets.Contains(ruleSet, StringComparer.Ordinal))
+            throw new ArgumentException($"Rule set '{ruleSet}' is not one this build implements ({string.Join(", ", LuxembourgRederivation.ImplementedRuleSets)}).", nameof(ruleSet));
+        var inputs = new RederivationInputs(RederivationSchema, baseInputs, ruleSet, LuxembourgRederivation.RulesOf(ruleSet).ToArray(),
+            admissionPolicySha256, derivedAt, null);
+        var encoded = Encoding.UTF8.GetBytes(ContractJson.Serialize(inputs));
+        // The inputs are held only once they read back exactly as a derivation will read them.
+        _ = await ReadInputsAsync(store, encoded, cancellationToken).ConfigureAwait(false);
+        await HoldAsync(store, encoded, cancellationToken).ConfigureAwait(false);
+        return new SourceArtifactRef(ContentDerivedIdentity.DeriveUuidUrn(RederivationSchema, encoded), CustodyDigest.Of(encoded));
+    }
+
+    /// <summary>
+    /// Seals unsealed inputs /3 after their derivation: the same inputs, now expecting exactly the record
+    /// <paramref name="recordSha256"/>, held in custody. A derivation of the sealed inputs refuses any other record. Sealed
+    /// inputs are never sealed again; their unsealed inputs stay in custody.
+    /// </summary>
+    public static async Task<SourceArtifactRef> SealRederivationAsync(ICustodyStore store, SourceArtifactRef unsealedInputs,
+        string recordSha256, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(unsealedInputs);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!CustodyDigest.IsLowercaseSha256(recordSha256))
+            throw new ArgumentException("A seal names the record by its lowercase SHA-256.", nameof(recordSha256));
+        var bytes = await CustodyRestore.ReadByDigestCheckedAsync(store, unsealedInputs.Sha256, cancellationToken).ConfigureAwait(false);
+        var (_, _, rederivation) = await ReadInputsAsync(store, bytes, cancellationToken).ConfigureAwait(false);
+        if (rederivation is null)
+            throw new CustodyIntegrityException("Only offline mount inputs /3 name a re-derivation to seal.");
+        if (rederivation.ExpectedRederivation is not null)
+            throw new CustodyIntegrityException("These inputs are sealed already; seal their unsealed inputs instead.");
+        var encoded = Encoding.UTF8.GetBytes(ContractJson.Serialize(rederivation with { ExpectedRederivation = recordSha256 }));
+        await HoldAsync(store, encoded, cancellationToken).ConfigureAwait(false);
+        return new SourceArtifactRef(ContentDerivedIdentity.DeriveUuidUrn(RederivationSchema, encoded), CustodyDigest.Of(encoded));
+    }
+
+    /// <summary>
+    /// Reads offline mount inputs: /1 (an act range), /2 (a population scope), or /3 (a re-derivation of a retained /1 or /2,
+    /// read from custody by its digest). Each must be its own exact canonical bytes; anything else refuses.
+    /// </summary>
+    private static async Task<(Inputs Root, LuxembourgPopulationScope? PopulationScope, RederivationInputs? Rederivation)> ReadInputsAsync(
+        ICustodyStore store, ReadOnlyMemory<byte> bytes, CancellationToken cancellationToken)
+    {
+        if (SchemaOf(bytes) != RederivationSchema)
+        {
+            var (root, scope) = ReadBase(bytes);
+            return (root, scope, null);
+        }
+
+        RederivationInputs rederivation;
+        try
+        {
+            rederivation = ContractJson.Deserialize<RederivationInputs>(new UTF8Encoding(false, true).GetString(bytes.Span));
+            if (rederivation is null || rederivation.Base is null || rederivation.Rules is null ||
+                !bytes.Span.SequenceEqual(Encoding.UTF8.GetBytes(ContractJson.Serialize(rederivation))))
+                throw new CustodyIntegrityException("Offline re-derivation inputs framing is invalid.");
+        }
+        catch (Exception exception) when (exception is ArgumentException or JsonException or DecoderFallbackException)
+        {
+            throw new CustodyIntegrityException("Offline re-derivation inputs cannot be verified.", exception);
+        }
+
+        if (!CustodyDigest.IsLowercaseSha256(rederivation.Base.Sha256) ||
+            rederivation.DerivedAt.Offset != TimeSpan.Zero || rederivation.DerivedAt != V3FirstMountBuild.BuildTimeOf(rederivation.DerivedAt) ||
+            rederivation.ExpectedRederivation is not null && !CustodyDigest.IsLowercaseSha256(rederivation.ExpectedRederivation))
+            throw new CustodyIntegrityException("Offline re-derivation inputs name an invalid base, derivation time or sealed record.");
+        // No rule and no policy is substituted: the inputs name exactly what this build runs, or nothing is reopened.
+        LuxembourgRederivation.RequireImplemented(rederivation.RuleSet, rederivation.Rules, rederivation.AdmissionPolicy);
+        var baseBytes = await CustodyRestore.ReadByDigestCheckedAsync(store, rederivation.Base.Sha256, cancellationToken).ConfigureAwait(false);
+        if (SchemaOf(baseBytes) == RederivationSchema)
+            throw new CustodyIntegrityException("A re-derivation's base is the acquisition's inputs /1 or /2, never another re-derivation.");
+        var (baseRoot, baseScope) = ReadBase(baseBytes);
+        if (rederivation.DerivedAt < baseRoot.BuildTime)
+            throw new CustodyIntegrityException("A re-derivation is not stated to run before the acquisition's build time.");
+        return (baseRoot, baseScope, rederivation);
+    }
+
+    /// <summary>R0 for the Luxembourg half: the act range's or the population's catalog, reopened and verified.</summary>
+    private static Task<LuxembourgFirstMountAcquisitionResult> ReopenLuxembourgAsync(ICustodyStore store, Inputs root,
+        LuxembourgPopulationScope? populationScope, CancellationToken cancellationToken) => populationScope is null
+        ? LuxembourgFirstMountAcquisition.ReopenAsync(store, root.Luxembourg, root.Act!, cancellationToken)
+        : LuxembourgFirstMountAcquisition.ReopenPopulationAsync(store, root.Luxembourg, populationScope, cancellationToken);
+
+    /// <summary>The <c>schema</c> of a retained inputs document, read before it is deserialized strictly.</summary>
+    private static string? SchemaOf(ReadOnlyMemory<byte> bytes)
+    {
+        try
+        {
+            using var framing = JsonDocument.Parse(bytes);
+            return framing.RootElement.ValueKind == JsonValueKind.Object &&
+                framing.RootElement.TryGetProperty("schema", out var schemaProperty) && schemaProperty.ValueKind == JsonValueKind.String
+                ? schemaProperty.GetString() : null;
+        }
+        catch (JsonException exception)
+        {
+            throw new CustodyIntegrityException("Offline mount catalog cannot be verified.", exception);
+        }
+    }
+
+    /// <summary>Reads inputs /1 or /2: the acquisitions, the seeds, the Luxembourg act range or population scope, the build time and the predecessor.</summary>
+    private static (Inputs Root, LuxembourgPopulationScope? PopulationScope) ReadBase(ReadOnlyMemory<byte> bytes)
+    {
         Inputs root;
         LuxembourgPopulationScope? populationScope = null;
         try
         {
-            using var framing = JsonDocument.Parse(bytes);
-            var schema = framing.RootElement.ValueKind == JsonValueKind.Object &&
-                framing.RootElement.TryGetProperty("schema", out var schemaProperty) && schemaProperty.ValueKind == JsonValueKind.String
-                ? schemaProperty.GetString() : null;
+            var schema = SchemaOf(bytes);
             if (schema == Schema)
             {
                 root = ContractJson.Deserialize<Inputs>(new UTF8Encoding(false, true).GetString(bytes.Span));
@@ -128,43 +292,8 @@ public static class V3OfflineMount
         {
             throw new CustodyIntegrityException("Offline mount catalog cannot be verified.", exception);
         }
-        var staging = Path.Combine(Path.GetTempPath(), "lex-v3-offline-predecessor-" + Guid.NewGuid().ToString("N"));
-        try
-        {
-            LuxembourgIndexPredecessor? predecessor = null;
-            V3GenerationSource? generations = null;
-            if (root.Predecessor.Length != 0)
-            {
-                foreach (var file in root.Predecessor)
-                {
-                    var retained = await CustodyRestore.ReadByDigestCheckedAsync(store, file.Sha256, cancellationToken).ConfigureAwait(false);
-                    var path = Path.Combine(staging, file.Path.Replace('/', Path.DirectorySeparatorChar));
-                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                    await File.WriteAllBytesAsync(path, retained.ToArray(), cancellationToken).ConfigureAwait(false);
-                }
-                var verified = await V3CorpusMountWriter.VerifyAsync(staging, cancellationToken).ConfigureAwait(false);
-                if (!verified.Verified) throw new CustodyIntegrityException("Retained predecessor fails mount verification: " + verified.Detail);
-                predecessor = V3FirstMountBuild.ReadPredecessor(staging, out var refusal, out var detail)
-                    ?? throw new CustodyIntegrityException($"Retained predecessor refused: {refusal}: {detail}");
-                generations = new(staging, root.Referenced.ToHashSet(StringComparer.Ordinal));
-            }
-            var europe = await EuFirstMountAcquisition.ReopenAsync(store, root.Europe, root.Seeds, cancellationToken).ConfigureAwait(false);
-            var luxembourg = populationScope is null
-                ? await LuxembourgFirstMountAcquisition.ReopenAsync(store, root.Luxembourg, root.Act!, cancellationToken).ConfigureAwait(false)
-                : await LuxembourgFirstMountAcquisition.ReopenPopulationAsync(store, root.Luxembourg, populationScope, cancellationToken).ConfigureAwait(false);
-            var build = await new V3FirstMountBuild(store, new BuildClock(root.BuildTime))
-                .RunAsync(europe, luxembourg, predecessor, cancellationToken).ConfigureAwait(false);
-            if (!build.Delivered) throw new CustodyIntegrityException($"Offline mount derivation refused: {build.Refusal}: {build.Detail}");
-            var write = await V3CorpusMountWriter.WriteAsync(build, target, generations, cancellationToken, root.BuildTime).ConfigureAwait(false);
-            var verification = await V3CorpusMountWriter.VerifyAsync(target, cancellationToken).ConfigureAwait(false);
-            if (!verification.Verified) throw new CustodyIntegrityException("Derived mount does not reopen: " + verification.Detail);
-            return write;
-        }
-        finally
-        {
-            // This unpredictable directory is created solely for this invocation's verified inputs.
-            if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
-        }
+
+        return (root, populationScope);
     }
 
     private static bool AdmittedPath(string path)
@@ -194,4 +323,15 @@ public static class V3OfflineMount
         string[] Seeds, string Policy, LuxembourgActRange[] Ranges, DateTimeOffset BuildTime,
         RetainedFile[] Predecessor, string[] Referenced);
 
+    /// <summary>
+    /// Inputs /3: the acquisition's retained inputs /1 or /2 (<paramref name="Base"/>), the rule set and its exact digests,
+    /// the admission policy, when the re-derivation is stated to run, and the record a sealed derivation must reproduce
+    /// (null until sealed).
+    /// </summary>
+    private sealed record RederivationInputs(string Schema, SourceArtifactRef Base, string RuleSet,
+        LuxembourgRederivationRule[] Rules, string AdmissionPolicy, DateTimeOffset DerivedAt, string? ExpectedRederivation)
+    {
+        public LuxembourgRederivationRequest Request() =>
+            new(RuleSet, Rules, AdmissionPolicy, DerivedAt, ExpectedRederivation);
+    }
 }

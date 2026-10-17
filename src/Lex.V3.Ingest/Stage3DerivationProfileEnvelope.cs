@@ -24,13 +24,46 @@ public sealed class Stage3DerivationProfileEnvelope
         LuxembourgPdfProfileEligibilityPopulation pdfEligibility,
         LuxembourgPdfLayoutEvidencePopulation pdfLayoutEvidence,
         LuxembourgPublisherPdfTextLayerPopulation publisherPdfTextLayer,
-        LuxembourgPublisherPdfActScopePopulation publisherPdfActScope)
+        LuxembourgPublisherPdfActScopePopulation publisherPdfActScope,
+        LuxembourgRederivationRecord? luxembourgRederivation = null)
     {
         BodyComposition = bodyComposition;
         PdfEligibility = pdfEligibility;
         PdfLayoutEvidence = pdfLayoutEvidence;
         PublisherPdfTextLayer = publisherPdfTextLayer;
         PublisherPdfActScope = publisherPdfActScope;
+        LuxembourgRederivation = luxembourgRederivation;
+    }
+
+    /// <summary>
+    /// The record of the re-derivation that made the Luxembourg inventory and legal content this chain carries; null when
+    /// they are the acquisition's own. Every artefact built from this envelope names it the same way (the corpus header).
+    /// </summary>
+    public LuxembourgRederivationRecord? LuxembourgRederivation { get; }
+
+    /// <summary>
+    /// This envelope with the record of the re-derivation that made its Luxembourg inventory and legal content, or null with
+    /// the reason when the record names other populations than the ones this chain carries, or the envelope has one already.
+    /// </summary>
+    internal Stage3DerivationProfileEnvelope? WithLuxembourgRederivation(LuxembourgRederivationRecord record, out string? detail)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        var envelope = BodyComposition.Envelope;
+        if (LuxembourgRederivation is not null)
+        {
+            detail = "the profile envelope already names a re-derivation";
+            return null;
+        }
+
+        if (!string.Equals(envelope.LuxembourgAknArticleInventoryPopulation.IdentitySha256, record.InventoryIdentitySha256, StringComparison.Ordinal) ||
+            !string.Equals(envelope.LuxembourgAknLegalContentPopulation.IdentitySha256, record.ContentIdentitySha256, StringComparison.Ordinal))
+        {
+            detail = $"the re-derivation record {record.Sha256} names other Luxembourg derivations than the envelope carries";
+            return null;
+        }
+
+        detail = null;
+        return new(BodyComposition, PdfEligibility, PdfLayoutEvidence, PublisherPdfTextLayer, PublisherPdfActScope, record);
     }
 
     public Stage3BodyComposition BodyComposition { get; }

@@ -386,6 +386,24 @@ public sealed partial class LuxembourgFirstMountAcquisitionTests
         return (resumed, stream.ToArray());
     }
 
+    /// <summary>
+    /// A resumed legislative population (every unit replayed from a complete journal), reopened from its catalog as R0
+    /// reopens one: the resumed acquisition a re-derivation reads in <c>LuxembourgRederivationTests</c>.
+    /// </summary>
+    internal static async Task<LuxembourgFirstMountAcquisitionResult> ResumedLegislativePopulationAsync(ICustodyStore store)
+    {
+        var renderers = await LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None);
+        var (arguments, header, journal) = await CompleteLegislativeJournalAsync(store, renderers);
+        using var handler = new LuxembourgFamilyHandler(PdfBytes(), includeSecondWork: true);
+        var (resumed, _) = await ResumeLegislativeAsync(store, renderers, arguments, header, journal, handler);
+        Assert.IsTrue(resumed.Delivered, resumed.Detail);
+        Assert.IsNotNull(resumed.Resumption, "a resumed acquisition says so in its catalog");
+        var reopened = await LuxembourgFirstMountAcquisition.ReopenPopulationAsync(store, resumed.CheckpointRef!,
+            LuxembourgPopulationScope.Legislative, CancellationToken.None);
+        Assert.IsTrue(reopened.Delivered, reopened.Detail);
+        return reopened;
+    }
+
     private static AcquisitionJournalRenderer[] LuxembourgRendererRoles(LuxembourgRendererSources renderers) =>
     [
         new AcquisitionJournalRenderer(LuxembourgRendererSources.RendererFiles[0], renderers.Query.Reference),

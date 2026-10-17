@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Lex.V3.Contracts.Source.Core;
@@ -14,7 +15,11 @@ public sealed record V3CorpusMountWrite(
     string Directory,
     IReadOnlyList<V3CorpusMountWrittenFile> Files,
     string ReportPath,
-    string ReportSha256);
+    string ReportSha256)
+{
+    /// <summary>The record of the re-derivation the Luxembourg derivations come from, as the report states it; null without one.</summary>
+    public SourceArtifactRef? LuxembourgRederivation { get; init; }
+}
 
 /// <summary>
 /// Whether a directory reads back as one consistent mount through the same public verifiers the
@@ -130,7 +135,10 @@ public static class V3CorpusMountWriter
             var report = RenderReport(build, written, kept, derivationInputUtc);
             await File.WriteAllBytesAsync(reportTemporary, report, cancellationToken).ConfigureAwait(false);
             File.Move(reportTemporary, reportPath, overwrite: true);
-            return new V3CorpusMountWrite(target, written, reportPath, Sha256(report));
+            return new V3CorpusMountWrite(target, written, reportPath, Sha256(report))
+            {
+                LuxembourgRederivation = build.LuxembourgDerivation?.Record.Reference,
+            };
         }
         catch
         {
@@ -277,14 +285,80 @@ public static class V3CorpusMountWriter
         };
         var options = new JsonSerializerOptions { WriteIndented = true };
         var resumption = Resumption(build.EuropeResumption, build.LuxembourgResumption);
-        if (resumption is null)
+        var derivation = Derivation(build.LuxembourgDerivation, build.LuxembourgResumption);
+        if (resumption is null && derivation is null)
         {
             return JsonSerializer.SerializeToUtf8Bytes(report, options);
         }
 
         var node = JsonSerializer.SerializeToNode(report, options)!.AsObject();
-        node["resumption"] = JsonSerializer.SerializeToNode(resumption, options);
+        if (resumption is not null)
+        {
+            node["resumption"] = JsonSerializer.SerializeToNode(resumption, options);
+        }
+
+        if (derivation is not null)
+        {
+            node["derivation"] = JsonSerializer.SerializeToNode(derivation, options);
+        }
+
         return JsonSerializer.SerializeToUtf8Bytes(node, options);
+    }
+
+    /// <summary>
+    /// What a mount whose Luxembourg derivations were re-derived from the acquisition's custody says about it: which
+    /// acquisition (for a resumed one, its window and both spends), the derivation time its inputs state, under which rules
+    /// and policy, the record that names them, the build of the code that ran it, and that the path holds no publisher
+    /// session. Null when the derivations are the acquisition's own, and the report is then exactly what it was.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The derivation time is the one the inputs state (<c>derived_at</c>), never a clock read here, never an observation
+    /// time, and it never moves the build time: the acquisition observed the population, and its catalog's resumption
+    /// (when it resumed) states that window. A resumed catalog's <c>WireSpent</c> is the resumed run's spend only; the
+    /// earlier runs' is at least <c>PreviousWireSpentAtLeast</c>, so the statement names both and adds neither.
+    /// </para>
+    /// <para>
+    /// The report states the path (<c>publisherSession</c>), not a count: it is written in whatever process derives, and a
+    /// count belongs to a process. The offline tool measures its own and prints it as <c>publisher_requests</c>. The tool
+    /// source is here and not in the record, so the record is reproduced by any build that implements the same rule digests.
+    /// </para>
+    /// </remarks>
+    internal static object? Derivation(V3LuxembourgDerivation? derivation, AcquisitionResumption? luxembourgResumption)
+    {
+        if (derivation is null)
+        {
+            return null;
+        }
+
+        var record = derivation.Record;
+        var derivedAt = derivation.DerivedAt.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
+        var acquired = luxembourgResumption is null
+            ? $"Acquired by the Luxembourg acquisition whose catalog is {record.AcquisitionCatalogSha256}"
+            : $"Acquired by the Luxembourg acquisition whose catalog is {record.AcquisitionCatalogSha256}, resumed on "
+              + $"{Day(luxembourgResumption.ResumedAt)} from {Count(luxembourgResumption.PreviousRuns)} earlier run(s) begun on "
+              + $"{Day(luxembourgResumption.PreviousStartedAt)} and catalogued on {Day(luxembourgResumption.CatalogedAt)}; the "
+              + $"resumed run had spent {Count(luxembourgResumption.WireSpent)} publisher request(s) when it catalogued, after at "
+              + $"least {Count(luxembourgResumption.PreviousWireSpentAtLeast)} by the earlier run(s)";
+        return new
+        {
+            statement = $"{acquired}; re-derived from that acquisition's custody under rule set {record.RuleSet} and admission "
+                + $"policy {record.AdmissionPolicySha256}, at the derivation time its inputs state ({derivedAt}); the derivation "
+                + "path holds no publisher session, and the offline tool measures its process's network activity and refuses to "
+                + "finish with any.",
+            derivedAt,
+            ruleSet = record.RuleSet,
+            rules = record.Rules.Select(static rule => new { profile = rule.Profile, sha256 = rule.Sha256 }).ToArray(),
+            admissionPolicy = record.AdmissionPolicySha256,
+            record = Reference(record.Reference),
+            toolSource = AcquisitionJournal.CurrentSource(),
+            publisherSession = "none_on_this_path",
+        };
+
+        static string Count(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+        static string Day(DateTimeOffset value) =>
+            value.ToUniversalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     }
 
     /// <summary>

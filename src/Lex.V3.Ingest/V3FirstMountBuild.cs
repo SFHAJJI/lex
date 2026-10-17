@@ -56,6 +56,13 @@ public enum V3FirstMountBuildRefusal
 public sealed record V3CorpusMountFile(string Name, ReadOnlyMemory<byte> Bytes);
 
 /// <summary>
+/// A build whose Luxembourg derivations come from a re-derivation of the acquisition's custody: the record that names it,
+/// and when the derivation is stated to run (<paramref name="DerivedAt"/>, never an observation time). The build report
+/// states both.
+/// </summary>
+public sealed record V3LuxembourgDerivation(LuxembourgRederivationRecord Record, DateTimeOffset DerivedAt);
+
+/// <summary>
 /// The five artefacts <c>Lex.V3.Api</c> mounts, each built twice and equal, or one typed refusal.
 /// </summary>
 public sealed class V3FirstMountBuildResult
@@ -74,7 +81,8 @@ public sealed class V3FirstMountBuildResult
         V3FirstMountBuildRefusal? refusal,
         string? detail,
         AcquisitionResumption? europeResumption = null,
-        AcquisitionResumption? luxembourgResumption = null)
+        AcquisitionResumption? luxembourgResumption = null,
+        V3LuxembourgDerivation? luxembourgDerivation = null)
     {
         Corpus = corpus;
         LuxembourgIndex = luxembourgIndex;
@@ -83,7 +91,11 @@ public sealed class V3FirstMountBuildResult
         Detail = detail;
         EuropeResumption = europeResumption;
         LuxembourgResumption = luxembourgResumption;
+        LuxembourgDerivation = luxembourgDerivation;
     }
+
+    /// <summary>The re-derivation the Luxembourg derivations come from, carried to the build report; null when they are the acquisition's own.</summary>
+    public V3LuxembourgDerivation? LuxembourgDerivation { get; }
 
     public LexCorpus6BuildResult? Corpus { get; }
 
@@ -117,17 +129,25 @@ public sealed class V3FirstMountBuildResult
 
     /// <param name="europeResumption">The EU acquisition's resumption, carried to the build report.</param>
     /// <param name="luxembourgResumption">The Luxembourg acquisition's resumption, carried to the build report.</param>
+    /// <param name="luxembourgDerivation">The re-derivation the Luxembourg derivations come from, carried to the build report;
+    /// its record must be the one the corpus header names.</param>
     public static V3FirstMountBuildResult Success(
         LexCorpus6BuildResult corpus,
         LuxembourgIndexBuildResult luxembourgIndex,
         EuropeIndexBuildResult europeIndex,
         AcquisitionResumption? europeResumption = null,
-        AcquisitionResumption? luxembourgResumption = null)
+        AcquisitionResumption? luxembourgResumption = null,
+        V3LuxembourgDerivation? luxembourgDerivation = null)
     {
         ArgumentNullException.ThrowIfNull(corpus);
         ArgumentNullException.ThrowIfNull(luxembourgIndex);
         ArgumentNullException.ThrowIfNull(europeIndex);
-        return new(corpus, luxembourgIndex, europeIndex, null, null, europeResumption, luxembourgResumption);
+        if (!string.Equals(luxembourgDerivation?.Record.Sha256, corpus.VerifiedSet.Set.LuxembourgRederivation, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("A build states the re-derivation its corpus header names, and only that one.", nameof(luxembourgDerivation));
+        }
+
+        return new(corpus, luxembourgIndex, europeIndex, null, null, europeResumption, luxembourgResumption, luxembourgDerivation);
     }
 
     public static V3FirstMountBuildResult Refused(V3FirstMountBuildRefusal refusal, string detail)
@@ -305,6 +325,18 @@ public sealed class V3FirstMountBuild
                 V3FirstMountBuildRefusal.ProfileEnvelopeRefused, $"{profileRefusal}: {profileDetail}");
         }
 
+        // A re-derived Luxembourg population names its record in the envelope, so the corpus and both indexes built from it
+        // carry the same header.
+        if (luxembourg.Rederivation is { } rederivation)
+        {
+            profileEnvelope = profileEnvelope.WithLuxembourgRederivation(rederivation, out var rederivationDetail);
+            if (profileEnvelope is null)
+            {
+                return V3FirstMountBuildResult.Refused(
+                    V3FirstMountBuildRefusal.ProfileEnvelopeRefused, $"luxembourg_rederivation: {rederivationDetail}");
+            }
+        }
+
         // ---- Three builders, each twice. A pair that differs refuses the build. ----
         // The build time is read here, after every fetch and derivation, once: both index builds record the same.
         var builtAt = BuildTimeOf(_clock.GetUtcNow());
@@ -368,7 +400,8 @@ public sealed class V3FirstMountBuild
 
         // A population acquired across an interruption says so in the build report (V3CorpusMountWriter). The catalogs
         // carry the resumption, so an offline derivation states it exactly as the acquiring build did.
-        return V3FirstMountBuildResult.Success(corpus, luxembourgIndex, europeIndex, europe.Resumption, luxembourg.Resumption);
+        return V3FirstMountBuildResult.Success(corpus, luxembourgIndex, europeIndex, europe.Resumption, luxembourg.Resumption,
+            luxembourg.Rederivation is { } record ? new V3LuxembourgDerivation(record, luxembourg.DerivedAt!.Value) : null);
     }
 
     private static bool SameArtefact(

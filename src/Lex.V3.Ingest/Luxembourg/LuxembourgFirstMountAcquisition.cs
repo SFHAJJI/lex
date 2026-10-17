@@ -226,22 +226,56 @@ public sealed class LuxembourgFirstMountAcquisitionResult
         new(Run, Profile, VocabularyEvidenceRef, AknInventory, AknLegalContent, Refusal, Detail)
         {
             VocabularyCheckpointRef = reference, CheckpointRef = CheckpointRef, PopulationScopeManifestRef = PopulationScopeManifestRef,
-            Resumption = Resumption,
+            Resumption = Resumption, Rederivation = Rederivation, DerivedAt = DerivedAt,
         };
 
     internal LuxembourgFirstMountAcquisitionResult WithCheckpoint(SourceArtifactRef reference, AcquisitionResumption? resumption = null) =>
         new(Run, Profile, VocabularyEvidenceRef, AknInventory, AknLegalContent, Refusal, Detail)
         {
             VocabularyCheckpointRef = VocabularyCheckpointRef, CheckpointRef = reference, PopulationScopeManifestRef = PopulationScopeManifestRef,
-            Resumption = resumption ?? Resumption,
+            Resumption = resumption ?? Resumption, Rederivation = Rederivation, DerivedAt = DerivedAt,
         };
 
     internal LuxembourgFirstMountAcquisitionResult WithPopulationScopeManifest(SourceArtifactRef reference) =>
         new(Run, Profile, VocabularyEvidenceRef, AknInventory, AknLegalContent, Refusal, Detail)
         {
             VocabularyCheckpointRef = VocabularyCheckpointRef, CheckpointRef = CheckpointRef, PopulationScopeManifestRef = reference,
-            Resumption = Resumption,
+            Resumption = Resumption, Rederivation = Rederivation, DerivedAt = DerivedAt,
         };
+
+    /// <summary>
+    /// The re-derivation's door (<see cref="LuxembourgRederivation.ApplyAsync"/>): this result, made by the later rules on the
+    /// acquisition's own run, with the record that names them and when the derivation is stated to run. Once only.
+    /// </summary>
+    internal LuxembourgFirstMountAcquisitionResult WithRederivation(LuxembourgRederivationRecord record, DateTimeOffset derivedAt)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        if (Rederivation is not null || !Delivered ||
+            !string.Equals(AknInventory!.IdentitySha256, record.InventoryIdentitySha256, StringComparison.Ordinal) ||
+            !string.Equals(AknLegalContent!.IdentitySha256, record.ContentIdentitySha256, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "A re-derivation record belongs, once, to the delivered result whose derivations it names.", nameof(record));
+        }
+
+        return new(Run, Profile, VocabularyEvidenceRef, AknInventory, AknLegalContent, Refusal, Detail)
+        {
+            VocabularyCheckpointRef = VocabularyCheckpointRef, CheckpointRef = CheckpointRef, PopulationScopeManifestRef = PopulationScopeManifestRef,
+            Resumption = Resumption, Rederivation = record, DerivedAt = derivedAt,
+        };
+    }
+
+    /// <summary>
+    /// The provenance record of the re-derivation that made <see cref="AknInventory"/> and <see cref="AknLegalContent"/>
+    /// (<c>lex-lu-rederivation/1</c>); null for an acquisition's own derivations, which its catalog records.
+    /// </summary>
+    public LuxembourgRederivationRecord? Rederivation { get; private init; }
+
+    /// <summary>
+    /// When the re-derivation is stated to run (its inputs' <c>derived_at</c>, a whole UTC second); null without one. It is
+    /// never an observation time: the acquisition observed the population, and its build time bounds that.
+    /// </summary>
+    public DateTimeOffset? DerivedAt { get; private init; }
 
     public LuxembourgAknArticleInventoryPopulation? AknInventory { get; }
 
