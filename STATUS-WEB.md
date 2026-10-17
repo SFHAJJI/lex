@@ -53,7 +53,7 @@ text. `verify` resolves every form."), with R18 to R21 and R64.
   provision's permalink from the mounts that sent its two bundles, and the web tests check the generator's forms against
   them; the journeys verify the cited article's evidence form on every permalink and readable-address step (CI's lane). The
   usual form alone is read by the exact-reference reader of the plan's item 4.2, not merged yet (next, below).
-- **French**: (filled in after the review addendum)
+- **French**: the new entries (five reading labels, `export.usualCitation`, the `citation` section) are drafts under an independent review (the addendum of 2026-10-17 of `C:\lex-v3\lanesr-revieweview.md`), to be applied and named in `live-chrome-fr.mjs`'s header before this pull request is opened.
 - **Driver decisions** (reversible):
   - One source for each part: the platform serves the facts (`citation_facts`, `article_text_sha256`) and composes no
     citation; the web generator composes the forms and invents no field. A machine client composes from the same facts;
@@ -85,7 +85,7 @@ text. `verify` resolves every form."), with R18 to R21 and R64.
   act's title and Official Journal reference, which no index holds; a consolidated Luxembourg state's title, which starts
   "Version consolidée applicable au …" and is not read into the usual form; the treaties' usual forms ("Article 6 TUE");
   the clipboard button.
-- **Measured** (this branch, from `v3/integration` at #972's merge, 1608c737): (filled in at the end)
+- **Measured** (this branch, from `v3/integration` at #972's merge, 1608c737), with no browser started: the web build; the web suite over 108 of its 111 files (all but `keyboard-walk`, `launch-browser` and `paint-check`), 1,195 of 1,195; `dotnet build Lex.V3.slnx -c Release` (and `--no-incremental`) 0 warnings, 0 errors; `Lex.V3.Tests` 3,181 (3,175 passed, 6 skipped); the `Lex.V3.Ingest.Tests` classes touched with Census, `PublicRequestRecordingTests`, the answer, envelope and refusal samples, verify, citation, citation facts, as-published, dossier, evidence bundle, pinned permalink, EU time view, EU permalink, generation quote and MCP, 181 (178 passed, 3 skipped), and the mounted and machine gates, replay, events, locator, resolve, EU capability and journey mounts, 105 (99 passed, 6 skipped); the answer and envelope censuses rendered again and verified without the variables; `eng/verify-v3-tree.ps1` 1,585 tracked paths. The journeys are CI's.
 
 ## The cited article first, what changed since, a stale permalink's current link, and readable addresses (sole driver, 2026-10-16)
 
