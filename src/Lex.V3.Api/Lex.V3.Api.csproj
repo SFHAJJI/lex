@@ -29,6 +29,10 @@
     <EmbeddedResource Include="../../schemas/v3-platform/*.schema.json">
       <LogicalName>Lex.V3.Api.PlatformSchemas.%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>
+    <!-- The fixed table of article numbers an exact reference is read against (the plan's item 4.2). -->
+    <None Remove="article-numbers.json" />
+    <Content Remove="article-numbers.json" />
+    <EmbeddedResource Include="article-numbers.json" LogicalName="Lex.V3.Api.ArticleNumbers.json" />
     <None Remove="preview-graph/**/*" />
     <None Remove="preview-trust/**/*" />
     <Content Remove="preview-graph/**/*" />

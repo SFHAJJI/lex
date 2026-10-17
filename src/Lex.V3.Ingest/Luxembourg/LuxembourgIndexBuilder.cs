@@ -3275,6 +3275,71 @@ public sealed class LuxembourgIndexReader : IDisposable
         }
     }
 
+    /// <summary>
+    /// The held works whose publisher work IRI starts with <paramref name="workIriPrefix"/> (the works of one ELI type and date,
+    /// <c>…/eli/etat/leg/loi/1991/08/10/</c>, for an exact reference by type and date): each work key with its work IRI, once,
+    /// in work-key order. An empty prefix is refused, since it would read every state.
+    /// </summary>
+    public IReadOnlyList<(string WorkKey, string PublisherWorkIri)> ResolveWorksUnder(string workIriPrefix)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(workIriPrefix);
+        var last = workIriPrefix[^1];
+        if (last >= '\u007f')
+        {
+            throw new ArgumentException("A work prefix ends in a character outside ASCII.", nameof(workIriPrefix));
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT DISTINCT work_key,publisher_work_iri
+                FROM states
+                WHERE publisher_work_iri>=$low AND publisher_work_iri<$high
+                ORDER BY work_key,publisher_work_iri
+                """;
+            command.Parameters.AddWithValue("$low", workIriPrefix);
+            command.Parameters.AddWithValue("$high", workIriPrefix[..^1] + (char)(last + 1));
+            using var reader = command.ExecuteReader();
+            var values = new List<(string, string)>();
+            while (reader.Read())
+            {
+                values.Add((reader.GetString(0), reader.GetString(1)));
+            }
+
+            return Array.AsReadOnly(values.ToArray());
+        }
+    }
+
+    /// <summary>
+    /// The publisher's catalogue references an exact reference is read against: each subject the catalogue says is part of an
+    /// issue of the Mémorial (<c>isPartOf</c> an IRI under <c>…/eli/etat/leg/memorial/</c>), and each subject's historical legal
+    /// identifier (<c>historicalLegalId</c>), verbatim, in subject, predicate and value order. It reads the fact table once (the
+    /// caller keeps it), and holds every subject the catalogue names, whether or not the index holds its text.
+    /// </summary>
+    public IReadOnlyList<(string SubjectIri, string Predicate, string Value)> ResolveCatalogueReferences()
+    {
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT DISTINCT subject_iri,predicate,object_value
+                FROM work_facts
+                WHERE (predicate='isPartOf' AND object_value GLOB 'http://data.legilux.public.lu/eli/etat/leg/memorial/*')
+                   OR predicate='historicalLegalId'
+                ORDER BY subject_iri,predicate,object_value
+                """;
+            using var reader = command.ExecuteReader();
+            var values = new List<(string, string, string)>();
+            while (reader.Read())
+            {
+                values.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2)));
+            }
+
+            return Array.AsReadOnly(values.ToArray());
+        }
+    }
+
     /// <summary>The states of the given expressions, by publisher date, work key, language, expression and digest.</summary>
     public IReadOnlyList<LuxembourgIndexResolvedState> ResolveStatesOfExpressions(IReadOnlyList<string> expressionIris)
     {
