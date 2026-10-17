@@ -17,6 +17,12 @@
 // the platform's English (`as_published` in the JSON, three columns on every CSV row, a paragraph of the PDF), and
 // null or empty for an act whose consolidated text is held.
 //
+// Every item and every exclusion carries its citations (`citation_forms`), from the one citation generator
+// (`citation.mjs`; the plan's item 3.3, R65), in the language of the text cited: the usual form, the usual form with the
+// dated permalink, and the evidence form, which an export keeps (R65: "exports keep this form"), with the date Lex was
+// consulted the answering snapshot's own (the envelope's `observed_at`, in Luxembourg). `citation` stays the article's
+// hash-pinned permalink, which `verify` takes as it is. A text in a language no citation is composed in carries null.
+//
 // The watermark is the composer's own (`export-composer.mjs`), so the preview and the export say the
 // same sentence.
 //
@@ -33,6 +39,7 @@
 // count, the platform's reason and the official source), never a text. `exportJson` and `exportCsv`
 // write either model, by its schema.
 
+import { citationForms } from './citation.mjs';
 import { WATERMARK_PREVIEW } from './export-composer.mjs';
 import { EUROPE_ANNEX_SERVED_AS } from './europe-annexes.mjs';
 import { articlePermalink } from './permalinks.mjs';
@@ -53,7 +60,7 @@ export const EUROPE_WITHOUT_TEXT = 'articles_without_text';
  * corpus, index and registry digests), so a row copied out alone loses none of it (review of #789).
  */
 export const CSV_COLUMNS = Object.freeze([
-  'work_key', 'language', 'applies_from', 'article', 'status', 'citation', 'state_permalink',
+  'work_key', 'language', 'applies_from', 'article', 'status', 'citation', 'citation_conventional', 'citation_with_permalink', 'citation_evidence', 'state_permalink',
   'text_sha256', 'body_sha256', 'official_source', 'rights_disposition', 'article_valid_from', 'text', 'watermark',
   'as_published', 'later_versions', 'authenticity',
   'observed_at', 'rights_rule', 'corpus_sha256', 'index_sha256', 'registry_sha256',
@@ -93,10 +100,36 @@ export function asPublishedParagraph(asPublished) {
  * and the corpus, index and registry digests.
  */
 export const EUROPE_CSV_COLUMNS = Object.freeze([
-  'celex', 'language', 'wording_kind', 'wording_date', 'article', 'heading', 'status', 'citation', 'wording_permalink',
+  'celex', 'language', 'wording_kind', 'wording_date', 'article', 'heading', 'status', 'citation', 'citation_conventional', 'citation_with_permalink', 'citation_evidence', 'wording_permalink',
   'text_sha256', 'body_sha256', 'official_source', 'annexes', 'reason', 'text', 'watermark', 'acknowledgement',
   'authenticity', 'observed_at', 'rights_rule', 'corpus_sha256', 'index_sha256', 'registry_sha256',
 ]);
+
+/** One article's citations as an export model holds them (`citationForms`), or null for a text no citation is composed in. */
+function citationsOf(view, version, article, observedAt) {
+  const forms = citationForms({ view, version, article, observedAt });
+  return forms === null ? null : Object.freeze({
+    language: forms.language,
+    conventional: forms.conventional,
+    withPermalink: forms.withPermalink,
+    evidence: forms.evidence,
+  });
+}
+
+/** The citations as the JSON export writes them: snake_case, or null. */
+function citationsJson(citations) {
+  return citations === null ? null : {
+    language: citations.language,
+    conventional: citations.conventional,
+    with_permalink: citations.withPermalink,
+    evidence: citations.evidence,
+  };
+}
+
+/** The three CSV fields of an item's citations: the usual form, with the permalink, and the evidence form (empty for null). */
+function citationsCsv(citations) {
+  return citations === null ? ['', '', ''] : [citations.conventional ?? '', citations.withPermalink, citations.evidence];
+}
 
 /**
  * The export model for the articles `pinned` names (each `{stateSha256, publisherId}`), in the order
@@ -118,6 +151,7 @@ export function composeExport({ view, pinned, observedAt }) {
         appliesFrom: state.applicabilityDate,
         publisherId: article.publisherId,
         citation: article.permalink,
+        citations: citationsOf(view, state, article, observedAt),
         statePermalink: state.permalink,
         text: article.text,
         textSha256: article.textSha256,
@@ -140,6 +174,7 @@ export function composeExport({ view, pinned, observedAt }) {
         // The article is held in its state, without text, so it is cited as any article of that
         // state is: the state's hash-pinned permalink and the publisher's article id as a last segment (R64).
         citation: articlePermalink(state.permalink, entry.publisherId),
+        citations: citationsOf(view, state, { publisherId: entry.publisherId }, observedAt),
         statePermalink: state.permalink,
         reason: 'no_text_tokens',
       }));
@@ -190,6 +225,7 @@ export function composeEuropeExport({ view, pinned, observedAt, registrySha256 }
         publisherId: article.publisherId,
         heading: article.heading,
         citation: article.permalink,
+        citations: citationsOf(view, wording, article, observedAt),
         text: article.text,
         textSha256: article.textSha256,
         textByteLength: article.textByteLength,
@@ -208,6 +244,7 @@ export function composeEuropeExport({ view, pinned, observedAt, registrySha256 }
         // The article is held in its wording, without text, so it is cited as any article of that wording
         // is: the wording's permalink and the provision as a last segment, escaped as the platform escapes it (R64).
         citation: articlePermalink(wording.permalink, entry.publisherId),
+        citations: citationsOf(view, wording, { publisherId: entry.publisherId }, observedAt),
         reason: EUROPE_WITHOUT_TEXT,
       }));
     }
@@ -279,6 +316,7 @@ export function exportJson(model) {
       applies_from: item.appliesFrom,
       article: item.publisherId,
       citation: item.citation,
+      citation_forms: citationsJson(item.citations),
       state_permalink: item.statePermalink,
       text: item.text,
       text_sha256: item.textSha256,
@@ -296,6 +334,7 @@ export function exportJson(model) {
       applies_from: entry.appliesFrom,
       article: entry.publisherId,
       citation: entry.citation,
+      citation_forms: citationsJson(entry.citations),
       state_permalink: entry.statePermalink,
       reason: entry.reason,
     })),
@@ -333,6 +372,7 @@ function europeExportJson(model) {
       article: item.publisherId,
       heading: item.heading,
       citation: item.citation,
+      citation_forms: citationsJson(item.citations),
       wording_permalink: item.wordingPermalink,
       text: item.text,
       text_sha256: item.textSha256,
@@ -349,6 +389,7 @@ function europeExportJson(model) {
       wording_date: entry.wordingDate,
       article: entry.publisherId,
       citation: entry.citation,
+      citation_forms: citationsJson(entry.citations),
       wording_permalink: entry.wordingPermalink,
       reason: entry.reason,
     })),
@@ -390,13 +431,13 @@ export function exportCsv(model) {
     : [model.asPublished.label, model.asPublished.laterVersions, model.asPublished.authenticity];
   const rows = [
     ...model.items.map((item) => [
-      item.workKey, item.language, item.appliesFrom, item.publisherId, 'exported', item.citation, item.statePermalink,
+      item.workKey, item.language, item.appliesFrom, item.publisherId, 'exported', item.citation, ...citationsCsv(item.citations), item.statePermalink,
       item.textSha256, item.bodySha256, item.officialSource, item.rightsDisposition, item.articleValidFrom, item.text, model.watermark,
       ...published,
       ...provenance,
     ]),
     ...model.excluded.map((entry) => [
-      entry.workKey, entry.language, entry.appliesFrom, entry.publisherId, `excluded: ${entry.reason}`, entry.citation, entry.statePermalink,
+      entry.workKey, entry.language, entry.appliesFrom, entry.publisherId, `excluded: ${entry.reason}`, entry.citation, ...citationsCsv(entry.citations), entry.statePermalink,
       '', '', '', model.rightsDisposition, '', '', model.watermark,
       ...published,
       ...provenance,
@@ -420,19 +461,19 @@ function europeExportCsv(model) {
   const rows = [
     ...model.items.map((item) => [
       item.celex, item.language, item.wordingKind, item.wordingDate, item.publisherId, item.heading, 'exported', item.citation,
-      item.wordingPermalink, item.textSha256, item.bodySha256, item.officialSource, '', '', item.text,
+      ...citationsCsv(item.citations), item.wordingPermalink, item.textSha256, item.bodySha256, item.officialSource, '', '', item.text,
       ...carried,
     ]),
     ...model.excluded.map((entry) => [
       entry.celex, entry.language, entry.wordingKind, entry.wordingDate, entry.publisherId, '', `excluded: ${entry.reason}`, entry.citation,
-      entry.wordingPermalink, '', '', '', '', '', '',
+      ...citationsCsv(entry.citations), entry.wordingPermalink, '', '', '', '', '', '',
       ...carried,
     ]),
     // An annex row names no article, and has no citation: an annex is never quoted, so it is pointed to by its
     // wording's permalink and its official source.
     ...model.annexesNotServed.map((row) => [
       row.celex, row.language, row.wordingKind, row.wordingDate, '', '', `excluded: ${row.disposition}`, '',
-      row.wordingPermalink, '', '', row.officialSource, row.count, row.reason, '',
+      '', '', '', row.wordingPermalink, '', '', row.officialSource, row.count, row.reason, '',
       ...carried,
     ]),
   ];

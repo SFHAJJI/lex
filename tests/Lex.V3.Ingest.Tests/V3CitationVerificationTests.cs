@@ -109,6 +109,60 @@ public sealed class V3CitationVerificationTests
         }
     }
 
+    /// <summary>
+    /// The citation generator's forms (the plan's item 3.3; R65): the permalink form prints the article's permalink under this
+    /// site's origin, and the evidence form adds the article's text digest (R64's long citation). <c>verify</c> resolves both by
+    /// their hashes: the version's digest in the permalink, as a path or under the origin, and the article text's, which
+    /// <c>article_text_sha256</c> names as the bundle served it; a state's permalink names no article, so no text digest.
+    /// </summary>
+    [TestMethod]
+    public async Task TheEvidenceFormOfEveryQuotedArticleVerifiesByTheVersionDigestAndTheTextDigest()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var europe = await EuropeMountedFixture.CreateAsync();
+        await using var cleanupEurope = europe;
+        using var europeMount = await V3CorpusMount.OpenAsync(europe.Directory, CancellationToken.None);
+        Assert.IsNotNull(europeMount);
+        var wordingDate = (await EnvelopeAsync(europeMount, "dossier", new { identifier = "32016R0679" })).Result!.Value
+            .GetProperty("expressions")[0].GetProperty("pinned_wording").GetProperty("wording_date").GetString();
+
+        foreach (var (from, request, versions, digestName) in new (V3CorpusMount, object, string, string)[]
+                 {
+                     (mount, new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate }, "states", "state_sha256"),
+                     (europeMount, new { identifier = "32016R0679", date = wordingDate }, "wordings", "wording_sha256"),
+                 })
+        {
+            var bundle = await AnswerAsync(from, "evidence_bundle", request);
+            var checkedArticles = 0;
+            foreach (var version in bundle[versions]!.AsArray())
+            {
+                var versionDigest = version![digestName]!.GetValue<string>();
+                var whole = await EnvelopeAsync(from, "verify", new { identifier = version["permalink"]!.GetValue<string>() });
+                Assert.AreEqual(JsonValueKind.Null, whole.Result!.Value.GetProperty("article_text_sha256").ValueKind, "a version's permalink names no article");
+                foreach (var article in version["articles"]!.AsArray().Take(8))
+                {
+                    var permalink = article!["article_permalink"]!.GetValue<string>();
+                    foreach (var identifier in new[] { permalink, "https://law.soufien.lu" + permalink })
+                    {
+                        var verified = await EnvelopeAsync(from, "verify", new { identifier });
+                        Assert.AreEqual(V3Verdicts.Answer, verified.Verdict, $"{identifier}: {verified.Refusal?.Code}");
+                        var body = verified.Result!.Value;
+                        Assert.AreEqual("digest_matches", body.GetProperty("verdict").GetString(), identifier);
+                        Assert.AreEqual(versionDigest, body.GetProperty(digestName).GetString(), identifier);
+                        Assert.AreEqual(article["text_sha256"]!.GetValue<string>(), body.GetProperty("article_text_sha256").GetString(), identifier);
+                    }
+
+                    checkedArticles++;
+                }
+            }
+
+            Assert.IsGreaterThan(0, checkedArticles, $"{versions}: no quoted article was checked");
+        }
+    }
+
     [TestMethod]
     public async Task EveryPermalinkTheEuAnswersEmitVerifiesAndEveryCoordinateTheyPrintResolves()
     {

@@ -219,8 +219,10 @@ test("typographic spaces are set plainly and said; a character the fonts cannot 
   assert.ok(!normalised(readPdf(exportPdf(plain)).flat().map((run) => run.text).join(" ")).includes("Typographic spaces"), "said only when it happened");
 
   const { model: foreign } = await modelOf(setText("Art. 1 漢 Δ"), (state) => [state.articles[0]]);
-  assert.equal(pdfRefusal(foreign), "its text holds characters the standard PDF fonts cannot set (U+6F22, U+0394)");
-  assert.throws(() => exportPdf(foreign), /cannot be set as a PDF: its text holds characters the standard PDF fonts cannot set \(U\+6F22, U\+0394\)/);
+  // The refusal names the field that holds the characters, never the article's text in place of another field.
+  const id = foreign.items[0].publisherId;
+  assert.equal(pdfRefusal(foreign), `it holds characters the standard PDF fonts cannot set, in article ${id}'s text (U+6F22, U+0394)`);
+  assert.throws(() => exportPdf(foreign), /cannot be set as a PDF: it holds characters the standard PDF fonts cannot set, in article .*'s text \(U\+6F22, U\+0394\)/);
 });
 
 /**
@@ -378,17 +380,19 @@ test("an EU PDF the standard fonts cannot set is refused, naming the characters 
     ["the authenticity statement", { authenticity: `${model.authenticity} −` }, "U+2212"],
     ["the rights rule", { rightsRule: `${model.rightsRule} ≤` }, "U+2264"],
     ["what a wording date is", { wordingDateSemantics: `${model.wordingDateSemantics} μ` }, "U+03BC"],
-    ["an article's heading", { items: [{ ...item, heading: `${item.heading} 漢` }] }, "U+6F22"],
-    ["an article's text", { items: [{ ...item, text: `${item.text} ∞` }] }, "U+221E"],
-    ["an article's official source", { items: [{ ...item, officialSource: `${item.officialSource}→` }] }, "U+2192"],
-    ["an excluded article's id", { excluded: [{ ...excluded, publisherId: "Art. ★" }] }, "U+2605"],
-    ["an annex's reason", { annexesNotServed: [{ ...annex, reason: `${annex.reason} ✓` }] }, "U+2713"],
-    ["an annex's official source", { annexesNotServed: [{ ...annex, officialSource: `${annex.officialSource}/✗` }] }, "U+2717"],
+    [`article ${item.publisherId}'s heading`, { items: [{ ...item, heading: `${item.heading} 漢` }] }, "U+6F22"],
+    [`article ${item.publisherId}'s text`, { items: [{ ...item, text: `${item.text} ∞` }] }, "U+221E"],
+    [`article ${item.publisherId}'s official source`, { items: [{ ...item, officialSource: `${item.officialSource}→` }] }, "U+2192"],
+    ["excluded article Art. ★", { excluded: [{ ...excluded, publisherId: "Art. ★" }] }, "U+2605"],
+    [`article ${item.publisherId}'s evidence form`, { items: [{ ...item, citations: { ...item.citations, evidence: `${item.citations.evidence}\n⇒` } }] }, "U+21D2"],
+    ["annex row 1", { annexesNotServed: [{ ...annex, reason: `${annex.reason} ✓` }] }, "U+2713"],
+    ["annex row 1's official source", { annexesNotServed: [{ ...annex, officialSource: `${annex.officialSource}/✗` }] }, "U+2717"],
   ];
   assert.equal(pdfRefusal(model), null);
   for (const [field, change, code] of fields) {
     const refused = { ...model, ...change };
-    assert.equal(pdfRefusal(refused), `its text holds characters the standard PDF fonts cannot set (${code})`, field);
+    // The refusal names the field that holds the characters (review of #975: it said "its text" of an evidence form).
+    assert.equal(pdfRefusal(refused), `it holds characters the standard PDF fonts cannot set, in ${field} (${code})`, field);
     assert.throws(() => exportPdf(refused), new RegExp(`cannot be set as a PDF: .*\\(U\\+${code.slice(2)}\\)$`), field);
   }
 

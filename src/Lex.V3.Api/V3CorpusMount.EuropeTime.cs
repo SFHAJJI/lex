@@ -1083,6 +1083,8 @@ internal sealed partial class V3CorpusMount
             requested_language = requestedLanguage,
             requested_anchor = provision,
             article_permalink = provision is null ? null : EuropeProvisionPermalink(match.Pin.Permalink, provision),
+            // The provision's text digest, which a citation's evidence form carries beside the permalink (R64, R65).
+            article_text_sha256 = provision is null ? null : EuropeProvisionTextSha256(match.Candidate.ExpressionId, provision),
             verdict = "digest_matches",
             publisher = EuropePermalinkPublisher,
             celex = seed,

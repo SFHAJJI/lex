@@ -146,7 +146,10 @@ test("CSV quoting keeps commas, quotes and line breaks inside a field", async ()
   const view = readEvidenceBundle(answer);
   const model = composeExport({ view, pinned: [{ stateSha256: view.states[0].stateSha256, publisherId: view.states[0].articles[0].publisherId }], observedAt: OBSERVED });
   const rows = parseCsv(exportCsv(model));
-  assert.equal(rows[1][12], 'Il dit « oui », puis "non",\nencore.');
+  assert.equal(rows[1][CSV_COLUMNS.indexOf("text")], 'Il dit « oui », puis "non",\nencore.');
+  // The evidence form's lines stay in one field too (`citation.mjs`).
+  assert.equal(rows[1][CSV_COLUMNS.indexOf("citation_evidence")], model.items[0].citations.evidence);
+  assert.ok(model.items[0].citations.evidence.includes("\n"), "the evidence form is set line by line");
   assert.equal(rows.length, 2, "a line break inside a quoted field does not start a row");
 });
 
@@ -229,8 +232,11 @@ test("an EU export excludes an article held without text, cited, and lists its w
   const json = JSON.parse(exportJson(model));
   assert.deepEqual(json.excluded, [{
     celex: EUROPE_SAMPLE.celex, language: "eng", wording_kind: "original_wording", wording_date: "2016-04-27", article: "099",
-    citation: `${wording.permalink}/099`, wording_permalink: wording.permalink, reason: EUROPE_WITHOUT_TEXT,
+    citation: `${wording.permalink}/099`, citation_forms: json.excluded[0].citation_forms, wording_permalink: wording.permalink, reason: EUROPE_WITHOUT_TEXT,
   }], "an excluded article keeps its citation and says why");
+  // Cited by the one generator as any article of its wording is, with no text digest (`citation.mjs`).
+  assert.equal(json.excluded[0].citation_forms.conventional, "Article 99 of Regulation (EU) 2016/679, as at 27 April 2016");
+  assert.ok(json.excluded[0].citation_forms.evidence.includes("Text digest (SHA-256): none, the article is held without text."));
   const [annex] = wording.annexesNotServed;
   assert.deepEqual(json.annexes_not_served, [{
     celex: EUROPE_SAMPLE.celex, language: "eng", wording_kind: "original_wording", wording_date: "2016-04-27", wording_permalink: wording.permalink,

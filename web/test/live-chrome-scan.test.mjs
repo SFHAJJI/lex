@@ -158,6 +158,21 @@ function split(markup, attribute) {
 }
 
 /**
+ * An export panel as it is scanned: its JSON aside (the file's content, shown as the file will hold it), and the line that
+ * refuses the PDF only because the pseudo-locale's fullwidth letters, which a citation's words carry into the file
+ * (`citation.mjs`), are no characters the standard PDF fonts set. That refusal is an artifact of the scan, whose reason must
+ * name those letters alone; the real builds offer the PDF (`citation.test.mjs`).
+ */
+function scannedPanel(markup) {
+  const rest = markup.replace(/<pre>[\s\S]*?<\/pre>/, "");
+  if (!rest.includes('data-format-refused="pdf"')) return rest;
+  const { inside, outside } = split(rest, 'data-format-refused="pdf"');
+  const codes = [...inside.matchAll(/U\+([0-9A-F]{4})/g)].map((match) => Number.parseInt(match[1], 16));
+  assert.ok(codes.length > 0 && codes.every((code) => code >= 0xff01 && code <= 0xff5e), `the PDF is refused for characters the pseudo-locale did not make: ${inside}`);
+  return outside;
+}
+
+/**
  * The evaluation card as the data it shows: every value but its verdicts, which the page says in the
  * table's words ("pass", "caught the shuffle"), so a verdict written into the page by hand is caught
  * (review of #807: the card's "pass" exempted a hard-coded "pass").
@@ -267,7 +282,7 @@ test("no interface text on a live page or a census answer bypasses the chrome ta
         assert.equal(composed.state, "composed", `export: ${entry.scenario}`);
         // The panel shows what the file will carry (its watermark, its rule, its JSON), which is the
         // file's content rather than interface text.
-        scan(`export panel: ${entry.scenario}`, panel.replace(/<pre>[\s\S]*?<\/pre>/, ""), dataOf(entry.envelope, composed.model));
+        scan(`export panel: ${entry.scenario}`, scannedPanel(panel), dataOf(entry.envelope, composed.model));
       }
     }
   }
@@ -284,7 +299,7 @@ test("no interface text on a live page or a census answer bypasses the chrome ta
     scan("export: an EU original wording", renderToStaticMarkup(h(app.ExportAnswerView, { outcome, pins, onPin: () => {} })), dataOf(envelope));
     const composed = exportState(outcome, pins);
     assert.equal(composed.state, "composed", "export: an EU original wording");
-    scan("export panel: an EU original wording", renderToStaticMarkup(h(app.ExportPanel, { outcome, pins, onSave: () => {} })).replace(/<pre>[\s\S]*?<\/pre>/, ""), dataOf(envelope, composed.model));
+    scan("export panel: an EU original wording", scannedPanel(renderToStaticMarkup(h(app.ExportPanel, { outcome, pins, onSave: () => {} }))), dataOf(envelope, composed.model));
   }
   assert.deepEqual([...answered].sort(), [...screens.map(([name]) => name), "coverage"].sort(), "every screen had a census answer to scan");
   assert.deepEqual([...refused].sort(), [...screens.map(([name]) => name), "coverage"].sort(), "every screen had a census refusal to scan");
@@ -373,7 +388,7 @@ test("no interface text on a French page or a census answer bypasses the French 
           : new Set(outcome.view.states.flatMap((held) => [...held.articles, ...held.articlesWithoutText].map((article) => app.pinKey(held.stateSha256, article.publisherId))));
         const composed = app.exportState(outcome, pins);
         assert.equal(composed.state, "composed", `export: ${entry.scenario}`);
-        scan(`export panel: ${entry.scenario}`, renderToStaticMarkup(h(app.ExportPanel, { outcome, pins, onSave: () => {} })).replace(/<pre>[\s\S]*?<\/pre>/, ""), dataOf(entry.envelope, composed.model));
+        scan(`export panel: ${entry.scenario}`, scannedPanel(renderToStaticMarkup(h(app.ExportPanel, { outcome, pins, onSave: () => {} }))), dataOf(entry.envelope, composed.model));
       }
     }
     // The states with no French at all (a transport failure, an answer the page cannot read): English, marked so.
@@ -395,7 +410,7 @@ test("no interface text on a French page or a census answer bypasses the French 
     scan("export: an EU original wording", renderToStaticMarkup(h(app.ExportAnswerView, { outcome, pins, onPin: () => {} })), dataOf(envelope));
     const composed = app.exportState(outcome, pins);
     assert.equal(composed.state, "composed", "export: an EU original wording");
-    scan("export panel: an EU original wording", renderToStaticMarkup(h(app.ExportPanel, { outcome, pins, onSave: () => {} })).replace(/<pre>[\s\S]*?<\/pre>/, ""), dataOf(envelope, composed.model));
+    scan("export panel: an EU original wording", scannedPanel(renderToStaticMarkup(h(app.ExportPanel, { outcome, pins, onSave: () => {} }))), dataOf(envelope, composed.model));
   }
   assert.ok(unshown >= 3, `refusals whose card cannot be shown were said (${unshown})`);
   assert.ok(marked >= 50, `the platform's English was marked English (${marked} elements)`);

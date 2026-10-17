@@ -22,6 +22,7 @@ import {
   JOURNEY_STEPS,
   REFLOW_WIDTH,
   answerCitations,
+  verifyEvidence,
   bodyOn,
   frontDoorOf,
   journeyStepsFor,
@@ -408,6 +409,48 @@ test("a permalink run passes when its page shows the pinned state with the artic
   }
   const refused = { ...observed(), answerState: "refusal", text: "no_corpus_mounted", pinReplaced: false, inView: "absent" };
   assert.deepEqual(journeyVerdict(refused, { origin: ORIGIN, step, state: "refusal", refusalCode: "no_corpus_mounted" }), [], "a refusal holds no state to show");
+});
+
+test("a permalink run checks the cited article's evidence form: verify confirms its permalink and its text digest (R65)", async () => {
+  const step = { ...JOURNEY_STEPS.permalink, path: `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}/fra/${HISTORY_ANCHOR}` };
+  const permalink = `https://law.soufien.lu${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}/fra/${HISTORY_ANCHOR}`;
+  const digest = "a".repeat(64);
+  const observed = (change = {}) => ({
+    ...goodSearch(),
+    requests: [
+      { url: `${ORIGIN}${step.path.split("#")[0]}`, method: "GET", headers: {} },
+      { url: `${ORIGIN}/en/client-live-reading.js`, method: "GET", headers: {} },
+      { url: `${ORIGIN}/api/v3/evidence_bundle`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(step.body) },
+    ],
+    location: `${ORIGIN}${step.path}`,
+    text: "49 articles quoted",
+    pinReplaced: false,
+    inView: "shown",
+    targetFocused: true,
+    citedEvidence: [{ permalink, textSha256: digest }],
+    evidenceVerifications: [{ identifier: permalink, textSha256: digest, refusal: null, verdict: "digest_matches", articleTextSha256: digest }],
+    ...change,
+  });
+  const expected = { origin: ORIGIN, step, state: "success", texts: ["49 articles quoted"] };
+  assert.deepEqual(journeyVerdict(observed(), expected), []);
+  const check = observed().evidenceVerifications[0];
+  for (const [what, change, reason] of [
+    ["no evidence form", { citedEvidence: [], evidenceVerifications: undefined }, /carries no evidence form/],
+    ["not verified", { evidenceVerifications: undefined }, /1 evidence forms were not verified/],
+    ["refused", { evidenceVerifications: [{ ...check, refusal: "pinned_digest_mismatch", verdict: null }] }, /refused the evidence form's permalink .* pinned_digest_mismatch/],
+    ["another text", { evidenceVerifications: [{ ...check, articleTextSha256: "b".repeat(64) }] }, /names the text digest b{64} .* carries a{64}/],
+  ]) {
+    const failures = journeyVerdict(observed(change), expected);
+    assert.ok(failures.some((failure) => reason.test(failure)), `${what}: ${failures.join(" | ")}`);
+  }
+  // The check asks verify by the permalink as printed, and keeps what it names beside the form's digest.
+  const asked = [];
+  const answers = await verifyEvidence(ORIGIN, [{ permalink, textSha256: digest }], async (url, init) => {
+    asked.push([url, JSON.parse(init.body)]);
+    return { status: 200, json: async () => ({ result: { value: { verdict: "digest_matches", article_text_sha256: digest } }, refusal: null }) };
+  });
+  assert.deepEqual(asked, [[`${ORIGIN}/api/v3/verify`, { operation_id: "verify", parameters: { identifier: permalink } }]]);
+  assert.deepEqual(answers, [check]);
 });
 
 test("a stale permalink run passes when it is refused, and its page says, in view, that the link pins no version held, with the current link", () => {

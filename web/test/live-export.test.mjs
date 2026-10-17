@@ -130,7 +130,7 @@ test("a PDF the standard fonts cannot set is not offered, and the panel says why
   const pins = new Set([pinKey(outcome.view.states[0].stateSha256, article.publisher_id)]);
   const markup = renderToStaticMarkup(h(ExportPanel, { outcome, pins, onSave: () => {} }));
   assert.deepEqual([...markup.matchAll(/data-save="([a-z]+)"/g)].map((match) => match[1]), ["json", "csv"], "JSON and CSV carry any text");
-  assert.ok(markup.includes('<p data-format-refused="pdf">PDF is not offered for this export: its text holds characters the standard PDF fonts cannot set (U+6F22).</p>'));
+  assert.ok(markup.includes(`<p data-format-refused="pdf">PDF is not offered for this export: it holds characters the standard PDF fonts cannot set, in article ${article.publisher_id}&#x27;s text (U+6F22).</p>`), markup.slice(markup.indexOf('data-format-refused'), markup.indexOf('data-format-refused') + 300));
 });
 
 test("a pinned article held without text is shown as excluded with its reason", async () => {
@@ -267,7 +267,7 @@ test("pinned EU articles compose the EU export: the acknowledgement, the authent
   });
   const refused = renderToStaticMarkup(h(ExportPanel, { outcome: foreign, pins: everyEuropePin(foreign.view), onSave: () => {} }));
   assert.deepEqual([...refused.matchAll(/data-save="([a-z]+)"/g)].map((match) => match[1]), ["json", "csv"]);
-  assert.ok(refused.includes('<p data-format-refused="pdf">PDF is not offered for this export: its text holds characters the standard PDF fonts cannot set (U+2212, U+6F22).</p>'));
+  assert.ok(refused.includes(`<p data-format-refused="pdf">PDF is not offered for this export: it holds characters the standard PDF fonts cannot set, in article ${foreign.view.wordings[0].articles[0].publisherId}&#x27;s text (U+2212, U+6F22).</p>`));
 });
 
 test("an EU export that cannot be composed says why: no observation time, or no registry", async () => {

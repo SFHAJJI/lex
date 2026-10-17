@@ -13,6 +13,9 @@
 //   - A permalink whose digest is not the version the site holds at its date is refused (`pinned_digest_mismatch`), never
 //     answered with another version: the page says so, with the current version's link, above the refusal card.
 //
+// The cited article carries its citations (`Citations`): the one citation generator's three forms (`citation.mjs`; the plan's
+// item 3.3, R65), each said in the language of the text it cites, under the page's labels, as text a reader copies.
+//
 // What it does not say: "The publisher replaced this file on {date}". The API's typed fact for it, a chained log's
 // `file_replaced` event, holds no date of the replacement (no observation time is held; a build's time only bounds it
 // from above), so the sentence would state a date Lex does not hold (STATUS-WEB.md, driver decisions).
@@ -22,6 +25,7 @@ import { ArticleText, EuropeWordingHeading, QuoteEvidence } from './LiveReading.
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { CHROME_LOCALE, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { anchorText, currentAddress, permalinkHref } from '../scripts/permalinks.mjs';
+import { citationForms, citationLang } from '../scripts/citation.mjs';
 
 const COPY = liveChrome().reading;
 
@@ -94,8 +98,44 @@ function ChangedSince({ view, version, pin, cited }) {
   );
 }
 
-/** The cited article, first: its title, the version it is quoted from, its text and evidence, and the whole act. */
-function CitedArticle({ view, version, pin, cited }) {
+/**
+ * One article's citations (R65), from the one generator: the usual form, the usual form with the dated permalink, and the
+ * evidence form, line by line, each marked in the language of the text it cites, under the page's labels. Nothing when the
+ * text's language is one no citation is composed in; the usual form says why it is not composed when it is not.
+ */
+export function Citations({ view, version, article, observedAt }) {
+  // The date Lex was consulted is the answer's own: an outcome that carries none is cited by its permalink alone.
+  if (typeof observedAt !== 'string') return null;
+  const forms = citationForms({ view, version, article, observedAt });
+  if (forms === null) return null;
+  const lang = citationLang(forms.language);
+  return (
+    <section data-citation={forms.language}>
+      <h3>{COPY.cite}</h3>
+      <dl>
+        <dt>{COPY.citeConventional}</dt>
+        {forms.conventional === null
+          ? <dd data-citation-form="conventional" data-not-composed="">{COPY.citeNotComposed}</dd>
+          : <dd data-citation-form="conventional" lang={lang}>{forms.conventional}</dd>}
+        <dt>{COPY.citeWithPermalink}</dt>
+        <dd data-citation-form="permalink" lang={lang}>{forms.withPermalink}</dd>
+        <dt>{COPY.citeEvidence}</dt>
+        {/* The permalink and text digest the form carries, which a check of it asks `verify` to confirm (the journeys). */}
+        <dd data-citation-form="evidence" lang={lang} data-permalink={forms.permalink} data-text-sha256={forms.textSha256 ?? ''}>
+          {forms.evidenceLines.map((line, index) => (
+            <span key={index}>
+              {index === 0 ? null : <br />}
+              {line}
+            </span>
+          ))}
+        </dd>
+      </dl>
+    </section>
+  );
+}
+
+/** The cited article, first: its title, the version it is quoted from, its text and evidence, its citations, and the whole act. */
+function CitedArticle({ view, version, pin, cited, observedAt }) {
   const europe = view.publisher === 'eu-eurlex';
   const heading = europe ? cited.quoted?.heading ?? '' : '';
   return (
@@ -123,6 +163,7 @@ function CitedArticle({ view, version, pin, cited }) {
           <QuoteEvidence article={cited.quoted} />
         </>
       )}
+      <Citations view={view} version={version} article={cited.quoted ?? { publisherId: cited.publisherId }} observedAt={observedAt} />
       <p data-whole-act="">
         {/* At a readable address, the act the answer names, never the request's (review of #972). */}
         <a href={permalinkHref(pin.kind === 'state' ? version.permalink : currentAddress({ publisher: view.publisher, work: europe ? view.celex : view.workKey, language: version.language }), CHROME_LOCALE)}>
@@ -161,7 +202,7 @@ export function PinnedLead({ outcome, pin }) {
   return (
     <div data-pinned-lead="">
       {changed}
-      {cited === null ? null : <CitedArticle view={outcome.view} version={version} pin={pin} cited={cited} />}
+      {cited === null ? null : <CitedArticle view={outcome.view} version={version} pin={pin} cited={cited} observedAt={outcome.context?.freshness?.observed_at} />}
     </div>
   );
 }

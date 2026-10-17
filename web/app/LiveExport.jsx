@@ -10,8 +10,8 @@
 // The reading screen's rules carry over: the publisher's text is quoted in its state's language, an
 // article held without text is named as such, the controls carry no `name`, and permalinks are printed,
 // not linked: the composer keeps its pins only while the page is open, and a link would leave it. The export panel shows, before anything is saved, what the file will carry:
-// the counts, the watermark, the rights, each item's citation and digest, the exclusions with their
-// reason, and the JSON itself.
+// the counts, the watermark, the rights, each item's citation and digest and its usual citation (`citation.mjs`, in the
+// language of the text cited; the file carries the three forms), the exclusions with their reason, and the JSON itself.
 //
 // An EU reading is pinned from as the reading screen shows it: below Decision 95's acknowledgement and
 // authenticity statement, each wording headed by its own date as a wording's, with the annexes it does
@@ -25,6 +25,7 @@ import { EuropeWordingHeading, QuoteEvidence, ReadingAnswerView, ReadingForm } f
 import { createReadingSession, quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { EXPORT_FORMATS, LIVE_EXPORT_IDLE, exportState, formatRefused, pinKey, saveExport } from '../scripts/live-export.mjs';
 import { EUROPE_EXPORT_SCHEMA, asPublishedParagraph, exportJson } from '../scripts/export-build.mjs';
+import { citationLang } from '../scripts/citation.mjs';
 import { ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { AsPublished, EuropeAnnexes, LiveAnswer, Permalink, Said, Say, StatusSentence, inEnglish } from './LiveAnswer.jsx';
 
@@ -35,6 +36,19 @@ const COPY = liveChrome().export;
 const READING = liveChrome().reading;
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_EXPORT_IDLE });
+
+/** An exported article's usual citation, on its own line, marked in the language of the text it cites; nothing when none is composed. */
+function UsualCitation({ citations }) {
+  if (citations === null || citations.conventional === null) return null;
+  return (
+    <>
+      <br />
+      <span data-usual-citation="">
+        <Say template={COPY.usualCitation} values={{ citation: <span lang={citationLang(citations.language)}>{citations.conventional}</span> }} />
+      </span>
+    </>
+  );
+}
 
 function Pin({ checked, onPin, label }) {
   return (
@@ -155,6 +169,7 @@ function ExportEntries({ model }) {
                 source: <code>{item.officialSource}</code>,
               }}
             />
+            <UsualCitation citations={item.citations} />
           </li>
         ))}
       </ol>
@@ -201,6 +216,7 @@ function EuropeExportEntries({ model }) {
                 source: <code>{item.officialSource}</code>,
               }}
             />
+            <UsualCitation citations={item.citations} />
           </li>
         ))}
       </ol>

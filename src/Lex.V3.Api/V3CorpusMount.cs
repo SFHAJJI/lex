@@ -1041,7 +1041,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         "structure, its notes, its official source, the digest of the publisher body it was read from and an article permalink (the state permalink " +
         "and the article id as a last segment, which verify accepts); the text is the concatenation of the article's text and reference tokens in publisher order, " +
         "the same bytes the index searches; an article whose tokens carry no text (the index admits a marker-only article as evidence) is named under " +
-        "articles_without_text and is not served as a quote; " + PinnedPermalinkRule;
+        "articles_without_text and is not served as a quote; citation_facts holds what a citation of the states needs that they do not carry (the " +
+        "publisher's titles and the act as published with its Mémorial issue and publication date facts, verbatim); " + PinnedPermalinkRule;
 
     internal const string EvidenceBundleRightsRule =
         "rights are enforced when the bundle is composed, before any text is read: every corpus member the state's articles come from must have " +
@@ -1328,6 +1329,8 @@ internal sealed partial class V3CorpusMount : IDisposable
             rights_disposition = EvidenceBundleAdmittingRightsDisposition,
             states = bundles,
             as_published = AsPublishedAnswer(asPublished),
+            // What the citation generator composes a quoted article's citations from (R65; V3CorpusMount.CitationFacts.cs).
+            citation_facts = CitationFactsOf(selected.Select(static entry => entry.State).ToArray()),
             articles_not_admitted_note = ArticlesNotAdmittedNote,
             available_languages = availableLanguages,
             verified_by = new
@@ -2218,14 +2221,15 @@ internal sealed partial class V3CorpusMount : IDisposable
         "more); for a work identifier or work coordinate, the current digests of every state " +
         "held, and for a dated stable coordinate those held exactly there, so a caller can pin them; a pinned permalink names its state's language, and " +
         "may carry an article id as a last segment (the article permalink evidence_bundle writes), and then the article must be one the pinned state " +
-        "holds or the answer is anchor_not_in_version; " +
+        "holds or the answer is anchor_not_in_version, and article_text_sha256 is the SHA-256 of that article's text as evidence_bundle serves it (null for " +
+        "an article held without text), the text digest a citation's evidence form carries beside the permalink (R64, R65); " +
         "nothing about the text or its legal effect is assessed";
 
     internal static readonly string[][] VerifyNotHeld =
     [
         ["publisher_signature", "no signature or attestation of the publisher is held; the digest is this index's own reading of the retained bytes under the named rule profiles"],
         ["observation_time", "when the publisher served the retained bytes is not held in this index, so no observation time is stated"],
-        ["text_verification", "the text itself is not compared here: evidence_bundle serves it with its digests, and provenance names its sources"],
+        ["text_verification", "no text a caller holds is compared here: an article permalink's answer names the digest of the article's text (article_text_sha256) for the caller to compare, evidence_bundle serves the text with its digests, and provenance names its sources"],
     ];
 
     internal const string RelationsScope =
@@ -2435,6 +2439,8 @@ internal sealed partial class V3CorpusMount : IDisposable
                 requested_language = requestedLanguage,
                 requested_anchor = anchor,
                 article_permalink = anchor is null ? null : ArticlePermalink(StateUrl(verified), anchor),
+                // The article's text digest, which a citation's evidence form carries beside the permalink (R64, R65).
+                article_text_sha256 = anchor is null ? null : ArticleTextSha256(holder, verified.StateSha256, anchor),
                 verdict = "digest_matches",
                 publisher = "lu-legilux",
                 work_key = verified.WorkKey,
@@ -5647,22 +5653,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         // key does not reliably name the work.
         var expressions = states.Select(static state => state.ExpressionIri)
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-        var titles = _reader!.ResolveWorkTitles(expressions)
-            .Where(title => requestedLanguage is null ||
-                            string.Equals(title.Language, requestedLanguage, StringComparison.Ordinal))
-            .GroupBy(static title => (title.Language, title.ExpressionIri))
-            .Select(static group => new
-            {
-                language = group.Key.Language,
-                expression_iri = group.Key.ExpressionIri,
-                titles = group.Where(static title => title.TitleKind == "title")
-                    .Select(static title => new { title = title.Title, evidence_sha256 = title.EvidenceSha256 })
-                    .ToArray(),
-                short_titles = group.Where(static title => title.TitleKind == "title_short")
-                    .Select(static title => new { title = title.Title, evidence_sha256 = title.EvidenceSha256 })
-                    .ToArray(),
-            })
-            .ToArray();
+        var titles = TitleGroups(expressions, requestedLanguage);
         var notAdmitted = NotAdmittedMap(scope);
         var rows = scope.Select(state => DossierStateRow(state, NextDateInLanguage(scope, state), notAdmitted)).ToArray();
         var asPublished = AsPublishedOf(states, scope);
@@ -5685,7 +5676,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             articles_not_admitted_note = ArticlesNotAdmittedNote,
             not_held = NotHeldRows(DossierNotHeld, asPublished),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
-            index_sha256 = _reader.IndexRef.Sha256,
+            index_sha256 = _reader!.IndexRef.Sha256,
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
@@ -6678,7 +6669,9 @@ internal sealed partial class V3CorpusMount : IDisposable
         "whether a hash-pinned EU provision permalink (/eu-eurlex/{celex}/{wording date}--{wording sha256}/{language}, with the publisher's provision " +
         "id as a last segment) still names the one wording this EU index holds of that expression, by the wording digest computed from the index (a matching digest " +
         "is digest_matches; a digest the wording no longer has is the pinned_digest_mismatch refusal naming the current one); the provision, when named, " +
-        "must be one the wording holds or the answer is anchor_not_in_version; nothing about the text or its legal effect is assessed";
+        "must be one the wording holds or the answer is anchor_not_in_version, and article_text_sha256 is the SHA-256 of that provision's text as " +
+        "evidence_bundle serves it (null for a provision held without text), the text digest a citation's evidence form carries beside the permalink " +
+        "(R64, R65); nothing about the text or its legal effect is assessed";
 
     internal static readonly string[][] EuropeVerifyNotHeld =
     [
@@ -6899,6 +6892,8 @@ internal sealed partial class V3CorpusMount : IDisposable
             requested_language = requestedLanguage,
             requested_anchor = provision,
             article_permalink = provision is null ? null : EuropeProvisionPermalink(wording.Permalink, provision),
+            // The provision's text digest, which a citation's evidence form carries beside the permalink (R64, R65).
+            article_text_sha256 = provision is null ? null : EuropeProvisionTextSha256(wording.ExpressionId, provision),
             verdict = "digest_matches",
             publisher = EuropePermalinkPublisher,
             celex = wording.Celex,

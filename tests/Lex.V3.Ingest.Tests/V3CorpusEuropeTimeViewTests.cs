@@ -188,6 +188,8 @@ public sealed class V3CorpusEuropeTimeViewTests
                 var verified = await EnvelopeAsync(mount, "/api/v3/verify", "verify", new { identifier = article.GetProperty("article_permalink").GetString(), language = "eng" });
                 Assert.AreEqual("digest_matches", verified.Result?.Value.GetProperty("verdict").GetString(), verified.Refusal?.Code);
                 Assert.AreEqual("consolidated_version", verified.Result!.Value.GetProperty("kind").GetString());
+                // The evidence form's second hash (R65): the provision's text digest, as the bundle served it.
+                Assert.AreEqual(article.GetProperty("text_sha256").GetString(), verified.Result!.Value.GetProperty("article_text_sha256").GetString());
             }
 
             // The original wording's pin still verifies, now through the time view.
