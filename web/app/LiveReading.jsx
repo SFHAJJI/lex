@@ -51,7 +51,7 @@ import {
 } from '../scripts/live-reading.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { anchorOf, anchorText, permalinkHref } from '../scripts/permalinks.mjs';
-import { hasNextPage, mergeReadingPage, pagesShown } from '../scripts/reading-pages.mjs';
+import { hasNextPage, pagesShown, readNextPage, viewOf } from '../scripts/reading-pages.mjs';
 import { answerHandedWith } from '../scripts/v3-client.mjs';
 import { readingAddressShown, readingPinOf, todayAt } from '../scripts/initial-answer.mjs';
 import { writeLawPageLinks } from './head-links.mjs';
@@ -154,8 +154,8 @@ export function PageContents({ version }) {
   );
 }
 
-/** Which pages of a long version are shown, and their first and last article. */
-function PagesShown({ version }) {
+/** Which pages of a long version are shown, and their first and last article. Shared with the export composer. */
+export function PagesShown({ version }) {
   if (!isPaged(version)) return null;
   const shown = pagesShown(version);
   const first = version.pages[shown.first - 1];
@@ -606,26 +606,24 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
     if (asked.current === null || outcome.state !== 'success') return;
     const base = outcome;
     const digest = versionDigest(version);
-    const { article: _article, page: _page, ...request } = asked.current;
     const controller = new AbortController();
     nextPage.current?.abort();
     nextPage.current = controller;
     const settle = (change) => setMore((current) => change(current.base === base ? current : { base, view: null, paging: {}, focus: null }));
     settle((current) => ({ ...current, base, paging: { ...current.paging, [digest]: { state: 'loading' } } }));
-    loadLiveReading({ contract, fetchImpl, signal: controller.signal, request: { ...request, language: version.language, page: pagesShown(version).last + 1 } })
-      .then((next) => {
+    // The articles the page shows before the new ones: the first one after them is the first of the page added.
+    const before = new Set([...version.articles, ...version.articlesWithoutText].map((article) => article.publisherId));
+    readNextPage({
+      view: shown.view,
+      version,
+      request: asked.current,
+      ask: async (request) => viewOf(await loadLiveReading({ contract, fetchImpl, signal: controller.signal, request })),
+    })
+      .then(({ view, version: now }) => {
         if (controller.signal.aborted) return;
-        settle((current) => {
-          if (next.state !== 'success') return { ...current, paging: { ...current.paging, [digest]: { state: 'failed' } } };
-          try {
-            const view = mergeReadingPage(current.view ?? base.view, next.view);
-            const page = (next.view.publisher === 'eu-eurlex' ? next.view.wordings : next.view.states).find((entry) => versionDigest(entry) === digest);
-            const first = page?.articles[0]?.publisherId ?? page?.articlesWithoutText[0]?.publisherId;
-            return { ...current, view, paging: { ...current.paging, [digest]: { state: 'added' } }, focus: first === undefined ? null : { digest, id: first } };
-          } catch {
-            return { ...current, paging: { ...current.paging, [digest]: { state: 'failed' } } };
-          }
-        });
+        const first = [...now.articles, ...now.articlesWithoutText].sort((left, right) => left.position - right.position)
+          .find((article) => !before.has(article.publisherId))?.publisherId;
+        settle((current) => ({ ...current, view, paging: { ...current.paging, [digest]: { state: 'added' } }, focus: first === undefined ? null : { digest, id: first } }));
       })
       .catch(() => {
         if (!controller.signal.aborted) settle((current) => ({ ...current, paging: { ...current.paging, [digest]: { state: 'failed' } } }));

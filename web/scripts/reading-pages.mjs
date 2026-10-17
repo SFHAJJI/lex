@@ -227,6 +227,24 @@ export function pageAddress(address, number) {
 }
 
 /**
+ * The page after the ones one version of a view shows, read and added (`mergeReadingPage`): asked with `ask(request)` (the
+ * view read from the answer, or a throw), the request the view was asked with in that version's language at that page.
+ * Returns the view with it, and the version as it now stands.
+ */
+export async function readNextPage({ view, version, request, ask }) {
+  const { article: _article, page: _page, ...asked } = request;
+  const merged = mergeReadingPage(view, await ask(Object.freeze({ ...asked, language: version.language, page: pagesShown(version).last + 1 })));
+  const digest = digestOf(version);
+  return { view: merged, version: versionsOf(merged).find((entry) => digestOf(entry) === digest) };
+}
+
+/** The view an asked reading's answer is read into, or a throw naming why there is none (`ask` for `readNextPage`). */
+export function viewOf(outcome) {
+  if (outcome?.state !== 'success') throw new Error(`the page was not answered (${outcome?.code ?? outcome?.state})`);
+  return outcome.view;
+}
+
+/**
  * Every page of a reading put together, from the view of its first page served (`first`) and its request: each next page
  * asked with `ask(request)` (which returns the view read from the answer, or throws), until every version is shown to its
  * last page. Returns the whole view. A reading that fits one page is returned as it is, so an export of it is the export of

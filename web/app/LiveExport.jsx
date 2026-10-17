@@ -13,6 +13,11 @@
 // the counts, the watermark, the rights, each item's citation and digest and its usual citation (`citation.mjs`, in the
 // language of the text cited; the file carries the three forms), the exclusions with their reason, and the JSON itself.
 //
+// A version of more than one page (the plan's item 3.7) is pinned from page by page as the API answers it: the page shown,
+// which says which it is, and a control that pins every article of the version, reading its other pages first, so an
+// export of a whole long act is put together from its pages and keeps every article and its evidence. A version of one
+// page is pinned from as before, with the same control.
+//
 // An EU reading is pinned from as the reading screen shows it: below Decision 95's acknowledgement and
 // authenticity statement, each wording headed by its own date as a wording's, with the annexes it does
 // not serve as text, which no pin reaches. Its panel says the acknowledgement every exported article
@@ -21,8 +26,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { EuropeWordingHeading, QuoteEvidence, ReadingAnswerView, ReadingForm } from './LiveReading.jsx';
-import { createReadingSession, quotationLanguageTag } from '../scripts/live-reading.mjs';
+import { EuropeWordingHeading, PagesShown, QuoteEvidence, ReadingAnswerView, ReadingForm, versionDigest } from './LiveReading.jsx';
+import { createReadingSession, loadLiveReading, quotationLanguageTag } from '../scripts/live-reading.mjs';
+import { pagesShown, readNextPage, viewOf } from '../scripts/reading-pages.mjs';
 import { EXPORT_FORMATS, LIVE_EXPORT_IDLE, exportState, formatRefused, pinKey, saveExport } from '../scripts/live-export.mjs';
 import { EUROPE_EXPORT_SCHEMA, asPublishedParagraph, exportJson } from '../scripts/export-build.mjs';
 import { citationLang } from '../scripts/citation.mjs';
@@ -82,7 +88,29 @@ function WithoutTextPins({ entries, digest, pins, onPin }) {
   );
 }
 
-function StatePins({ state, workKey, pins, onPin }) {
+/**
+ * The control that pins every article of a version, quoted or held without text, reading its other pages first when the
+ * reading shows only some (`assembling`: how that stands, `{ state, done, pages }`).
+ */
+function PinAll({ version, onPinAll, assembling }) {
+  if (onPinAll === null) return null;
+  return (
+    <p data-pin-all-control="">
+      <button type="button" data-pin-all={versionDigest(version)} disabled={assembling?.state === 'loading'} onClick={() => onPinAll(version)}>
+        {COPY.pinAll}
+      </button>
+      {assembling?.state === 'loading' ? (
+        <span data-pages-reading="">
+          {' '}
+          <Say template={COPY.readingPages} values={{ done: assembling.done, pages: assembling.pages }} />
+        </span>
+      ) : null}
+      {assembling?.state === 'failed' ? <span data-pages-failed="">{' '}{COPY.pagesFailed}</span> : null}
+    </p>
+  );
+}
+
+function StatePins({ state, workKey, pins, onPin, onPinAll = null, assembling = null }) {
   return (
     <section data-state={state.stateSha256}>
       <h2>
@@ -95,6 +123,8 @@ function StatePins({ state, workKey, pins, onPin }) {
       <p>
         <Permalink value={state.permalink} linked={false} />
       </p>
+      <PagesShown version={state} />
+      <PinAll version={state} onPinAll={onPinAll} assembling={assembling} />
       <ol className="articles">
         {state.articles.map((article) => {
           const key = pinKey(state.stateSha256, article.publisherId);
@@ -117,7 +147,7 @@ function StatePins({ state, workKey, pins, onPin }) {
  * and text in the wording's language, and its evidence; the articles held without text; and the annexes the wording
  * does not serve as text.
  */
-function WordingPins({ wording, celex, pins, onPin }) {
+function WordingPins({ wording, celex, pins, onPin, onPinAll = null, assembling = null }) {
   const statuteLanguage = quotationLanguageTag(wording.language);
   return (
     <section data-wording={wording.wordingSha256}>
@@ -127,6 +157,8 @@ function WordingPins({ wording, celex, pins, onPin }) {
       <p>
         <Permalink value={wording.permalink} linked={false} />
       </p>
+      <PagesShown version={wording} />
+      <PinAll version={wording} onPinAll={onPinAll} assembling={assembling} />
       <ol className="articles">
         {wording.articles.map((article) => {
           const key = pinKey(wording.wordingSha256, article.publisherId);
@@ -331,7 +363,7 @@ export function ExportPanel({ outcome, pins, onSave }) {
 }
 
 /** The reading to pin from, or whatever state the reading is in. */
-export function ExportAnswerView({ outcome, pins, onPin, onRetry }) {
+export function ExportAnswerView({ outcome, pins, onPin, onRetry, onPinAll = null, assembling = {} }) {
   if (outcome.state !== 'success') return <ReadingAnswerView outcome={outcome} onRetry={onRetry} />;
   const { view } = outcome;
   return (
@@ -349,14 +381,14 @@ export function ExportAnswerView({ outcome, pins, onPin, onRetry }) {
           <p data-acknowledgement="" lang={ENGLISH_LANG}>{view.acknowledgement}</p>
           <p data-authenticity="" lang={ENGLISH_LANG}>{view.authenticity}</p>
           {view.wordings.map((wording) => (
-            <WordingPins key={wording.wordingSha256} wording={wording} celex={view.celex} pins={pins} onPin={onPin} />
+            <WordingPins key={wording.wordingSha256} wording={wording} celex={view.celex} pins={pins} onPin={onPin} onPinAll={onPinAll} assembling={assembling[wording.wordingSha256] ?? null} />
           ))}
         </>
       ) : (
         <>
           <AsPublished asPublished={view.asPublished} />
           {view.states.map((state) => (
-            <StatePins key={state.stateSha256} state={state} workKey={view.workKey} pins={pins} onPin={onPin} />
+            <StatePins key={state.stateSha256} state={state} workKey={view.workKey} pins={pins} onPin={onPin} onPinAll={onPinAll} assembling={assembling[state.stateSha256] ?? null} />
           ))}
         </>
       )}
@@ -371,6 +403,11 @@ export function ExportAnswerView({ outcome, pins, onPin, onRetry }) {
 export function LiveExport({ contract, fetchImpl, save = saveExport }) {
   const [outcome, setOutcome] = useState(IDLE);
   const [pins, setPins] = useState(() => new Set());
+  // The reading with the other pages a "pin every article" read put in (`base`, the outcome it extends), and, by version
+  // digest, how that reading stands.
+  const [whole, setWhole] = useState({ base: null, view: null, assembling: {} });
+  const asked = useRef(null);
+  const reading = useRef(null);
   const session = useRef(null);
   if (session.current === null) {
     session.current = createReadingSession({
@@ -383,7 +420,46 @@ export function LiveExport({ contract, fetchImpl, save = saveExport }) {
     });
   }
 
-  useEffect(() => () => session.current.cancel(), []);
+  useEffect(() => () => {
+    session.current.cancel();
+    reading.current?.abort();
+  }, []);
+
+  const shown = whole.base === outcome && whole.view !== null ? { ...outcome, view: whole.view } : outcome;
+
+  // Every article of one version pinned: its pages after the ones shown read first, one request each, in its language, and
+  // added to the reading; then every article, quoted or held without text, pinned. A page that cannot be read stops it.
+  const onPinAll = async (version) => {
+    if (asked.current === null || outcome.state !== 'success') return;
+    const base = outcome;
+    const digest = versionDigest(version);
+    const controller = new AbortController();
+    reading.current?.abort();
+    reading.current = controller;
+    const update = (change) => setWhole((current) => change(current.base === base ? current : { base, view: null, assembling: {} }));
+    let view = shown.view;
+    let current = (view.publisher === 'eu-eurlex' ? view.wordings : view.states).find((entry) => versionDigest(entry) === digest) ?? version;
+    try {
+      while (pagesShown(current).last < current.page.pages) {
+        const done = pagesShown(current).last;
+        update((state) => ({ ...state, assembling: { ...state.assembling, [digest]: { state: 'loading', done, pages: current.page.pages } } }));
+        ({ view, version: current } = await readNextPage({
+          view,
+          version: current,
+          request: asked.current,
+          ask: async (request) => viewOf(await loadLiveReading({ contract, fetchImpl, signal: controller.signal, request })),
+        }));
+        if (controller.signal.aborted) return;
+        const merged = view;
+        update((state) => ({ ...state, view: merged }));
+      }
+    } catch {
+      if (!controller.signal.aborted) update((state) => ({ ...state, assembling: { ...state.assembling, [digest]: { state: 'failed' } } }));
+      return;
+    }
+    update((state) => ({ ...state, assembling: { ...state.assembling, [digest]: { state: 'done' } } }));
+    setPins((pinned) => new Set([...pinned, ...[...current.articles, ...current.articlesWithoutText].map((article) => pinKey(digest, article.publisherId))]));
+  };
 
   const onPin = (key, on) => setPins((current) => {
     const next = new Set(current);
@@ -393,14 +469,19 @@ export function LiveExport({ contract, fetchImpl, save = saveExport }) {
 
   return (
     <div>
-      <ReadingForm submitLabel={FORM.submit.export} onAsk={(request) => session.current.ask(request)} />
+      <ReadingForm submitLabel={FORM.submit.export} onAsk={(request) => {
+        reading.current?.abort();
+        asked.current = request;
+        session.current.ask(request);
+      }} />
       <LiveAnswer>
-        <ExportAnswerView outcome={outcome} pins={pins} onPin={onPin} onRetry={() => session.current.retry()} />
+        <ExportAnswerView outcome={shown} pins={pins} onPin={onPin} onRetry={() => session.current.retry()} onPinAll={onPinAll}
+          assembling={whole.base === outcome ? whole.assembling : {}} />
       </LiveAnswer>
       {/* The export is its own live region: pinning changes it, and the reading above does not change. */}
       <LiveAnswer>
-        <ExportPanel outcome={outcome} pins={pins} onSave={(format) => {
-          const panel = exportState(outcome, pins);
+        <ExportPanel outcome={shown} pins={pins} onSave={(format) => {
+          const panel = exportState(shown, pins);
           if (panel.state === 'composed') save(panel.model, format);
         }} />
       </LiveAnswer>
