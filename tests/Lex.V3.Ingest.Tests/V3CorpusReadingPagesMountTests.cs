@@ -292,4 +292,40 @@ public sealed class V3CorpusReadingPagesMountTests
         Assert.IsLessThan(600_000, lastBytes, "a page and the contents of 3,000 articles");
         Assert.IsLessThan(5_000L, firstMs, "a page is answered in time on any runner");
     }
+
+    /// <summary>
+    /// The stand-in for the codes written where the speed check asks (<c>web/scripts/reading-weight.mjs</c>), when
+    /// <c>V3_WRITE_CODE_STAND_IN_MOUNT</c> names a directory: the state of 3,000 synthetic articles above, as a mount a local
+    /// API serves, so its answers and its pages are measured as the population mount's largest versions are. Opt-in, as the
+    /// journey mounts are; otherwise inconclusive and nothing is written.
+    /// </summary>
+    [TestMethod]
+    public async Task TheStandInForTheCodesIsWrittenWhereTheSpeedCheckAsks()
+    {
+        var target = Environment.GetEnvironmentVariable("V3_WRITE_CODE_STAND_IN_MOUNT");
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            Assert.Inconclusive("V3_WRITE_CODE_STAND_IN_MOUNT names no directory, so no stand-in mount is written.");
+        }
+
+        var fixture = await MountedFixture.CreateAsync(await SyntheticLongAct.DocumentAsync(3000, textBytes: 340, lean: true));
+        await using var cleanup = fixture;
+        Directory.CreateDirectory(target);
+        foreach (var name in new[] { V3CorpusMount.IndexFileName, V3CorpusMount.CapabilityManifestFileName, V3CorpusMount.CorpusFileName })
+        {
+            File.Copy(Path.Combine(fixture.Directory, name), Path.Combine(target, name), overwrite: true);
+        }
+
+        using (var mount = await V3CorpusMount.OpenAsync(target, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount, "the stand-in mounts through the API's own verifier.");
+        }
+
+        await File.WriteAllTextAsync(Path.Combine(target, "stand-in.json"), JsonSerializer.Serialize(new
+        {
+            note = "the fixture act with 3,000 articles of synthetic text (THE MOUNT IS A FIXTURE), the stand-in for the codes",
+            permalink = fixture.Permalink,
+            date = fixture.ApplicabilityDate,
+        }) + "\n");
+    }
 }

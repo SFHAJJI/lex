@@ -2,7 +2,7 @@
 // version says of itself, read and held to the API's rule, and the pages a reading puts together.
 //
 // The API answers `evidence_bundle` one bounded page of a version at a time (a Luxembourg state or an EU wording; at most
-// 50 articles and 96 KiB of text and notes, `page_rule`): each version carries `page` (the page served, the version's pages, its
+// 50 articles and 96 KiB of text, `page_rule`): each version carries `page` (the page served, the version's pages, its
 // positions and the version's counts), `pages` (the index of its pages: each page's first and last article) and, when
 // asked, `contents` (every article's position, publisher id, EU heading and page, no text). Every article and every
 // article held without text carries its position in the version. This module reads those members for the two readers

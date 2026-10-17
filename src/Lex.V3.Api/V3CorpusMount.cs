@@ -1227,10 +1227,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         {
             // In the reading's order (V3CorpusMount.Reading.cs): the index holds no document order (a state lists its article
             // identities sorted by digest), so the publisher's ids are compared part by part, then the identity.
-            var articles = _reader!.ResolveStateArticles(state.StateSha256)
-                .OrderBy(static article => article.PublisherId, Comparer<string>.Create(CompareLuxembourgArticleIds))
-                .ThenBy(static article => article.ArticleIdentitySha256, StringComparer.Ordinal)
-                .ToArray();
+            var articles = InLuxembourgReadingOrder(_reader!.ResolveStateArticles(state.StateSha256),
+                static article => article.PublisherId, static article => article.ArticleIdentitySha256);
             if (!articles.Any(static article => article.Text.Length > 0))
             {
                 var member = sourcesByState[state.StateSha256].Select(source => MemberOf(source.ObjectRefSha256)).FirstOrDefault(static value => value is not null);
@@ -1254,7 +1252,7 @@ internal sealed partial class V3CorpusMount : IDisposable
 
             // The state cut into pages, and the page asked: its number, the one that holds the article asked, or the first.
             var pages = CutReadingPages(
-                articles.Select(static article => new ReadingEntry(article.PublisherId, null, article.Text.Length > 0, ReadingWeight(article.Text, article.TokensJson), article.ArticleIdentitySha256)).ToArray(),
+                articles.Select(static article => new ReadingEntry(article.PublisherId, null, article.Text.Length > 0, ReadingWeight(article.Text), article.ArticleIdentitySha256)).ToArray(),
                 asked,
                 $"the state in {state.Language}");
             if (pages is null)

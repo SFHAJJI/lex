@@ -440,9 +440,11 @@ function readEuropeWording(wording, index, { celex, date }) {
     throw new Error(`${where} says next_text_held is ${JSON.stringify(nextTextHeld)} beside the next date ${JSON.stringify(nextDate ?? null)}; it is true or false beside a date, and null with none`);
   }
   const wordingSha256 = requireDigest(requireOwn(wording, 'wording_sha256', where), `${where} wording_sha256`);
-  // The time view names the CELEX of the work its wording is read from (a consolidated version's own, `0…-{date}`); the
-  // original-wording bundle names only the act's, which is then the wording's.
-  const wordingCelex = Object.hasOwn(wording, 'celex') ? requireText(wording.celex, `${where} celex`) : celex;
+  // The time view names the CELEX of the work its wording is read from (a consolidated version's own, `0…-{date}`), or
+  // null when the publisher's record of that work names none (in the population mount, one of the two works the
+  // publisher holds of many a consolidation: the speed checks of the plan's item 3.7 found MiCA's 2024-01-09 wording
+  // unreadable for it); the original-wording bundle names only the act's, which is then the wording's.
+  const wordingCelex = Object.hasOwn(wording, 'celex') ? requireTextOrNull(wording.celex, `${where} celex`) : celex;
   const permalink = requireText(requireOwn(wording, 'permalink', where), `${where} permalink`);
   const expected = europePermalink({ celex, date: wordingDate, wordingSha256, language });
   if (permalink !== expected) {

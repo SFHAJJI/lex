@@ -14,8 +14,7 @@ namespace Lex.V3.Api;
 /// <para>
 /// A version is read in its order (Luxembourg: <see cref="CompareLuxembourgArticleIds"/>; the EU: the order of the
 /// publisher's provision ids, which the wording digest reads them in) and cut into pages: a page holds at most
-/// <see cref="ReadingPageArticles"/> articles and at most <see cref="ReadingPageBytes"/> bytes of quoted text and notes
-/// (UTF-8), and an article whose text alone passes that bound is a page of its own. The cut depends on the version alone, so
+/// <see cref="ReadingPageArticles"/> articles and at most <see cref="ReadingPageBytes"/> bytes of quoted text (UTF-8), and an article whose text alone passes that bound is a page of its own. The cut depends on the version alone, so
 /// a page's number names the same articles on every asking. With neither <c>page</c> nor <c>article</c> asked the first
 /// page is served, so a version that fits one page is answered whole, as before; <c>article</c> serves the page that holds
 /// it, <c>page</c> that page, and <c>contents</c> adds every article's position, publisher id, heading and page, no text.
@@ -32,7 +31,7 @@ internal sealed partial class V3CorpusMount
     /// <summary>The most articles one page holds.</summary>
     internal const int ReadingPageArticles = 50;
 
-    /// <summary>The most bytes of quoted text and notes (UTF-8) one page holds, unless one article alone passes it.</summary>
+    /// <summary>The most bytes of quoted text (UTF-8) one page holds, unless one article alone passes it.</summary>
     internal const int ReadingPageBytes = 98_304;
 
     /// <summary>The greatest page number a request may name (the request schema's maximum).</summary>
@@ -42,7 +41,7 @@ internal sealed partial class V3CorpusMount
         "a state is read in pages: its articles, quoted or held without text, are taken in the order of their publisher ids (the publisher's " +
         "document order is not held: the numbers in an id compare as numbers, the Latin adverbs bis, ter, quater and the rest in their order, an " +
         "article id that is a roman numeral by its value, then the article identity), and each page holds at most 50 of them and at most 98,304 " +
-        "bytes of quoted text and notes (UTF-8), an article whose text alone passes that bound being a page of its own; pages count from 1 and the " +
+        "bytes of quoted text (UTF-8), an article whose text alone passes that bound being a page of its own; pages count from 1 and the " +
         "cut depends on the state alone; with neither page nor article asked the first page is served, article serves the page that holds that " +
         "publisher id (anchor_not_in_version when a served state does not hold it), and contents true adds every article's position, publisher " +
         "id, identity and page, with no text; articles, articles_without_text and validity_conflict_count are the page's, and page counts the state's";
@@ -293,24 +292,25 @@ internal sealed partial class V3CorpusMount
     private static ReadingEntry[] EuropeReadingEntries(IReadOnlyList<Lex.V3.Ingest.Europe.EuropeIndexArticleText> articles) =>
         articles.Select(static article => new ReadingEntry(article.PublisherIdentifier, article.Heading, article.Text.Length > 0, ReadingWeight(article.Text), article.ArticleIdentitySha256)).ToArray();
 
-    /// <summary>The bytes an article weighs on a page: its text and its notes' text (UTF-8); none for an article held without text.</summary>
-    private static long ReadingWeight(string text, string? tokensJson = null)
+    /// <summary>
+    /// The bytes an article weighs on a page: its text's (UTF-8), the bytes its digest is taken over; none for an article held
+    /// without text. Its notes are not weighed: reading them would parse every article's tokens to cut one page.
+    /// </summary>
+    private static long ReadingWeight(string text) => text.Length == 0 ? 0 : Encoding.UTF8.GetByteCount(text);
+
+    /// <summary>
+    /// A Luxembourg version's articles in the reading's order (<see cref="CompareLuxembourgArticleIds"/>, then the identity),
+    /// each id read into its parts once.
+    /// </summary>
+    private static T[] InLuxembourgReadingOrder<T>(IEnumerable<T> articles, Func<T, string> id, Func<T, string> identity)
     {
-        if (text.Length == 0)
+        var keyed = articles.Select(article => (Article: article, Parts: ArticleIdParts(id(article)), Id: id(article), Identity: identity(article))).ToArray();
+        Array.Sort(keyed, static (left, right) =>
         {
-            return 0;
-        }
-
-        long weight = Encoding.UTF8.GetByteCount(text);
-        if (tokensJson is not null)
-        {
-            foreach (var (_, noteText) in ArticleNoteParts(tokensJson))
-            {
-                weight += Encoding.UTF8.GetByteCount(noteText);
-            }
-        }
-
-        return weight;
+            var byParts = CompareArticleIdParts(left.Parts, right.Parts, left.Id, right.Id);
+            return byParts != 0 ? byParts : string.CompareOrdinal(left.Identity, right.Identity);
+        });
+        return keyed.Select(static entry => entry.Article).ToArray();
     }
 
     /// <summary>
@@ -324,8 +324,11 @@ internal sealed partial class V3CorpusMount
     {
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
-        var leftParts = ArticleIdParts(left);
-        var rightParts = ArticleIdParts(right);
+        return CompareArticleIdParts(ArticleIdParts(left), ArticleIdParts(right), left, right);
+    }
+
+    private static int CompareArticleIdParts(List<ArticleIdPart> leftParts, List<ArticleIdPart> rightParts, string left, string right)
+    {
         for (var index = 0; index < Math.Min(leftParts.Count, rightParts.Count); index++)
         {
             var compared = CompareArticleIdPart(leftParts[index], rightParts[index]);
