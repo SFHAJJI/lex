@@ -22,6 +22,7 @@ import {
   readingOutcome,
   readingParameters,
 } from "../scripts/live-reading.mjs";
+import { withoutTextAt } from "../scripts/reading-page-samples.mjs";
 
 /** A refusal's card as the screen shows it: one about this service (R60) inside the failure panel, under its line; any other alone. */
 const asShown = (outcome, card) => renderToStaticMarkup(h(FailureFrame, { outcome }, h("lex-card"))).replace("<lex-card></lex-card>", card);
@@ -110,11 +111,10 @@ test("a served bundle is the text of the state, quoted in its language, with bot
 test("an article held without text is named, never quoted empty", () => {
   const envelope = structuredClone(envelopeOf(ANSWER));
   const state = envelope.result.value.states[0];
-  const [moved] = state.articles.splice(0, 1);
-  if (moved.validity_conflict) state.validity_conflict_count -= 1;
-  state.articles_without_text = [{ article_identity_sha256: moved.article_identity_sha256, publisher_id: moved.publisher_id, reason: "no_text_tokens" }];
+  // Moved at its position, the page's counts with it (the plan's item 3.7).
+  const moved = withoutTextAt(state, 0);
   const outcome = readingOutcome({ state: "success", envelope });
-  assert.equal(outcome.state, "success");
+  assert.equal(outcome.state, "success", outcome.sentence);
   const markup = view(outcome);
   assert.ok(markup.includes(`Held without text: ${moved.publisher_id}.`));
   assert.ok(!markup.includes(`data-article="${moved.publisher_id}"`));

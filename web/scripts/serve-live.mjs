@@ -387,8 +387,9 @@ export function createLiveServer({
         return;
       }
       // A law's address under a language: the page rendered from the API's answer (R67), else the page as built. A
-      // readable address asks for today in Luxembourg (R13), as the API asks it (V3WebRoot.SitePageFor).
-      const page = sitePageFor(url.pathname, { today: luxembourgToday(now) });
+      // readable address asks for today in Luxembourg (R13), as the API asks it (V3WebRoot.SitePageFor), and a reading the
+      // page its query names (the plan's item 3.7).
+      const page = sitePageFor(url.pathname, { today: luxembourgToday(now), search: url.search });
       if (page !== null) {
         let rendered = null;
         try {

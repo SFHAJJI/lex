@@ -8,7 +8,7 @@
 //
 // The sample's one English wording quotes two articles, holds one article without text and lists one annex row (two
 // annexes of one disposition, not served as text), so a test of what a page or an export says about each has one to
-// read. Its envelope carries what a page reads of the platform's envelope besides the answer: the context (the
+// read. Its three articles are one page (the plan's item 3.7: `page`, `pages`, each article's `position`). Its envelope carries what a page reads of the platform's envelope besides the answer: the context (the
 // publisher and when the answering snapshot was observed) and the digest of the registry it is bound to, a stand-in
 // here (a real envelope carries the census contract's).
 
@@ -16,6 +16,7 @@ import { createHash } from 'node:crypto';
 
 import { articlePermalink, europePermalink } from './permalinks.mjs';
 import { escapeProvision } from './search-answer.mjs';
+import { asOnePage } from './reading-page-samples.mjs';
 
 /** The SHA-256 of a text's UTF-8 bytes, as the platform digests a quoted text. */
 export function sha256(text) {
@@ -64,11 +65,14 @@ export function europeBundle(change = () => {}) {
     requested_identifier: celex,
     requested_date: wordingDate,
     requested_language: 'eng',
+    requested_page: null,
+    requested_article: null,
     publisher: 'eu-eurlex',
     publisher_work_id: work,
     celex,
     available_languages: ['eng'],
     served_languages: ['eng'],
+    page_rule: 'a wording is read in pages of at most 50 provisions and 98,304 bytes of quoted text',
     wordings: [{
       publisher_expression_id: `${work}.0006`,
       language: 'eng',
@@ -77,7 +81,8 @@ export function europeBundle(change = () => {}) {
       stable_coordinate: `/eu-eurlex/${celex}/eng/${wordingDate}`,
       permalink,
       sources: [{ object_ref_sha256: 'c'.repeat(64), outcome: 'acquired', body_sha256: bodySha256, body_byte_length: 1024, body_receipt_sha256: 'd'.repeat(64) }],
-      articles: EUROPE_SAMPLE.articles.map(([id, heading, text]) => ({
+      articles: EUROPE_SAMPLE.articles.map(([id, heading, text], index) => ({
+        position: index + 1,
         article_identity_sha256: sha256(`identity ${id}`),
         publisher_id: id,
         heading,
@@ -93,8 +98,11 @@ export function europeBundle(change = () => {}) {
         article_permalink: articlePermalink(permalink, id),
         provision_coordinate: `${work}.0006#lex-provision=${escapeProvision(id)}`,
       })),
-      articles_without_text: [{ article_identity_sha256: sha256(`identity ${EUROPE_SAMPLE.withoutText}`), publisher_id: EUROPE_SAMPLE.withoutText }],
+      articles_without_text: [{ position: 3, article_identity_sha256: sha256(`identity ${EUROPE_SAMPLE.withoutText}`), publisher_id: EUROPE_SAMPLE.withoutText }],
       annexes_not_served: [europeAnnexRow({ annexes: 2, annex_identities_sha256: ['7'.repeat(64), '8'.repeat(64)] })],
+      page: { number: 1, pages: 1, first_position: 1, last_position: 3, articles_in_version: 3, quoted_in_version: 2, without_text_in_version: 1 },
+      pages: [{ number: 1, first_publisher_id: '001', last_publisher_id: EUROPE_SAMPLE.withoutText, articles: 3, first_heading: 'Subject-matter and objectives', last_heading: '' }],
+      contents: null,
     }],
     acknowledgement: '© European Union, https://eur-lex.europa.eu',
     authenticity: "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) No 216/2013, Article 1(2)); this text is a reproduction read from the Publications Office's Formex package, not the authentic edition.",
@@ -112,6 +120,12 @@ export function europeBundle(change = () => {}) {
   };
   const copy = structuredClone(bundle);
   change(copy);
+  // Its pages made true again for the articles the change left (the plan's item 3.7): one page, in the ids' order.
+  for (const wording of copy.wordings ?? []) {
+    if (Array.isArray(wording?.articles) && Array.isArray(wording?.articles_without_text) && wording.articles.length + wording.articles_without_text.length > 0) {
+      asOnePage(wording, { headings: true });
+    }
+  }
   return copy;
 }
 

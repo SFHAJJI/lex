@@ -28,6 +28,13 @@
 // English, marked English on a page in another language).
 //
 // Between the form and the reading, the sentence that says what Lex is not (the specification of record's R50).
+//
+// A version is read one page at a time (the plan's item 3.7; R73): the API answers a page of at most 50 articles and 96 KiB
+// of text, and a version of more than one page says which pages it shows, lists its pages under "Contents" (each page by
+// its first and last article, a link to that page's address, `?page=N` on the version's permalink), and ends with the links
+// to the pages before and after the ones shown. Without scripts they are plain links, and the server renders each page; with
+// scripts the next page is asked in place and its articles are added below the ones shown, the focus on the first of them,
+// and the link still works as a link. A version that fits one page is laid out as before.
 
 import { useEffect, useRef, useState } from 'react';
 
@@ -38,11 +45,13 @@ import {
   LIVE_READING_IDLE,
   READING_LANGUAGES,
   createReadingSession,
+  loadLiveReading,
   quotationLanguageTag,
   readingOutcome,
 } from '../scripts/live-reading.mjs';
-import { ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
-import { anchorOf, anchorText } from '../scripts/permalinks.mjs';
+import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
+import { anchorOf, anchorText, permalinkHref } from '../scripts/permalinks.mjs';
+import { hasNextPage, mergeReadingPage, pagesShown } from '../scripts/reading-pages.mjs';
 import { answerHandedWith } from '../scripts/v3-client.mjs';
 import { readingAddressShown, readingPinOf, todayAt } from '../scripts/initial-answer.mjs';
 import { writeLawPageLinks } from './head-links.mjs';
@@ -102,9 +111,113 @@ export function ArticleText({ article, language, applicabilityDate }) {
   );
 }
 
+/** Whether a version is read in more than one page, and so lays out its pages (a version of one page is laid out as before). */
+function isPaged(version) {
+  return version.page.pages > 1;
+}
+
+/** The address of one page of a version's reading, on this page's language: its permalink, and `?page=N` after the first. */
+export function pageHref(version, number) {
+  const base = permalinkHref(version.permalink, CHROME_LOCALE);
+  return number > 1 ? `${base}?page=${number}` : base;
+}
+
+/** What names a page's first or last article: an EU provision's heading when it has one, else the publisher's id. */
+function PageEnd({ version, row, end }) {
+  const heading = end === 'first' ? row.firstHeading : row.lastHeading;
+  const id = end === 'first' ? row.firstPublisherId : row.lastPublisherId;
+  return typeof heading === 'string' && heading.length > 0
+    ? <span lang={quotationLanguageTag(version.language)}>{heading}</span>
+    : <>{id}</>;
+}
+
+/** A long version's contents: each of its pages, by its first and last article, a link to the page's address. */
+export function PageContents({ version }) {
+  if (!isPaged(version)) return null;
+  const shown = pagesShown(version);
+  return (
+    <details data-contents={version.page.pages}>
+      <summary>{COPY.contents}</summary>
+      <ol>
+        {version.pages.map((row) => (
+          <li key={row.number}>
+            <a href={pageHref(version, row.number)} aria-current={row.number >= shown.first && row.number <= shown.last ? 'page' : undefined}>
+              <Say
+                template={COPY.contentsPage}
+                values={{ number: row.number, first: <PageEnd version={version} row={row} end="first" />, last: <PageEnd version={version} row={row} end="last" /> }}
+              />
+            </a>
+          </li>
+        ))}
+      </ol>
+    </details>
+  );
+}
+
+/** Which pages of a long version are shown, and their first and last article. */
+function PagesShown({ version }) {
+  if (!isPaged(version)) return null;
+  const shown = pagesShown(version);
+  const first = version.pages[shown.first - 1];
+  const last = version.pages[shown.last - 1];
+  return (
+    <p data-pages-shown={`${shown.first}-${shown.last}`}>
+      <Say
+        template={shown.first === shown.last ? COPY.pageShown : COPY.pagesShown}
+        values={{
+          ...(shown.first === shown.last ? { number: shown.first } : { from: shown.first, to: shown.last }),
+          pages: version.page.pages,
+          first: <PageEnd version={version} row={first} end="first" />,
+          last: <PageEnd version={version} row={last} end="last" />,
+        }}
+      />
+    </p>
+  );
+}
+
+/** Whether a click is a plain one, which the page may take over; any other opens the link as the browser would. */
+function plainClick(event) {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+}
+
+/**
+ * The links to the pages before and after the ones a long version shows. With scripts, the next page is asked in place
+ * (`onNext`); its link stays a link, which a reader without scripts, or opening it apart, follows to that page's address.
+ */
+export function Pager({ version, paging = null, onNext = null }) {
+  if (!isPaged(version)) return null;
+  const shown = pagesShown(version);
+  const next = shown.last + 1;
+  return (
+    <nav data-pager="" aria-label={COPY.pager}>
+      {shown.first > 1 ? (
+        <a rel="prev" href={pageHref(version, shown.first - 1)} data-previous-page={shown.first - 1}>{COPY.previousPage}</a>
+      ) : null}
+      {shown.first > 1 && hasNextPage(version) ? ' ' : null}
+      {hasNextPage(version) ? (
+        <a
+          rel="next"
+          href={pageHref(version, next)}
+          data-next-page={next}
+          aria-busy={paging?.state === 'loading' ? 'true' : undefined}
+          onClick={(event) => {
+            if (onNext === null || !plainClick(event)) return;
+            event.preventDefault();
+            if (paging?.state !== 'loading') onNext(version);
+          }}
+        >
+          {COPY.nextPage}
+        </a>
+      ) : null}
+      {paging?.state === 'loading' ? <span data-page-loading="">{' '}{COMMON.loading}</span> : null}
+      {paging?.state === 'failed' ? <span data-page-failed="">{' '}{COPY.nextPageFailed}</span> : null}
+    </nav>
+  );
+}
+
 function Article({ article, state }) {
   return (
-    <li id={`${state.language}-${article.publisherId}`} data-article={article.publisherId}>
+    <li id={`${state.language}-${article.publisherId}`} data-article={article.publisherId} value={isPaged(state) ? article.position : undefined}>
       <h3>{article.publisherId}</h3>
       <ArticleText article={article} language={state.language} applicabilityDate={state.applicabilityDate} />
       <QuoteEvidence article={article} />
@@ -112,7 +225,7 @@ function Article({ article, state }) {
   );
 }
 
-function StateReading({ state, workKey }) {
+function StateReading({ state, workKey, paging = null, onNext = null }) {
   return (
     <section data-state={state.stateSha256}>
       <h2>
@@ -125,18 +238,22 @@ function StateReading({ state, workKey }) {
       <p>
         <Permalink value={state.permalink} />
       </p>
+      {/* The state's own counts, whichever of its pages are shown. */}
       <p data-counts="">
         <Say
-          template={countedEntry(COPY.counts, state.articles.length)}
+          template={countedEntry(COPY.counts, state.page.quotedInVersion)}
           values={{
-            count: state.articles.length,
-            withoutText: state.articlesWithoutText.length,
+            count: state.page.quotedInVersion,
+            withoutText: state.page.withoutTextInVersion,
             notAdmitted: state.articlesNotAdmitted,
-            conflicts: state.validityConflictCount,
+            conflicts: state.page.validityConflictsInVersion,
           }}
         />
       </p>
-      <ol className="articles">
+      <PageContents version={state} />
+      <PagesShown version={state} />
+      {/* A page added in place is not read out whole: the focus moves to its first article (aria-live off). */}
+      <ol className="articles" aria-live={isPaged(state) ? 'off' : undefined}>
         {state.articles.map((article) => (
           <Article key={article.articleIdentitySha256} article={article} state={state} />
         ))}
@@ -146,12 +263,18 @@ function StateReading({ state, workKey }) {
           <Say template={COPY.withoutText} values={{ articles: state.articlesWithoutText.map((entry) => entry.publisherId).join(', ') }} />
         </p>
       ) : null}
+      <Pager version={state} paging={paging} onNext={onNext} />
     </section>
   );
 }
 
+/** The digest that names a version of a reading: a Luxembourg state's, an EU wording's. */
+export function versionDigest(version) {
+  return version.stateSha256 ?? version.wordingSha256;
+}
+
 /** One reading view, laid out: each state's quoted text and what the bundle does not hold. */
-export function ReadingView({ view }) {
+export function ReadingView({ view, paging = {}, onNext = null }) {
   return (
     <>
       <p data-rights="">
@@ -163,7 +286,7 @@ export function ReadingView({ view }) {
       </p>
       <AsPublished asPublished={view.asPublished} />
       {view.states.map((state) => (
-        <StateReading key={state.stateSha256} state={state} workKey={view.workKey} />
+        <StateReading key={state.stateSha256} state={state} workKey={view.workKey} paging={paging[state.stateSha256] ?? null} onNext={onNext} />
       ))}
       <h3>{COPY.notHeldHeading}</h3>
       <ul data-not-held={view.notHeld.length}>
@@ -179,7 +302,7 @@ export function ReadingView({ view }) {
 
 function EuropeArticle({ article, wording }) {
   return (
-    <li id={`${wording.language}-${article.publisherId}`} data-article={article.publisherId}>
+    <li id={`${wording.language}-${article.publisherId}`} data-article={article.publisherId} value={isPaged(wording) ? article.position : undefined}>
       <h3>
         {article.publisherId}
         {article.heading.length > 0 ? (
@@ -221,7 +344,7 @@ export function EuropeWordingHeading({ wording, celex }) {
   );
 }
 
-function EuropeWordingReading({ wording, celex }) {
+function EuropeWordingReading({ wording, celex, paging = null, onNext = null }) {
   return (
     <section data-wording={wording.wordingSha256}>
       <h2>
@@ -239,13 +362,16 @@ function EuropeWordingReading({ wording, celex }) {
       <p>
         <Permalink value={wording.permalink} />
       </p>
+      {/* The wording's own counts, whichever of its pages are shown. */}
       <p data-counts="">
         <Say
-          template={countedEntry(COPY.europeCounts, wording.articles.length)}
-          values={{ count: wording.articles.length, withoutText: wording.articlesWithoutText.length }}
+          template={countedEntry(COPY.europeCounts, wording.page.quotedInVersion)}
+          values={{ count: wording.page.quotedInVersion, withoutText: wording.page.withoutTextInVersion }}
         />
       </p>
-      <ol className="articles">
+      <PageContents version={wording} />
+      <PagesShown version={wording} />
+      <ol className="articles" aria-live={isPaged(wording) ? 'off' : undefined}>
         {wording.articles.map((article) => (
           <EuropeArticle key={article.articleIdentitySha256} article={article} wording={wording} />
         ))}
@@ -255,6 +381,7 @@ function EuropeWordingReading({ wording, celex }) {
           <Say template={COPY.withoutText} values={{ articles: wording.articlesWithoutText.map((entry) => entry.publisherId).join(', ') }} />
         </p>
       ) : null}
+      <Pager version={wording} paging={paging} onNext={onNext} />
       <EuropeAnnexes rows={wording.annexesNotServed} language={wording.language} />
     </section>
   );
@@ -264,13 +391,13 @@ function EuropeWordingReading({ wording, celex }) {
  * One EU reading view, laid out: the acknowledgement and authenticity statement, each held wording's
  * quoted text, and what the bundle does not hold.
  */
-export function EuropeReadingView({ view }) {
+export function EuropeReadingView({ view, paging = {}, onNext = null }) {
   return (
     <>
       <p data-acknowledgement="" lang={ENGLISH_LANG}>{view.acknowledgement}</p>
       <p data-authenticity="" lang={ENGLISH_LANG}>{view.authenticity}</p>
       {view.wordings.map((wording) => (
-        <EuropeWordingReading key={wording.wordingSha256} wording={wording} celex={view.celex} />
+        <EuropeWordingReading key={wording.wordingSha256} wording={wording} celex={view.celex} paging={paging[wording.wordingSha256] ?? null} onNext={onNext} />
       ))}
       <h3>{COPY.notHeldHeading}</h3>
       <ul data-not-held={view.notHeld.length}>
@@ -284,12 +411,17 @@ export function EuropeReadingView({ view }) {
   );
 }
 
-/** One view state, laid out: the reading, the refusal card, or the sentence a state carries. */
-export function ReadingAnswerView({ outcome, onRetry }) {
+/**
+ * One view state, laid out: the reading, the refusal card, or the sentence a state carries. `paging` says, by version
+ * digest, how the next page asked in place stands, and `onNext(version)` asks it (none on a page that does not page in place).
+ */
+export function ReadingAnswerView({ outcome, onRetry, paging = {}, onNext = null }) {
   if (outcome.state === 'success') {
     return (
       <section data-answer-state="success">
-        {outcome.view.publisher === 'eu-eurlex' ? <EuropeReadingView view={outcome.view} /> : <ReadingView view={outcome.view} />}
+        {outcome.view.publisher === 'eu-eurlex'
+          ? <EuropeReadingView view={outcome.view} paging={paging} onNext={onNext} />
+          : <ReadingView view={outcome.view} paging={paging} onNext={onNext} />}
       </section>
     );
   }
@@ -387,17 +519,27 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
   if (session.current === null) {
     session.current = createReadingSession({ contract, fetchImpl, onOutcome: setOutcome });
   }
+  // The request the reading shown answers (the next page is the same request at that page), and the next pages asked in
+  // place: `base`, the outcome they extend (a new reading drops them), `view`, the reading with them added, and `paging`,
+  // by version digest, how the last one asked stands.
+  const asked = useRef(initial === null ? null : readingPinOf(initial.path, initial.envelope)?.request ?? null);
+  const [more, setMore] = useState({ base: null, view: null, paging: {}, focus: null });
+  const nextPage = useRef(null);
 
-  useEffect(() => () => session.current.cancel(), []);
+  useEffect(() => () => {
+    session.current.cancel();
+    nextPage.current?.abort();
+  }, []);
 
   // Opened at a permalink the server did not render: ask the reading it names, once, after hydration (the server
   // rendered the idle form).
   useEffect(() => {
     if (initial !== null) return;
-    const named = readingPinOf(window.location.pathname);
+    const named = readingPinOf(window.location.pathname, null, undefined, window.location.search);
     if (named === null) return;
     setPin(named);
     setPinned(true);
+    asked.current = named.request;
     session.current.ask(named.request);
   }, []);
 
@@ -421,7 +563,7 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
     if (title !== null) document.title = fillText(liveChrome().shell.title, { title });
     let target;
     if (view === null) {
-      target = document.querySelector('[data-pin-not-held]');
+      target = document.querySelector('[data-pin-not-held]') ?? document.querySelector('[data-pinned-lead]');
     } else if (pin.kind === 'state' && !readingHolds(view, pin.permalink)) {
       target = document.querySelector('[data-pin-replaced]');
     } else if (document.querySelector('[data-pinned-lead]') !== null) {
@@ -439,9 +581,55 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
     target.focus({ preventScroll: true });
   }, [pinned, pin, outcome]);
 
+  // The next page added in place, once it is shown: its first article is brought into view and given the focus.
+  const focus = more.base === outcome ? more.focus : null;
+  useEffect(() => {
+    if (focus === null || focus === undefined) return;
+    const section = document.querySelector(`[data-state="${focus.digest}"], [data-wording="${focus.digest}"]`);
+    const target = [...(section?.querySelectorAll('[data-article]') ?? [])].find((element) => element.getAttribute('data-article') === focus.id);
+    if (!target) return;
+    target.scrollIntoView();
+    if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+    target.focus({ preventScroll: true });
+  }, [focus]);
+
   const ask = (request) => {
     setPinned(false);
+    nextPage.current?.abort();
+    asked.current = request;
     session.current.ask(request);
+  };
+
+  // The page after the ones a version shows, asked in place: the request that asked the reading, in that version's language,
+  // at that page. Its articles are added below the shown ones; a failure says so, and the link still opens the page.
+  const onNext = (version) => {
+    if (asked.current === null || outcome.state !== 'success') return;
+    const base = outcome;
+    const digest = versionDigest(version);
+    const { article: _article, page: _page, ...request } = asked.current;
+    const controller = new AbortController();
+    nextPage.current?.abort();
+    nextPage.current = controller;
+    const settle = (change) => setMore((current) => change(current.base === base ? current : { base, view: null, paging: {}, focus: null }));
+    settle((current) => ({ ...current, base, paging: { ...current.paging, [digest]: { state: 'loading' } } }));
+    loadLiveReading({ contract, fetchImpl, signal: controller.signal, request: { ...request, language: version.language, page: pagesShown(version).last + 1 } })
+      .then((next) => {
+        if (controller.signal.aborted) return;
+        settle((current) => {
+          if (next.state !== 'success') return { ...current, paging: { ...current.paging, [digest]: { state: 'failed' } } };
+          try {
+            const view = mergeReadingPage(current.view ?? base.view, next.view);
+            const page = (next.view.publisher === 'eu-eurlex' ? next.view.wordings : next.view.states).find((entry) => versionDigest(entry) === digest);
+            const first = page?.articles[0]?.publisherId ?? page?.articlesWithoutText[0]?.publisherId;
+            return { ...current, view, paging: { ...current.paging, [digest]: { state: 'added' } }, focus: first === undefined ? null : { digest, id: first } };
+          } catch {
+            return { ...current, paging: { ...current.paging, [digest]: { state: 'failed' } } };
+          }
+        });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) settle((current) => ({ ...current, paging: { ...current.paging, [digest]: { state: 'failed' } } }));
+      });
   };
   // The failure panel's retry (R60): the last reading asked, or on a page the server rendered from a failure, the reading
   // its permalink names, as the page would have asked it. The pin stays as it was.
@@ -449,6 +637,7 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
     if (!session.current.retry() && pin !== null) session.current.ask(pin.request);
   };
   const replaced = pinned && pin.kind === 'state' && outcome.state === 'success' && !readingHolds(outcome.view, pin.permalink);
+  const shown = more.base === outcome && more.view !== null ? { ...outcome, view: more.view } : outcome;
   return (
     <div>
       <ReadingForm key={pin === null ? 'blank' : pin.address} initial={pin?.form ?? null} onAsk={ask} />
@@ -464,7 +653,7 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
             />
           </p>
         ) : null}
-        <ReadingAnswerView outcome={outcome} onRetry={retry} />
+        <ReadingAnswerView outcome={shown} onRetry={retry} paging={more.base === outcome ? more.paging : {}} onNext={onNext} />
       </LiveAnswer>
     </div>
   );

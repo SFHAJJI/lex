@@ -244,6 +244,14 @@ export const LIVE_CHROME_FR = Object.freeze({
     citeWithPermalink: 'Avec son permalien',
     citeEvidence: 'Avec ses éléments de vérification',
     citeNotComposed: 'Lex ne compose pas de citation usuelle pour cet article ; son permalien le cite.',
+    contents: 'Sommaire',
+    contentsPage: 'Page {number} : {first} à {last}',
+    pageShown: 'Page {number} sur {pages} : {first} à {last}.',
+    pagesShown: 'Pages {from} à {to} sur {pages} : {first} à {last}.',
+    pager: 'Pages',
+    previousPage: 'Articles précédents',
+    nextPage: 'Articles suivants',
+    nextPageFailed: 'Les articles suivants n’ont pas pu être chargés ici ; le lien les ouvre sur une page qui leur est propre.',
   }),
   history: Object.freeze({
     title: 'Historique d’une disposition',
@@ -803,6 +811,10 @@ export const REFUSALS_FR = Object.freeze({
       'La version que la date retient ne comporte aucun article de ce numéro, et aucun autre article n’est ouvert à sa place.',
     'This server holds this EU act in one wording only, and answers no date for it: leave the date out of the reference.':
       'Ce serveur ne détient cet acte de l’UE que dans un seul libellé, et ne répond à aucune date pour celui-ci : retirez la date de la référence.',
+    'This version holds no article with that id.':
+      'Cette version ne contient aucun article portant cet identifiant.',
+    'This wording holds no article with that id.':
+      'Ce libellé ne contient aucun article portant cet identifiant.',
   }),
   templates: Object.freeze({
     coverage: Object.freeze({

@@ -17,6 +17,7 @@ import { readingOutcome } from "../scripts/live-reading.mjs";
 import { LIVE_CHROME, entriesOf } from "../scripts/live-chrome.mjs";
 import { assertTimeVocabulary } from "../scripts/publisher-vocabulary.mjs";
 import { EUROPE_SAMPLE, europeBundle, europeEnvelope } from "../scripts/europe-bundle-sample.mjs";
+import { withoutTextAt } from "../scripts/reading-page-samples.mjs";
 
 const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const { contract } = census;
@@ -44,7 +45,8 @@ test("the census's permalink answer is the state the permalink pins, asked by th
 test("what a law's address names for its reading: the permalink's request, or a readable address's at today's date", () => {
   const permalink = readingPinOf(`/en${STATE.permalink}/${ARTICLE.publisher_id}`, PINNED);
   assert.equal(permalink.kind, "state");
-  assert.deepEqual({ ...permalink.request }, { identifier: STATE.permalink, date: STATE.applicability_date, language: "fra" }, "asked by the permalink, with no article");
+  assert.deepEqual({ ...permalink.request }, { identifier: STATE.permalink, date: STATE.applicability_date, language: "fra", article: ARTICLE.publisher_id }, "asked by the permalink, with no article in it, for the page that holds the article (the plan's item 3.7)");
+  assert.deepEqual({ ...readingPinOf(`/en${STATE.permalink}`, PINNED, undefined, "?page=2").request }, { identifier: STATE.permalink, date: STATE.applicability_date, language: "fra", page: 2 }, "a page its query names");
   assert.deepEqual({ ...permalink.form }, { identifier: "/lu-legilux/loi-1991-08-10-n3", date: STATE.applicability_date, language: "fra" }, "the form names the work");
   assert.equal(permalink.anchor, ARTICLE.publisher_id);
 
@@ -56,7 +58,7 @@ test("what a law's address names for its reading: the permalink's request, or a 
   refused.context.freshness.observed_at = "2026-10-15T22:30:00.0000000Z";
   assert.equal(readingPinOf(readable, refused).request.date, "2026-10-16", "the day its server answered, in Luxembourg (summer time)");
   assert.equal(readingPinOf(readable, null, () => "2026-12-31T23:30:00Z").request.date, "2027-01-01", "this browser's clock, in Luxembourg (winter time)");
-  assert.deepEqual({ ...readingPinOf(readable, null, () => "2026-10-15T08:00:00Z").request }, { identifier: "/lu-legilux/loi-1991-08-10-n3", date: "2026-10-15", language: "fra" });
+  assert.deepEqual({ ...readingPinOf(readable, null, () => "2026-10-15T08:00:00Z").request }, { identifier: "/lu-legilux/loi-1991-08-10-n3", date: "2026-10-15", language: "fra", article: "art_15" });
   assert.equal(readingPinOf(readable, null, () => "1970-01-01T00:00:00Z"), null, "a clock outside the rule's range names no date, and no reading");
   assert.equal(readingPinOf("/lu-legilux/loi-1991-08-10-n3/fra"), null, "an address under no interface language is sent to one first");
   assert.equal(readingPinOf("/en/lu-legilux/loi-1991-08-10-n3"), null, "a work's address names its dossier");
@@ -85,9 +87,7 @@ test("the cited article comes first, under its own title, quoted from its versio
 
   // An article held without text is named first, never quoted empty.
   const withoutText = structuredClone(PINNED);
-  const [moved] = withoutText.result.value.states[0].articles.splice(14, 1);
-  withoutText.result.value.states[0].articles_without_text.push({ article_identity_sha256: moved.article_identity_sha256, publisher_id: moved.publisher_id, reason: "no_text_tokens" });
-  if (moved.validity_conflict) withoutText.result.value.states[0].validity_conflict_count -= 1;
+  const moved = withoutTextAt(withoutText.result.value.states[0], withoutText.result.value.states[0].articles.findIndex((article) => article.publisher_id === ARTICLE.publisher_id));
   const held = lead(success(withoutText), pin);
   assert.ok(held.includes(`<p data-cited-from="" data-without-text="">Held without text in loi-1991-08-10-n3, fra, the state applying from ${STATE.applicability_date}.</p>`), held);
   assert.ok(!held.includes("<blockquote"), "no empty quotation");

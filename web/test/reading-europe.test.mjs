@@ -74,7 +74,7 @@ test("an EU provision is escaped as the platform escapes it in an article's perm
     article.publisher_id = id;
     article.article_permalink = `${PERMALINK}/${escapeProvision(id)}`;
   });
-  assert.equal(readEuropeEvidenceBundle(bundle).wordings[0].articles[0].permalink, `${PERMALINK}/Article%201%282%29`);
+  assert.equal(readEuropeEvidenceBundle(bundle).wordings[0].articles.find((article) => article.publisherId === id).permalink, `${PERMALINK}/Article%201%282%29`);
 });
 
 test("the reading screen shows the EU wording: the acknowledgement and authenticity above the quoted text, each quote with its evidence", () => {

@@ -12,6 +12,7 @@ import { readEvidenceBundleAnswer } from "./reading-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
 import { historyBeginsHint, noCorpusMountedSentence, tableRefusalSentence, unshownRefusal } from "./live-refusals.mjs";
 import { isCalendarDate } from "./temporal.mjs";
+import { MAXIMUM_PAGE } from "./permalinks.mjs";
 import { englishStatement, fillText, liveChrome, refusalTemplate } from "./live-chrome.mjs";
 
 /**
@@ -49,6 +50,8 @@ export const LIVE_READING_REFUSAL_SENTENCES = Object.freeze({
   retrieval_mode_unavailable: "This index cannot read this work's text.",
   // A permalink whose digest is not the state this index holds at its date (R64); the page says the current link above.
   pinned_digest_mismatch: "The version this permalink pins is not the one this index holds for its date.",
+  // An article address whose article the version does not hold (the plan's item 3.7: the page that holds it is asked).
+  anchor_not_in_version: "This version holds no article with that id.",
 });
 
 /**
@@ -65,6 +68,7 @@ export const LIVE_READING_EUROPE_REFUSAL_SENTENCES = Object.freeze({
   text_not_available: "This index knows this wording of the EU act but holds no text for it.",
   retrieval_mode_unavailable: "This index cannot read this work's text.",
   pinned_digest_mismatch: "The wording this permalink pins is not one this index holds for its date.",
+  anchor_not_in_version: "This wording holds no article with that id.",
 });
 
 /** The refusal sentences for a refusal's publisher, as its envelope context names it. */
@@ -102,21 +106,32 @@ export function invalidAnswerSentence(reason) {
 
 /**
  * The request parameters for one reading, checked before anything is sent: an identifier that is not
- * blank, sent as typed; a calendar date written yyyy-mm-dd; and a language only when one is chosen.
- * Nothing else is sent.
+ * blank, sent as typed; a calendar date written yyyy-mm-dd; a language only when one is chosen; and, for a
+ * page of the reading (the plan's item 3.7), the page's number (a whole number from 1) or an article it
+ * holds (its publisher id), never both. Nothing else is sent.
  */
-export function readingParameters({ identifier, date, language = "" }) {
+export function readingParameters({ identifier, date, language = "", page = null, article = null }) {
   if (typeof identifier !== "string" || identifier.trim().length === 0) {
     throw new Error("a reading needs the identifier of a work");
   }
   if (!isCalendarDate(date)) {
     throw new Error("a reading needs a calendar date, written yyyy-mm-dd");
   }
-  if (language === "") return { identifier, date };
+  if (page !== null && (!Number.isInteger(page) || page < 1 || page > MAXIMUM_PAGE)) {
+    throw new Error(`${JSON.stringify(page)} is not a page of a reading`);
+  }
+  if (article !== null && (typeof article !== "string" || article.trim().length === 0)) {
+    throw new Error("an article is asked by its publisher id");
+  }
+  if (page !== null && article !== null) {
+    throw new Error("a reading asks one page: by its number or by an article it holds");
+  }
+  const paged = page !== null ? { page } : article !== null ? { article } : {};
+  if (language === "" || language === null || language === undefined) return { identifier, date, ...paged };
   if (!READING_LANGUAGES.some((offered) => offered.code === language)) {
     throw new Error(`${JSON.stringify(language)} is not a language this form offers`);
   }
-  return { identifier, date, language };
+  return { identifier, date, language, ...paged };
 }
 
 /**

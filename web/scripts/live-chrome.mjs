@@ -176,6 +176,16 @@ const EN = Object.freeze({
     citeWithPermalink: "With its permalink",
     citeEvidence: "Evidence form",
     citeNotComposed: "Lex composes no usual citation for this article; its permalink cites it.",
+    // Reading by page (the plan's item 3.7): a long version's contents, by page, the pages shown, and the links to the pages
+    // before and after them, which the page loads in place when it can.
+    contents: "Contents",
+    contentsPage: "Page {number}: {first} to {last}",
+    pageShown: "Page {number} of {pages}: {first} to {last}.",
+    pagesShown: "Pages {from} to {to} of {pages}: {first} to {last}.",
+    pager: "Pages",
+    previousPage: "Previous articles",
+    nextPage: "Next articles",
+    nextPageFailed: "The next articles could not be loaded here; the link opens them on a page of their own.",
   }),
   history: Object.freeze({
     title: "Provision history",
