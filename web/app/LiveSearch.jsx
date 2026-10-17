@@ -24,9 +24,10 @@
 //
 // The screen has two forms of one form (`variant`). The home page's (R47, R52) is the one box, with its
 // placeholder, a date field that starts at today, the calendar date in Luxembourg (R13), and the
-// language: a search across the Luxembourg works this server holds, at that date. The search page's
-// adds the optional work identifier, which is how an EU act is searched, and its date field starts
-// empty (`live-search.mjs` says why). Below either form, before any answer, the sentence that says
+// language: a search across the Luxembourg works this server holds, at that date, which the line under
+// it says, with the way to an EU act (the search page). The search page's form adds the optional work
+// identifier, which is how an EU act is searched, and its date field starts empty (`live-search.mjs`
+// says why). Below either form, before any answer, the sentence that says
 // what Lex is not (R50), which the search results carry on both pages.
 
 import { useEffect, useRef, useState } from 'react';
@@ -41,7 +42,7 @@ import {
   createSearchSession,
   todayInLuxembourg,
 } from '../scripts/live-search.mjs';
-import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
+import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillText, liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { articlePermalink, permalinkHref } from '../scripts/permalinks.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
@@ -215,7 +216,10 @@ export function SearchResultsView({ view, onNextPage }) {
       {view.hits.length === 0 ? (
         <>
           {view.searchableTextHeld ? (
-            <p data-no-hit=""><Say template={COPY.noHit} values={{ query: view.query }} /> {inEnglish(asSentence(view.matching))}</p>
+            <p data-no-hit="">
+              {/* With no work named, a search is of Luxembourg law alone, and says so. */}
+              <Say template={view.identifier === null ? COPY.noHitLuxembourg : COPY.noHit} values={{ query: view.query }} /> {inEnglish(asSentence(view.matching))}
+            </p>
           ) : (
             <p data-no-hit="">
               <Say template={COPY.noText} values={{ language: view.language, languages: view.searchableLanguages.join(', ') }} />
@@ -396,6 +400,11 @@ export function LiveSearch({ contract, fetchImpl, variant = 'search', today = nu
         <button type="submit">{FORM.submit.search}</button>
       </form>
       <p className="not-advice" data-not-advice="">{liveChrome().site.notAdvice}</p>
+      {home ? (
+        <p className="search-scope" data-search-scope="">
+          <Say template={COPY.luxembourgOnly} values={{ link: <a href={livePath('search.html')}>{COPY.searchPage}</a> }} />
+        </p>
+      ) : null}
       <LiveAnswer>
         <SearchAnswerView outcome={outcome} onNextPage={(after) => session.current.next(after)} onRetry={() => session.current.retry()} />
       </LiveAnswer>

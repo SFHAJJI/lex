@@ -105,8 +105,11 @@ export const LIVE_CHROME_FR = Object.freeze({
     euHit: '{heading} de {celex}, libellé du {date}',
     notHeldHeading: 'Ce que cette recherche ne couvre pas',
     placeholder: 'Rechercher par intitulé, numéro, ELI ou CELEX, ou par des mots du texte',
-    dated: 'Chaque acte a été interrogé dans sa version applicable au {date} ; un acte sans version applicable à cette date n’a pas été interrogé.',
-    undated: 'Aucune date n’a été indiquée : toutes les versions détenues ont été interrogées, et chaque résultat indique la date de sa version.',
+    dated: 'Seuls des actes luxembourgeois ont été interrogés. Pour chacun, la dernière version que ce site détient qui est applicable à partir du {date} ou d’une date antérieure (éditeur) a été interrogée, et un acte sans une telle version ne l’a pas été. Un acte détenu uniquement tel que publié est interrogé tel que publié, et peut avoir été modifié depuis.',
+    undated: 'Seuls des actes luxembourgeois ont été interrogés, sans date : toutes les versions que ce site détient ont été interrogées, et chaque résultat indique la date de sa version.',
+    noHitLuxembourg: 'Aucun article du texte luxembourgeois que ce serveur détient et qu’il est autorisé à interroger ne contient « {query} ».',
+    luxembourgOnly: 'Cette recherche porte sur le droit luxembourgeois. Pour interroger un acte de l’UE, désignez-le par son numéro CELEX sur la {link}.',
+    searchPage: 'page de recherche',
   }),
   dossier: Object.freeze({
     title: 'Dossier',

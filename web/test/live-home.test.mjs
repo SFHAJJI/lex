@@ -7,14 +7,16 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { renderToString } from "react-dom/server";
+import { createElement as h } from "react";
+import { renderToStaticMarkup, renderToString } from "react-dom/server";
 
 import {
-  LIVE_CONTRACT, LIVE_HOME_ROOT, liveHomeTree, renderLiveCoveragePage, renderLiveDossierPage, renderLiveHomePage, renderLiveNotFoundPage,
+  LIVE_CONTRACT, LIVE_HOME_ROOT, SearchAnswerView, liveHomeTree, renderLiveCoveragePage, renderLiveDossierPage, renderLiveHomePage, renderLiveNotFoundPage,
   renderLiveReadingPage, renderLiveSearchPage,
 } from "../.react-build/app.mjs";
 import { HOME_FACTS_ID, coverageLineOf, homeFacts, readHomeFacts, readHomeFactsValue } from "../scripts/live-home.mjs";
-import { createSearchSession, searchParameters, todayInLuxembourg } from "../scripts/live-search.mjs";
+import { createSearchSession, searchOutcome, searchParameters, todayInLuxembourg } from "../scripts/live-search.mjs";
+import { assertTimeVocabulary } from "../scripts/publisher-vocabulary.mjs";
 import { coverageOutcome } from "../scripts/live-coverage.mjs";
 import { liveChrome } from "../scripts/live-chrome.mjs";
 import { answerHandedWith } from "../scripts/v3-client.mjs";
@@ -211,4 +213,52 @@ test("the search page keeps its work identifier and an empty date, and the 404 p
   const notFound = mainOf(renderLiveNotFoundPage());
   assert.ok(notFound.includes('data-variant="home"'), "the 404 page's search is the home page's form");
   assert.ok(!notFound.includes(escaped(EN.form.workIdentifierOptional)));
+});
+
+/** A Luxembourg search answer from the census, asked at `date` (or none), as the results lay it out. */
+function searchedAt(date, change = (view) => view) {
+  const envelope = envelopeOf("search", "a phrase the held text carries");
+  envelope.result.value.requested_date = date;
+  const outcome = searchOutcome({ state: "success", envelope });
+  assert.equal(outcome.state, "success", outcome.sentence);
+  return renderToStaticMarkup(h(SearchAnswerView, { outcome: { ...outcome, view: change(outcome.view) }, onNextPage: () => {} })).replaceAll("<!-- -->", "");
+}
+
+test("a dated search says what this site holds was searched, in Luxembourg law, never that a version applies (review of #971)", () => {
+  const html = searchedAt("2026-10-16");
+  const dated = EN.search.dated.replace("{date}", "2026-10-16");
+  assert.ok(html.includes(`data-searched-on="2026-10-16">${escaped(dated)}</p>`), html);
+  assert.equal(EN.search.dated, "Only Luxembourg acts were searched. For each, the latest version this site holds that is applicable from {date} or an earlier date (publisher) was searched, and an act with no such version was not. An act held only as published is searched as published, and may have been amended since.");
+  assert.equal(liveChrome("fr").search.dated, "Seuls des actes luxembourgeois ont été interrogés. Pour chacun, la dernière version que ce site détient qui est applicable à partir du {date} ou d’une date antérieure (éditeur) a été interrogée, et un acte sans une telle version ne l’a pas été. Un acte détenu uniquement tel que publié est interrogé tel que publié, et peut avoir été modifié depuis.");
+  // The latest held version on or before the date (SelectAtDate), which for an act held only as published is that act as
+  // published: never "the version that applies", which on a population of acts held as first published claims too much.
+  assert.doesNotMatch(dated, /\bthat applies\b|\bapplying on\b|\bin force\b/);
+  for (const language of ["en", "fr"]) {
+    for (const entry of ["dated", "undated", "noHitLuxembourg", "luxembourgOnly"]) assertTimeVocabulary(liveChrome(language).search[entry], `${language} search.${entry}`);
+    // The as-published label's own words (common.asPublished.label): "as published" and "may have been amended since".
+    const label = liveChrome(language).common.asPublished.label.split(";").map((part) => part.trim());
+    for (const words of label.slice(0, 2)) assert.ok(liveChrome(language).search.dated.includes(words), `${language}: the dated sentence says "${words}"`);
+  }
+  const undated = searchedAt(null);
+  assert.ok(undated.includes(`data-searched-on="">${escaped(EN.search.undated)}</p>`));
+  assert.match(EN.search.undated, /^Only Luxembourg acts were searched/);
+});
+
+test("with no work named, the no-hit sentence says the search was of Luxembourg law; with one named, it names no publisher (review of #971)", () => {
+  const unnamed = searchedAt(null, (view) => ({ ...view, hits: [], identifier: null }));
+  assert.ok(unnamed.includes("No article of the Luxembourg text this server holds and may search contains “assemblée générale”."), unnamed);
+  const named = searchedAt(null, (view) => ({ ...view, hits: [], identifier: "/lu-legilux/loi-1991-08-10-n3" }));
+  assert.ok(named.includes("No article of the text this server holds and may search contains “assemblée générale”."), named);
+});
+
+test("under the home page's box and the 404 page's, a line says the search covers Luxembourg law and leads to the search page for an EU act (review of #971)", () => {
+  const line = (html) => /<p class="search-scope" data-search-scope="">([\s\S]*?)<\/p>/.exec(mainOf(html).replaceAll("<!-- -->", ""))?.[1] ?? null;
+  for (const html of [rendered(COVERAGE), renderLiveHomePage(), renderLiveNotFoundPage()]) {
+    assert.equal(line(html), 'This search covers Luxembourg law. To search within an EU act, name it by its CELEX number on the <a href="/en/search.html">search page</a>.');
+    const main = mainOf(html);
+    assert.ok(main.indexOf("data-not-advice") < main.indexOf("data-search-scope") && main.indexOf("data-search-scope") < main.indexOf("data-live-answer"), "under R50's sentence, so the phone's first screen keeps the box and that sentence");
+  }
+  assert.equal(line(renderLiveSearchPage()), null, "the search page names a work itself");
+  assert.equal(liveChrome("fr").search.luxembourgOnly, "Cette recherche porte sur le droit luxembourgeois. Pour interroger un acte de l’UE, désignez-le par son numéro CELEX sur la {link}.");
+  assert.equal(liveChrome("fr").search.searchPage, "page de recherche");
 });

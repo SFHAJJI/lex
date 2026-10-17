@@ -1593,11 +1593,17 @@ export function fixtureMountExpectations(journeyMount) {
   const searchTexts = [`“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work.`, "art_15 in", "The first hits in the stated order, not the best hits.", NOT_ADVICE_SAID];
   // The home page's search is dated today, which the fixture's one state (2024-02-01) applies on; its coverage line counts the
   // fixture's one work, one state and 49 articles.
-  const homeTexts = [...searchTexts, "Searched the version of each act that applies on", "This site holds 1 act of Luxembourg law, in 1 version with 49 articles, as of the index built on"];
+  const homeTexts = [
+    ...searchTexts,
+    "Only Luxembourg acts were searched. For each, the latest version this site holds that is applicable from",
+    "An act held only as published is searched as published, and may have been amended since.",
+    "This search covers Luxembourg law. To search within an EU act, name it by its CELEX number on the search page.",
+    "This site holds 1 act of Luxembourg law, in 1 version with 49 articles, as of the index built on",
+  ];
   return [
     ["coverage", { step: coverage, state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }],
     ["home", { step: home, state: "success", texts: homeTexts }],
-    ["search", { step: search, state: "success", texts: [...searchTexts, "No date was given: every version held was searched"] }],
+    ["search", { step: search, state: "success", texts: [...searchTexts, "Only Luxembourg acts were searched, with no date: every version this site holds was searched"] }],
     ["dossier", { step: dossier, state: "success", texts: [journeyMount.work_key, "1 state, from 2024-02-01 to 2024-02-01.", "What this dossier does not hold", AS_PUBLISHED_SAID] }],
     ["reading", { step: reading, state: "success", texts: ["the state applying from 2024-02-01", "49 articles quoted", "Art. 15.", "Text served under agreed_same_run_cc_by", AS_PUBLISHED_SAID, NOT_ADVICE_SAID] }],
     ["history", { step: history, state: "success", texts: [`${HISTORY_ANCHOR} in loi-1991-08-10-n3`, "Carried by 1 held state, from 2024-02-01", "first held wording"] }],

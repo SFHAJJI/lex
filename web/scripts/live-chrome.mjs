@@ -61,9 +61,15 @@ const EN = Object.freeze({
     notHeldHeading: "What this search does not cover",
     // The one box's placeholder, word for word the specification of record's (R52).
     placeholder: "Search by title, number, ELI or CELEX, or words from the text",
-    // What a Luxembourg search was asked at (R13: the date is printed): the date the answer echoes, or none.
-    dated: "Searched the version of each act that applies on {date}; an act with no version applying on that date is not searched.",
-    undated: "No date was given: every version held was searched, and each result names its version's date.",
+    // What a Luxembourg search was asked at (R13: the date is printed), said of what this site holds (R21, R22, R76): the
+    // latest held version applicable by the date, which for an act held only as published is that act as published.
+    dated: "Only Luxembourg acts were searched. For each, the latest version this site holds that is applicable from {date} or an earlier date (publisher) was searched, and an act with no such version was not. An act held only as published is searched as published, and may have been amended since.",
+    undated: "Only Luxembourg acts were searched, with no date: every version this site holds was searched, and each result names its version's date.",
+    // A search with no work named searches Luxembourg law alone, and its no-hit sentence says so.
+    noHitLuxembourg: "No article of the Luxembourg text this server holds and may search contains “{query}”.",
+    // Under the home page's box (and the 404 page's): what it searches, and where an EU act is searched.
+    luxembourgOnly: "This search covers Luxembourg law. To search within an EU act, name it by its CELEX number on the {link}.",
+    searchPage: "search page",
   }),
   dossier: Object.freeze({
     title: "Dossier",

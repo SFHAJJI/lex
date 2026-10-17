@@ -579,6 +579,13 @@ blockquote.law {
   line-height: 1.5;
 }
 
+.search-scope {
+  max-inline-size: 40rem;
+  color: #44554a;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 .coverage-line {
   max-inline-size: 40rem;
   color: #44554a;
@@ -626,6 +633,7 @@ blockquote.law {
 
 @media (prefers-color-scheme: dark) {
   .site-header ~ main .field-hint,
+  .search-scope,
   .coverage-line {
     color: #b8c6bc;
   }
