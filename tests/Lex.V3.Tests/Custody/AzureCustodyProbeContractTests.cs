@@ -659,30 +659,44 @@ public sealed class AzureCustodyProbeContractTests
             startInfo.Environment[entry.Key] = entry.Value;
         }
 
-        using var process = new Process { StartInfo = startInfo };
-        Assert.IsTrue(process.Start());
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-        await Task.Delay(TimeSpan.FromMilliseconds(250));
-        Assert.IsFalse(process.HasExited);
-        Assert.AreEqual(0, Kill(process.Id, 15));
+        // The probe answers SIGTERM once its own handler is registered, as it starts. A signal that arrives before then ends
+        // the process by the runtime's default, 143: on a loaded runner the start took longer than the first wait
+        // (2026-10-17). So the signal is sent after a growing wait, and a 143 is tried again; a probe whose handler is gone
+        // answers 143 every time and fails. No attempt may return output.
+        var exitCode = -1;
+        foreach (var wait in new[] { 250, 2_000, 8_000 })
+        {
+            using var process = new Process { StartInfo = startInfo };
+            Assert.IsTrue(process.Start());
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
+            await Task.Delay(TimeSpan.FromMilliseconds(wait));
+            Assert.IsFalse(process.HasExited);
+            Assert.AreEqual(0, Kill(process.Id, 15));
 
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        try
-        {
-            await process.WaitForExitAsync(timeout.Token);
-        }
-        finally
-        {
-            if (!process.HasExited)
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            try
             {
-                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+
+            Assert.AreEqual(string.Empty, await stdoutTask);
+            Assert.AreEqual(string.Empty, await stderrTask);
+            exitCode = process.ExitCode;
+            if (exitCode != 143)
+            {
+                break;
             }
         }
 
-        Assert.AreEqual(string.Empty, await stdoutTask);
-        Assert.AreEqual(string.Empty, await stderrTask);
-        Assert.AreEqual(130, process.ExitCode);
+        Assert.AreEqual(130, exitCode);
     }
 
     [TestMethod]

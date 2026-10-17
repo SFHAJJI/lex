@@ -108,14 +108,20 @@ public sealed class V3PageRendererTests
             Assert.AreEqual("<!doctype html><p>/en/c render 1</p>", await renderer.RenderAsync("en", "reading", "{}", "/en/c", CancellationToken.None),
                 "and the next render has a fresh engine, which no late interrupt reaches");
 
+            // The heap is held apart from the time by a renderer with a long time: stopped well before that time, the render
+            // was stopped by its heap. A 3-second time made the test a race with the runner's speed: filling the heap took
+            // 3.5 seconds on a loaded runner (2026-10-17).
+            using var roomy = V3PageRenderer.Open(directory, TimeSpan.FromSeconds(60))!;
+            Assert.AreEqual("<!doctype html><p>/en/f render 1</p>", await roomy.RenderAsync("en", "reading", "{}", "/en/f", CancellationToken.None),
+                "the roomy renderer's engine renders before the heap, so a fresh engine after the stop says 1 again");
             var clock = Stopwatch.StartNew();
-            Assert.IsNull(await renderer.RenderAsync("en", "reading", "{}", "/en/heap", CancellationToken.None), "a render that fills its heap is stopped at the soft limit");
-            Assert.IsLessThan(3_000L, clock.ElapsedMilliseconds, "by its heap, before its time");
-            Assert.AreEqual("<!doctype html><p>/en/d render 1</p>", await renderer.RenderAsync("en", "reading", "{}", "/en/d", CancellationToken.None),
+            Assert.IsNull(await roomy.RenderAsync("en", "reading", "{}", "/en/heap", CancellationToken.None), "a render that fills its heap is stopped at the soft limit");
+            Assert.IsLessThan(45_000L, clock.ElapsedMilliseconds, "by its heap, before its time");
+            Assert.AreEqual("<!doctype html><p>/en/d render 1</p>", await roomy.RenderAsync("en", "reading", "{}", "/en/d", CancellationToken.None),
                 "the process stands, and the next render has a fresh engine");
 
-            Assert.IsNull(await renderer.RenderAsync("en", "reading", "{}", "/en/deep", CancellationToken.None), "recursion without end is a script error, not an overflow");
-            Assert.AreEqual("<!doctype html><p>/en/e render 3</p>", await renderer.RenderAsync("en", "reading", "{}", "/en/e", CancellationToken.None),
+            Assert.IsNull(await roomy.RenderAsync("en", "reading", "{}", "/en/deep", CancellationToken.None), "recursion without end is a script error, not an overflow");
+            Assert.AreEqual("<!doctype html><p>/en/e render 3</p>", await roomy.RenderAsync("en", "reading", "{}", "/en/e", CancellationToken.None),
                 "after which the engine is sound and kept");
         }
         finally

@@ -4,6 +4,25 @@ Updated 2026-10-17. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Two tests that timed the runner, not the behaviour (sole driver, 2026-10-17)
+
+#974's first `dotnet` run was cancelled at its 45-minute limit on a slow runner: every step took about eight times its
+usual time, the build 6 min 18 s for 45 s. Two tests failed there on timing alone, and the re-run passed.
+- `V3PageRendererTests.ARenderStoppedForItsTimeOrItsHeapLeavesTheProcessStandingAndItsLanguageAFreshEngine` held "stopped
+  by its heap, before its time" to a renderer whose time was 3 s, and filling the heap took 3.5 s there. The heap is now
+  asked of a second renderer with a 60 s time and must stop well before it (45 s); the loop is still stopped by the 3 s
+  renderer's time. The second renderer renders once before the heap, so "render 1" after the stop shows a fresh
+  engine whatever the heap render's place.
+- `AzureCustodyProbeContractTests.LinuxSigtermCancelsWithoutReturningOutput` sent SIGTERM 250 ms after the probe
+  started, and got the runtime's default 143 when the probe's own handler was not yet registered. The signal is now sent
+  after 250 ms, then 2 s, then 8 s, while the answer is 143; the answer must be 130 and no attempt may write output, so
+  a probe whose handler is gone still fails.
+- Measured: `Lex.V3.Tests` filtered to both classes, 52 of 52 (the SIGTERM test runs on Linux only, in CI).
+- The review of #977 found the test changes sound, and three faults in the owner's brief, repaired: "the private
+  copy" named both the storage copy of custody and the private copy of the site, with two costs; the brief's plan
+  and owner items were not in STATUS.md, which now records them (the plan line, the Azure credits, O15's storage
+  option and the public beta question); and its time was local time labelled UTC.
+
 ## Search engines: kept out until O27, one switch, the sitemap and the Legislation markup (sole driver, 2026-10-17)
 
 The plan's item 3.6 (`C:\lex-v3\PLAN-2026-10-14.md`), to the specification of record's R67 ("robots.txt allows dossiers and
