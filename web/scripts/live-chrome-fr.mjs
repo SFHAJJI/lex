@@ -90,7 +90,13 @@
 // (`search.opensReading`, `search.opensDossier`) and why it opened nothing (`search.notOpenedDate`,
 // `search.notOpenedTwoDates`); a date in words (`common.longDate`, `common.firstDay`, the twelve `common.months`); and the
 // phase's four refusal sentences in `REFUSALS_FR.sentences`, were reviewed by the same reviewer under the same delegation
-// in the addendum of 2026-10-17 for that pull request (the record names each, with what changed in review).
+// in the addendum of 2026-10-17 for that pull request (the record names each, with what changed in review). Its repair
+// round (the review of #974): the home line's "lorsque ce site le détient" (`search.searchScope`); a citation by a title
+// this site holds no act under, searched as words (`search.titleNotHeld`); an act of a list that only the publisher's
+// catalogue names (`search.candidateNotHeld`), and under an absent act's card (`search.catalogueNamesIt`); and two refusal
+// sentences in `REFUSALS_FR.sentences`, the list's, which no longer says the acts are held, and the EU article's, which
+// says "libellé" where the Luxembourg one says "version", were reviewed by an independent reviewer (Claude, AI reviewer,
+// not the author) under the same delegation in the addendum of 2026-10-17 for the repair (the record names each).
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -140,7 +146,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     dated: 'Seuls des actes luxembourgeois ont été interrogés. Pour chacun, la dernière version que ce site détient qui est applicable à partir du {date} ou d’une date antérieure (éditeur) a été interrogée, et un acte sans une telle version ne l’a pas été. Un acte détenu uniquement tel que publié est interrogé tel que publié, et peut avoir été modifié depuis.',
     undated: 'Seuls des actes luxembourgeois ont été interrogés, sans date : toutes les versions que ce site détient ont été interrogées, et chaque résultat indique la date de sa version.',
     noHitLuxembourg: 'Aucun article du texte luxembourgeois que ce serveur détient et qu’il est autorisé à interroger ne contient « {query} ».',
-    searchScope: 'La recherche par mots porte sur le droit luxembourgeois. Un ELI, un numéro CELEX, une référence au Mémorial, un permalien ou la citation d’un article d’un acte, avec ou sans date, ouvre cet acte, luxembourgeois ou de l’UE. Pour interroger un acte de l’UE, désignez-le par son numéro CELEX sur la {link}.',
+    searchScope: 'La recherche par mots porte sur le droit luxembourgeois. Un ELI, un numéro CELEX, une référence au Mémorial, un permalien ou la citation d’un article d’un acte, avec ou sans date, ouvre cet acte, luxembourgeois ou de l’UE, lorsque ce site le détient. Pour interroger un acte de l’UE, désignez-le par son numéro CELEX sur la {link}.',
     searchPage: 'page de recherche',
     recognised: 'Référence reconnue : {act}.',
     recognisedArticle: 'Référence reconnue : {act}, article {article}.',
@@ -152,6 +158,9 @@ export const LIVE_CHROME_FR = Object.freeze({
     opensDossier: 'Ouverture du dossier : {link}',
     notOpenedDate: '« {date} » ne désigne aucun jour du calendrier ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
     notOpenedTwoDates: 'La référence indique deux dates qui ne concordent pas ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
+    titleNotHeld: 'Ce site ne détient aucun acte sous le titre que cite la requête ; ses mots ont donc été recherchés.',
+    candidateNotHeld: '{act} (ce site n’en détient aucune version)',
+    catalogueNamesIt: 'Les données de l’éditeur désignent cet acte ({works}), et ce site n’en détient aucune version.',
   }),
   dossier: Object.freeze({
     title: 'Dossier',
@@ -778,8 +787,10 @@ export const REFUSALS_FR = Object.freeze({
       'Le libellé que ce permalien épingle n’est pas un libellé que cet index contient pour sa date.',
     'This site holds no act the reference names, so nothing was opened and no word was searched.':
       'Ce site ne détient aucun acte que la référence désigne ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
-    'The reference names more than one act or article this site holds, and none is chosen.':
-      'La référence désigne plusieurs actes ou articles que ce site détient, et aucun n’est retenu.',
+    'The reference names more than one act or article, and none is chosen.':
+      'La référence désigne plusieurs actes ou articles, et aucun n’est retenu.',
+    'The wording the date selects holds no article with that number, and no other article is opened in its place.':
+      'Le libellé que la date retient ne comporte aucun article de ce numéro, et aucun autre article n’est ouvert à sa place.',
     'The version the date selects holds no article with that number, and no other article is opened in its place.':
       'La version que la date retient ne comporte aucun article de ce numéro, et aucun autre article n’est ouvert à sa place.',
     'This server holds this EU act in one wording only, and answers no date for it: leave the date out of the reference.':

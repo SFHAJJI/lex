@@ -69,7 +69,8 @@ const EN = Object.freeze({
     noHitLuxembourg: "No article of the Luxembourg text this server holds and may search contains “{query}”.",
     // Under the home page's box (and the 404 page's): what a search by words covers, what an exact reference opens (the
     // plan's item 4.2), and where words are searched within an EU act.
-    searchScope: "A search by words covers Luxembourg law. An ELI, a CELEX number, a Mémorial reference, a permalink, or the citation of an article of an act, with or without a date, opens that act, Luxembourg or EU. To search within an EU act, name it by its CELEX number on the {link}.",
+    // "when this site holds it" (the review of #974, F1): a reference to an act this site does not hold opens nothing.
+    searchScope: "A search by words covers Luxembourg law. An ELI, a CELEX number, a Mémorial reference, a permalink, or the citation of an article of an act, with or without a date, opens that act, Luxembourg or EU, when this site holds it. To search within an EU act, name it by its CELEX number on the {link}.",
     searchPage: "search page",
     // What an exact reference was read as (the plan's item 4.2), said before its act opens and above a refusal of it: the
     // act, the article and the date as read, the date in words. A date the reference does not name is said apart.
@@ -83,6 +84,12 @@ const EN = Object.freeze({
     opensDossier: "Opening the dossier: {link}",
     notOpenedDate: "“{date}” names no day of the calendar, so nothing was opened and no word was searched.",
     notOpenedTwoDates: "The reference names two dates that disagree, so nothing was opened and no word was searched.",
+    // The review of #974: a citation by a title this site holds no act under is searched as words, and the page says so; the
+    // acts a reference may name are listed, one only the publisher's catalogue names said as not held; and an absent act
+    // the catalogue names is named under its card.
+    titleNotHeld: "This site holds no act under the title the query cites, so its words were searched.",
+    candidateNotHeld: "{act} (this site holds no version of it)",
+    catalogueNamesIt: "The publisher's catalogue names this act ({works}), and this site holds no version of it.",
   }),
   dossier: Object.freeze({
     title: "Dossier",

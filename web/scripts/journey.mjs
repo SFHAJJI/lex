@@ -1667,7 +1667,7 @@ export function fixtureMountExpectations(journeyMount) {
     ...searchTexts,
     "Only Luxembourg acts were searched. For each, the latest version this site holds that is applicable from",
     "An act held only as published is searched as published, and may have been amended since.",
-    "A search by words covers Luxembourg law. An ELI, a CELEX number, a Mémorial reference, a permalink, or the citation of an article of an act, with or without a date, opens that act, Luxembourg or EU. To search within an EU act, name it by its CELEX number on the search page.",
+    "A search by words covers Luxembourg law. An ELI, a CELEX number, a Mémorial reference, a permalink, or the citation of an article of an act, with or without a date, opens that act, Luxembourg or EU, when this site holds it. To search within an EU act, name it by its CELEX number on the search page.",
     "This site holds 1 act of Luxembourg law, in 1 version with 49 articles, as of the index built on",
   ];
   return [

@@ -22,6 +22,7 @@
       ],
       "optional_payload_keys": [
         "candidate_held",
+        "candidate_title_languages",
         "candidate_titles",
         "match_reason",
         "recognised_act",
@@ -35,6 +36,10 @@
         "candidate_held": [
           true,
           false
+        ],
+        "candidate_title_languages": [
+          null,
+          "fra"
         ],
         "candidate_titles": [
           null,

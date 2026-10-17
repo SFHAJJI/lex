@@ -217,6 +217,7 @@ export function SearchResultsView({ view, onNextPage }) {
         />
       </p>
       <SearchedOn view={view} />
+      {view.referenceReason === 'title_not_held' ? <p data-searched-as-words="title_not_held">{COPY.titleNotHeld}</p> : null}
       <SearchWorkResolution resolution={view.workResolution} />
       {europe ? <EuropeWording view={view} /> : <AmbiguousWorks works={view.ambiguousWorks} date={view.date} />}
       {view.hits.length === 0 ? (
@@ -266,7 +267,9 @@ export function recognitionOf(outcome) {
       kind: referenceKind,
       act: recognised.act.title ?? recognised.act.identifier,
       actLanguage: recognised.act.title === null ? null : recognised.act.titleLanguage,
-      article: recognised.article?.number ?? null,
+      article: recognised.article === null
+        ? null
+        : recognised.article.part === null ? recognised.article.number : `${recognised.article.number}, ${recognised.article.part}`,
       date: recognised.date?.date ?? null,
       dateSource: recognised.date?.source ?? null,
     };
@@ -309,6 +312,52 @@ export function Recognition({ recognition }) {
         </p>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The acts a reference may name, none chosen (the review of #974, F2): each one this site holds is a link to it, named by its
+ * title (else its address); each one only the publisher's catalogue names is said by its title (else its work IRI), with
+ * the note that this site holds no version of it.
+ */
+export function ReferenceCandidates({ candidates }) {
+  if (candidates === null || candidates === undefined || candidates.length === 0) return null;
+  return (
+    <ul data-reference-candidates={candidates.length}>
+      {candidates.map((candidate) => {
+        // A title is the publisher's text, marked in the language it is written in, as the work resolution marks one.
+        const act = candidate.title === null
+          ? <code>{candidate.identifier}</code>
+          : candidate.titleLanguage === null
+            ? candidate.title
+            : <span lang={quotationLanguageTag(candidate.titleLanguage)}>{candidate.title}</span>;
+        if (candidate.href !== null) {
+          return <li key={candidate.identifier} data-candidate-held="true"><a href={candidate.href}>{act}</a></li>;
+        }
+        if (candidate.held === false) {
+          return (
+            <li key={candidate.identifier} data-candidate-held="false">
+              <Say template={COPY.candidateNotHeld} values={{ act }} />
+            </li>
+          );
+        }
+        return <li key={candidate.identifier}><code>{candidate.identifier}</code></li>;
+      })}
+    </ul>
+  );
+}
+
+/** The act the publisher's catalogue names, which this site holds no version of: said under an absent act's card. */
+function CatalogueWorks({ recognition }) {
+  const works = recognition?.catalogueWorks ?? null;
+  if (works === null || works.length === 0) return null;
+  return (
+    <p data-catalogue-works={works.length}>
+      <Say
+        template={COPY.catalogueNamesIt}
+        values={{ works: works.map((work, index) => <span key={work}>{index > 0 ? ', ' : ''}<code>{work}</code></span>) }}
+      />
+    </p>
   );
 }
 
@@ -375,6 +424,8 @@ export function SearchAnswerView({ outcome, onNextPage, onRetry }) {
         <FailureFrame outcome={outcome} onRetry={onRetry}>
           <Recognition recognition={recognitionOf(outcome)} />
           <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
+          <ReferenceCandidates candidates={outcome.candidates} />
+          <CatalogueWorks recognition={outcome.recognition} />
         </FailureFrame>
       </section>
     );

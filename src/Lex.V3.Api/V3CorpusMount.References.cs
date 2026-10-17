@@ -364,6 +364,8 @@ internal sealed partial class V3CorpusMount
                 candidates = located.Acts.Select(static act => act.Identifier).ToArray(),
                 // An act the index and the catalogue state no title of has none here (null): its identifier names it.
                 candidate_titles = located.Acts.Select(static act => act.Title).ToArray(),
+                // The language each title is written in, so a page marks it as the text it quotes (null with no title).
+                candidate_title_languages = located.Acts.Select(static act => act.Title is null ? null : act.TitleLanguage).ToArray(),
                 candidate_held = located.Acts.Select(static act => act.Held).ToArray(),
             });
             return WithRecognition(request, V3PlatformOperationOutcome.Refused(

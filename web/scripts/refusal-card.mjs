@@ -251,7 +251,9 @@ export const CONTRACT_STATUS = Object.freeze({
 /**
  * What a refusal of search's exact-reference phase (the plan's item 4.2) carries beside its code's own payload: what was
  * recognised, as scalars (the kind, the act, its held title, the article and the date as read, and where the date came
- * from). Optional wherever the phase refuses, since every other producer of these codes sends none of them.
+ * from), and the acts the publisher's catalogue names that this site holds no version of. Optional on every code the
+ * phase can refuse with a declared payload (the review of #974, F5: text_not_available and retrieval_mode_unavailable
+ * lacked them, so their card could not be shown), since every other producer of these codes sends none of them.
  */
 export const RECOGNISED_KEYS = Object.freeze([
   'recognised_kind',
@@ -260,6 +262,7 @@ export const RECOGNISED_KEYS = Object.freeze([
   'recognised_article',
   'recognised_date',
   'recognised_date_source',
+  'recognised_catalogue_works',
 ]);
 
 export const REQUIRED_PAYLOAD = Object.freeze({
@@ -349,7 +352,7 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     // and that is what `evidence_bundle` produces for a state whose articles hold no text. The
     // coordinate, the permalink, the language and the article count travel beside them.
     keys: Object.freeze(['official_identity', 'official_source', 'retained_transport_evidence']),
-    optional: Object.freeze(['articles_held', 'language', 'permalink', 'stable_coordinate']),
+    optional: Object.freeze(['articles_held', 'language', 'permalink', 'stable_coordinate', ...RECOGNISED_KEYS]),
     // TWO producers reach this card and they share no key. This surface's own reading view says it
     // for one provision it holds no text for, with that provision's official file and gazette
     // chain (`reading.mjs`), and it is held to exactly that set until it is rebuilt on
@@ -368,6 +371,7 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     // threw on the refusal `search` actually produces. It stays renderable when a producer does
     // disclose a fallback; it is no longer demanded from producers that correctly do not.
     keys: Object.freeze(['requested_mode', 'available_modes']),
+    optional: RECOGNISED_KEYS,
     basis:
       'lex-v3-operation-registry/1: retrieval_mode_unavailable carries requested_mode, ' +
       'available_modes',

@@ -191,7 +191,14 @@ test("a worked example carries the fields its real payload carries", async (t) =
     // of a hash-pinned URL must carry it. Not a grammar validator — the examples are synthetic and
     // must stay synthetic — but enough that a form nothing emits cannot sit on the page that
     // teaches the form.
-    for (const [key, real] of Object.entries(row.payload)) {
+    //
+    // A code the census keeps several samples of (`more_payloads`: no one producer's payload holds
+    // every key another sends, as search's exact references add what was recognised where
+    // evidence_bundle adds the state's coordinate) is held against all of them: a key is real when
+    // one producer sends it, and its shape is the shape of the first sample that carries it.
+    const samples = [row.payload, ...(row.more_payloads ?? [])];
+    for (const key of new Set(samples.flatMap((sample) => Object.keys(sample)))) {
+      const real = samples.find((sample) => Object.hasOwn(sample, key))[key];
       const shown = example.payload?.[key];
       if (shown === undefined) continue;
       assert.equal(
@@ -246,7 +253,7 @@ test("a worked example carries the fields its real payload carries", async (t) =
       ? ["what_would_answer", "asserts_absence_of_law"]
       : [];
     const invented = Object.keys(example.payload ?? {}).filter(
-      (key) => !Object.hasOwn(row.payload, key) && !absenceExtras.includes(key),
+      (key) => !samples.some((sample) => Object.hasOwn(sample, key)) && !absenceExtras.includes(key),
     );
     assert.deepEqual(
       invented,

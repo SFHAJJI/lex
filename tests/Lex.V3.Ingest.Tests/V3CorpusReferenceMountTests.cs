@@ -270,6 +270,7 @@ public sealed class V3CorpusReferenceMountTests
             CollectionAssert.AreEqual(new[] { true, false }, payload.GetProperty("candidate_held").EnumerateArray().Select(static held => held.GetBoolean()).ToArray(), query);
             CollectionAssert.AreEqual(new[] { "Loi du 10 août 1991 sur la profession d'avocat", "Loi du 10 août 1991 portant approbation de la Convention de La Haye" },
                 Strings(payload.GetProperty("candidate_titles")), query);
+            CollectionAssert.AreEqual(new[] { "fra", "fra" }, Strings(payload.GetProperty("candidate_title_languages")), $"{query}: each title's language");
         }
 
         // Title words choose among the day's acts: the held one opens; the other is named, held by the catalogue and not here.

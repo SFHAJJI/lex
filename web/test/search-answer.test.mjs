@@ -13,6 +13,7 @@ import test from "node:test";
 import {
   LANE_MATCH_REASON,
   NOT_OPENED_REASONS,
+  SEARCHED_AS_WORDS_REASONS,
   OPENED_ADDRESS_KINDS,
   REFERENCE_DATE_SOURCES,
   REFERENCE_KINDS,
@@ -392,7 +393,14 @@ test("a refusal of the phase says what was recognised; one of a word search says
     recognised_date: "2021-03-15",
     recognised_date_source: "citation",
   });
-  assert.deepEqual({ ...recognised }, { kind: "citation", act: "Code du travail", title: null, article: "L. 121-6", date: "2021-03-15", dateSource: "citation" });
+  assert.deepEqual({ ...recognised }, { kind: "citation", act: "Code du travail", title: null, article: "L. 121-6", date: "2021-03-15", dateSource: "citation", catalogueWorks: null });
+  // The acts the publisher's catalogue names, which this site holds no version of (the review of #974, F2).
+  const unknown = {
+    recognised_kind: "citation", recognised_act: "loi du 10 août 1991", recognised_title: null, recognised_article: null,
+    recognised_date: null, recognised_date_source: null, recognised_catalogue_works: ["http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5"],
+  };
+  assert.deepEqual(readRefusalRecognition(unknown).catalogueWorks, ["http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5"]);
+  assert.throws(() => readRefusalRecognition({ ...unknown, recognised_catalogue_works: "n5" }), /recognised_catalogue_works/);
   assert.equal(readRefusalRecognition({ requested_language: "deu", available_languages: ["fra"] }), null);
   assert.throws(() => readRefusalRecognition({ recognised_kind: "guess", recognised_act: "x", recognised_title: null, recognised_article: null, recognised_date: null, recognised_date_source: null }), /recognised_kind/);
 });
@@ -402,5 +410,6 @@ test("the phase's vocabularies are the platform's", () => {
   assert.deepEqual(REFERENCE_KINDS, ["eli", "celex", "memorial", "historical_legal_id", "permalink", "citation"]);
   assert.deepEqual(REFERENCE_DATE_SOURCES, ["citation", "identifier", "search_date", "today_in_luxembourg"]);
   assert.deepEqual(NOT_OPENED_REASONS, ["date_not_a_calendar_date", "two_dates_disagree"]);
+  assert.deepEqual(SEARCHED_AS_WORDS_REASONS, ["title_not_held"]);
   assert.deepEqual(OPENED_ADDRESS_KINDS, { dossier: "work", permalink: "state", readable: "current" });
 });

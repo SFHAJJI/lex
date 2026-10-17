@@ -26,10 +26,13 @@
 // reference it holds answers with the address its act opens at. That is the `opens` state, which carries the address as a
 // link on this page (`href`); the screen goes there. A reference that opens nothing (a date that names no calendar day,
 // two dates that disagree) is `not_opened`; a refusal of the phase carries what was recognised (`recognition`) and is
-// said with the phase's own sentences (`LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES`), so the page says what it read.
+// said with the phase's own sentences (`LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES`, or for an EU act, as the refusal's
+// context names its publisher, `LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES`), so the page says what it read. A
+// reference that may name several acts lists each (`candidates`), linked when this site holds it, and opens none.
 
 import { askV3 } from "./v3-client.mjs";
-import { readRefusalRecognition, readSearchAnswer } from "./search-answer.mjs";
+import { readReferenceCandidates, readRefusalRecognition, readSearchAnswer } from "./search-answer.mjs";
+import { LIVE_READING_EUROPE_REFUSAL_SENTENCES } from "./live-reading.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
 import { noCorpusMountedSentence, tableRefusalSentence, unshownRefusal } from "./live-refusals.mjs";
 import { CHROME_LOCALE, englishStatement, fillText, liveChrome, refusalTemplate } from "./live-chrome.mjs";
@@ -82,20 +85,42 @@ export const LIVE_SEARCH_REFUSAL_SENTENCES = Object.freeze({
 });
 
 /**
- * The sentence per refusal code of a search whose query was read as an exact reference (the payload's `recognised_*`
- * members say what was read): the act it names is not held, it names several, the version the date selects holds no
- * article of that number, the act is not held in the language asked, or the EU index answers no date for it. A date before
- * the history and several versions on the date are said with the search's own sentences above.
+ * The sentence per refusal code of a search whose query was read as an exact reference to a Luxembourg act (the payload's
+ * `recognised_*` members say what was read): the act it names is not held, it may name several (held or not: the review
+ * of #974 found the list names acts this site does not hold), the version the date selects holds no article of that
+ * number, or the act is not held in the language asked. A date before the history and several versions on the date are
+ * said with the search's own sentences above.
  */
 export const LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES = Object.freeze({
   identifier_unknown: "This site holds no act the reference names, so nothing was opened and no word was searched.",
-  ambiguous_identifier: "The reference names more than one act or article this site holds, and none is chosen.",
+  ambiguous_identifier: "The reference names more than one act or article, and none is chosen.",
   anchor_not_in_version: "The version the date selects holds no article with that number, and no other article is opened in its place.",
   language_not_available: "This work is not held in the language asked for.",
   no_version_for_date: LIVE_SEARCH_REFUSAL_SENTENCES.no_version_for_date,
   ambiguous_version: LIVE_SEARCH_REFUSAL_SENTENCES.ambiguous_version,
+});
+
+/**
+ * The same refusals of a reference to an EU act (the refusal's context names eu-eurlex; the review of #974, F4): an EU
+ * date is the date of a wording, never an applicability date, so the time view's refusals are said as the reading says
+ * them for an EU act (`LIVE_READING_EUROPE_REFUSAL_SENTENCES`), the wording the date selects holds no article of that
+ * number, and an act held outside the census answers no date.
+ */
+export const LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES = Object.freeze({
+  identifier_unknown: LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES.identifier_unknown,
+  ambiguous_identifier: LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES.ambiguous_identifier,
+  anchor_not_in_version: "The wording the date selects holds no article with that number, and no other article is opened in its place.",
+  language_not_available: LIVE_READING_EUROPE_REFUSAL_SENTENCES.language_not_available,
+  no_version_for_date: LIVE_READING_EUROPE_REFUSAL_SENTENCES.no_version_for_date,
+  ambiguous_version: LIVE_READING_EUROPE_REFUSAL_SENTENCES.ambiguous_version,
+  text_not_available: LIVE_READING_EUROPE_REFUSAL_SENTENCES.text_not_available,
   retrieval_mode_unavailable: "This server holds this EU act in one wording only, and answers no date for it: leave the date out of the reference.",
 });
+
+/** The phase's sentences for a refusal, by the publisher its context names. */
+export function referenceRefusalSentences(context) {
+  return context?.publisher === "eu-eurlex" ? LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES : LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES;
+}
 
 export const LIVE_SEARCH_IDLE = liveChrome().search.idle;
 export const LIVE_SEARCH_LOADING = liveChrome().common.loading;
@@ -223,12 +248,20 @@ export function searchOutcome(asked) {
   if (asked.state === "refusal") {
     const { code, helpful_payload: payload } = asked.envelope.refusal;
     let recognition = null;
+    let candidates = null;
     try {
       recognition = readRefusalRecognition(payload);
+      // The acts a reference may name, each linked under this page's language when this site holds it; none is chosen.
+      candidates = recognition !== null && code === "ambiguous_identifier"
+        ? readReferenceCandidates(payload).map((candidate) => Object.freeze({
+          ...candidate,
+          href: candidate.held === true ? permalinkHref(candidate.identifier, CHROME_LOCALE) : null,
+        }))
+        : null;
     } catch (error) {
       return { state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(error.message)) };
     }
-    const table = recognition === null ? LIVE_SEARCH_REFUSAL_SENTENCES : LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES;
+    const table = recognition === null ? LIVE_SEARCH_REFUSAL_SENTENCES : referenceRefusalSentences(asked.envelope.context);
     const sentence = code === "no_corpus_mounted"
       ? noCorpusMountedSentence(payload)
       : tableRefusalSentence(table, code, unexpectedRefusalSentence);
@@ -244,7 +277,7 @@ export function searchOutcome(asked) {
         context: asked.envelope.context,
       };
     }
-    return { state: "refusal", code, card: true, sentence, payload, recognition, context: asked.envelope.context };
+    return { state: "refusal", code, card: true, sentence, payload, recognition, candidates, context: asked.envelope.context };
   }
 
   if (asked.state === "transport_failure") {

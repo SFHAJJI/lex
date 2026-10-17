@@ -28,7 +28,7 @@ import { REFUSALS_FR } from './live-chrome-fr.mjs';
 /** The live screens, in the launch contract's order, each with its refusal table. */
 export const SCREENS = Object.freeze([
   Object.freeze({ id: 'coverage', name: 'Trust and Coverage', module: coverage, table: coverage.LIVE_COVERAGE_REFUSAL_SENTENCES }),
-  Object.freeze({ id: 'search', name: 'Search', module: search, table: search.LIVE_SEARCH_REFUSAL_SENTENCES, referenceTable: search.LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES }),
+  Object.freeze({ id: 'search', name: 'Search', module: search, table: search.LIVE_SEARCH_REFUSAL_SENTENCES, referenceTable: search.LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES, europeReferenceTable: search.LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES }),
   Object.freeze({ id: 'dossier', name: 'Work dossier', module: dossier, table: dossier.LIVE_DOSSIER_REFUSAL_SENTENCES }),
   Object.freeze({ id: 'reading', name: 'Reading and Export composer', module: reading, table: reading.LIVE_READING_REFUSAL_SENTENCES, europeTable: reading.LIVE_READING_EUROPE_REFUSAL_SENTENCES }),
   Object.freeze({ id: 'history', name: 'Provision history', module: history, table: history.LIVE_HISTORY_REFUSAL_SENTENCES }),
@@ -70,6 +70,8 @@ export function servedRefusalSentences() {
     for (const [code, sentence] of Object.entries(screen.europeTable ?? {})) add(sentence, screen.id, code);
     // Search says a refusal of an exact reference with the phase's own sentences (the plan's item 4.2).
     for (const [code, sentence] of Object.entries(screen.referenceTable ?? {})) add(sentence, screen.id, code);
+    // And of a reference to an EU act, with the EU's (the review of #974, F4).
+    for (const [code, sentence] of Object.entries(screen.europeReferenceTable ?? {})) add(sentence, screen.id, code);
     if (screen.id === NAMING_THE_INDEX[0]) {
       for (const requiredCorpus of ['lu', 'eu', null]) {
         for (const id of NAMING_THE_INDEX) add(noCorpusMountedSentence({ required_corpus: requiredCorpus }), id, 'no_corpus_mounted');

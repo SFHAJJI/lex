@@ -404,6 +404,7 @@ export function readSearch(answer) {
     ambiguousWorks: readAmbiguousWorks(requireOwn(answer, 'ambiguous_works', where), requestedDate, hits),
     workResolution: readWorkResolution(requireOwn(answer, 'work_resolution', where), identifier),
     reference: readReferencePhase(answer, identifier),
+    referenceReason: readReferenceReason(answer),
     limit,
     truncated,
     continueAfter,
@@ -581,6 +582,7 @@ export function readEuropeSearch(answer) {
     hits: Object.freeze(hits),
     workResolution: readWorkResolution(requireOwn(answer, 'work_resolution', where), identifier),
     reference: readReferencePhase(answer, identifier),
+    referenceReason: readReferenceReason(answer),
     limit,
     truncated,
     continueAfter,
@@ -608,6 +610,9 @@ export const REFERENCE_DATE_SOURCES = Object.freeze(['citation', 'identifier', '
 /** Why a recognised reference opened nothing. */
 export const NOT_OPENED_REASONS = Object.freeze(['date_not_a_calendar_date', 'two_dates_disagree']);
 
+/** Why a query the phase read as a citation was searched as words: a title the index holds no act under (review of #974, F1). */
+export const SEARCHED_AS_WORDS_REASONS = Object.freeze(['title_not_held']);
+
 /** The kinds of address a reference opens: a dossier, a permalink that pins a version, an act's readable address (R67). */
 export const OPENED_ADDRESS_KINDS = Object.freeze({ dossier: 'work', permalink: 'state', readable: 'current' });
 
@@ -632,6 +637,16 @@ function readReferencePhase(answer, identifier) {
   return outcome;
 }
 
+/** Why the phase searched as words a query it read as a citation, or null: only a search that read no reference says one. */
+function readReferenceReason(answer) {
+  const reason = answer.reference?.reason ?? null;
+  if (reason === null) return null;
+  if (answer.reference.outcome !== 'no_reference') {
+    throw new Error('reference.reason is said only of a query searched as words');
+  }
+  return requireOneOf(reason, SEARCHED_AS_WORDS_REASONS, 'reference.reason');
+}
+
 /** What the phase recognised: the act, the article and the date, each as typed and as read. */
 function readRecognised(value) {
   const where = 'reference.recognised';
@@ -653,6 +668,8 @@ function readRecognised(value) {
       number: requireText(requireOwn(article, 'number', `${where}.article`), `${where}.article.number`),
       key: requireText(requireOwn(article, 'key', `${where}.article`), `${where}.article.key`),
       matchedBy: requireTextOrNull(requireOwn(article, 'matched_by', `${where}.article`), `${where}.article.matched_by`),
+      // A part of the article the citation names (an alinéa, a paragraph), as typed: the article opens, and the part is said.
+      part: Object.hasOwn(article, 'part') ? requireTextOrNull(article.part, `${where}.article.part`) : null,
     }),
     date: date === null ? null : Object.freeze({
       asTyped: requireTextOrNull(requireOwn(date, 'as_typed', `${where}.date`), `${where}.date.as_typed`),
@@ -756,7 +773,46 @@ export function readRefusalRecognition(payload) {
     article: requireTextOrNull(requireOwn(payload, 'recognised_article', where), `${where}.recognised_article`),
     date: date === null ? null : requireDate(date, `${where}.recognised_date`),
     dateSource: source === null ? null : requireOneOf(source, REFERENCE_DATE_SOURCES, `${where}.recognised_date_source`),
+    // The acts the publisher's catalogue names, which this site holds no version of (an identifier_unknown that names one).
+    catalogueWorks: Object.hasOwn(payload, 'recognised_catalogue_works')
+      ? Object.freeze(requireList(payload.recognised_catalogue_works, `${where}.recognised_catalogue_works`)
+        .map((work, index) => requireText(work, `${where}.recognised_catalogue_works[${index}]`)))
+      : null,
   });
+}
+
+/**
+ * The acts a reference may name, from an `ambiguous_identifier` refusal of the phase, in the platform's order: each act's
+ * identifier (this site's address when it holds the act, else the publisher's work IRI), its title (null when none is
+ * stated) and the language the title is written in, and whether this site holds a version of it (null when the payload
+ * does not say: an EU act's census seeds).
+ */
+export function readReferenceCandidates(payload) {
+  const where = 'the refusal payload';
+  const candidates = requireList(requireOwn(payload, 'candidates', where), `${where}.candidates`);
+  const titles = Object.hasOwn(payload, 'candidate_titles') ? requireList(payload.candidate_titles, `${where}.candidate_titles`) : null;
+  const held = Object.hasOwn(payload, 'candidate_held') ? requireList(payload.candidate_held, `${where}.candidate_held`) : null;
+  const languages = Object.hasOwn(payload, 'candidate_title_languages')
+    ? requireList(payload.candidate_title_languages, `${where}.candidate_title_languages`)
+    : null;
+  for (const [name, list] of [['candidate_titles', titles], ['candidate_title_languages', languages], ['candidate_held', held]]) {
+    if (list !== null && list.length !== candidates.length) {
+      throw new Error(`${where}.${name} has ${list.length} entries for ${candidates.length} candidates`);
+    }
+  }
+  return Object.freeze(candidates.map((identifier, index) => {
+    const isHeld = held === null ? null : requireBoolean(held[index], `${where}.candidate_held[${index}]`);
+    const named = requireText(identifier, `${where}.candidates[${index}]`);
+    if (isHeld === true && !named.startsWith('/')) {
+      throw new Error(`${where}.candidates[${index}] is held and is not an address of this site`);
+    }
+    const title = titles === null ? null : requireTextOrNull(titles[index], `${where}.candidate_titles[${index}]`);
+    const titleLanguage = languages === null ? null : requireTextOrNull(languages[index], `${where}.candidate_title_languages[${index}]`);
+    if ((title === null) !== (titleLanguage === null) && languages !== null) {
+      throw new Error(`${where}.candidate_title_languages[${index}] names a language exactly when there is a title`);
+    }
+    return Object.freeze({ identifier: named, title, titleLanguage, held: isHeld });
+  }));
 }
 
 /**

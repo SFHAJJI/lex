@@ -254,11 +254,11 @@ test("with no work named, the no-hit sentence says the search was of Luxembourg 
 test("under the home page's box and the 404 page's, a line says a search by words covers Luxembourg law, an exact reference opens its act, Luxembourg or EU, and the search page searches within an EU act (review of #971; plan 4.2)", () => {
   const line = (html) => /<p class="search-scope" data-search-scope="">([\s\S]*?)<\/p>/.exec(mainOf(html).replaceAll("<!-- -->", ""))?.[1] ?? null;
   for (const html of [rendered(COVERAGE), renderLiveHomePage(), renderLiveNotFoundPage()]) {
-    assert.equal(line(html), 'A search by words covers Luxembourg law. An ELI, a CELEX number, a Mémorial reference, a permalink, or the citation of an article of an act, with or without a date, opens that act, Luxembourg or EU. To search within an EU act, name it by its CELEX number on the <a href="/en/search.html">search page</a>.');
+    assert.equal(line(html), 'A search by words covers Luxembourg law. An ELI, a CELEX number, a Mémorial reference, a permalink, or the citation of an article of an act, with or without a date, opens that act, Luxembourg or EU, when this site holds it. To search within an EU act, name it by its CELEX number on the <a href="/en/search.html">search page</a>.');
     const main = mainOf(html);
     assert.ok(main.indexOf("data-not-advice") < main.indexOf("data-search-scope") && main.indexOf("data-search-scope") < main.indexOf("data-live-answer"), "under R50's sentence, so the phone's first screen keeps the box and that sentence");
   }
   assert.equal(line(renderLiveSearchPage()), null, "the search page names a work itself");
-  assert.equal(liveChrome("fr").search.searchScope, "La recherche par mots porte sur le droit luxembourgeois. Un ELI, un numéro CELEX, une référence au Mémorial, un permalien ou la citation d’un article d’un acte, avec ou sans date, ouvre cet acte, luxembourgeois ou de l’UE. Pour interroger un acte de l’UE, désignez-le par son numéro CELEX sur la {link}.");
+  assert.equal(liveChrome("fr").search.searchScope, "La recherche par mots porte sur le droit luxembourgeois. Un ELI, un numéro CELEX, une référence au Mémorial, un permalien ou la citation d’un article d’un acte, avec ou sans date, ouvre cet acte, luxembourgeois ou de l’UE, lorsque ce site le détient. Pour interroger un acte de l’UE, désignez-le par son numéro CELEX sur la {link}.");
   assert.equal(liveChrome("fr").search.searchPage, "page de recherche");
 });
