@@ -93,10 +93,12 @@
 // in the addendum of 2026-10-17 for that pull request (the record names each, with what changed in review). Its repair
 // round (the review of #974): the home line's "lorsque ce site le détient" (`search.searchScope`); a citation by a title
 // this site holds no act under, searched as words (`search.titleNotHeld`); an act of a list that only the publisher's
-// catalogue names (`search.candidateNotHeld`), and under an absent act's card (`search.catalogueNamesIt`); and two refusal
-// sentences in `REFUSALS_FR.sentences`, the list's, which no longer says the acts are held, and the EU article's, which
-// says "libellé" where the Luxembourg one says "version", were reviewed by an independent reviewer (Claude, AI reviewer,
-// not the author) under the same delegation in the addendum of 2026-10-17 for the repair (the record names each).
+// catalogue names (`search.candidateNotHeld`), and under an absent act's card (`search.catalogueNamesIt`); and five refusal
+// sentences in `REFUSALS_FR.sentences`: the list's, which no longer says the acts are held or that there are several; the EU
+// article's, which says "libellé" where the Luxembourg one says "version"; and the three said of an act this site holds
+// (a Luxembourg version it does not hold; a version, or an EU wording, it holds with no article), were reviewed by an
+// independent reviewer (Claude, AI reviewer, not the author) under the same delegation in the addendum of 2026-10-17 for
+// the repair, "the repair of exact references (the review of #974)" (the record names each, with what changed in review).
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -158,7 +160,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     opensDossier: 'Ouverture du dossier : {link}',
     notOpenedDate: '« {date} » ne désigne aucun jour du calendrier ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
     notOpenedTwoDates: 'La référence indique deux dates qui ne concordent pas ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
-    titleNotHeld: 'Ce site ne détient aucun acte sous le titre que cite la requête ; ses mots ont donc été recherchés.',
+    titleNotHeld: 'Ce site ne détient aucun acte sous l’intitulé que cite l’expression ; ses mots ont donc été recherchés.',
     candidateNotHeld: '{act} (ce site n’en détient aucune version)',
     catalogueNamesIt: 'Les données de l’éditeur désignent cet acte ({works}), et ce site n’en détient aucune version.',
   }),
@@ -787,8 +789,14 @@ export const REFUSALS_FR = Object.freeze({
       'Le libellé que ce permalien épingle n’est pas un libellé que cet index contient pour sa date.',
     'This site holds no act the reference names, so nothing was opened and no word was searched.':
       'Ce site ne détient aucun acte que la référence désigne ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
-    'The reference names more than one act or article, and none is chosen.':
-      'La référence désigne plusieurs actes ou articles, et aucun n’est retenu.',
+    'The reference does not name a single act or article for certain, and none is chosen.':
+      'La référence ne désigne pas avec certitude un seul acte ou article, et aucun n’est retenu.',
+    'This site holds the act the reference names, but not the version it names, so nothing was opened and no word was searched.':
+      'Ce site détient l’acte que la référence désigne, mais non la version qu’elle désigne ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
+    'This site holds the act the reference names and the version the date selects, but no article of that version, so nothing was opened and no word was searched.':
+      'Ce site détient l’acte que la référence désigne et la version que la date retient, mais aucun article de cette version ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
+    'This site holds the act the reference names and the wording selected, but no article of that wording, so nothing was opened and no word was searched.':
+      'Ce site détient l’acte que la référence désigne et le libellé retenu, mais aucun article de ce libellé ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
     'The wording the date selects holds no article with that number, and no other article is opened in its place.':
       'Le libellé que la date retient ne comporte aucun article de ce numéro, et aucun autre article n’est ouvert à sa place.',
     'The version the date selects holds no article with that number, and no other article is opened in its place.':

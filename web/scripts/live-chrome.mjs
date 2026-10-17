@@ -87,9 +87,9 @@ const EN = Object.freeze({
     // The review of #974: a citation by a title this site holds no act under is searched as words, and the page says so; the
     // acts a reference may name are listed, one only the publisher's catalogue names said as not held; and an absent act
     // the catalogue names is named under its card.
-    titleNotHeld: "This site holds no act under the title the query cites, so its words were searched.",
+    titleNotHeld: "This site holds no act under the title the phrase cites, so its words were searched.",
     candidateNotHeld: "{act} (this site holds no version of it)",
-    catalogueNamesIt: "The publisher's catalogue names this act ({works}), and this site holds no version of it.",
+    catalogueNamesIt: "The publisher's record names this act ({works}), and this site holds no version of it.",
   }),
   dossier: Object.freeze({
     title: "Dossier",

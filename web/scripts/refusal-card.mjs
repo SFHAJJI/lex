@@ -251,7 +251,9 @@ export const CONTRACT_STATUS = Object.freeze({
 /**
  * What a refusal of search's exact-reference phase (the plan's item 4.2) carries beside its code's own payload: what was
  * recognised, as scalars (the kind, the act, its held title, the article and the date as read, and where the date came
- * from), and the acts the publisher's catalogue names that this site holds no version of. Optional on every code the
+ * from), this site's address of the act when it holds it and the permalink of the version it selected when that is held,
+ * and the acts the publisher's catalogue names that this site
+ * holds no version of. Optional on every code the
  * phase can refuse with a declared payload (the review of #974, F5: text_not_available and retrieval_mode_unavailable
  * lacked them, so their card could not be shown), since every other producer of these codes sends none of them.
  */
@@ -263,6 +265,8 @@ export const RECOGNISED_KEYS = Object.freeze([
   'recognised_date',
   'recognised_date_source',
   'recognised_catalogue_works',
+  'recognised_held_act',
+  'recognised_held_version',
 ]);
 
 export const REQUIRED_PAYLOAD = Object.freeze({

@@ -16,6 +16,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { SearchAnswerView } from "../.react-build/app.mjs";
 import {
   LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES,
+  LIVE_SEARCH_HELD_ACT_REFUSAL_SENTENCES,
   LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES,
   LIVE_SEARCH_REFUSAL_SENTENCES,
   loadLiveSearch,
@@ -241,8 +242,31 @@ test("an act the publisher's catalogue names and this site does not hold is name
   assert.equal(outcome.card, true, outcome.sentence);
   assert.deepEqual(outcome.recognition.catalogueWorks, catalogued.recognised_catalogue_works);
   assert.ok(text(view(outcome)).includes(
-    "The publisher's catalogue names this act (http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5), and this site holds no version of it."));
-  assert.doesNotMatch(text(view(searchOutcome({ state: "refusal", envelope: refusalEnvelope("identifier_unknown", payload) }))), /catalogue names this act/);
+    "The publisher's record names this act (http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5), and this site holds no version of it."));
+  assert.doesNotMatch(text(view(searchOutcome({ state: "refusal", envelope: refusalEnvelope("identifier_unknown", payload) }))), /record names this act/);
+});
+
+test("an absent version or article of an act this site holds is said as such, never as an act this site does not hold", () => {
+  const [payload] = samplesOf("identifier_unknown").filter((candidate) => Object.hasOwn(candidate, "recognised_kind"));
+  const luVersion = "/lu-legilux/loi-1991-08-10-n3/2024-02-01--" + "a".repeat(64) + "/fra";
+  const euWording = "/eu-eurlex/32016R0679/2016-04-27--" + "b".repeat(64) + "/eng";
+  for (const [publisher, address, version, kind] of [
+    ["lu-legilux", "/lu-legilux/loi-1991-08-10-n3", null, "version"],
+    ["lu-legilux", "/lu-legilux/loi-1991-08-10-n3", luVersion, "article"],
+    ["eu-eurlex", "/eu-eurlex/32016R0679", euWording, "article"],
+  ]) {
+    const outcome = searchOutcome({
+      state: "refusal",
+      envelope: refusalEnvelope("identifier_unknown", { ...payload, recognised_held_act: address, recognised_held_version: version }, publisher),
+    });
+    assert.equal(outcome.card, true, outcome.sentence);
+    assert.equal(outcome.recognition.heldAct, address);
+    assert.equal(outcome.recognition.heldVersion, version);
+    assert.equal(outcome.sentence, LIVE_SEARCH_HELD_ACT_REFUSAL_SENTENCES[publisher][kind], `${publisher} ${kind}`);
+    assert.ok(Object.hasOwn(REFUSALS_FR.sentences, outcome.sentence), `${publisher} ${kind}: no reviewed French`);
+  }
+  assert.equal(searchOutcome({ state: "refusal", envelope: refusalEnvelope("identifier_unknown", { ...payload, recognised_held_act: null }) }).sentence,
+    LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES.identifier_unknown, "an act this site does not hold");
 });
 
 test("a part of an article is said with the article, and a title this site holds no act under is searched as words and said", () => {

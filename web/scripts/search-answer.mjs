@@ -773,6 +773,14 @@ export function readRefusalRecognition(payload) {
     article: requireTextOrNull(requireOwn(payload, 'recognised_article', where), `${where}.recognised_article`),
     date: date === null ? null : requireDate(date, `${where}.recognised_date`),
     dateSource: source === null ? null : requireOneOf(source, REFERENCE_DATE_SOURCES, `${where}.recognised_date_source`),
+    // This site's address of the act when this site holds it (a version or an article of it is then what is not held).
+    heldAct: Object.hasOwn(payload, 'recognised_held_act')
+      ? requireTextOrNull(payload.recognised_held_act, `${where}.recognised_held_act`)
+      : null,
+    // The permalink of the version (or EU wording) selected, when this site holds it and the refusal is about its articles.
+    heldVersion: Object.hasOwn(payload, 'recognised_held_version')
+      ? requireTextOrNull(payload.recognised_held_version, `${where}.recognised_held_version`)
+      : null,
     // The acts the publisher's catalogue names, which this site holds no version of (an identifier_unknown that names one).
     catalogueWorks: Object.hasOwn(payload, 'recognised_catalogue_works')
       ? Object.freeze(requireList(payload.recognised_catalogue_works, `${where}.recognised_catalogue_works`)

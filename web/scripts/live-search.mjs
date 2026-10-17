@@ -93,7 +93,9 @@ export const LIVE_SEARCH_REFUSAL_SENTENCES = Object.freeze({
  */
 export const LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES = Object.freeze({
   identifier_unknown: "This site holds no act the reference names, so nothing was opened and no word was searched.",
-  ambiguous_identifier: "The reference names more than one act or article, and none is chosen.",
+  // Not "several": words after a type and date that name none of the day's acts list them, however many (the French
+  // review of #974's repair).
+  ambiguous_identifier: "The reference does not name a single act or article for certain, and none is chosen.",
   anchor_not_in_version: "The version the date selects holds no article with that number, and no other article is opened in its place.",
   language_not_available: "This work is not held in the language asked for.",
   no_version_for_date: LIVE_SEARCH_REFUSAL_SENTENCES.no_version_for_date,
@@ -117,9 +119,35 @@ export const LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES = Object.freeze({
   retrieval_mode_unavailable: "This server holds this EU act in one wording only, and answers no date for it: leave the date out of the reference.",
 });
 
+/**
+ * The phase's `identifier_unknown` when this site holds the act the reference names (the payload's `recognised_held_act`),
+ * where "holds no act" would be false (the French review of #974's repair, its driver point 1): a Luxembourg version it
+ * names that this site does not hold (`version`), or a version or EU wording it selects that this site holds with no article
+ * (`article`, the payload's `recognised_held_version` naming it). An EU act held is opened at any wording it names, so the
+ * EU has the second case only.
+ */
+export const LIVE_SEARCH_HELD_ACT_REFUSAL_SENTENCES = Object.freeze({
+  "lu-legilux": Object.freeze({
+    version: "This site holds the act the reference names, but not the version it names, so nothing was opened and no word was searched.",
+    article: "This site holds the act the reference names and the version the date selects, but no article of that version, so nothing was opened and no word was searched.",
+  }),
+  "eu-eurlex": Object.freeze({
+    article: "This site holds the act the reference names and the wording selected, but no article of that wording, so nothing was opened and no word was searched.",
+  }),
+});
+
 /** The phase's sentences for a refusal, by the publisher its context names. */
 export function referenceRefusalSentences(context) {
   return context?.publisher === "eu-eurlex" ? LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES : LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES;
+}
+
+/** The sentence table for a refusal of the phase: its publisher's, with the held act's sentence when the act is held. */
+function referenceTableFor(context, code, recognition) {
+  const table = referenceRefusalSentences(context);
+  if (code !== "identifier_unknown" || recognition.heldAct === null) return table;
+  const held = LIVE_SEARCH_HELD_ACT_REFUSAL_SENTENCES[context?.publisher === "eu-eurlex" ? "eu-eurlex" : "lu-legilux"];
+  const sentence = held[recognition.heldVersion === null ? "version" : "article"];
+  return sentence === undefined ? table : Object.freeze({ ...table, identifier_unknown: sentence });
 }
 
 export const LIVE_SEARCH_IDLE = liveChrome().search.idle;
@@ -261,7 +289,7 @@ export function searchOutcome(asked) {
     } catch (error) {
       return { state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(error.message)) };
     }
-    const table = recognition === null ? LIVE_SEARCH_REFUSAL_SENTENCES : referenceRefusalSentences(asked.envelope.context);
+    const table = recognition === null ? LIVE_SEARCH_REFUSAL_SENTENCES : referenceTableFor(asked.envelope.context, code, recognition);
     const sentence = code === "no_corpus_mounted"
       ? noCorpusMountedSentence(payload)
       : tableRefusalSentence(table, code, unexpectedRefusalSentence);

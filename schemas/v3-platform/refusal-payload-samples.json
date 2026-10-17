@@ -29,6 +29,8 @@
         "recognised_article",
         "recognised_date",
         "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
         "recognised_kind",
         "recognised_title"
       ],
@@ -53,6 +55,8 @@
         "recognised_article": null,
         "recognised_date": null,
         "recognised_date_source": null,
+        "recognised_held_act": null,
+        "recognised_held_version": null,
         "recognised_kind": "memorial",
         "recognised_title": null,
         "requested_identifier": "M\u00E9m. A n\u00B0 58 de 1991"
@@ -82,6 +86,8 @@
         "recognised_article",
         "recognised_date",
         "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
         "recognised_kind",
         "recognised_title"
       ],
@@ -94,6 +100,8 @@
         "recognised_article": "5",
         "recognised_date": "2026-04-11",
         "recognised_date_source": "citation",
+        "recognised_held_act": "/lu-legilux/loi-1991-08-10-n3",
+        "recognised_held_version": null,
         "recognised_kind": "citation",
         "recognised_title": "R\u00E8glement sur l\u0027\u00E9preuve terminale zeta",
         "requested_date": "2026-04-11"
@@ -116,6 +124,8 @@
         "recognised_article",
         "recognised_date",
         "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
         "recognised_kind",
         "recognised_title"
       ],
@@ -129,6 +139,8 @@
         "recognised_article": "99",
         "recognised_date": "2024-03-15",
         "recognised_date_source": "citation",
+        "recognised_held_act": "/lu-legilux/loi-1991-08-10-n3",
+        "recognised_held_version": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra",
         "recognised_kind": "citation",
         "recognised_title": "R\u00E8glement sur l\u0027\u00E9preuve terminale zeta",
         "requested_anchor": "99",
@@ -173,6 +185,8 @@
         "recognised_article",
         "recognised_date",
         "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
         "recognised_kind",
         "recognised_title"
       ],
@@ -186,6 +200,8 @@
         "recognised_article": null,
         "recognised_date": null,
         "recognised_date_source": null,
+        "recognised_held_act": null,
+        "recognised_held_version": null,
         "recognised_kind": "permalink",
         "recognised_title": null,
         "requested_identifier": "/lu-legilux/no-such-work",
@@ -223,6 +239,8 @@
         "recognised_article",
         "recognised_date",
         "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
         "recognised_kind",
         "recognised_title"
       ],
@@ -235,6 +253,8 @@
         "recognised_article": "5",
         "recognised_date": "2024-03-15",
         "recognised_date_source": "citation",
+        "recognised_held_act": "/lu-legilux/loi-1991-08-10-n3",
+        "recognised_held_version": null,
         "recognised_kind": "citation",
         "recognised_title": "R\u00E8glement sur l\u0027\u00E9preuve terminale zeta",
         "requested_language": "eng"
@@ -311,6 +331,8 @@
         "recognised_article",
         "recognised_date",
         "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
         "recognised_kind",
         "recognised_title"
       ],
@@ -323,6 +345,8 @@
         "recognised_article": "5",
         "recognised_date": "1990-01-01",
         "recognised_date_source": "citation",
+        "recognised_held_act": "/lu-legilux/loi-1991-08-10-n3",
+        "recognised_held_version": null,
         "recognised_kind": "citation",
         "recognised_title": "R\u00E8glement sur l\u0027\u00E9preuve terminale zeta",
         "requested_date": "1990-01-01",
@@ -390,6 +414,8 @@
         "recognised_article",
         "recognised_date",
         "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
         "recognised_kind",
         "recognised_title"
       ],
@@ -401,6 +427,8 @@
         "recognised_article": null,
         "recognised_date": "2026-03-15",
         "recognised_date_source": "citation",
+        "recognised_held_act": "/eu-eurlex/32026R0002",
+        "recognised_held_version": null,
         "recognised_kind": "citation",
         "recognised_title": null,
         "requested_mode": "r6_as_of"
@@ -461,6 +489,8 @@
         "recognised_article",
         "recognised_date",
         "recognised_date_source",
+        "recognised_held_act",
+        "recognised_held_version",
         "recognised_kind",
         "recognised_title",
         "stable_coordinate"
@@ -474,6 +504,8 @@
         "recognised_article": null,
         "recognised_date": "2025-03-01",
         "recognised_date_source": "citation",
+        "recognised_held_act": "/eu-eurlex/32016R0679",
+        "recognised_held_version": null,
         "recognised_kind": "citation",
         "recognised_title": null,
         "retained_transport_evidence": "none",

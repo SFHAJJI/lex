@@ -57,7 +57,9 @@ internal sealed partial class V3CorpusMount
         string? Date = null,
         string? DateSource = null,
         string? Language = null,
-        IReadOnlyList<string>? CatalogueWorks = null);
+        IReadOnlyList<string>? CatalogueWorks = null,
+        string? HeldAct = null,
+        string? HeldVersion = null);
 
     /// <summary>
     /// One act a reference may name, as the indexes and the publisher's catalogue hold it: its work IRI, its work key when the
@@ -408,6 +410,8 @@ internal sealed partial class V3CorpusMount
         bool reading = false)
     {
         var reference = recognition.Reference;
+        // The act is held: every refusal from here says so (a version or an article of it is what is not held).
+        recognition = recognition with { HeldAct = "/lu-legilux/" + workKey };
         if (!reading && reference.Article is null && reference.Date is null && pinnedDate is null && heldArticleId is null && pinnedResource is null)
         {
             return ReferenceAnswer(request, query, language, requestedDate, mode, observedAt, recognition, new
@@ -497,7 +501,7 @@ internal sealed partial class V3CorpusMount
             if (opened.Count == 0)
             {
                 return WithRecognition(request, AnchorNotInVersion(request, observedAt, PublisherId.LuLegilux, requested,
-                    NearestArticles(ids, reference.Article, ArticleNumbers.FromLuxembourgId, requested)), recognition);
+                    NearestArticles(ids, reference.Article, ArticleNumbers.FromLuxembourgId, requested)), recognition with { HeldVersion = permalink });
             }
 
             if (opened.Count > 1)
@@ -710,7 +714,7 @@ internal sealed partial class V3CorpusMount
         }
 
         var act = seed ?? celex;
-        recognition = recognition with { Work = act };
+        recognition = recognition with { Work = act, HeldAct = "/eu-eurlex/" + act };
 
         // A consolidated CELEX names its version's date (02016R0679-20160504); a second date that disagrees opens nothing.
         var versionDate = pinnedDate ?? (celex.Length > 11 && celex[0] == '0' && celex[^9] == '-' && IsEightDigitDay(celex[^8..]) ? DayOf(celex[^8..]) : null);
@@ -806,7 +810,7 @@ internal sealed partial class V3CorpusMount
             if (!provisions.Contains(heldProvision, StringComparer.Ordinal))
             {
                 return WithRecognition(request, AnchorNotInVersion(request, observedAt, PublisherId.EuEurLex, heldProvision,
-                    NearestAnchors(provisions, heldProvision)), recognition);
+                    NearestAnchors(provisions, heldProvision)), recognition with { HeldVersion = permalink });
             }
 
             provision = heldProvision;
@@ -818,7 +822,7 @@ internal sealed partial class V3CorpusMount
             if (opened.Count == 0)
             {
                 return WithRecognition(request, AnchorNotInVersion(request, observedAt, PublisherId.EuEurLex, article.Key,
-                    NearestArticles(provisions, article, ArticleNumbers.FromEuropeId, article.Key)), recognition);
+                    NearestArticles(provisions, article, ArticleNumbers.FromEuropeId, article.Key)), recognition with { HeldVersion = permalink });
             }
 
             if (opened.Count > 1)
@@ -926,7 +930,9 @@ internal sealed partial class V3CorpusMount
         {
             var held = _reader.ResolveState(workKey, applicabilityDate)
                 .Any(state => string.Equals(state.Language, stateLanguage, StringComparison.Ordinal));
-            return OpenAddressAsTyped(request, query, language, requestedDate, mode, recognition with { Work = workKey }, address, "lu-legilux",
+            // A permalink of a version not held, of an act held, says the act is held.
+            var heldAct = _reader.ResolveWorkStates(workKey).Count > 0 ? "/lu-legilux/" + workKey : null;
+            return OpenAddressAsTyped(request, query, language, requestedDate, mode, recognition with { Work = workKey, HeldAct = heldAct }, address, "lu-legilux",
                 workKey, stateLanguage, applicabilityDate, observedAt, held);
         }
 
@@ -1097,6 +1103,13 @@ internal sealed partial class V3CorpusMount
         payload["recognised_article"] = reference.PrintedArticle(recognition.Publisher == "eu-eurlex");
         payload["recognised_date"] = recognition.Date ?? reference.Date?.Date;
         payload["recognised_date_source"] = recognition.DateSource ?? (reference.Date is null ? null : "citation");
+        // This site's address of the act the reference names, when this site holds it (a version or an article of it is then
+        // what was not held), else null (the driver's note of the French review of #974's repair: "holds no act" was said of a
+        // held act whose named version is not held).
+        payload["recognised_held_act"] = recognition.HeldAct;
+        // The permalink of the version (or EU wording) the reference selected, when this site holds it and the refusal is about
+        // an article of it; null when the version itself is what is not held.
+        payload["recognised_held_version"] = recognition.HeldVersion;
         if (recognition.CatalogueWorks is { } catalogued)
         {
             // The acts the publisher's catalogue names, which the index holds no version of.

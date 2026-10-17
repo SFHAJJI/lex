@@ -47,9 +47,14 @@ work identifier, so an ELI or a CELEX typed there was searched as Luxembourg wor
   address (#972, R67), which opens today's version, with the article read in today's version (driver decision, after #972
   merged). The answer's `opens` says the page, the address and its kind (`dossier`, `permalink`, `readable`).
 - **What is refused, typed, with what was recognised** (the payload's `recognised_*` scalars: kind, act, held title,
-  article, date, date source): an act the indexes do not hold is `identifier_unknown` with no list ("Code du travail" today,
-  since codes come with Release 1); several acts (two laws of one day, several acts of one Mémorial issue) or several
-  articles of one number are `ambiguous_identifier` with every candidate (and their titles), never a guess; a date before
+  article, date, date source, and the catalogue's acts this site does not hold): only a strict locator says an act is
+  absent (the review of #974, F1): an ELI, a CELEX, a Mémorial issue, a historical identifier, an EU act's name, or a type
+  and date whose day holds no act in the index or the publisher's catalogue is `identifier_unknown` with no list. A title is
+  no strict locator: a citation by a title the index holds no act under ("Code du travail" today, since codes come with
+  Release 1) is searched as words, as typed (the phase's `reason: title_not_held`, said on the page). Several acts (a day,
+  an issue or an ELI under which the catalogue names several, held or not; title words after a type and date that name
+  none of the day's acts) or several articles of one number are `ambiguous_identifier` with every candidate (their titles,
+  the titles' languages, and whether this site holds each), never a guess; a date before
   the held history is `no_version_for_date` (R22), several versions on it `ambiguous_version`; an article the version does
   not hold is `anchor_not_in_version` with its nearest ids (by key, so 42bis's neighbours are 42 and 42ter) and the
   do-not-fall-back rule; a language the act is not held in is `language_not_available`. A date written in a date's shape
@@ -68,23 +73,27 @@ work identifier, so an ELI or a CELEX typed there was searched as Luxembourg wor
   "Code du travail" fixture in two versions.
 - **Dates** (`CitationDates`): `2021-03-15`, `15/03/2021`, `15.03.2021`, `15-03-2021` (the day first), `15 mars 2021`, `1er
   mars 2021`, `15 March 2021`, `March 15, 2021`, `15. März 2021`, read strictly (31 février, 2021-02-29 and 03/15/2021 are
-  in a date's shape and name no day); a date before a type and date's own date, after a comma or "le", is its title's
-  ("… signée à Genève, le 23 septembre 1936"), and after "au", "on" or "as at" the date asked. The page prints the date back
+  in a date's shape and name no day; `2012-1-5` is 5 January 2012); a date before a type and date's own date, after a
+  comma or "le", is its title's when the title words then name an act of that day ("… signée à Genève, le 23 septembre
+  1936"), else the date asked; after "au", "on" or "as at" it is the date asked. The page prints the date back
   in words in its language (`longDate`). The default is today in Luxembourg (R13, `LuxembourgCalendar`), said apart when
   the reference names no date.
 - **The pages** (`LiveSearch.jsx`, `live-search.mjs`, `search-answer.mjs`): the home box and the search page route a
   reference. `opens`: "Recognised: {act}, article {article}, at {date}." (the held title when the index resolved one), then
   "Opening the reading: {address}" as a link, then the page goes there (`location.assign`). `not_opened`: the recognition and
   why ("“31 février 2024” names no day of the calendar, so nothing was opened and no word was searched."). A refusal: the
-  recognition above its card, with the phase's own sentences (`LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES`). The refusal card
-  declares the six `recognised_*` keys (`RECOGNISED_KEYS`).
+  recognition above its card, with the phase's own sentences (`LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES`, or for an EU act
+  `LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES`), the acts a list names (a held one linked, one only the catalogue names
+  said as not held), and under an absent act's card the catalogue's act that names it. The refusal card declares the seven
+  `recognised_*` keys (`RECOGNISED_KEYS`) on every code the phase refuses with a declared payload.
 - **The EU in the same box** (repairs #971's F3 note): a CELEX, an EU ELI or an EU act's name opens the EU act; the line
   under the home page's box (and the 404 page's) now says what is true: "A search by words covers Luxembourg law. An ELI, a
   CELEX number, a Mémorial reference, a permalink, or the citation of an article of an act, with or without a date, opens
-  that act, Luxembourg or EU. To search within an EU act, name it by its CELEX number on the search page." / "La recherche
-  par mots porte sur le droit luxembourgeois. Un ELI, un numéro CELEX, une référence au Mémorial, un permalien ou la
-  citation d’un article d’un acte, avec ou sans date, ouvre cet acte, luxembourgeois ou de l’UE. Pour interroger un acte de
-  l’UE, désignez-le par son numéro CELEX sur la page de recherche." (`search.searchScope`, replacing `search.luxembourgOnly`).
+  that act, Luxembourg or EU, when this site holds it. To search within an EU act, name it by its CELEX number on the
+  search page." / "La recherche par mots porte sur le droit luxembourgeois. Un ELI, un numéro CELEX, une référence au
+  Mémorial, un permalien ou la citation d’un article d’un acte, avec ou sans date, ouvre cet acte, luxembourgeois ou de l’UE,
+  lorsque ce site le détient. Pour interroger un acte de l’UE, désignez-le par son numéro CELEX sur la page de recherche."
+  (`search.searchScope`, replacing `search.luxembourgOnly`; "when this site holds it" since the review of #974, F1).
   The dated and undated sentences ("Only Luxembourg acts were searched …") stay: they are said of a search by words.
 - **French** (Decision 41): 29 forms (25 interface entries with the twelve months, and 4 refusal sentences) were reviewed by
   Claude (AI reviewer) under the owner's delegation in the addendum of 2026-10-17 ("exact references first") of
@@ -112,8 +121,15 @@ work identifier, so an ELI or a CELEX typed there was searched as Luxembourg wor
     ladder's exact and prefix tiers, never by words it shares, so "Code du travail" never opens an act amending it.
   - A grouped article opens for a number it groups only when no article holds that number; a quoted article never.
   - An arabic number never matches a roman one; Latin suffixes have their synonyms; nothing else is near.
-  - A date before an act's own date after a comma or "le" is its title's; after a preposition that asks for a version it
-    is the date asked.
+  - A date before an act's own date after a comma or "le" is its title's when the title words then name an act of that
+    day, else the date asked; after a preposition that asks for a version it is the date asked.
+  - (The review of #974.) A day's, an issue's or an ELI's acts are the index's and the catalogue's together, so a list
+    names acts this site does not hold, each marked; title words that name none of a day's acts list them even when the
+    day holds one, since a guess would be the false absence F1 found in the other direction. An untitled candidate's title
+    is null, never its IRI. A part of an article (an alinéa, a paragraph) opens the article and is said with it, as typed.
+    An EU name's number and year are read year first with (UE)/(EU) or a first part from 2015, else in both orders, the
+    first the EU index holds chosen. The server reads what the phase's first references would read once, when the mount
+    opens, not in the background, so no test's mount is disposed under it.
   - The refusals of the phase carry what was recognised as `recognised_*` scalars beside the code's own payload; the samples
     keep a payload per key set.
   - The page shows the recognition and the address, then goes there; the asked date is not carried into Reading's address
@@ -121,8 +137,9 @@ work identifier, so an ELI or a CELEX typed there was searched as Luxembourg wor
 - **Not in this slice** (next): an OJ L citation (`OJ L 119, 4.5.2016, p. 1`), which needs a catalogue of OJ references the
   EU index does not hold; codes themselves (Release 1: the table and the logic are ready and tested on code-shaped ids); a
   title with a date inside it other than after a comma or "le"; the asked date written into Reading's address (the plan's
-  3.5, the search in the address); results grouped by act (4.3); an EU index with no census answering a dated EU reference
-  (refused `retrieval_mode_unavailable`, a branch no fixture reaches: every EU fixture and the population hold a census).
+  3.5, the search in the address); results grouped by act (4.3); an EU act held outside the census answering a dated
+  reference (refused `retrieval_mode_unavailable`, now driven in the census by an act outside it); an EU-shaped name that
+  reads to no CELEX ("règlement (UE) n° 5/6") is no reference and is searched as words.
 - **Measured** (no browser was started on this machine: the owner's order of 2026-10-16; CI's journeys lane is the browser
   evidence, and the journeys' home text changed with `search.searchScope` without being run here): `npm run build` in `web`,
   then `node scripts/react-bundle.mjs` and `node --test` over every web test file but `keyboard-walk`, `launch-browser` and

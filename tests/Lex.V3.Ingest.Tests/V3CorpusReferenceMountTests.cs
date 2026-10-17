@@ -278,6 +278,7 @@ public sealed class V3CorpusReferenceMountTests
             Opened(await SearchAsync(mount, "loi du 10 août 1991 sur la profession d'avocat"), "held").GetProperty("opens").GetProperty("address").GetString());
         const string notHeld = "loi du 10 août 1991 portant approbation de la Convention de La Haye";
         var unknown = Refused(await SearchAsync(mount, notHeld), "identifier_unknown", notHeld);
+        Assert.AreEqual(System.Text.Json.JsonValueKind.Null, unknown.GetProperty("recognised_held_act").ValueKind, "an act this site does not hold");
         CollectionAssert.AreEqual(new[] { other }, Strings(unknown.GetProperty("recognised_catalogue_works")));
         StringAssert.Contains(unknown.GetProperty("what_would_answer_detail").GetString(), "the publisher's catalogue names this one");
     }
@@ -301,6 +302,9 @@ public sealed class V3CorpusReferenceMountTests
         Assert.IsTrue(missing.GetProperty("do_not_fall_back_to_full_text_search").GetBoolean(), "no word is searched instead");
         Assert.IsGreaterThan(0, missing.GetProperty("nearest_anchors").GetArrayLength());
         Assert.AreEqual("99", missing.GetProperty("recognised_article").GetString());
+        // The act and the version the date selects are held; an article of it is what is not.
+        Assert.AreEqual($"/lu-legilux/{fixture.WorkKey}", missing.GetProperty("recognised_held_act").GetString());
+        Assert.AreEqual(fixture.Permalink, missing.GetProperty("recognised_held_version").GetString());
 
         // The act holds Art. 42 and, here, an Art. 42ter beside it: each opens its own, and 42bis neither.
         CollectionAssert.Contains(fixture.ArticlesOfOwnState().Select(static article => article.PublisherId).ToArray(), "art_42");
@@ -523,7 +527,10 @@ public sealed class V3CorpusReferenceMountTests
         }
 
         const string unheld = "/lu-legilux/loi-1991-08-10-n3/2020-01-01--" + "0000000000000000000000000000000000000000000000000000000000000000/fra";
-        Refused(await SearchAsync(mount, unheld), "identifier_unknown", unheld);
+        // The act is held and the version is not: the refusal says which act this site holds (the French review of #974's repair).
+        var unheldVersion = Refused(await SearchAsync(mount, unheld), "identifier_unknown", unheld);
+        Assert.AreEqual($"/lu-legilux/{fixture.WorkKey}", unheldVersion.GetProperty("recognised_held_act").GetString());
+        Assert.AreEqual(System.Text.Json.JsonValueKind.Null, unheldVersion.GetProperty("recognised_held_version").ValueKind, "the version is what is not held");
         const string german = WorkIri + "/jo/de";
         Refused(await SearchAsync(mount, german), "language_not_available", german);
     }

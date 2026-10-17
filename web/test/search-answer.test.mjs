@@ -393,7 +393,7 @@ test("a refusal of the phase says what was recognised; one of a word search says
     recognised_date: "2021-03-15",
     recognised_date_source: "citation",
   });
-  assert.deepEqual({ ...recognised }, { kind: "citation", act: "Code du travail", title: null, article: "L. 121-6", date: "2021-03-15", dateSource: "citation", catalogueWorks: null });
+  assert.deepEqual({ ...recognised }, { kind: "citation", act: "Code du travail", title: null, article: "L. 121-6", date: "2021-03-15", dateSource: "citation", heldAct: null, heldVersion: null, catalogueWorks: null });
   // The acts the publisher's catalogue names, which this site holds no version of (the review of #974, F2).
   const unknown = {
     recognised_kind: "citation", recognised_act: "loi du 10 août 1991", recognised_title: null, recognised_article: null,
