@@ -4,10 +4,11 @@
 // - the release must read back first, under the signing identity's public key the owner names (`releaseFailures`:
 //   the manifest's signature, every asset by size and hash, the image blob by blob and its signature);
 // - health and the page: `GET /` sends a reader who names no language to `/fr/` (R61), with `Vary: Accept-Language`,
-//   and `GET /fr/` answers 200 with the release image's own home page (`isOwnHomePage`: byte for byte as built, or as
-//   the server renders it from its coverage answer, the built page's head byte for byte and the facts it was rendered
-//   from), carrying the security headers the image run probes (CSP with `frame-ancestors 'none'`, HSTS,
-//   `Referrer-Policy: no-referrer`, `nosniff`);
+//   and `GET /fr/` answers 200 with the release image's own home page (`homePageFailures`: byte for byte as built, or
+//   as the server renders it from its coverage answer: everything outside the root's content and the facts block the
+//   built page's, byte for byte, facts a home page's, and the whole page what the release's own renderer renders from
+//   the probe's coverage answer on the facts' day), carrying the security headers the image run probes (CSP with
+//   `frame-ancestors 'none'`, HSTS, `Referrer-Policy: no-referrer`, `nosniff`);
 // - the 404 page (R60): an address nothing claims answers 404 with the release image's own French 404 page, byte for
 //   byte, carrying the same security headers, for a reader who names no language;
 // - the card: the evaluation card at its stable route is the release's card, byte for byte, as JSON;
@@ -27,6 +28,7 @@
 // It sends no request anywhere but the origin it is given, and writes nothing but a temporary copy of the release's
 // mount report, removed when it ends.
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import vm from "node:vm";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findBrowser } from "./browser-evidence.mjs";
@@ -37,23 +39,94 @@ import { invokedDirectly } from "./invoked-directly.mjs";
 import { askOperation, heldLuxembourgWorkFromAnswers, realMountRuns } from "./journey.mjs";
 import { ASSETS, RELEASE_MANIFEST, releaseFailures } from "./release-assets.mjs";
 import { readLargeFile } from "./large-bytes.mjs";
-import { HOME_FACTS_ID } from "./live-home.mjs";
+import { HOME_FACTS_ID, readHomeFactsValue } from "./live-home.mjs";
 import { luxembourgDate, luxembourgOffset, luxembourgSummerTimeEnds, luxembourgSummerTimeStarts } from "./temporal.mjs";
 
 const LIVE_PREFIX = "app/v3-web/";
 
+/** The home page's root, which the server renders from the coverage answer (`live-home-page.jsx`). */
+const HOME_ROOT_OPEN = '<div id="live-home-root">';
+const FACTS_OPEN = `<script type="application/json" id="${HOME_FACTS_ID}">`;
+
 /**
- * Whether `served` is the release image's own home page `built`: that page byte for byte (served as built), or that page
- * as the server renders it from its coverage answer (`live-home.mjs`, R67): the built page's head, byte for byte (its title,
- * its policy, its links: nothing in it depends on the answer), its script, and the facts it was rendered from.
+ * A home page in its parts: `before`, everything up to the root's content; `root`, that content; `facts`, the facts block's
+ * text when the page carries one (rendered) or null (as built); and `after`, the root's closing tag and everything after the
+ * root and the facts block. Null when the page has no single root followed by the facts block or by its script.
  */
-export function isOwnHomePage(served, built) {
-  if (served.equals(built)) return true;
+export function homePageParts(text) {
+  const open = text.indexOf(HOME_ROOT_OPEN);
+  if (open < 0 || text.indexOf(HOME_ROOT_OPEN, open + 1) >= 0) return null;
+  const start = open + HOME_ROOT_OPEN.length;
+  const factsAt = text.indexOf(FACTS_OPEN, start);
+  // The root is followed by the facts block (rendered) or by the script that hydrates it (as built).
+  const next = factsAt >= 0 ? factsAt : text.indexOf('<script src="', start);
+  if (next < 0) return null;
+  const close = text.lastIndexOf("</div>", next);
+  if (close < start || close + "</div>".length !== next) return null;
+  if (factsAt < 0) return { before: text.slice(0, start), root: text.slice(start, close), facts: null, after: text.slice(close) };
+  const end = text.indexOf("</script>", factsAt);
+  if (end < 0 || text.indexOf(FACTS_OPEN, end) >= 0) return null;
+  return {
+    before: text.slice(0, start),
+    root: text.slice(start, close),
+    facts: text.slice(factsAt + FACTS_OPEN.length, end),
+    after: `</div>${text.slice(end + "</script>".length)}`,
+  };
+}
+
+/**
+ * The home page the release's own server renderer (`ssr/{language}.js`, bytes) renders from `coverage`, the coverage
+ * envelope, on `today`: the envelope answered at midday UTC that day (the same calendar day in Luxembourg, either season).
+ */
+export function renderedHomePage(renderer, coverage, today, language = "fr") {
+  const context = vm.createContext({ TextEncoder });
+  vm.runInContext(renderer.toString("utf8"), context, { timeout: 10_000 });
+  const envelope = structuredClone(coverage);
+  envelope.context = { ...envelope.context, freshness: { ...envelope.context?.freshness, observed_at: `${today}T12:00:00.0000000Z` } };
+  return context.lexSsr.render("home", JSON.stringify(envelope), `/${language}/`);
+}
+
+/**
+ * Why `served` is not the release image's own home page `built`, as failures (empty when it is): the page as built, byte
+ * for byte; or that page as the server renders it from its coverage answer (`live-home.mjs`, R67), which is held to
+ * everything the probe can hold it to:
+ * - everything outside the root's content and the facts block is the built page's, byte for byte (the head, the
+ *   heading, the footer: nothing there depends on the answer);
+ * - the facts block is a home page's facts (`readHomeFactsValue`), today and a coverage line of served counts;
+ * - the whole page is what the release's own renderer (`renderer`, the bytes of `ssr/fr.js`) renders from the probe's
+ *   own coverage answer (`coverage`) on the facts' day, byte for byte, so the root says that answer's counts and nothing
+ *   typed in their place. With no renderer or no answer to render from, the rendered page cannot be held, and fails.
+ */
+export function homePageFailures(served, built, { renderer = null, coverage = null } = {}) {
+  if (served.equals(built)) return [];
+  const notOwn = "GET /fr/ answered a page that is not the release image's own home page, as built or rendered from its coverage answer";
+  const own = homePageParts(built.toString("utf8"));
+  if (own === null || own.facts !== null) return [`${notOwn}: the release image's home page as built has no root to hold it to`];
   const page = served.toString("utf8");
-  const own = built.toString("utf8");
-  const head = (text) => (text.includes("</head>") ? text.slice(0, text.indexOf("</head>")) : null);
-  const script = /<script src="[^"]+" defer=""><\/script>/.exec(own)?.[0] ?? null;
-  return head(own) !== null && head(page) === head(own) && script !== null && page.includes(script) && page.includes(`<script type="application/json" id="${HOME_FACTS_ID}">`);
+  const parts = homePageParts(page);
+  if (parts === null || parts.facts === null) return [`${notOwn}: it carries no root followed by the facts it was rendered from`];
+  const failures = [];
+  if (parts.before !== own.before || parts.after !== own.after) {
+    failures.push(`${notOwn}: outside its root and its facts it is not the built page, byte for byte`);
+  }
+  let facts = null;
+  try {
+    facts = readHomeFactsValue(JSON.parse(parts.facts));
+  } catch {
+    facts = null;
+  }
+  if (facts === null) return [...failures, `${notOwn}: its facts are not a home page's facts`];
+  if (renderer === null) return [...failures, `${notOwn}: the release image holds no server renderer (ssr/fr.js) to render it again`];
+  if (coverage === null) return [...failures, `${notOwn}: the probe has no coverage answer to render it again from`];
+  if (facts.today === null) return [...failures, `${notOwn}: its facts name no today to render it again on`];
+  let again = null;
+  try {
+    again = renderedHomePage(renderer, coverage, facts.today);
+  } catch (error) {
+    return [...failures, `${notOwn}: the release's renderer could not render it again (${error?.message ?? error})`];
+  }
+  if (again !== page) failures.push(`${notOwn}: it is not what the release's renderer renders from this revision's coverage answer on ${facts.today}, byte for byte`);
+  return failures;
 }
 
 /** An address nothing claims, asked of a revision for its 404 page (R60): a page request, under no law's address. */
@@ -91,11 +164,8 @@ export async function revisionFailures(origin, { web, card, corpusSha256, notes 
   if (start.headers.get("vary") !== "Accept-Language") failures.push(`GET / varies by ${start.headers.get("vary")}, not Accept-Language`);
   const page = await fetch(`${origin}/fr/`, { redirect: "manual" });
   const body = Buffer.from(await page.arrayBuffer());
-  if (page.status !== 200) {
-    failures.push(`GET /fr/ answered ${page.status}, not 200`);
-  } else if (!isOwnHomePage(body, served.get("/fr/"))) {
-    failures.push("GET /fr/ answered a page that is not the release image's own home page, as built or rendered from its coverage answer");
-  }
+  // The page itself is held once the probe has its own coverage answer to render it again from (below).
+  if (page.status !== 200) failures.push(`GET /fr/ answered ${page.status}, not 200`);
   const header = (name) => page.headers.get(name);
   const policy = `${cspValue()}; frame-ancestors 'none'`;
   if (header("content-security-policy") !== policy) failures.push(`GET /fr/ carries the CSP ${header("content-security-policy")}, not ${policy}`);
@@ -154,6 +224,10 @@ export async function revisionFailures(origin, { web, card, corpusSha256, notes 
   }
   if (envelope !== null && (envelope.refusal === null || envelope.refusal === undefined)) {
     failures.push(...await accentedTitleFailures(origin, { ask, notes }));
+  }
+  // The home page (R67): the release's own, as built or as its renderer renders this revision's coverage answer.
+  if (page.status === 200) {
+    failures.push(...homePageFailures(body, served.get("/fr/"), { renderer: new Map(web).get("ssr/fr.js") ?? null, coverage: envelope }));
   }
 
   failures.push(...await serverFailures(origin));

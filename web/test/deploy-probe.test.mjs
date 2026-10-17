@@ -16,8 +16,8 @@ import { cspValue } from "../scripts/csp.mjs";
 import { CARD_ROUTE } from "../scripts/evaluation-card.mjs";
 import { redirectFor } from "../scripts/permalinks.mjs";
 import {
-  NOT_FOUND_PROBE, REMOTE_PRIVACY_NOTE, accentedTitleFailures, browserFailures, clockFailures, deployedReleaseFailures, isOwnHomePage,
-  liveFilesOf, luxembourgTodayNote, remoteRevision, revisionFailures,
+  NOT_FOUND_PROBE, REMOTE_PRIVACY_NOTE, accentedTitleFailures, browserFailures, clockFailures, deployedReleaseFailures, homePageFailures,
+  liveFilesOf, luxembourgTodayNote, remoteRevision, renderedHomePage, revisionFailures,
 } from "../scripts/deploy-probe.mjs";
 import { rehearsalKey, signRehearsal } from "../scripts/image-rehearsal.mjs";
 import { writeLayout, writeTar } from "../scripts/image-reproducible.mjs";
@@ -149,28 +149,68 @@ test("a revision that answers as its release holds passes the probe", async () =
   }
 });
 
-test("a revision that renders its home page from its coverage answer serves the release's own home page (R67)", async () => {
-  const head = '<!doctype html>\n<html lang="fr"><head><meta charSet="utf-8"/><title>Le droit - Lex</title></head>';
-  const script = '<script src="/fr/client-live-home.js" defer=""></script>';
-  const built = Buffer.from(`${head}<body><div id="live-home-root"><form role="search"></form></div>${script}</body></html>\n`);
-  const rendered = Buffer.from(`${head}<body><div id="live-home-root"><form role="search"></form><p data-coverage-line="counted">Ce site détient 1 acte</p></div>`
-    + `<script type="application/json" id="lex-home-facts">{"today":"2026-10-15"}</script>${script}</body></html>\n`);
-  const web = [["fr/index.html", built], ["evaluation-card.json", CARD], ["not-found/fr.html", NOT_FOUND_PAGE]];
-  for (const [what, page, own] of [
-    ["rendered from its coverage answer", rendered, true],
-    ["as built", built, true],
-    ["another page's head", Buffer.from(rendered.toString("utf8").replace("Le droit - Lex", "Ailleurs")), false],
-    ["no facts it was rendered from", Buffer.from(rendered.toString("utf8").replace(' id="lex-home-facts"', "")), false],
-    ["another script", Buffer.from(rendered.toString("utf8").replace("client-live-home.js", "client-elsewhere.js")), false],
+// The home page as built, and the release's renderer as a stand-in: it renders that page with the coverage line and the
+// facts it was rendered from, and today in its date field, from the coverage answer it is handed, as `ssr/fr.js` does
+// (`live-home-page.jsx`).
+const HOME_HEAD = '<!doctype html>\n<html lang="fr"><head><meta charSet="utf-8"/><title>Le droit - Lex</title></head>';
+const HOME_SCRIPT = '<script src="/fr/client-live-home.js" defer=""></script>';
+const HOME_FOOTER = '<footer class="site-footer"><p data-not-advice="">Lex montre le texte de la loi.</p><p>Les textes consolidés n’ont aucun effet juridique.</p></footer>';
+const BUILT_HOME = Buffer.from(`${HOME_HEAD}<body><main><h1>Le droit</h1><div id="live-home-root"><form role="search"></form></div>${HOME_SCRIPT}</main>${HOME_FOOTER}</body></html>\n`);
+const HOME_RENDERER = Buffer.from(`globalThis.lexSsr = { render(kind, envelopeJson, path) {
+  const envelope = JSON.parse(envelopeJson);
+  const today = envelope.context.freshness.observed_at.slice(0, 10);
+  const works = envelope.result.value.mounted.corpus_sha256.length;
+  return ${JSON.stringify(`${HOME_HEAD}<body><main><h1>Le droit</h1><div id="live-home-root"><form role="search"></form><p data-coverage-line="counted">Ce site détient `)}
+    + works + ' actes</p><input data-search-date="" value="' + today + '"/></div><script type="application/json" id="lex-home-facts">{"today":"' + today
+    + '","coverage":{"state":"counted","works":' + works + ',"states":' + works + ',"articles":' + works + ',"builtOn":"2026-10-01"}}</script>'
+    + ${JSON.stringify(`${HOME_SCRIPT}</main>${HOME_FOOTER}</body></html>\n`)};
+} };`);
+
+/** The home page the stand-in renderer renders from the stand-in revision's coverage answer, today. */
+function renderedHome(today = new Date().toISOString().slice(0, 10)) {
+  return Buffer.from(renderedHomePage(HOME_RENDERER, { context: { freshness: {} }, result: { value: { mounted: { corpus_sha256: CORPUS } } } }, today));
+}
+
+test("a revision that renders its home page from its coverage answer serves the release's own home page, and nothing else passes for it (review of #971)", async () => {
+  const rendered = renderedHome();
+  const text = rendered.toString("utf8");
+  const web = [["fr/index.html", BUILT_HOME], ["ssr/fr.js", HOME_RENDERER], ["evaluation-card.json", CARD], ["not-found/fr.html", NOT_FOUND_PAGE]];
+  const coverage = { context: { freshness: { observed_at: "2001-01-01T00:00:00.0000000Z" } }, result: { value: { mounted: { corpus_sha256: CORPUS } } } };
+  const options = { renderer: HOME_RENDERER, coverage };
+  assert.deepEqual(homePageFailures(rendered, BUILT_HOME, options), [], "rendered from the answer, on the facts' day");
+  assert.deepEqual(homePageFailures(BUILT_HOME, BUILT_HOME, options), [], "as built");
+  const NOT_OWN = /^GET \/fr\/ answered a page that is not the release image's own home page/;
+  for (const [what, page, reason, change = {}] of [
+    // The four pages the review of #971 found the probe passed.
+    ["the footer's R50 line swapped for the old advice line", text.replace('<p data-not-advice="">Lex montre le texte de la loi.</p>', "<p>Documentation, et non consultation juridique.</p>"), /outside its root and its facts it is not the built page/],
+    ["the heading and the whole root replaced, with empty facts", text.replace(/<h1>[\s\S]*<\/main>/, `<h1>Autre</h1><div id="live-home-root"><p>anything</p></div><script type="application/json" id="lex-home-facts">{}</script>${HOME_SCRIPT}</main>`), /its facts are not a home page's facts/],
+    ["a count typed into the coverage line", text.replace(/Ce site détient \d+ actes/, "Ce site détient 1402 actes"), /not what the release's renderer renders from this revision's coverage answer/],
+    ["facts that say other counts than the root", text.replace('"works":64', '"works":1402'), /not what the release's renderer renders/],
+    // And what the probe cannot hold without the release's renderer or its own answer: it fails closed.
+    ["a rendered page with no renderer in the release", text, /holds no server renderer/, { renderer: null }],
+    ["a rendered page with no coverage answer", text, /no coverage answer to render it again from/, { coverage: null }],
+    ["another day's facts than its root was rendered on", text.replace(/"today":"[0-9-]+"/, '"today":"2001-01-01"'), /not what the release's renderer renders/],
+    ["no facts block", text.replace(/<script type="application\/json" id="lex-home-facts">[^<]*<\/script>/, ""), /carries no root followed by the facts/],
+    ["two roots", text.replace("<main>", `<main>${'<div id="live-home-root"></div>'}`), /carries no root followed by the facts/],
   ]) {
-    assert.equal(isOwnHomePage(page, built), own, what);
-    const served = await revision({ page });
+    const failures = homePageFailures(Buffer.from(page), BUILT_HOME, { ...options, ...change });
+    assert.ok(failures.length > 0 && failures.every((failure) => NOT_OWN.test(failure)) && failures.some((failure) => reason.test(failure)), `${what}: ${JSON.stringify(failures)}`);
+  }
+
+  // Through the probe itself: a revision serving the rendered page passes, one serving any of the four does not.
+  const served = await revision({ page: rendered });
+  try {
+    assert.deepEqual(await revisionFailures(served.origin, { web, card: CARD, corpusSha256: CORPUS }), []);
+  } finally {
+    await served.close();
+  }
+  for (const page of [text.replace("<h1>Le droit</h1>", "<h1>Autre</h1>"), text.replace(/Ce site détient \d+ actes/, "Ce site détient 1402 actes")]) {
+    const tampered = await revision({ page: Buffer.from(page) });
     try {
-      const failures = await revisionFailures(served.origin, { web, card: CARD, corpusSha256: CORPUS });
-      if (own) assert.deepEqual(failures, [], what);
-      else assert.ok(failures.some((failure) => /GET \/fr\/ answered a page that is not the release image's own home page/.test(failure)), `${what}: ${JSON.stringify(failures)}`);
+      const failures = await revisionFailures(tampered.origin, { web, card: CARD, corpusSha256: CORPUS });
+      assert.ok(failures.some((failure) => NOT_OWN.test(failure)), JSON.stringify(failures));
     } finally {
-      await served.close();
+      await tampered.close();
     }
   }
 });

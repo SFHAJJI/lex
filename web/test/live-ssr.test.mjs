@@ -25,6 +25,7 @@ import { createLiveServer } from "../scripts/serve-live.mjs";
 import { buildLive } from "../scripts/build-live.mjs";
 import { LIVE_CHROME, fillCounted, fillText } from "../scripts/live-chrome.mjs";
 import { luxembourgDate } from "../scripts/temporal.mjs";
+import { homePageFailures } from "../scripts/deploy-probe.mjs";
 
 const TABLE = JSON.parse(await readFile(new URL("../../tests/Lex.V3.Tests/Fixtures/SitePaths/site-paths.json", import.meta.url), "utf8"));
 const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
@@ -197,6 +198,23 @@ test("the build writes a server renderer per language, which renders the page in
       assert.equal(home.split(`data-not-advice="">${copy.site.notAdvice}</p>`).length - 1, 2, `${language}: R50's sentence under the box and in the footer`);
       // The reading says it in this language too, above the text.
       assert.ok(html.includes(`<p class="not-advice" data-not-advice="">${copy.site.notAdvice}</p>`), `${language}: Reading says R50's sentence`);
+      // The deploy probe holds a revision's rendered home page to the release's own: the page this renderer renders from
+      // a coverage answer passes, and the four pages the review of #971 found it passed do not.
+      if (language === "fr") {
+        const built = await readFile(join(destination, "fr", "index.html"));
+        const renderer = await readFile(join(destination, "ssr", "fr.js"));
+        assert.deepEqual(homePageFailures(Buffer.from(home), built, { renderer, coverage: COVERAGE }), [], "the page as the server renders it");
+        assert.deepEqual(homePageFailures(built, built, { renderer, coverage: COVERAGE }), [], "the page as built");
+        for (const [what, page] of [
+          ["the footer's R50 line swapped for the old advice line", home.replace(/<p data-not-advice="">[^<]*<\/p><p>/, "<p>Documentation, et non consultation juridique.</p><p>")],
+          ["the heading and the whole root replaced, with empty facts", home.replace(/<h1>[\s\S]*<\/main>/, '<h1>Autre</h1><div id="live-home-root"><p>anything</p></div><script type="application/json" id="lex-home-facts">{}</script><script src="/fr/client-live-home.js" defer=""></script></main>')],
+          ["a count typed into the coverage line", home.replace(/(data-coverage-line="counted" data-built-on="[^"]*">)[^<]*/, "$1Ce site détient 1402 actes")],
+          ["another day in the date field", home.replace(`value="${today}"`, 'value="2001-01-01"')],
+        ]) {
+          assert.notEqual(page, home, `${what}: the page was changed`);
+          assert.ok(homePageFailures(Buffer.from(page), built, { renderer, coverage: COVERAGE }).length > 0, what);
+        }
+      }
       // And the search page as built, and the home page as built, which asks for its facts once loaded.
       for (const page of ["search.html", "index.html"]) {
         const built = await readFile(join(destination, language, page), "utf8");
