@@ -92,7 +92,7 @@ public sealed class VocabularyRegistryCensusTests
                     + "const LegislativeMemorialPrefix, const RuleProfile, "
                     + "static property RuleProfileSha256",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgRederivation: ImplementedRuleSets=1, "
-                    + "const Release1RuleSet, const RightsAsAcquired",
+                    + "const NoPublisherSession, const Release1RuleSet, const RightsAsAcquired",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgReferralDateComposition: const HasOpinion, "
                     + "const IriKind, const ReferralDate",
                 "Lex.V3.Ingest.V3CorpusMountWriter: GenerationFiles=6, "

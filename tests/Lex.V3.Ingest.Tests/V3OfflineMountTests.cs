@@ -209,8 +209,14 @@ public sealed partial class V3FirstMountBuildTests
     /// Inputs /3 through the tool's own steps, each in its own process with every proxy pointed at a local trap:
     /// <c>rederive-inputs</c> over the acquisition's retained inputs, <c>derive</c> (R0 then R1), <c>rederive-seal</c> with the
     /// record that derive printed, and <c>derive</c> of the sealed inputs. Both derives write the files an in-process build
-    /// over R1 writes; inputs sealed with another record refuse; and no process opens a connection (zero wire budget).
+    /// over R1 writes, and inputs sealed with another record refuse.
     /// </summary>
+    /// <remarks>
+    /// Zero wire budget is measured in each process, not inferred from the trap: the trap catches only clients that use the
+    /// default proxy, and the code base's own session builds its handler with <c>UseProxy = false</c>. Each command enters
+    /// the offline guard (no publisher session can be built in its process) and prints what its
+    /// <see cref="V3NetworkActivityListener"/> counted; this test requires the guard on and every count at zero.
+    /// </remarks>
     [TestMethod]
     public async Task TheReDerivationStepsRoundTripThroughTheToolWithNoPublisherTraffic()
     {
@@ -249,18 +255,22 @@ public sealed partial class V3FirstMountBuildTests
                     LuxembourgRederivation.Release1RuleSet, "--policy", LuxembourgRightsAdmissionPolicies.Policy1Sha256,
                     "--derived-at", "2026-10-17T06:00:00Z");
                 Assert.AreEqual(0, inputs.ExitCode, inputs.Transcript);
+                StringAssert.Contains(inputs.StandardOutput, OfflineMeasuredNothing, inputs.Transcript);
                 var unsealed = Pointer(inputs.StandardOutput, "re-derivation inputs (unsealed): ");
 
                 var derive = await RunToolAsync(proxy, "derive", "--custody", custody, "--checkpoint", unsealed, "--out", first);
                 Assert.AreEqual(0, derive.ExitCode, derive.Transcript);
-                StringAssert.Contains(derive.StandardOutput, "publisher_requests=0");
+                StringAssert.Contains(derive.StandardOutput, OfflineMeasuredNothing, derive.Transcript);
+                StringAssert.Contains(derive.StandardOutput, "verified offline mount; publisher_requests=0");
                 StringAssert.Contains(derive.StandardOutput, "luxembourg_rederivation=" + rederived.Rederivation!.Sha256 + "\n");
 
                 var seal = await RunToolAsync(proxy, "rederive-seal", "--custody", custody, "--inputs", unsealed, "--record", rederived.Rederivation.Sha256);
                 Assert.AreEqual(0, seal.ExitCode, seal.Transcript);
+                StringAssert.Contains(seal.StandardOutput, OfflineMeasuredNothing, seal.Transcript);
                 var sealedPointer = Pointer(seal.StandardOutput, "re-derivation inputs (sealed): ");
                 var sealedDerive = await RunToolAsync(proxy, "derive", "--custody", custody, "--checkpoint", sealedPointer, "--out", second);
                 Assert.AreEqual(0, sealedDerive.ExitCode, sealedDerive.Transcript);
+                StringAssert.Contains(sealedDerive.StandardOutput, OfflineMeasuredNothing, sealedDerive.Transcript);
 
                 var wrongSeal = await RunToolAsync(proxy, "rederive-seal", "--custody", custody, "--inputs", unsealed, "--record", new string('0', 64));
                 Assert.AreEqual(0, wrongSeal.ExitCode, wrongSeal.Transcript);
@@ -345,6 +355,14 @@ public sealed partial class V3FirstMountBuildTests
         try { await process.WaitForExitAsync(timeout.Token); }
         catch { process.Kill(entireProcessTree: true); throw; }
         Assert.AreEqual(0, process.ExitCode, await stderr + "\n" + await stdout);
+        // Measured, not printed as a constant: the derive's own process entered the offline guard and its listener counted
+        // no socket connect, no name resolution and no HTTP request, on any transport (the trap sees only default-proxy
+        // clients, and the code base's own session does not use the default proxy).
+        StringAssert.Contains(await stdout, OfflineMeasuredNothing);
         StringAssert.Contains(await stdout, "publisher_requests=0");
     }
+
+    /// <summary>What an offline command prints when its guard held and its listener counted nothing.</summary>
+    internal const string OfflineMeasuredNothing =
+        "offline_guard=on; network measured: socket connects 0, name resolutions 0, HTTP requests 0; publisher_requests=0";
 }

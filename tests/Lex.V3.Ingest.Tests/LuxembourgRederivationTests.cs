@@ -132,7 +132,13 @@ public sealed class LuxembourgRederivationTests
         var rights = verified.Run!.HeldBodyDerivationPopulation!.Inputs.Single().RightsResolution!;
         Assert.AreEqual(LuxembourgRightsChannelDisposition.AgreedSameRunCcBy, rights.Disposition, "both channels agree on the synthetic body");
 
-        var rederived = await LuxembourgRederivation.ApplyAsync(store, verified, Release1(), CancellationToken.None);
+        // R1 inside a measurement of every network operation the process starts: it must start none.
+        LuxembourgFirstMountAcquisitionResult rederived;
+        using (var network = new V3NetworkActivityListener())
+        {
+            rederived = await LuxembourgRederivation.ApplyAsync(store, verified, Release1(), CancellationToken.None);
+            Assert.AreEqual(0L, network.Total, "R1 starts no network operation: " + network.Describe());
+        }
 
         // The acquisition result on R0's own run: the same objects and references, the later derivations.
         Assert.IsTrue(rederived.Delivered);
@@ -235,12 +241,17 @@ public sealed class LuxembourgRederivationTests
                 Assert.AreEqual(LuxembourgRederivation.Release1RuleSet, derivation.GetProperty("ruleSet").GetString());
                 Assert.AreEqual(Policy1Sha256, derivation.GetProperty("admissionPolicy").GetString());
                 Assert.AreEqual(record.Sha256, derivation.GetProperty("record").GetProperty("Sha256").GetString());
-                Assert.AreEqual(0, derivation.GetProperty("publisherRequests").GetInt32());
+                Assert.AreEqual("none_on_this_path", derivation.GetProperty("publisherSession").GetString(),
+                    "the report states the path; a count belongs to the process that measured it");
+                Assert.IsFalse(derivation.TryGetProperty("publisherRequests", out _), "no constant count stands in for a measurement");
                 Assert.AreEqual(AcquisitionJournal.CurrentSource(), derivation.GetProperty("toolSource").GetString());
                 Assert.AreEqual(2, derivation.GetProperty("rules").GetArrayLength());
-                var statement = derivation.GetProperty("statement").GetString()!;
-                StringAssert.StartsWith(statement, $"Acquired by the Luxembourg acquisition whose catalog is {verified.CheckpointRef.Sha256}; derived from that acquisition's custody on 2026-10-17T06:00:00Z under rule set lu-release-1 and admission policy {Policy1Sha256}");
-                StringAssert.EndsWith(statement, "; no publisher request in this derivation.");
+                Assert.AreEqual(
+                    $"Acquired by the Luxembourg acquisition whose catalog is {verified.CheckpointRef.Sha256}; re-derived from "
+                    + $"that acquisition's custody under rule set lu-release-1 and admission policy {Policy1Sha256}, at the "
+                    + "derivation time its inputs state (2026-10-17T06:00:00Z); the derivation path holds no publisher session, "
+                    + "and the offline tool measures its process's network activity and refuses to finish with any.",
+                    derivation.GetProperty("statement").GetString());
                 Assert.AreEqual("2026-10-12T18:17:05+00:00", report.RootElement.GetProperty("derivationInputUtc").GetString(),
                     "the report's input clock stays the acquisition's");
             }
@@ -278,10 +289,11 @@ public sealed class LuxembourgRederivationTests
         using var document = JsonDocument.Parse(first.CanonicalBytes);
         var root = document.RootElement;
         CollectionAssert.AreEqual(
-            new[] { "schema", "acquisition", "verified_under", "rules", "outputs", "counts", "publisher_requests" },
+            new[] { "schema", "acquisition", "verified_under", "rules", "outputs", "counts", "publisher_session" },
             root.EnumerateObject().Select(static property => property.Name).ToArray());
         Assert.AreEqual(LuxembourgRederivationRecord.Schema, root.GetProperty("schema").GetString());
-        Assert.AreEqual(0, root.GetProperty("publisher_requests").GetInt32());
+        Assert.AreEqual("none_on_this_path", root.GetProperty("publisher_session").GetString(),
+            "the record states the path, never a count it did not measure");
         var acquisition = root.GetProperty("acquisition");
         Assert.AreEqual(verified.CheckpointRef!.Sha256, acquisition.GetProperty("catalog_sha256").GetString());
         Assert.AreEqual(verified.Run!.AcquisitionCheckpointRef!.Sha256, acquisition.GetProperty("query_checkpoint_sha256").GetString());
@@ -415,13 +427,17 @@ public sealed class LuxembourgRederivationTests
     }
 
     /// <summary>
-    /// Zero wire budget, by construction: the re-derivation's whole surface takes a custody store, an acquisition result and
-    /// a request, and none of them carries a transport, a session or a wire budget. The separate-process derive in
-    /// <see cref="V3FirstMountBuildTests.TheReDerivationStepsRoundTripThroughTheToolWithNoPublisherTraffic"/> proves the
-    /// same on the wire: a proxy trap sees no connection.
+    /// A signature check, and only that: the re-derivation's surface takes a custody store, an acquisition result and a
+    /// request, and none of them carries a transport, a session or a wire budget. It reads types, not method bodies, so it
+    /// cannot see code that builds its own client (the review of #973 added one and this stayed green). Zero traffic is
+    /// measured instead: <see cref="AReDerivedPopulationBuildsTheFirstMountEndToEnd"/> and
+    /// <see cref="InputsThreeRoundTripThroughDeriveAndSeal"/> run R1 and the derive inside a
+    /// <see cref="V3NetworkActivityListener"/> and require zero network operations, and the tool's offline commands enter
+    /// <see cref="V3OfflineProcess"/> and refuse to finish when their listener counts any
+    /// (<see cref="V3FirstMountBuildTests.TheReDerivationStepsRoundTripThroughTheToolWithNoPublisherTraffic"/>).
     /// </summary>
     [TestMethod]
-    public void TheReDerivationHasNoWireCapability()
+    public void TheReDerivationSurfaceTakesNoTransport()
     {
         var wire = new[]
         {
@@ -443,6 +459,132 @@ public sealed class LuxembourgRederivationTests
         Assert.IsFalse(typeof(LuxembourgRederivation).GetFields(
                 System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
             .Any(field => wire.Any(forbidden => forbidden.IsAssignableFrom(field.FieldType))));
+    }
+
+    /// <summary>
+    /// The listener is not vacuous, and sees what a proxy trap cannot: a client built as the code base's own session builds
+    /// its handler (<c>UseProxy = false</c>), sending to a stand-in on the loopback interface, is counted as a socket connect
+    /// and an HTTP request, and a name resolution is counted too. Nothing leaves this machine.
+    /// </summary>
+    [TestMethod]
+    public async Task TheListenerCountsThePinnedTransportThatAProxyTrapCannotSee()
+    {
+        var standIn = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        standIn.Start();
+        try
+        {
+            var port = ((System.Net.IPEndPoint)standIn.LocalEndpoint).Port;
+            var served = Task.Run(async () =>
+            {
+                using var client = await standIn.AcceptTcpClientAsync();
+                var stream = client.GetStream();
+                _ = await stream.ReadAsync(new byte[4096]);
+                await stream.WriteAsync("HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"u8.ToArray());
+            });
+            using var network = new V3NetworkActivityListener();
+            Assert.AreEqual(0L, network.Total, network.Describe());
+            using (var handler = new System.Net.Http.SocketsHttpHandler { UseProxy = false, AllowAutoRedirect = false, UseCookies = false })
+            using (var client = new System.Net.Http.HttpClient(handler))
+            using (var response = await client.GetAsync($"http://127.0.0.1:{port}/"))
+            {
+                Assert.AreEqual(System.Net.HttpStatusCode.OK, response.StatusCode);
+            }
+
+            await served;
+            Assert.IsGreaterThanOrEqualTo(1L, network.SocketConnects, network.Describe());
+            Assert.IsGreaterThanOrEqualTo(1L, network.HttpRequests, network.Describe());
+            _ = await System.Net.Dns.GetHostAddressesAsync("localhost");
+            Assert.IsGreaterThanOrEqualTo(1L, network.NameResolutions, network.Describe());
+            Assert.AreEqual(network.SocketConnects + network.NameResolutions + network.HttpRequests, network.Total);
+        }
+        finally
+        {
+            standIn.Stop();
+        }
+    }
+
+    /// <summary>
+    /// An offline process builds no publisher session: once <see cref="V3OfflineProcess"/> is entered, the session's one
+    /// constructor refuses before its transport sends anything, on the test transport here (the production door is never
+    /// called by a test). The switch is process-wide, so this class runs alone and the test leaves it as it found it.
+    /// </summary>
+    [TestMethod]
+    public async Task AnOfflineProcessBuildsNoPublisherSession()
+    {
+        Assert.IsFalse(V3OfflineProcess.IsEntered, "no test leaves the guard entered");
+        var handler = new SendCountingHandler();
+        try
+        {
+            V3OfflineProcess.Enter();
+            Assert.IsTrue(V3OfflineProcess.IsEntered);
+            var refused = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => RoutedHttpAcquisitionSession.StartWithTestTransportAsync(
+                EuAcquisitionTestFixture.SourceWitness(), new EuAcquisitionTestFixture.EuInMemoryCustodyStore(), handler,
+                TimeProvider.System, WireRequestBudget.OfWireRequests(10), CancellationToken.None));
+            StringAssert.Contains(refused.Message, V3OfflineProcess.SwitchName);
+            Assert.AreEqual(0, handler.Sends, "refused before the transport sent anything");
+        }
+        finally
+        {
+            AppContext.SetSwitch(V3OfflineProcess.SwitchName, false);
+            handler.Dispose();
+        }
+
+        Assert.IsFalse(V3OfflineProcess.IsEntered);
+    }
+
+    /// <summary>
+    /// R1 over a resumed acquisition keeps R0's resumption, so the report states the window and both spends: the resumed
+    /// run's (<c>WireSpent</c>) and the earlier runs' floor (<c>PreviousWireSpentAtLeast</c>), named apart and never added.
+    /// The review of #973 dropped the resumption from R1's result and every test stayed green; this one does not.
+    /// </summary>
+    [TestMethod]
+    public async Task AReDerivationOfAResumedAcquisitionKeepsItsResumptionAndStatesBothSpends()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var verified = await LuxembourgFirstMountAcquisitionTests.ResumedLegislativePopulationAsync(store);
+        var resumption = verified.Resumption!;
+        Assert.IsGreaterThan(0, resumption.PreviousWireSpentAtLeast, "the earlier run spent requests before it stopped");
+
+        LuxembourgFirstMountAcquisitionResult rederived;
+        using (var network = new V3NetworkActivityListener())
+        {
+            rederived = await LuxembourgRederivation.ApplyAsync(store, verified, Release1(), CancellationToken.None);
+            Assert.AreEqual(0L, network.Total, network.Describe());
+        }
+
+        Assert.IsNotNull(rederived.Resumption, "R1 keeps R0's resumption");
+        Assert.AreEqual(ContractJson.Serialize(resumption), ContractJson.Serialize(rederived.Resumption));
+        Assert.AreEqual(verified.CheckpointRef, rederived.CheckpointRef);
+        Assert.AreEqual(verified.PopulationScopeManifestRef, rederived.PopulationScopeManifestRef);
+
+        var record = rederived.Rederivation!;
+        var block = JsonSerializer.SerializeToNode(V3CorpusMountWriter.Derivation(
+            new V3LuxembourgDerivation(record, DerivedAt), rederived.Resumption))!;
+        static string Day(DateTimeOffset value) => value.ToUniversalTime().ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        Assert.AreEqual(
+            $"Acquired by the Luxembourg acquisition whose catalog is {verified.CheckpointRef!.Sha256}, resumed on "
+            + $"{Day(resumption.ResumedAt)} from {resumption.PreviousRuns} earlier run(s) begun on {Day(resumption.PreviousStartedAt)} "
+            + $"and catalogued on {Day(resumption.CatalogedAt)}; the resumed run had spent {resumption.WireSpent} publisher "
+            + $"request(s) when it catalogued, after at least {resumption.PreviousWireSpentAtLeast} by the earlier run(s); "
+            + $"re-derived from that acquisition's custody under rule set lu-release-1 and admission policy {Policy1Sha256}, at "
+            + "the derivation time its inputs state (2026-10-17T06:00:00Z); the derivation path holds no publisher session, and "
+            + "the offline tool measures its process's network activity and refuses to finish with any.",
+            block["statement"]!.GetValue<string>());
+    }
+
+    /// <summary>A transport that counts what reaches it and answers nothing useful: the guard must refuse before it.</summary>
+    private sealed class SendCountingHandler : System.Net.Http.HttpMessageHandler
+    {
+        private int _sends;
+
+        internal int Sends => Volatile.Read(ref _sends);
+
+        protected override Task<System.Net.Http.HttpResponseMessage> SendAsync(
+            System.Net.Http.HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _sends);
+            return Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.NotFound) { RequestMessage = request });
+        }
     }
 
     /// <summary>
@@ -544,7 +686,14 @@ public sealed class LuxembourgRederivationTests
             }
 
             var derived = Path.Combine(root, "derived");
-            var write = await V3OfflineMount.DeriveAsync(store, inputs, derived, CancellationToken.None);
+            // The whole derive of inputs /3 (R0's reopen, R1, the build and the write) inside the network measurement.
+            V3CorpusMountWrite write;
+            using (var network = new V3NetworkActivityListener())
+            {
+                write = await V3OfflineMount.DeriveAsync(store, inputs, derived, CancellationToken.None);
+                Assert.AreEqual(0L, network.Total, "a derive of inputs /3 starts no network operation: " + network.Describe());
+            }
+
             Assert.IsNotNull(write.LuxembourgRederivation);
 
             // The same files as an in-process build over R1 at the acquisition's build time.
@@ -564,7 +713,11 @@ public sealed class LuxembourgRederivationTests
             // Sealed with the record the derive named: the same files again.
             var sealedInputs = await V3OfflineMount.SealRederivationAsync(store, inputs, write.LuxembourgRederivation!.Sha256, CancellationToken.None);
             var sealedDerived = Path.Combine(root, "sealed");
-            await V3OfflineMount.DeriveAsync(store, sealedInputs, sealedDerived, CancellationToken.None);
+            using (var network = new V3NetworkActivityListener())
+            {
+                await V3OfflineMount.DeriveAsync(store, sealedInputs, sealedDerived, CancellationToken.None);
+                Assert.AreEqual(0L, network.Total, "a derive of sealed inputs /3 starts no network operation: " + network.Describe());
+            }
             CollectionAssert.AreEqual(V3FirstMountBuildTests.MountDigests(derived), V3FirstMountBuildTests.MountDigests(sealedDerived));
             await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() =>
                 V3OfflineMount.SealRederivationAsync(store, sealedInputs, write.LuxembourgRederivation.Sha256, CancellationToken.None),

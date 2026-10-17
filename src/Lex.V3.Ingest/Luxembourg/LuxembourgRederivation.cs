@@ -24,9 +24,10 @@ public sealed record LuxembourgRederivationRequest(
 /// <summary>
 /// The provenance record of one re-derivation, <c>lex-lu-rederivation/1</c>: a custody object whose resource identity derives
 /// from its bytes. It names the acquisition it re-derived, the rules and digests that acquisition was verified under, the
-/// rules and policy of the re-derivation, its outputs and its counts, and that it made no publisher request. It names no
-/// tool commit and no clock, so any build that implements the same rule digests reproduces it byte for byte from the same
-/// custody.
+/// rules and policy of the re-derivation, its outputs and its counts, and that its path holds no publisher session
+/// (<c>publisher_session: none_on_this_path</c>: a statement of what the path is, not a measurement; the offline tool measures
+/// its process's network activity and refuses to finish with any). It names no tool commit and no clock, so any build that
+/// implements the same rule digests reproduces it byte for byte from the same custody.
 /// </summary>
 public sealed class LuxembourgRederivationRecord
 {
@@ -87,8 +88,11 @@ public sealed class LuxembourgRederivationRecord
 /// <summary>
 /// R1, the re-derivation of the Luxembourg design (Release 1, the profiles): over an acquisition R0 verified, it runs the
 /// later rule profiles over R0's own held-body population, mints the acquisition result on R0's own run, and holds a
-/// provenance record. It has no wire capability: it takes a custody store and R0's result, and nothing it calls can reach
-/// a publisher.
+/// provenance record. It holds no transport: it takes a custody store and R0's result, and builds no session. That is a
+/// property of the code, which a signature check cannot prove; what proves it is measured: the tests run it inside a
+/// <see cref="V3NetworkActivityListener"/> and require zero network operations, and the offline tool enters
+/// <see cref="V3OfflineProcess"/> (no session can be built in its process) and refuses to finish when its listener counts
+/// any.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -110,6 +114,12 @@ public static class LuxembourgRederivation
 
     /// <summary>The value of the record's <c>rights_resolution</c> under Release 1: the acquisition's own, re-read by nothing.</summary>
     private const string RightsAsAcquired = "as_acquired";
+
+    /// <summary>
+    /// The record's <c>publisher_session</c>: the path holds no transport and builds no session. A statement of the path,
+    /// never a count: a count belongs to a process, and the offline tool measures its own.
+    /// </summary>
+    private const string NoPublisherSession = "none_on_this_path";
 
     /// <summary>The rule sets this build implements, sorted ordinally.</summary>
     public static IReadOnlyList<string> ImplementedRuleSets { get; } = Array.AsReadOnly(new[] { Release1RuleSet });
@@ -304,7 +314,7 @@ public static class LuxembourgRederivation
                     outcome.Disposition == LuxembourgAknArticleInventoryDisposition.PublisherFileNamesOtherState),
                 OutcomeCounts(content.Outcomes.Select(static outcome => ContractWire.NameOf(outcome.Disposition))),
                 content.Outcomes.Count(static outcome => outcome.Disposition == LuxembourgAknLegalContentDisposition.Admitted)),
-            PublisherRequests: 0);
+            PublisherSession: NoPublisherSession);
         var bytes = Encoding.UTF8.GetBytes(ContractJson.Serialize(document));
         var record = new LuxembourgRederivationRecord(
             bytes, catalog.Sha256, request.RuleSet, request.Rules, request.AdmissionPolicySha256,
@@ -378,7 +388,7 @@ public static class LuxembourgRederivation
         RulesPart Rules,
         OutputsPart Outputs,
         CountsPart Counts,
-        int PublisherRequests);
+        string PublisherSession);
 
     /// <summary>The acquisition re-derived: its catalog, query checkpoint, record set and observed set, the final manifests,
     /// run identities and rights-bound run identities its records name, and its scope manifest (null for an act range).</summary>

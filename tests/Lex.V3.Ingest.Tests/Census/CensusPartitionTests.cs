@@ -44,6 +44,8 @@ public sealed class CensusPartitionTests
     /// </summary>
     private static readonly string[] Declined =
     [
+        "Lex.V3.Ingest.V3OfflineProcess: one AppContext switch name, the offline guard's; not a selectable vocabulary. "
+            + "The guard refusing a session, and the tool's offline commands printing it on, are tested.",
         "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionCoverCheckpoint: two private schema identifiers, /1 on the class for a "
             + "single-run cover and /2 on its nested run-block record for a cover over several runs; they name record versions, "
             + "not a selectable vocabulary. Split-history reopening, both versions' restores, run-block tampering and "
@@ -100,14 +102,14 @@ public sealed class CensusPartitionTests
     public void ThePartitionTotalsAreExactlyThese()
     {
         Assert.AreEqual(
-            270, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
+            271, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
         Assert.AreEqual(
             106, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
         Assert.AreEqual(
             142, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
         Assert.AreEqual(
             13, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
-        Assert.AreEqual(9, Declined.Length, "declined");
+        Assert.AreEqual(10, Declined.Length, "declined");
     }
 
     private static string NameOf(string row) =>

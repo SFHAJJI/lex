@@ -7,14 +7,16 @@ using Lex.V3.Ingest;
 using Lex.V3.Ingest.Luxembourg;
 
 /// <summary>
-/// The two re-derivation steps around an offline <c>derive</c>. Neither opens a network session, reopens an acquisition or
-/// reads a body: each reads retained inputs from custody, writes new inputs into it, and writes their pointer beside it.
+/// The two re-derivation steps around an offline <c>derive</c>. Neither reopens an acquisition or reads a body: each reads
+/// retained inputs from custody, writes new inputs into it, and writes their pointer beside it. Like <c>derive</c>, each
+/// enters the offline guard and measures the process's network activity (<see cref="OfflineNetwork"/>).
 /// </summary>
 /// <remarks>
 /// <c>rederive-inputs</c> writes unsealed inputs <c>lex-v3-offline-mount-inputs/3</c> over an acquisition's retained inputs
 /// /1 or /2 (its <c>mount-inputs-*.json</c> pointer). <c>derive</c> over them prints the record digest
 /// (<c>luxembourg_rederivation=</c>), and <c>rederive-seal</c> then writes the same inputs expecting exactly that record, so
-/// a later derive of the sealed inputs refuses any other. Exit codes: 0 written; 2 usage; 3 refused (printed).
+/// a later derive of the sealed inputs refuses any other. Exit codes: 0 written; 2 usage; 3 refused (printed); 5 network
+/// activity measured (the pointer is removed; the custody object, append-only, stays).
 /// </remarks>
 internal static class RederiveCommands
 {
@@ -36,6 +38,7 @@ internal static class RederiveCommands
 
     internal static async Task<int> InputsAsync(string[] args)
     {
+        using var network = OfflineNetwork.Begin();
         if (!TryOptions(args, ["--custody", "--base", "--rules", "--policy", "--derived-at"], InputsUsage, out var options))
         {
             return 2;
@@ -55,22 +58,30 @@ internal static class RederiveCommands
             var inputs = await V3OfflineMount.CaptureRederivationAsync(store, baseInputs, options["--rules"], options["--policy"],
                 derivedAt, CancellationToken.None);
             var pointer = await WritePointerAsync(custody, inputs);
+            if (OfflineNetwork.Refusal(network, "rederive-inputs") is { } refusal)
+            {
+                File.Delete(pointer);
+                return refusal;
+            }
+
             Console.WriteLine($"re-derivation inputs (unsealed): {pointer}; rule set {options["--rules"]}; "
                 + $"policy {options["--policy"]}; derived_at {options["--derived-at"]}; base {baseInputs.Sha256}");
             Console.WriteLine($"next: derive --custody {custody} --checkpoint {pointer} --out <fresh-directory>, then rederive-seal "
-                + "with the luxembourg_rederivation it prints; publisher_requests=0");
+                + "with the luxembourg_rederivation it prints");
+            Console.WriteLine(OfflineNetwork.Line(network));
             return 0;
         }
         catch (Exception exception) when (exception is ArgumentException or CustodyRequiredException or CustodyIntegrityException
             or IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
         {
-            Console.Error.WriteLine($"rederive-inputs refused: {exception.GetType().Name}: {exception.Message}");
-            return 3;
+            Console.Error.WriteLine($"rederive-inputs refused: {exception.GetType().Name}: {exception.Message} ({OfflineNetwork.Line(network)})");
+            return OfflineNetwork.Refusal(network, "rederive-inputs") ?? 3;
         }
     }
 
     internal static async Task<int> SealAsync(string[] args)
     {
+        using var network = OfflineNetwork.Begin();
         if (!TryOptions(args, ["--custody", "--inputs", "--record"], SealUsage, out var options))
         {
             return 2;
@@ -88,15 +99,22 @@ internal static class RederiveCommands
             var unsealed = await ReadPointerAsync(options["--inputs"]);
             var sealedInputs = await V3OfflineMount.SealRederivationAsync(store, unsealed, options["--record"], CancellationToken.None);
             var pointer = await WritePointerAsync(custody, sealedInputs);
+            if (OfflineNetwork.Refusal(network, "rederive-seal") is { } refusal)
+            {
+                File.Delete(pointer);
+                return refusal;
+            }
+
             Console.WriteLine($"re-derivation inputs (sealed): {pointer}; expected_rederivation {options["--record"]}; "
-                + $"unsealed {unsealed.Sha256}; publisher_requests=0");
+                + $"unsealed {unsealed.Sha256}");
+            Console.WriteLine(OfflineNetwork.Line(network));
             return 0;
         }
         catch (Exception exception) when (exception is ArgumentException or CustodyRequiredException or CustodyIntegrityException
             or IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
         {
-            Console.Error.WriteLine($"rederive-seal refused: {exception.GetType().Name}: {exception.Message}");
-            return 3;
+            Console.Error.WriteLine($"rederive-seal refused: {exception.GetType().Name}: {exception.Message} ({OfflineNetwork.Line(network)})");
+            return OfflineNetwork.Refusal(network, "rederive-seal") ?? 3;
         }
     }
 

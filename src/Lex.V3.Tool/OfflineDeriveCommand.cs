@@ -8,7 +8,10 @@ internal static class OfflineDeriveCommand
 {
     internal static async Task<int> RunAsync(string[] args)
     {
-        const string usage = "Usage: Lex.V3.Tool derive --custody <directory> --checkpoint <mount-inputs.json> --out <empty-directory> [--custody-encoding raw|brotli]";
+        const string usage = "Usage: Lex.V3.Tool derive --custody <directory> --checkpoint <mount-inputs.json> --out <empty-directory> [--custody-encoding raw|brotli]\n"
+            + "Exit codes: 0 derived and verified, 2 usage, 3 refused, 5 network activity measured (the output is removed), 130 cancelled";
+        // Before any work: no publisher session can be built in this process, and every network operation it starts is counted.
+        using var network = OfflineNetwork.Begin();
         var options = new Dictionary<string, string>(StringComparer.Ordinal);
         if (args.Length % 2 != 0) { Console.Error.WriteLine(usage); return 2; }
         for (var index = 0; index < args.Length; index += 2)
@@ -29,6 +32,13 @@ internal static class OfflineDeriveCommand
             var checkpoint = ContractJson.Deserialize<SourceArtifactRef>(await File.ReadAllTextAsync(options["--checkpoint"], cancellation.Token));
             var store = encoding == "brotli" ? FileSystemCustodyStore.WithBrotliCompression(custody) : new FileSystemCustodyStore(custody);
             var write = await V3OfflineMount.DeriveAsync(store, checkpoint, options["--out"], cancellation.Token);
+            // A derive that measured any network activity leaves no mount behind: the directory it wrote was empty before it.
+            if (OfflineNetwork.Refusal(network, "derive") is { } refusal)
+            {
+                Directory.Delete(write.Directory, recursive: true);
+                return refusal;
+            }
+
             foreach (var file in Directory.EnumerateFiles(write.Directory, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
             {
                 await using var stream = File.OpenRead(file);
@@ -38,11 +48,16 @@ internal static class OfflineDeriveCommand
             // A re-derivation names its record: rederive-seal takes this digest.
             if (write.LuxembourgRederivation is { } record)
                 Console.WriteLine($"luxembourg_rederivation={record.Sha256}");
-            Console.WriteLine("verified offline mount; publisher_requests=0");
+            Console.WriteLine(OfflineNetwork.Line(network));
+            Console.WriteLine($"verified offline mount; publisher_requests={network.Total}");
             return 0;
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { Console.Error.WriteLine("cancelled"); return 130; }
-        catch (Exception exception) { Console.Error.WriteLine($"derive refused: {exception.GetType().Name}: {exception.Message}"); return 3; }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"derive refused: {exception.GetType().Name}: {exception.Message} ({OfflineNetwork.Line(network)})");
+            return OfflineNetwork.Refusal(network, "derive") ?? 3;
+        }
         finally { Console.CancelKeyPress -= Cancel; }
     }
 }
