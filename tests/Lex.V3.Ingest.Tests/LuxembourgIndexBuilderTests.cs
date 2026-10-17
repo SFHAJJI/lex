@@ -585,21 +585,22 @@ public sealed class LuxembourgIndexBuilderTests
     }
 
     /// <summary>
-    /// Schema 8 is still read exactly as schema 8 checked it: the same tampers of a schema-8 index (the built index 9
-    /// rewritten into schema 8's tables) are refused by schema 8's own checks, with schema 8's own reasons, and the
-    /// untampered rewrite opens as schema 8.
+    /// Schema 8 is still read exactly as schema 8 checked it: the same tampers of a schema-8 index (the multi-body fixture's
+    /// index 9, every byte synthetic, rewritten into schema 8's tables) are refused by schema 8's own checks, with schema 8's
+    /// own reasons, and the untampered rewrite opens as schema 8, its held states only and none of index 9's fields.
     /// </summary>
     [TestMethod]
     [DataRow("PRAGMA user_version=2", "schema differs from the exact terminal schema")]
     [DataRow("PRAGMA user_version=9", "schema differs from the exact terminal schema")]
-    [DataRow("UPDATE states SET state_sha256='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'", "digest is not derived")]
+    [DataRow("UPDATE states SET state_sha256='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'" + FirstCodeCivilState, "digest is not derived")]
     [DataRow("UPDATE articles SET expression_iri=expression_iri || '/other'", "does not bind its exact article population")]
-    [DataRow("UPDATE states SET work_key='wrong-work-key'", "not canonical")]
-    [DataRow("UPDATE states SET publisher_legal_resource_iri=expression_iri", "omits or crosses")]
-    [DataRow("UPDATE states SET expression_iri=publisher_legal_resource_iri || '/de'", "does not bind its exact article population")]
-    public async Task ASchema8IndexIsStillReadExactlyAsSchema8CheckedIt(string sql, string expected)
+    [DataRow("UPDATE states SET work_key='wrong-work-key'" + FirstCodeCivilState, "not canonical")]
+    [DataRow("UPDATE states SET publisher_legal_resource_iri=expression_iri" + FirstCodeCivilState, "omits or crosses")]
+    [DataRow("UPDATE states SET expression_iri=publisher_legal_resource_iri || '/de'" + FirstCodeCivilState, "does not bind its exact article population")]
+    public void ASchema8IndexIsStillReadExactlyAsSchema8CheckedIt(string sql, string expected)
     {
-        var (built, corpusRef) = await BuildStateIndexAsync();
+        var built = LuxembourgIndexCatalogueStatesTests.Fixture().Build();
+        var corpusRef = LuxembourgIndexCatalogueStatesTests.Harness.CorpusRef;
         var schema8 = Schema8Of(built.IndexBytes.Span);
         var reference = IndexRefOf(schema8);
         using (var reader = LuxembourgIndexReader.OpenAndVerify(reference, schema8, corpusRef, RebindManifest(built.CapabilityManifest, reference.Sha256)))
@@ -608,6 +609,11 @@ public sealed class LuxembourgIndexBuilderTests
             Assert.IsTrue(reader.RecordsBuilds);
             Assert.IsFalse(reader.RecordsCatalogueStates);
             Assert.IsNull(reader.ResolveObservations().Single().DerivedAt, "schema 8 records no derivation time");
+            var code = reader.ResolveCatalogueStates("code-civil");
+            Assert.HasCount(2, code, "schema 8 holds the held states only");
+            Assert.IsTrue(code.All(static row => row.StateKind is null && row.TextStatus == "held"), "and none of index 9's fields");
+            Assert.IsEmpty(reader.ResolveIntervals("code-civil"));
+            Assert.AreEqual(12L, reader.ResolveCoverage().States);
         }
 
         var tampered = MutateDatabase(schema8, sql);
@@ -616,6 +622,10 @@ public sealed class LuxembourgIndexBuilderTests
             tamperedRef, tampered, corpusRef, RebindManifest(built.CapabilityManifest, tamperedRef.Sha256)));
         StringAssert.Contains(exception.Message, expected);
     }
+
+    /// <summary>One row of the multi-body fixture's states, so a tamper of a keyed column meets no other row's key.</summary>
+    private const string FirstCodeCivilState =
+        " WHERE work_key='code-civil' AND applicability_date=(SELECT min(applicability_date) FROM states WHERE work_key='code-civil')";
 
     internal static SourceArtifactRef IndexRefOf(byte[] index)
     {
