@@ -113,6 +113,7 @@ const EN = Object.freeze({
     europeWholeAct: "The whole act in this wording",
     newerVersion: "A newer version is applicable from {date} (publisher).",
     europeNewerWording: "A later wording of this act is held: the wording of {date}.",
+    europeLaterWordingNotHeld: "The publisher's record names a later wording of this act, of {date}, whose text this site does not hold in this language.",
     openToday: "Read this act at today's date",
     title: "Reading",
     eyebrow: "Reading",

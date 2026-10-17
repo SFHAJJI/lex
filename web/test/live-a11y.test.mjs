@@ -123,7 +123,9 @@ test("the diff is linear: one list per language, each article one row, its statu
 test("every quotation is the publisher's whole article text: bracket tables and condition lists are never cut", async () => {
   let quoted = 0;
   for (const one of (await renders()).filter((render) => (render.name === "reading" || render.name === "export") && !render.envelope.refusal)) {
-    const expected = one.envelope.result.value.states.flatMap((state) => state.articles.filter((article) => article.text !== null && article.text !== undefined).map((article) => article.text));
+    // A Luxembourg bundle's states, or an EU bundle's wordings (the census holds one, review of #972).
+    const versions = one.envelope.result.value.states ?? one.envelope.result.value.wordings;
+    const expected = versions.flatMap((version) => version.articles.filter((article) => article.text !== null && article.text !== undefined).map((article) => article.text));
     const shown = [...one.markup.matchAll(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/g)].map((match) => decode(match[1]));
     assert.deepEqual(shown, expected, `${one.name}: ${one.scenario}: every article quoted whole, in order, none dropped`);
     quoted += shown.length;

@@ -25,6 +25,9 @@ const envelopeOf = (scenarioStart) => {
   return entry.envelope;
 };
 const PINNED = envelopeOf("a state's permalink at its own date");
+// The EU branch fixture (review of #972): the English original wording's permalink, whose next wording (2024-01-01) is held
+// in French only.
+const LATER_NOT_HELD = envelopeOf("an EU wording's permalink whose next wording's text is not held in its language");
 const MISMATCH = envelopeOf("a state's permalink whose digest is not the one held at its date");
 const STATE = PINNED.result.value.states[0];
 const ARTICLE = STATE.articles[14];
@@ -109,6 +112,7 @@ test("a version that is not the latest held says so, in its publisher's words, w
   const europe = europeEnvelope(europeBundle((value) => {
     value.wordings[0].kind = "original_wording";
     value.wordings[0].next_date = "2024-01-01";
+    value.wordings[0].next_text_held = true;
   }));
   const europePin = readingPinOf(`/en${EUROPE_SAMPLE.permalink}/001`, europe);
   const europeMarkup = lead(success(europe), europePin);
@@ -117,6 +121,17 @@ test("a version that is not the latest held says so, in its publisher's words, w
   assert.ok(europeMarkup.includes('<p data-whole-act=""><a href="/en/eu-eurlex/32016R0679/2016-04-27--'), "the whole act in that wording");
   assert.ok(europeMarkup.includes("The whole act in this wording"));
   assert.ok(!/appl(?:y|ies|icable)/.test(europeMarkup.replace(/<blockquote[\s\S]*?<\/blockquote>/g, "")), "no Luxembourg date word on an EU wording");
+  // The branch fixture's answer, as the platform sent it: the next wording's text is not held in English, so the page says
+  // the publisher's record names it, and links no text this site does not hold (review of #972).
+  const branch = success(LATER_NOT_HELD);
+  assert.equal(branch.state, "success");
+  const branchWording = branch.view.wordings[0];
+  assert.deepEqual([branchWording.nextDate, branchWording.nextTextHeld], ["2024-01-01", false]);
+  const branchPin = readingPinOf(`/en${branchWording.permalink}/${branchWording.articles[4].publisherId}`, LATER_NOT_HELD);
+  const branchMarkup = lead(branch, branchPin);
+  assert.ok(branchMarkup.includes("<p data-changed-since=\"\">The publisher&#x27;s record names a later wording of this act, of 2024-01-01, whose text this site does not hold in this language.</p>"), branchMarkup.slice(0, 400));
+  assert.ok(!branchMarkup.includes("is held: the wording of"), "never said held");
+  assert.ok(!branchMarkup.includes("today&#x27;s date"), "no link to the act today, whose text this site does not hold");
   const latest = europeEnvelope(europeBundle((value) => {
     value.wordings[0].kind = "original_wording";
     value.wordings[0].next_date = null;

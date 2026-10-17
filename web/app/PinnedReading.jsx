@@ -66,18 +66,24 @@ function VersionHeading({ view, version }) {
     : <Say template={COPY.stateHeadingNext} values={{ work: view.workKey, language: version.language, from: version.applicabilityDate, next: version.nextApplicabilityDate }} />;
 }
 
-/** What changed since the version shown: a newer version (or a later EU wording) the site holds, and the act today. */
+/**
+ * What changed since the version shown: a newer version (or a later EU wording) and the act today. A Luxembourg state's next
+ * date is a state the index holds, which the sentence names and says nothing of its text. An EU wording's next date bounds it
+ * whether or not the next wording's text is held here (review of #972), so it is said held only when it is, and otherwise
+ * as the publisher's record names it, with no link to a text this site does not hold.
+ */
 function ChangedSince({ view, version, pin, cited }) {
   const europe = view.publisher === 'eu-eurlex';
   const next = europe ? version.nextDate : version.nextApplicabilityDate;
   if (typeof next !== 'string') return null;
+  const notHeld = europe && version.nextTextHeld !== true;
   // At a permalink, the act as it stands today, at its readable address (R67); a readable address is that page already.
-  const today = pin.kind === 'state'
+  const today = pin.kind === 'state' && !notHeld
     ? permalinkHref(currentAddress({ publisher: view.publisher, work: europe ? view.celex : view.workKey, language: version.language, publisherId: cited?.publisherId ?? null }), CHROME_LOCALE)
     : null;
   return (
     <p data-changed-since="">
-      <Say template={europe ? COPY.europeNewerWording : COPY.newerVersion} values={{ date: next }} />
+      <Say template={notHeld ? COPY.europeLaterWordingNotHeld : europe ? COPY.europeNewerWording : COPY.newerVersion} values={{ date: next }} />
       {today === null ? null : (
         <>
           {' '}

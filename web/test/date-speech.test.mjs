@@ -83,6 +83,7 @@ const EUROPE_ENTRIES = new Set([
   "reading.europeSameDateWorks.one", "reading.europeSameDateWorks.other", "reading.europeUnplaced.one", "reading.europeUnplaced.other",
   "common.europeAnnexes.one", "common.europeAnnexes.other",
   "reading.europePinReplaced", "reading.europePinNotHeld", "reading.europeWholeAct", "reading.europeNewerWording",
+  "reading.europeLaterWordingNotHeld",
 ]);
 
 /**

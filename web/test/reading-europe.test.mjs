@@ -172,7 +172,12 @@ test("a time-view bundle reads: a consolidated version answers the dates from it
   assert.ok(markup.includes(liveChrome().reading.europeLatest), "the latest wording says it answers every later date");
   assert.doesNotMatch(markup, /no later wording is held/, "the original-only heading is not used");
 
-  const bounded = readEuropeEvidenceBundle(timeView((copy) => { copy.wordings[0].next_date = "2026-01-01"; }));
+  const bounded = readEuropeEvidenceBundle(timeView((copy) => { Object.assign(copy.wordings[0], { next_date: "2026-01-01", next_text_held: true }); }));
+  assert.equal(bounded.wordings[0].nextTextHeld, true);
+  // Beside a next date, whether its text is held is always said (review of #972), and never without one.
+  assert.throws(() => readEuropeEvidenceBundle(timeView((copy) => { copy.wordings[0].next_date = "2026-01-01"; })), /next_text_held is null beside the next date "2026-01-01"/);
+  assert.throws(() => readEuropeEvidenceBundle(timeView((copy) => { Object.assign(copy.wordings[0], { next_date: "2026-01-01", next_text_held: "yes" }); })), /true or false beside a date/);
+  assert.throws(() => readEuropeEvidenceBundle(timeView((copy) => { copy.wordings[0].next_text_held = false; })), /null with none/);
   const boundedMarkup = renderToStaticMarkup(h(ReadingAnswerView, { outcome: { state: "success", view: bounded } }));
   assert.ok(boundedMarkup.includes("to the day before 2026-01-01"), "a wording with a next date says where it ends");
 

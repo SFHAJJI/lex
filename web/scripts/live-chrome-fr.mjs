@@ -162,6 +162,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     europeWholeAct: 'L’acte entier dans ce libellé',
     newerVersion: 'Une version plus récente est applicable à partir du {date} (éditeur).',
     europeNewerWording: 'Un libellé ultérieur de cet acte est détenu : le libellé du {date}.',
+    europeLaterWordingNotHeld: 'Les données de l’éditeur nomment un libellé ultérieur de cet acte, du {date}, dont ce site ne détient pas le texte dans cette langue.',
     openToday: 'Lire cet acte à la date du jour',
     title: 'Lecture',
     eyebrow: 'Lecture',
