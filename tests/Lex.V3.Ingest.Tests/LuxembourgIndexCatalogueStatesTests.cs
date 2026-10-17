@@ -369,6 +369,11 @@ public sealed class LuxembourgIndexCatalogueStatesTests
         Assert.AreEqual(2L, works.Single(static work => work.WorkKey == "code-civil").StateCount, "browse counts held states");
         var observed = reader.ResolveObservedStates("code-civil", reader.ResolveEventLog().LastSeq);
         Assert.HasCount(2, observed, "as_observed folds the held states of the log");
+        CollectionAssert.AreEqual(
+            new[] { ("code-civil", W("code/civil")) },
+            reader.ResolveWorksUnder(W("code/")).ToArray(),
+            "an exact reference's works under a prefix are the held works, once");
+        Assert.IsEmpty(reader.ResolveWorksUnder(W("loi/2000/01/01/")), "a work with no held state is not a work an exact reference opens");
         Assert.HasCount(6, reader.ResolveCatalogueStates("code-civil"));
     }
 

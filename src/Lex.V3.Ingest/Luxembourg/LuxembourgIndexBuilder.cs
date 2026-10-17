@@ -3984,11 +3984,11 @@ public sealed class LuxembourgIndexReader : IDisposable
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
-            command.CommandText = """
-                SELECT DISTINCT work_key,publisher_work_iri
-                FROM states
-                WHERE publisher_work_iri>=$low AND publisher_work_iri<$high
-                ORDER BY work_key,publisher_work_iri
+            command.CommandText = $$"""
+                SELECT DISTINCT s.work_key,s.publisher_work_iri
+                FROM states s
+                WHERE s.publisher_work_iri>=$low AND s.publisher_work_iri<$high{{HeldOnly("s")}}
+                ORDER BY s.work_key,s.publisher_work_iri
                 """;
             command.Parameters.AddWithValue("$low", workIriPrefix);
             command.Parameters.AddWithValue("$high", workIriPrefix[..^1] + (char)(last + 1));
