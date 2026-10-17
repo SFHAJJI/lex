@@ -63,11 +63,12 @@ link.") and R67 ("Every work and article has a readable address that resolves to
   calendar date, with or without a digest after it, so neither the EU stable coordinate (`/eu-eurlex/{celex}/{lng}/{date}`)
   nor the EU shape before R64 (moved) is read as one. Its canonical link is itself: the article's readable address when the
   version shown holds the article (escaped as the platform escapes it), else the act's.
-- **The shared table** (`site-paths.json`) holds 122 paths (96 before): 33 served (9 readable, four of them naming their
-  canonical), 14 sent, 7 moved (4 of them a consolidated version's readable address, the review of #972), 68 neither (9
-  readable shapes that are none: the EU stable coordinate, a date as an article, under a consolidated CELEX too, `FRA`,
-  `fr`, an empty or `%2E%2E` segment, two segments, `/de/`), and the date it is held at (`today`); every served permalink
-  row renders from the permalink itself.
+- **The shared table** (`site-paths.json`) holds 124 paths, rebased on #971's (98 there, its two home pages' `index.html`
+  rows among them): 33 served (9 readable, four of them naming their canonical), 14 sent, 7 moved (4 of them a
+  consolidated version's readable address, the review of #972), 70 neither (the four home-page rows, rendered from
+  `coverage`, among them; 9 readable shapes that are none: the EU stable coordinate, a date as an article, under a
+  consolidated CELEX too, `FRA`, `fr`, an empty or `%2E%2E` segment, two segments, `/de/`), and the date it is held at
+  (`today`); every served permalink row renders from the permalink itself.
 - **French** (Decision 41): eleven new forms (nine reading entries and two refusal sentences), reviewed by an independent
   reviewer in the addendum of 2026-10-16 of `C:\lex-v3\lanes\fr-review\review.md` (1 changed: "Cité d’après {source}.", never
   "Extrait de", the table's word for Lex's own extraction), and a twelfth, `reading.citedWithoutText`, in the review's own
@@ -133,6 +134,16 @@ link.") and R67 ("Every work and article has a readable address that resolves to
     alone, its interface language, provision and query kept; its dossier stands. A readable page's canonical and its
     whole-act link are built from the work key or CELEX the answer names. The table's served row for
     `/en/eu-eurlex/02016R0679-20160504/eng/047` is now moved, with three moved rows and one neither added.
+  - Measured after the repairs, rebased on `v3/integration` at #971's merge (212ccd71; conflicts in the French header
+    comment, this file's top, `LiveReading.jsx`'s R50 sentence, `sitePageFor`'s home page, the journeys' home and
+    reading texts and the shared table, each keeping both), with no browser started (the owner's order of 2026-10-16):
+    the web build; the web suite over its 107 files but `keyboard-walk`, `launch-browser` and `paint-check`, 1,182 of
+    1,182; `dotnet build Lex.V3.slnx -c Release` 0 warnings, 0 errors; `Lex.V3.Tests` 3,181 (3,175 passed, 6 skipped);
+    the `Lex.V3.Ingest.Tests` classes `V3CorpusEurope*`, `V3CorpusAsOf*`, `V3CorpusPinnedPermalink*`,
+    `V3CorpusEvidenceBundle*`, `V3CorpusProvenance*`, `V3CorpusTimeline*`, `Census`, `PublicRequestRecordingTests` and the
+    answer, envelope and refusal samples, 148 (146 passed, 2 skipped); the envelope census rendered again from the handler
+    with `V3_RENDER_ENVELOPE_SAMPLES` and verified without it, twice, the answer census unchanged; `eng/verify-v3-tree.ps1`
+    1,581 tracked paths. The journeys are CI's.
 
 ## The home page, and the sentence that says what Lex is not (sole driver, 2026-10-16)
 
