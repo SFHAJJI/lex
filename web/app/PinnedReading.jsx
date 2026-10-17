@@ -124,7 +124,10 @@ function CitedArticle({ view, version, pin, cited }) {
         </>
       )}
       <p data-whole-act="">
-        <a href={permalinkHref(pin.kind === 'state' ? version.permalink : pin.act, CHROME_LOCALE)}>{europe ? COPY.europeWholeAct : COPY.wholeAct}</a>
+        {/* At a readable address, the act the answer names, never the request's (review of #972). */}
+        <a href={permalinkHref(pin.kind === 'state' ? version.permalink : currentAddress({ publisher: view.publisher, work: europe ? view.celex : view.workKey, language: version.language }), CHROME_LOCALE)}>
+          {europe ? COPY.europeWholeAct : COPY.wholeAct}
+        </a>
       </p>
     </section>
   );

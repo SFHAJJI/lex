@@ -47,8 +47,9 @@ export function lawPathOf(path) {
  * refusal names (R64: "with the current link"), else the pinned state's permalink, with no article.
  *
  * At an act's readable address (R67): the readable address of the article it names when the version shown quotes it or
- * holds it without text, escaped as the platform escapes a segment, else the act's readable address in that language. Any
- * other address is returned as it is.
+ * holds it without text, escaped as the platform escapes it, else the act's readable address in that language, each built
+ * from the act the answer names (its work key, or its EU act's CELEX), never the request's (review of #972); with no view,
+ * the act's readable address the request names. Any other address is returned as it is.
  */
 export function readingAddressShown(view, address, refusal = null) {
   const named = parseSitePath(address);
@@ -56,9 +57,11 @@ export function readingAddressShown(view, address, refusal = null) {
   const shown = (view?.publisher === 'eu-eurlex' ? view.wordings : view?.states) ?? [];
   if (named.kind === 'current') {
     const version = shown.find((one) => one.language === named.language);
+    if (version === undefined) return named.act;
+    const work = view.publisher === 'eu-eurlex' ? view.celex : view.workKey;
     const publisherId = anchorText(named.anchor);
-    if (version === undefined || publisherId === null || !holdsArticle(version, publisherId)) return named.act;
-    return currentAddress({ publisher: named.publisher, work: named.work, language: named.language, publisherId });
+    const held = publisherId !== null && holdsArticle(version, publisherId);
+    return currentAddress({ publisher: view.publisher === 'eu-eurlex' ? 'eu-eurlex' : 'lu-legilux', work, language: version.language, publisherId: held ? publisherId : null });
   }
   if (named.kind !== 'state') return address;
   if (view === null && refusal?.code === 'pinned_digest_mismatch') {

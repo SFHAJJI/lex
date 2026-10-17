@@ -22,7 +22,9 @@
 // never a pin, so it cannot be taken for a permalink. Its article is never a calendar date, with or without a digest after
 // it: `/eu-eurlex/{celex}/{lng}/{date}` is an EU stable coordinate and `/eu-eurlex/{celex}/{lng}/{date}--{sha256}` the EU
 // permalink shape before R64 (`movedFor`), and neither names an article. A permalink cites one version for good; a
-// readable address follows the act.
+// readable address follows the act. A consolidated version's CELEX (`0{yyyy}{type}{number}-{yyyymmdd}`) names one wording, not
+// the act today, so its readable address has moved for good to its act's (`3{yyyy}{type}{number}`), whose reading answers
+// today (review of #972: it quoted another wording under its own address).
 //
 // Every page stands under its interface language, /fr/ or /en/ (the specification of record's R61): /fr/search.html,
 // /en/lu-legilux/{work}. An address the API mints names no interface language, so it, and the site's root, are answered
@@ -68,6 +70,15 @@ export const PERMALINK_PATTERNS = Object.freeze({
 
 /** An EU wording's permalink in the shape before R64, `/eu-eurlex/{celex}/{lng}/{date}--{sha256}`, moved to R64's. */
 const EUROPE_WORDING_BEFORE_R64 = new RegExp(`^/eu-eurlex/(${CELEX})/${LANGUAGE}/${PIN}$`);
+
+/**
+ * A consolidated version's CELEX as EUR-Lex writes it: sector 0, the consolidated act's year, type and number (with a
+ * corrigendum's suffix), and the consolidation's date; the act's own CELEX is the same in sector 3.
+ */
+const CONSOLIDATED_CELEX = /^0([0-9]{4}[A-Z]{1,2}[0-9]{4,}(?:\([0-9]{2}\))?)-[0-9]{8}$/;
+
+/** A readable address under a consolidated version's CELEX, moved to its act's (`movedFor`). */
+const EUROPE_CONSOLIDATED_CURRENT = new RegExp(`^/eu-eurlex/0([0-9]{4}[A-Z]{1,2}[0-9]{4,}(?:\\([0-9]{2}\\))?)-[0-9]{8}/${LANGUAGE}(?:/${CURRENT_ANCHOR})?$`);
 
 /** The interface languages, each under its own path (R61); the first is the one a reader with no preference gets. */
 export const INTERFACE_LANGUAGES = Object.freeze(['fr', 'en']);
@@ -177,6 +188,8 @@ export function parseSitePath(pathname) {
     const match = pattern.exec(path);
     if (match === null) continue;
     const [, work, language, anchor = null] = match;
+    // A consolidated version's readable address names no page here: it has moved to its act's (`movedFor`).
+    if (publisher === 'eu-eurlex' && CONSOLIDATED_CELEX.test(work)) return null;
     return Object.freeze({
       kind: 'current',
       publisher,
@@ -256,18 +269,28 @@ export function redirectFor(pathname, search, acceptLanguage) {
 }
 
 /**
- * Where a permalink of the shape before R64 has moved for good: an EU wording's `/eu-eurlex/{celex}/{lng}/{date}--{sha256}`
- * to `/eu-eurlex/{celex}/{date}--{sha256}/{lng}`, under the interface language it stood under, if any (a browser keeps the
- * `#provision` it carried, which the reading page still brings into view). The query goes along. Null for any other path,
- * a Luxembourg state's of that time included: it names no language, so its new address cannot be computed from it alone.
+ * Where an address has moved for good, computed from it alone: an EU wording's permalink of the shape before R64,
+ * `/eu-eurlex/{celex}/{lng}/{date}--{sha256}`, to `/eu-eurlex/{celex}/{date}--{sha256}/{lng}` (a browser keeps the
+ * `#provision` it carried, which the reading page still brings into view); and a consolidated version's readable address,
+ * `/eu-eurlex/0{act}-{yyyymmdd}/{lng}[/{provision}]`, to its act's, `/eu-eurlex/3{act}/{lng}[/{provision}]` (review of
+ * #972). Each under the interface language it stood under, if any, the query along. Null for any other path, a Luxembourg
+ * state's permalink before R64 included: it names no language, so its new address cannot be computed from it alone.
  */
 export function movedFor(pathname, search) {
   if (typeof pathname !== 'string') return null;
   const { locale, path } = withoutLocale(pathname);
-  const match = EUROPE_WORDING_BEFORE_R64.exec(path);
-  if (match === null) return null;
-  const [, celex, language, date, wordingSha256] = match;
-  return `${locale === null ? '' : `/${locale}`}${europePermalink({ celex, date, wordingSha256, language })}${search ?? ''}`;
+  const prefix = locale === null ? '' : `/${locale}`;
+  const before = EUROPE_WORDING_BEFORE_R64.exec(path);
+  if (before !== null) {
+    const [, celex, language, date, wordingSha256] = before;
+    return `${prefix}${europePermalink({ celex, date, wordingSha256, language })}${search ?? ''}`;
+  }
+  const consolidated = EUROPE_CONSOLIDATED_CURRENT.exec(path);
+  if (consolidated !== null) {
+    const [, act, language, anchor = null] = consolidated;
+    return `${prefix}/eu-eurlex/3${act}/${language}${anchor === null ? '' : `/${anchor}`}${search ?? ''}`;
+  }
+  return null;
 }
 
 /**

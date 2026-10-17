@@ -12,6 +12,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { LiveReading, PinnedLead, citedArticle, citedTitle, readingTitle, versionShown } from "../.react-build/app.mjs";
 import { readingAddressShown, readingPinOf } from "../scripts/initial-answer.mjs";
+import { movedFor, parseSitePath } from "../scripts/permalinks.mjs";
 import { readingOutcome } from "../scripts/live-reading.mjs";
 import { LIVE_CHROME, entriesOf } from "../scripts/live-chrome.mjs";
 import { assertTimeVocabulary } from "../scripts/publisher-vocabulary.mjs";
@@ -157,6 +158,29 @@ test("a permalink refused because its digest is not the version held at its date
   assert.ok(lead(europe, pin).includes("which is not a wording this site holds for that date; the wording that answers that date on this site is"));
   assert.equal(lead({ ...outcome, code: "text_withheld" }, pin), "");
   assert.equal(lead(outcome, readingPinOf("/en/lu-legilux/loi-1991-08-10-n3/fra/art_15", MISMATCH)), "", "a readable address pins no digest");
+});
+
+test("a readable address names the act its answer names, never the request's, and a consolidated version's has moved (review of #972)", () => {
+  // The address a reading names as canonical, and the whole act it links, come from the answer: an address that names
+  // another work than the one the answer reads is held to the answer's.
+  const outcome = success(PINNED);
+  const asked = "/lu-legilux/another-work/fra/art_15";
+  assert.equal(readingAddressShown(outcome.view, asked), `/lu-legilux/loi-1991-08-10-n3/fra/${"art_15"}`, "the article's readable address, of the answer's work");
+  assert.equal(readingAddressShown(outcome.view, "/lu-legilux/another-work/fra/no-such-article"), "/lu-legilux/loi-1991-08-10-n3/fra");
+  assert.equal(readingAddressShown(null, asked), "/lu-legilux/another-work/fra", "with no answer, the act the address names");
+  const markup = lead(outcome, readingPinOf(`/en${asked}`, PINNED));
+  assert.ok(markup.includes('<p data-whole-act=""><a href="/en/lu-legilux/loi-1991-08-10-n3/fra">'), "the whole act the answer names");
+  const europe = success(europeEnvelope());
+  assert.equal(readingAddressShown(europe.view, "/eu-eurlex/32016R0680/eng/001"), "/eu-eurlex/32016R0679/eng/001", "an EU act's CELEX from the answer");
+
+  // A consolidated version's readable address names one wording, not the act today: it has moved to its act's, under the
+  // interface language it had, its provision and query kept; its address with a date as the article is none.
+  assert.equal(movedFor("/en/eu-eurlex/02016R0679-20240101/eng/005", "?from=card"), "/en/eu-eurlex/32016R0679/eng/005?from=card");
+  assert.equal(movedFor("/eu-eurlex/02016R0679-20240101/eng", ""), "/eu-eurlex/32016R0679/eng");
+  assert.equal(parseSitePath("/en/eu-eurlex/02016R0679-20240101/eng/005"), null, "no page stands there");
+  assert.equal(movedFor("/en/eu-eurlex/02016R0679-20240101/eng/2024-01-01", ""), null);
+  assert.equal(parseSitePath("/en/eu-eurlex/02016R0679-20160504").kind, "work", "the consolidated version's dossier stands");
+  assert.equal(movedFor("/en/eu-eurlex/32016R0679/eng/005", ""), null, "the act's own readable address stands");
 });
 
 test("the page at a permalink, as the server renders it, leads with the cited article and keeps the form on the work", () => {

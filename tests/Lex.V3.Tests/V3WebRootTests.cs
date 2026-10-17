@@ -302,6 +302,11 @@ public sealed class V3WebRootTests
             await handler.HandleAsync(before, CancellationToken.None);
             Assert.AreEqual(StatusCodes.Status301MovedPermanently, before.Response.StatusCode);
             Assert.AreEqual($"/en/eu-eurlex/32016R0679/2016-05-04--{digest}/fra?from=card", before.Response.Headers.Location.ToString());
+            // A consolidated version's readable address has moved to its act's, for good, its query along (review of #972).
+            var consolidated = Request("GET", "/en/eu-eurlex/02016R0679-20240101/eng/005?from=card", "fr");
+            await handler.HandleAsync(consolidated, CancellationToken.None);
+            Assert.AreEqual(StatusCodes.Status301MovedPermanently, consolidated.Response.StatusCode);
+            Assert.AreEqual("/en/eu-eurlex/32016R0679/eng/005?from=card", consolidated.Response.Headers.Location.ToString());
             var luxembourgBefore = Request("GET", $"/en/lu-legilux/loi-1991-08-10-n3/2024-02-01--{digest}");
             await handler.HandleAsync(luxembourgBefore, CancellationToken.None);
             var unknown = Request("GET", "/en/no-such-page.html");

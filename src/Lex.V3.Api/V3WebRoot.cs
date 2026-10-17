@@ -307,14 +307,47 @@ internal sealed partial class V3WebRoot
         TimeSpan.FromMilliseconds(100));
 
     /// <summary>
+    /// A consolidated version's CELEX as EUR-Lex writes it, <c>0{yyyy}{type}{number}-{yyyymmdd}</c>: sector 0, the consolidated
+    /// act's year, type and number, and the consolidation's date; the act's own CELEX is the same in sector 3.
+    /// </summary>
+    private static readonly Regex ConsolidatedCelex = new(
+        "^0(?<act>[0-9]{4}[A-Z]{1,2}[0-9]{4,}(?:\\([0-9]{2}\\))?)-[0-9]{8}\\z",
+        RegexOptions.CultureInvariant,
+        TimeSpan.FromMilliseconds(100));
+
+    /// <summary>
+    /// A consolidated version's readable address, <c>/eu-eurlex/0{act}-{yyyymmdd}/{lng}[/{provision}]</c>, under an interface
+    /// language or none: it names one wording, not the act today, so it has moved to its act's readable address
+    /// (<see cref="MovedFor"/>; review of #972: it quoted another wording under its own address).
+    /// </summary>
+    private static readonly Regex EuropeConsolidatedReadable = new(
+        "^/(?:(?<locale>fr|en)/)?eu-eurlex/0(?<act>[0-9]{4}[A-Z]{1,2}[0-9]{4,}(?:\\([0-9]{2}\\))?)-[0-9]{8}/(?<lng>[a-z]{3})" +
+        "(?<article>/(?![0-9]{4}-[0-9]{2}-[0-9]{2}(?:--[0-9a-f]{64})?\\z)(?!(?:\\.|%2[eE]){1,2}\\z)(?:[0-9A-Za-z._~!$&'()*+,;=:@-]|%[0-9A-Fa-f]{2})+)?\\z",
+        RegexOptions.CultureInvariant,
+        TimeSpan.FromMilliseconds(100));
+
+    /// <summary>
+    /// A site path's match, or null when it is none, or is a consolidated version's readable address, which names no page
+    /// here and has moved (<see cref="MovedFor"/>).
+    /// </summary>
+    private static Match? SiteMatch(string path)
+    {
+        var match = SitePath.Match(path);
+        return !match.Success ||
+               (match.Groups["current"].Success && match.Groups["celex"].Success && ConsolidatedCelex.IsMatch(match.Groups["celex"].Value))
+            ? null
+            : match;
+    }
+
+    /// <summary>
     /// The page a site path under an interface language is served by (<c>/en/reading.html</c>, <c>/fr/dossier.html</c>), or
     /// null for any other path, an address for law with no language included (it is redirected).
     /// </summary>
     internal static string? PageForSitePath(string path)
     {
         ArgumentNullException.ThrowIfNull(path);
-        var match = SitePath.Match(path);
-        if (!match.Success || !match.Groups["locale"].Success)
+        var match = SiteMatch(path);
+        if (match is null || !match.Groups["locale"].Success)
         {
             return null;
         }
@@ -345,8 +378,8 @@ internal sealed partial class V3WebRoot
             }
         }
 
-        var match = SitePath.Match(path);
-        if (!match.Success || !match.Groups["locale"].Success)
+        var match = SiteMatch(path);
+        if (match is null || !match.Groups["locale"].Success)
         {
             return null;
         }
@@ -460,8 +493,8 @@ internal sealed partial class V3WebRoot
             return ($"{path}/{query}", $"{path}/");
         }
 
-        var match = SitePath.Match(path);
-        if (!match.Success || match.Groups["locale"].Success)
+        var match = SiteMatch(path);
+        if (match is null || match.Groups["locale"].Success)
         {
             return null;
         }
@@ -470,9 +503,11 @@ internal sealed partial class V3WebRoot
     }
 
     /// <summary>
-    /// Where a permalink of the shape before R64 has moved for good, as <c>movedFor</c> in <c>web/scripts/permalinks.mjs</c>
-    /// says it (a test holds the two to one table): an EU wording's <c>/eu-eurlex/{celex}/{lng}/{date}--{sha256}</c> to
-    /// <c>/eu-eurlex/{celex}/{date}--{sha256}/{lng}</c>, under the interface language it stood under, if any, with the query
+    /// Where an address has moved for good, as <c>movedFor</c> in <c>web/scripts/permalinks.mjs</c> says it (a test holds the two
+    /// to one table): an EU wording's permalink of the shape before R64, <c>/eu-eurlex/{celex}/{lng}/{date}--{sha256}</c>, to
+    /// <c>/eu-eurlex/{celex}/{date}--{sha256}/{lng}</c>, and a consolidated version's readable address,
+    /// <c>/eu-eurlex/0{act}-{yyyymmdd}/{lng}[/{provision}]</c>, to its act's, <c>/eu-eurlex/3{act}/{lng}[/{provision}]</c> (review
+    /// of #972), each under the interface language it stood under, if any, with the query
     /// (<paramref name="query"/>, with its <c>?</c>). Null for any other path. <c>Page</c> is the reading page the move relies
     /// on: the one under that language, or the first interface language's for an address with none.
     /// </summary>
@@ -480,15 +515,25 @@ internal sealed partial class V3WebRoot
     {
         ArgumentNullException.ThrowIfNull(path);
         var match = EuropeWordingBeforeR64.Match(path);
-        if (!match.Success)
+        if (match.Success)
         {
-            return null;
+            var locale = match.Groups["locale"].Success ? match.Groups["locale"].Value : null;
+            return (
+                $"{(locale is null ? string.Empty : "/" + locale)}/eu-eurlex/{match.Groups["celex"].Value}/{match.Groups["pin"].Value}/{match.Groups["lng"].Value}{query}",
+                $"/{locale ?? InterfaceLanguages[0]}/reading.html");
         }
 
-        var locale = match.Groups["locale"].Success ? match.Groups["locale"].Value : null;
-        return (
-            $"{(locale is null ? string.Empty : "/" + locale)}/eu-eurlex/{match.Groups["celex"].Value}/{match.Groups["pin"].Value}/{match.Groups["lng"].Value}{query}",
-            $"/{locale ?? InterfaceLanguages[0]}/reading.html");
+        // A consolidated version's readable address, to its act's (review of #972).
+        var consolidated = EuropeConsolidatedReadable.Match(path);
+        if (consolidated.Success)
+        {
+            var locale = consolidated.Groups["locale"].Success ? consolidated.Groups["locale"].Value : null;
+            return (
+                $"{(locale is null ? string.Empty : "/" + locale)}/eu-eurlex/3{consolidated.Groups["act"].Value}/{consolidated.Groups["lng"].Value}{consolidated.Groups["article"].Value}{query}",
+                $"/{locale ?? InterfaceLanguages[0]}/reading.html");
+        }
+
+        return null;
     }
 
     /// <summary>A header value's optional whitespace, as HTTP has it: space and tab.</summary>
