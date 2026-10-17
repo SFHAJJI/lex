@@ -281,6 +281,7 @@ export function journeyStepsFor({ identifier, date, anchor, language = READING_L
   // brings that article into view. The digest is the mount's, so `run` opens the permalink the same server's dossier names
   // for the date (`pinnedStep`); the placeholder's digest (all zeros) pins nothing, and stays only where no state is held
   // on the date (no mount).
+  // The page asks the page of the state that holds the article (the plan's item 3.7: `article`).
   permalink: Object.freeze({
     path: `/en${placeholder}/${escapeSegment(anchor)}`,
     rendered: true,
@@ -289,7 +290,7 @@ export function journeyStepsFor({ identifier, date, anchor, language = READING_L
     operation: "evidence_bundle",
     body: Object.freeze({
       operation_id: "evidence_bundle",
-      parameters: Object.freeze({ identifier: placeholder, date: date, language: language }),
+      parameters: Object.freeze({ identifier: placeholder, date: date, language: language, article: anchor }),
     }),
   }),
   // A permalink whose digest pins no held state (all zeros), as a link made before the text was derived again would: the
@@ -303,7 +304,7 @@ export function journeyStepsFor({ identifier, date, anchor, language = READING_L
     operation: "evidence_bundle",
     body: Object.freeze({
       operation_id: "evidence_bundle",
-      parameters: Object.freeze({ identifier: placeholder, date: date, language: language }),
+      parameters: Object.freeze({ identifier: placeholder, date: date, language: language, article: anchor }),
     }),
   }),
   // The work's readable address at one of its articles (R67): the reading page served at it asks the work at today's
@@ -316,7 +317,7 @@ export function journeyStepsFor({ identifier, date, anchor, language = READING_L
     operation: "evidence_bundle",
     body: Object.freeze({
       operation_id: "evidence_bundle",
-      parameters: Object.freeze({ identifier: identifier, date: today, language: language }),
+      parameters: Object.freeze({ identifier: identifier, date: today, language: language, article: anchor }),
     }),
   }),
 });
@@ -487,10 +488,12 @@ export function journeyVerdict(observed, expected) {
     const locale = /^\/(en|fr)\//.exec(step.path)?.[1] ?? null;
     const page = `${SITE_ORIGIN}/${locale}`;
     const named = typeof observed.canonical === "string" && locale !== null && observed.canonical.startsWith(`${page}/`) ? observed.canonical.slice(page.length) : null;
-    const law = named === null ? null : parseSitePath(named);
-    const pinned = parseSitePath(own);
+    // A page of a reading after its first names itself with its page (`?page=N`; the plan's item 3.7), and nothing else.
+    const law = named === null || !/^[^?]*(?:\?page=[1-9][0-9]*)?$/.test(named) ? null : parseSitePath(named.split("?")[0]);
+    const query = own.includes("?") ? own.slice(own.indexOf("?")) : "";
+    const pinned = parseSitePath(own.split("?")[0]);
     const readable = pinned?.kind === "state"
-      ? currentAddress({ publisher: pinned.publisher, work: pinned.publisher === "lu-legilux" ? pinned.identifier.slice("/lu-legilux/".length) : pinned.identifier, language: pinned.language, publisherId: anchorText(pinned.anchor) })
+      ? `${currentAddress({ publisher: pinned.publisher, work: pinned.publisher === "lu-legilux" ? pinned.identifier.slice("/lu-legilux/".length) : pinned.identifier, language: pinned.language, publisherId: anchorText(pinned.anchor) })}${query}`
       : null;
     if (law === null || law.locale !== null) failures.push(`the page names ${observed.canonical ?? "no"} canonical link, not a law's address on ${page}, the page's own interface language`);
     else if (step.stale === true ? (law.kind !== "state" || law.anchor !== null || named.includes(pinned?.digest ?? "")) : (named !== own && named !== readable)) {
@@ -662,7 +665,7 @@ export function journeyVerdict(observed, expected) {
     failures.push(`the failure panel's retry was not pressed and settled (${observed.retried ?? "not observed"})`);
   }
   const toApi = observed.requests.filter((request) => new URL(request.url).pathname.startsWith("/api/"));
-  const asks = (expected.mustRender === true ? 0 : 1) + (step.retry === true ? 1 : 0);
+  const asks = (expected.mustRender === true ? 0 : 1) + (step.retry === true ? 1 : 0) + (step.then?.asks ?? 0);
   if (toApi.length !== asks) {
     failures.push(`the page made ${toApi.length} requests to the API, not exactly ${["none", "one", "two"][asks]}`);
   }
@@ -1070,6 +1073,24 @@ async function keyboardPin(session, sessionId, evaluate, stops) {
 }
 
 /**
+ * The keyboard path to one control (a step's `then.key`): from where the focus is, Tab until the element matching
+ * `selector` has the focus, recording each stop, then press `key` on it. "absent" when Tab never reaches it.
+ */
+async function keyboardActivate(session, sessionId, evaluate, stops, selector, key) {
+  for (let tab = 0; tab < 200; tab += 1) {
+    await pressKey(session, sessionId, "Tab");
+    const focused = await evaluate(FOCUSED);
+    if (focused === null) continue;
+    stops.push(focused);
+    if (await evaluate(`document.activeElement?.matches(${JSON.stringify(selector)}) === true`)) {
+      await pressKey(session, sessionId, key);
+      return "clicked";
+    }
+  }
+  return "absent";
+}
+
+/**
  * Every element whose meaning could lie in paint alone: painted apart from what is behind it (a
  * background image, a background colour other than the one it sits on, a visible border, outline or
  * shadow) and saying nothing in words or in an accessible name. The launch contract's "no meaning by
@@ -1227,7 +1248,11 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
     if (step.then !== undefined && answerState === "success") {
       // `count` matches are clicked, the first first (journey J4 pins several provisions); one when it is not given.
       const count = step.then.count ?? 1;
-      if (keyboard) {
+      if (keyboard && step.then.key !== undefined) {
+        // A link or button the step acts on by the keyboard (the next articles, the plan's item 3.7): Tab until it has the
+        // focus, then its key, as a keyboard user follows it.
+        then = await keyboardActivate(session, sessionId, evaluate, keys?.stops ?? [], step.then.click, step.then.key);
+      } else if (keyboard) {
         for (let pinned = 0; pinned < count; pinned += 1) {
           then = await keyboardPin(session, sessionId, evaluate, keys.stops);
           if (then !== "clicked") break;
@@ -2018,6 +2043,49 @@ export function twoStateExpectations(journeyMount) {
 }
 
 /**
+ * The long act's mount (`journey-mount.json` names `long_act`; the plan's item 3.7): the fixture act with 130 articles of
+ * synthetic text, read in three pages of 50. Three steps, each on a page the server renders from its own answer: an article
+ * on the second page, cited first, with the page that holds it, the act's contents and the links before and after; the
+ * second page by the address the next-articles link names, as a reader without scripts follows it (the page shows it with
+ * no script run); and the first page, whose next articles are asked in place by the link, by pointer or by the keyboard,
+ * with one request at the next page and no navigation.
+ */
+export function longActExpectations(journeyMount) {
+  const { date, language, permalink, cited, pages, articles } = journeyMount.long_act;
+  const reading = (parameters) => Object.freeze({ operation_id: "evidence_bundle", parameters: Object.freeze({ identifier: permalink, date, language, ...parameters }) });
+  const counted = `${articles} articles quoted`;
+  const citedStep = Object.freeze({
+    path: `/en${permalink}/${escapeSegment(cited)}`,
+    rendered: true,
+    pins: Object.freeze({ identifier: `/lu-legilux/${journeyMount.work_key}`, date, anchor: cited, language }),
+    cites: true,
+    operation: "evidence_bundle",
+    body: reading({ article: cited }),
+  });
+  const secondPage = Object.freeze({
+    path: `/en${permalink}?page=2`,
+    rendered: true,
+    cites: true,
+    operation: "evidence_bundle",
+    body: reading({ page: 2 }),
+  });
+  const inPlace = Object.freeze({
+    path: `/en${permalink}`,
+    rendered: true,
+    cites: true,
+    operation: "evidence_bundle",
+    // The next articles, asked in place: one request at page 2, the articles added below, the pages shown 1 to 2.
+    then: Object.freeze({ click: "[data-live-answer] a[data-next-page]", key: "Enter", until: "[data-pages-shown='1-2']", asks: 1 }),
+    body: reading({ page: 2 }),
+  });
+  return [
+    ["a long act's article on its second page, cited first", { step: citedStep, state: "success", texts: [`Page 2 of ${pages}: art_51 to art_100.`, "Contents", "Previous articles", "Next articles", counted, "Quoted from"] }],
+    ["a long act's second page at the address its next-articles link names, without scripts", { step: secondPage, state: "success", texts: [`Page 2 of ${pages}: art_51 to art_100.`, "Previous articles", counted] }],
+    ["a long act's next articles, asked in place", { step: inPlace, state: "success", texts: [`Pages 1 to 2 of ${pages}: art_1er to art_100.`, counted] }],
+  ];
+}
+
+/**
  * The EU annex control mount (`journey-mount.json` names `eu_annex`): the reading, dossier and export composer pages for
  * the act whose annex the publisher's PDF holds only as images. Each page must say that the annex is not served as
  * text, and neither the annex's text nor its title may appear anywhere on the page, in its text or its markup (the JSON
@@ -2095,8 +2163,9 @@ async function main(argv) {
   // two-state mount.
   const licenceBlocked = journeyMount?.rights_disposition !== undefined;
   const twoState = journeyMount?.later_date !== undefined;
-  // One that names an EU annex is the image-only annex control mount.
+  // One that names an EU annex is the image-only annex control mount, and one that names a long act the reading by page's.
   const europeAnnex = journeyMount?.eu_annex !== undefined;
+  const longAct = journeyMount?.long_act !== undefined;
   // `--live-root` serves a directory built elsewhere instead of building one: how a deliberately
   // broken page is shown to fail the journey.
   const liveRoot = argv.includes("--live-root") ? argument("--live-root") : await buildLive();
@@ -2113,6 +2182,10 @@ async function main(argv) {
   } else if (europeAnnex) {
     for (const [name, expected] of europeAnnexExpectations(journeyMount)) {
       results.push([`${name}, with the EU annex control mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
+    }
+  } else if (longAct) {
+    for (const [name, expected] of longActExpectations(journeyMount)) {
+      results.push([`${name}, with the long act mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
     }
   } else {
     // Each step with the fixture mount, then with no mount, where every page shows the refusal card.
@@ -2134,7 +2207,7 @@ async function main(argv) {
   }
   // Journeys J6, J7 and J8 at the API (no page asks the contained assistant or MCP, or polls events), on the
   // fixture mount.
-  const apiResults = realMount || licenceBlocked || twoState || europeAnnex ? [] : await apiJourneyRuns(apiOutput, mount);
+  const apiResults = realMount || licenceBlocked || twoState || europeAnnex || longAct ? [] : await apiJourneyRuns(apiOutput, mount);
   let failed = false;
   for (const [label, failures] of apiResults) {
     console.log(`${label}: ${failures.length === 0 ? "PASS" : "FAIL"}`);

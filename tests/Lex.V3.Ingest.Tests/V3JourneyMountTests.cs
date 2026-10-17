@@ -18,6 +18,7 @@ public sealed class V3JourneyMountTests
     private const string WriteVariable = "V3_WRITE_JOURNEY_MOUNT";
     private const string LicenceBlockedVariable = "V3_WRITE_LICENCE_BLOCKED_MOUNT";
     private const string TwoStateVariable = "V3_WRITE_TWO_STATE_JOURNEY_MOUNT";
+    private const string LongActVariable = "V3_WRITE_LONG_ACT_JOURNEY_MOUNT";
     private const string LaterDate = "2025-01-01";
     private const string NonAdmittingLicence = "non_admitting_licence_scl";
     private const int WindowLength = 40;
@@ -164,6 +165,54 @@ public sealed class V3JourneyMountTests
             first_date = fixture.ApplicabilityDate,
             later_date = LaterDate,
             amended_article = amended.PublisherId,
+        }, new JsonSerializerOptions { WriteIndented = true });
+        await File.WriteAllTextAsync(Path.Combine(target, "journey-mount.json"), manifest + "\n");
+    }
+
+    /// <summary>
+    /// Writes the mount the reading by page's journeys walk (the plan's item 3.7), when <c>V3_WRITE_LONG_ACT_JOURNEY_MOUNT</c>
+    /// names a directory: the fixture act with 130 articles of synthetic text (<see cref="SyntheticLongAct"/>), three pages
+    /// of 50 under the reading's page rule. Its <c>journey-mount.json</c> names the state's permalink, its date and language,
+    /// its pages and articles, and the article on the second page the journey cites.
+    /// </summary>
+    [TestMethod]
+    public async Task TheLongActJourneyMountIsReadInThreePages()
+    {
+        var target = Environment.GetEnvironmentVariable(LongActVariable);
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            Assert.Inconclusive($"{LongActVariable} names no directory, so no long act journey mount is written.");
+        }
+
+        var fixture = await MountedFixture.CreateAsync(await SyntheticLongAct.DocumentAsync(130, textBytes: 1200));
+        await using var cleanup = fixture;
+        Directory.CreateDirectory(target);
+        foreach (var name in new[] { V3CorpusMount.IndexFileName, V3CorpusMount.CapabilityManifestFileName, V3CorpusMount.CorpusFileName })
+        {
+            File.Copy(Path.Combine(fixture.Directory, name), Path.Combine(target, name), overwrite: true);
+        }
+
+        using (var mount = await V3CorpusMount.OpenAsync(target, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount, "the long act's directory mounts through the API's own verifier.");
+        }
+
+        var manifest = JsonSerializer.Serialize(new
+        {
+            schema = "lex-v3-journey-mount/1",
+            note = "the test fixture's Luxembourg act with 130 articles of synthetic text (THE MOUNT IS A FIXTURE), written for the journeys that read a long act by page",
+            corpus_sha256 = fixture.CorpusSha256,
+            index_sha256 = fixture.IndexSha256,
+            work_key = fixture.WorkKey,
+            long_act = new
+            {
+                date = fixture.ApplicabilityDate,
+                language = fixture.Language,
+                permalink = fixture.Permalink,
+                pages = 3,
+                articles = 130,
+                cited = "art_77",
+            },
         }, new JsonSerializerOptions { WriteIndented = true });
         await File.WriteAllTextAsync(Path.Combine(target, "journey-mount.json"), manifest + "\n");
     }

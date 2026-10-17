@@ -58,6 +58,7 @@ import {
   specificationJourneyExpectations,
   twoStateExpectations,
   europeAnnexExpectations,
+  longActExpectations,
   withoutRequestFields,
   EU_READING_DATE,
   EU_READING_STEP,
@@ -318,8 +319,9 @@ test("a work's address and a state's permalink open their pages with nothing typ
   assert.equal(address.typed, undefined);
   assert.deepEqual(address.body, JOURNEY_STEPS.dossier.body);
   assert.equal(permalink.typed, undefined);
-  // R64: the page asks the reading by the permalink itself, with no article, its date and the text's language it names.
-  assert.deepEqual(permalink.body, { operation_id: "evidence_bundle", parameters: { identifier: `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"0".repeat(64)}/fra`, date: READING_DATE, language: READING_LANGUAGE } });
+  // R64: the page asks the reading by the permalink itself, with no article in it, its date and the text's language it
+  // names, for the page that holds the article (the plan's item 3.7).
+  assert.deepEqual(permalink.body, { operation_id: "evidence_bundle", parameters: { identifier: `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"0".repeat(64)}/fra`, date: READING_DATE, language: READING_LANGUAGE, article: HISTORY_ANCHOR } });
   assert.equal(READING_LANGUAGE, "fra");
   assert.deepEqual(permalink.pins, { identifier: DOSSIER_IDENTIFIER, date: READING_DATE, anchor: HISTORY_ANCHOR, language: READING_LANGUAGE });
   assert.equal(permalink.path, `/en${DOSSIER_IDENTIFIER}/${READING_DATE}--${"0".repeat(64)}/fra/${HISTORY_ANCHOR}`, "a placeholder that pins nothing, the article a segment of it");
@@ -330,7 +332,7 @@ test("a work's address and a state's permalink open their pages with nothing typ
   // R67: the work's readable address at the article, asked at today's date in Luxembourg, in its language.
   const today = journeyStepsFor({ identifier: DOSSIER_IDENTIFIER, date: READING_DATE, anchor: HISTORY_ANCHOR, today: "2026-10-16" }).current;
   assert.equal(today.path, `/en${DOSSIER_IDENTIFIER}/fra/${HISTORY_ANCHOR}`);
-  assert.deepEqual(today.body, { operation_id: "evidence_bundle", parameters: { identifier: DOSSIER_IDENTIFIER, date: "2026-10-16", language: "fra" } });
+  assert.deepEqual(today.body, { operation_id: "evidence_bundle", parameters: { identifier: DOSSIER_IDENTIFIER, date: "2026-10-16", language: "fra", article: HISTORY_ANCHOR } });
   assert.deepEqual(today.current, { anchor: HISTORY_ANCHOR });
   assert.equal(today.rendered, true);
 });
@@ -1453,4 +1455,47 @@ test("the API journeys run against the server the caller starts (the release ima
   } finally {
     await server.close();
   }
+});
+
+test("the long act's journeys: the cited article on its second page, that page without scripts, and the next articles in place", () => {
+  const permalink = `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"a".repeat(64)}/fra`;
+  const mount = { work_key: "loi-1991-08-10-n3", long_act: { date: READING_DATE, language: "fra", permalink, pages: 3, articles: 130, cited: "art_77" } };
+  const [[, cited], [, second], [, inPlace]] = longActExpectations(mount);
+  assert.equal(cited.step.path, `/en${permalink}/art_77`);
+  assert.deepEqual(cited.step.pins, { identifier: DOSSIER_IDENTIFIER, date: READING_DATE, anchor: "art_77", language: "fra" });
+  assert.deepEqual(cited.step.body.parameters, { identifier: permalink, date: READING_DATE, language: "fra", article: "art_77" }, "the page that holds the cited article");
+  assert.ok(cited.texts.includes("Page 2 of 3: art_51 to art_100."));
+  assert.equal(second.step.path, `/en${permalink}?page=2`, "the address the next-articles link names");
+  assert.equal(second.step.rendered, true, "shown with no script run");
+  assert.deepEqual(inPlace.step.then, { click: "[data-live-answer] a[data-next-page]", key: "Enter", until: "[data-pages-shown='1-2']", asks: 1 });
+
+  // The next articles in place: one request, at page 2, and no navigation.
+  const observed = {
+    ...good(),
+    text: "Pages 1 to 2 of 3: art_1er to art_100. 130 articles quoted",
+    requests: [
+      { url: `${ORIGIN}${inPlace.step.path}`, method: "GET", headers: {} },
+      { url: `${ORIGIN}/api/v3/evidence_bundle`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(inPlace.step.body) },
+    ],
+    location: `${ORIGIN}${inPlace.step.path}`,
+    history: { atLoad: 2, atEnd: 2, state: "null" },
+    cookie: "",
+    then: "reached",
+    serverRendered: true,
+    withoutScripts: { answerState: "success" },
+  };
+  const expected = { origin: ORIGIN, ...inPlace, mustRender: true };
+  assert.deepEqual(journeyVerdict(observed, expected), []);
+  assert.ok(journeyVerdict({ ...observed, then: "clicked" }, expected).some((failure) => /never showed \[data-pages-shown='1-2'\]/.test(failure)), "the next articles never added");
+  assert.ok(journeyVerdict({ ...observed, requests: observed.requests.slice(0, 1) }, expected).some((failure) => /not exactly one/.test(failure)), "the next page must be asked, once");
+  assert.ok(journeyVerdict({ ...observed, location: `${ORIGIN}${second.step.path}` }, expected).some((failure) => /ended at/.test(failure)), "in place: no navigation");
+
+  // A page after the first names itself canonical with its page, and nothing else after it.
+  const page = { ...observed, then: undefined, text: "Page 2 of 3: art_51 to art_100. Previous articles 130 articles quoted", requests: observed.requests.slice(0, 1), location: `${ORIGIN}${second.step.path}`,
+    canonical: `https://law.soufien.lu${permalink}?page=2`,
+    alternates: [["fr", `https://law.soufien.lu/fr${permalink}?page=2`], ["en", `https://law.soufien.lu/en${permalink}?page=2`], ["x-default", `https://law.soufien.lu${permalink}?page=2`]] };
+  const secondExpected = { origin: ORIGIN, ...second, mustRender: true };
+  assert.deepEqual(journeyVerdict(page, secondExpected), []);
+  assert.ok(journeyVerdict({ ...page, canonical: `https://law.soufien.lu${permalink}?page=2&x=1` }, secondExpected).some((failure) => /canonical/.test(failure)), "a canonical with another query fails");
+  assert.ok(journeyVerdict({ ...page, canonical: `https://law.soufien.lu${permalink}` }, secondExpected).some((failure) => /canonical/.test(failure)), "page 2 named as page 1 fails");
 });
