@@ -17,7 +17,8 @@ namespace Lex.V3.Ingest.Tests;
 /// <para>
 /// OPT-IN AND READ-ONLY, like S2's and S3a's probes. It runs only with <c>LEX_LU_INDEX9_PROBE=1</c>;
 /// <c>LEX_LU_INDEX9_PROBE_ROOT</c> names a directory holding S3a's <c>run15-held.jsonl</c> (every held body: its
-/// selected WEMI and rights), S2's <c>csharp_v4.jsonl</c> (inventory /4 per body) and S3a's <c>csharp_content2.jsonl</c>
+/// selected WEMI and rights), S2's <c>csharp_v4.jsonl</c> (inventory /4 per body; or <c>ref_v4.jsonl</c>, the reference
+/// implementation's, which S2 matched on every one of the 11,205 bodies) and S3a's <c>csharp_content2.jsonl</c>
 /// (content /2 per main-body article); <c>LEX_LU_INDEX9_PROBE_FACTS</c> names derive-c's Luxembourg index, opened read-only,
 /// whose <c>work_facts</c> are run 15's typed assertions, the catalogue the projection reads. Nothing is written but the
 /// summary in the probe root; nothing goes over the network.
@@ -90,7 +91,8 @@ public sealed class LuxembourgIndexNineRun15Probe
 
         // ---- The held bodies, what inventory /4 and content /2 made of them. ----
         var inventory = new Dictionary<string, JsonNode>(StringComparer.Ordinal);
-        foreach (var line in File.ReadLines(Path.Combine(root, "csharp_v4.jsonl")))
+        var inventoryFile = File.Exists(Path.Combine(root, "csharp_v4.jsonl")) ? "csharp_v4.jsonl" : "ref_v4.jsonl";
+        foreach (var line in File.ReadLines(Path.Combine(root, inventoryFile)))
         {
             var row = JsonNode.Parse(line)!;
             inventory[(string)row["root"]!] = row;
@@ -174,6 +176,7 @@ public sealed class LuxembourgIndexNineRun15Probe
         var summary = new JsonObject
         {
             ["schema"] = "lex-v3-lu-index9-run15-probe/1",
+            ["inventory_input"] = inventoryFile,
             ["catalogue_facts_read"] = catalogueFacts.Subjects.Count(),
             ["held_bodies"] = bodies.Count,
             ["admitted_articles"] = articles.Count,

@@ -877,19 +877,21 @@ internal sealed partial class V3CorpusMount : IDisposable
 
     /// <summary>
     /// The derivation on a mount of lex-v3-luxembourg-index/9, whose state digest is /2: the same encoding over the row's own
-    /// facts, which the answer carries in each state's <c>digest_inputs</c>.
+    /// facts as well. Those facts (the date's role and the others after the language) are served with the state rows when the
+    /// reader's interval rules land (S7a); until then this answer says a caller cannot recompute the digest from it alone.
     /// </summary>
     internal const string ProvenanceDerivationNine =
-        "state_sha256 is a SHA-256 over these values, each as UTF-8 preceded by its length as four bytes big-endian: the domain tag " +
-        "lex-v3-luxembourg-expression-state/2, the publisher, the work key, the applicability date, the date's role, the state's kind, the " +
-        "expression, the publisher work IRI, the publisher legal-resource IRI, the language, then from digest_inputs the end the publisher " +
+        "state_sha256 is state digest /2, a SHA-256 over these values, each as UTF-8 preceded by its length as four bytes big-endian: " +
+        "the domain tag lex-v3-luxembourg-expression-state/2, the publisher, the work key, the applicability date, the date's role, the " +
+        "state's kind, the expression, the publisher work IRI, the publisher legal-resource IRI, the language, the end the publisher " +
         "states, the publication date, the text status, its reason, the in-file identity, the in-file date, the entry into force and the " +
-        "French expression a translation takes its interval from (each the empty string when null), then the number of rule-profile digests " +
-        "as decimal text and each digest in sorted order, then the number of article identities as decimal text and each identity in sorted " +
-        "order; an end derived from the next state, the boundary and provisional are not in it; the article identities are not carried here " +
-        "(they are article_identities in as_of's answer to the same request, and article_identities_sha256 is the SHA-256 of them in sorted " +
-        "order, each preceded by its length in the same way, so a caller can check the list it holds); this mount's own reader recomputes " +
-        "the state digest when the index is opened and refuses an index in which it does not match its row";
+        "French expression a translation takes its interval from (each the empty string when there is none), then the number of " +
+        "rule-profile digests as decimal text and each digest in sorted order, then the number of article identities as decimal text and " +
+        "each identity in sorted order; an end derived from the next state is not in it; the date's role and the facts after the language " +
+        "are not carried in this answer, so a caller cannot recompute the digest from it alone; the article identities are not carried " +
+        "here either (they are article_identities in as_of's answer to the same request, and article_identities_sha256 is the SHA-256 of " +
+        "them in sorted order, each preceded by its length in the same way, so a caller can check the list it holds); this mount's own " +
+        "reader recomputes the state digest when the index is opened and refuses an index in which it does not match its row";
 
     internal const string ProvenanceSourcesNote =
         "object_ref_sha256 identifies the source object in the corpus; body_sha256 is the digest of the publisher bytes the corpus retained " +
@@ -1000,14 +1002,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         }
 
         var served = new List<object>();
-        var nine = _reader!.RecordsCatalogueStates;
         foreach (var state in chosen)
         {
-            // On index 9 the state digest is /2, over the row's own facts as well: they are carried, so the chain stays one a
-            // caller can recompute (a reader of an index 8 or 6 has none, and its digest is /1).
-            var row = nine
-                ? _reader.ResolveCatalogueStates(state.WorkKey).Single(candidate => string.Equals(candidate.StateSha256, state.StateSha256, StringComparison.Ordinal))
-                : null;
             served.Add(new
             {
                 language = state.Language,
@@ -1021,19 +1017,6 @@ internal sealed partial class V3CorpusMount : IDisposable
                 rule_profile_sha256s = state.RuleProfileSha256s,
                 articles = state.ArticleIdentities.Count,
                 article_identities_sha256 = ArticleIdentitiesSha256(state.ArticleIdentities),
-                digest_inputs = row is null ? null : new
-                {
-                    date_role = row.DateRole,
-                    state_kind = row.StateKind,
-                    publisher_applicable_to = row.ApplicableToSource == "publisher" ? row.ApplicableTo : null,
-                    publication_date = row.PublicationDate,
-                    text_status = row.TextStatus,
-                    text_status_reason = row.TextStatusReason,
-                    in_file_identity = row.InFileIdentity,
-                    in_file_date = row.InFileDate,
-                    entry_into_force = row.EntryIntoForce,
-                    translation_of = row.TranslationOf,
-                },
                 sources = _reader!.ResolveStateSources(state.StateSha256).Select(SourceRow).ToArray(),
             });
         }
@@ -1054,7 +1037,8 @@ internal sealed partial class V3CorpusMount : IDisposable
                 index_sha256 = _reader!.IndexRef.Sha256,
                 registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
             },
-            derivation = nine ? ProvenanceDerivationNine : ProvenanceDerivation,
+            // On an index 9 the digest is /2, whose sentence says what this answer does not carry (S7a serves it).
+            derivation = _reader!.RecordsCatalogueStates ? ProvenanceDerivationNine : ProvenanceDerivation,
             sources_note = ProvenanceSourcesNote,
             not_held = ProvenanceNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
         });
