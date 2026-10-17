@@ -97,6 +97,16 @@ link.") and R67 ("Every work and article has a readable address that resolves to
   mount 51 of 51 through the live server and 51 of 51 by keyboard served by the API, the licence-blocked mount 13 of 13 both
   ways, the two-state mount 2 of 2 and the EU annex control mount 3 of 3 both ways; at the final head they are left to CI's
   journeys lane, on Linux.
+- **CI on #972 (bc1ffe26)** found one Ingest test on the contract before this part, in the `dotnet` and `image-conditions`
+  jobs: `V3CorpusEuropeCapabilityMountTests.AnEuIdentifierIsAttributedToTheEuWhateverItsFormAndOnlyOneNoIndexHoldsIsUnknownToTheTimeView`
+  asked `as_of` at an EU wording's permalink at another date and expected `identifier_unknown`. It now leaves the permalink
+  out of `as_of`'s unknown identifiers, asserts that `as_of` at the permalink's own date answers the wording it pins (EU
+  context), and at another date the `request_schema_invalid` problem (400); `timeline` still answers a permalink
+  `identifier_unknown`, unchanged. Every other Ingest test that sends a permalink to `as_of`, `evidence_bundle` or
+  `provenance` was looked for and run: the `V3CorpusEurope*`, `V3CorpusAsOf*`, `V3CorpusProvenance*`,
+  `V3CorpusEvidenceBundle*` and pinned-permalink classes, with generation quotes, as_observed, citation verification, MCP,
+  replay, article history, diff, timeline, citation, in_force_on, status_on, changes_in_period, articles not admitted and the
+  EU annex control case: 229 of 229.
 
 ## The home page, and the sentence that says what Lex is not (sole driver, 2026-10-16)
 
