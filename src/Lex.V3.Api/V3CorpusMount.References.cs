@@ -32,6 +32,9 @@ internal sealed partial class V3CorpusMount
 
     private const string ReferencePhase = "exact_reference";
 
+    /// <summary>What every <c>identifier_unknown</c> of the phase says after what would answer: the reference was read, and no word searched.</summary>
+    private const string ReferenceNotHeld = "; the reference was read, and what it names is not held here, so no word was searched";
+
     private const string LuxembourgEliRoot = "http://data.legilux.public.lu/eli/etat/";
 
     private readonly object _catalogueGate = new();
@@ -206,7 +209,7 @@ internal sealed partial class V3CorpusMount
         if (workKeys.Count == 0)
         {
             return WithRecognition(request, Unknown(request, query, observedAt, PublisherId.LuLegilux,
-                "an act this index holds: the reference was read, and no act it names is held, so no word was searched"), recognition);
+                "an act this index holds" + ReferenceNotHeld), recognition);
         }
 
         if (workKeys.Count > 1)
@@ -282,7 +285,7 @@ internal sealed partial class V3CorpusMount
         if (scope.Count == 0)
         {
             return WithRecognition(request, Unknown(request, query, observedAt, PublisherId.LuLegilux,
-                "a version of this act this index holds: the ELI names a version the index does not hold"), recognition);
+                "a version of this act this index holds: the ELI names a version the index does not hold" + ReferenceNotHeld), recognition);
         }
 
         var textLanguage = pinnedLanguage ?? language;
@@ -534,7 +537,7 @@ internal sealed partial class V3CorpusMount
         if (seed is null && expressions.Count == 0)
         {
             return WithRecognition(request, Unknown(request, query, observedAt, PublisherId.EuEurLex,
-                "an EU act this EU index holds: the reference was read, and the act it names is not held, so no word was searched"), recognition);
+                "an EU act this EU index holds" + ReferenceNotHeld), recognition);
         }
 
         var act = seed ?? celex;
@@ -713,7 +716,7 @@ internal sealed partial class V3CorpusMount
             }
 
             return WithRecognition(request, Unknown(request, query, observedAt, PublisherId.EuEurLex,
-                "an address of this site for EU law: /eu-eurlex/{celex}, or a permalink /eu-eurlex/{celex}/{date}--{sha256}/{language}"), recognised);
+                "an address of this site for EU law: /eu-eurlex/{celex}, or a permalink /eu-eurlex/{celex}/{date}--{sha256}/{language}" + ReferenceNotHeld), recognised);
         }
 
         var recognition = new Recognition(reference, "lu-legilux");
@@ -754,7 +757,7 @@ internal sealed partial class V3CorpusMount
         }
 
         return WithRecognition(request, Unknown(request, query, observedAt, PublisherId.LuLegilux,
-            "an address of this site for a Luxembourg act this index holds: /lu-legilux/{work}, or a permalink /lu-legilux/{work}/{date}--{sha256}/{language}"), recognition);
+            "an address of this site for a Luxembourg act this index holds: /lu-legilux/{work}, or a permalink /lu-legilux/{work}/{date}--{sha256}/{language}" + ReferenceNotHeld), recognition);
     }
 
     /// <summary>A permalink opens as written (its own page says when its pin is not the version served) when its act is held.</summary>
@@ -777,7 +780,7 @@ internal sealed partial class V3CorpusMount
         if (!held)
         {
             return WithRecognition(request, Unknown(request, query, observedAt, context,
-                "a permalink of a version this site holds"), recognition);
+                "a permalink of a version this site holds" + ReferenceNotHeld), recognition);
         }
 
         var segments = address.Split('/');
