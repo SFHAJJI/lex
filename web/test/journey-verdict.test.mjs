@@ -557,11 +557,11 @@ test("a page at a law's address the server renders asks nothing as it loads and 
   assert.deepEqual(journeyVerdict(unrendered, { origin: ORIGIN, step, state: "refusal", refusalCode: "no_corpus_mounted" }), []);
 });
 
-test("a law's page names the permalink with no interface language as canonical, each language and x-default as alternates (R64)", () => {
+test("a law's page names as canonical the address it shows in its own interface language, each language and x-default as alternates (R61, R64, R67)", () => {
   const site = "https://law.soufien.lu";
   const article = `${DOSSIER_IDENTIFIER}/${READING_DATE}--${"e".repeat(64)}/fra/${HISTORY_ANCHOR}`;
   const step = { ...JOURNEY_STEPS.permalink, path: `/en${article}` };
-  const links = (address) => ({ canonical: `${site}${address}`, alternates: [["fr", `${site}/fr${address}`], ["en", `${site}/en${address}`], ["x-default", `${site}${address}`]] });
+  const links = (address, locale = "en") => ({ canonical: `${site}/${locale}${address}`, alternates: [["fr", `${site}/fr${address}`], ["en", `${site}/en${address}`], ["x-default", `${site}${address}`]] });
   const observed = (change = {}) => ({
     ...goodSearch(),
     requests: [{ url: `${ORIGIN}${step.path}`, method: "GET", headers: {} }],
@@ -577,15 +577,23 @@ test("a law's page names the permalink with no interface language as canonical, 
   });
   const expected = { origin: ORIGIN, step, state: "success", texts: ["49 articles quoted"], mustRender: true };
   assert.deepEqual(journeyVerdict(observed(), expected), []);
+  // A permalink of the version its act's readable address shows today names that readable address, the article's (R67).
+  const readable = `${DOSSIER_IDENTIFIER}/fra/${HISTORY_ANCHOR}`;
+  assert.deepEqual(journeyVerdict(observed(links(readable)), expected), [], "today's version: its readable address");
+  // A page under /fr/ names its canonical under /fr/.
+  const french = { ...links(article, "fr"), location: `${ORIGIN}/fr${article}`, requests: [{ url: `${ORIGIN}/fr${article}`, method: "GET", headers: {} }] };
+  assert.deepEqual(journeyVerdict(observed(french), { ...expected, step: { ...step, path: `/fr${article}` } }), [], "the French page");
   for (const [what, change, reason] of [
     ["no canonical link", { canonical: null }, /names no canonical link/],
-    ["the page's own language", { canonical: `${site}/en${article}` }, /not a law's address .* with no interface language/],
-    ["the state without its article", links(article.slice(0, article.lastIndexOf("/"))), /canonical, not https:\/\/law\.soufien\.lu\/lu-legilux/],
-    ["another origin", { canonical: `${ORIGIN}${article}` }, /not a law's address on https:\/\/law\.soufien\.lu/],
+    ["no interface language", { canonical: `${site}${article}` }, /not a law's address on https:\/\/law\.soufien\.lu\/en, the page's own interface language/],
+    ["the other interface language", { canonical: `${site}/fr${article}` }, /the page's own interface language/],
+    ["the state without its article", links(article.slice(0, article.lastIndexOf("/"))), /canonical, not https:\/\/law\.soufien\.lu\/en\/lu-legilux/],
+    ["another article's readable address", links(`${DOSSIER_IDENTIFIER}/fra/art_1`), /canonical, not https:\/\/law\.soufien\.lu\/en\/lu-legilux/],
+    ["another origin", { canonical: `${ORIGIN}/en${article}` }, /not a law's address on https:\/\/law\.soufien\.lu/],
     ["no x-default", { alternates: [["fr", `${site}/fr${article}`], ["en", `${site}/en${article}`]] }, /alternates are/],
     // Every link is counted (review of #967): one named twice is a failure, which a map of them would hide.
     ["an alternate twice", { alternates: [...links(article).alternates, ["en", `${site}/en${article}`]] }, /alternates are .*, each once/],
-    ["two canonical links", { canonical: [`${site}${article}`, `${site}${article}`] }, /not a law's address/],
+    ["two canonical links", { canonical: [`${site}/en${article}`, `${site}/en${article}`] }, /not a law's address/],
   ]) {
     const failures = journeyVerdict(observed(change), expected);
     assert.ok(failures.some((failure) => reason.test(failure)), `${what}: ${failures.join(" | ")}`);
@@ -892,6 +900,7 @@ test("a run whose page the API served is held to the headers the page arrived wi
       "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
+      "X-Robots-Tag": "noindex",
     },
   });
   const expected = { ...SEARCH, servedByApi: true };
@@ -901,6 +910,11 @@ test("a run whose page the API served is held to the headers the page arrived wi
     ["no HSTS", (o) => { delete o.pageHeaders["Strict-Transport-Security"]; }, /without HSTS/],
     ["a referrer policy that sends one", (o) => { o.pageHeaders["Referrer-Policy"] = "origin"; }, /Referrer-Policy origin/],
     ["no nosniff", (o) => { delete o.pageHeaders["X-Content-Type-Options"]; }, /without nosniff/],
+    // Kept out of search engines until the owner answers O27 (R67).
+    ["no X-Robots-Tag", (o) => { delete o.pageHeaders["X-Robots-Tag"]; }, /X-Robots-Tag null, not noindex/],
+    ["no robots element", (o) => { o.robots = []; }, /robots elements \[\], not one noindex/],
+    ["two robots elements", (o) => { o.robots = ["noindex", "noindex"]; }, /not one noindex/],
+    ["a page opened to search engines", (o) => { o.robots = ["index"]; }, /not kept out of search engines/],
     ["headers never observed", (o) => { o.pageHeaders = null; }, /arrived with the CSP null/],
   ];
   for (const [what, mutate, reason] of cases) {
@@ -909,6 +923,10 @@ test("a run whose page the API served is held to the headers the page arrived wi
     assert.ok(journeyVerdict(observed, expected).some((failure) => reason.test(failure)), what);
   }
   assert.deepEqual(journeyVerdict({ ...goodSearch(), pageHeaders: null }, SEARCH), [], "a page served by serve-live is not held to them");
+  // A run against a release opened to search engines (O27 answered yes) is not held to noindex: its record decides.
+  const opened = served();
+  delete opened.pageHeaders["X-Robots-Tag"];
+  assert.deepEqual(journeyVerdict({ ...opened, robots: [] }, { ...expected, searchEngines: "indexed" }), []);
 });
 
 test("on the fixture mount every step must answer, and coverage must name the mount's own digests", () => {

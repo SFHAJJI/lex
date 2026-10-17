@@ -4,6 +4,166 @@ Updated 2026-10-17. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Search engines: kept out until O27, one switch, the sitemap and the Legislation markup (sole driver, 2026-10-17)
+
+The plan's item 3.6 (`C:\lex-v3\PLAN-2026-10-14.md`), to the specification of record's R67 ("robots.txt allows dossiers and
+reading pages, and disallows /api, /mcp, search results and exports. Search pages are noindex. A sitemap lists dossiers and
+current reading pages, with lastmod from the build or acquisition time, never valid_from. Pages carry hreflang and schema.org
+Legislation markup. Indexing follows R92's handling of names."), with R92, R49, R109 and R64, and the web lane's 3.2c item 3
+(R67's "identical version pages point their canonical link there"). The owner has not answered O27 (search-engine indexing),
+and the plan says: "If unanswered: the pages open but are kept out of search engines." So the whole mechanism is built and
+the site stays out.
+- **What there was** (read from the code): no robots.txt (both servers answered the 404 page), no sitemap, no robots element
+  or header, no structured data; every law page named as canonical its address with no interface language, which answers a
+  redirect by the reader's language (#967's decision, below).
+- **One release-level switch**, `LEX_V3_SEARCH_ENGINES`, read by the API when it starts (`Program.cs`, `V3WebRoot.Open`) and
+  by the live server when it is made (`createLiveServer`'s `searchEngines`, the variable by default): `indexed`, exactly, opens
+  the site; anything else, its absence included, keeps it out. `deploy/deploy.ps1` and `deploy/main.bicep` are unchanged and
+  set no such variable, so every release and the private copy are kept out.
+  - Kept out: `/robots.txt` disallows `/api/`, `/mcp`, `/health/` and each language's `search.html` and `export.html`, allows
+    the pages and names no sitemap (a crawler must fetch a page to read its noindex; review of #976, F1); every response of
+    the web root (pages, files, redirects, robots.txt, the 404 page, a method refused) carries `X-Robots-Tag: noindex`;
+    every live page names `<meta name="robots" content="noindex">`; the sitemap is an address the site does not hold (its
+    404 page).
+  - Indexed: robots.txt is the same and names `https://law.soufien.lu/sitemap.xml`; a page the switch opens is served
+    without its kept-out marker and without the header; a redirect or a move carries no header (it is no page); every other
+    response keeps both.
+- **Which pages the switch may open**: each page names one of two robots elements, written by the pages' renderer
+  (`Document.jsx`, `indexing`): `never` (`<meta name="robots" content="noindex"/>`) or the kept-out marker
+  (`... data-search-engines="kept-out"/>`), which a server removes, once, when the switch is on and the page may be indexed
+  (`servedPage`, `V3WebRoot.ServedPage`). The marker stands on a home page rendered from a coverage answer that counts the
+  mounted law, Trust and Coverage, a dossier rendered from an answer, and a reading rendered from an answer that shows the
+  version its act's readable address shows today; the home page and Trust and Coverage name themselves canonical in their
+  language (`/{fr,en}/`, also at `index.html`, and `/{fr,en}/coverage.html`; review of #976, F2). Every other page is
+  `never`: the home page as built or with no corpus mounted (F2), search, export, the provision history, compare and radar
+  forms, a law's page as built (no law on it), a
+  refusal (a work the index does not hold included), a version that is not today's (replaced since, or not yet applicable),
+  the 404 and maintenance pages, the German and Luxembourgish pages. The built bytes are kept out: a server that forgot the
+  switch serves pages search engines leave alone.
+- **Names (R92, the owner's O28)**: a law's page is opened only for a work the release's indexing record lists
+  (`lex-v3-indexing-record/1`; the API reads `v3-corpus/indexing-record.json` beside its mount, the live server a file its
+  caller names) and the mounted corpus holds: the outcome of R92's measurement of which classes of acts name private
+  individuals (the plan's item 1.11, in the data lane), each work it found to name none, with the text languages of its
+  readable addresses and the build of the index it read. A record that breaks any rule is refused whole, whatever its size
+  (`readIndexingRecord`, `V3WebRoot.ReadIndexingRecord`, held to 4 admitted and 15 refused records). With the site indexed,
+  each server asks its API once (the API at startup, `V3ApiHandler.AnswerAtStartup`; the live server on its first need) the
+  `dossier` of every listed work, and a work it does not answer is dropped, never opened nor listed (`searchEngineFacts`,
+  `V3WebRoot.SearchEngineFacts`; review of #976, F5). No release carries a record yet, so with the switch on no law's page
+  would be opened and the sitemap would list only the home pages and Trust and Coverage: indexing waits on O28's
+  measurement, as the plan's risk 14 says ("indexing (O27) only after O28"). The markup names no person (below).
+- **The sitemap** (`sitemapFiles`, `V3WebRoot.SitemapFiles`, byte for byte one table), with the site indexed: an index at
+  `/sitemap.xml` naming its parts `/sitemap-1.xml` on, each at most the protocol's 50,000 addresses and 50 MiB (review of
+  #976, F3: the population already lists about 29,000), built once, at `V3WebRoot.Open` and on the live server's first need
+  (F4). Its entries: each interface language's home page (its `x-default` the root) and Trust and Coverage (its `x-default`
+  the French page, as the pages' own alternates say), then each held work's dossier and its act's readable address in each
+  listed text language, every one in both interface languages with `xhtml:link` alternates for `fr`, `en` and `x-default`
+  (the address with no interface language); never a permalink, never search. `lastmod`, on every entry and part, is the
+  mounted index's build time, the `built_at` of the snapshot the API's `coverage` names `mounted` (`mountedBuiltAt`; F5),
+  never a version's date nor the record's; with none, there is none.
+- **The canonical link, revisiting #967's decision**: a law's page names as canonical the address it shows in the page's own
+  interface language (`https://law.soufien.lu/{fr,en}/...`), a page that answers itself, where it named the address with no
+  interface language, which answers a redirect; the alternates are unchanged (`fr`, `en`, and `x-default` the address with no
+  interface language, which sends each reader to theirs). At a permalink whose version is the one its act's readable address
+  shows today (Luxembourg's date at the answer's own instant, `answersToday`: a Luxembourg state applicable on or before today
+  with no later state applicable on or before it, an act held only as published included; an EU wording in the time view
+  dated on or before today with no later wording dated on or before it), the canonical is that readable address, the
+  article's when the version holds it (R67), on the server's render (`readingLawPath`) and once loaded (`LiveReading.jsx`). A
+  version not today's names itself, as before. The permalink Lex prints and cites still names no interface language (R64).
+- **The Legislation markup** (`structured-data.mjs`): JSON-LD in the head of a dossier and a reading rendered from an answer
+  (a data block, as the answer's own: no Content-Security-Policy runs it), from the answer's facts only: `url` (the canonical
+  link), `legislationIdentifier` (a Luxembourg state's legal resource ELI, the work's ELI on a dossier, or the wording's or
+  act's CELEX), `name` (the one publisher's title held for the version's expression in its language, or on a Luxembourg dossier
+  for the act as published; none when none or several are held, and never for the EU, whose index holds no title),
+  `inLanguage` (BCP 47; a dossier's name in two languages is two values, each tagged with its own, never one language's in
+  another's place: F6), `legislationJurisdiction` (`LU`, `EU`), `legislationDate` (a Luxembourg act's date as its work ELI
+  names it), `legislationDateVersion` (the date the reading was asked for), `isBasedOn` (the official sources the version's
+  quoted articles name) and `copyrightNotice` (an EU text's acknowledgement, as the answer gives it). Never a person (no author,
+  `legislationPassedBy` or `legislationResponsible`), a legal force (R21: no in-force flag is held), a legal value (R18) or a
+  relation to another act. A refusal carries none.
+- **The shared table** (`site-paths.json`) gains its `searchEngines` member (the variable and 8 values, the two robots
+  elements, robots.txt in both states, a record of three works, 4 admitted and 15 refused records, the API's 4 answers to the
+  servers' own questions, the 2 works they hold and the mounted build's time, 7 coverage and 4 dossier envelopes each
+  server reads the same way, the sitemap's files with and without the record and split into parts of 5, 15 page paths
+  opened or not in each state, 4 redirects) and the rows `/robots.txt`, `/sitemap.xml`, `/sitemap-1.xml` and
+  `/sitemap-2.xml` with both states (128 paths); its 9 canonical rows name the page's interface language, and the 4 at a
+  permalink of the sample's state (today's
+  version) its readable address. `search-engines.test.mjs` and `V3WebRootSearchEnginesTests` hold both servers to it over
+  HTTP, in both states, with and without a record; the canonical rows are rendered by each interface language's built
+  renderer, as both servers run it.
+- **Journeys** (CI's lane; never run on this machine): the verdict holds the canonical rule (the page's own interface
+  language; at a permalink, its own address or its act's readable address) and every page kept out: exactly one robots element,
+  `noindex`, and, served by the API, `X-Robots-Tag: noindex`. A run against a release opened to search engines would say
+  `searchEngines: "indexed"` and is not held to them.
+- **The release probes**: the check that V2 answers none of its routes (the image rehearsal's and the deploy probe's,
+  `v2RouteFailures`) required `/robots.txt` to answer 404; it now requires V3's own robots.txt in the release's switch state
+  there (kept out unless it says `indexed`), and V3's sitemap index at `/sitemap.xml` once indexed (kept out, a 404 as
+  before). The deploy probe's check of the home page reads its head without its robots element, which follows the facts.
+- **French**: no new interface text. robots.txt, the sitemap, the robots elements and the markup are for machines, and the
+  markup's values are the answer's, so no review addendum.
+- **Driver decisions** (reversible):
+  - The switch is read at startup from the environment, not built into the pages: a release is opened or closed by its
+    deployment, with no rebuild. Only the exact value `indexed` opens; a typo keeps the site out.
+  - Fail closed: the pages are built kept out and a server removes the marker, never the reverse; a law's page needs the
+    indexing record besides the switch.
+  - The canonical names the page's own interface language (revisiting #967): a canonical that answers a redirect is no page
+    of its own, two language pages naming one redirecting address told a search engine they were duplicates of it, and a
+    sitemap lists only canonical pages that answer 200. `x-default` keeps the address with no interface language, which is what
+    it is for.
+  - A version that is not today's (replaced since, or not yet applicable) is `noindex` and out of the sitemap, and names its own
+    permalink: a search engine leads to the text that applies today; a historical version stays citable and reachable from its
+    dossier and its banner.
+  - The home page, the search box with no results (a search lives in the fragment, R109, which no crawler sends), is opened
+    when rendered from a coverage answer that counts the law; `search.html`, the results screen under its own title, is
+    `noindex` and disallowed, as `export.html` is. The robots.txt disallow means a compliant crawler never reads those pages'
+    own `noindex`; both stand, as R67 says. The provision history, compare and radar pages show what a reader asks, by
+    script: `noindex`, allowed.
+  - Kept out, robots.txt is the indexed one without its sitemap, never `Disallow: /` (review of #976, F1): the header and the
+    element keep the pages out, and only a page a crawler fetches tells it so; a blocked address can be listed bare.
+  - The sitemap is always an index with numbered parts, one shape at every size (F3), and a part is cut at 50,000 addresses
+    or 50 MiB, whichever comes first.
+  - Which listed works a mount holds is what its API's `dossier` answers, asked once with the site indexed, the API at
+    startup and the live server through its API (F5): one rule on both servers, and none of it is asked kept out. A live
+    server whose API it cannot reach opens nothing, offers no sitemap, and asks again on the next request.
+  - robots.txt also disallows `/health/`, the probes' routes.
+  - The sitemap lists each act's readable address, not each article's: an article's page is the whole act with the article
+    first until reading by article (3.7) pages it.
+  - The indexing record stands beside the mount, read when a corpus is mounted, and binds works by their identity, not the
+    index digest: a cleared work stays cleared across builds while the mount holds it, and a new work is kept out until it is
+    measured.
+  - No startup line says the switch's state: the privacy census pins the API's three startup writes, and `/robots.txt` says it.
+- **Not in this part** (next, below): O27 (the owner's); the indexing record, from R92's measurement (the plan's item 1.11, O28,
+  the data lane); the objection contact R92 and R49 ask for (O5's privacy notice, its section for people named in acts);
+  the deploy parameter that sets the switch (one variable on the container app, once O27 says yes); each page's title and
+  description in its head (3.1); the provision history and Coverage pages rendered by the server (3.1).
+- **The review of #976** (an independent reviewer; it found the fail-closed core sound on both servers): one medium and five
+  low findings, repaired in one round, each tested on both servers.
+  - F1, medium: kept out, `Disallow: /` stopped compliant crawlers from ever fetching a page, so they never read its noindex,
+    and a blocked address can still be listed bare when linked. Kept out, robots.txt is now the indexed rules without the
+    `Sitemap:` line; the header and the element keep the site out.
+  - F2: the home page opened at `/{fr,en}/` and `index.html`, and neither it nor Trust and Coverage named a canonical; with no
+    corpus mounted the home page could open. Both now name themselves canonical in their language, and the home page opens
+    only rendered from a coverage answer that counts the law.
+  - F3: a record past 50,000 sitemap addresses was refused whole, and silently opened no law's page. The record is read
+    whatever its size, and the sitemap is an index naming parts of at most 50,000 addresses and 50 MiB.
+  - F4: the sitemap, 12.9 MB at the population's scale, was rebuilt on every GET and HEAD; it is built once.
+  - F5: `lastmod` was the record's `built_at`, and the record was not checked against the mount, so a listed work the mount
+    does not hold was listed as a 404 address. `lastmod` is the mounted index's build time, and a work the API's `dossier`
+    does not answer is dropped, never opened nor listed.
+  - F6 (tests): the JSON-LD's escaping of a `</script>` title, a name in the version's own language (and a dossier's in each),
+    and `X-Robots-Tag` on the API's 405 are pinned.
+  - Its notes: the live server's header comment no longer says every answer carries the header (a JSON problem does not, as
+    the API's do not); the live server serves a file only at the build's own path (no final slash, percent-escape or
+    capital), and answers a target of two slashes with its 404 page, as the API does.
+  - Measured after the repairs (no rebase: `v3/integration` still at #975's merge), with no browser started: the web build; the web suite over 109 of its 112 files (all but the three that start a browser), 1,207 of 1,207; `dotnet build Lex.V3.slnx -c Release` 0 warnings, 0 errors; `Lex.V3.Tests` 3,186 (3,180 passed, 6 skipped; `V3WebRootSearchEnginesTests` 5); the `Lex.V3.Ingest.Tests` censuses, `PublicRequestRecordingTests` (its three startup writes stand) and the answer, envelope and refusal samples with the EU permalink tests, 58 (55 passed, 3 skipped); `eng/verify-v3-tree.ps1` 1,596 tracked paths.
+  - Rebased on `v3/integration` at #974's merge (f9565335; one conflict, this file's top, both sections kept, this one
+    first). The exact references' refusal cards (plan 4.2) are shown by script on the search screens, the search page and the
+    404 page never opened and the home page as served carrying none; a test holds it. Nothing it changed moves a census or
+    sample (they verify without the render switch). Measured again, with no browser started: the web build; the web suite over
+    110 of its 113 files, 1,223 of 1,223; `dotnet build Lex.V3.slnx -c Release` 0 warnings, 0 errors; `Lex.V3.Tests` 3,321
+    (3,315 passed, 6 skipped); the `Lex.V3.Ingest.Tests` censuses, `PublicRequestRecordingTests` and the samples with the EU
+    permalink tests, 60 (57 passed, 3 skipped); `eng/verify-v3-tree.ps1` 1,608 tracked paths.
+- **Measured** (this branch, from `v3/integration` at #975's merge, 32a9522e), with no browser started: the web build; the web suite over 109 of its 112 files (all but `keyboard-walk`, `launch-browser` and `paint-check`, which start a browser), 1,206 of 1,206; `dotnet build Lex.V3.slnx -c Release` 0 warnings, 0 errors; `Lex.V3.Tests` 3,185 (3,179 passed, 6 skipped; `V3WebRootSearchEnginesTests` 4, the web root's 20 with it); no `Lex.V3.Ingest` class was touched, and the `Lex.V3.Ingest.Tests` classes the brief names (the censuses, `PublicRequestRecordingTests`, whose three startup writes stand, and the answer, envelope and refusal samples) with the EU permalink tests, 58 (55 passed, 3 skipped); no census or sample was rendered again (no answer, envelope or registry changed); `eng/verify-v3-tree.ps1` 1,596 tracked paths. The journeys are CI's lane.
+
 ## Exact references first: the one box opens the act a reference names (sole driver, 2026-10-17)
 
 The plan's item 4.2 ("Exact references first. ELI, CELEX, Mémorial citations, historical identifiers and permalinks open
@@ -4369,6 +4529,17 @@ date" now measures EU dated selection, the owner's main use case.
 
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
 
+The plan's item 3.6, what is left after the switch, the sitemap and the markup (done on 2026-10-17, above):
+1. The owner's O27, asked in the pull request: when it is answered yes, the deploy kit sets `LEX_V3_SEARCH_ENGINES=indexed` on
+   the container app (a parameter of `deploy/main.bicep`, its default kept out), and the deploy probe's journeys say
+   `searchEngines: "indexed"`.
+2. The indexing record, R92's outcome: the data lane's measurement of the classes of acts that name private individuals (the
+   plan's item 1.11, O28) writes `v3-corpus/indexing-record.json` beside the mount it measured, listing each work found to name
+   none and the text languages its readable address answers a reading in; until then no law's page is opened.
+3. The objection contact R92 and R49 ask for, in the privacy notice's section for people named in acts (O5).
+4. Each article's readable address in the sitemap, once reading by article (3.7) gives an article a page of its own (the
+   sitemap index past 50,000 addresses was done in the review of #976).
+
 The plan's item 3.3, what is left after the generator (done on 2026-10-17, above):
 1. Done in #974's repair: the usual form is read by the exact-reference phase to the article it cites (`usualVerdict`).
    Next of 4.2: an EU act's timeline read without its articles' text, so an act's first reference is cheap.
@@ -4394,8 +4565,8 @@ The plan's item 3.2, what is left after its second part (3.2b, done on 2026-10-1
    `pinned_digest_mismatch` today. No mount holds a generation yet.
 2. "The publisher replaced this file on {date}", once the log holds when the replacement was observed (a chained log's
    `file_replaced` event carries no date; a build's time only bounds it).
-3. R67's "identical version pages point their canonical link there": a permalink page showing the current version names
-   the act's readable address as canonical, with the sitemap (3.6), which revisits the 967 decision.
+3. Done on 2026-10-17 with the plan's item 3.6 (above): a permalink page showing the version its act's readable address
+   shows today names that readable address as canonical, and every canonical names the page's own interface language.
 
 The web lane's order since the owner's proxy's journey corrections (2026-10-01 14:30 UTC,
 `C:\lex-v3\lanes\STANDING-ORDERS.md` section 7, overriding the queues below):
@@ -4671,6 +4842,8 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   alike, names the address with no interface language as canonical, the permalink Lex prints and cites, and each
   language's page and `x-default` as alternates. A canonical that answers a redirect is a weaker signal to a search
   engine than one that answers 200; the plan chose the address Lex cites, and the sitemap and indexing (3.6) revisit it.
+  Revisited on 2026-10-17 (3.6, the top of this file): the canonical names the page's own interface language, and a
+  permalink of today's version its act's readable address; the alternates stand.
 
 - The sole-driver period (the owner's order of 2026-10-02: one Claude driver, no Codex, no other
   Claude, full authorisation, never ask the owner): each pull request is reviewed by an independent

@@ -44,7 +44,7 @@ import {
 import { ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { anchorOf, anchorText } from '../scripts/permalinks.mjs';
 import { answerHandedWith } from '../scripts/v3-client.mjs';
-import { readingAddressShown, readingPinOf } from '../scripts/initial-answer.mjs';
+import { readingAddressShown, readingPinOf, todayAt } from '../scripts/initial-answer.mjs';
 import { writeLawPageLinks } from './head-links.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
@@ -411,7 +411,12 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
   useEffect(() => {
     if (!pinned || (outcome.state !== 'success' && outcome.state !== 'refusal')) return;
     const view = outcome.state === 'success' ? outcome.view : null;
-    writeLawPageLinks(document, readingAddressShown(view, pin.address, outcome.state === 'refusal' ? { code: outcome.code, payload: outcome.payload } : null));
+    writeLawPageLinks(document, readingAddressShown(
+      view,
+      pin.address,
+      outcome.state === 'refusal' ? { code: outcome.code, payload: outcome.payload } : null,
+      todayAt(outcome.context?.freshness?.observed_at),
+    ));
     const title = citedTitle(outcome, pin);
     if (title !== null) document.title = fillText(liveChrome().shell.title, { title });
     let target;

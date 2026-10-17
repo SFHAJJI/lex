@@ -64,6 +64,8 @@ public sealed class V3WebRootTests
         Assert.AreEqual("no-referrer", headers["Referrer-Policy"].ToString(), target);
         Assert.AreEqual("nosniff", headers.XContentTypeOptions.ToString(), target);
         Assert.AreEqual("no-store", headers.CacheControl.ToString(), target);
+        // Kept out of search engines: the release's switch is off unless it says otherwise (R67, O27; V3WebRootSearchEnginesTests).
+        Assert.AreEqual("noindex", headers["X-Robots-Tag"].ToString(), target);
     }
 
     [TestMethod]
@@ -272,6 +274,11 @@ public sealed class V3WebRootTests
                     Assert.AreEqual(0, context.Response.Headers.Vary.Count, path);
                     Assert.AreEqual("", Body(context), path);
                     AssertPageHeaders(root, context, path);
+                }
+                else if (row.TryGetProperty("searchEngines", out var searchEngines))
+                {
+                    // robots.txt and the sitemap, which the switch's state says (V3WebRootSearchEnginesTests): kept out here.
+                    Assert.AreEqual(searchEngines.GetProperty("kept-out").GetProperty("claimed").GetBoolean(), served, path);
                 }
                 else
                 {

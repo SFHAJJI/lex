@@ -95,7 +95,8 @@ import { cspValue } from "./csp.mjs";
 import { EXPORT_WATERMARK } from "./export-build.mjs";
 import { EUROPE_TEXT_ACKNOWLEDGEMENT } from "./reading-answer.mjs";
 import { TMP_MARGIN_MEBIBYTES, tmpMebibytesFor } from "./image-run.mjs";
-import { INTERFACE_LANGUAGES, articlePermalink, escapeSegment, parseSitePath, sameDocumentIn } from "./permalinks.mjs";
+import { INTERFACE_LANGUAGES, anchorText, articlePermalink, currentAddress, escapeSegment, parseSitePath, sameDocumentIn } from "./permalinks.mjs";
+import { INDEXED, X_ROBOTS_TAG } from "./search-engines.mjs";
 import { CANONICAL_HOST } from "./routes.mjs";
 import { luxembourgDate } from "./temporal.mjs";
 
@@ -474,18 +475,26 @@ export function journeyVerdict(observed, expected) {
       if (said !== "pinned_digest_mismatch") failures.push(`verify answers the permalink the notice names (${observed.pinNamed ?? "none"}) with ${said}, not pinned_digest_mismatch`);
     }
   }
-  // A law's page names as canonical the address with no interface language, the permalink Lex prints and cites (R64): its
-  // own address, article included, when it shows what that names; a stale permalink's page the version it shows, with no
-  // article and never the digest it was opened at (review of #967: the canonical is what the answer shows, never the
-  // request). Each interface language is an alternate, and the address itself for any other, each named once: the links
-  // are counted, so a page that names one twice fails.
+  // A law's page names as canonical the address it shows in the page's own interface language, a page that answers itself
+  // (the plan's item 3.6): its own address, article included, when it shows what that names, or at a permalink of the version
+  // its act's readable address shows today, that readable address (R67: "identical version pages point their canonical link
+  // there"); a stale permalink's page the version it shows, with no article and never the digest it was opened at (review of
+  // #967: the canonical is what the answer shows, never the request). Each interface language is an alternate, and the
+  // address with no interface language for any other, each named once: the links are counted, so a page that names one
+  // twice fails.
   if ((expected.state === "success" || (step.stale === true && expected.refusalCode === "pinned_digest_mismatch")) && step.rendered === true && observed.canonical !== undefined) {
     const own = step.path.replace(/^\/(?:en|fr)(?=\/)/, "");
-    const named = typeof observed.canonical === "string" && observed.canonical.startsWith(SITE_ORIGIN) ? observed.canonical.slice(SITE_ORIGIN.length) : null;
+    const locale = /^\/(en|fr)\//.exec(step.path)?.[1] ?? null;
+    const page = `${SITE_ORIGIN}/${locale}`;
+    const named = typeof observed.canonical === "string" && locale !== null && observed.canonical.startsWith(`${page}/`) ? observed.canonical.slice(page.length) : null;
     const law = named === null ? null : parseSitePath(named);
-    if (law === null || law.locale !== null) failures.push(`the page names ${observed.canonical ?? "no"} canonical link, not a law's address on ${SITE_ORIGIN} with no interface language`);
-    else if (step.stale === true ? (law.kind !== "state" || law.anchor !== null || named.includes(parseSitePath(own)?.digest ?? "")) : named !== own) {
-      failures.push(`the page names ${observed.canonical} canonical, not ${step.stale === true ? "the version it shows" : `${SITE_ORIGIN}${own}`}`);
+    const pinned = parseSitePath(own);
+    const readable = pinned?.kind === "state"
+      ? currentAddress({ publisher: pinned.publisher, work: pinned.publisher === "lu-legilux" ? pinned.identifier.slice("/lu-legilux/".length) : pinned.identifier, language: pinned.language, publisherId: anchorText(pinned.anchor) })
+      : null;
+    if (law === null || law.locale !== null) failures.push(`the page names ${observed.canonical ?? "no"} canonical link, not a law's address on ${page}, the page's own interface language`);
+    else if (step.stale === true ? (law.kind !== "state" || law.anchor !== null || named.includes(pinned?.digest ?? "")) : (named !== own && named !== readable)) {
+      failures.push(`the page names ${observed.canonical} canonical, not ${step.stale === true ? "the version it shows" : `${page}${own}${readable === null ? "" : ` or ${page}${readable}`}`}`);
     } else {
       const wanted = [...INTERFACE_LANGUAGES.map((language) => [language, `${SITE_ORIGIN}/${language}${named}`]), ["x-default", `${SITE_ORIGIN}${named}`]];
       const seen = Array.isArray(observed.alternates) ? observed.alternates : [];
@@ -606,8 +615,17 @@ export function journeyVerdict(observed, expected) {
     const touched = [...new Set(fileEvents.filter(([event]) => event !== "error").map(([, path]) => path))];
     if (touched.length > 0) failures.push(`the API process touched files while serving the run: ${touched.join(", ")}`);
   }
+  // Kept out of search engines, as every release is until the owner answers O27 (R67; `search-engines.mjs`): the page names
+  // one robots element, noindex, and served by the API it arrives with X-Robots-Tag: noindex. A run against a release opened
+  // to search engines says so (`searchEngines: "indexed"`): what each of its pages says then hangs on its indexing record,
+  // which the servers' own tests hold.
+  const keptOut = expected.searchEngines !== INDEXED;
+  if (keptOut && observed.robots !== undefined && JSON.stringify(observed.robots) !== JSON.stringify(["noindex"])) {
+    failures.push(`the page names the robots elements ${JSON.stringify(observed.robots)}, not one noindex: it is not kept out of search engines`);
+  }
   if (expected.servedByApi) {
     const header = (name) => Object.entries(observed.pageHeaders ?? {}).find(([key]) => key.toLowerCase() === name)?.[1] ?? null;
+    if (keptOut && header("x-robots-tag") !== X_ROBOTS_TAG) failures.push(`the page arrived with X-Robots-Tag ${header("x-robots-tag")}, not ${X_ROBOTS_TAG}`);
     const policy = `${cspValue()}; frame-ancestors 'none'`;
     if (header("content-security-policy") !== policy) failures.push(`the page arrived with the CSP ${header("content-security-policy")}, not ${policy}`);
     if (!/^max-age=\d+/.test(header("strict-transport-security") ?? "")) failures.push("the page arrived without HSTS");
@@ -1288,6 +1306,8 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
       pinCurrent: step.stale === true ? await evaluate("document.querySelector('[data-pin-not-held] a[href]')?.getAttribute('href') ?? null") : undefined,
       // Whether the document arrived carrying the answer the server rendered it from (`initial-answer.mjs`).
       serverRendered: await evaluate("document.getElementById('lex-initial-answer') !== null"),
+      // What the page says to search engines: its robots elements' contents, every one (R67).
+      robots: await evaluate("[...document.querySelectorAll('meta[name=\"robots\"]')].map((meta) => meta.getAttribute('content'))"),
       // At a law's address: the canonical link and the alternates the page's head names once loaded (R64, R67), every one
       // of them (review of #967): two canonical links are observed as the list of both, and each alternate as a pair.
       ...(step.rendered === true ? {

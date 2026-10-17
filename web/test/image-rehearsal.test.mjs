@@ -16,6 +16,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { gzipSync } from "node:zlib";
 
+import { ROBOTS_KEPT_OUT } from "../scripts/search-engines.mjs";
 import { REHEARSAL_IDENTITY, V2_ROUTES, imageFailures, imageSignatureFailures, mountReport, readOciImage, readTar, rehearsalSignatureFailures, releaseSigner, servedPaths, signImage, signRehearsal, v2Failures, v2RouteFailures } from "../scripts/image-rehearsal.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -216,11 +217,22 @@ test("V2's routes must each answer 404 from the running image, or V3's own file 
     const v3Files = servedPaths([["fr/index.html", index], ["en/index.html", index], ["en/client-live.js", Buffer.from("hydrate()")]]);
     assert.deepEqual(await v2RouteFailures(origin, { v3Files }), [
       "GET / answered 404, not V3's redirect to /fr/",
+      "GET /robots.txt answered 404, not V3's own robots.txt (kept-out)",
       "GET /lu-legilux/loi-1991-08-10-n3 answered 404, not V3's redirect to /fr/lu-legilux/loi-1991-08-10-n3",
       "GET /eu-eurlex/32016R0679 answered 404, not V3's redirect to /fr/eu-eurlex/32016R0679",
-    ], "V3's own redirects must be there");
+    ], "V3's own redirects and robots.txt must be there");
     for (const [route, location] of v3Redirects) answering.set(route, { status: 302, location });
+    // V3's own robots.txt, kept out of search engines as every release is until O27 (R67); kept out, it holds no sitemap.
+    answering.set("GET /robots.txt", { status: 200, body: ROBOTS_KEPT_OUT });
     assert.deepEqual(await v2RouteFailures(origin, { v3Files }), [], "every other V2 route answers 404, and V3 answers its own paths");
+    // A release opened to search engines answers its own robots.txt, and its own sitemap where V2 had one.
+    assert.deepEqual(await v2RouteFailures(origin, { v3Files, searchEngines: "indexed" }), [
+      "GET /robots.txt answered 200, not V3's own robots.txt (indexed)",
+      "GET /sitemap.xml answered 404, not V3's own sitemap.xml (indexed)",
+    ]);
+    answering.set("GET /robots.txt", { status: 200, body: "User-agent: *\nAllow: /\n" });
+    assert.deepEqual(await v2RouteFailures(origin, { v3Files }), ["GET /robots.txt answered 200, not V3's own robots.txt (kept-out)"], "another robots.txt is caught");
+    answering.set("GET /robots.txt", { status: 200, body: ROBOTS_KEPT_OUT });
     answering.set("GET /built", { status: 200, body: "<h1>Overview</h1>" });
     assert.deepEqual(await v2RouteFailures(origin, { v3Files }), ["GET /built answered 200, not 404"], "the reviewer's reproduction: /built served by V2 is caught");
     answering.delete("GET /built");

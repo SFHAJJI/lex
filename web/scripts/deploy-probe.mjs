@@ -40,6 +40,7 @@ import { askOperation, heldLuxembourgWorkFromAnswers, realMountRuns } from "./jo
 import { ASSETS, RELEASE_MANIFEST, releaseFailures } from "./release-assets.mjs";
 import { readLargeFile } from "./large-bytes.mjs";
 import { HOME_FACTS_ID, readHomeFactsValue } from "./live-home.mjs";
+import { KEPT_OUT_META, NEVER_INDEXED_META } from "./search-engines.mjs";
 import { luxembourgDate, luxembourgOffset, luxembourgSummerTimeEnds, luxembourgSummerTimeStarts } from "./temporal.mjs";
 
 const LIVE_PREFIX = "app/v3-web/";
@@ -91,12 +92,17 @@ export function renderedHomePage(renderer, coverage, today, language = "fr") {
  * for byte; or that page as the server renders it from its coverage answer (`live-home.mjs`, R67), which is held to
  * everything the probe can hold it to:
  * - everything outside the root's content and the facts block is the built page's, byte for byte (the head, the
- *   heading, the footer: nothing there depends on the answer);
+ *   heading, the footer: nothing there depends on the answer), but its robots element, which follows the facts (a home
+ *   page that counts the mounted law carries the kept-out marker, which a server opened to search engines removes; the
+ *   page as built never is: `search-engines.mjs`, review of #976, F2);
  * - the facts block is a home page's facts (`readHomeFactsValue`), today and a coverage line of served counts;
  * - the whole page is what the release's own renderer (`renderer`, the bytes of `ssr/fr.js`) renders from the probe's
  *   own coverage answer (`coverage`) on the facts' day, byte for byte, so the root says that answer's counts and nothing
  *   typed in their place. With no renderer or no answer to render from, the rendered page cannot be held, and fails.
  */
+/** A page's head with its robots element left out, either one (`search-engines.mjs`). */
+const withoutRobots = (text) => text.replace(KEPT_OUT_META, "").replace(NEVER_INDEXED_META, "");
+
 export function homePageFailures(served, built, { renderer = null, coverage = null } = {}) {
   if (served.equals(built)) return [];
   const notOwn = "GET /fr/ answered a page that is not the release image's own home page, as built or rendered from its coverage answer";
@@ -106,7 +112,7 @@ export function homePageFailures(served, built, { renderer = null, coverage = nu
   const parts = homePageParts(page);
   if (parts === null || parts.facts === null) return [`${notOwn}: it carries no root followed by the facts it was rendered from`];
   const failures = [];
-  if (parts.before !== own.before || parts.after !== own.after) {
+  if (withoutRobots(parts.before) !== withoutRobots(own.before) || parts.after !== own.after) {
     failures.push(`${notOwn}: outside its root and its facts it is not the built page, byte for byte`);
   }
   let facts = null;
@@ -125,7 +131,10 @@ export function homePageFailures(served, built, { renderer = null, coverage = nu
   } catch (error) {
     return [...failures, `${notOwn}: the release's renderer could not render it again (${error?.message ?? error})`];
   }
-  if (again !== page) failures.push(`${notOwn}: it is not what the release's renderer renders from this revision's coverage answer on ${facts.today}, byte for byte`);
+  // The server opened to search engines serves the render without its kept-out marker (`servedPage`).
+  if (again !== page && again.replace(KEPT_OUT_META, "") !== page) {
+    failures.push(`${notOwn}: it is not what the release's renderer renders from this revision's coverage answer on ${facts.today}, byte for byte`);
+  }
   return failures;
 }
 

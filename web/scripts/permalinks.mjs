@@ -304,14 +304,18 @@ export function sameDocumentIn(language, pathname) {
 }
 
 /**
- * The links a page at a law's address carries in its head (R61, R64, R67), for `lawPath`, the address with no interface
- * language: the canonical link to that address itself (the permalink Lex prints and cites, which sends each reader to
- * their language), and the address in each interface language, with the address itself for any other (`x-default`), all
- * under `origin`.
+ * The links a page at a law's address carries in its head (R61, R64, R67), for `lawPath`, the address it names as its own
+ * with no interface language, on a page in the interface language `locale`: the canonical link to that address in the
+ * page's own language, a page that answers itself (the plan's item 3.6, revisiting #967's canonical with no interface
+ * language: that address answers a redirect by the reader's language, so it is no page of its own, and a sitemap lists only
+ * canonical pages), and the address in each interface language, with the address itself for any other (`x-default`, which
+ * sends each reader to their language), all under `origin`. The permalink Lex prints and cites still names no interface
+ * language (R64): a citation is not a canonical link.
  */
-export function lawPageLinks(lawPath, origin) {
+export function lawPageLinks(lawPath, origin, locale) {
+  if (!INTERFACE_LANGUAGES.includes(locale)) throw new Error(`a law's page stands under an interface language, not ${JSON.stringify(locale)}`);
   return Object.freeze({
-    canonical: `${origin}${lawPath}`,
+    canonical: `${origin}/${locale}${lawPath}`,
     alternates: Object.freeze([
       ...INTERFACE_LANGUAGES.map((language) => Object.freeze({ hrefLang: language, href: `${origin}/${language}${lawPath}` })),
       Object.freeze({ hrefLang: 'x-default', href: `${origin}${lawPath}` }),

@@ -44,6 +44,7 @@ export function renderLiveCoveragePage({ card = CENSUS_EVALUATION_CARD } = {}) {
       shell="ask"
       density={skinFor('ask').density}
       banner="live"
+      indexing="switch"
     >
       <p className="eyebrow">{copy.eyebrow}</p>
       <h1>{copy.heading}</h1>

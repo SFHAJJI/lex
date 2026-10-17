@@ -15,6 +15,7 @@ import test from "node:test";
 import { cspValue } from "../scripts/csp.mjs";
 import { CARD_ROUTE } from "../scripts/evaluation-card.mjs";
 import { redirectFor } from "../scripts/permalinks.mjs";
+import { ROBOTS_KEPT_OUT } from "../scripts/search-engines.mjs";
 import {
   NOT_FOUND_PROBE, REMOTE_PRIVACY_NOTE, accentedTitleFailures, browserFailures, clockFailures, deployedReleaseFailures, homePageFailures,
   liveFilesOf, luxembourgTodayNote, remoteRevision, renderedHomePage, revisionFailures,
@@ -80,7 +81,7 @@ function titleAnswer(operation, parameters, { folds, titlesHeld }) {
 }
 
 /**
- * A stand-in revision: `/` a redirect to `/fr/`, `/fr/` and the card as the release holds them, coverage from `corpus`
+ * A stand-in revision: `/` a redirect to `/fr/`, `/fr/`, the card and robots.txt as the release holds them, coverage from `corpus`
  * observed at `observedAt()`, its readiness as `ready` says, one Luxembourg work with an accented title (folded unless
  * `folds` is false; none held when `titlesHeld` is false), 404 for everything else.
  */
@@ -99,6 +100,10 @@ async function revision(change = {}) {
       // A law's address with no interface language, sent to the reader's as V3 sends it.
       response.writeHead(302, { ...answer.headers, location: redirectFor(path, "", request.headers["accept-language"]), vary: "Accept-Language" });
       response.end();
+    } else if (request.method === "GET" && path === "/robots.txt") {
+      // The release's own robots.txt, kept out of search engines until O27 (R67).
+      response.writeHead(200, { "content-type": "text/plain; charset=utf-8", ...answer.headers });
+      response.end(ROBOTS_KEPT_OUT);
     } else if (request.method === "GET" && path === "/health/ready") {
       response.writeHead(answer.ready.status, { "cache-control": answer.ready.cache, "x-content-type-options": "nosniff" });
       response.end(answer.ready.status === 204 ? undefined : "No law is mounted.\n");

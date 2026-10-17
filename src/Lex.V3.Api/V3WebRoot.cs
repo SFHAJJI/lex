@@ -29,7 +29,9 @@ namespace Lex.V3.Api;
 /// of it, with <c>frame-ancestors 'none'</c> added, which only a header can carry;
 /// <c>Strict-Transport-Security</c>; <c>Referrer-Policy: no-referrer</c>;
 /// <c>X-Content-Type-Options: nosniff</c>; and <c>Cache-Control: no-store</c>, so a page never outlives the
-/// corpus it was answered from. A redirect carries them too, and <c>Vary: Accept-Language</c>.
+/// corpus it was answered from. A redirect carries them too, and <c>Vary: Accept-Language</c>. So does
+/// <c>X-Robots-Tag: noindex</c>, but on a page the release's switch opened (R67, <c>V3WebRoot.SearchEngines.cs</c>); this
+/// root also answers <c>/robots.txt</c>, and <c>/sitemap.xml</c> with the site indexed.
 /// </para>
 /// <para>
 /// A law's address under an interface language, and each language's home page (from the coverage answer), are rendered
@@ -61,18 +63,37 @@ internal sealed partial class V3WebRoot
     private readonly IReadOnlyDictionary<string, string> _files;
     private readonly V3PageRenderer? _renderer;
     private readonly IReadOnlyDictionary<string, string> _notFoundPages;
+    private readonly IndexingRecord? _indexingRecord;
+    private readonly byte[] _robots;
+    private readonly IReadOnlyDictionary<string, byte[]>? _sitemap;
 
     private V3WebRoot(
         IReadOnlyDictionary<string, string> files,
         string contentSecurityPolicy,
         V3PageRenderer? renderer,
-        IReadOnlyDictionary<string, string> notFoundPages)
+        IReadOnlyDictionary<string, string> notFoundPages,
+        string searchEngines,
+        IndexingRecord? indexingRecord,
+        string? lastmod)
     {
         _files = files;
         ContentSecurityPolicy = contentSecurityPolicy;
         _renderer = renderer;
         _notFoundPages = notFoundPages;
+        SearchEngines = searchEngines;
+        _indexingRecord = indexingRecord;
+        // robots.txt and, with the site indexed, the sitemap's files, built once for the root's life (review of #976, F4).
+        _robots = Encoding.UTF8.GetBytes(RobotsTxt(searchEngines));
+        _sitemap = string.Equals(searchEngines, Indexed, StringComparison.Ordinal)
+            ? SitemapFiles(indexingRecord, lastmod).ToDictionary(static file => file.Key, static file => Encoding.UTF8.GetBytes(file.Value), StringComparer.Ordinal)
+            : null;
     }
+
+    /// <summary>The release's switch, as this root read it when it was opened: <see cref="Indexed"/> or <see cref="KeptOut"/>.</summary>
+    internal string SearchEngines { get; }
+
+    /// <summary>Whether this root holds an indexing record (R92's outcome), which opens the pages of the works it lists.</summary>
+    internal bool HoldsIndexingRecord => _indexingRecord is not null;
 
     /// <summary>Whether the directory held the pages' server renderer.</summary>
     internal bool RendersPages => _renderer is not null;
@@ -87,9 +108,13 @@ internal sealed partial class V3WebRoot
     /// The pages in <paramref name="directory"/>, or null when there is none to serve (no directory, or no
     /// English home page, <c>en/index.html</c>). A directory whose home page carries no Content-Security-Policy,
     /// or whose files include one of a type this server does not serve, is refused: a page is never served
-    /// without its reviewed policy, and a file is never served as a guessed type.
+    /// without its reviewed policy, and a file is never served as a guessed type. <paramref name="searchEngines"/> is the
+    /// release's switch, the value of <c>LEX_V3_SEARCH_ENGINES</c> (<see cref="SearchEnginesState"/>: kept out unless it is
+    /// <c>indexed</c>), <paramref name="indexingRecord"/> the release's indexing record with the works the mount holds
+    /// (<see cref="SearchEngineFacts"/>), or null (no law's page opened), and <paramref name="lastmod"/> the mounted index's
+    /// build time, which the sitemap dates its entries by, or null.
     /// </summary>
-    internal static V3WebRoot? Open(string directory)
+    internal static V3WebRoot? Open(string directory, string? searchEngines = null, IndexingRecord? indexingRecord = null, string? lastmod = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
         var index = Path.Combine(directory, "en", "index.html");
@@ -143,7 +168,10 @@ internal sealed partial class V3WebRoot
             files,
             $"{System.Net.WebUtility.HtmlDecode(policy.Groups["policy"].Value)}; {FrameAncestors}",
             V3PageRenderer.Open(Path.Combine(root, "ssr")),
-            notFound);
+            notFound,
+            SearchEnginesState(searchEngines),
+            indexingRecord,
+            lastmod);
     }
 
     /// <summary>
@@ -164,6 +192,27 @@ internal sealed partial class V3WebRoot
         var path = queryAt < 0 ? rawTarget : rawTarget[..queryAt];
         var response = context.Response;
         var method = context.Request.Method;
+
+        // robots.txt in the switch's state, and the sitemap's index and parts only with the site indexed (R67); kept out, or a
+        // part the sitemap has not, is an address this root does not hold.
+        byte[]? sitemap = null;
+        if (string.Equals(path, RobotsPath, StringComparison.Ordinal) || (_sitemap is not null && _sitemap.TryGetValue(path, out sitemap)))
+        {
+            if (WritePageHeaders(response, method))
+            {
+                var text = sitemap ?? _robots;
+                response.StatusCode = StatusCodes.Status200OK;
+                response.ContentType = sitemap is null ? RobotsContentType : SitemapContentType;
+                response.ContentLength = text.Length;
+                if (HttpMethods.IsGet(method))
+                {
+                    await response.Body.WriteAsync(text, cancellationToken).ConfigureAwait(false);
+                }
+            }
+
+            return true;
+        }
+
         if (!_files.TryGetValue(path, out var file))
         {
             // A law's address (a permalink or a work's coordinate) under an interface language is served the page that
@@ -179,6 +228,7 @@ internal sealed partial class V3WebRoot
                 {
                     if (WritePageHeaders(response, method))
                     {
+                        ForSearchEnginesRedirect(response);
                         response.Headers.Location = moved.Location;
                         response.StatusCode = StatusCodes.Status301MovedPermanently;
                         response.ContentLength = 0;
@@ -195,6 +245,7 @@ internal sealed partial class V3WebRoot
 
                 if (WritePageHeaders(response, method))
                 {
+                    ForSearchEnginesRedirect(response);
                     // The answer depends on the reader's languages, so a cache must not hand it to another reader.
                     response.Headers.Vary = "Accept-Language";
                     response.Headers.Location = redirect.Location;
@@ -216,7 +267,7 @@ internal sealed partial class V3WebRoot
         if (answer is not null && _renderer is not null && SitePageFor(path, today?.Invoke()) is { } sitePage && answer(sitePage, cancellationToken) is { } envelope &&
             await _renderer.RenderAsync(sitePage.Language, sitePage.Kind, Encoding.UTF8.GetString(envelope), path, cancellationToken).ConfigureAwait(false) is { } html)
         {
-            var page = Encoding.UTF8.GetBytes(html);
+            var page = Encoding.UTF8.GetBytes(ForSearchEngines(response, html, path));
             response.StatusCode = AnswersUnknownWork(envelope) ? StatusCodes.Status404NotFound : StatusCodes.Status200OK;
             response.ContentType = ContentTypes[".html"];
             response.ContentLength = page.Length;
@@ -229,6 +280,14 @@ internal sealed partial class V3WebRoot
         }
 
         var bytes = await File.ReadAllBytesAsync(file, cancellationToken).ConfigureAwait(false);
+        // Kept out, nothing is opened, so a page is never read as text here.
+        if (string.Equals(Path.GetExtension(file), ".html", StringComparison.Ordinal) && string.Equals(SearchEngines, Indexed, StringComparison.Ordinal))
+        {
+            var built = Encoding.UTF8.GetString(bytes);
+            var served = ForSearchEngines(response, built, path);
+            bytes = ReferenceEquals(served, built) ? bytes : Encoding.UTF8.GetBytes(served);
+        }
+
         response.StatusCode = StatusCodes.Status200OK;
         response.ContentType = ContentTypes[Path.GetExtension(file)];
         response.ContentLength = bytes.Length;
@@ -241,8 +300,38 @@ internal sealed partial class V3WebRoot
     }
 
     /// <summary>
+    /// A page as served at <paramref name="path"/> in the switch's state (<see cref="ServedPage"/>): when its kept-out marker
+    /// was removed, the page the switch opened, without the <c>X-Robots-Tag</c> every other response carries; else the page
+    /// as it is, the same instance.
+    /// </summary>
+    private string ForSearchEngines(HttpResponse response, string html, string path)
+    {
+        var (served, opened) = ServedPage(html, SearchEngines, path, _indexingRecord);
+        if (!opened)
+        {
+            return html;
+        }
+
+        response.Headers.Remove("X-Robots-Tag");
+        return served;
+    }
+
+    /// <summary>
+    /// A redirect or a move with the site indexed carries no <c>X-Robots-Tag</c>: it is no page, and the page it leads to says
+    /// what it says (an <c>x-default</c> alternate is the root's or a law's redirect). Kept out, it keeps the header.
+    /// </summary>
+    private void ForSearchEnginesRedirect(HttpResponse response)
+    {
+        if (string.Equals(SearchEngines, Indexed, StringComparison.Ordinal))
+        {
+            response.Headers.Remove("X-Robots-Tag");
+        }
+    }
+
+    /// <summary>
     /// Writes the headers every response of this root carries (ruling 3), and returns whether the method may be answered:
-    /// for any method but GET or HEAD it answers 405, naming the two, and returns false.
+    /// for any method but GET or HEAD it answers 405, naming the two, and returns false. <c>X-Robots-Tag: noindex</c> is one
+    /// of them (R67): only a page the switch opened goes without it (<see cref="ForSearchEngines"/>).
     /// </summary>
     private bool WritePageHeaders(HttpResponse response, string method)
     {
@@ -252,6 +341,7 @@ internal sealed partial class V3WebRoot
         headers["Referrer-Policy"] = "no-referrer";
         headers.XContentTypeOptions = "nosniff";
         headers.CacheControl = "no-store";
+        headers["X-Robots-Tag"] = XRobotsTag;
         if (HttpMethods.IsGet(method) || HttpMethods.IsHead(method))
         {
             return true;

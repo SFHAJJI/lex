@@ -19,6 +19,7 @@ import { cspValue } from '../scripts/csp.mjs';
 import { LocaleNav, localeHome } from './LocaleNav.jsx';
 import { CHROME_LOCALE, fillText, liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { INTERFACE_LANGUAGES, lawPageLinks } from '../scripts/permalinks.mjs';
+import { jsonInScript } from '../scripts/initial-answer.mjs';
 import { CANONICAL_HOST } from '../scripts/routes.mjs';
 
 /** The marker that says, in the DOM, that nothing on this page is law. */
@@ -78,6 +79,23 @@ const ALTERNATE_PAGES = Object.freeze({
 });
 
 /**
+ * The pages the release's switch opens that stand at no law's address, by their state, each naming itself canonical in its
+ * interface language: the home page at its language's root (also served at `index.html`), and Trust and Coverage (review of
+ * #976, F2: neither named a canonical).
+ */
+const CANONICAL_PAGES = Object.freeze({ 'live-home': '', 'live-coverage': 'coverage.html' });
+
+/**
+ * The canonical link of a live page in `locale`: at a law's address (`lawPath`), the address it shows in that language
+ * (`lawPageLinks`); for the home page and Trust and Coverage, their own address in that language; else none.
+ */
+export function canonicalLink(state, locale, lawPath = null) {
+  if (lawPath !== null) return lawPageLinks(lawPath, SITE_ORIGIN, locale).canonical;
+  const page = CANONICAL_PAGES[state];
+  return page === undefined || !INTERFACE_LANGUAGES.includes(locale) ? null : `${SITE_ORIGIN}/${locale}/${page}`;
+}
+
+/**
  * The alternate-language links of a live page: the same page in each interface language, and for a reader of any other
  * language (`x-default`) the page a reader with no preference gets: the home page's root, which sends each reader to their
  * language, and for any other page that page in French (`negotiateLanguage`'s default; review of #958: the root named a
@@ -86,7 +104,7 @@ const ALTERNATE_PAGES = Object.freeze({
  * (`lawPageLinks`, which the page as built writes once loaded, `client.jsx`).
  */
 export function alternateLinks(state, lawPath = null) {
-  if (lawPath !== null) return lawPageLinks(lawPath, SITE_ORIGIN).alternates;
+  if (lawPath !== null) return lawPageLinks(lawPath, SITE_ORIGIN, CHROME_LOCALE).alternates;
   const page = ALTERNATE_PAGES[state];
   if (page === undefined) return [];
   return [
@@ -173,6 +191,13 @@ export function Document({
   density = null,
   // The address of the law a page the server rendered stands at, with no language (`/lu-legilux/{work}/...`), or null.
   lawPath = null,
+  // What a live page says to search engines (R67; `search-engines.mjs`): `never`, a page no search engine is asked to index
+  // (search, export, the forms, a law's page as built or refused, the 404 and maintenance pages), or `switch`, a page the
+  // release's switch opens (the home pages, Trust and Coverage, a law's page rendered whole). Either way the page as rendered
+  // is kept out; the server removes the kept-out marker when the switch is on and the page may be indexed.
+  indexing = 'never',
+  // A law's page's schema.org Legislation markup (`structured-data.mjs`), written as JSON-LD in the head, or null.
+  structuredData = null,
   children,
 }) {
   // Each axis names itself. Both guards used to raise the same sentence, so a test feeding an
@@ -205,6 +230,9 @@ export function Document({
   if (banner !== 'synthetic' && banner !== 'live') {
     throw new Error(`a page carries the synthetic or the live banner, not ${JSON.stringify(banner)}`);
   }
+  if (indexing !== 'never' && indexing !== 'switch') {
+    throw new Error(`a page is never indexed or opened by the switch, not ${JSON.stringify(indexing)}`);
+  }
 
   const shellAttributes =
     shell === null ? {} : { 'data-shell': shell, 'data-density': density ?? '' };
@@ -220,13 +248,23 @@ export function Document({
             and served from this origin. */}
         <meta httpEquiv="Content-Security-Policy" content={cspValue()} />
         <title>{banner === 'live' ? fillText(liveChrome().shell.title, { title }) : `${title} - Lex V3 preview`}</title>
+        {/* Kept out of search engines as rendered (R67, O27): `search-engines.mjs` says which marker a server removes. */}
+        {banner === 'live'
+          ? (indexing === 'switch' ? <meta name="robots" content="noindex" data-search-engines="kept-out" /> : <meta name="robots" content="noindex" />)
+          : null}
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="stylesheet" href="/styles.css" />
-        {/* A page at a law's address names as canonical the address with no interface language, the permalink Lex prints
-            and cites (R64, R67), which sends each reader to their language; each language's page is an alternate. */}
-        {banner === 'live' && lawPath !== null ? <link rel="canonical" href={lawPageLinks(lawPath, SITE_ORIGIN).canonical} /> : null}
+        {/* A page at a law's address names as canonical the address it shows in the page's own interface language, a page
+            that answers itself (R67; the plan's item 3.6), and each language's page and the address with no interface
+            language (which sends each reader to theirs) as alternates; the home page and Trust and Coverage name their own
+            address in the page's language (`canonicalLink`). */}
+        {banner === 'live' && canonicalLink(state, locale, lawPath) !== null ? <link rel="canonical" href={canonicalLink(state, locale, lawPath)} /> : null}
         {banner === 'live'
           ? alternateLinks(state, lawPath).map((link) => <link key={link.hrefLang} rel="alternate" hrefLang={link.hrefLang} href={link.href} />)
+          : null}
+        {/* Data, not a script: no Content-Security-Policy runs it, as the answer's own block (`initial-answer.mjs`). */}
+        {banner === 'live' && structuredData !== null
+          ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonInScript(structuredData) }} />
           : null}
       </head>
       <body>

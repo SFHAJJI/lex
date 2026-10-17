@@ -10,14 +10,15 @@
 
 import { lawPageLinks } from '../scripts/permalinks.mjs';
 import { CANONICAL_HOST } from '../scripts/routes.mjs';
+import { CHROME_LOCALE } from '../scripts/live-chrome.mjs';
 
 /**
  * Writes into `document`'s head the links of a page at `lawPath`, a law's address with no interface language: the
- * canonical link to that address, and the address in each interface language and for any other (`lawPageLinks`),
- * replacing any the head held.
+ * canonical link to that address in the page's interface language (the language its bundle was built for), and the address
+ * in each interface language and for any other (`lawPageLinks`), replacing any the head held.
  */
 export function writeLawPageLinks(document, lawPath) {
-  const { canonical, alternates } = lawPageLinks(lawPath, `https://${CANONICAL_HOST}`);
+  const { canonical, alternates } = lawPageLinks(lawPath, `https://${CANONICAL_HOST}`, CHROME_LOCALE);
   const head = document.head;
   let link = head.querySelector('link[rel="canonical"]');
   if (link === null) {
