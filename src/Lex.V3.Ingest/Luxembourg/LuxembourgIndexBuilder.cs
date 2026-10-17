@@ -3312,6 +3312,43 @@ public sealed class LuxembourgIndexReader : IDisposable
     }
 
     /// <summary>
+    /// Every subject IRI of the fact table that starts with <paramref name="prefix"/>, once, in ordinal order: the works, versions
+    /// and expressions the publisher's catalogue names under one ELI (a type and day, <c>…/eli/etat/leg/loi/2018/02/03/</c>, for
+    /// an exact reference by type and date), whether or not the index holds a version of them. It reads the fact table's key
+    /// range, and an empty prefix is refused, since it would read the whole table.
+    /// </summary>
+    public IReadOnlyList<string> ResolveSubjectsUnder(string prefix)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(prefix);
+        var last = prefix[^1];
+        if (last >= '\u007f')
+        {
+            throw new ArgumentException("A subject prefix ends in a character outside ASCII.", nameof(prefix));
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT DISTINCT subject_iri
+                FROM work_facts
+                WHERE subject_iri>=$low AND subject_iri<$high
+                ORDER BY subject_iri
+                """;
+            command.Parameters.AddWithValue("$low", prefix);
+            command.Parameters.AddWithValue("$high", prefix[..^1] + (char)(last + 1));
+            using var reader = command.ExecuteReader();
+            var values = new List<string>();
+            while (reader.Read())
+            {
+                values.Add(reader.GetString(0));
+            }
+
+            return Array.AsReadOnly(values.ToArray());
+        }
+    }
+
+    /// <summary>
     /// The publisher's catalogue references an exact reference is read against: each subject the catalogue says is part of an
     /// issue of the Mémorial (<c>isPartOf</c> an IRI under <c>…/eli/etat/leg/memorial/</c>), and each subject's historical legal
     /// identifier (<c>historicalLegalId</c>), verbatim, in subject, predicate and value order. It reads the fact table once (the

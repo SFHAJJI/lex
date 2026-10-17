@@ -53,7 +53,7 @@ internal static class V3McpJsonRpc
         "diff" => "The article-level difference between the states of a Luxembourg act on two dates.",
         "changes_in_period" => "The Luxembourg states that began in a period, for a work or across the index.",
         "in_force_on" => "The Luxembourg works with a state applicable on a date.",
-        "search" => "Search the held Luxembourg article text its rights admit (text they withhold is not matched), strict or relaxed, with the quotes that answer; for one EU work named by identifier, its held wording.",
+        "search" => "With no work named, first read the query as an exact reference (an ELI, a CELEX, an EU act's name, a Memorial citation, a historical identifier, a permalink, or a citation of an article of an act at a date) and answer the address its act opens at, the acts it may name, or a typed refusal; otherwise search the held Luxembourg article text its rights admit (text they withhold is not matched), strict or relaxed, with the quotes that answer; for one EU work named by identifier, its held wording.",
         "coverage" => "What this mount holds and serves, named, and what it does not.",
         "provenance" => "The retained sources, rule profiles and digests behind a Luxembourg state.",
         "dossier" => "The work record of a Luxembourg act as the index holds it; for an EU work named by identifier, its held expressions from the EU index.",

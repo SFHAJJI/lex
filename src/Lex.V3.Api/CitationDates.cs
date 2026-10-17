@@ -8,7 +8,7 @@ internal sealed record CitationDate(string AsTyped, string Date);
 
 /// <summary>
 /// The dates a citation writes (the plan's item 4.2; R90: no date dropped), read strictly and only in these forms:
-/// <c>2021-03-15</c>; <c>15/03/2021</c>, <c>15.03.2021</c> and <c>15-03-2021</c> (the day first, as Luxembourg and the Union
+/// <c>2021-03-15</c> (its month and day on one or two digits); <c>15/03/2021</c>, <c>15.03.2021</c> and <c>15-03-2021</c> (the day first, as Luxembourg and the Union
 /// write it); <c>15 mars 2021</c>, <c>1er mars 2021</c>, <c>15 March 2021</c>, <c>15. März 2021</c>; and <c>March 15, 2021</c>.
 /// A month is a month's full name in French, English or German; the year has four digits. A text in one of these shapes that
 /// names no day of the calendar (31 février, 2021-02-29) is said to be one (<see cref="IsDateShaped"/>) and is never read as a
@@ -36,7 +36,8 @@ internal static class CitationDates
         @"|(?:1er|1re|[0-9]{1,2}(?:st|nd|rd|th|\.)?)\s+\p{L}+\s+[0-9]{4}" +
         @"|\p{L}+\s+[0-9]{1,2}(?:st|nd|rd|th)?,?\s+[0-9]{4})";
 
-    private static readonly Regex Iso = new(@"^(?<y>[0-9]{4})-(?<m>[0-9]{2})-(?<d>[0-9]{2})$", RegexOptions.CultureInvariant);
+    // The year, then the month and the day on one or two digits each, as the shape reads them (2012-1-5 names its day).
+    private static readonly Regex Iso = new(@"^(?<y>[0-9]{4})-(?<m>[0-9]{1,2})-(?<d>[0-9]{1,2})$", RegexOptions.CultureInvariant);
 
     private static readonly Regex DayFirst = new(@"^(?<d>[0-9]{1,2})(?<s>[./-])(?<m>[0-9]{1,2})\k<s>(?<y>[0-9]{4})$", RegexOptions.CultureInvariant);
 

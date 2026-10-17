@@ -32,6 +32,8 @@ public sealed class ExactReferenceReaderTests
     [DataRow("1st March 2021", "2021-03-01")]
     [DataRow("15. März 2021", "2021-03-15")]
     [DataRow("29 février 2024", "2024-02-29")]
+    [DataRow("2012-1-5", "2012-01-05")]
+    [DataRow("2012-01-5", "2012-01-05")]
     public void ACitationDateIsReadInEachFormItIsWrittenIn(string written, string date)
     {
         Assert.IsTrue(CitationDates.IsDateShaped(written), written);
@@ -102,11 +104,46 @@ public sealed class ExactReferenceReaderTests
     [DataRow("règlement (CE) n° 261/2004", "32004R0261")]
     [DataRow("directive 89/391/CEE", "31989L0391")]
     [DataRow("Décision 2011/833/UE", "32011D0833")]
+    [DataRow("règlement (UE) n° 2019/2088", "32019R2088")]
+    [DataRow("Règlement (UE) n° 2016/679", "32016R0679")]
+    [DataRow("Regulation (EU) No 2016/679", "32016R0679")]
+    [DataRow("Regulation (EU) No 600/2014", "32014R0600")]
+    [DataRow("règlement (UE) n° 600/2014", "32014R0600")]
+    [DataRow("règlement (CE) 593/2008", "32008R0593")]
+    [DataRow("Règlement (CE) n° 593/2008", "32008R0593")]
+    [DataRow("règlement (UE) n° 2019/1150", "32019R1150")]
+    [DataRow("Règlement (UE) 2016/679 du 27 avril 2016", "32016R0679")]
+    [DataRow("Règlement (UE) 2016/679 du Parlement européen et du Conseil du 27 avril 2016", "32016R0679")]
+    [DataRow("Regulation (EU) 2016/679 of the European Parliament and of the Council of 27 April 2016", "32016R0679")]
+    [DataRow("le règlement (UE) 2016/679", "32016R0679")]
+    [DataRow("la directive 2006/112/CE", "32006L0112")]
+    [DataRow("http://data.europa.eu/eli/reg/2016/679/oj/eng", "32016R0679")]
+    [DataRow("https://eur-lex.europa.eu/eli/reg/2016/679/oj", "32016R0679")]
+    [DataRow("eur-lex.europa.eu/eli/reg/2016/679/oj", "32016R0679")]
+    [DataRow("http://data.europa.eu/eli/dir/2006/112/2016-06-01", "32006L0112")]
     public void AnEuActIsReadToItsCelexFromEachFormItIsWrittenIn(string written, string celex)
     {
         var reference = Read(written);
         Assert.IsTrue(reference.Act.IsEurope, written);
         Assert.AreEqual(celex, reference.Act.Celex, written);
+    }
+
+    [TestMethod]
+    public void AnEuNameWhoseNumberAndYearCouldBeEitherReadsToBothOrdersAndNoneFallsToALuxembourgTitle()
+    {
+        // (UE) or a first part from 2015 on: the year first; the other order is tried after it.
+        CollectionAssert.AreEqual(new[] { "32019R2088", "32088R2019" }, Read("règlement (UE) n° 2019/2088").Act.CelexCandidates!.ToArray());
+        CollectionAssert.AreEqual(new[] { "32020R2021", "32021R2020" }, Read("règlement 2020/2021").Act.CelexCandidates!.ToArray());
+        CollectionAssert.AreEqual(new[] { "32004R0261" }, Read("Regulation (EC) No 261/2004").Act.CelexCandidates!.ToArray());
+        Assert.AreEqual("2016-04-27", Read("Règlement (UE) 2016/679 du 27 avril 2016").Act.ActDate!.Date, "the act's own date is kept");
+        // An expression's ELI names its language; a consolidated version's, its date.
+        Assert.AreEqual("eng", Read("http://data.europa.eu/eli/reg/2016/679/oj/eng").Act.EuropeLanguage);
+        Assert.AreEqual("2016-06-01", Read("http://data.europa.eu/eli/dir/2006/112/2016-06-01").Act.EuropeVersionDate!.Date);
+        // A text in an EU name's shape that reads to no CELEX is no reference, never a Luxembourg title.
+        foreach (var text in new[] { "règlement (UE) n° 5/6", "article 6 du règlement (UE) n° 99/99999", "Règlement (UE) 2016/679 relatif à la protection des données" })
+        {
+            Assert.IsNull(ExactReferenceReader.Read(text), text);
+        }
     }
 
     [TestMethod]
@@ -171,10 +208,19 @@ public sealed class ExactReferenceReaderTests
         Assert.AreEqual("2000-06-01", Read("arrêté grand-ducal du 1er juin 2000").Act.ActDate!.Date);
 
         // A date in the title earlier than the act's own date is the title's, never a date to read the act at.
+        // A date in the title earlier than the act's own date, after a comma or "le": two readings, the title's (tried first by
+        // the index, which takes it when its title words name an act of the day) and the date asked's.
         var convention = Read("Loi du 28 novembre 1961 portant approbation de la Convention Eurocontrol, signée à Bruxelles, le 13 décembre 1960");
         Assert.AreEqual("1961-11-28", convention.Act.ActDate!.Date);
-        Assert.IsNull(convention.Date);
-        StringAssert.Contains(convention.Act.TitleWords, "le 13 décembre 1960");
+        Assert.AreEqual("1960-12-13", convention.Date!.Date, "the date asked, if the title words name no act");
+        Assert.IsNotNull(convention.AsTitle);
+        Assert.IsNull(convention.AsTitle.Date);
+        StringAssert.Contains(convention.AsTitle.Act.TitleWords, "le 13 décembre 1960");
+        Assert.IsNull(Read("article 5 de la loi du 10 août 1991 au 1er janvier 1990").AsTitle, "after au, the date asked alone");
+
+        // An article before the type, and an article after a comma alone.
+        Assert.AreEqual("1991-08-10", Read("la loi du 10 août 1991").Act.ActDate!.Date);
+        Assert.AreEqual("2", Read("art. 2, loi du 10 août 1991").Article!.Key);
     }
 
     [TestMethod]
@@ -196,6 +242,9 @@ public sealed class ExactReferenceReaderTests
     [DataRow("32016R0679 art. 38l", nameof(ReferenceActForm.Celex), "32016R0679", "38l", null)]
     [DataRow("articles 141 à 144 du Code de commerce", nameof(ReferenceActForm.Title), "Code de commerce", "141 à 144", null)]
     [DataRow("Loi sur le timbre, article XXVII", nameof(ReferenceActForm.Title), "Loi sur le timbre", "XXVII", null)]
+    [DataRow("article 6 du règlement (UE) 2016/679 du 27 avril 2016", nameof(ReferenceActForm.EuropeName), "règlement (UE) 2016/679 du 27 avril 2016", "6", null)]
+    [DataRow("article 6 du règlement (UE) n° 2016/679", nameof(ReferenceActForm.EuropeName), "règlement (UE) n° 2016/679", "6", null)]
+    [DataRow("art. 2, loi du 10 août 1991, 15 mars 2024", nameof(ReferenceActForm.TypeAndDate), "loi du 10 août 1991", "2", "2024-03-15")]
     public void ACitationOfAnArticleOfAnActAtADateKeepsEachOfItsParts(
         string written, string form, string act, string? article, string? date)
     {
@@ -206,6 +255,20 @@ public sealed class ExactReferenceReaderTests
         Assert.AreEqual(article, reference.Article?.Key, written);
         Assert.AreEqual(date, reference.Date?.Date, written);
         Assert.IsNull(reference.DateNotRead, written);
+    }
+
+    [TestMethod]
+    [DataRow("loi du 10 août 1991 art. 2 al. 3", "2", "al. 3")]
+    [DataRow("article 2, alinéa 3, de la loi du 10 août 1991", "2", "alinéa 3")]
+    [DataRow("article 6, paragraphe 1, du règlement (UE) 2016/679", "6", "paragraphe 1")]
+    [DataRow("article 6 § 1 du règlement (UE) 2016/679", "6", "§ 1")]
+    [DataRow("art. 5, al. 2, point 3, de la loi du 10 août 1991", "5", "al. 2, point 3")]
+    public void APartOfAnArticleIsKeptAsTypedAndTheArticleIsTheOneCited(string written, string article, string part)
+    {
+        var reference = Read(written);
+        Assert.AreEqual(article, reference.Article!.Key, written);
+        Assert.AreEqual(part, reference.ArticlePart, written);
+        StringAssert.EndsWith(reference.PrintedArticle(europe: false), ", " + part, written);
     }
 
     [TestMethod]

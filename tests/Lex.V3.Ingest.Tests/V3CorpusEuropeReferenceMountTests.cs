@@ -59,6 +59,10 @@ public sealed class V3CorpusEuropeReferenceMountTests
                      (Celex, "celex"), ("CELEX:32016R0679", "celex"), ("celex 32016r0679", "celex"),
                      ("http://data.europa.eu/eli/reg/2016/679/oj", "celex"), ("https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32016R0679", "celex"),
                      ("Regulation (EU) 2016/679", "citation"), ("règlement (UE) 2016/679", "citation"), ("/fr/eu-eurlex/32016R0679", "permalink"),
+                     // The review of #974, F3 and F7: "n°" before a year-first number, the act's own date and its body, the expression's ELI.
+                     ("règlement (UE) n° 2016/679", "citation"), ("Règlement (UE) 2016/679 du 27 avril 2016", "citation"),
+                     ("Règlement (UE) 2016/679 du Parlement européen et du Conseil du 27 avril 2016", "citation"),
+                     ("http://data.europa.eu/eli/reg/2016/679/oj/eng", "celex"), ("https://eur-lex.europa.eu/eli/reg/2016/679/oj", "celex"),
                  })
         {
             var envelope = await SearchAsync(mount, query, language: "eng", date: "2026-09-18");
@@ -95,6 +99,17 @@ public sealed class V3CorpusEuropeReferenceMountTests
         const string early = "Article 99 of Regulation (EU) 2016/679, 15 March 2015";
         var before = Refused(await SearchAsync(mount, early, language: "eng"), "no_version_for_date", early);
         Assert.AreEqual("2015-03-15", before.GetProperty("recognised_date").GetString(), "the date is kept, and no wording this index holds answers it");
+
+        foreach (var query in new[] { "article 99 du règlement (UE) n° 2016/679", "article 99 du règlement (UE) 2016/679 du 27 avril 2016" })
+        {
+            Assert.AreEqual($"/eu-eurlex/{Celex}/eng/099",
+                Opened(await SearchAsync(mount, query, language: "eng"), query).GetProperty("opens").GetProperty("address").GetString(), query);
+        }
+
+        // An expression's ELI names its language, whatever the search's.
+        Assert.AreEqual($"/eu-eurlex/{Celex}/eng/099",
+            Opened(await SearchAsync(mount, "http://data.europa.eu/eli/reg/2016/679/oj/eng, article 99", language: "fra"), "eli language")
+                .GetProperty("opens").GetProperty("address").GetString());
 
         const string missing = "Article 9999 of Regulation (EU) 2016/679";
         var notHeld = Refused(await SearchAsync(mount, missing, language: "eng"), "anchor_not_in_version", missing);

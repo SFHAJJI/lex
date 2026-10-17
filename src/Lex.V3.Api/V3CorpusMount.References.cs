@@ -25,10 +25,12 @@ internal sealed partial class V3CorpusMount
         "Memorial or Journal officiel A citation, a historical identifier of the publisher's catalogue, an address of this site for " +
         "law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a " +
         "date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search's " +
-        "date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; a reference to an act " +
-        "the indexes do not hold is refused identifier_unknown, with no list; several acts or articles are refused " +
-        "ambiguous_identifier with every candidate; a date in a date's shape that names no calendar day opens nothing; a query that " +
-        "is no reference is searched as words";
+        "date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU " +
+        "act's name or a type and date that names no act the indexes or the publisher's catalogue hold is refused " +
+        "identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with " +
+        "every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name " +
+        "none of that day's acts, open nothing on their own: a title is searched as words, and the day's acts are listed; a date " +
+        "in a date's shape that names no calendar day opens nothing; a query that is no reference is searched as words";
 
     private const string ReferencePhase = "exact_reference";
 
@@ -51,10 +53,40 @@ internal sealed partial class V3CorpusMount
         string? ArticleMatchedBy = null,
         string? Date = null,
         string? DateSource = null,
-        string? Language = null);
+        string? Language = null,
+        IReadOnlyList<string>? CatalogueWorks = null);
 
-    /// <summary>The phase's report when it did not run or read no reference: the search answer carries it as <c>reference</c>.</summary>
-    private static object ReferenceNotRead(string outcome) => new
+    /// <summary>
+    /// One act a reference may name, as the indexes and the publisher's catalogue hold it: its work IRI, its work key when the
+    /// index holds a version of it (null when only the catalogue names it), and the title it is named by.
+    /// </summary>
+    private sealed record CandidateAct(string WorkIri, string? WorkKey, string? Title, string? TitleLanguage)
+    {
+        public bool Held => WorkKey is not null;
+
+        /// <summary>How a candidate is named in a refusal: this site's address when held, else the publisher's work IRI.</summary>
+        public string Identifier => WorkKey is null ? WorkIri : "/lu-legilux/" + WorkKey;
+    }
+
+    /// <summary>
+    /// What a Luxembourg reference's act was located as: the acts it may name (held or not), whether title words chose among a
+    /// day's acts, and what an ELI pins. <see cref="TitleNotHeld"/> is a title the index holds no act under: the reference is
+    /// then no reference, and the query is searched as words.
+    /// </summary>
+    private sealed record LocatedAct(
+        IReadOnlyList<CandidateAct> Acts,
+        bool TitleWordsMatched = false,
+        bool TitleNotHeld = false,
+        bool ListOnly = false,
+        string? PinnedResource = null,
+        string? PinnedLanguage = null,
+        string? PinnedDate = null);
+
+    /// <summary>
+    /// The phase's report when it did not run or read no reference: the search answer carries it as <c>reference</c>, with the
+    /// reason a citation it read was searched as words (<c>title_not_held</c>), if any.
+    /// </summary>
+    private static object ReferenceNotRead(string outcome, string? reason = null) => new
     {
         phase = ReferencePhase,
         outcome,
@@ -62,12 +94,13 @@ internal sealed partial class V3CorpusMount
         kind = (string?)null,
         recognised = (object?)null,
         opens = (object?)null,
-        reason = (string?)null,
+        reason,
     };
 
     /// <summary>
-    /// The phase: null when the query is no reference (the search continues as before), else the outcome that answers the search
-    /// (the address to open, or the refusal, with what was recognised).
+    /// The phase: null when the query is no reference (the search continues as before; <paramref name="reason"/> says why a
+    /// citation it read is searched as words), else the outcome that answers the search (the address to open, or the refusal,
+    /// with what was recognised).
     /// </summary>
     private V3PlatformOperationOutcome? SearchReference(
         V3PlatformOperationRequest request,
@@ -76,73 +109,127 @@ internal sealed partial class V3CorpusMount
         string? requestedDate,
         string? mode,
         string? after,
-        DateTimeOffset observedAt)
+        DateTimeOffset observedAt,
+        out string? reason)
     {
+        reason = null;
         if (ExactReferenceReader.Read(query) is not { } reference)
         {
             return null;
         }
 
+        if (reference.DateNotRead is { } notRead)
+        {
+            RefuseCursor(after);
+            return ReferenceAnswer(request, query, language, requestedDate, mode, observedAt,
+                new Recognition(reference, reference.Act.IsEurope ? "eu-eurlex" : "lu-legilux"), opens: null, reason: notRead);
+        }
+
+        if (reference.Act.Form is ReferenceActForm.Permalink)
+        {
+            RefuseCursor(after);
+            return SitePathReference(request, query, language, requestedDate, mode, reference, observedAt);
+        }
+
+        if (reference.Act.Form is ReferenceActForm.Celex or ReferenceActForm.EuropeName)
+        {
+            RefuseCursor(after);
+            var celex = ChooseCelex(reference.Act);
+            reference = reference with { Act = reference.Act with { Celex = celex } };
+            return EuropeReference(request, query, language, requestedDate, mode, reference, celex, observedAt,
+                pinnedLanguage: reference.Act.EuropeLanguage, pinnedDate: reference.Act.EuropeVersionDate?.Date);
+        }
+
+        if (_reader is null)
+        {
+            RefuseCursor(after);
+            using var unmounted = JsonSerializer.SerializeToDocument(new { required_corpus = "lu" });
+            return WithRecognition(request, V3PlatformOperationOutcome.Refused(
+                Context("refusal", observedAt, PublisherId.LuLegilux),
+                new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement)), new Recognition(reference, "lu-legilux"));
+        }
+
+        // A text whose last date may be its act's title's: the title reading first, when its title words name an act of that day.
+        var located = LocateLuxembourg(reference);
+        if (reference.AsTitle is { } asTitle && LocateLuxembourg(asTitle) is { TitleWordsMatched: true } titled)
+        {
+            (reference, located) = (asTitle, titled);
+        }
+
+        // A title the index holds no act under is no reference: the query is searched as words, every token of it kept.
+        if (located.TitleNotHeld)
+        {
+            reason = "title_not_held";
+            return null;
+        }
+
+        RefuseCursor(after);
+        return LuxembourgReference(request, query, language, requestedDate, mode, reference, located, observedAt);
+    }
+
+    /// <summary>
+    /// Reads, once, what the phase reads on its first reference of a kind, so that no request pays it and none waits behind it:
+    /// the EU census's identifiers (every seed act's CELEXes, works and expressions) and the catalogue's Mémorial issues and
+    /// historical identifiers. The server calls it once the mount is open; an act's own EU timeline is still read on its first
+    /// use, as every time-view answer reads it.
+    /// </summary>
+    internal void Warm()
+    {
+        if (_europeReader is { HasStates: true })
+        {
+            _ = EuropeSeedsOf(string.Empty);
+        }
+
+        if (_reader is not null)
+        {
+            _ = CatalogueSubjects(memorial: true, string.Empty);
+        }
+    }
+
+    /// <summary>A later page asked of a reference: a reference opens its act, and has no page of hits.</summary>
+    private static void RefuseCursor(string? after)
+    {
         if (after is not null)
         {
             throw new V3TransportFailureException(
                 V3TransportFailureKind.RequestSchemaInvalid,
                 "The operation request's 'after' names a later page, and an exact reference opens its act: it has no page of hits.");
         }
+    }
 
-        if (reference.DateNotRead is { } notRead)
+    /// <summary>
+    /// The CELEX an EU act's name is read to: of the CELEXes it can read to, in the order the reader tries them, the first the EU
+    /// index holds, else the first; any other EU reference names its one CELEX.
+    /// </summary>
+    private string ChooseCelex(ReferenceAct act)
+    {
+        if (act.CelexCandidates is not { Count: > 1 } candidates || _europeReader is null)
         {
-            return ReferenceAnswer(request, query, language, requestedDate, mode, observedAt,
-                new Recognition(reference, reference.Act.IsEurope ? "eu-eurlex" : "lu-legilux"), opens: null, reason: notRead);
+            return act.Celex!;
         }
 
-        return reference.Act.Form switch
-        {
-            ReferenceActForm.Permalink => SitePathReference(request, query, language, requestedDate, mode, reference, observedAt),
-            ReferenceActForm.Celex or ReferenceActForm.EuropeName =>
-                EuropeReference(request, query, language, requestedDate, mode, reference, reference.Act.Celex!, observedAt),
-            _ => LuxembourgReference(request, query, language, requestedDate, mode, reference, observedAt),
-        };
+        return candidates.FirstOrDefault(celex => EuropeSeedsOf(celex).Count > 0 || _europeReader.ResolveExact(celex).Count > 0)
+            ?? candidates[0];
     }
 
     // ---- Luxembourg -------------------------------------------------------------------------------------------------------
 
-    /// <summary>A reference to a Luxembourg act: located by its form, then opened at the article and date, or its dossier.</summary>
-    private V3PlatformOperationOutcome LuxembourgReference(
-        V3PlatformOperationRequest request,
-        string query,
-        string language,
-        string? requestedDate,
-        string? mode,
-        ExactReference reference,
-        DateTimeOffset observedAt)
+    /// <summary>
+    /// The acts a Luxembourg reference may name, by its form, from the index and from the publisher's catalogue (its facts): an
+    /// ELI's work; a Mémorial issue's acts (on the issue's date, when written); a historical identifier's; every act of a type
+    /// and date's day, chosen among by its title words when they name some; a title's held acts by the title ladder's exact and
+    /// prefix tiers.
+    /// </summary>
+    private LocatedAct LocateLuxembourg(ExactReference reference)
     {
-        var recognition = new Recognition(reference, "lu-legilux");
-        if (_reader is null)
-        {
-            using var unmounted = JsonSerializer.SerializeToDocument(new { required_corpus = "lu" });
-            return WithRecognition(request, V3PlatformOperationOutcome.Refused(
-                Context("refusal", observedAt, PublisherId.LuLegilux),
-                new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement)), recognition);
-        }
-
-        string? pinnedResource = null;
-        string? pinnedLanguage = null;
-        string? pinnedDate = null;
-        IReadOnlyList<string> workKeys;
-        string? matchedTitle = null;
-        string? matchedTitleLanguage = null;
+        ArgumentNullException.ThrowIfNull(_reader);
         switch (reference.Act.Form)
         {
             case ReferenceActForm.LuxembourgEli:
             {
                 var eli = ReadEli(reference.Act.Eli!);
-                pinnedResource = eli.LegalResource;
-                pinnedLanguage = eli.Language;
-                pinnedDate = eli.Date;
-                workKeys = _reader.ResolveWorkStates(eli.Work).Select(static state => state.WorkKey)
-                    .Distinct(StringComparer.Ordinal).ToArray();
-                break;
+                var acts = CandidatesOf([eli.Work]).Where(act => act.Held || CatalogueNames(act.WorkIri)).ToArray();
+                return new LocatedAct(acts, PinnedResource: eli.LegalResource, PinnedLanguage: eli.Language, PinnedDate: eli.Date);
             }
 
             case ReferenceActForm.Memorial:
@@ -161,80 +248,137 @@ internal sealed partial class V3CorpusMount
                         string.Equals(fact.ObjectValue, issued.Date, StringComparison.Ordinal))).ToArray();
                 }
 
-                workKeys = WorksOfSubjects(subjects);
-                break;
+                return new LocatedAct(CandidatesOf(WorksOfSubjects(subjects)));
             }
 
             case ReferenceActForm.HistoricalLegalId:
-                workKeys = WorksOfSubjects(CatalogueSubjects(memorial: false, reference.Act.HistoricalLegalId!));
-                break;
+                return new LocatedAct(CandidatesOf(WorksOfSubjects(CatalogueSubjects(memorial: false, reference.Act.HistoricalLegalId!))));
 
             case ReferenceActForm.TypeAndDate:
             {
+                // Every act the catalogue or the index holds of that type on that day, held or not.
                 var date = reference.Act.ActDate!.Date;
                 var prefix = $"{LuxembourgEliRoot}leg/{reference.Act.LuxembourgType}/{date[..4]}/{date[5..7]}/{date[8..10]}/";
-                workKeys = _reader.ResolveWorksUnder(prefix).Select(static work => work.WorkKey)
-                    .Distinct(StringComparer.Ordinal).ToArray();
-                if (reference.Act.TitleWords is { } words)
+                var works = WorksOfSubjects(_reader.ResolveSubjectsUnder(prefix))
+                    .Concat(_reader.ResolveWorksUnder(prefix).Select(static work => work.PublisherWorkIri))
+                    .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+                var acts = CandidatesOf(works);
+                if (reference.Act.TitleWords is not { } words)
                 {
-                    // Title words after the date name the act among those of that day: every one of them, in order, in its title.
-                    var folded = ArticleNumbers.Fold(words);
-                    workKeys = workKeys.Where(key => TitlesOfWork(key).Any(title =>
-                        (" " + Lex.V3.Contracts.Index.TitleFolding.NormalizeTitle(title.Title) + " ")
-                            .Contains(" " + folded + " ", StringComparison.Ordinal))).ToArray();
+                    return new LocatedAct(acts);
                 }
 
-                break;
+                // Title words after the date name the act among those of that day: every one of them, in order, in one of its
+                // titles. When they name none, the day's acts are listed: never an absence, never a guess.
+                var folded = " " + ArticleNumbers.Fold(words) + " ";
+                var named = acts.Where(act => TitlesOfCandidate(act).Any(title =>
+                    (" " + ArticleNumbers.Fold(title) + " ").Contains(folded, StringComparison.Ordinal))).ToArray();
+                return named.Length > 0 ? new LocatedAct(named, TitleWordsMatched: true) : new LocatedAct(acts, ListOnly: true);
             }
 
             default:
             {
-                // A title: the title ladder's exact and prefix tiers only; a title that only shares words with the act's is not it.
+                // A title: the title ladder's exact and prefix tiers only, among the acts the index holds a version of; a title
+                // that only shares words with an act's, or that names no held act, is no reference.
                 var resolution = _reader.ResolveWorkTitle(reference.Act.Title!);
                 var matched = resolution.Candidates
                     .Where(static candidate => candidate.MatchReason is "exact_normalized_title" or "prefix")
                     .ToArray();
                 var states = _reader.ResolveStatesOfExpressions(matched.SelectMany(static candidate => candidate.ExpressionIris).ToArray());
-                workKeys = states.Select(static state => state.WorkKey).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-                if (workKeys.Count == 1 && matched.Length > 0)
-                {
-                    matchedTitle = matched[0].MatchedTitle;
-                    matchedTitleLanguage = matched[0].MatchedTitleLanguage;
-                }
-
-                break;
+                var held = states.GroupBy(static state => state.WorkKey, StringComparer.Ordinal)
+                    .OrderBy(static group => group.Key, StringComparer.Ordinal)
+                    .Select(group =>
+                    {
+                        var title = matched.FirstOrDefault(candidate => candidate.ExpressionIris.Intersect(group.Select(static state => state.ExpressionIri)).Any());
+                        return new CandidateAct(group.First().PublisherWorkIri, group.Key, title?.MatchedTitle, title?.MatchedTitleLanguage);
+                    })
+                    .ToArray();
+                return held.Length == 0 ? new LocatedAct([], TitleNotHeld: true) : new LocatedAct(held);
             }
         }
+    }
 
-        if (workKeys.Count == 0)
+    /// <summary>The acts of the given work IRIs: each with its work key when the index holds a version of it, and its title.</summary>
+    private IReadOnlyList<CandidateAct> CandidatesOf(IReadOnlyList<string> workIris) =>
+        workIris.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).Select(iri =>
+        {
+            var key = _reader!.ResolveWorkStates(iri).FirstOrDefault()?.WorkKey;
+            if (key is not null && TitlesOfWork(key).FirstOrDefault() is { } held)
+            {
+                return new CandidateAct(iri, key, held.Title, held.Language);
+            }
+
+            var catalogued = CatalogueTitles(iri).FirstOrDefault();
+            return new CandidateAct(iri, key, catalogued, catalogued is null ? null : "fra");
+        })
+        // A work the catalogue names only by facts of other subjects than itself and its versions is still a work: kept.
+        .ToArray();
+
+    /// <summary>Every title an act is named by: the index's titles of its held versions, and the publisher's catalogue's.</summary>
+    private IEnumerable<string> TitlesOfCandidate(CandidateAct act) =>
+        (act.WorkKey is null ? [] : TitlesOfWork(act.WorkKey).Select(static title => title.Title)).Concat(CatalogueTitles(act.WorkIri));
+
+    /// <summary>The titles (and short titles) the publisher's catalogue states of a work's versions and expressions, French first.</summary>
+    private IReadOnlyList<string> CatalogueTitles(string workIri) =>
+        _reader!.ResolveFactsUnder(workIri + "/")
+            .Where(static fact => fact.Predicate is "title" or "titleShort" && string.Equals(fact.ObjectKind, "literal", StringComparison.Ordinal))
+            .OrderBy(static fact => fact.SubjectIri.EndsWith("/fr", StringComparison.Ordinal) ? 0 : 1)
+            .ThenBy(static fact => fact.Predicate == "title" ? 0 : 1)
+            .ThenBy(static fact => fact.SubjectIri, StringComparer.Ordinal)
+            .Select(static fact => fact.ObjectValue)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+    /// <summary>
+    /// A reference to a Luxembourg act, once located: one held act opens (at the article and date, or its dossier); one act the
+    /// catalogue names and the index holds no version of is <c>identifier_unknown</c> naming it; several are
+    /// <c>ambiguous_identifier</c> with every one, each marked held or not, and none is chosen; none is <c>identifier_unknown</c>.
+    /// </summary>
+    private V3PlatformOperationOutcome LuxembourgReference(
+        V3PlatformOperationRequest request,
+        string query,
+        string language,
+        string? requestedDate,
+        string? mode,
+        ExactReference reference,
+        LocatedAct located,
+        DateTimeOffset observedAt)
+    {
+        var recognition = new Recognition(reference, "lu-legilux");
+        if (located.Acts.Count == 0)
         {
             return WithRecognition(request, Unknown(request, query, observedAt, PublisherId.LuLegilux,
                 "an act this index holds" + ReferenceNotHeld), recognition);
         }
 
-        if (workKeys.Count > 1)
+        // Several acts, or words after a type and date that name none of that day's acts (however many it holds): each is listed,
+        // held or not, and none is chosen.
+        if (located.Acts.Count > 1 || located.ListOnly)
         {
-            var ordered = workKeys.Order(StringComparer.Ordinal).ToArray();
             using var ambiguous = JsonSerializer.SerializeToDocument(new
             {
                 requested_identifier = query,
-                candidates = ordered.Select(static key => "/lu-legilux/" + key).ToArray(),
-                candidate_titles = ordered.Select(key => TitlesOfWork(key).FirstOrDefault()?.Title ?? key).ToArray(),
+                candidates = located.Acts.Select(static act => act.Identifier).ToArray(),
+                candidate_titles = located.Acts.Select(static act => act.Title ?? act.WorkIri).ToArray(),
+                candidate_held = located.Acts.Select(static act => act.Held).ToArray(),
             });
             return WithRecognition(request, V3PlatformOperationOutcome.Refused(
                 Context("refusal", observedAt),
                 new V3PlatformOperationRefusal(request, "ambiguous_identifier", ambiguous.RootElement)), recognition);
         }
 
-        var workKey = workKeys[0];
-        if (matchedTitle is null && TitlesOfWork(workKey).FirstOrDefault() is { } held)
+        var act = located.Acts[0];
+        recognition = recognition with { Work = act.WorkKey, Title = act.Title, TitleLanguage = act.TitleLanguage };
+        if (!act.Held)
         {
-            (matchedTitle, matchedTitleLanguage) = (held.Title, held.Language);
+            // The catalogue names this act, and the index holds no version of it: said, with the act the catalogue names.
+            return WithRecognition(request, Unknown(request, query, observedAt, PublisherId.LuLegilux,
+                "an act this index holds a version of: the publisher's catalogue names this one, and no version of it is held" + ReferenceNotHeld),
+                recognition with { CatalogueWorks = [act.WorkIri] });
         }
 
-        recognition = recognition with { Work = workKey, Title = matchedTitle, TitleLanguage = matchedTitleLanguage };
-        return OpenLuxembourgWork(request, query, language, requestedDate, mode, recognition, workKey,
-            pinnedResource, pinnedLanguage, pinnedDate, observedAt);
+        return OpenLuxembourgWork(request, query, language, requestedDate, mode, recognition, act.WorkKey!,
+            located.PinnedResource, located.PinnedLanguage, located.PinnedDate, observedAt);
     }
 
     /// <summary>
@@ -454,16 +598,19 @@ internal sealed partial class V3CorpusMount
 
     private static string DayOf(string yyyymmdd) => $"{yyyymmdd[..4]}-{yyyymmdd[4..6]}-{yyyymmdd[6..8]}";
 
-    /// <summary>The held works of catalogue subjects (legal resources or works): each subject's work by its ELI, held or not.</summary>
-    private string[] WorksOfSubjects(IReadOnlyList<string> subjects) =>
+    /// <summary>The works of catalogue subjects (works, legal resources, expressions), each by its ELI, held or not.</summary>
+    private static string[] WorksOfSubjects(IReadOnlyList<string> subjects) =>
         subjects
             .Where(static subject => subject.StartsWith(LuxembourgEliRoot, StringComparison.Ordinal))
-            .Select(subject => ReadEli(subject).Work)
-            .Distinct(StringComparer.Ordinal)
-            .SelectMany(work => _reader!.ResolveWorkStates(work).Select(static state => state.WorkKey))
+            .Select(static subject => ReadEli(subject).Work)
+            .Where(static work => work.Length > LuxembourgEliRoot.Length)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
+
+    /// <summary>Whether the publisher's catalogue states anything of a work, or of a version or expression of it.</summary>
+    private bool CatalogueNames(string workIri) =>
+        _reader!.ResolveFacts([workIri]).Count > 0 || _reader.ResolveSubjectsUnder(workIri + "/").Count > 0;
 
     /// <summary>
     /// The catalogue's subjects of one Mémorial issue (by its IRI) or of one historical legal identifier, from the fact table
@@ -906,6 +1053,8 @@ internal sealed partial class V3CorpusMount
                 as_typed = reference.ArticleAsTyped,
                 number = recognition.Publisher == "eu-eurlex" ? article.Key : article.Printed,
                 key = article.Key,
+                // A part of the article the citation names (an alinéa, a paragraph), as typed: the article opens, and the part is said.
+                part = reference.ArticlePart,
                 matched_by = recognition.ArticleMatchedBy,
             },
             // A date the reference writes in a date's shape and that names no day is the date as typed, never dropped: the
@@ -939,11 +1088,14 @@ internal sealed partial class V3CorpusMount
         payload["recognised_kind"] = reference.Kind;
         payload["recognised_act"] = reference.Act.Label;
         payload["recognised_title"] = recognition.Title;
-        payload["recognised_article"] = reference.Article is null
-            ? null
-            : recognition.Publisher == "eu-eurlex" ? reference.Article.Key : reference.Article.Printed;
+        payload["recognised_article"] = reference.PrintedArticle(recognition.Publisher == "eu-eurlex");
         payload["recognised_date"] = recognition.Date ?? reference.Date?.Date;
         payload["recognised_date_source"] = recognition.DateSource ?? (reference.Date is null ? null : "citation");
+        if (recognition.CatalogueWorks is { } catalogued)
+        {
+            // The acts the publisher's catalogue names, which the index holds no version of.
+            payload["recognised_catalogue_works"] = new JsonArray(catalogued.Select(static iri => (JsonNode?)JsonValue.Create(iri)).ToArray());
+        }
         using var document = JsonSerializer.SerializeToDocument(payload);
         return V3PlatformOperationOutcome.Refused(
             outcome.Context,

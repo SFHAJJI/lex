@@ -195,6 +195,90 @@ public sealed class V3CorpusReferenceMountTests
         Assert.AreEqual("2020-01-01", payload.GetProperty("recognised_date").GetString());
         Assert.AreEqual("citation", payload.GetProperty("recognised_date_source").GetString());
         Assert.IsFalse(payload.GetProperty("asserts_absence_of_law").GetBoolean());
+
+        // The review of #974, F1: an earlier date after a comma or "le" that the act's title does not carry is the date asked, as
+        // after "au": never words that name no act.
+        foreach (var earlier in new[] { "article 5 de la loi du 10 août 1991, 1er janvier 1990", "article 5 de la loi du 10 août 1991, le 1er janvier 1990",
+                     "loi du 10 août 1991, 1990-01-01", "article 2 de la loi du 10 août 1991, 1990-1-1" })
+        {
+            var asked = Refused(await SearchAsync(mount, earlier), "no_version_for_date", earlier);
+            Assert.AreEqual(fixture.ApplicabilityDate, asked.GetProperty("history_begins").GetString(), earlier);
+            StringAssert.StartsWith(asked.GetProperty("recognised_date").GetString(), "1990-01-01", earlier);
+        }
+    }
+
+    [TestMethod]
+    public async Task ATitlesOwnEarlierDateIsReadAsTheTitlesAndAPartOfAnArticleIsKept()
+    {
+        const string title = "Loi du 10 août 1991 portant approbation de la Convention, signée à Genève, le 1er janvier 1990";
+        var (fixture, mount) = await MountAsync(fixture =>
+            fixture.AddTitleRowsAsync((null, fixture.ExpressionIri, "fra", "title", title, new string('c', 64))));
+        await using var cleanup = fixture;
+        using var mounted = mount;
+
+        // The title's own date: the title reading names the act, so its dossier opens.
+        var titled = Opened(await SearchAsync(mount, title), "title");
+        Assert.AreEqual($"/lu-legilux/{fixture.WorkKey}", titled.GetProperty("opens").GetProperty("address").GetString());
+
+        // "la loi du …", "art. 5, loi du …", and a part of the article, kept as typed and said with the article opened.
+        Assert.AreEqual($"/lu-legilux/{fixture.WorkKey}",
+            Opened(await SearchAsync(mount, "la loi du 10 août 1991"), "la loi").GetProperty("opens").GetProperty("address").GetString());
+        Assert.AreEqual(Readable(fixture, "art_5"),
+            Opened(await SearchAsync(mount, "art. 5, loi du 10 août 1991"), "comma").GetProperty("opens").GetProperty("address").GetString());
+        foreach (var (query, part) in new[] { ("loi du 10 août 1991 art. 5 al. 3", "al. 3"), ("article 5, alinéa 2, de la loi du 10 août 1991", "alinéa 2") })
+        {
+            var reference = Opened(await SearchAsync(mount, query), query);
+            Assert.AreEqual(Readable(fixture, "art_5"), reference.GetProperty("opens").GetProperty("address").GetString(), query);
+            Assert.AreEqual(part, reference.GetProperty("recognised").GetProperty("article").GetProperty("part").GetString(), query);
+        }
+
+        const string partRefused = "loi du 10 août 1991 art. 99 al. 3";
+        Assert.AreEqual("99, al. 3", Refused(await SearchAsync(mount, partRefused), "anchor_not_in_version", partRefused)
+            .GetProperty("recognised_article").GetString(), "a refusal says the part with the article");
+
+        // Words after a type and date that name no act of the day (a negation, another act) list the day's acts, here one:
+        // never a guess, never an absence.
+        foreach (var query in new[] { "loi du 10 août 1991 ne s'applique pas", "loi du 10 août 1991 relative aux chiens", "loi du 10 août 1991 et loi du 3 février 2018" })
+        {
+            var listed = Refused(await SearchAsync(mount, query), "ambiguous_identifier", query);
+            CollectionAssert.AreEqual(new[] { $"/lu-legilux/{fixture.WorkKey}" }, Strings(listed.GetProperty("candidates")), query);
+            CollectionAssert.AreEqual(new[] { true }, listed.GetProperty("candidate_held").EnumerateArray().Select(static held => held.GetBoolean()).ToArray(), query);
+        }
+    }
+
+    [TestMethod]
+    public async Task ADayOrAnIssueTheCatalogueNamesSeveralActsOnListsEachHeldOrNotAndOpensNone()
+    {
+        // The review of #974, F2: the catalogue names a second act of the day, which the index holds no version of; the day and the
+        // Mémorial issue that publishes both name two acts, so none is opened on its own.
+        const string other = "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5";
+        const string issue = "http://data.legilux.public.lu/eli/etat/leg/memorial/1991/a58";
+        var (fixture, mount) = await MountAsync(async fixture =>
+        {
+            await fixture.AddTitleRowsAsync((null, fixture.ExpressionIri, "fra", "title", "Loi du 10 août 1991 sur la profession d'avocat", new string('c', 64)));
+            await fixture.AddWorkFactAsync(other + "/jo/fr", "title", "expression_language_or_title", "literal", "Loi du 10 août 1991 portant approbation de la Convention de La Haye");
+            await fixture.AddWorkFactAsync(other + "/jo", "isPartOf", "wemi_structural", "iri", issue);
+            await fixture.AddWorkFactAsync(WorkIri + "/jo", "isPartOf", "wemi_structural", "iri", issue);
+        });
+        await using var cleanup = fixture;
+        using var mounted = mount;
+
+        foreach (var query in new[] { "loi du 10 août 1991", "Mém. A n° 58 de 1991", "article 5 de la loi du 10 août 1991, 15 mars 2024", "loi du 10 août 1991 relative aux chiens" })
+        {
+            var payload = Refused(await SearchAsync(mount, query), "ambiguous_identifier", query);
+            CollectionAssert.AreEqual(new[] { $"/lu-legilux/{fixture.WorkKey}", other }, Strings(payload.GetProperty("candidates")), query);
+            CollectionAssert.AreEqual(new[] { true, false }, payload.GetProperty("candidate_held").EnumerateArray().Select(static held => held.GetBoolean()).ToArray(), query);
+            CollectionAssert.AreEqual(new[] { "Loi du 10 août 1991 sur la profession d'avocat", "Loi du 10 août 1991 portant approbation de la Convention de La Haye" },
+                Strings(payload.GetProperty("candidate_titles")), query);
+        }
+
+        // Title words choose among the day's acts: the held one opens; the other is named, held by the catalogue and not here.
+        Assert.AreEqual($"/lu-legilux/{fixture.WorkKey}",
+            Opened(await SearchAsync(mount, "loi du 10 août 1991 sur la profession d'avocat"), "held").GetProperty("opens").GetProperty("address").GetString());
+        const string notHeld = "loi du 10 août 1991 portant approbation de la Convention de La Haye";
+        var unknown = Refused(await SearchAsync(mount, notHeld), "identifier_unknown", notHeld);
+        CollectionAssert.AreEqual(new[] { other }, Strings(unknown.GetProperty("recognised_catalogue_works")));
+        StringAssert.Contains(unknown.GetProperty("what_would_answer_detail").GetString(), "the publisher's catalogue names this one");
     }
 
     [TestMethod]
@@ -259,7 +343,6 @@ public sealed class V3CorpusReferenceMountTests
         using var mounted = mount;
         foreach (var (query, act, article, date) in new (string, string, string?, string?)[]
                  {
-                     ("Code du travail, article L. 121-6, 15 mars 2021", "Code du travail", "L. 121-6", "2021-03-15"),
                      ("loi du 11 août 1991", "loi du 11 août 1991", null, null),
                      ("article 5 de la loi du 11 août 1991", "loi du 11 août 1991", "5", null),
                      ("http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/11/n1", "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/11/n1", null, null),
@@ -278,6 +361,36 @@ public sealed class V3CorpusReferenceMountTests
             Assert.IsFalse(payload.GetProperty("asserts_absence_of_law").GetBoolean(), query);
             StringAssert.Contains(payload.GetProperty("population_disclosure").GetString(), "Luxembourg index holds 1 Luxembourg work", query);
             StringAssert.Contains(payload.GetProperty("what_would_answer_detail").GetString(), "no word was searched", query);
+        }
+    }
+
+    [TestMethod]
+    public async Task ATitleTheIndexHoldsNoActUnderIsNoReferenceAndIsSearchedAsWordsWithEveryToken()
+    {
+        // The review of #974, F1: a title is not a strict locator, so a title the index holds no act under says no absence; the
+        // query is searched as words, as typed, so no protected token is dropped (R90).
+        var (fixture, mount) = await MountAsync();
+        await using var cleanup = fixture;
+        using var mounted = mount;
+        foreach (var (query, tokens) in new (string, string[])[]
+                 {
+                     ("Code du travail, article L. 121-6, 15 mars 2021", ["L.", "121-6,", "2021"]),
+                     ("règlement intérieur article 12", ["12"]),
+                     ("convention collective article 5", ["5"]),
+                     ("loi sur le bail commercial, article 3", ["3"]),
+                     ("article 1er de la loi relative aux oeuvres orphelines", ["1er"]),
+                     ("règlement grand-ducal relatif aux vacances scolaires, article 2", ["2"]),
+                 })
+        {
+            var envelope = await SearchAsync(mount, query);
+            Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict, $"{query}: {envelope.Refusal?.Code}");
+            var body = envelope.Result!.Value;
+            var reference = body.GetProperty("reference");
+            Assert.AreEqual("no_reference", reference.GetProperty("outcome").GetString(), query);
+            Assert.AreEqual("title_not_held", reference.GetProperty("reason").GetString(), query);
+            Assert.IsTrue(body.GetProperty("lanes_run").GetBoolean(), query);
+            Assert.AreEqual(query, body.GetProperty("requested_query").GetString(), $"{query}: searched as typed");
+            CollectionAssert.IsSubsetOf(tokens, Strings(body.GetProperty("terms")), $"{query}: every protected token is a term");
         }
     }
 
@@ -344,6 +457,7 @@ public sealed class V3CorpusReferenceMountTests
             CollectionAssert.AreEqual(new[] { "/lu-legilux/loi-1991-08-10-n3", "/lu-legilux/loi-1991-08-10-n4" },
                 Strings(payload.GetProperty("candidates")), query);
             Assert.AreEqual(2, payload.GetProperty("candidate_titles").GetArrayLength(), query);
+            CollectionAssert.AreEqual(new[] { true, true }, payload.GetProperty("candidate_held").EnumerateArray().Select(static held => held.GetBoolean()).ToArray(), query);
         }
 
         // Its own identifier still names one of them.
@@ -453,6 +567,14 @@ public sealed class V3CorpusReferenceMountTests
                 var body = envelope.Result!.Value;
                 Assert.IsTrue(body.GetProperty("lanes_run").GetBoolean(), query);
                 Assert.AreEqual(query, body.GetProperty("requested_query").GetString(), $"{query}: searched as typed");
+                continue;
+            }
+
+            if (envelope.Result is { } words && words.Value.GetProperty("lanes_run").GetBoolean())
+            {
+                // A citation by a title the index holds no act under is searched as words, as typed (F1 of #974's review).
+                Assert.AreEqual("title_not_held", words.Value.GetProperty("reference").GetProperty("reason").GetString(), query);
+                Assert.AreEqual(query, words.Value.GetProperty("requested_query").GetString(), query);
                 continue;
             }
 

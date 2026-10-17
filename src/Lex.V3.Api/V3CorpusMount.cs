@@ -3782,8 +3782,9 @@ internal sealed partial class V3CorpusMount : IDisposable
         // Exact references first (resolver first, S4-A03; R59, R90): a search that names no work reads its query as an exact
         // reference before any word is searched (V3CorpusMount.References.cs). A reference opens its act, or is refused with what
         // was recognised; a query that is no reference is searched as before, and the answer says the phase read none.
+        string? referenceReason = null;
         if (identifier is null && (mode is null || SearchModes.Contains(mode, StringComparer.Ordinal)) &&
-            SearchReference(request, query, language, requestedDate, mode, after, observedAt) is { } referenced)
+            SearchReference(request, query, language, requestedDate, mode, after, observedAt, out referenceReason) is { } referenced)
         {
             return referenced;
         }
@@ -4033,7 +4034,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             searchable_languages = _reader.SearchableLanguages(),
             modes_held = SearchModes,
             modes_not_held = new[] { "bm25", "semantic" },
-            reference = ReferenceNotRead(identifier is null ? "no_reference" : "not_run_identifier_given"),
+            reference = ReferenceNotRead(identifier is null ? "no_reference" : "not_run_identifier_given", referenceReason),
             lanes_run = true,
             work_resolution = new
             {
