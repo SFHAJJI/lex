@@ -145,7 +145,8 @@ public sealed class V3CorpusReadingPagesMountTests
             Assert.AreEqual("art_15-9", payload.GetProperty("requested_anchor").GetString());
             CollectionAssert.Contains(payload.GetProperty("nearest_anchors").EnumerateArray().Select(static id => id.GetString()).ToArray(), "art_15");
             Assert.IsTrue(payload.GetProperty("do_not_fall_back_to_full_text_search").GetBoolean());
-            Assert.AreEqual(fixture.Permalink, payload.GetProperty("permalink").GetString());
+            Assert.AreEqual(V3OperationRegistry.Reviewed.MandatoryPayloadFields("anchor_not_in_version").Count + 2, payload.EnumerateObject().Count(),
+                "the payload every operation sends for an anchor: its mandatory fields, what would answer, and no claim of absence");
         }
 
         foreach (var (parameters, why) in new (object Parameters, string Why)[]

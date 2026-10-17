@@ -266,25 +266,21 @@ internal sealed partial class V3CorpusMount
         }).ToArray();
 
     /// <summary>
-    /// The refusal of an article a served version does not hold: the article asked, the ids nearest it that the version holds
-    /// (<see cref="NearestAnchors"/>), and the version.
+    /// The refusal of an article a served version does not hold: the article asked and the ids nearest it that the version
+    /// holds (<see cref="NearestAnchors"/>), as every other operation refuses an anchor.
     /// </summary>
     private V3PlatformOperationOutcome RefuseArticleNotInVersion(
         V3PlatformOperationRequest request,
         DateTimeOffset observedAt,
         Lex.V3.Contracts.PublisherId publisher,
         string article,
-        IReadOnlyList<string> held,
-        string permalink,
-        string language)
+        IReadOnlyList<string> held)
     {
         using var notInVersion = JsonSerializer.SerializeToDocument(new
         {
             requested_anchor = article,
             nearest_anchors = NearestAnchors(held, article),
             do_not_fall_back_to_full_text_search = true,
-            permalink,
-            language,
             what_would_answer = AnchorNotInVersionRoutes,
             asserts_absence_of_law = false,
         });

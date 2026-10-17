@@ -53,19 +53,23 @@
     },
     {
       "code": "anchor_not_in_version",
-      "optional_payload_keys": [
-        "language",
-        "permalink"
-      ],
+      "optional_payload_keys": [],
       "payload": {
         "asserts_absence_of_law": false,
         "do_not_fall_back_to_full_text_search": true,
-        "language": "fra",
         "nearest_anchors": [
-          "art_15"
+          "art_10",
+          "art_11",
+          "art_12",
+          "art_13",
+          "art_14",
+          "art_15",
+          "art_16",
+          "art_17",
+          "art_18",
+          "art_19"
         ],
-        "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra",
-        "requested_anchor": "art_15-9",
+        "requested_anchor": "art_no_such_anchor",
         "what_would_answer": [
           "corrected_identifier",
           "new_official_observation"

@@ -1260,7 +1260,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             if (pages is null)
             {
                 return RefuseArticleNotInVersion(request, observedAt, PublisherId.LuLegilux, asked.Article!,
-                    articles.Select(static article => article.PublisherId).Distinct(StringComparer.Ordinal).ToArray(), StateUrl(state), state.Language);
+                    articles.Select(static article => article.PublisherId).Distinct(StringComparer.Ordinal).ToArray());
             }
 
             var conflictsInVersion = articles.Count(article => article.Text.Length > 0 &&
@@ -6007,8 +6007,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             if (pages is null)
             {
                 return RefuseArticleNotInVersion(request, observedAt, PublisherId.EuEurLex, asked.Article!,
-                    articles.Select(static article => article.PublisherIdentifier).Distinct(StringComparer.Ordinal).ToArray(),
-                    wording.Permalink, wording.Language);
+                    articles.Select(static article => article.PublisherIdentifier).Distinct(StringComparer.Ordinal).ToArray());
             }
 
             cut[wording.ExpressionId] = pages;

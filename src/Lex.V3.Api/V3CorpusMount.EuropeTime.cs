@@ -894,8 +894,7 @@ internal sealed partial class V3CorpusMount
             if (pages is null)
             {
                 return RefuseArticleNotInVersion(request, observedAt, PublisherId.EuEurLex, asked.Article!,
-                    articles.Select(static article => article.PublisherIdentifier).Distinct(StringComparer.Ordinal).ToArray(),
-                    EuropeStatePin(seed, candidate, selection.Entry!.Date).Permalink, candidate.Language);
+                    articles.Select(static article => article.PublisherIdentifier).Distinct(StringComparer.Ordinal).ToArray());
             }
 
             cut.Add(pages);

@@ -4124,11 +4124,9 @@
           "helpful_payload": {
             "asserts_absence_of_law": false,
             "do_not_fall_back_to_full_text_search": true,
-            "language": "fra",
             "nearest_anchors": [
               "art_15"
             ],
-            "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra",
             "requested_anchor": "art_15-9",
             "what_would_answer": [
               "corrected_identifier",
