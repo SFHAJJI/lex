@@ -238,7 +238,8 @@ test("the publisher's titles are marked in their own language, apart from the in
   // Review of #797: a French title found while searching in English is marked French, the language the card
   // names for the title, not the language the search was asked in.
   const one = renderToStaticMarkup(h(SearchWorkResolution, { resolution: { outcome: "one_work", work: { matchedTitle: "Loi du 10 août 1991", matchedTitleLanguage: "fra", workIdentifier: "/lu-legilux/x" }, candidates: null } }));
-  assert.ok(one.includes('“<span lang="fr">Loi du 10 août 1991</span>”'), "a matched title is marked in its own language");
+  assert.ok(one.includes('<span lang="fr">Loi du 10 août 1991</span>'), "a matched title is marked in its own language");
+  assert.doesNotMatch(one, /<a /, "a card that names no work key is said without a link");
   const several = renderToStaticMarkup(h(SearchWorkResolution, { resolution: { outcome: "several_candidates", work: null, candidates: [{ matchedTitle: "Gesetz A", matchedTitleLanguage: "deu", workIdentifier: "/a" }, { matchedTitle: "Loi B", matchedTitleLanguage: "fra", workIdentifier: "/b" }] } }));
   assert.ok(several.includes('<span lang="de">Gesetz A</span>') && several.includes('<span lang="fr">Loi B</span>'), "each candidate in its own title's language");
 });

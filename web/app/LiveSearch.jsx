@@ -83,7 +83,7 @@ function laneCount(count) {
 function TitleOf({ card }) {
   // The resolver searches every language's titles, so the search's language is not the title's (review of #797).
   const title = <span lang={quotationLanguageTag(card.matchedTitleLanguage)}>{card.matchedTitle}</span>;
-  return card.workKey === null ? title : <a href={permalinkHref(`/lu-legilux/${card.workKey}`, CHROME_LOCALE)}>{title}</a>;
+  return typeof card.workKey !== 'string' ? title : <a href={permalinkHref(`/lu-legilux/${card.workKey}`, CHROME_LOCALE)}>{title}</a>;
 }
 
 /** The sentence for the one act the title ladder names, by how its title matched: is, begins, or holds every word. */
