@@ -84,7 +84,9 @@ public sealed class V3CorpusLegacySchema8MountTests
     /// Every recorded request, asked again of the same committed files, answers the same bytes: the schema-8 mount (its
     /// provenance's /1 derivation, its events with no derivation time and the scope and genesis note it had, as_of,
     /// as_observed and the rest) and the schema-6 mount (its events and as_observed's refusal). The few sentences index 9
-    /// adds are served on index 9 only. The answers are those production sends: recorded on Linux, as the release image
+    /// adds are served on index 9 only. Recorded again at b1b41312 (search results by act, on 8e6d3d27): its two schema-8
+    /// search answers gained, additively, each hit's extract, the page's acts, the population searched and their rules, and
+    /// the ranking sentence states the new order (one state's hits together); no other row and no other member moved. The answers are those production sends: recorded on Linux, as the release image
     /// runs (globalization-invariant, UTC; the language library changes no byte), and every system is held to them. Resolve
     /// of a rooted path was the one answer Windows sent otherwise, until a rooted path was read as an identifier on every
     /// system (<c>LooksLikeIdentifier</c>).
@@ -95,7 +97,7 @@ public sealed class V3CorpusLegacySchema8MountTests
         using var recorded = JsonDocument.Parse(Fixture("base-answers.json"));
         var root = recorded.RootElement;
         Assert.AreEqual("3b7913ec", root.GetProperty("written_at_commit").GetString());
-        Assert.AreEqual("5a659831", root.GetProperty("recorded_at_commit").GetString());
+        Assert.AreEqual("b1b41312", root.GetProperty("recorded_at_commit").GetString());
         Assert.AreEqual(IndexFileSha256, root.GetProperty("index_sha256").GetString());
         Assert.AreEqual(StateSha256, root.GetProperty("state_sha256").GetString());
 

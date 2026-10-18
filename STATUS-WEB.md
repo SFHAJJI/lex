@@ -164,6 +164,14 @@ The looser search stays off until its own check passes"), to the specification o
   - F3, low: an extract was cut at a no-break space (`char.IsWhiteSpace` counts U+00A0), so "6 septembre 2021" could lose
     its day. Repair: U+00A0, U+202F and U+2007 are no break (`IsExtractBreak`), and the rule says so. Test:
     `AnExtractIsNeverCutAtANoBreakSpace`, a bound on the no-break space before and after the match.
+  - CI on c789ad9b (image-conditions): `V3CorpusLegacySchema8MountTests` replays #980's recorded answers over the committed
+    schema-8 and schema-6 mounts byte for byte. Of its 38 rows, 2 differ, both schema-8 searches (`schema8-13`, `schema8-14`),
+    and only by this slice's additive members (`acts`, `acts_rule`, `extract_rule`, `searched`, each hit's `extract`) and the
+    ranking sentence, which states the new order; no field was removed and no hit moved; the schema-6 search (a reference)
+    is unchanged. Recorded again where production runs, with the new gated recorder
+    (`TheAnswersAreRecordedWhereTheRecordingAsks`, `V3_RECORD_LEGACY_ANSWERS`): Linux in WSL (Ubuntu 24.04, .NET 10.0.11,
+    `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1`, `TZ=UTC`), identical with ICU and on Windows; the two rows spliced in and
+    `recorded_at_commit` b1b41312, the test pinning it.
   - Content /3 (#981): search matches and extracts the searchable text alone, which holds no `deleted_text` token; a test
     holds it (`DeletedWordingIsNeitherMatchedNorExtracted`: deleted wording in an article's tokens is neither matched nor
     in its extract).
