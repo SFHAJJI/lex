@@ -1943,21 +1943,64 @@ public static partial class LuxembourgIndexBuilder
     /// The stored token stream of one article, exactly as the <c>articles.tokens_json</c> column
     /// holds it. One function, so a test can digest what the index stores.
     /// </summary>
+    /// <remarks>
+    /// A token that carries none of content /3's marks is written as it always was (<c>kind</c>, <c>text</c>,
+    /// <c>target</c>, <c>marker</c> and, at the top level, <c>note_body</c>), so a content /1 or /2 stream keeps its bytes.
+    /// A token that carries one is written with the same members first and then only the marks it carries:
+    /// <c>underline</c>, <c>unmarked</c>, <c>quotation</c> and <c>marks_in_wording</c>.
+    /// </remarks>
     internal static string TokensJson(IReadOnlyList<LuxembourgAknLegalContentToken> tokens) =>
-        JsonSerializer.Serialize(tokens.Select(static token => new
+        JsonSerializer.Serialize(tokens.Select(static token => StoredToken(token, nested: false)));
+
+    private static object StoredToken(LuxembourgAknLegalContentToken token, bool nested)
+    {
+        var body = token.NoteBody?.Select(static inner => StoredToken(inner, nested: true));
+        if (!token.UsesContent3)
         {
-            kind = ContractWire.NameOf(token.Kind),
-            text = token.Text,
-            target = token.Target,
-            marker = token.Marker,
-            note_body = token.NoteBody?.Select(static nested => new
-            {
-                kind = ContractWire.NameOf(nested.Kind),
-                text = nested.Text,
-                target = nested.Target,
-                marker = nested.Marker,
-            }),
-        }));
+            return nested
+                ? new
+                {
+                    kind = ContractWire.NameOf(token.Kind),
+                    text = token.Text,
+                    target = token.Target,
+                    marker = token.Marker,
+                }
+                : new
+                {
+                    kind = ContractWire.NameOf(token.Kind),
+                    text = token.Text,
+                    target = token.Target,
+                    marker = token.Marker,
+                    note_body = body,
+                };
+        }
+
+        var stored = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["kind"] = ContractWire.NameOf(token.Kind),
+            ["text"] = token.Text,
+            ["target"] = token.Target,
+            ["marker"] = token.Marker,
+        };
+        if (!nested)
+        {
+            stored["note_body"] = body;
+        }
+        if (token.Underline)
+        {
+            stored["underline"] = true;
+        }
+        if (token.Unmarked)
+        {
+            stored["unmarked"] = true;
+        }
+        if (token.Quotation is not null)
+        {
+            stored["quotation"] = token.Quotation;
+            stored["marks_in_wording"] = token.MarksInWording;
+        }
+        return stored;
+    }
 
     private static string? ApplicabilityDate(string? value)
     {
@@ -3841,21 +3884,23 @@ public sealed class LuxembourgIndexReader : IDisposable
     /// text merged into one entry first. The producer emits one text token per XML text node, so a
     /// paragraph or inline-formatting boundary splits text without changing a word; merging makes the
     /// digest blind to the boundary and to nothing else. Notes and markers are not words of the
-    /// article and are left out before merging.
+    /// article and are left out before merging. Content /3's wording is in it too: deleted wording as
+    /// <c>["deleted_text", text, target]</c>, consecutive deleted text without a target merged as text is, and each
+    /// quotation boundary as <c>[kind, null, null]</c>, so a stream with neither digests as it always did.
     /// </summary>
     internal static string WordingSha256(string tokensJson)
     {
         using var stream = JsonDocument.Parse(tokensJson);
         var words = new List<string?[]>();
         var pendingText = new StringBuilder();
-        var hasPendingText = false;
+        string? pendingKind = null;
         void FlushText()
         {
-            if (hasPendingText)
+            if (pendingKind is not null)
             {
-                words.Add(["text", pendingText.ToString(), null]);
+                words.Add([pendingKind, pendingText.ToString(), null]);
                 pendingText.Clear();
-                hasPendingText = false;
+                pendingKind = null;
             }
         }
 
@@ -3863,25 +3908,32 @@ public sealed class LuxembourgIndexReader : IDisposable
         {
             var kind = token.GetProperty("kind").GetString();
             var text = token.TryGetProperty("text", out var textValue) && textValue.ValueKind == JsonValueKind.String ? textValue.GetString() : null;
-            if (kind == "text")
+            var target = token.TryGetProperty("target", out var targetValue) && targetValue.ValueKind == JsonValueKind.String ? targetValue.GetString() : null;
+            if (kind == "text" || (kind == "deleted_text" && target is null))
             {
+                if (pendingKind != kind)
+                {
+                    FlushText();
+                    pendingKind = kind;
+                }
                 pendingText.Append(text);
-                hasPendingText = true;
                 continue;
             }
 
-            if (kind != "reference")
+            if (kind is "quotation_start" or "quotation_end")
+            {
+                FlushText();
+                words.Add([kind, null, null]);
+                continue;
+            }
+
+            if (kind is not ("reference" or "deleted_text"))
             {
                 continue;
             }
 
             FlushText();
-            words.Add(
-            [
-                kind,
-                text,
-                token.TryGetProperty("target", out var target) && target.ValueKind == JsonValueKind.String ? target.GetString() : null,
-            ]);
+            words.Add([kind, text, target]);
         }
 
         FlushText();

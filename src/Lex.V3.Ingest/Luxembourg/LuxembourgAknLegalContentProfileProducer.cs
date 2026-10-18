@@ -50,15 +50,64 @@ public enum LuxembourgAknLegalContentTokenKind
 
     [JsonStringEnumMemberName("note_reference")]
     NoteReference = 5,
+
+    /// <summary>
+    /// Content /3: where quoted wording begins (<c>embeddedText</c>, <c>quotedText</c>, <c>embeddedStructure</c> or
+    /// <c>quotedStructure</c>). The wording between it and its <see cref="QuotationEnd"/> is the act's own: text and
+    /// reference tokens, searchable and quotable.
+    /// </summary>
+    [JsonStringEnumMemberName("quotation_start")]
+    QuotationStart = 6,
+
+    /// <summary>Content /3: where the quoted wording its <see cref="QuotationStart"/> opened ends.</summary>
+    [JsonStringEnumMemberName("quotation_end")]
+    QuotationEnd = 7,
+
+    /// <summary>
+    /// Content /3: wording the publisher marks deleted (<c>del</c>, or a <c>span</c> of class <c>strike</c>). It is in the
+    /// article's identity and its wording digest, never in its searchable text, a quote, an export's or a bundle's text,
+    /// and a reference inside it is this kind, keeping its target, so it emits no <c>cites</c> row.
+    /// </summary>
+    [JsonStringEnumMemberName("deleted_text")]
+    DeletedText = 8,
 }
 
 /// <summary>One ordered publisher token. Unused fields are null rather than inferred.</summary>
+/// <remarks>
+/// The four init-only marks are content /3's and are false or null on every token content /1 and /2 make, so a /1 or /2
+/// token, its stored form and its identity are what they were. A content /1 or /2 article refuses a token that carries
+/// one (<see cref="UsesContent3"/>).
+/// </remarks>
 public sealed record LuxembourgAknLegalContentToken(
     LuxembourgAknLegalContentTokenKind Kind,
     string? Text,
     string? Target,
     string? Marker,
-    IReadOnlyList<LuxembourgAknLegalContentToken>? NoteBody = null);
+    IReadOnlyList<LuxembourgAknLegalContentToken>? NoteBody = null)
+{
+    /// <summary>Content /3: the publisher underlined this wording (<c>u</c> outside quoted and amending structures).</summary>
+    public bool Underline { get; init; }
+
+    /// <summary>Content /3: a note reference the publisher wrote without a marker, bound to exactly one note by its id.</summary>
+    public bool Unmarked { get; init; }
+
+    /// <summary>Content /3: on a quotation token, the publisher's element (<c>embeddedText</c>, <c>embeddedStructure</c>, …).</summary>
+    public string? Quotation { get; init; }
+
+    /// <summary>
+    /// Content /3: on a quotation token, whether the publisher writes the quotation marks in the wording itself
+    /// (<c>scl:hide-quote="true"</c>), so a reader adds none; otherwise the publisher's own rendering adds them.
+    /// </summary>
+    public bool MarksInWording { get; init; }
+
+    /// <summary>Whether this token, or a token in its note body, is a kind or carries a mark only content /3 makes.</summary>
+    internal bool UsesContent3 =>
+        Underline || Unmarked || Quotation is not null || MarksInWording ||
+        Kind is LuxembourgAknLegalContentTokenKind.QuotationStart
+            or LuxembourgAknLegalContentTokenKind.QuotationEnd
+            or LuxembourgAknLegalContentTokenKind.DeletedText ||
+        (NoteBody?.Any(static nested => nested.UsesContent3) ?? false);
+}
 
 /// <summary>Legal content derived from one exact publisher article.</summary>
 /// <remarks>
@@ -76,12 +125,24 @@ public sealed class LuxembourgAknLegalContentArticle
         LuxembourgAknArticleCoordinate coordinate,
         string ruleProfileSha256,
         IReadOnlyList<LuxembourgAknLegalContentToken> tokens,
-        IReadOnlyList<LuxembourgAknIndexTerm>? indexTerms = null)
+        IReadOnlyList<LuxembourgAknIndexTerm>? indexTerms = null,
+        bool content3 = false)
     {
         PublisherExpressionIri = publisherExpressionIri;
         Coordinate = coordinate;
         RuleProfileSha256 = ruleProfileSha256;
         Tokens = Array.AsReadOnly(tokens.ToArray());
+        if (content3 && indexTerms is null)
+        {
+            throw new ArgumentException("A content /3 article carries index-term metadata, as /2's does.", nameof(indexTerms));
+        }
+        if (!content3 && Tokens.Any(static token => token.UsesContent3))
+        {
+            throw new ArgumentException(
+                "Only a content /3 article carries a quotation, deleted wording, an underline or an unmarked note reference.",
+                nameof(tokens));
+        }
+        IsContent3 = content3;
         if (indexTerms is not null)
         {
             var terms = indexTerms.ToArray();
@@ -111,9 +172,34 @@ public sealed class LuxembourgAknLegalContentArticle
 
     public string IdentitySha256 { get; }
 
+    /// <summary>Whether content /3 made this article: its identity is layout <c>/3</c>, which hashes the /3 marks.</summary>
+    internal bool IsContent3 { get; }
+
     private static string IdentityOf(LuxembourgAknLegalContentArticle article)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        if (article.IsContent3)
+        {
+            // Layout /3: layout /2's fields and order, each token with its four content /3 marks after its marker.
+            Append(hash, "lex-v3-luxembourg-akn-legal-content-article/3");
+            Append(hash, article.PublisherExpressionIri);
+            Append(hash, article.Coordinate.PublisherId);
+            Append(hash, article.Coordinate.PublisherWId ?? "");
+            Append(hash, article.Coordinate.PublisherApplicability ?? "");
+            Append(hash, article.RuleProfileSha256);
+            Append(hash, article.Tokens.Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            foreach (var token in article.Tokens)
+            {
+                AppendToken3(hash, token);
+            }
+            Append(hash, article.IndexTerms!.Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            foreach (var term in article.IndexTerms)
+            {
+                AppendIndexTerm(hash, term);
+            }
+            return Convert.ToHexStringLower(hash.GetHashAndReset());
+        }
+
         if (article.IndexTerms is { } indexTerms)
         {
             Append(hash, "lex-v3-luxembourg-akn-legal-content-article/2");
@@ -178,6 +264,23 @@ public sealed class LuxembourgAknLegalContentArticle
         Append(hash, (token.NoteBody?.Count ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture));
         if (token.NoteBody is null) return;
         foreach (var nested in token.NoteBody) AppendToken(hash, nested);
+    }
+
+    private static void AppendToken3(
+        IncrementalHash hash,
+        LuxembourgAknLegalContentToken token)
+    {
+        Append(hash, ((int)token.Kind).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Append(hash, token.Text ?? "");
+        Append(hash, token.Target ?? "");
+        Append(hash, token.Marker ?? "");
+        Append(hash, token.Underline ? "1" : "0");
+        Append(hash, token.Unmarked ? "1" : "0");
+        Append(hash, token.Quotation ?? "");
+        Append(hash, token.MarksInWording ? "1" : "0");
+        Append(hash, (token.NoteBody?.Count ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (token.NoteBody is null) return;
+        foreach (var nested in token.NoteBody) AppendToken3(hash, nested);
     }
 }
 
@@ -274,6 +377,14 @@ public sealed class LuxembourgAknLegalContentPopulation
                     "Every article of a versioned content population carries index-term metadata under that population's rule profile.",
                     nameof(outcomes));
             }
+            if (outcome.Article is { } made &&
+                made.IsContent3 != string.Equals(
+                    versionedRuleProfileSha256, LuxembourgAknLegalContentProfile3Producer.RuleProfileSha256, StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "A content /3 population holds content /3 articles only, and only a content /3 population holds them.",
+                    nameof(outcomes));
+            }
         }
 
         if (versionedRuleProfileSha256 is not null &&
@@ -300,8 +411,8 @@ public sealed class LuxembourgAknLegalContentPopulation
     public IReadOnlyList<LuxembourgAknLegalContentOutcome> Outcomes { get; }
 
     /// <summary>
-    /// The rule profile every article in this population was made under: content /2's digest for a
-    /// population it made, otherwise content /1's.
+    /// The rule profile every article in this population was made under: content /2's or /3's digest for a
+    /// population one of them made, otherwise content /1's.
     /// </summary>
     public string RuleProfileSha256 { get; }
 

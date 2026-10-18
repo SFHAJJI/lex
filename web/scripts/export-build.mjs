@@ -26,6 +26,13 @@
 // The watermark is the composer's own (`export-composer.mjs`), so the preview and the export say the
 // same sentence.
 //
+// An article whose wording holds quoted wording or wording the publisher marks deleted (content /3) carries its segments
+// (`segments` in the JSON and a column of the CSV, empty for any other article): its text segments, the quotation
+// boundaries with the publisher's mark evidence (`marks_in_text`: the publisher writes the marks in its text), and the
+// deleted wording, which is never part of `text`, its digest or a citation. The PDF quotes the text with its quotation
+// marks and lists the deleted wording apart, under a label, never inside the text. A note whose reference the publisher
+// wrote without a marker is `unmarked`, with no marker.
+//
 // An EU reading (`readEuropeEvidenceBundle`) is composed by `composeEuropeExport` into a model of its
 // own (`lex-v3-export-eu/1`), never through the Luxembourg one: an EU article is dated by its wording,
 // whose date is never an applicability date, and its text is served with Decision 95's acknowledgement
@@ -55,15 +62,18 @@ export const EXPORT_WATERMARK = WATERMARK_PREVIEW;
 export const EUROPE_WITHOUT_TEXT = 'articles_without_text';
 
 /**
- * The CSV columns, in order: each row is one pinned article, whole on its own. The last five repeat on
- * every row what the export as a whole carries (the snapshot's observation time, the rights rule, the
- * corpus, index and registry digests), so a row copied out alone loses none of it (review of #789).
+ * The CSV columns, in order: each row is one pinned article, whole on its own. The five before the last repeat on every row
+ * what the export as a whole carries (the snapshot's observation time, the rights rule, the corpus, index and registry
+ * digests), so a row copied out alone loses none of it (review of #789). The last, `segments`, is the JSON of an article's
+ * segments (content /3), empty for any other; it comes last so every column before it keeps its place under
+ * `lex-v3-export/1` (the review of #981, F4).
  */
 export const CSV_COLUMNS = Object.freeze([
   'work_key', 'language', 'applies_from', 'article', 'status', 'citation', 'citation_conventional', 'citation_with_permalink', 'citation_evidence', 'state_permalink',
   'text_sha256', 'body_sha256', 'official_source', 'rights_disposition', 'article_valid_from', 'text', 'watermark',
   'as_published', 'later_versions', 'authenticity',
   'observed_at', 'rights_rule', 'corpus_sha256', 'index_sha256', 'registry_sha256',
+  'segments',
 ]);
 
 /**
@@ -162,6 +172,7 @@ export function composeExport({ view, pinned, observedAt }) {
         articleValidFrom: article.validFrom,
         validityConflict: article.validityConflict,
         notes: article.notes,
+        segments: article.segments ?? null,
       }));
     }
     for (const entry of state.articlesWithoutText) {
@@ -326,7 +337,8 @@ export function exportJson(model) {
       rights_disposition: item.rightsDisposition,
       article_valid_from: item.articleValidFrom,
       validity_conflict: item.validityConflict,
-      notes: item.notes.map((note) => ({ marker: note.marker, text: note.text })),
+      notes: item.notes.map(noteJson),
+      ...(item.segments === null ? {} : { segments: segmentsJson(item.segments) }),
     })),
     excluded: model.excluded.map((entry) => ({
       work_key: entry.workKey,
@@ -416,6 +428,21 @@ function csvField(value) {
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
+/** A note as an export writes it: its marker and text, or, for a reference the publisher wrote without one, `unmarked`. */
+function noteJson(note) {
+  return note.unmarked === true ? { marker: null, text: note.text, unmarked: true } : { marker: note.marker, text: note.text };
+}
+
+/**
+ * An article's segments as an export writes them: the text segments and the deleted wording each with its text, each
+ * quotation boundary with its element, whether the publisher writes the marks in its text, and its mark when it gives one.
+ */
+export function segmentsJson(segments) {
+  return segments.map((segment) => (segment.kind === 'text' || segment.kind === 'deleted_text'
+    ? { kind: segment.kind, text: segment.text }
+    : { kind: segment.kind, quotation: segment.quotation, marks_in_text: segment.marksInWording, marker: segment.marker }));
+}
+
 /**
  * The CSV export (RFC 4180, CRLF line ends): a header, then one row per pinned article, the excluded
  * ones included with their status and no text, and every row carrying its citation, rights, the
@@ -435,12 +462,14 @@ export function exportCsv(model) {
       item.textSha256, item.bodySha256, item.officialSource, item.rightsDisposition, item.articleValidFrom, item.text, model.watermark,
       ...published,
       ...provenance,
+      item.segments === null ? '' : JSON.stringify(segmentsJson(item.segments)),
     ]),
     ...model.excluded.map((entry) => [
       entry.workKey, entry.language, entry.appliesFrom, entry.publisherId, `excluded: ${entry.reason}`, entry.citation, ...citationsCsv(entry.citations), entry.statePermalink,
       '', '', '', model.rightsDisposition, '', '', model.watermark,
       ...published,
       ...provenance,
+      '',
     ]),
   ];
   return [CSV_COLUMNS, ...rows].map((row) => row.map(csvField).join(',')).join('\r\n') + '\r\n';
