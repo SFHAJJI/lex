@@ -38,6 +38,10 @@ namespace Lex.V3.Ingest.Luxembourg;
 /// so it is never a reference and emits no <c>cites</c> row. Inline containers, layout markers, nested deleted wording,
 /// empty modification boundaries and note references may sit inside; anything else is a typed gap.</item>
 /// <item>A <c>span</c> of any other class is a typed gap until the class is reviewed.</item>
+/// <item>An element whose attribute marks a deletion (<c>style="del"</c>, or <c>class="strike"</c> on anything but a
+/// <c>span</c>; the article itself included) is a typed gap unless all its wording is deleted wording (the review of #981,
+/// F2): the design's /3 table reads deletion from <c>del</c> and a struck span only, so wording an attribute marks deleted
+/// is never read as wording in force.</item>
 /// <item>A <c>noteRef</c> with no <c>marker</c>, empty and bound by its id to exactly one note, is a note reference with
 /// <see cref="LuxembourgAknLegalContentToken.Unmarked"/> and no marker. A note body holds no quotation and no deleted
 /// wording, so a note's text is always wording in force.</item>
@@ -56,6 +60,7 @@ public sealed class LuxembourgAknLegalContentProfile3Producer
     private const string Namespace0 = "unsupported legal-content node or namespace";
     private const string InsideDeleted = "unsupported content inside deleted wording: ";
     private const string InsideNote = "publisher note bodies hold no quotation or deleted wording: ";
+    private const string AttributeDeletion = "deletion marked by an attribute holds wording not marked deleted: ";
 
     /// <summary>
     /// The rule text. It names inventory /4's digest and content /2's, whose index-term rule it applies, so a change to
@@ -94,6 +99,8 @@ public sealed class LuxembourgAknLegalContentProfile3Producer
         "empty-modification-boundaries,note-references;other-content-typed-gap;del-with-a-class-typed-gap;" +
         "never-searchable-text-quoted-text-or-cites\n" +
         "spans=without-class-container;class-strike-deleted;any-other-class-typed-gap\n" +
+        "attribute-marked-deletion=style-del-or-class-strike-on-an-element-other-than-del-or-span;" +
+        "a-typed-gap-unless-all-its-wording-is-deleted-wording\n" +
         "references=bounded-href;label-of-text,b,i,sup\n" +
         "note-references=empty;bounded-#-target;" +
         "marker-binds-exactly-one-note-with-the-same-marker;" +
@@ -265,6 +272,11 @@ public sealed class LuxembourgAknLegalContentProfile3Producer
         var terms = new List<LuxembourgAknIndexTerm>();
         tokens = null;
         indexTerms = null;
+        if (DeletionMarkedByAttribute(article) is { } markedArticle && HoldsWordingOutsideDeletion(article))
+        {
+            failure = AttributeDeletion + markedArticle;
+            return false;
+        }
         foreach (var node in article.Nodes())
         {
             if (node is XElement element
@@ -365,6 +377,11 @@ public sealed class LuxembourgAknLegalContentProfile3Producer
             }
 
             var name = element.Name.LocalName;
+            if (_deletedDepth == 0 && DeletionMarkedByAttribute(element) is { } marked && HoldsWordingOutsideDeletion(element))
+            {
+                failure = AttributeDeletion + marked;
+                return false;
+            }
             switch (name)
             {
                 case "ref":
@@ -678,6 +695,59 @@ public sealed class LuxembourgAknLegalContentProfile3Producer
             failure = null;
             return true;
         }
+    }
+
+    /// <summary>
+    /// The attribute that marks <paramref name="element"/> deleted, as <c>style=del on paragraph</c>, or null: <c>style="del"</c>
+    /// on any element, or <c>class="strike"</c> on anything but a <c>span</c>; never on <c>del</c> itself, which is read as
+    /// deleted whatever it carries.
+    /// </summary>
+    private static string? DeletionMarkedByAttribute(XElement element)
+    {
+        var name = element.Name.LocalName;
+        if (name == "del")
+        {
+            return null;
+        }
+        if ((string?)element.Attribute("style") == "del")
+        {
+            return "style=del on " + name;
+        }
+        if (name != "span" && (string?)element.Attribute("class") == "strike")
+        {
+            return "class=strike on " + name;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="element"/> holds a character of AKN wording that no <c>del</c> or struck span inside it marks
+    /// deleted. Text under another namespace (<c>scl:JOLUXWork</c>, <c>scl:indexterms</c>) is not wording.
+    /// </summary>
+    private static bool HoldsWordingOutsideDeletion(XElement element)
+    {
+        foreach (var text in element.DescendantNodes().OfType<XText>())
+        {
+            if (string.IsNullOrWhiteSpace(text.Value))
+            {
+                continue;
+            }
+            var counts = true;
+            for (var parent = text.Parent; parent is not null && parent != element; parent = parent.Parent)
+            {
+                if (parent.Name.NamespaceName != AknNamespace || parent.Name.LocalName == "del" ||
+                    (parent.Name.LocalName == "span" && (string?)parent.Attribute("class") == "strike"))
+                {
+                    counts = false;
+                    break;
+                }
+            }
+            if (counts)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void AddEveryCoordinate(

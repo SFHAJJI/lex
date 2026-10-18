@@ -47,7 +47,7 @@ namespace Lex.V3.Ingest.Tests;
 public sealed class LuxembourgAknLegalContentProfile3ProducerTests
 {
     /// <summary>Profile /3: its own text, which names inventory /4's and content /2's digests. Recomputed in Python.</summary>
-    internal const string Content3RuleSha256 = "68ae07566a136b95a728806056bfccd81e220b4fa9d8f52af8343c78c12111c3";
+    internal const string Content3RuleSha256 = "33bb002cd33e066f98e238e371b56e60e62ce37736c86cd141173c1018b7be47";
 
     private const string Eli = LuxembourgHeldPopulationBuilder.Eli;
     private const string ExcerptDirectory = "LuAknLegalContent3";
@@ -69,8 +69,8 @@ public sealed class LuxembourgAknLegalContentProfile3ProducerTests
         Assert.AreEqual(Content3RuleSha256, LuxembourgAknLegalContentProfile3Producer.RuleProfileSha256);
         Assert.AreEqual(Content3RuleSha256,
             LuxembourgHeldPopulationBuilder.Sha(LuxembourgAknLegalContentProfile3Producer.CopyRuleProfileBytes()));
-        Assert.AreEqual(2746, LuxembourgAknLegalContentProfile3Producer.CopyRuleProfileBytes().Length);
-        Assert.AreEqual(21, profile.Count(static character => character == '\n'));
+        Assert.AreEqual(2889, LuxembourgAknLegalContentProfile3Producer.CopyRuleProfileBytes().Length);
+        Assert.AreEqual(22, profile.Count(static character => character == '\n'));
         Assert.AreEqual(LuxembourgAknFrozenReplayTests.Content1RuleSha256, LuxembourgAknLegalContentProfileProducer.RuleProfileSha256);
         Assert.AreEqual(LuxembourgAknLegalContentProfile2ProducerTests.Content2RuleSha256, LuxembourgAknLegalContentProfile2Producer.RuleProfileSha256);
         StringAssert.StartsWith(profile, "lex-v3-luxembourg-akn-legal-content-profile/3\n");
@@ -153,7 +153,7 @@ public sealed class LuxembourgAknLegalContentProfile3ProducerTests
         Assert.IsTrue(quotes.All(static token => token.Quotation == "embeddedText" && !token.MarksInWording && token.Marker is null));
         CollectionAssert.AreEqual(new[] { "le plan", "les plans" }, QuotedTexts(first.Tokens));
         StringAssert.Contains(SearchableText(first.Tokens), "les termes\u00a0le plan sont remplacés par ceux de\u00a0les plans.");
-        Assert.AreEqual("cf36e22165827e59639b44137b270123e996fc8a03eab7cae6ac8eef26ba5700", first.IdentitySha256);
+        Assert.AreEqual("7fcc14c53a8ddc4d2c45ee154e6a7996375026f368839e781bccd30cd78678d1", first.IdentitySha256);
         Assert.AreEqual(Article3Identity(first), first.IdentitySha256);
 
         // art_2: a struck span, and an underline inside a quoted structure, which can mark inserted wording.
@@ -170,13 +170,13 @@ public sealed class LuxembourgAknLegalContentProfile3ProducerTests
         Assert.IsTrue(third.Tokens.Single(static token =>
             token.Kind == LuxembourgAknLegalContentTokenKind.QuotationEnd && token.Quotation == "embeddedStructure").MarksInWording);
         StringAssert.StartsWith(QuotedTexts(third.Tokens)[^1], "«\u00a0Les itinéraires cyclables du réseau national");
-        Assert.AreEqual("996679254a9ddaa50fe1e7ce5bffa3a7689f7363949ad265e00edc1d475df21e", third.IdentitySha256);
+        Assert.AreEqual("10ee1422d6562b85ead67d91e6d4c3f6fe0633b8585b81393bb564d97147e337", third.IdentitySha256);
 
         // art_5: a shape /2 admits reads to /2's tokens; only the identity layout differs.
         var plain = Admitted(run.Content, "art_5");
         Assert.AreEqual(LuxembourgIndexBuilder.TokensJson(Outcome(two, "art_5").Article!.Tokens), LuxembourgIndexBuilder.TokensJson(plain.Tokens));
         Assert.AreNotEqual(Outcome(two, "art_5").Article!.IdentitySha256, plain.IdentitySha256);
-        Assert.AreEqual("0cda7bbd3f51fd05b8be17c1748239c2e16749b8ef8b04f4c359f943e67122ae", plain.IdentitySha256);
+        Assert.AreEqual("711af4ab9126cfaf974e04cfe96079e3f73f437540436736267b38de5733c5b7", plain.IdentitySha256);
 
         // art_13: the struck old numbers are deleted wording, never searchable; the eop before the number makes no token.
         var thirteenth = Admitted(run.Content, "art_13");
@@ -191,7 +191,7 @@ public sealed class LuxembourgAknLegalContentProfile3ProducerTests
         Assert.IsFalse(searchable.Contains("4. 2.", StringComparison.Ordinal));
         Assert.HasCount(2, thirteenth.Tokens.Where(static token =>
             token.Kind == LuxembourgAknLegalContentTokenKind.QuotationStart && token.Quotation == "embeddedStructure" && !token.MarksInWording));
-        Assert.AreEqual("cbfcd67166567accff8314ca0cf6cd4e6f3338209607ca45ae9845671845319a", thirteenth.IdentitySha256);
+        Assert.AreEqual("c5b4171780fe4621ae5e984099e866894c64ed428ac75497f156ec76adce1c41", thirteenth.IdentitySha256);
         Assert.AreEqual(Article3Identity(thirteenth), thirteenth.IdentitySha256);
     }
 
@@ -223,7 +223,7 @@ public sealed class LuxembourgAknLegalContentProfile3ProducerTests
         Assert.AreEqual("#note_3_3_0", note.Target);
         CollectionAssert.AreEqual(new[] { "Inséré par la ", "loi du 2 avril 2014", "." }, note.NoteBody!.Select(static token => token.Text).ToArray());
         Assert.AreEqual("2018-07-01", noted.Coordinate.PublisherApplicability);
-        Assert.AreEqual("7d6d3caade496e2ca3cd58a64c74520ef3745f80095f7af76fb458bae8410285", noted.IdentitySha256);
+        Assert.AreEqual("b55c2006881857dfe9caea817f858ac86f41627250cbad9aec9323370edff1fc", noted.IdentitySha256);
 
         // art_l_226-23: deleted wording between two runs of wording in force.
         var deleted = Admitted(run.Content, "art_l_226-23");
@@ -233,7 +233,7 @@ public sealed class LuxembourgAknLegalContentProfile3ProducerTests
         StringAssert.Contains(SearchableText(deleted.Tokens), "sans être en possession d’un agrément écrit de la CSSF.");
         Assert.IsFalse(SearchableText(deleted.Tokens).Contains("Place financière", StringComparison.Ordinal));
         Assert.IsNotEmpty(deleted.IndexTerms!);
-        Assert.AreEqual("0a53e99c23e5129c9afb083eac18d6862f19192d0bdba353c0f16e4e592ab21c", deleted.IdentitySha256);
+        Assert.AreEqual("de4572a939a587d5a77545ff39e2e723980278b8058c12ef0916a3f9f6939506", deleted.IdentitySha256);
 
         // art_l_311-2: two references inside the deleted wording are deleted wording that keeps its targets, never a reference.
         var withReferences = Admitted(run.Content, "art_l_311-2");
@@ -250,7 +250,7 @@ public sealed class LuxembourgAknLegalContentProfile3ProducerTests
             relations.Length,
             "every reference in force, and nothing else, is a cites row");
         Assert.IsFalse(SearchableText(withReferences.Tokens).Contains("relatif \u00e0 la coop\u00e9ration en mati\u00e8re de protection", StringComparison.Ordinal));
-        Assert.AreEqual("1ef0ed96b2a4ac9fcc1d89c3ad807602b4955e8d1fe33afa03b782841c334f09", withReferences.IdentitySha256);
+        Assert.AreEqual("f75a52197da1e5db21c42ea4cd8d3764b8d967fdc5c2abc7e959d2a204ce724a", withReferences.IdentitySha256);
 
         // art_r302-1: the underlined number outside any amending structure keeps its mark, and is wording in force.
         var number = Admitted(run.Content, "art_r302-1");
@@ -258,7 +258,7 @@ public sealed class LuxembourgAknLegalContentProfile3ProducerTests
         Assert.AreEqual("Art. R.302-1", number.Tokens[0].Text);
         Assert.IsTrue(number.Tokens.Skip(1).All(static token => !token.Underline));
         StringAssert.StartsWith(SearchableText(number.Tokens), "Art. R.302-1Le procès-verbal");
-        Assert.AreEqual("444778bceab16bd687be46e97739b63048557a9d0f4ce9c1dbb87fc685ddb46d", number.IdentitySha256);
+        Assert.AreEqual("d0bdaf8dda9f00a75722edad12068cde587ab3374c67bf62a169a52012708867", number.IdentitySha256);
         foreach (var article in new[] { noted, deleted, withReferences, number })
         {
             Assert.AreEqual(Article3Identity(article), article.IdentitySha256, article.Coordinate.PublisherId);
@@ -505,6 +505,54 @@ public sealed class LuxembourgAknLegalContentProfile3ProducerTests
             var outcome = await OutcomeAsync(Article("art_1", "<p>Texte " + content + "</p>"));
             Assert.AreEqual(detail, outcome.Detail, content);
         }
+    }
+
+    /// <summary>
+    /// The review of #981, F2: a deletion an attribute marks (<c>style="del"</c>, <c>class="strike"</c> on anything but a
+    /// span) is never read as wording in force. The element is a typed gap unless every character of wording inside it is
+    /// already deleted wording, in the shapes run 15's consolidations hold (<c>style="del"</c> on an article, a paragraph, a
+    /// list item; <c>p class="strike"</c>).
+    /// </summary>
+    [TestMethod]
+    public async Task ADeletionAnAttributeMarksIsATypedGapUnlessItsWordingIsDeleted()
+    {
+        foreach (var (content, detail) in new[]
+                 {
+                     ("<paragraph style=\"del\"><content><p>Texte supprimé synthétique.</p></content></paragraph>", "style=del on paragraph"),
+                     ("<p class=\"strike\">Texte barré synthétique.</p>", "class=strike on p"),
+                     ("<ol><li style=\"del\">un point supprimé</li></ol>", "style=del on li"),
+                     ("<p><span style=\"del\">mot</span> suivant</p>", "style=del on span"),
+                     ("<paragraph style=\"del\"><content><p><del>supprimé</del> et <ref href=\"/eli/etat/leg/loi/2001/01/01/n1/jo\">la loi</ref></p></content></paragraph>",
+                         "style=del on paragraph"),
+                 })
+        {
+            var outcome = await OutcomeAsync(Article("art_1", content));
+            Assert.AreEqual(LuxembourgAknLegalContentDisposition.UnsupportedContentShape, outcome.Disposition, content);
+            Assert.AreEqual("deletion marked by an attribute holds wording not marked deleted: " + detail, outcome.Detail, content);
+        }
+
+        // The article itself marked deleted: a gap while it holds wording no del marks; its number is wording.
+        var article = await OutcomeAsync(
+            "<article id=\"art_1\" style=\"del\"><num>Art. 1.</num><content><p><del>Abrogé synthétique.</del></p></content></article>");
+        Assert.AreEqual("deletion marked by an attribute holds wording not marked deleted: style=del on article", article.Detail);
+
+        // Every character of its wording already deleted: read as /3 reads it, and nothing reaches the searchable text.
+        var deleted = await AdmittedAsync(Article("art_1",
+            "<p>Texte</p><paragraph style=\"del\"><content><p><del>supprimé synthétique</del></p></content></paragraph>"));
+        Assert.AreEqual("Art. 1.Texte", SearchableText(deleted.Tokens));
+        Assert.AreEqual("supprimé synthétique", deleted.Tokens.Single(static token => token.Kind == LuxembourgAknLegalContentTokenKind.DeletedText).Text);
+        var whole = await OutcomeAsync(
+            "<article id=\"art_1\" style=\"del\"><content><p><del>Abrogé synthétique.</del></p></content></article>");
+        Assert.AreEqual(LuxembourgAknLegalContentDisposition.Admitted, whole.Disposition, whole.Detail);
+        Assert.AreEqual("", SearchableText(whole.Article!.Tokens));
+
+        // Inside a del, the attribute adds nothing: the wording is deleted already.
+        var inside = await AdmittedAsync(Article("art_1", "<p>Texte <del><span style=\"del\">supprimé</span></del></p>"));
+        Assert.AreEqual("Art. 1.Texte ", SearchableText(inside.Tokens));
+
+        // Other styles and classes are what they were: a span of style li_symbol is a container, a p of class h2 is a p.
+        var other = await AdmittedAsync(Article("art_1", "<p><span style=\"li_symbol\">a)</span> texte</p>"));
+        Assert.AreEqual("Art. 1.a) texte", SearchableText(other.Tokens));
     }
 
     [TestMethod]
