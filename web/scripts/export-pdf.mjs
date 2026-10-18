@@ -243,6 +243,34 @@ function pageLine(model, number, count) {
   return `Page ${number} of ${count}. ${model.identifier}, read on ${model.date}.`;
 }
 
+/** The quotation marks set where the publisher's rendering shows them and its text does not hold them. */
+const QUOTE_OPEN = '« ';
+const QUOTE_CLOSE = ' »';
+
+/**
+ * An article with segments (content /3): its text with the quotation marks the publisher's rendering shows, a line saying
+ * the marks are not in the text its digest covers, and the wording the publisher marks deleted listed after it, under a
+ * label, never inside the text.
+ */
+function addSegmented(add, item, subject) {
+  let marked = false;
+  const quoted = item.segments.map((segment) => {
+    if (segment.kind === 'text') return segment.text;
+    if (segment.kind === 'deleted_text' || segment.marksInWording) return '';
+    marked = true;
+    return segment.marker ?? (segment.kind === 'quotation_start' ? QUOTE_OPEN : QUOTE_CLOSE);
+  }).join('');
+  add(quoted, { field: `${subject}'s text` });
+  if (marked) {
+    add('The quotation marks around quoted wording are set where the publisher shows them; the text sha-256 is of the text without them.', { size: 9 });
+  }
+  const deleted = item.segments.filter((segment) => segment.kind === 'deleted_text');
+  if (deleted.length > 0) {
+    add('Wording the publisher marks deleted, in order; none of it is part of the text above:', { size: 9 });
+    for (const segment of deleted) add(segment.text, { size: 9, indent: 12, field: `${subject}'s deleted wording` });
+  }
+}
+
 /**
  * The layout of a Luxembourg export (`lex-v3-export/1`). With `unsettable`, the characters the fonts cannot set are
  * gathered there, by field (`layoutWriter`).
@@ -276,8 +304,11 @@ function layout(model, unsettable = null) {
       add(`This article's own date is ${item.articleValidFrom}; its state applies from ${item.appliesFrom}.`, { size: 9 });
     }
     gap(3);
-    add(item.text, { field: `${subject}'s text` });
-    for (const note of item.notes) add(`[${note.marker}] ${note.text}`, { size: 9, indent: 12, field: `${subject}'s notes` });
+    if (item.segments === null || item.segments === undefined) add(item.text, { field: `${subject}'s text` });
+    else addSegmented(add, item, subject);
+    for (const note of item.notes) {
+      add(`[${note.unmarked === true ? 'no marker' : note.marker}] ${note.text}`, { size: 9, indent: 12, field: `${subject}'s notes` });
+    }
     gap(3);
     addCitation(add, item.citations, subject);
   }

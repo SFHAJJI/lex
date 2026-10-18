@@ -93,7 +93,10 @@ export function QuoteEvidence({ article, linked = true }) {
 export function ArticleText({ article, language, applicabilityDate }) {
   return (
     <>
-      <blockquote lang={quotationLanguageTag(language)}>{article.text}</blockquote>
+      <ArticleWording article={article} language={language} />
+      {article.holdsDeletedWording ? (
+        <p data-deleted-wording-note="">{COPY.deletedWordingNote}</p>
+      ) : null}
       {applicabilityDate !== null && article.validityConflict ? (
         <p data-validity-conflict="">
           <Say template={COPY.validityConflict} values={{ own: article.validFrom, state: applicabilityDate }} />
@@ -102,13 +105,47 @@ export function ArticleText({ article, language, applicabilityDate }) {
       {(article.notes ?? []).length > 0 ? (
         <ol data-notes={article.notes.length}>
           {article.notes.map((note, index) => (
-            <li key={`${index}.${note.marker}`}>
-              <span>[{note.marker}]</span> <span lang={quotationLanguageTag(language)}>{note.text}</span>
+            <li key={`${index}.${note.marker}`} data-unmarked={note.unmarked ? '' : undefined}>
+              <span>[{note.unmarked ? COPY.unmarkedNote : note.marker}]</span> <span lang={quotationLanguageTag(language)}>{note.text}</span>
             </li>
           ))}
         </ol>
       ) : null}
     </>
+  );
+}
+
+/** The quotation marks a reader adds where the publisher's rendering adds them and its wording does not hold them. */
+const QUOTE_OPEN = '« ';
+const QUOTE_CLOSE = ' »';
+
+/**
+ * One article's wording in its state's language. An article with segments (content /3) shows quoted wording between
+ * quotation marks, unless the publisher writes them in the wording itself, and the wording the publisher marks deleted
+ * struck through, in a `del` that says so to a screen reader; its wording in force is exactly its text. Any other article
+ * is its text, as before. Shared with the export composer, which pins the same articles.
+ */
+export function ArticleWording({ article, language }) {
+  const lang = quotationLanguageTag(language);
+  if (article.segments === null || article.segments === undefined) return <blockquote lang={lang}>{article.text}</blockquote>;
+  return (
+    <blockquote lang={lang} data-segmented="">
+      {article.segments.map((segment, index) => {
+        if (segment.kind === 'text') return <span key={index}>{segment.text}</span>;
+        if (segment.kind === 'deleted_text') {
+          return (
+            <del key={index} data-deleted-wording="">
+              <span className="visually-hidden" lang={CHROME_LOCALE}>{COPY.deletedWordingStart} </span>
+              {segment.text}
+              <span className="visually-hidden" lang={CHROME_LOCALE}> {COPY.deletedWordingEnd}</span>
+            </del>
+          );
+        }
+        if (segment.marksInWording) return null;
+        const mark = segment.marker ?? (segment.kind === 'quotation_start' ? QUOTE_OPEN : QUOTE_CLOSE);
+        return <span key={index} data-quotation-mark={segment.kind === 'quotation_start' ? 'open' : 'close'}>{mark}</span>;
+      })}
+    </blockquote>
   );
 }
 

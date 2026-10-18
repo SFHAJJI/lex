@@ -26,7 +26,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { EuropeWordingHeading, PagesShown, QuoteEvidence, ReadingAnswerView, ReadingForm, versionDigest } from './LiveReading.jsx';
+import { ArticleWording, EuropeWordingHeading, PagesShown, QuoteEvidence, ReadingAnswerView, ReadingForm, versionDigest } from './LiveReading.jsx';
 import { createReadingSession, loadLiveReading, quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { pagesShown, readNextPage, viewOf, withoutStopped } from '../scripts/reading-pages.mjs';
 import { EXPORT_FORMATS, LIVE_EXPORT_IDLE, exportState, formatRefused, pinKey, saveExport } from '../scripts/live-export.mjs';
@@ -131,7 +131,7 @@ function StatePins({ state, workKey, pins, onPin, onPinAll = null, assembling = 
           return (
             <li key={article.articleIdentitySha256} data-article={article.publisherId}>
               <Pin checked={pins.has(key)} onPin={(on) => onPin(key, on)} label={fillText(COPY.pin, { article: article.publisherId })} />
-              <blockquote lang={quotationLanguageTag(state.language)}>{article.text}</blockquote>
+              <ArticleWording article={article} language={state.language} />
               <QuoteEvidence article={article} linked={false} />
             </li>
           );

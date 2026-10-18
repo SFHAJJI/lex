@@ -18,6 +18,10 @@
 //    read from one of the state's sources and pointing at its official source; its validity flag is
 //    exactly "its own date is stated and differs from the state's", and the state's count is theirs;
 //  - an article without text is named apart from the quoted ones, never served as a quote;
+//  - an article whose wording holds quoted wording or wording the publisher marks deleted (content /3) carries its
+//    segments: wording in force whose texts concatenate to exactly its text, quotation boundaries that pair, and deleted
+//    wording, which is never part of the text; a note whose reference the publisher wrote without a marker says so
+//    (`unmarked`) and has no marker;
 //  - a state is read one page at a time (the plan's item 3.7): its page, its index of pages and, when asked, its contents
 //    hold to the rules `reading-pages.mjs` reads them by, and every article carries its position in the state.
 // The text digests are not recomputed here (the reader is synchronous and the browser's digest is
@@ -113,6 +117,67 @@ function requireBoolean(value, where) {
   return value;
 }
 
+/** The quotation elements the publisher writes (content /3), which a quotation segment names. */
+const QUOTATIONS = new Set(['embeddedText', 'quotedText', 'embeddedStructure', 'quotedStructure']);
+
+/**
+ * An article's segments (content /3), or null when it carries none: wording in force (`text`), quotation boundaries
+ * (`quotation_start`, `quotation_end`, each naming its element, whether the publisher writes the marks in the wording and
+ * the publisher's own mark when it gives one) and deleted wording (`deleted_text`). The wording in force concatenates to
+ * exactly the article's text, so what is quoted, cited and digested is never changed by them, and deleted wording is never
+ * part of it.
+ */
+function readSegments(article, text, at) {
+  if (!Object.hasOwn(article, 'segments')) return null;
+  const segments = requireList(article.segments, `${at} segments`);
+  if (segments.length === 0) throw new Error(`${at} carries segments and none of them`);
+  const open = [];
+  let inForce = '';
+  let deleted = 0;
+  const read = segments.map((segment, segmentIndex) => {
+    const where = `${at} segment ${segmentIndex + 1}`;
+    const kind = requireOwn(segment, 'kind', where);
+    if (kind === 'text' || kind === 'deleted_text') {
+      const value = requireOwn(segment, 'text', where);
+      if (typeof value !== 'string' || value.length === 0) throw new Error(`${where} is ${kind} with no text`);
+      if (kind === 'text') inForce += value;
+      else deleted += 1;
+      return Object.freeze({ kind, text: value });
+    }
+    if (kind === 'quotation_start' || kind === 'quotation_end') {
+      const quotation = requireOwn(segment, 'quotation', where);
+      if (!QUOTATIONS.has(quotation)) throw new Error(`${where} names ${JSON.stringify(quotation)}, not a quotation element`);
+      const marksInWording = requireBoolean(requireOwn(segment, 'marks_in_wording', where), `${where} marks_in_wording`);
+      const marker = requireOwn(segment, 'marker', where);
+      if (marker !== null && (typeof marker !== 'string' || marker.length === 0)) throw new Error(`${where} carries a marker that is not a mark`);
+      if (kind === 'quotation_start') open.push({ quotation, marksInWording });
+      else {
+        const start = open.pop();
+        if (start === undefined || start.quotation !== quotation || start.marksInWording !== marksInWording) {
+          throw new Error(`${where} closes a quotation it did not open`);
+        }
+      }
+      return Object.freeze({ kind, quotation, marksInWording, marker });
+    }
+    throw new Error(`${where} is ${JSON.stringify(kind)}, not a segment of wording`);
+  });
+  if (open.length > 0) throw new Error(`${at} leaves a quotation open`);
+  if (inForce !== text) throw new Error(`${at}'s wording in force is not its text`);
+  return Object.freeze({ segments: Object.freeze(read), deleted });
+}
+
+function readNote(note, at) {
+  if (Object.hasOwn(note, 'unmarked')) {
+    if (note.unmarked !== true) throw new Error(`${at} says unmarked as ${JSON.stringify(note.unmarked)}`);
+    if (requireOwn(note, 'marker', at) !== null) throw new Error(`${at} is unmarked and carries a marker`);
+    return Object.freeze({ marker: null, unmarked: true, text: requireText(requireOwn(note, 'text', at), `${at} text`) });
+  }
+  return Object.freeze({
+    marker: requireText(requireOwn(note, 'marker', at), `${at} marker`),
+    text: requireText(requireOwn(note, 'text', at), `${at} text`),
+  });
+}
+
 function readArticle(article, index, state, where) {
   const at = `${where} article ${index + 1}`;
   const publisherId = requireText(requireOwn(article, 'publisher_id', at), `${at} publisher_id`);
@@ -145,10 +210,8 @@ function readArticle(article, index, state, where) {
       `${at} (${publisherId}) says validity_conflict is ${validityConflict} for its date ${validFrom} in a state of ${state.applicabilityDate}`,
     );
   }
-  const notes = requireList(requireOwn(article, 'notes', at), `${at} notes`).map((note, noteIndex) => Object.freeze({
-    marker: requireText(requireOwn(note, 'marker', `${at} note ${noteIndex + 1}`), `${at} note ${noteIndex + 1} marker`),
-    text: requireText(requireOwn(note, 'text', `${at} note ${noteIndex + 1}`), `${at} note ${noteIndex + 1} text`),
-  }));
+  const notes = requireList(requireOwn(article, 'notes', at), `${at} notes`).map((note, noteIndex) => readNote(note, `${at} note ${noteIndex + 1}`));
+  const wording = readSegments(article, text, at);
   return Object.freeze({
     position: requirePosition(requireOwn(article, 'position', at), `${at} position`),
     publisherId,
@@ -164,6 +227,8 @@ function readArticle(article, index, state, where) {
     validFrom,
     validityConflict,
     notes: Object.freeze(notes),
+    segments: wording === null ? null : wording.segments,
+    holdsDeletedWording: wording !== null && wording.deleted > 0,
     permalink,
   });
 }

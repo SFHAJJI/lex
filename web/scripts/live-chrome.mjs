@@ -149,6 +149,12 @@ const EN = Object.freeze({
       other: "{count} articles quoted, {withoutText} held without text, {notAdmitted} not admitted; {conflicts} with their own date differing from the state's.",
     }),
     validityConflict: "This article's own date is {own}; its state applies from {state}.",
+    // Content /3 (S3b): the publisher's deleted wording, struck through, said to a screen reader at its start and end; the
+    // sentence under an article that holds some; a note whose reference the publisher wrote without a marker.
+    deletedWordingStart: "Wording the publisher marks deleted:",
+    deletedWordingEnd: "End of the wording marked deleted.",
+    deletedWordingNote: "Struck-through wording is wording the publisher marks deleted in its text. It is not part of the text this site quotes, cites or searches.",
+    unmarkedNote: "no marker",
     evidence: "Text digest {text}, body digest {body}, official source {source}, {permalink}",
     withoutText: "Held without text: {articles}.",
     notHeldHeading: "What this reading does not hold",
