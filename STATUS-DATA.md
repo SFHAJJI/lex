@@ -18,6 +18,14 @@ Updated 2026-10-18.
   `in_file_date`, `translation_of`, `provisional`, and `entry_into_force` (beyond the design; the driver decisions). Its CHECKs:
   an end and its source come together; a row is held exactly when it lists articles, and exactly when it gives no reason; an
   empty expression comes exactly with an empty language, and only on a `not_acquired` row.
+- **The articles table gains `document_position`** (#978's finding: every state lists its articles by digest, and the
+  index held no document order): an admitted article's place among its publisher document's main-body top-level
+  articles, from 1, in the publisher's order, which inventory /4 lists (its rule profile's `publisher-order`; /3 lists
+  them in document order too). The build takes it from the content outcome's own inventory and refuses an admitted
+  article its inventory does not list; an article not admitted keeps its place, so a body's positions can skip (the gap
+  is the missing article's place). No digest but the logical rows' covers it: it is a fact of the file, not of the
+  state or the wording. The reader checks a body's articles hold distinct places; S7a reads a state's articles in that
+  order, replacing #978's stopgap (the natural order of their ids).
 - **The `intervals` table** (work key, ordinal, kind, from and to state digests, span): each work's French chain in date
   order, one row from each state to the first state of the next date (`contiguous`, `derived`, `inclusive_suspected`,
   `hole` and `overlap` with their spans, `invalid`), and one between consecutive states of one date (`same_date`).
@@ -79,8 +87,8 @@ Updated 2026-10-18.
   - Opens /9, /8 and /6 by `user_version`, each against its exact DDL. /8 and /6 are checked as before: state digest /1,
     log /2 (or /6's genesis log), schema 8's logical-rows digest (`HashLegacyLogicalRows8`, the old JSON shape). /9:
     `ValidateCatalogueStates` (each row's own facts canonical; a held row binds exactly its expression's articles, a
-    textless one none; digest /2; the chain fields and the intervals recomputed from the rows and compared), then log /3
-    and the logical rows with the intervals.
+    textless one none; digest /2; the chain fields and the intervals recomputed from the rows and compared), each body's
+    articles in distinct places of its document, then log /3 and the logical rows with the intervals.
   - `RecordsBuilds` is true for /8 and /9; `RecordsCatalogueStates` for /9 only. `ResolveObservations` gives `DerivedAt`.
   - Every state query not keyed by a digest takes `text_status='held'` on /9 (`HeldOnly`, and the `HeldWorksNine`,
     `StatesOfExpressionsNine` and `WorkRecordsNine` texts), #974's `ResolveWorksUnder` among them (the exact references'
@@ -90,7 +98,7 @@ Updated 2026-10-18.
     not carried in the answer yet, so a caller cannot recompute it from the answer alone (S7a serves them); /8 and /6 keep
     the /1 sentence.
 - **Tests.**
-  - `LuxembourgIndexCatalogueStatesTests` (new, 9 methods, 18 cases): a multi-body harness that states each body's member,
+  - `LuxembourgIndexCatalogueStatesTests` (new, 10 methods, 19 cases): a multi-body harness that states each body's member,
     record, inventory and content outcome and the catalogue's facts, and builds through the builder's projection and writer
     (`WriteIndex`, the code `TryBuild` runs after reading its envelope). The fixture of §3.4: a code (its base-act
     `isMemberOf`, an accented id `art_141_à_144`, a shared-file pair refused as misfiled, a PDF state, a catalogued state
@@ -103,10 +111,11 @@ Updated 2026-10-18.
     `interval_closed` and a `first_sighting` and no `validity_revised` for unchanged publisher ends; ten tampers refused
     (provisional, boundary, a derived end for a stated one, a translation's French state, an entry into force on a
     consolidation or off its role's date, a kind, a reason, an interval removed, a span moved); the work check and the
-    catalogue language refusing; an undated state getting no row; and state digest /2 and its rule profile pinned to a
-    Python recomputation (`1c1c403a…` for the code's first state; `943c77af…`).
+    catalogue language refusing; an undated state getting no row; each article's place in its document (the
+    publisher's order, not the ids', and two articles of one body in one place refused); and state digest /2 and its rule
+    profile pinned to a Python recomputation (`1c1c403a…` for the code's first state; `943c77af…`).
   - `LuxembourgIndexBuilderTests`: the schema at /9; the fixed-input index (one held act, a textless consolidation, an
-    interval, a derivation time) re-pinned to `46a9b1e7…`; the state tampers recomputed under digest /2; `Schema8Of`, a
+    interval, a derivation time) re-pinned to `abb1d264…`; the state tampers recomputed under digest /2; `Schema8Of`, a
     test-side rewrite of a built index 9 into schema 8's tables (held rows, digest /1, log /2), and
     `ASchema8IndexIsStillReadExactlyAsSchema8CheckedIt` over the multi-body fixture's index 9, every byte synthetic (seven
     tampers refused with schema 8's own reasons, and the rewrite opens as schema 8 with no derivation time, its held states
@@ -153,6 +162,14 @@ Updated 2026-10-18.
     `provisional` (dated after 2026-10-12).
   - Against the design: its 2,350 works and 2,469 texts came from its scripts' estimate of content /2; the measured /4 and
     /2 outputs admit 74 more acts (2,543 texts, 2,425 works). Everything else above is the design's figure or explained.
+  - Articles missing from held states (#978's French review found Art. 2 of the loi du 16 mars 2020 missing; derive-c,
+    under inventory /3 and content /1: 1,004 of its 1,730 states): under Release 1's rules 1,365 of the 2,543 held rows
+    (1,255 acts, 110 code states) hold fewer articles than their document's main body, 118,355 of those documents'
+    126,059. Every one of the 7,704 missing is content /2's `unsupported_content_shape`: `embeddedStructure` 3,126,
+    `embeddedText` 1,839, a non-empty note reference 1,288, `eop` 596, `u` 484, `table` 452, `docNumber` 168, `span`
+    137 (Art. 2 of `loi/2020/03/16/a195` among them), and smaller shapes. The index serves what content admits; which
+    shapes are admitted is the content rules' (a later content version), and with `document_position` and the member's
+    article outcomes the reader can say a state lacks an article and where (S7a).
   - 9.7 s, peak working set 465 MiB. The summary is written to the probe root (`index9-probe.summary.json`). No derive ran;
     the dry run measures index 9 over the real population.
 - **derive-c's 209 expressions with articles and no state** (977 articles; the 1798 "Loi sur le timbre" among them, slice
@@ -209,9 +226,12 @@ Updated 2026-10-18.
     acquisition fixture serves one body per acquisition, and a many-body SPARQL fixture is a slice of its own. The harness
     states each body's member, record, inventory and content outcome and the catalogue's facts; `WriteIndex` is the code
     `TryBuild` runs after its rows are read.
+  - **`document_position` in index 9 rather than later**: the order is a fact the build already holds (the inventory),
+    and carrying it now spares S7a an index 10; it is outside state digest /2, so it moves no digest.
   - Titles are keyed by the work key of the held expression's legal resource (a code's titles are one work); a title of
     an expression whose legal resource spells no state keeps index 8's key.
-- **Not yet.** S7a: the interval selection for `as_of`, `in_force_on`, `as_observed`, `evidence_bundle` and `diff`, the
+- **Not yet.** S7a: a state's articles in their document's order (`document_position`, replacing #978's natural-order
+  stopgap) and the articles a state lacks, said as such; the interval selection for `as_of`, `in_force_on`, `as_observed`, `evidence_bundle` and `diff`, the
   refusals for textless states, unclear ends and invalid intervals, `provisional`, translations' labels, the state rows'
   new fields (and with them a provenance chain a caller can recompute again: G5 from the answer alone), and the
   undated-search fold; S7b: timelines'

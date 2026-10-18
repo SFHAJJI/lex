@@ -117,6 +117,8 @@ public sealed class LuxembourgIndexNineRun15Probe
         var bodies = new List<LuxembourgIndexBuilder.CatalogueBody>();
         var records = new List<LuxembourgIndexBuilder.CatalogueRecord>();
         var articles = new List<LuxembourgIndexBuilder.ArticleRow>();
+        // Per held body's expression: its document's main-body articles (inventory /4) and those content /2 admits.
+        var documentOf = new Dictionary<string, (int InDocument, int Admitted, SortedDictionary<string, long> Dispositions)>(StringComparer.Ordinal);
         foreach (var line in File.ReadLines(Path.Combine(root, "run15-held.jsonl")))
         {
             var row = JsonNode.Parse(line)!;
@@ -136,11 +138,12 @@ public sealed class LuxembourgIndexNineRun15Probe
             records.Add(new(legalResource, objectRef, outcome, "accepted_selected"));
             if (outcome == "acquired" && (string)inv["disp"]! == "inventoried" && admitted.TryGetValue(legalResource, out var ids))
             {
+                documentOf[expression] = ((int)inv["n_articles"]!, ids.Count, dispositions[legalResource]);
                 for (var index = 0; index < ids.Count; index++)
                 {
                     articles.Add(new(
                         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"{legalResource}#{index}#{ids[index]}"))),
-                        objectRef, expression, ids[index], null, null, language, new string('c', 64), "", "[]"));
+                        objectRef, expression, ids[index], null, null, language, new string('c', 64), "", "[]", index + 1));
                 }
             }
         }
@@ -169,6 +172,19 @@ public sealed class LuxembourgIndexNineRun15Probe
             .GroupBy(static value => value, StringComparer.Ordinal)
             .OrderBy(static group => group.Key, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.Count(), StringComparer.Ordinal);
+        // The held states that hold fewer articles than their publisher document's main body, and what content /2 made of
+        // the others (#978's French review found an article missing; derive-c: 1,004 of 1,730 states, under inventory /3).
+        var measured = held.Where(state => documentOf.ContainsKey(state.ExpressionIri)).ToArray();
+        var fewer = measured.Where(state => documentOf[state.ExpressionIri].Admitted < documentOf[state.ExpressionIri].InDocument).ToArray();
+        var missingByDisposition = new SortedDictionary<string, long>(StringComparer.Ordinal);
+        foreach (var state in fewer)
+        {
+            foreach (var (disposition, count) in documentOf[state.ExpressionIri].Dispositions)
+            {
+                if (disposition != "admitted") missingByDisposition[disposition] = missingByDisposition.GetValueOrDefault(disposition) + count;
+            }
+        }
+
         string[] five = ["loi-2011-11-12-n1", "loi-2019-03-05-a129", "rgd-2015-12-18-n10", "rgd-2018-06-20-a507", "rgd-2019-09-12-a609"];
         var odd = held.Where(state => five.Contains(state.WorkKey, StringComparer.Ordinal) && state.StateKind == LuxembourgIndexBuilder.KindAsPublished)
             .Select(static state => $"{state.WorkKey} {state.ApplicabilityDate} {state.DateRole} entry_into_force={state.EntryIntoForce ?? "-"} in_file={state.InFileDate ?? "-"}")
@@ -200,6 +216,13 @@ public sealed class LuxembourgIndexNineRun15Probe
             ["rows_by_boundary"] = Counted(states.Select(static state => state.Boundary!)),
             ["intervals_by_kind"] = Counted(projected.Intervals.Select(static interval => interval.Kind)),
             ["provisional_rows"] = states.Count(static state => state.Provisional),
+            ["held_rows_measured_against_their_document"] = measured.Length,
+            ["held_rows_with_fewer_articles_than_their_document"] = fewer.Length,
+            ["held_rows_with_fewer_articles_by_kind"] = Counted(fewer.Select(KindOf)),
+            ["articles_in_those_documents"] = fewer.Sum(state => documentOf[state.ExpressionIri].InDocument),
+            ["articles_those_rows_hold"] = fewer.Sum(state => documentOf[state.ExpressionIri].Admitted),
+            ["articles_those_rows_lack_by_content_disposition"] = new JsonObject(missingByDisposition
+                .Select(static pair => KeyValuePair.Create(pair.Key, (JsonNode?)pair.Value))),
             ["derive_c_expressions_with_articles_and_no_state"] = noState.Length,
             ["those_by_index9_row"] = new JsonObject(deriveC209.Select(static pair => KeyValuePair.Create(pair.Key, (JsonNode?)pair.Value))),
             ["the_five_acts_not_dated_by_entry_into_force_in_derive_c"] = new JsonArray(odd.Select(static value => (JsonNode?)value).ToArray()),
