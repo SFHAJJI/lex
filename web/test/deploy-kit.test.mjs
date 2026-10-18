@@ -70,6 +70,19 @@ test("a new revision arrives as the candidate with no traffic while a live revis
   assert.match(ingress.traffic, /createObject\('revisionName', parameters\('liveRevision'\), 'weight', 100\), createObject\('latestRevision', true\(\), 'weight', 0, 'label', 'candidate'\)/);
 });
 
+test("the candidate is probed only once it is the latest ready revision, which its label follows", () => {
+  // The label names the latest *ready* revision: probed earlier, the live revision answered (2026-10-18).
+  assert.match(code, /\$candidate = "\$AppName--\$suffix"/, "the candidate is the revision this deployment made, by name");
+  const wait = code.indexOf("properties.latestReadyRevisionName");
+  const probe = code.indexOf("& node @nodeTrap (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --origin");
+  assert.ok(wait > 0 && probe > wait, "the wait for the latest ready revision comes before the candidate's probe");
+  assert.match(code, /\$latestReady -eq \$candidate/);
+  assert.match(code, /"\$\(\$state\.running\)"\.StartsWith\('Running'\)/);
+  assert.match(code, /\$state\.health -eq 'Healthy'/);
+  assert.match(code, /if \(\(Get-Date\) -gt \$readyBy\) \{\s*Step "the candidate did not become ready: deactivate the candidate \$candidate"\s*az containerapp revision deactivate/,
+    "a candidate that never becomes ready is deactivated, and no traffic moves");
+});
+
 test("until the owner opens the site, every deployment admits only the named ranges, and one that names none admits no one", () => {
   const { ingress } = app.properties.configuration;
   // Not only on a first deployment (the plan's item 0.5: a second deployment emptied the list and opened the private copy).

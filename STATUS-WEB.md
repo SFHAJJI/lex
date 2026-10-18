@@ -4,6 +4,26 @@ Updated 2026-10-18. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The private copy on the release of 18 October, and a deployment that waits for its candidate (sole driver, 2026-10-18)
+
+The release `v3-20261018T050235Z-f505b58cee2f` (from v3/integration at f505b58c, #984, over derive-c) was built with
+`--no-browser`, signed by the release signer (its key piped from Key Vault, never printed), reproduced to the same image
+(`sha256:9f8da279…`), and probed in WSL: 18 API journey probes, the served pages, 63 V2 routes absent, the server and
+card, and privacy clean (142 requests, nothing written, no cookie, no other origin); 19 page steps were not walked
+(no browser on this PC). It is kept at `C:\lex-v3\releases\` with its report.
+- `deploy.ps1 -Apply`, run by the driver's identity, copied the image by digest and deployed it as a zero-traffic
+  candidate, ingress admitting only the two named addresses. Its probe then held the live revision of 13 October to
+  this release and failed, rightly: the candidate label follows the latest *ready* revision, and the new revision was
+  still pulling its 2.7 GB image and verifying its indexes (about four minutes). The kit deactivated a healthy
+  candidate; no traffic moved.
+- The driver reactivated it, waited until it was the latest ready revision, and ran the same probe: it passed. Then,
+  as a driver decision (reversible; the private copy stays restricted, so this is not the opening), all of the private
+  copy's traffic moved to it and the revision of 13 October was deactivated, keeping the cost at one replica.
+- `deploy.ps1` now waits, before its probe, until the candidate (named `$AppName--$suffix`) runs, is healthy and is
+  the latest ready revision, for up to 20 minutes; one that never becomes ready is deactivated and nothing moves. A plan
+  run says so. `deploy-kit.test.mjs` pins the order: the wait before the probe.
+- Measured: `deploy-kit.test.mjs` and `no-browser-probes.test.mjs` 23 of 23.
+
 ## Search results by act, and a plain no-hit card (sole driver, 2026-10-18)
 
 The plan's items 4.3 ("Results grouped by act: the act's title once, with its passages nested below; a word-for-word

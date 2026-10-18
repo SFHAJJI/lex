@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-18 at 08:00 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-18 at 05:47 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -11,18 +11,18 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 - Landed on 17 October: the new home page; a link opens on the article it cites; readable addresses; one
   citation in three forms for copy, export and links; and the search box opens a law from its exact reference (an
   ELI, a CELEX number, a Mémorial issue, "loi du 10 août 1991", "Article 6 of Regulation (EU) 2016/679").
-- Long codes are read page by page. Kept off until you decide: search engines. Being built: dated Luxembourg
-  versions; search results by act, the words found marked, and a plain card when nothing is found.
+- Your private copy runs today's code since 18 October (a signed release, checked over HTTP), at the address the
+  driver gave you, from this PC or your 14 October address. Search results come grouped by act, the words
+  found marked. Kept off until you decide: search engines. Being built: dated Luxembourg versions.
 - Still thin: Luxembourg has 1,730 acts as first published, no codes; EU text covers 511 of 1,170 versions. Done and
   waiting for disk: the codes (121,000 articles) and quoted or struck-out wording (6,000 more, from 18 October).
 
 ## The plan
 
 - You asked for days, not months. A private beta with today's law comes first, then the codes once the disk is
-  solved. Opening it to the public before the lawyer's read and the audits is your decision, not the driver's.
-- The full plan is your private page, and C:\lex-v3\PLAN-2026-10-14.md.
-- Decided on 14 October, by you: the DNS lives at your registrar, outside Azure, and the site keeps V2's address,
-  law.soufien.lu.
+  solved. Opening it to the public before the lawyer's read and the audits is your decision, not the driver's. The
+  full plan is your private page, and C:\lex-v3\PLAN-2026-10-14.md.
+- Decided by you on 14 October: the DNS lives at your registrar, and the site keeps V2's address, law.soufien.lu.
 
 ## What waits on you
 
