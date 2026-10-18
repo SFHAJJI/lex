@@ -339,7 +339,10 @@ public sealed class V3WebRootTests
         foreach (var row in rows)
         {
             var path = row.GetProperty("path").GetString()!;
-            var page = V3WebRoot.SitePageFor(path, today);
+            // A row's query, where it has one (the plan's item 3.7: a reading's page=N).
+            var search = row.TryGetProperty("search", out var query) ? query.GetString() : null;
+            var page = V3WebRoot.SitePageFor(path, today, search);
+            path += search;
             var render = row.GetProperty("render");
             if (render.ValueKind == JsonValueKind.Null)
             {
@@ -351,9 +354,12 @@ public sealed class V3WebRootTests
             Assert.AreEqual(render.GetProperty("language").GetString(), page.Language, path);
             Assert.AreEqual(render.GetProperty("kind").GetString(), page.Kind, path);
             Assert.AreEqual(render.GetProperty("operation").GetString(), page.OperationId, path);
+            // A string as a string, a page number as a whole number: each as the request's JSON writes it.
             CollectionAssert.AreEquivalent(
-                render.GetProperty("parameters").EnumerateObject().Select(property => $"{property.Name}={property.Value.GetString()}").ToArray(),
-                page.Parameters.Select(pair => $"{pair.Key}={pair.Value}").ToArray(),
+                render.GetProperty("parameters").EnumerateObject().Select(property => property.Value.ValueKind == JsonValueKind.Number
+                    ? $"{property.Name}=number:{property.Value.GetInt32()}"
+                    : $"{property.Name}=string:{property.Value.GetString()}").ToArray(),
+                page.Parameters.Select(pair => pair.Value is int number ? $"{pair.Key}=number:{number}" : $"{pair.Key}=string:{(string)pair.Value}").ToArray(),
                 path);
             using var request = JsonDocument.Parse(page.RequestUtf8);
             Assert.AreEqual(page.OperationId, request.RootElement.GetProperty("operation_id").GetString(), $"{path}: the body the page would send");
@@ -398,7 +404,20 @@ public sealed class V3WebRootTests
             Assert.AreEqual($"/lu-legilux/loi-1991-08-10-n3/2024-02-01--{new string('a', 64)}/fra", asked.Parameters["identifier"], "asked by the permalink itself, with no article (R64)");
             Assert.AreEqual("2024-02-01", asked.Parameters["date"], "asked as the page itself would ask");
             Assert.AreEqual("fra", asked.Parameters["language"], "in the text's language the permalink names (R64)");
-            Assert.IsFalse(asked.Parameters.ContainsKey("anchor"), "the whole reading: the page brings the article into view");
+            Assert.IsFalse(asked.Parameters.ContainsKey("anchor"), "the reading, not an anchor's history");
+            Assert.AreEqual("art_15", asked.Parameters["article"], "the page that holds the cited article (the plan's item 3.7)");
+            Assert.IsFalse(asked.Parameters.ContainsKey("page"), "an article names its page");
+
+            // A page of the reading, named in the query (the plan's item 3.7): asked as a whole number, the query not otherwise read.
+            var paged = $"/en/lu-legilux/loi-1991-08-10-n3/2024-02-01--{new string('a', 64)}/fra";
+            var pageRequest = Request("GET", paged);
+            Assert.IsTrue(await root.TryServeAsync(pageRequest, paged + "?from=card&page=3", CancellationToken.None, (page, _) =>
+            {
+                asked = page;
+                return "{\"result\":{},\"refusal\":null}"u8.ToArray();
+            }));
+            Assert.AreEqual(3, asked.Parameters["page"]);
+            StringAssert.Contains(System.Text.Encoding.UTF8.GetString(asked.RequestUtf8), "\"page\":3", "sent as a number, as the request schema asks");
 
             // An act's readable address (R67) is rendered at today in Luxembourg by the caller's clock; with none, as built.
             var readable = "/en/lu-legilux/loi-1991-08-10-n3/fra/art_15";
@@ -410,7 +429,7 @@ public sealed class V3WebRootTests
             }, static () => "2026-10-16"));
             Assert.AreEqual($"<!doctype html><p>reading answer {readable}</p>", Body(current));
             CollectionAssert.AreEquivalent(
-                new[] { "identifier=/lu-legilux/loi-1991-08-10-n3", "date=2026-10-16", "language=fra" },
+                new[] { "identifier=/lu-legilux/loi-1991-08-10-n3", "date=2026-10-16", "language=fra", "article=art_15" },
                 asked.Parameters.Select(pair => $"{pair.Key}={pair.Value}").ToArray());
             var unclocked = Request("GET", readable);
             Assert.IsTrue(await root.TryServeAsync(unclocked, readable, CancellationToken.None, (_, _) => "{\"result\":{}}"u8.ToArray()));

@@ -24,6 +24,19 @@
           "type": "string",
           "minLength": 1,
           "pattern": "\\S"
+        },
+        "article": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "contents": {
+          "type": "boolean"
         }
       },
       "required": [

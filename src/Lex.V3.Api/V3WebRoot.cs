@@ -264,7 +264,8 @@ internal sealed partial class V3WebRoot
 
         // A law's address under a language, rendered from the API's own answer when there is one (R67). A readable address asks
         // for today in Luxembourg (R13), which the caller's clock says; with no clock its page is served as built.
-        if (answer is not null && _renderer is not null && SitePageFor(path, today?.Invoke()) is { } sitePage && answer(sitePage, cancellationToken) is { } envelope &&
+        if (answer is not null && _renderer is not null && SitePageFor(path, today?.Invoke(), queryAt < 0 ? null : rawTarget[queryAt..]) is { } sitePage &&
+            answer(sitePage, cancellationToken) is { } envelope &&
             await _renderer.RenderAsync(sitePage.Language, sitePage.Kind, Encoding.UTF8.GetString(envelope), path, cancellationToken).ConfigureAwait(false) is { } html)
         {
             var page = Encoding.UTF8.GetBytes(ForSearchEngines(response, html, path));
@@ -457,14 +458,20 @@ internal sealed partial class V3WebRoot
     /// asks it once loaded: its coverage line and today's date in Luxembourg (R11, R13; <c>web/scripts/live-home.mjs</c>).
     /// Null for any other path.
     /// </summary>
-    internal static V3SitePage? SitePageFor(string path, string? today = null)
+    /// <remarks>
+    /// A reading is read one page at a time (the plan's item 3.7): an address that names an article asks the page that holds
+    /// it (<c>article</c>, the segment decoded; a segment that is not UTF-8 once decoded names none), and an address with no
+    /// article whose <paramref name="query"/> (with its <c>?</c>) names <c>page=N</c>, N a whole number from 2 written without
+    /// leading zeros, asks that page; anything else in the query is ignored, as before. Page 1 is the address with no page.
+    /// </remarks>
+    internal static V3SitePage? SitePageFor(string path, string? today = null, string? query = null)
     {
         ArgumentNullException.ThrowIfNull(path);
         foreach (var home in InterfaceLanguages)
         {
             if (string.Equals(path, $"/{home}/", StringComparison.Ordinal) || string.Equals(path, $"/{home}/index.html", StringComparison.Ordinal))
             {
-                return new V3SitePage(home, "home", "coverage", new Dictionary<string, string>(StringComparer.Ordinal));
+                return new V3SitePage(home, "home", "coverage", new Dictionary<string, object>(StringComparer.Ordinal));
             }
         }
 
@@ -480,12 +487,12 @@ internal sealed partial class V3WebRoot
         {
             var date = match.Groups["date"].Value;
             var lng = match.Groups["lng"].Value;
-            return new V3SitePage(language, "reading", "evidence_bundle", new Dictionary<string, string>(StringComparer.Ordinal)
+            return new V3SitePage(language, "reading", "evidence_bundle", Paged(new Dictionary<string, object>(StringComparer.Ordinal)
             {
                 ["identifier"] = $"/{match.Groups["law"].Value}/{date}--{match.Groups["digest"].Value}/{lng}",
                 ["date"] = date,
                 ["language"] = lng,
-            });
+            }, path, query));
         }
 
         if (match.Groups["current"].Success)
@@ -495,16 +502,120 @@ internal sealed partial class V3WebRoot
                 return null;
             }
 
-            return new V3SitePage(language, "reading", "evidence_bundle", new Dictionary<string, string>(StringComparer.Ordinal)
+            return new V3SitePage(language, "reading", "evidence_bundle", Paged(new Dictionary<string, object>(StringComparer.Ordinal)
             {
                 ["identifier"] = work,
                 ["date"] = today,
                 ["language"] = match.Groups["currentLng"].Value,
-            });
+            }, path, query));
         }
 
-        return new V3SitePage(language, "dossier", "dossier", new Dictionary<string, string>(StringComparer.Ordinal) { ["identifier"] = work });
+        return new V3SitePage(language, "dossier", "dossier", new Dictionary<string, object>(StringComparer.Ordinal) { ["identifier"] = work });
     }
+
+    /// <summary>
+    /// A reading's request with the page its address names (the plan's item 3.7), as <c>readingRequestFor</c> in
+    /// <c>web/scripts/permalinks.mjs</c> adds it: the article the last segment names, decoded, or else the page the query names.
+    /// </summary>
+    private static Dictionary<string, object> Paged(Dictionary<string, object> parameters, string path, string? query)
+    {
+        if (ArticleSegmentOf(path) is { } segment)
+        {
+            if (DecodeSegment(segment) is { } article)
+            {
+                parameters["article"] = article;
+            }
+
+            return parameters;
+        }
+
+        if (PageOfQuery(query) is { } page)
+        {
+            parameters["page"] = page;
+        }
+
+        return parameters;
+    }
+
+    /// <summary>The article segment a reading's address names (escaped as the path writes it), or null.</summary>
+    private static string? ArticleSegmentOf(string path)
+    {
+        var match = SiteMatch(path);
+        if (match is null)
+        {
+            return null;
+        }
+
+        // The address up to its language: the pin's (/{date}--{digest}/{lng}) or the readable address's (/{lng}).
+        var languageGroup = match.Groups["pin"].Success ? match.Groups["lng"] : match.Groups["currentLng"];
+        var end = languageGroup.Index + languageGroup.Length;
+        return end < path.Length ? path[(end + 1)..] : null;
+    }
+
+    /// <summary>
+    /// A path segment decoded as a browser's <c>decodeURIComponent</c> decodes it: each <c>%HH</c> a byte, the bytes UTF-8; a
+    /// segment whose bytes are not UTF-8 decodes to nothing (null), as there it throws.
+    /// </summary>
+    private static string? DecodeSegment(string segment)
+    {
+        var bytes = new List<byte>(segment.Length);
+        for (var index = 0; index < segment.Length; index++)
+        {
+            if (segment[index] == '%' && index + 2 < segment.Length &&
+                byte.TryParse(segment.AsSpan(index + 1, 2), System.Globalization.NumberStyles.AllowHexSpecifier, System.Globalization.CultureInfo.InvariantCulture, out var value))
+            {
+                bytes.Add(value);
+                index += 2;
+                continue;
+            }
+
+            bytes.AddRange(Encoding.UTF8.GetBytes(segment[index].ToString()));
+        }
+
+        try
+        {
+            return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetString(bytes.ToArray());
+        }
+        catch (DecoderFallbackException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The page a query names (<c>?page=N</c>, its first <c>page</c> parameter): N a whole number from 2 to 100,000 written
+    /// without leading zeros, else none. As <c>pageOfQuery</c> in <c>web/scripts/permalinks.mjs</c>.
+    /// </summary>
+    private static int? PageOfQuery(string? query)
+    {
+        if (query is null || query.Length < 2 || query[0] != '?')
+        {
+            return null;
+        }
+
+        foreach (var part in query[1..].Split('&'))
+        {
+            var equals = part.IndexOf('=', StringComparison.Ordinal);
+            var name = equals < 0 ? part : part[..equals];
+            if (!string.Equals(name, "page", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var value = equals < 0 ? string.Empty : part[(equals + 1)..];
+            if (!PageNumber.IsMatch(value))
+            {
+                return null;
+            }
+
+            var number = int.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
+            return number is >= 2 and <= 100_000 ? number : null;
+        }
+
+        return null;
+    }
+
+    private static readonly Regex PageNumber = new("^[1-9][0-9]{0,5}\\z", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
 
     /// <summary>Whether an envelope is the refusal of a work the API does not know: its page is a 404, as an absent page is.</summary>
     private static bool AnswersUnknownWork(byte[] envelope)

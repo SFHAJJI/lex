@@ -22,6 +22,7 @@ import { exportPdf, pdfRefusal } from "../scripts/export-pdf.mjs";
 import { liveChrome } from "../scripts/live-chrome.mjs";
 import { assertTimeVocabulary } from "../scripts/publisher-vocabulary.mjs";
 import { europeBundle } from "../scripts/europe-bundle-sample.mjs";
+import { withoutTextAt } from "../scripts/reading-page-samples.mjs";
 
 const NB = String.fromCharCode(0xa0);
 const FR = liveChrome("fr");
@@ -377,9 +378,7 @@ test("the export keeps the evidence form: each item and exclusion carries the th
   const answer = luxembourgAnswer((value) => {
     // One article held without text, so an exclusion is cited too.
     const [state] = value.states;
-    const moved = state.articles.pop();
-    state.articles_without_text.push({ article_identity_sha256: moved.article_identity_sha256, publisher_id: moved.publisher_id, reason: "no_text_tokens" });
-    state.validity_conflict_count = state.articles.filter((article) => article.validity_conflict).length;
+    withoutTextAt(state, state.articles.length - 1);
   });
   const view = readEvidenceBundle(answer);
   const [state] = view.states;

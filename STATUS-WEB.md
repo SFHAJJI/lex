@@ -4,6 +4,181 @@ Updated 2026-10-18. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Reading by article: the cited article's page first, the contents, and the next articles (sole driver, 2026-10-17)
+
+The plan's item 3.7 (`C:\lex-v3\PLAN-2026-10-14.md`), to the specification of record's R73 ("Reading renders the requested
+article first (R64) and streams the rest") and R107 (R73's page budget, latency measured on the largest works), with R64
+and R67. Release 1 brings the codes, which the population mount does not hold, so its largest held versions are the
+proxies and a synthetic act of 3,000 articles is the stand-in.
+- **What there was** (read from the code, measured on `v3/integration` at 32a9522e, built in a scratch copy):
+  `evidence_bundle` answered every article of every served version in one answer, and the reading page rendered it whole
+  and carried that answer beside it for hydration (about half the page). A reading of 3,000 articles at the census
+  fixture's article size weighed 13.4 MB (its answer 6.5 MB) and rendered in 168 ms; the largest held version, CRR
+  (32013R0575, its 2027-01-01 French wording, 804 provisions), a 6.2 MB page from a 3.6 MB answer, served in 250 to 290
+  ms. And a Luxembourg state's articles were served in the order of their identity digests (every state lists them sorted
+  by digest: 1,730 of 1,730 in `derive-c`, read-only), so a code would have been read in no order a reader knows.
+- **The API reads by page and by article** (`V3CorpusMount.Reading.cs`; additive parameters on `evidence_bundle`, so the
+  registry digest moved and every census pinned to it was rendered again from the handler with the `V3_RENDER_*`
+  variables, then verified without them):
+  - a version (a Luxembourg state or an EU wording) is cut into pages: at most 50 articles and at most 98,304 bytes of
+    quoted text (UTF-8), an article whose text alone passes that bound a page of its own, in the version's order, so a
+    page's number names the same articles on every asking (`page_rule` says it in the answer);
+  - `page` (1 to 100,000) serves that page, `article` (a publisher id) the page that holds it, neither the first page,
+    so a version that fits one page is answered whole as before; `contents: true` adds the table of contents: every
+    article's position, publisher id, identity, EU heading and page, no text;
+  - every version carries `page` (its number, the version's pages, its first and last positions, and the version's
+    counts: articles, quoted, held without text, and a Luxembourg state's articles whose date differs from its own) and
+    `pages` (each page's first and last article, EU headings, and count); every article and article held without text
+    its `position`; `articles`, `articles_without_text` and `validity_conflict_count` are the page's;
+  - on both publishers, at a permalink and by the work and a date (Luxembourg; the EU time view and the original-wording
+    path); rights are enforced over the whole version before any page is cut, and a version with no text at all is still
+    `text_not_available`;
+  - refusals stay typed: an article a served version does not hold is `anchor_not_in_version`, with the ids nearest it and
+    the payload every other anchor refusal carries (`article_history`, `citation`, `verify`); so is a page past a served
+    version's last, each version cut on its own (`page=N`, the first and last pages as the nearest anchors, and
+    `requested_page`, `pages` and the version's language; the review of #978, F2); a page and an article together, or a
+    page or contents of the wrong type, is `request_schema_invalid`, as a cursor that names nothing is;
+  - a Luxembourg state is read in the order of its publisher ids (`CompareLuxembourgArticleIds`: the numbers in an id as
+    numbers of any length, `er` then bis, ter, quater and the Latin adverbs in their order, a roman numeral after `art_` or
+    `article_`, alone or with `er` or an adverb (`art_ier`, "Ier", `art_iibis`), by its value, `premier` as 1, `art` written
+    right before its number (`art1er`, `art12`) as `art_1er` and `art_12`, then the identity), since the index holds no
+    document order; the EU order is the publisher's provision ids', as the
+    wording digest reads them (zero-padded: `001`, `005A`, `325AO`);
+  - MCP's `evidence_bundle` tool says it pages.
+- **Reading renders the requested article first, with the contents, and loads the rest on demand** (`LiveReading.jsx`,
+  `PinnedReading.jsx`, `reading-pages.mjs`):
+  - an article's address (a permalink or a readable address) asks the page that holds its article: the cited article
+    first, as before, then its page; a version's address asks its first page, and `?page=N` on it that page (both servers
+    read the query, `V3WebRoot.SitePageFor` and `sitePageFor` held to one table, now with the queries' rows);
+  - a version of more than one page says which pages it shows ("Page 2 of 26: … to …"), lists its pages under a collapsed
+    "Contents" (each by its first and last article, a link to `?page=N` on the version's permalink, or on the act's readable
+    address when the page stands at one, the shown ones marked
+    `aria-current`), numbers each article by its place in the version, and ends with "Previous articles" and "Next
+    articles", plain links to those pages' addresses, which the server renders with no script run;
+  - with scripts, "Next articles" asks the next page in place (the same request at that page, `readNextPage`), adds its
+    articles below the shown ones and gives the focus to the first of them; the link stays a link, opened apart or without
+    scripts. The articles' list is `aria-live="off"` on a paged version, so a page added is not read out whole;
+  - a page after the first names itself canonical with its page (`?page=N`), in the page's own language, and a page of the
+    version its act's readable address shows today names that readable address with its page (both rules #976's, the plan's
+    item 3.6); a page of today's version is kept out until the switch opens it, as its first page is, any other page is never
+    opened, and the sitemap lists act-level addresses only; the cited article's address names the article;
+  - an article the version does not hold: the refusal card ("This index holds no article with that id in this version",
+    with the ids nearest it), the focus on it, and after it "The whole act at this version" (or the act today, at a readable
+    address), where before the whole act stood under the article's address;
+  - a page past the version's last: "This version is read here on 2 pages, so there is no page 3." (an EU wording's own
+    sentence), with no card, whose note is about provisions, then links to its first page and its last, the focus on the
+    refusal; never indexed (the review of #978, F2);
+  - a version that fits one page is laid out as before: no contents, no pages line, no links, no numbers of its own.
+- **The dossier and the exports ask by page.** The dossier asks no text (titles, states and their counts), and each version
+  links to its reading's first page, so it is unchanged. The export composer pins from the page shown, and "Pin every
+  article" reads the version's other pages first, one request each, and adds them to the reading: an export of a whole
+  long act is put together from its pages and keeps every article and its evidence. The tests hold its JSON, CSV and PDF
+  byte for byte against the same articles read as one page, for the census's long act (60 articles, two pages) and for
+  the census's one-page act cut into three and put together again.
+- **Speed checks** (`web/scripts/reading-weight.mjs`, no browser: the API's answer to the request the page sends, the page
+  the API serves, and the server's render time, the median of five; the base build against this branch, `derive-c` mounted
+  read-only through a junction, its listing unchanged before and after, the API's verified index copies in a scratch
+  folder removed after each run):
+
+  | Version | Before: page, answer, served in | After, its first page: page, answer, served in |
+  |---|---|---|
+  | CRR 32013R0575, 2027-01-01, fra, 804 provisions (26 pages) | 6,247,500 B, 3,598,388 B, 249 to 288 ms | 247,619 B, 141,266 B, 16 to 26 ms |
+  | CRD 32013L0036, 2026-07-11, fra, 197 (7 pages) | 1,583,229 B, 914,450 B, 72 to 87 ms | 271,300 B, 156,723 B, 12 to 29 ms |
+  | MiCA 32023R1114, 2024-01-09, fra, 150 (6 pages) | not readable (below), 772,667 B answer | 251,306 B, 144,929 B, 11 ms |
+  | VAT 32006L0112, 2025-04-14, fra, 496 (10 pages) | 1,652,273 B, 943,421 B, 71 to 82 ms | 212,385 B, 121,509 B, 9 to 23 ms |
+  | Luxembourg's largest, loi-2018-03-27-a221, 120 (3 pages) | 400,016 B, 220,244 B, 26 ms | 202,309 B, 113,273 B, 17 ms |
+  | The stand-in, 3,000 synthetic articles through the real derivation (60 pages) | 6,394,661 B, 3,321,730 B, 263 to 300 ms | 143,208 B, 72,745 B, 76 to 118 ms |
+  | 3,000 articles at the census's article size, the renderer alone | 13,385,667 B, 168 ms to render | 260,126 B, 5 ms |
+
+  CRR's row is its 2027-01-01 French wording, the largest held; the wording that answers today (2026-06-26) holds 790
+  provisions, read on 25 pages in French and 22 in English (the review of #978). CRR's other pages: page 2, 283,880 B; its Article 4 (66 KB of definitions) cited first, 323,402 B; Article 429's page
+  (21 of 26), 300,042 B. The three largest held versions by bytes are CRR, CRD and MiCA (`derive-c`'s EU index, counted
+  read-only); VAT is the next by provisions. CRD and MiCA answer their dates `ambiguous_version` (two held texts), so each
+  was read at the permalink of its longer one, as the refusal names them.
+- **Driver decisions** (reversible):
+  - The page budget: a reading page weighs at most 400,000 bytes (about 3 per cent of 12.9 MB) unless one article alone
+    passes 96 KiB, which is then a page of its own; measured at 143 to 323 KB on every version above. `reading-pages.test.mjs`
+    holds the stand-in's first page to it (260,126 B).
+  - The page bound is 50 articles and 98,304 bytes of text: the census's fixture act (49 articles, 63,575 B) fits one
+    page, so an act that fits one page is answered, laid out and exported as before; CRR's first page holds 12 provisions
+    (its Article 4 is 66 KB). A page is weighed by its articles' text alone: weighing the notes too meant parsing every
+    article's tokens to cut one page (on the stand-in, a page took 110 to 162 ms before that change and 86 to 116 ms after).
+  - With neither `page` nor `article` the API serves the first page, never the whole of a long version: every answer is
+    bounded, and an old client asking a short act gets what it got.
+  - A page's address is `?page=N` on the version's address, page 1 the address with no page: R64's last segment is the
+    article, and a page is not a citation. A page links its pages by its version's permalink, and at an act's readable
+    address by that address (`?page=N` there; changed in the review of #978, which found the links left the readable
+    address for the permalink): the readable address's pages are of today's version, which is the one it shows.
+  - A page past the last is refused as an anchor the version does not hold (`anchor_not_in_version`), not as a malformed
+    request: the request is well formed and only the version decides (the review of #978, F2). No new refusal code: the
+    registry's twenty stand, and the payload's three members are optional on the card's contract.
+  - The page lists its pages, not every article: links to 3,000 articles would weigh about 400 KB; the API's `contents`
+    lists every article for a client that asks, with identities, so one answer with its contents still lets a reader
+    recompute the state's article identities digest (the replay guarantee).
+  - The next articles are loaded by a control, not by scrolling: a link a keyboard and a screen reader follow, and the
+    address a reader without scripts opens. Previous articles is a link only.
+  - A Luxembourg state's order is its ids' (above): the export's items follow the reading's order, as before, so an
+    export of several articles of one act lists them in that order, not the digests'.
+  - An article address whose article the version does not hold is refused, not answered with the version (typed, R64).
+    Its page is a 200, as every refusal but `identifier_unknown` is.
+  - `as_of` is unchanged: it carries no text.
+  - Found by the speed checks and repaired here: the EU reader refused a consolidated wording whose work names no CELEX of
+    its own (`celex: null`; one of the two works the publisher holds of many a consolidation, MiCA's above), so that
+    reading showed "the answer could not be read", before this slice too. It now reads, its CELEX not held; the evidence
+    form then names the act's CELEX, as `citation.mjs` already fell back.
+- **Journeys** (expectations in code; the browser runs are CI's): a fifth journey mount, the fixture act with 130 synthetic
+  articles in three pages (`V3_WRITE_LONG_ACT_JOURNEY_MOUNT`), and three journeys on it, by pointer and by keyboard on
+  the pages the API serves (a step of their own in the `journeys` lane): an article on the second page, cited first, with
+  its page, the contents and the links before and after; the second page at the address the next-articles link names,
+  shown with no script run; and the next articles asked in place, one request at page 2 and no navigation. The fixture's
+  permalink and readable-address steps ask the page that holds their article, and the canonical check reads a page's query.
+- **French**: the 13 new forms (the reading's pages, the export's pin-every-article, and the two refusal sentences for
+  `anchor_not_in_version`) were reviewed by an independent reviewer in the addendum of 2026-10-18 on reading by page of
+  `C:\lex-v3\lanes\fr-review\review.md`: 2 changed, 11 approved, and named in `live-chrome-fr.mjs`'s header.
+  - The two refusal sentences say what the index holds, in both languages: "Cet index ne contient aucun article portant cet
+    identifiant dans cette version" (and "dans ce libellé"; the English "This index holds no article with that id in this
+    version"). The draft, "Cette version ne contient aucun article …", claimed of the version what only the index can say:
+    in `derive-c`, 1,004 of the 1,730 held Luxembourg states hold fewer articles than the publisher's document (4,143 not
+    admitted), and the review reproduced one (the loi du 16 mars 2020, its Art. 2 in the document and not in the index).
+  - Taken from its points: the whole-act link after the card, which takes the focus, so "this version" follows the sentence
+    that names it; a page of one article named once (`reading.contentsPageOne`, `reading.pageShownOne`, forms it gave); the
+    export's progress "Reading every page: {done} of {pages} read." (`Lecture de toutes les pages ; pages lues : …`); the
+    thirteen shared entries held to neither publisher's date words (`SHARED_LEAD_ENTRIES`).
+  - "Sommaire" for the contents (not "Table des matières": the act's own table of its divisions), "{first} à {last}" for a
+    run of articles, "Page {n} sur {N}", "Articles précédents" and "Articles suivants" were approved as drafted.
+- **Review and repair (#978)**, one round, by the other model family: three findings and four notes, all taken.
+  - F1 (medium): the reading order put `art_ier`, `art1er` and `art12` out of place (the roman numeral with `er`, and `art`
+    written right before its number, were read as letters). Fixed in `ArticleIdParts`, with numbers of any length compared
+    by their digits (the comment on ids of more than 18 digits was wrong). Tests: the order's cases, and an opt-in sweep
+    over every state of a named index (`V3_READING_ORDER_INDEX`): over `derive-c`, read in place, 1,730 states, 986 with a
+    first article, every one first, and 6,147 pairs of plain ids, none out of order; its listing unchanged.
+  - F2 (low): a page past the last was a bare `request_schema_invalid`, judged across every version served, and the site
+    showed the malformed request's panel. Now the typed refusal above, each version on its own, and on the site the sentence
+    and the links to the first and last page, never indexed. Tests: the API's at a permalink, by the work with a language
+    asked and none, the long act's fourth page of three, and the EU wording at its permalink and by its CELEX; the cut's
+    unit test; the census pin of `RefusePageNotInVersion`; the refusal and envelope censuses; the page's sentence, links,
+    pin and noindex render in `reading-pages.test.mjs`; the French census test, over a Luxembourg state's and an EU
+    wording's page past the last. Its six French forms were reviewed independently in the addendum of 2026-10-18 on a page
+    past a version's last (4 changed, 2 approved): the sentence says "so there is no page 3" ("il n’y a donc pas de page
+    3"), the site's page, never that the version has none, since the publisher's text has printed pages of its own.
+  - F3 (low): two web mutants survived. Tests: a superseded version's `?page=2` (a Luxembourg state and an EU wording)
+    renders the plain noindex at its permalink with its page; a contents row on another page than the index names is
+    refused, both ways.
+  - Notes: a page asked in place, or an export's reading of every page, stopped by one asked for another version stayed
+    loading and its control dead; it now goes back to its link (`withoutStopped`, tested). The links at a readable address
+    (above). `PinnedLead`'s comment back above it. CRR's figures (above).
+- **Not in this part** (next): the search phase's own `anchor_not_in_version` sentences (4.2's, approved there) make the claim
+  the review changed here ("La version que la date retient ne comporte aucun article de ce numéro …"); the review gave
+  renderings in the phase's own subject ("Ce site ne détient aucun article de ce numéro dans la version que la date retient,
+  et aucun autre article n’est ouvert à sa place.", and "dans le libellé que la date retient" for the EU), for the slice that
+  next touches them. The API still reads every article of a state to cut its pages (76 to 118 ms a page of the
+  stand-in on this machine, against 263 to 300 ms for the whole): a reader query of the ids and text lengths alone would
+  read only the page's text, in the index reader, after index /9 (the data lane's S6, which changes it) merges. R73's LCP,
+  INP and CLS measured in a browser at the 75th percentile, and R107's monitoring. The codes themselves, which wait on the
+  disk. A page's sitemap entries and head markup (3.6). Previous articles in place, and a contents of every article on the
+  page.
+- **Measured** (this branch, from `v3/integration` at 32a9522e), with no browser started: the web build; the web suite over 111 of its 114 files (all but `keyboard-walk`, `launch-browser` and `paint-check`), 1,234 of 1,234; `dotnet build Lex.V3.slnx -c Release` 0 warnings, 0 errors; `Lex.V3.Tests` 3,321 (3,315 passed, 6 skipped); the `Lex.V3.Ingest.Tests` classes this slice touched with the brief's (`Census`, `PublicRequestRecordingTests`, the answer, envelope and refusal samples, MCP, the pinned permalinks, as_of, the evidence bundles of both publishers, the EU time view and permalinks, reading by page, resolve, the journey mounts, replay, verify, citation facts, as-published, articles not admitted, the annex control case and annexes, capability, locator, the mounted and machine gates, generation quote, dossiers, search, references, coverage and ask), 324 (317 passed, 7 skipped); the platform schemas, and the answer, envelope and refusal samples, rendered again from the handler with the `V3_RENDER_*` variables and verified without them; the long act's journey mount written once and mounted (`V3_WRITE_LONG_ACT_JOURNEY_MOUNT`), its journeys left to CI; `eng/verify-v3-tree.ps1` 1,615 tracked paths. Rebased on `v3/integration` at #977's merge (3b7913ec), through #974 and #976. The speed checks above were measured before the rebases, on this branch from 32a9522e; neither merge changes what the reading's answer and page carry. After the review's repair, rebased on `v3/integration` at #979's merge (21d3a3e2), with no browser started: the web build; the web suite over 112 of its 115 files (all but the three that start a browser), 1,250 of 1,250; `dotnet build Lex.V3.slnx -c Release` 0 warnings, 0 errors; `Lex.V3.Tests` 3,321 (3,315 passed, 6 skipped); the same `Lex.V3.Ingest.Tests` classes with every `Census`, `Privacy` and `Samples` class, 411 (400 passed, 11 skipped, the opt-in probes and mount writers); the answer, envelope and refusal censuses rendered again from the handler and verified without the variables; `eng/verify-v3-tree.ps1` 1,617 tracked paths.
+
 ## A release probed without a browser on this PC (sole driver, 2026-10-18)
 
 On 2026-10-16 headless Chrome runs started by tests on the driver's machine made 263 failed Windows sign-ins and locked

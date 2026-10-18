@@ -68,7 +68,8 @@ export function readingSearchEngines(initial) {
   const versions = (view.publisher === 'eu-eurlex' ? view.wordings : view.states) ?? [];
   const version = versions.find((one) => (pin?.kind === 'state' ? one.permalink === pin.permalink : one.language === pin?.language)) ?? versions[0];
   return {
-    indexing: parseSitePath(lawPath)?.kind === 'current' ? 'switch' : 'never',
+    // A page of today's version after its first names itself with its page (`?page=N`; the plan's item 3.7): it may open too.
+    indexing: parseSitePath(lawPath.split('?')[0])?.kind === 'current' ? 'switch' : 'never',
     structuredData: version === undefined ? null : readingStructuredData({ view, version, canonical: lawPageLinks(lawPath, SITE_ORIGIN, CHROME_LOCALE).canonical }),
   };
 }

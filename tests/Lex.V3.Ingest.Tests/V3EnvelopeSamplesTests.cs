@@ -45,6 +45,12 @@ public sealed class V3EnvelopeSamplesTests
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
 
+        // A long act read by page (the plan's item 3.7): the fixture act with 60 articles of synthetic text, two pages.
+        var longAct = await MountedFixture.CreateAsync(await SyntheticLongAct.DocumentAsync(60, textBytes: 120, lean: true));
+        await using var cleanupLongAct = longAct;
+        using var longActMount = await V3CorpusMount.OpenAsync(longAct.Directory, CancellationToken.None);
+        Assert.IsNotNull(longActMount);
+
         // An EU mount (the GDPR's one held English wording), for the search screen's EU answers and refusals.
         var europe = await EuropeMountedFixture.CreateAsync();
         await using var cleanupEurope = europe;
@@ -55,6 +61,7 @@ public sealed class V3EnvelopeSamplesTests
         // original wording's permalink, whose next wording's text this site does not hold in English. Captured first, so the
         // derived mount is gone before the rest is asked.
         JsonObject laterNotHeld;
+        JsonObject laterNotHeldPastLast;
         JsonObject laterNotHeldVerified;
         var (branchRoot, branchDirectory) = await V3CorpusEuropeTimeViewTests.ConsolidatedWorksMountAsync(
             new EuFirstMountAcquisitionTests.ConsolidatedWorkSpec(
@@ -76,6 +83,12 @@ public sealed class V3EnvelopeSamplesTests
                 branchMount, "evidence_bundle", scenario, parameters);
             // Its custody records each body's receipt per run too.
             WithFixed(laterNotHeld["envelope"]!, "body_receipt_sha256", FixedReceiptDigest);
+            // A page past the wording's last (the review of #978, F2): refused with the wording's pages and its language.
+            laterNotHeldPastLast = await CaptureAsync(
+                probe["context"]!["snapshot"]!["snapshot_sha256"]!.GetValue<string>(),
+                probe["result"]!["value"]!["index_sha256"]!.GetValue<string>(),
+                branchMount, "evidence_bundle", "the same EU wording's page 100, past its last: a refusal naming its pages",
+                new { identifier = originalPermalink, date = originalDate, page = 100 });
             // A citation's evidence form is verified by both its hashes (R65): verify at the first provision's permalink names
             // the wording's digest and the provision text's, which the web's generator checks against the bundle above.
             laterNotHeldVerified = await CaptureAsync(
@@ -114,7 +127,15 @@ public sealed class V3EnvelopeSamplesTests
             // The reading at a permalink asks by the permalink itself (R64): the state it pins, or why not.
             await CaptureAsync(fixture, mount, "evidence_bundle", "a state's permalink at its own date: an answer, the state it pins", new { identifier = fixture.Permalink, date = fixture.ApplicabilityDate, language = "fra" }),
             await CaptureAsync(fixture, mount, "evidence_bundle", "a state's permalink whose digest is not the one held at its date: a refusal with the current link", new { identifier = fixture.PermalinkOf(new string('0', 64)), date = fixture.ApplicabilityDate, language = "fra" }),
+            // Reading by article and by page (the plan's item 3.7): the page that holds an article, or a refusal naming the ids
+            // nearest it; and a long act of synthetic text, read in two pages, the first with the state's contents, and a page
+            // past its last refused with its pages (the review of #978, F2).
+            await CaptureAsync(fixture, mount, "evidence_bundle", "a state's permalink and an article it does not hold: a refusal with the ids nearest it", new { identifier = fixture.Permalink, date = fixture.ApplicabilityDate, article = "art_15-9" }),
+            await CaptureAsync(longAct, longActMount, "evidence_bundle", "a long act's state at its permalink, with its contents: an answer, its first page of two", new { identifier = longAct.Permalink, date = longAct.ApplicabilityDate, contents = true }),
+            await CaptureAsync(longAct, longActMount, "evidence_bundle", "the same long act's second page: an answer, its last ten articles", new { identifier = longAct.Permalink, date = longAct.ApplicabilityDate, page = 2 }),
+            await CaptureAsync(longAct, longActMount, "evidence_bundle", "the same long act's third page, past its last: a refusal naming its two pages", new { identifier = longAct.Permalink, date = longAct.ApplicabilityDate, page = 3 }),
             laterNotHeld,
+            laterNotHeldPastLast,
             // A citation's evidence form is verified by both its hashes (R65): the version's, in its permalink, and the text's.
             await CaptureAsync(fixture, mount, "verify", "an article's permalink: digest_matches, with the article's text digest", new { identifier = fixture.Permalink + "/art_15" }),
             laterNotHeldVerified,

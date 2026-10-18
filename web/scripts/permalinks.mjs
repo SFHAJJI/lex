@@ -219,17 +219,40 @@ export function pageForSitePath(pathname) {
   return `${named.locale}/${named.kind === 'work' ? 'dossier.html' : 'reading.html'}`;
 }
 
+/** The greatest page number a reading's request may name (the API's request schema). */
+export const MAXIMUM_PAGE = 100000;
+
+/**
+ * The page a reading's address names in its query (`?page=N`, its first `page` parameter; the plan's item 3.7): N a whole
+ * number from 2 to `MAXIMUM_PAGE` written without leading zeros, else null (page 1 is the address with no page). Anything
+ * else in the query is ignored, as before. `V3WebRoot.PageOfQuery` reads it the same way.
+ */
+export function pageOfQuery(search) {
+  if (typeof search !== 'string' || search.length < 2 || search[0] !== '?') return null;
+  for (const part of search.slice(1).split('&')) {
+    const equals = part.indexOf('=');
+    const name = equals < 0 ? part : part.slice(0, equals);
+    if (name !== 'page') continue;
+    const value = equals < 0 ? '' : part.slice(equals + 1);
+    if (!/^[1-9][0-9]{0,5}$/.test(value)) return null;
+    const number = Number(value);
+    return number >= 2 && number <= MAXIMUM_PAGE ? number : null;
+  }
+  return null;
+}
+
 /**
  * What the server renders a law's address under an interface language from (R67): the page (`reading`, `dossier`), the
  * operation and the parameters the page itself would ask (`readingRequestFor`), so the page the server renders and the page
- * a reader asks show one answer. A permalink's reading asks by the permalink itself (R64: the version it pins, or why
+ * a reader asks show one answer. A reading is read one page at a time (the plan's item 3.7): the address's article asks the
+ * page that holds it, and with no article, the query's `page=N` (`search`, with its `?`) asks that page. A permalink's reading asks by the permalink itself (R64: the version it pins, or why
  * not), with the date and the text's language it names; a readable address's reading asks by the work (a Luxembourg
  * coordinate or an EU CELEX), `today` (Luxembourg's date, R13, which the server's clock gives) and the text's language it
  * names, and with no `today` it is not rendered (the page as built asks for itself); a dossier asks by the work. An
  * interface language's home page (`/en/`, `/en/index.html`) is rendered from `coverage`, asked with no parameters, as the
  * page as built asks it once loaded (`live-home.mjs`). Null for any other path.
  */
-export function sitePageFor(pathname, { today = null } = {}) {
+export function sitePageFor(pathname, { today = null, search = '' } = {}) {
   const home = INTERFACE_LANGUAGES.find((language) => pathname === `/${language}/` || pathname === `/${language}/index.html`);
   if (home !== undefined) return Object.freeze({ language: home, kind: 'home', operation: 'coverage', parameters: Object.freeze({}) });
   const named = parseSitePath(pathname);
@@ -237,7 +260,7 @@ export function sitePageFor(pathname, { today = null } = {}) {
   if (named.kind === 'work') {
     return Object.freeze({ language: named.locale, kind: 'dossier', operation: 'dossier', parameters: Object.freeze({ identifier: named.identifier }) });
   }
-  const parameters = readingRequestFor(named, today);
+  const parameters = readingRequestFor(named, today, pageOfQuery(search));
   if (parameters === null) return null;
   return Object.freeze({ language: named.locale, kind: 'reading', operation: 'evidence_bundle', parameters });
 }
@@ -245,12 +268,18 @@ export function sitePageFor(pathname, { today = null } = {}) {
 /**
  * The request a reading at a law's address sends (`parseSitePath`'s answer): at a permalink, the permalink with no article,
  * its date and its language; at a readable address, the work, `today` and the language, or null with no `today`. Null for
- * a work's address.
+ * a work's address. The page asked (the plan's item 3.7): the article the address names (`article`, decoded; a segment that
+ * does not decode names none), so the page that holds the cited article is served; else `page` (2 or more), the page the
+ * address's query names; else neither, the first page.
  */
-export function readingRequestFor(named, today = null) {
-  if (named?.kind === 'state') return Object.freeze({ identifier: named.permalink, date: named.date, language: named.language });
-  if (named?.kind !== 'current' || typeof today !== 'string' || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(today)) return null;
-  return Object.freeze({ identifier: named.identifier, date: today, language: named.language });
+export function readingRequestFor(named, today = null, page = null) {
+  let base;
+  if (named?.kind === 'state') base = { identifier: named.permalink, date: named.date, language: named.language };
+  else if (named?.kind !== 'current' || typeof today !== 'string' || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(today)) return null;
+  else base = { identifier: named.identifier, date: today, language: named.language };
+  const article = anchorText(named.anchor);
+  if (named.anchor !== null) return Object.freeze(article === null ? base : { ...base, article });
+  return Object.freeze(Number.isInteger(page) && page >= 2 ? { ...base, page } : base);
 }
 
 /**

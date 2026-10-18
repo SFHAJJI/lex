@@ -28,6 +28,7 @@ import {
   pinKey,
   saveExport,
 } from "../scripts/live-export.mjs";
+import { withoutTextAt } from "../scripts/reading-page-samples.mjs";
 
 /** A refusal's card as the screen shows it: one about this service (R60) inside the failure panel, under its line; any other alone. */
 const asShown = (outcome, card) => renderToStaticMarkup(h(FailureFrame, { outcome }, h("lex-card"))).replace("<lex-card></lex-card>", card);
@@ -136,9 +137,7 @@ test("a PDF the standard fonts cannot set is not offered, and the panel says why
 test("a pinned article held without text is shown as excluded with its reason", async () => {
   const envelope = structuredClone(envelopeOf(ANSWER));
   const state = envelope.result.value.states[0];
-  const [moved] = state.articles.splice(0, 1);
-  if (moved.validity_conflict) state.validity_conflict_count -= 1;
-  state.articles_without_text = [{ article_identity_sha256: moved.article_identity_sha256, publisher_id: moved.publisher_id, reason: "no_text_tokens" }];
+  const moved = withoutTextAt(state, 0);
   const outcome = readingOutcome({ state: "success", envelope });
   assert.equal(outcome.state, "success", outcome.sentence);
   const pins = new Set([pinKey(state.state_sha256, moved.publisher_id)]);

@@ -28,6 +28,7 @@ import {
 import { WATERMARK_PREVIEW } from "../scripts/export-composer.mjs";
 import { EUROPE_SAMPLE, europeBundle } from "../scripts/europe-bundle-sample.mjs";
 import { escapeProvision } from "../scripts/search-answer.mjs";
+import { withoutTextAt } from "../scripts/reading-page-samples.mjs";
 
 const SAMPLES = new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url);
 
@@ -106,9 +107,7 @@ test("an export carries every pinned article's citation, text, digests, official
 test("a pinned article held without text is excluded with its reason in both formats, never quoted empty", async () => {
   const answer = await bundle();
   const state = answer.states[0];
-  const [moved] = state.articles.splice(0, 1);
-  if (moved.validity_conflict) state.validity_conflict_count -= 1;
-  state.articles_without_text = [{ article_identity_sha256: moved.article_identity_sha256, publisher_id: moved.publisher_id, reason: "no_text_tokens" }];
+  const moved = withoutTextAt(state, 0);
   const view = readEvidenceBundle(answer);
   const model = composeExport({ view, pinned: [{ stateSha256: state.state_sha256, publisherId: moved.publisher_id }, { stateSha256: state.state_sha256, publisherId: state.articles[0].publisher_id }], observedAt: OBSERVED });
   assert.equal(model.items.length, 1);

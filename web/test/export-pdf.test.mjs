@@ -19,6 +19,7 @@ import { EUROPE_TEXT_ACKNOWLEDGEMENT, readEuropeEvidenceBundle, readEvidenceBund
 import { composeEuropeExport, composeExport, EXPORT_WATERMARK } from "../scripts/export-build.mjs";
 import { PDF_SUBSTITUTION_NOTE, PDF_TEXT_WIDTH, exportPdf, pdfRefusal, pdfTextWidth } from "../scripts/export-pdf.mjs";
 import { EUROPE_SAMPLE, europeBundle, sha256 } from "../scripts/europe-bundle-sample.mjs";
+import { withoutTextAt } from "../scripts/reading-page-samples.mjs";
 
 const SAMPLES = new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url);
 const OBSERVED = "2026-09-18T07:00:00.0000000Z";
@@ -146,9 +147,7 @@ test("each item carries its citation, digests, official source, rights and its w
 test("an exclusion is set with its reason, and every line stays inside the text width", async () => {
   const { model } = await modelOf((raw) => {
     const state = raw.states[0];
-    const [moved] = state.articles.splice(0, 1);
-    if (moved.validity_conflict) state.validity_conflict_count -= 1;
-    state.articles_without_text = [{ article_identity_sha256: moved.article_identity_sha256, publisher_id: moved.publisher_id, reason: "no_text_tokens" }];
+    withoutTextAt(state, 0);
   }, (state) => [state.articlesWithoutText[0], state.articles[0]]);
   const runs = readPdf(exportPdf(model)).flat();
   const prose = normalised(runs.map((run) => run.text).join(" "));

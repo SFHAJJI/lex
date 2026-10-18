@@ -12,7 +12,8 @@ import { readEvidenceBundleAnswer } from "./reading-answer.mjs";
 import { validateRefusal } from "./refusal-card.mjs";
 import { historyBeginsHint, noCorpusMountedSentence, tableRefusalSentence, unshownRefusal } from "./live-refusals.mjs";
 import { isCalendarDate } from "./temporal.mjs";
-import { englishStatement, fillText, liveChrome, refusalTemplate } from "./live-chrome.mjs";
+import { MAXIMUM_PAGE } from "./permalinks.mjs";
+import { englishStatement, fillCounted, fillText, liveChrome, refusalTemplate } from "./live-chrome.mjs";
 
 /**
  * The languages the form offers besides "any": the platform answers a language the work is not held
@@ -49,6 +50,8 @@ export const LIVE_READING_REFUSAL_SENTENCES = Object.freeze({
   retrieval_mode_unavailable: "This index cannot read this work's text.",
   // A permalink whose digest is not the state this index holds at its date (R64); the page says the current link above.
   pinned_digest_mismatch: "The version this permalink pins is not the one this index holds for its date.",
+  // An article address whose article the version does not hold (the plan's item 3.7: the page that holds it is asked).
+  anchor_not_in_version: "This index holds no article with that id in this version.",
 });
 
 /**
@@ -65,6 +68,7 @@ export const LIVE_READING_EUROPE_REFUSAL_SENTENCES = Object.freeze({
   text_not_available: "This index knows this wording of the EU act but holds no text for it.",
   retrieval_mode_unavailable: "This index cannot read this work's text.",
   pinned_digest_mismatch: "The wording this permalink pins is not one this index holds for its date.",
+  anchor_not_in_version: "This index holds no article with that id in this wording.",
 });
 
 /** The refusal sentences for a refusal's publisher, as its envelope context names it. */
@@ -102,21 +106,32 @@ export function invalidAnswerSentence(reason) {
 
 /**
  * The request parameters for one reading, checked before anything is sent: an identifier that is not
- * blank, sent as typed; a calendar date written yyyy-mm-dd; and a language only when one is chosen.
- * Nothing else is sent.
+ * blank, sent as typed; a calendar date written yyyy-mm-dd; a language only when one is chosen; and, for a
+ * page of the reading (the plan's item 3.7), the page's number (a whole number from 1) or an article it
+ * holds (its publisher id), never both. Nothing else is sent.
  */
-export function readingParameters({ identifier, date, language = "" }) {
+export function readingParameters({ identifier, date, language = "", page = null, article = null }) {
   if (typeof identifier !== "string" || identifier.trim().length === 0) {
     throw new Error("a reading needs the identifier of a work");
   }
   if (!isCalendarDate(date)) {
     throw new Error("a reading needs a calendar date, written yyyy-mm-dd");
   }
-  if (language === "") return { identifier, date };
+  if (page !== null && (!Number.isInteger(page) || page < 1 || page > MAXIMUM_PAGE)) {
+    throw new Error(`${JSON.stringify(page)} is not a page of a reading`);
+  }
+  if (article !== null && (typeof article !== "string" || article.trim().length === 0)) {
+    throw new Error("an article is asked by its publisher id");
+  }
+  if (page !== null && article !== null) {
+    throw new Error("a reading asks one page: by its number or by an article it holds");
+  }
+  const paged = page !== null ? { page } : article !== null ? { article } : {};
+  if (language === "" || language === null || language === undefined) return { identifier, date, ...paged };
   if (!READING_LANGUAGES.some((offered) => offered.code === language)) {
     throw new Error(`${JSON.stringify(language)} is not a language this form offers`);
   }
-  return { identifier, date, language };
+  return { identifier, date, language, ...paged };
 }
 
 /**
@@ -150,6 +165,21 @@ export function readingOutcome(asked) {
     if (code === "ambiguous_version" && asked.envelope.context?.publisher === "eu-eurlex") {
       return { state: "refusal", code, card: false, sentence, context: asked.envelope.context };
     }
+    // A page past the version's last (the review of #978, F2): the anchor refused is a page, not a provision, so the card
+    // (whose note is about provisions) is not shown; the page says how many pages the version is read on, and links its
+    // first and last (`PageNotHeld`).
+    const page = pageNotHeld(code, payload);
+    if (page !== null) {
+      const copy = liveChrome().reading;
+      return {
+        state: "refusal",
+        code,
+        card: false,
+        sentence: fillCounted(asked.envelope.context?.publisher === "eu-eurlex" ? copy.europePageNotHeld : copy.pageNotHeld, page.pages, { page: page.asked }),
+        page,
+        context: asked.envelope.context,
+      };
+    }
     try {
       validateRefusal({ code, sentence, payload });
     } catch (error) {
@@ -174,6 +204,17 @@ export function readingOutcome(asked) {
   }
 
   return { state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(asked.reason)) };
+}
+
+/**
+ * The page a refusal says a version does not have (`anchor_not_in_version` naming `page=N`, with `requested_page` and the
+ * version's `pages`; the review of #978, F2): `{ asked, pages, language }`, or null for any other refusal.
+ */
+export function pageNotHeld(code, payload) {
+  if (code !== "anchor_not_in_version" || payload === null || typeof payload !== "object") return null;
+  const { requested_page: asked, pages, language = null } = payload;
+  if (!Number.isInteger(asked) || !Number.isInteger(pages) || pages < 1 || asked <= pages || payload.requested_anchor !== `page=${asked}`) return null;
+  return Object.freeze({ asked, pages, language });
 }
 
 /** Asks the live API one reading and returns the view state. */

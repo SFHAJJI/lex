@@ -84,6 +84,8 @@ const EUROPE_ENTRIES = new Set([
   "common.europeAnnexes.one", "common.europeAnnexes.other",
   "reading.europePinReplaced", "reading.europePinNotHeld", "reading.europeWholeAct", "reading.europeNewerWording",
   "reading.europeLaterWordingNotHeld",
+  // A page past an EU wording's last (the review of #978, F2).
+  "reading.europePageNotHeld.one", "reading.europePageNotHeld.other",
   // The citation generator's EU words (`citation.mjs`): an EU act's name and the date it is cited at, the wording's line of
   // the evidence form, the Official Journal reference no index holds, and the EU's authenticity statement.
   "citation.europe.article", "citation.europe.acts.R", "citation.europe.acts.L", "citation.europe.acts.D",
@@ -104,6 +106,12 @@ const SHARED_LEAD_ENTRIES = new Set([
   "reading.cite", "reading.citeConventional", "reading.citeWithPermalink", "reading.citeEvidence", "reading.citeNotComposed",
   "export.usualCitation", "citation.withPermalink", "citation.date", "citation.firstOfMonth", "citation.evidence.permalink",
   "citation.evidence.textSha256", "citation.evidence.noText", "citation.evidence.consulted",
+  // A long version's pages, said on both publishers' pages (the plan's item 3.7; the French review of 2026-10-18, point 5).
+  "reading.contents", "reading.contentsPage", "reading.contentsPageOne", "reading.pageShown", "reading.pageShownOne",
+  "reading.pagesShown", "reading.pager", "reading.previousPage", "reading.nextPage", "reading.nextPageFailed",
+  "export.pinAll", "export.readingPages", "export.pagesFailed",
+  // The links after a page past a version's last (the review of #978, F2).
+  "reading.firstPage", "reading.lastPage",
 ]);
 
 function fieldsOf(node, found = new Set()) {

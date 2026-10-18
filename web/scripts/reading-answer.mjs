@@ -17,7 +17,9 @@
 //  - each quoted article has text, in its state's language, whose UTF-8 length is the one stated,
 //    read from one of the state's sources and pointing at its official source; its validity flag is
 //    exactly "its own date is stated and differs from the state's", and the state's count is theirs;
-//  - an article without text is named apart from the quoted ones, never served as a quote.
+//  - an article without text is named apart from the quoted ones, never served as a quote;
+//  - a state is read one page at a time (the plan's item 3.7): its page, its index of pages and, when asked, its contents
+//    hold to the rules `reading-pages.mjs` reads them by, and every article carries its position in the state.
 // The text digests are not recomputed here (the reader is synchronous and the browser's digest is
 // not); `V3ReplayGuaranteesTests` recomputes them from the publisher's file, and the tests of this
 // reader check the captured answer's digests with Node's own SHA-256.
@@ -39,6 +41,7 @@ import { isCalendarDate } from './temporal.mjs';
 import { articlePermalink, europePermalink, luxembourgPermalink } from './permalinks.mjs';
 import { readAnnexesNotServed } from './europe-annexes.mjs';
 import { readAsPublished } from './as-published.mjs';
+import { readVersionPages } from './reading-pages.mjs';
 
 /** The acknowledgement every EU text served carries (Decision 95). */
 export const EUROPE_TEXT_ACKNOWLEDGEMENT = '© European Union, https://eur-lex.europa.eu';
@@ -96,6 +99,13 @@ function requireDate(value, where) {
   return value;
 }
 
+function requirePosition(value, where) {
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(`${where} is ${JSON.stringify(value)} rather than a position in its version, from 1`);
+  }
+  return value;
+}
+
 function requireBoolean(value, where) {
   if (typeof value !== 'boolean') {
     throw new Error(`${where} is true or false, not ${JSON.stringify(value)}`);
@@ -140,6 +150,7 @@ function readArticle(article, index, state, where) {
     text: requireText(requireOwn(note, 'text', `${at} note ${noteIndex + 1}`), `${at} note ${noteIndex + 1} text`),
   }));
   return Object.freeze({
+    position: requirePosition(requireOwn(article, 'position', at), `${at} position`),
     publisherId,
     publisherWid: requireTextOrNull(requireOwn(article, 'publisher_wid', at), `${at} publisher_wid`),
     articleIdentitySha256: requireDigest(requireOwn(article, 'article_identity_sha256', at), `${at} article_identity_sha256`),
@@ -211,9 +222,6 @@ function readState(state, index, context) {
   };
   const articles = requireList(requireOwn(state, 'articles', where), `${where} articles`)
     .map((article, articleIndex) => readArticle(article, articleIndex, partial, where));
-  if (articles.length === 0) {
-    throw new Error(`${where} quotes no article; a state with no text is refused text_not_available, not answered`);
-  }
   const without = requireList(requireOwn(state, 'articles_without_text', where), `${where} articles_without_text`)
     .map((entry, entryIndex) => {
       const at = `${where} article without text ${entryIndex + 1}`;
@@ -221,6 +229,7 @@ function readState(state, index, context) {
         throw new Error(`${at} is without text for no_text_tokens, the one reason the platform names`);
       }
       return Object.freeze({
+        position: requirePosition(requireOwn(entry, 'position', at), `${at} position`),
         publisherId: requireText(requireOwn(entry, 'publisher_id', at), `${at} publisher_id`),
         articleIdentitySha256: requireDigest(requireOwn(entry, 'article_identity_sha256', at), `${at} article_identity_sha256`),
       });
@@ -238,6 +247,12 @@ function readState(state, index, context) {
   if (conflictCount !== counted) {
     throw new Error(`${where}'s validity_conflict_count is ${conflictCount}, and ${counted} of its articles are flagged`);
   }
+  // The page served, the state's pages and its contents (a state with no text at all is refused text_not_available, so it
+  // quotes at least one article, on some page).
+  const paged = readVersionPages(state, { quoted: articles, withoutText: without, headings: false }, where);
+  if (conflictCount > paged.page.validityConflictsInVersion) {
+    throw new Error(`${where}'s page flags ${conflictCount} articles, and its state ${paged.page.validityConflictsInVersion}`);
+  }
 
   return Object.freeze({
     ...partial,
@@ -254,7 +269,17 @@ function readState(state, index, context) {
     articlesNotAdmitted: requireCount(requireOwn(state, 'articles_not_admitted', where), `${where} articles_not_admitted`),
     validityConflictCount: conflictCount,
     validityConflictRule: requireText(requireOwn(state, 'validity_conflict_rule', where), `${where} validity_conflict_rule`),
+    ...paged,
   });
+}
+
+/** The page a bundle was asked for (`requested_page`, `requested_article`, never both) and the platform's paging rule. */
+function readPageRequest(answer, where) {
+  const page = requireOwn(answer, 'requested_page', where);
+  if (page !== null && (!Number.isInteger(page) || page < 1)) throw new Error(`requested_page is ${JSON.stringify(page)}, a page number from 1 or null`);
+  const article = requireTextOrNull(requireOwn(answer, 'requested_article', where), 'requested_article');
+  if (page !== null && article !== null) throw new Error('a bundle is asked one page, by its number or by an article, not both');
+  return { requestedPage: page, requestedArticle: article, pageRule: requireText(requireOwn(answer, 'page_rule', where), 'page_rule') };
 }
 
 /** One publisher fact's value as an answer serves it (`subject_iri`, `value`, `evidence_sha256`), when its subject is `subject`. */
@@ -366,6 +391,7 @@ export function readEvidenceBundle(answer) {
     workKey,
     date,
     language,
+    ...readPageRequest(answer, where),
     availableLanguages,
     rightsDisposition,
     rightsRule: requireText(requireOwn(answer, 'rights_rule', where), 'rights_rule'),
@@ -414,9 +440,11 @@ function readEuropeWording(wording, index, { celex, date }) {
     throw new Error(`${where} says next_text_held is ${JSON.stringify(nextTextHeld)} beside the next date ${JSON.stringify(nextDate ?? null)}; it is true or false beside a date, and null with none`);
   }
   const wordingSha256 = requireDigest(requireOwn(wording, 'wording_sha256', where), `${where} wording_sha256`);
-  // The time view names the CELEX of the work its wording is read from (a consolidated version's own, `0…-{date}`); the
-  // original-wording bundle names only the act's, which is then the wording's.
-  const wordingCelex = Object.hasOwn(wording, 'celex') ? requireText(wording.celex, `${where} celex`) : celex;
+  // The time view names the CELEX of the work its wording is read from (a consolidated version's own, `0…-{date}`), or
+  // null when the publisher's record of that work names none (in the population mount, one of the two works the
+  // publisher holds of many a consolidation: the speed checks of the plan's item 3.7 found MiCA's 2024-01-09 wording
+  // unreadable for it); the original-wording bundle names only the act's, which is then the wording's.
+  const wordingCelex = Object.hasOwn(wording, 'celex') ? requireTextOrNull(wording.celex, `${where} celex`) : celex;
   const permalink = requireText(requireOwn(wording, 'permalink', where), `${where} permalink`);
   const expected = europePermalink({ celex, date: wordingDate, wordingSha256, language });
   if (permalink !== expected) {
@@ -459,6 +487,7 @@ function readEuropeWording(wording, index, { celex, date }) {
     const heading = requireOwn(article, 'heading', label);
     if (typeof heading !== 'string') throw new Error(`${label} heading is not text`);
     return Object.freeze({
+      position: requirePosition(requireOwn(article, 'position', label), `${label} position`),
       articleIdentitySha256: requireDigest(requireOwn(article, 'article_identity_sha256', label), `${label} article_identity_sha256`),
       publisherId,
       heading,
@@ -478,11 +507,14 @@ function readEuropeWording(wording, index, { celex, date }) {
   const articlesWithoutText = Object.freeze(requireList(requireOwn(wording, 'articles_without_text', where), `${where} articles_without_text`).map((article, at) => {
     const label = `${where} articles_without_text[${at}]`;
     return Object.freeze({
+      position: requirePosition(requireOwn(article, 'position', label), `${label}.position`),
       articleIdentitySha256: requireDigest(requireOwn(article, 'article_identity_sha256', label), `${label}.article_identity_sha256`),
       publisherId: requireText(requireOwn(article, 'publisher_id', label), `${label}.publisher_id`),
     });
   }));
-  if (articles.length === 0) throw new Error(`${where} quotes no article; a wording with no text is refused, not answered`);
+  // The page served, the wording's pages and its contents (a wording with no text at all is refused, so it quotes at least
+  // one article, on some page).
+  const paged = readVersionPages(wording, { quoted: articles, withoutText: articlesWithoutText, headings: true }, where);
 
   // The time view's disclosure beside the wording: the other works the census dated to its day, and the versions with no
   // usable date, each with whether its text is held here (absent on the original-wording bundle of an index with no states).
@@ -499,7 +531,7 @@ function readEuropeWording(wording, index, { celex, date }) {
   const annexesNotServed = readAnnexesNotServed(wording, where);
   return Object.freeze({
     expressionIri, language, kind, wordingDate, nextDate, nextTextHeld, wordingSha256, wordingCelex, permalink, stableCoordinate, sources, articles, articlesWithoutText,
-    sameDateWorks, unplacedVersions, annexesNotServed,
+    sameDateWorks, unplacedVersions, annexesNotServed, ...paged,
   });
 }
 
@@ -560,6 +592,7 @@ export function readEuropeEvidenceBundle(answer) {
     publisherWorkIri: requireText(requireOwn(answer, 'publisher_work_id', where), 'publisher_work_id'),
     date,
     language,
+    ...readPageRequest(answer, where),
     availableLanguages,
     acknowledgement,
     authenticity: requireText(requireOwn(answer, 'authenticity', where), 'authenticity'),

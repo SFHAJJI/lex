@@ -176,6 +176,29 @@ const EN = Object.freeze({
     citeWithPermalink: "With its permalink",
     citeEvidence: "Evidence form",
     citeNotComposed: "Lex composes no usual citation for this article; its permalink cites it.",
+    // Reading by page (the plan's item 3.7): a long version's contents, by page, the pages shown, and the links to the pages
+    // before and after them, which the page loads in place when it can.
+    contents: "Contents",
+    contentsPage: "Page {number}: {first} to {last}",
+    contentsPageOne: "Page {number}: {first}",
+    pageShown: "Page {number} of {pages}: {first} to {last}.",
+    pageShownOne: "Page {number} of {pages}: {first}.",
+    pagesShown: "Pages {from} to {to} of {pages}: {first} to {last}.",
+    pager: "Pages",
+    previousPage: "Previous articles",
+    nextPage: "Next articles",
+    nextPageFailed: "The next articles could not be loaded here; the link opens them on a page of their own.",
+    // A page past a version's last (the review of #978, F2): the pages are this site's reading's, not the publisher's.
+    pageNotHeld: Object.freeze({
+      one: "This version is read here on {count} page, so there is no page {page}.",
+      other: "This version is read here on {count} pages, so there is no page {page}.",
+    }),
+    europePageNotHeld: Object.freeze({
+      one: "This wording is read here on {count} page, so there is no page {page}.",
+      other: "This wording is read here on {count} pages, so there is no page {page}.",
+    }),
+    firstPage: "First page",
+    lastPage: "Last page (page {pages})",
   }),
   history: Object.freeze({
     title: "Provision history",
@@ -307,6 +330,10 @@ const EN = Object.freeze({
     jsonSummary: "The JSON as it will be saved",
     // Each exported article's usual citation (`citation.mjs`), in its text's language; the file carries the three forms.
     usualCitation: "Usual citation: {citation}",
+    // Reading by page (the plan's item 3.7): a version's every article pinned at once, its other pages read first.
+    pinAll: "Pin every article",
+    readingPages: "Reading every page: {done} of {pages} read.",
+    pagesFailed: "Not every page could be read; nothing more was pinned.",
   }),
   card: Object.freeze({
     heading: "Evaluation card",

@@ -50,17 +50,21 @@ test('each path of the shared table is served the page the table names, or sent 
 
 test('what the server renders a law page from is what the shared table says, the text language included', () => {
   assert.match(TABLE.today, /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/, 'the date in Luxembourg the table is held at');
-  for (const { path, render } of TABLE.paths) {
-    const page = sitePageFor(path, { today: TABLE.today });
-    assert.deepEqual(page === null ? null : JSON.parse(JSON.stringify(page)), render, path);
+  for (const { path, search, render } of TABLE.paths) {
+    const page = sitePageFor(path, { today: TABLE.today, search: search ?? '' });
+    assert.deepEqual(page === null ? null : JSON.parse(JSON.stringify(page)), render, `${path}${search ?? ''}`);
   }
-  // A permalink's reading asks by the permalink itself, with no article (R64); a readable address's by the work at today's
-  // date, and with no date it is not rendered (the page as built asks for itself).
+  assert.ok(TABLE.paths.filter(({ search }) => typeof search === 'string').length >= 8, 'the table holds the pages a query names');
+  // A permalink's reading asks by the permalink itself, with no article in it (R64), and the page that holds the article the
+  // address names (the plan's item 3.7); a readable address's by the work at today's date, and with no date it is not
+  // rendered (the page as built asks for itself).
   const pinned = `/lu-legilux/loi-2017-03-14-a439/2024-01-01--${DIGEST}/fra`;
-  assert.deepEqual({ ...sitePageFor(`/en${pinned}/art_1er`).parameters }, { identifier: pinned, date: '2024-01-01', language: 'fra' });
+  assert.deepEqual({ ...sitePageFor(`/en${pinned}/art_1er`).parameters }, { identifier: pinned, date: '2024-01-01', language: 'fra', article: 'art_1er' });
+  assert.deepEqual({ ...sitePageFor(`/en${pinned}`, { search: '?page=4' }).parameters }, { identifier: pinned, date: '2024-01-01', language: 'fra', page: 4 });
+  assert.deepEqual({ ...sitePageFor(`/en${pinned}`, { search: '?page=x' }).parameters }, { identifier: pinned, date: '2024-01-01', language: 'fra' }, 'a page that is not a number is none');
   assert.equal(sitePageFor('/en/lu-legilux/loi-2017-03-14-a439/fra/art_1er'), null, 'no today: not rendered');
   assert.equal(sitePageFor('/en/lu-legilux/loi-2017-03-14-a439/fra', { today: '15/10/2026' }), null, 'a date written otherwise is none');
-  assert.deepEqual({ ...sitePageFor('/fr/eu-eurlex/32016R0679/eng/Article%2017', { today: '2026-10-15' }).parameters }, { identifier: '32016R0679', date: '2026-10-15', language: 'eng' });
+  assert.deepEqual({ ...sitePageFor('/fr/eu-eurlex/32016R0679/eng/Article%2017', { today: '2026-10-15' }).parameters }, { identifier: '32016R0679', date: '2026-10-15', language: 'eng', article: 'Article 17' });
   assert.equal(readingRequestFor(parseSitePath('/en/lu-legilux/loi-2017-03-14-a439'), '2026-10-15'), null, "a work's address asks no reading");
 });
 

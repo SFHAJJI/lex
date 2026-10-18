@@ -8,7 +8,7 @@
 //
 // Data and pure functions only: the pages, their client entries and the server-render bundle share it.
 
-import { anchorText, articlePermalink, currentAddress, parseSitePath, readingRequestFor } from './permalinks.mjs';
+import { anchorText, articlePermalink, currentAddress, pageOfQuery, parseSitePath, readingRequestFor } from './permalinks.mjs';
 import { isCalendarDate, luxembourgDate } from './temporal.mjs';
 
 /** The id of the data block that carries the answer a page was rendered from. */
@@ -55,6 +55,9 @@ export function lawPathOf(path) {
  * `answersToday`): that readable address, the article's when the version holds it (R67: "identical version pages point
  * their canonical link there"; the plan's item 3.6, revisiting the decision of #967 that such a permalink names itself).
  * With no `today`, a permalink names itself as above.
+ *
+ * A page of a version after its first (the plan's item 3.7), shown at an address that names no article, names itself with
+ * its page: the version's permalink, or the act's readable address, and `?page=N`, N the page the answer served.
  */
 export function readingAddressShown(view, address, refusal = null, today = null) {
   const named = parseSitePath(address);
@@ -66,7 +69,8 @@ export function readingAddressShown(view, address, refusal = null, today = null)
     const work = view.publisher === 'eu-eurlex' ? view.celex : view.workKey;
     const publisherId = anchorText(named.anchor);
     const held = publisherId !== null && holdsArticle(version, publisherId);
-    return currentAddress({ publisher: view.publisher === 'eu-eurlex' ? 'eu-eurlex' : 'lu-legilux', work, language: version.language, publisherId: held ? publisherId : null });
+    const act = currentAddress({ publisher: view.publisher === 'eu-eurlex' ? 'eu-eurlex' : 'lu-legilux', work, language: version.language, publisherId: held ? publisherId : null });
+    return held ? act : `${act}${pageQuery(version)}`;
   }
   if (named.kind !== 'state') return address;
   if (view === null && refusal?.code === 'pinned_digest_mismatch') {
@@ -78,14 +82,16 @@ export function readingAddressShown(view, address, refusal = null, today = null)
   const publisherId = anchorText(named.anchor);
   if (answersToday(view, pinned, today)) {
     const europe = view.publisher === 'eu-eurlex';
-    return currentAddress({
+    const held = publisherId !== null && holdsArticle(pinned, publisherId);
+    const act = currentAddress({
       publisher: europe ? 'eu-eurlex' : 'lu-legilux',
       work: europe ? view.celex : view.workKey,
       language: pinned.language,
-      publisherId: publisherId !== null && holdsArticle(pinned, publisherId) ? publisherId : null,
+      publisherId: held ? publisherId : null,
     });
+    return held ? act : `${act}${pageQuery(pinned)}`;
   }
-  if (publisherId === null) return pinned.permalink;
+  if (publisherId === null) return `${pinned.permalink}${pageQuery(pinned)}`;
   const quoted = (pinned.articles ?? []).find((article) => article.publisherId === publisherId);
   if (quoted !== undefined) return quoted.permalink;
   return holdsArticle(pinned, publisherId) ? articlePermalink(pinned.permalink, publisherId) : pinned.permalink;
@@ -118,6 +124,12 @@ export function todayAt(instant) {
   }
 }
 
+/** The query a page of a version after its first names itself with (`?page=N`), or nothing for the first. */
+function pageQuery(version) {
+  const number = version?.page?.number;
+  return Number.isInteger(number) && number > 1 ? `?page=${number}` : '';
+}
+
 /** Whether a state (or EU wording) quotes the article with this publisher id, or holds it without text. */
 function holdsArticle(version, publisherId) {
   return (version.articles ?? []).some((article) => article.publisherId === publisherId)
@@ -136,12 +148,16 @@ function holdsArticle(version, publisherId) {
  * so the page the server rendered and the page a browser hydrates from it name one date: the date that answer was asked for
  * (its requested date), else the day its server answered (`context.freshness.observed_at`); with no answer, `now`, this
  * browser's clock. A path under no interface language names no reading here: it is sent to the reader's language first.
+ *
+ * The page asked (the plan's item 3.7): the article the address names, else the page its query names (`search`), else the
+ * page the answer the page carries was asked for (the server renders from the path alone, and its answer says the page).
  */
-export function readingPinOf(pathname, envelope = null, now = () => new Date().toISOString()) {
+export function readingPinOf(pathname, envelope = null, now = () => new Date().toISOString(), search = '') {
   const named = parseSitePath(pathname);
   if (named === null || named.locale === null || (named.kind !== 'state' && named.kind !== 'current')) return null;
   const date = named.kind === 'state' ? named.date : answeredOn(envelope, now);
-  const request = readingRequestFor(named, date);
+  const askedPage = envelope?.result?.value?.requested_page ?? envelope?.refusal?.helpful_payload?.requested_page;
+  const request = readingRequestFor(named, date, pageOfQuery(search) ?? (Number.isInteger(askedPage) ? askedPage : null));
   if (request === null) return null;
   return Object.freeze({
     kind: named.kind,

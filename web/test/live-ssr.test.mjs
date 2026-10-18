@@ -171,9 +171,9 @@ test("a reading's page names as canonical an address the platform mints, never t
 test("each law's address under a language is rendered from what the page itself would ask, as the shared table says", () => {
   const served = TABLE.paths.filter(({ render }) => render !== null);
   assert.ok(served.length >= 12, "the table the API is held to as well");
-  for (const { path, render } of TABLE.paths) {
-    const page = sitePageFor(path, { today: TABLE.today });
-    assert.deepEqual(page === null ? null : { ...page, parameters: { ...page.parameters } }, render, path);
+  for (const { path, search, render } of TABLE.paths) {
+    const page = sitePageFor(path, { today: TABLE.today, search: search ?? '' });
+    assert.deepEqual(page === null ? null : { ...page, parameters: { ...page.parameters } }, render, `${path}${search ?? ''}`);
   }
 });
 
@@ -369,15 +369,18 @@ test("the live server renders a law's address from the API's answer, refuses to 
       assert.equal(await page.text(), `<!doctype html><p>reading answer ${permalink}</p>`, "rendered from the API's answer");
       assert.deepEqual(
         JSON.parse(asked.at(-1).body),
-        { operation_id: "evidence_bundle", parameters: { identifier: `/lu-legilux/loi-1991-08-10-n3/2024-02-01--${"a".repeat(64)}/fra`, date: "2024-02-01", language: "fra" } },
-        "asked as the page itself would ask: by the permalink, its date and the text's language it names (R64)",
+        { operation_id: "evidence_bundle", parameters: { identifier: `/lu-legilux/loi-1991-08-10-n3/2024-02-01--${"a".repeat(64)}/fra`, date: "2024-02-01", language: "fra", article: "art_15" } },
+        "asked as the page itself would ask: by the permalink, its date and the text's language it names (R64), for the page that holds its article (the plan's item 3.7)",
       );
+      // A page its query names (the plan's item 3.7), asked as a whole number; the rest of the query is not read.
+      assert.equal((await fetch(`${origin}${permalink.replace(/\/art_15$/, "")}?from=card&page=3`)).status, 200);
+      assert.deepEqual(JSON.parse(asked.at(-1).body).parameters, { identifier: `/lu-legilux/loi-1991-08-10-n3/2024-02-01--${"a".repeat(64)}/fra`, date: "2024-02-01", language: "fra", page: 3 });
 
       // An act's readable address (R67): asked at today's date in Luxembourg by the server's clock (R13): 23:30 UTC on
       // 2026-10-15 is 2026-10-16 in Luxembourg, in summer time.
       const readable = "/en/lu-legilux/loi-1991-08-10-n3/fra/art_15";
       assert.equal((await fetch(`${origin}${readable}`)).status, 200);
-      assert.deepEqual(JSON.parse(asked.at(-1).body), { operation_id: "evidence_bundle", parameters: { identifier: "/lu-legilux/loi-1991-08-10-n3", date: "2026-10-16", language: "fra" } });
+      assert.deepEqual(JSON.parse(asked.at(-1).body), { operation_id: "evidence_bundle", parameters: { identifier: "/lu-legilux/loi-1991-08-10-n3", date: "2026-10-16", language: "fra", article: "art_15" } });
 
       // R64: the EU shape before it has moved for good, its interface language and query kept; the Luxembourg shape before it
       // names no language, so it is answered as any address the server does not hold.

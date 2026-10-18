@@ -251,6 +251,8 @@ public sealed class V3RefusalPayloadSamplesTests
         await DriveAsync(observed, mount, "evidence_bundle", "a date before the history", new { identifier = work, date = beforeHistory, language = "fra" }, "no_version_for_date");
         await DriveAsync(observed, mount, "evidence_bundle", "a language not held", new { identifier = work, date, language = "eng" }, "language_not_available");
         await DriveAsync(observed, mount, "evidence_bundle", "an identifier no work has", new { identifier = unknown, date, language = "fra" }, "identifier_unknown");
+        await DriveAsync(observed, mount, "evidence_bundle", "an article the state does not hold", new { identifier = work, date, language = "fra", article = "art_15-9" }, "anchor_not_in_version");
+        await DriveAsync(observed, mount, "evidence_bundle", "a page past the state's last", new { identifier = work, date, language = "fra", page = 2 }, "anchor_not_in_version");
         await DriveAsync(observed, mount, "evidence_bundle", "a European identifier on a Luxembourg-only mount", new { identifier = european, date, language = "fra" }, "retrieval_mode_unavailable");
         // At a hash-pinned permalink (R64), the reading page's own request: never another state in the pinned one's place.
         await DriveAsync(observed, mount, "evidence_bundle", "a pinned permalink whose digest the coordinate no longer carries",

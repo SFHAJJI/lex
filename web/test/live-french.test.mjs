@@ -140,6 +140,18 @@ test("a French page says each census refusal in its reviewed French, and never t
       const label = `${name}: ${entry.scenario}`;
       const englishState = inEnglishOf({ state: "refusal", envelope: entry.envelope });
       const frenchState = frenchModule(module)[outcomeName]({ state: "refusal", envelope: entry.envelope });
+      if (englishState.page) {
+        // A page past the version's last (the review of #978, F2): the reading's own counted sentence, with no card.
+        const { asked, pages } = englishState.page;
+        assert.equal(frenchState.card, false, `${label}: a page refused is said without the provision's card`);
+        const table = entry.envelope.context?.publisher === "eu-eurlex" ? FR.reading.europePageNotHeld : FR.reading.pageNotHeld;
+        assert.equal(frenchState.sentence, table[new Intl.PluralRules("fr").select(pages)].replace("{count}", String(pages)).replace("{page}", String(asked)), label);
+        const markup = renderToStaticMarkup(h(french[view], props(frenchState)));
+        assert.ok(markup.replaceAll("<!-- -->", "").includes(escaped(frenchState.sentence)), `${label}: the page says the French`);
+        assert.ok(!markup.replaceAll("<!-- -->", "").includes(escaped(englishState.sentence)), `${label}: and not the English`);
+        said += 1;
+        continue;
+      }
       assert.equal(frenchState.card, true, `${label}: the census refusals are cards`);
       assert.equal(frenchState.sentence, SAID.sentences[englishState.sentence], `${label}: the reviewed French of ${JSON.stringify(englishState.sentence)}`);
       const markup = renderToStaticMarkup(h(french[view], props(frenchState)));

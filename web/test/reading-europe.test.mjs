@@ -74,7 +74,7 @@ test("an EU provision is escaped as the platform escapes it in an article's perm
     article.publisher_id = id;
     article.article_permalink = `${PERMALINK}/${escapeProvision(id)}`;
   });
-  assert.equal(readEuropeEvidenceBundle(bundle).wordings[0].articles[0].permalink, `${PERMALINK}/Article%201%282%29`);
+  assert.equal(readEuropeEvidenceBundle(bundle).wordings[0].articles.find((article) => article.publisherId === id).permalink, `${PERMALINK}/Article%201%282%29`);
 });
 
 test("the reading screen shows the EU wording: the acknowledgement and authenticity above the quoted text, each quote with its evidence", () => {
@@ -171,6 +171,12 @@ test("a time-view bundle reads: a consolidated version answers the dates from it
   assert.ok(markup.includes("the consolidated wording of 2024-01-01"), "the heading names the kind and its date");
   assert.ok(markup.includes(liveChrome().reading.europeLatest), "the latest wording says it answers every later date");
   assert.doesNotMatch(markup, /no later wording is held/, "the original-only heading is not used");
+
+  // A consolidated wording whose work's record names no CELEX of its own reads, its CELEX not held (the speed checks of the
+  // plan's item 3.7: MiCA's 2024-01-09 wording in the population mount).
+  assert.equal(readEuropeEvidenceBundle(timeView((copy) => { copy.wordings[0].celex = null; })).wordings[0].wordingCelex, null);
+  assert.equal(readEuropeEvidenceBundle(timeView((copy) => { copy.wordings[0].celex = "02016R0679-20240101"; })).wordings[0].wordingCelex, "02016R0679-20240101");
+  assert.throws(() => readEuropeEvidenceBundle(timeView((copy) => { copy.wordings[0].celex = ""; })), /celex is not a value this page can print/);
 
   const bounded = readEuropeEvidenceBundle(timeView((copy) => { Object.assign(copy.wordings[0], { next_date: "2026-01-01", next_text_held: true }); }));
   assert.equal(bounded.wordings[0].nextTextHeld, true);
