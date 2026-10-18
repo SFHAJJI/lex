@@ -93,8 +93,42 @@ Updated 2026-10-18.
     - Free disk for the page file: Step 0's 40 GiB. Derive-c went from 43.5 to 22.6 GiB free. C: holds 11.8 GiB free now
       (06:52 UTC; a 14.2 GiB page file allocated), so as things stand the dry run would stop on disk in R0's replay.
   - The dry run's resource log, with the tool's new peak line, decides. S4b is judged there, on real data.
+- **Review and repair (#986).** One independent review found nothing high or medium. It reproduced the byte identity
+  (the five mount files and the record over the 20,000-article custody, both tools, twice each), the measurement
+  (−42 to −56%), and the double build's independence: a later build time, and a reversed insertion order in either
+  second build, were each refused `NotByteStable`, with nothing left in the temporary folder. Three low findings,
+  repaired:
+  - **L1.** No test exercised the refusal when the two builds of an index differ. A test seam
+    (`V3FirstMountBuild.SecondBuildForTest`, null outside tests) makes the second build another file or another
+    manifest. For each index, the build refuses `NotByteStable` with both digests and leaves no staging directory. A
+    build that compared a first file with itself would deliver there.
+  - **L2.** A write that failed after moving a staged index deleted the build's only copy, so a retry threw
+    `FileNotFoundException`. A failed write now moves every staged index it took back to the staging directory: from
+    its temporary name, or from its place in the unfinished mount.
+    - Tested with a tampered staged file: the write is refused with no half-written file, and the file is back in
+      staging.
+    - A retry gives the same clear refusal, because the tamper is in the staged bytes themselves (the chosen
+      behaviour).
+    - Once the bytes are restored, the build writes, the mount verifies, and the file is byte-identical to the first
+      mount's.
+  - **L3.** A hard-killed derive left `%TEMP%\lex-v3-mount-build-*` (up to about 4 GB at the population) on the binding
+    disk. Each staging directory now holds an owner file open until its build is disposed. Before it reads anything,
+    the derive tool (and the acquisition command, before its build) calls `V3FirstMountBuild.SweepStaleStaging` and
+    prints `swept N stale mount-build staging directories under … (bytes): names`. The sweep removes a directory only
+    when all of these hold:
+    - its name is exactly `lex-v3-mount-build-` and 32 hex digits;
+    - it is not a link;
+    - it was last written before the process started (a directory's last write moves with every file made or removed in
+      it, on every system);
+    - no live build holds its owner file.
+
+    Tested: two stale directories (with and without an owner file) are removed. A live build's, a recent one, one named
+    otherwise and an unrelated one are kept. The tool, given its own temporary folder, sweeps a planted directory and
+    names it.
+  - The staging test now uses its own directory as the staging root, so a long temporary path stays under 260
+    characters.
 - **Tests.**
-  - `V3MountBuildFileTests` (2):
+  - `V3MountBuildFileTests` (5, the repair's three included):
     - Each index built to a file is the bytes its public builder returns: the genesis Luxembourg index, a chained one
       with a derivation time, and the EU index. A predecessor read from the file equals one read from the bytes. A
       refused build leaves no file.
@@ -104,8 +138,8 @@ Updated 2026-10-18.
       leaves nothing.
   - The tests that build mounts now dispose their builds. `V3FirstMountBuildTests` compares two builds' files with
     `ReadAllBytes`.
-  - The guarded-construction census pins `V3BuiltIndexFile`, `V3CorpusMountFile` and the predecessor's file doors. The
-    partition totals move: 272 → 274 candidates, 143 → 145 guarded types.
+  - The guarded-construction census pins `V3BuiltIndexFile` (and the seam's door), `V3CorpusMountFile`, `V3MountStaging`
+    and the predecessor's file doors. The partition totals move: 272 → 275 candidates, 143 → 146 guarded types.
 - **Driver decisions (reversible):**
   - The indexes are compared by file digest. The corpus keeps its byte comparison, because its bytes are in memory for
     the writer anyway.
@@ -124,7 +158,10 @@ Updated 2026-10-18.
   - the Luxembourg reader's verification, which reads every article row into memory (`ReadArticles`): the reader is
     S7a's area;
   - the corpus's 0.21 GB of canonical bytes, still held through the index builds;
-  - R0's replay.
+  - R0's replay;
+  - §2.5's other S4b item, "R0 releases its /3 and /1 populations once they match", is deferred: this slice neither
+    measured nor changed it. `DeriveAsync` already hands R0's result straight to R1 and holds it nowhere (S4). Whether
+    those populations are freed early enough is for the dry run's resource log to show.
 
 ## Content /3: quoted wording, deleted wording, layout markers and unmarked notes; Release 1 runs it (sole driver, 2026-10-18)
 
