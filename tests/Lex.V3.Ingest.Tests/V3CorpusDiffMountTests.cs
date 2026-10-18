@@ -346,7 +346,7 @@ public sealed class V3CorpusDiffMountTests
         var ambiguous = await DiffAsync(mountWithTwin, $"/lu-legilux/{fixture.WorkKey}", fixture.ApplicabilityDate, laterDate);
         Assert.AreEqual("ambiguous_version", ambiguous.Refusal!.Code);
         Assert.AreEqual(
-            "bound,candidate_applicability_dates,candidate_applicable_to_sources,candidate_applicable_tos,candidate_boundaries,candidate_state_kinds,candidate_state_sha256s,candidate_states_rule,candidate_text_statuses,candidates,requested_date",
+            "bound,candidate_applicability_dates,candidate_applicable_to_sources,candidate_applicable_tos,candidate_boundaries,candidate_date_roles,candidate_state_kinds,candidate_state_sha256s,candidate_states_rule,candidate_text_statuses,candidates,requested_date",
             string.Join(",", ambiguous.Refusal.HelpfulPayload.EnumerateObject().Select(static property => property.Name)),
             "diff names the bound: exactly these properties, as served in the envelope's canonical order.");
         Assert.AreEqual(PublisherId.LuLegilux, ambiguous.Context.Publisher);

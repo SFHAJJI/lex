@@ -186,7 +186,7 @@ public sealed class V3CorpusAsOfMountTests
         Assert.AreEqual("ambiguous_version", envelope.Refusal!.Code);
         // On index 9 each candidate is named with its interval, boundary, digest and text status (S7a).
         Assert.AreEqual(
-            "candidate_applicability_dates,candidate_applicable_to_sources,candidate_applicable_tos,candidate_boundaries,candidate_state_kinds,candidate_state_sha256s,candidate_states_rule,candidate_text_statuses,candidates,requested_date",
+            "candidate_applicability_dates,candidate_applicable_to_sources,candidate_applicable_tos,candidate_boundaries,candidate_date_roles,candidate_state_kinds,candidate_state_sha256s,candidate_states_rule,candidate_text_statuses,candidates,requested_date",
             string.Join(",", envelope.Refusal.HelpfulPayload.EnumerateObject().Select(static property => property.Name)),
             "as_of has one date, so its refusal names no bound: exactly these properties, as served in the envelope's canonical order.");
         Assert.AreEqual(2, envelope.Refusal.HelpfulPayload.GetProperty("candidate_state_sha256s").GetArrayLength(),

@@ -964,8 +964,8 @@ internal sealed partial class V3CorpusMount
 
     internal const string AmbiguousCandidatesRule =
         "on lex-v3-luxembourg-index/9 the candidate_ lists name every state whose interval holds the date, each in the order of " +
-        "candidate_state_sha256s: its kind, its interval (candidate_applicability_dates to candidate_applicable_tos, and that end's " +
-        "source), its boundary and its text status; they are not one wording held, so none is chosen";
+        "candidate_state_sha256s: its kind, its date's role, its interval (candidate_applicability_dates to candidate_applicable_tos, " +
+        "and that end's source), its boundary and its text status; they are not one wording held, so none is chosen";
 
     /// <summary>
     /// The candidates of an index 9 ambiguity, by the permalinks the refusal lists (each <c>/lu-legilux/{work}/{date}--{digest}/{language}</c>):
@@ -993,6 +993,8 @@ internal sealed partial class V3CorpusMount
             // Lists of scalars, each in the order of candidate_state_sha256s, so a refusal card reads them as every other payload.
             ["candidate_state_sha256s"] = new JsonArray(rows.Select(static row => (JsonNode)row.StateSha256).ToArray()),
             ["candidate_state_kinds"] = new JsonArray(rows.Select(static row => (JsonNode?)row.StateKind).ToArray()),
+            // Each candidate's date role (R21, S7b): an act dated by its entry into force is never offered as applicable from it.
+            ["candidate_date_roles"] = new JsonArray(rows.Select(static row => (JsonNode?)row.DateRole).ToArray()),
             ["candidate_applicability_dates"] = new JsonArray(rows.Select(static row => (JsonNode)row.ApplicabilityDate).ToArray()),
             ["candidate_applicable_tos"] = new JsonArray(rows.Select(static row => (JsonNode?)row.ApplicableTo).ToArray()),
             ["candidate_applicable_to_sources"] = new JsonArray(rows.Select(static row => (JsonNode?)row.ApplicableToSource).ToArray()),

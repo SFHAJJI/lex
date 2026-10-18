@@ -222,22 +222,27 @@ internal sealed partial class V3CorpusMount
         string after,
         string onOrBefore,
         IReadOnlyList<(string ApplicabilityDate, string? EndApplicabilityDate)> consolidations,
-        IReadOnlyList<string> endOfForce)
+        IReadOnlyList<string> endOfForce,
+        bool datedByEntryIntoForce = false)
     {
         // Beside another held state of the language, "later versions are not held" would contradict the sides' next state.
-        var note = $"Both dates select {(onlyStateHeld ? "the one text held" : "the same text held")}, the act as published, applicable from " +
-                   $"{applicabilityDate} (publisher); {(onlyStateHeld ? "later versions are not held" : "no consolidated version is held")}";
+        // An act its file does not date is dated by its entry into force on index 9 (R21): said as that, never as applicable.
+        var dated = datedByEntryIntoForce
+            ? $"dated by its entry into force on {applicabilityDate} (publisher)"
+            : $"applicable from {applicabilityDate} (publisher)";
+        var note = $"Both dates select {(onlyStateHeld ? "the one text held" : "the same text held")}, the act as published, {dated}; " +
+                   $"{(onlyStateHeld ? "later versions are not held" : "no consolidated version is held")}";
         if (consolidations.Count > 0)
         {
             var named = consolidations.Count == 1
                 ? "1 consolidated version of it whose applicability date falls"
                 : $"{consolidations.Count} consolidated versions of it whose applicability dates fall";
-            var dated = consolidations
+            var versions = consolidations
                 .Select(static entry => entry.EndApplicabilityDate is null
                     ? $"from {entry.ApplicabilityDate}"
                     : $"from {entry.ApplicabilityDate} to {entry.EndApplicabilityDate}")
                 .ToArray();
-            note += $"; the publisher's record names {named} after {after} and on or before {onOrBefore}, applicable {JoinWithAnd(dated)} (publisher)";
+            note += $"; the publisher's record names {named} after {after} and on or before {onOrBefore}, applicable {JoinWithAnd(versions)} (publisher)";
         }
 
         if (endOfForce.Count > 0)
@@ -363,13 +368,14 @@ internal sealed partial class V3CorpusMount
         FactView[] EndOfForce)
     {
         /// <summary>The note of a comparison in which both dates select one state of the act as published.</summary>
-        public string Note(string applicabilityDate, bool onlyStateHeld) => AsPublishedSameTextNote(
+        public string Note(string applicabilityDate, bool onlyStateHeld, bool datedByEntryIntoForce = false) => AsPublishedSameTextNote(
             applicabilityDate,
             onlyStateHeld,
             After,
             OnOrBefore,
             Consolidations.Select(static consolidation => (consolidation.ApplicabilityDate!, consolidation.EndApplicabilityDate)).ToArray(),
-            EndOfForce.Select(static fact => fact.value).Distinct(StringComparer.Ordinal).ToArray());
+            EndOfForce.Select(static fact => fact.value).Distinct(StringComparer.Ordinal).ToArray(),
+            datedByEntryIntoForce);
     }
 
     private sealed record AsPublishedServedFile(string ManifestationIri, string FormatIri, FactView[] LegalValues);

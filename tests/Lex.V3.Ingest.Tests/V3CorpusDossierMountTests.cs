@@ -26,11 +26,12 @@ public sealed class V3CorpusDossierMountTests
     private const string TimelineRawTarget = "/api/v3/timeline";
 
     // The fixture is an index 9: its states carry their publication date, an act's entry into force and their interval's
-    // end (S7a), so those are not on the list (an index 8 or 6 keeps them, base-answers.json).
+    // end (S7a), so those are not on the list, and the catalogue's gaps are listed (S7b), so the list says what that list is
+    // not (an index 8 or 6 keeps its own list, base-answers.json).
     private static readonly string[] NotHeldItems =
     [
         "document_type", "current_state_flag", "application",
-        "historical_identifiers", "responsible_ministry", "first_observed", "coverage_gaps",
+        "historical_identifiers", "responsible_ministry", "first_observed", "catalogue_completeness",
         // Not a fixed row: the fixture's act is held only as first published, and the answer says its later versions
         // are not held (the plan's item 0.6).
         "later_versions",
@@ -315,6 +316,9 @@ public sealed class V3CorpusDossierMountTests
             "states[].state_kind", "states[].date_role", "states[].entry_into_force", "states[].applicable_to", "states[].applicable_to_source",
             "states[].boundary", "states[].publication_date", "states[].text_status", "states[].text_status_reason", "states[].in_file_identity",
             "states[].in_file_date", "states[].translation_of", "states[].provisional",
+            // Index 9's catalogue chain (S7b): the fixture's states are held and its chain has no transition to list, so only the
+            // members are walked here; V3CorpusContinuityMountTests holds their rows.
+            "catalogue_chain_rule", "gaps", "invalid_intervals", "overlaps", "same_date", "textless_states", "transitions", "unclear_end_days",
             "titles", "titles[].expression_iri", "titles[].language",
             "titles[].short_titles", "titles[].short_titles[].evidence_sha256", "titles[].short_titles[].title",
             "titles[].titles", "titles[].titles[].evidence_sha256", "titles[].titles[].title",
@@ -365,7 +369,7 @@ public sealed class V3CorpusDossierMountTests
                     "no historical identifier is held, so no earlier or later identifier of this work is mapped to it",
                     "no responsible ministry is held",
                     "no observation time is held, so nothing here says when this work was first seen; the event log's first_sighting (events) says only that a state is first present in that log",
-                    "each state carries the end of its interval (applicable_to, the publisher's or derived from the next state) and its boundary, and no gap between states is listed in this record; it never says there is none",
+                    "the states listed are the publisher catalogue's as this index read it, held or not (textless_states); a state the catalogue did not list is not here, and a gap in the catalogue (gaps) is not a gap in the law",
                     "later versions of this act are not held",
                 },
                 notHeld.Select(static row => row.GetProperty("reason").GetString()).ToArray());

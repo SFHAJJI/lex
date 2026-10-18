@@ -3277,8 +3277,10 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// act held only as published says <see cref="AsPublishedSameTextNote"/> instead: its one state is the act as first
     /// published, and the publisher may name consolidated versions between the two dates (the review of #964).
     /// </summary>
-    internal static string SameVersionNote(string applicabilityDate) =>
-        $"Both dates fall within the same version, applicable from {applicabilityDate} (publisher)";
+    internal static string SameVersionNote(string applicabilityDate, bool datedByEntryIntoForce = false) =>
+        datedByEntryIntoForce
+            ? $"Both dates fall within the same version, the act as published, dated by its entry into force on {applicabilityDate} (publisher)"
+            : $"Both dates fall within the same version, applicable from {applicabilityDate} (publisher)";
 
     /// <summary>
     /// R6 <c>diff</c> for Luxembourg, at article level: each bound resolves to a state exactly as
@@ -3436,8 +3438,8 @@ internal sealed partial class V3CorpusMount : IDisposable
             note = entry.Rows is not null
                 ? "two publisher-dated states; each article is compared by its publisher-minted id and wording digest, and nothing about legal effect is asserted"
                 : between is null
-                    ? SameVersionNote(entry.From.ApplicabilityDate)
-                    : between.Note(entry.From.ApplicabilityDate, entry.OnlyStateHeld),
+                    ? SameVersionNote(entry.From.ApplicabilityDate, DatedByEntryIntoForce(entry.From))
+                    : between.Note(entry.From.ApplicabilityDate, entry.OnlyStateHeld, DatedByEntryIntoForce(entry.From)),
             articles = (object?)entry.Rows?.Articles,
             counts = entry.Rows?.Counts,
         }).ToArray();
@@ -4733,6 +4735,15 @@ internal sealed partial class V3CorpusMount : IDisposable
     internal static readonly string[] CoverageLegacyBuildTimeRow =
         ["build_time_and_currency", "this report states no build time and no build time of the corpus file is held, so nothing here says how current these counts are; this Luxembourg index is lex-v3-luxembourg-index/6 and its event log records no build time either; the corpus and index digests name exactly which artifacts are mounted"];
 
+    /// <summary>
+    /// The build-time row on a mount of lex-v3-luxembourg-index/9, which may be derived again from custody (S4r): a build's
+    /// time in history is when its acquiring build read once its acquisition had ended, which such a derivation keeps, and the
+    /// derivation's own time is the log's derived_at (events), so the row says both and never that a build time is when the
+    /// mounted index was made (S7c, the row S4 left).
+    /// </summary>
+    internal static readonly string[] CoverageBuildTimeRowNine =
+        ["build_time_and_currency", "history gives each build's time, when its acquiring build read once its acquisition had ended: an upper bound on when its corpus was observed and never an observation time, which an index derived again from custody keeps; events gives log.derived_at, when the mounted index was derived from custody, null when its derivations are the acquiring build's own; nothing here says how current these counts are against the publisher; no build time of the corpus file itself is held; the corpus and index digests name exactly which artifacts are mounted"];
+
     internal const string HistoryNote =
         "the builds the mounted Luxembourg log records (its snapshots), and those whose text this mount holds: the mounted build, and each " +
         "earlier generation the retention line keeps beside it (S7-A09: referenced generations indefinitely, the last build of each UTC day " +
@@ -4921,7 +4932,10 @@ internal sealed partial class V3CorpusMount : IDisposable
                 .ToArray(),
             operations = CoverageOperations(registered, served),
             not_held = CoverageNotHeld
-                .Select(row => _reader.RecordsBuilds || row[0] != "build_time_and_currency" ? row : CoverageLegacyBuildTimeRow)
+                .Select(row => row[0] != "build_time_and_currency" ? row
+                    : !_reader.RecordsBuilds ? CoverageLegacyBuildTimeRow
+                    : _reader.RecordsCatalogueStates ? CoverageBuildTimeRowNine
+                    : row)
                 .Select(static row => new { item = row[0], reason = row[1] })
                 .ToArray(),
         });
@@ -5061,6 +5075,13 @@ internal sealed partial class V3CorpusMount : IDisposable
         "no predecessor) holds one first_sighting per state row and nothing else (on lex-v3-luxembourg-index/9 a row may be a state whose text " +
         "is not held); a chained log carries its predecessors' observations unchanged " +
         "and appends one observation per later build (log.basis says which)";
+
+    /// <summary>What an event's permalink answers on index 9, whose log sights the states whose text is not held too.</summary>
+    internal const string EventsPermalinkRuleNine =
+        "a sighted state's permalink opens it when its text is held; for a state whose text this index does not hold (its " +
+        "detail's text_status), the permalink is refused text_withheld or text_not_available, naming the state and why, and no " +
+        "other state is served in its place; a state the catalogue names no expression of has no permalink (null), only its " +
+        "stable coordinate";
 
     internal const string EventsDeliveryNote =
         "cursor polling, at least once: while this index is mounted a request with the same cursor answers the same events again, so a reader " +
@@ -5225,7 +5246,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         var hasMore = rows.Count > limit;
         var served = rows.Take(limit).ToArray();
         var nextSeq = hasMore ? served[^1].Seq : log.LastSeq;
-        using var result = JsonSerializer.SerializeToDocument(new
+        var answer = new
         {
             scope = _reader!.RecordsCatalogueStates ? EventsScopeNine : EventsScope,
             log = EventLogBlock(logId, log, observations),
@@ -5243,7 +5264,10 @@ internal sealed partial class V3CorpusMount : IDisposable
                 language = value.Language,
                 state_sha256 = value.StateSha256,
                 stable_coordinate = $"/lu-legilux/{value.WorkKey}/{value.ApplicabilityDate}",
-                permalink = LuxembourgPermalink(value.WorkKey, value.ApplicabilityDate, value.StateSha256, value.Language),
+                // A state the catalogue names no expression of (index 9's textless rows) has no permalink, only its coordinate.
+                permalink = value.Language.Length == 0
+                    ? null
+                    : LuxembourgPermalink(value.WorkKey, value.ApplicabilityDate, value.StateSha256, value.Language),
                 // The log's own detail, verbatim: the source bodies, and what a revision replaced or moved.
                 detail = JsonDocument.Parse(value.DetailJson).RootElement.Clone(),
                 replaced_permalink = value.Event == V3EventRegistry.FileReplaced
@@ -5269,7 +5293,17 @@ internal sealed partial class V3CorpusMount : IDisposable
                 .Concat(_reader.RecordsBuilds ? [] : [EventsLegacyNotHeld])
                 .Select(static row => new { item = row[0], reason = row[1] })
                 .ToArray(),
-        });
+        };
+        object events = answer;
+        if (_reader.RecordsCatalogueStates)
+        {
+            // Index 9's log sights every state row, held or not (S7c): what a sighted state's permalink answers says so.
+            var node = JsonSerializer.SerializeToNode(answer)!.AsObject();
+            node["permalink_rule"] = EventsPermalinkRuleNine;
+            events = node;
+        }
+
+        using var result = JsonSerializer.SerializeToDocument(events);
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "event", result.RootElement));
@@ -5878,9 +5912,12 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// per language, in the reader's order (date, language, expression, digest). Each row is the same
     /// dated-state vocabulary <c>as_of</c> serves, so the two operations never describe one state in
     /// two ways. Nothing is selected, so nothing is refused for a date: two states on one date and
-    /// language are both listed. Nothing is derived: no end date, no "in force", no gap or overlap
-    /// label; <c>next_applicability_date</c> is the publisher's next dated state in the same language
-    /// or <c>null</c>. The index holds no publication date, so none is served.
+    /// language are both listed. On an index of schema 8 or 6 nothing is derived: no end date, no "in
+    /// force", no gap or overlap label; <c>next_applicability_date</c> is the publisher's next dated
+    /// state in the same language or <c>null</c>, and no publication date is held. On index 9 each row
+    /// carries its catalogue facts (its end, boundary and publication date among them), and the answer
+    /// names the catalogue's textless states and its chain's gaps, overlaps, same-date groups, unclear
+    /// end days and invalid intervals as the publisher left them (<see cref="CatalogueChainRule"/>, S7b).
     /// </summary>
     public V3PlatformOperationOutcome Timeline(
         V3PlatformOperationRequest request,
@@ -5925,7 +5962,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             rows.Add(WithSameText(WithCatalogueFacts(StateRow(state, NextDateInLanguage(scope, state), datesByIdentity, notAdmitted), state), state, state.ApplicabilityDate));
         }
 
-        using var result = JsonSerializer.SerializeToDocument(new
+        using var result = JsonSerializer.SerializeToDocument(WithCatalogueChain(new
         {
             requested_identifier = identifier,
             requested_language = requestedLanguage,
@@ -5939,7 +5976,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             available_languages = availableLanguages,
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader!.IndexRef.Sha256,
-        });
+        }, states[0].WorkKey, requestedLanguage));
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "timeline", result.RootElement));
@@ -6019,7 +6056,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         var rows = scope.Select(state => WithCatalogueFacts(DossierStateRow(state, NextDateInLanguage(scope, state), notAdmitted), state)).ToArray();
         var asPublished = AsPublishedOf(states, scope);
 
-        using var result = JsonSerializer.SerializeToDocument(new
+        using var result = JsonSerializer.SerializeToDocument(WithCatalogueChain(new
         {
             scope = DossierScope,
             requested_identifier = identifier,
@@ -6038,7 +6075,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             not_held = NotHeldRows(RulesByInterval ? DossierNotHeldNine : DossierNotHeld, asPublished),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader!.IndexRef.Sha256,
-        });
+        }, states[0].WorkKey, requestedLanguage));
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "work_record", result.RootElement));
@@ -6461,7 +6498,9 @@ internal sealed partial class V3CorpusMount : IDisposable
 
     /// <summary>
     /// What the dossier of a work on lex-v3-luxembourg-index/9 does not hold: its states carry their publication date, an act's
-    /// entry into force, the end of their interval and its boundary (S7a), so those are not on this list.
+    /// entry into force, the end of their interval and its boundary (S7a), and the answer lists the catalogue's textless states
+    /// and its chain's gaps, overlaps and same-date groups (S7b), so those are not on this list; what the catalogue did not
+    /// list is.
     /// </summary>
     internal static readonly string[][] DossierNotHeldNine =
     [
@@ -6471,7 +6510,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         ["historical_identifiers", "no historical identifier is held, so no earlier or later identifier of this work is mapped to it"],
         ["responsible_ministry", "no responsible ministry is held"],
         ["first_observed", "no observation time is held, so nothing here says when this work was first seen; the event log's first_sighting (events) says only that a state is first present in that log"],
-        ["coverage_gaps", "each state carries the end of its interval (applicable_to, the publisher's or derived from the next state) and its boundary, and no gap between states is listed in this record; it never says there is none"],
+        ["catalogue_completeness", "the states listed are the publisher catalogue's as this index read it, held or not (textless_states); a state the catalogue did not list is not here, and a gap in the catalogue (gaps) is not a gap in the law"],
     ];
 
     /// <summary>
@@ -6504,6 +6543,9 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// or a retargeted reference is a new wording; a note or a modification marker is the publisher's
     /// apparatus and is not; a paragraph or inline-formatting boundary is not a word and is not seen.
     /// The rule travels with the answer. Nothing is derived: no end date, no "in force", no repeal, no diff text.
+    /// On index 9 each row carries its state's catalogue facts (its date's role among them, R21), and the answer names, per
+    /// language, each run of dates no state with held text covers (a textless state, a hole, an unclear end day, an invalid
+    /// interval), with each row saying whether one lies before it (<see cref="ContinuityRule"/>, S7b).
     /// </summary>
     public V3PlatformOperationOutcome ArticleHistory(
         V3PlatformOperationRequest request,
@@ -6532,7 +6574,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             .GroupBy(static article => article.StateSha256, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
 
-        var rows = new List<object>();
+        var rows = new List<(LuxembourgIndexResolvedState State, object Row)>();
         var absent = new List<object>();
         string? historyBegins = null;
         var previousWording = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -6571,7 +6613,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             previousWording[state.Language] = wording;
             historyBegins ??= state.ApplicabilityDate;
 
-            rows.Add(WithCatalogueFacts(new
+            rows.Add((state, new
             {
                 language = state.Language,
                 applicability_date = state.ApplicabilityDate,
@@ -6589,7 +6631,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                     wording_sha256 = article.WordingSha256,
                 }).ToArray(),
                 wording_changed = changed,
-            }, state));
+            }));
         }
 
         if (rows.Count == 0)
@@ -6607,7 +6649,29 @@ internal sealed partial class V3CorpusMount : IDisposable
                 new V3PlatformOperationRefusal(request, "anchor_not_in_version", notInVersion.RootElement));
         }
 
-        using var result = JsonSerializer.SerializeToDocument(new
+        // On index 9: each row's catalogue facts, and where no state with held text covers the dates between two rows.
+        var breaks = RulesByInterval
+            ? scope.GroupBy(static state => state.Language, StringComparer.Ordinal)
+                .Where(group => rows.Any(row => string.Equals(row.State.Language, group.Key, StringComparison.Ordinal)))
+                .SelectMany(group => ContinuityBreaksOf(states[0].WorkKey, group.Key, group.Select(static state => state.ApplicabilityDate).Min(StringComparer.Ordinal)!))
+                .ToArray()
+            : [];
+        var served = rows.Select((entry, index) =>
+        {
+            if (!RulesByInterval)
+            {
+                return entry.Row;
+            }
+
+            var node = (JsonObject)WithCatalogueFacts(entry.Row, entry.State);
+            var previous = rows.Take(index).LastOrDefault(other => string.Equals(other.State.Language, entry.State.Language, StringComparison.Ordinal));
+            node["after_break"] = previous.State is not null && breaks.Any(gap =>
+                string.Equals(gap.Language, entry.State.Language, StringComparison.Ordinal) &&
+                string.CompareOrdinal(gap.From, previous.State.ApplicabilityDate) >= 0 &&
+                string.CompareOrdinal(gap.From, entry.State.ApplicabilityDate) < 0);
+            return node;
+        }).ToArray();
+        var answer = new
         {
             requested_identifier = identifier,
             requested_anchor = anchor,
@@ -6618,13 +6682,24 @@ internal sealed partial class V3CorpusMount : IDisposable
             wording_rule = WordingRule,
             wording_runs = runs.Select(static pair => new { language = pair.Key, count = pair.Value }).ToArray(),
             distinct_wordings = distinct.Select(static pair => new { language = pair.Key, count = pair.Value.Count }).ToArray(),
-            states = rows,
+            states = served,
             absent_in_states = absent,
             available_languages = availableLanguages,
             validity_conflict_rule = ValidityConflictRule,
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader.IndexRef.Sha256,
-        });
+        };
+        object history = answer;
+        if (RulesByInterval)
+        {
+            var node = JsonSerializer.SerializeToNode(answer)!.AsObject();
+            node["continuity_breaks"] = new JsonArray(breaks.Select(static gap => (JsonNode)ContinuityBreakNode(gap)).ToArray());
+            node["continuity_rule"] = ContinuityRule;
+            node["anchor_rule"] = AnchorRule;
+            history = node;
+        }
+
+        using var result = JsonSerializer.SerializeToDocument(history);
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "provision_history", result.RootElement));
