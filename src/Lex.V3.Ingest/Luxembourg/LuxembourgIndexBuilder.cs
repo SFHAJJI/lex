@@ -3854,22 +3854,14 @@ public sealed class LuxembourgIndexReader : IDisposable
     /// For every state the index holds, its articles with searchable text grouped by the outcome and rights disposition the
     /// corpus recorded for the member each was read from, in state digest, outcome and rights order: what a search's
     /// population is counted from. One pass over the states' articles and their members; a state none of whose articles
-    /// has searchable text still has its rows, counting zero.
+    /// has searchable text still has its rows, counting zero (<see cref="LuxembourgIndexQueries.StateTextSources"/>).
     /// </summary>
     public IReadOnlyList<LuxembourgIndexStateTextSource> ResolveStateTextSources()
     {
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
-            command.CommandText = """
-                SELECT s.state_sha256, m.outcome, m.rights_disposition,
-                       SUM(CASE WHEN length(a.searchable_text) > 0 THEN 1 ELSE 0 END)
-                FROM states s, json_each(s.article_identities_json) j
-                JOIN articles a ON a.article_identity_sha256 = j.value AND a.language = s.language
-                JOIN members m ON m.object_ref_sha256 = a.object_ref_sha256
-                GROUP BY s.state_sha256, m.outcome, m.rights_disposition
-                ORDER BY s.state_sha256, m.outcome, m.rights_disposition
-                """;
+            command.CommandText = LuxembourgIndexQueries.StateTextSources;
             using var reader = command.ExecuteReader();
             var rows = new List<LuxembourgIndexStateTextSource>();
             while (reader.Read())
