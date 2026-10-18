@@ -132,8 +132,10 @@ public sealed partial class V3FirstMountBuildTests
 
     /// <param name="luxembourgXml">When given, the Luxembourg consolidation is published as these Akoma Ntoso bytes rather
     /// than as the retained PDF (<see cref="LuxembourgFirstMountAcquisitionTests.LuxembourgFamilyHandler"/>).</param>
+    /// <param name="luxembourgClock">The Luxembourg acquisition's clock; the fixture's own unless given (S4b's probe gives one
+    /// whose elapsed time moves slower, so a body of tens of megabytes is read within the request timeout).</param>
     internal static async Task<(EuFirstMountAcquisitionResult Europe, LuxembourgFirstMountAcquisitionResult Luxembourg)> AcquireAsync(
-        ICustodyStore store, string checkout, byte[]? luxembourgXml = null)
+        ICustodyStore store, string checkout, byte[]? luxembourgXml = null, TimeProvider? luxembourgClock = null)
     {
         var root = EuAxiomWiringHarness.SeedRoot(null);
         var celex = EuAxiomWiringHarness.Seed(null).Celex;
@@ -151,7 +153,7 @@ public sealed partial class V3FirstMountBuildTests
             LuxembourgFirstMountAcquisitionTests.PdfBytes(), xmlBody: luxembourgXml);
         var luxembourgRenderers = await LuxembourgRendererSources.FromCheckoutAsync(store, checkout, CancellationToken.None);
         var luxembourg = await new LuxembourgFirstMountAcquisition(
-                store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), luxembourgHandler)
+                store, luxembourgClock ?? new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), luxembourgHandler)
             .RunAsync(LuxembourgFirstMountAcquisitionTests.ActRange, luxembourgRenderers,
                 LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
         return (europe, luxembourg);

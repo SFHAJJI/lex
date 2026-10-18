@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Ingest.Luxembourg;
 
 namespace Lex.V3.Ingest.Tests;
@@ -67,9 +68,12 @@ public sealed class V3DeriveMemoryProbe
         sampler.Enter("acquire_r0_r1");
         var body = Consolidation(articles, textBytes);
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
-        var (europe, verified) = await V3FirstMountBuildTests.AcquireAsync(store, V3FirstMountBuildTests.CheckoutRoot(), body);
+        var (europe, verified) = await V3FirstMountBuildTests.AcquireAsync(store, V3FirstMountBuildTests.CheckoutRoot(), body, new ReadingClock());
         Assert.IsTrue(europe.Delivered, europe.Detail);
         Assert.IsTrue(verified.Delivered, verified.Detail);
+        var records = verified.Run!.CorpusRecordSet!.Set.Records;
+        Assert.IsTrue(records.Any(static record => record.Body.Kind == CorpusBodyRecordKind.Held), string.Join("; ", records.Select(static record =>
+            $"{record.ObjectRef.PublisherUri} {record.Body.Kind} {record.Body.NotHeldReason} {record.Body.PendingAcquisitionReason?.Kind}")));
         var rederived = await LuxembourgRederivation.ApplyAsync(store, verified, LuxembourgRederivationTests.Release1(), CancellationToken.None);
         var admitted = rederived.AknLegalContent!.Outcomes.Count(static outcome => outcome.Disposition == LuxembourgAknLegalContentDisposition.Admitted);
         Assert.AreEqual(articles, admitted, "every synthetic article is admitted under content /3");
@@ -202,6 +206,24 @@ public sealed class V3DeriveMemoryProbe
 
         document.Append(synthetic, end, synthetic.Length - end);
         return Encoding.UTF8.GetBytes(document.ToString());
+    }
+
+    /// <summary>
+    /// The Luxembourg fixture's clock (<see cref="LuxembourgAcquisitionTestFixture.FixedTimeProvider"/>: each reading of the
+    /// time two seconds later, from the same epoch), except that the elapsed time a body read measures moves 10 ms a reading
+    /// instead of two seconds, so a synthetic body of tens of megabytes is read within the request timeout.
+    /// </summary>
+    private sealed class ReadingClock : TimeProvider
+    {
+        private static readonly DateTimeOffset Epoch = new(2026, 9, 3, 0, 0, 0, TimeSpan.Zero);
+        private long _ticks;
+        private long _timestamp;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override DateTimeOffset GetUtcNow() => Epoch.AddTicks(Interlocked.Add(ref _ticks, TimeSpan.FromSeconds(2).Ticks));
+
+        public override long GetTimestamp() => Interlocked.Add(ref _timestamp, TimeSpan.FromMilliseconds(10).Ticks);
     }
 
     private static int Number(string variable, int fallback) =>
