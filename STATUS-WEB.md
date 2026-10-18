@@ -4,6 +4,62 @@ Updated 2026-10-18. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Index /9 served: a date said with its role, a missing article said in place, the cards read the new refusals (sole driver, 2026-10-18)
+
+Slice S7a of the Luxembourg data design (STATUS-DATA.md, the section of the same day): the reader's interval rules over
+lex-v3-luxembourg-index/9, and with them R21's "every date said with its role" on the pages that say a Luxembourg state's
+date. The server now serves a built mount of index 9.
+- **The role** (`web/scripts/date-role.mjs`): `readDateRole`, `readEntryIntoForce` and `readDateFacts` read a state's
+  `date_role` (`applicability`, `applicability_in_file`, `entry_into_force`) and its act's `entry_into_force`, hold the two to
+  each other (a state dated by its entry into force names that date as its entry into force), refuse any other role, and give
+  null on an index of schema 8 or 6, which names none, so those pages say what they said before.
+- **Where it is said.**
+  - The reading (`LiveReading.jsx`): a state dated by its entry into force is headed "{work}, {language}, the act as
+    published, dated by its entry into force on {from} (publisher)" (`reading.stateHeadingEntryIntoForce`, and `…Next` with
+    the next state held), never "the state applying from".
+  - The dossier (`LiveDossier.jsx`): under "Applies from" such a row says "no date stated (entry into force: {date})", and
+    once under the table what the mark means (`dossier.entryIntoForceDate`, `dossier.entryIntoForceNote`).
+  - The search page (`LiveSearch.jsx`, #982's version line): "The act as published, entry into force on {date} (publisher)"
+    (`search.versionAsPublishedEntryIntoForce`); each hit carries `dateRole` (`search-answer.mjs`), each version group its
+    role (`actGroups`).
+  - The citation generator (`citation.mjs`): the usual form "{citation}, as published, entry into force on {date}" and the
+    evidence line "Version: the act as published, entry into force on {date} (publisher)"; the exact-reference phase reads
+    the usual form back (STATUS-DATA.md).
+  - The provenance page (`provenance.mjs`, `Provenance.jsx`, its preview): a state's thirteen row facts, state digest /2's
+    inputs, in rows (null said as not stated), and its heading by its role.
+- **Missing articles.** `reading-answer.mjs` reads each article's `document_position` and the state's `missing_articles`;
+  the reading says, inside the next quoted article and before its heading, "At this point, the publisher's document has an
+  article that this site does not hold in this version." (`reading.missingBefore`, `one` and `other`).
+- **The undated fold** (STATUS-DATA.md): a passage folded from several versions says "The same wording is in {count} other
+  version(s) this site searched." (`search.sameWording`).
+- **The cards read index 9's refusals.** `refusal-card.mjs` declares their optional members (`INTERVAL_KEYS`: the reason,
+  the named states, a hole's span, a closed end and the base act's facts; each ambiguous candidate's kind, interval, boundary
+  and text status; a textless state's fields), so a card is shown as before, never refused for an undeclared member; the
+  catalogue's worked examples carry them. Their own wording on the card is S7c's.
+- **The time-word guard** (`publisher-vocabulary.mjs`, `FORBIDDEN_TIME_WORDS`): "en vigueur" stays refused as a state and
+  over an interval; only the noun of the typed date, "entrée(s) en vigueur", gets through (the French review's point 1:
+  "entré en vigueur", "rentrée en vigueur", "est en vigueur", "la version en vigueur" stay refused; ten refused controls and
+  eight allowed ones in `compare-vocabulary.test.mjs`).
+- **French** (Decision 41): 11 forms reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the
+  owner's delegation in the addendum of 2026-10-18 "dates by role and missing articles" of `C:\lex-v3\lanes\fr-review\review.md`;
+  6 changed in review (the notice's "À cet endroit", since "ici" is this table's "on this site"; the dossier's cell answers its
+  column with "aucune date indiquée" and its note classifies the value rather than saying when the act applies; a semicolon
+  parts the act as published from its entry into force; "interrogées par ce site"), the English of four with them; 5 approved;
+  the forms are named in the header comment of `live-chrome-fr.mjs`. Its blocking points (the guard; a run of one missing
+  article threw) and point 3 (the exact references) are done; point 4 is S7b's and S7c's (below).
+- **Tests.** `web/test/date-role.test.mjs` (8): the role read and refused; the reading's heading, the dossier's mark and
+  note, the citation's two forms and the search's version line and folded line, in English, and the reading in French; every
+  form of the slice held to the time-word guard in both languages; a missing article said in place, and a run that does not
+  add up refused. Updated: `compare-vocabulary.test.mjs` (the guard's controls), `provenance.test.mjs` (the row facts' nulls).
+  `npm test`: 1,279 tests, 1,276 passed, 0 failed, 3 skipped (the browser tests, which run only with `LEX_BROWSER_TESTS=1`).
+- **Driver decisions (reversible).** The dossier's cell answers its column ("no date stated") rather than renaming the
+  column, which is right for every other row. The provenance page's labels are English, as the rest of that page's are. The
+  refusal payloads are flat rather than the card gaining structured members (STATUS-DATA.md).
+- **Left to S7b and S7c** (the French review's point 4): the Compare card's same-version note and sides, `reading.validityConflict`,
+  the exports' item lines and the PDF's "applying from", the History table's column, `search.dated`, and the dossier's state
+  span, which still say a state dated by its entry into force with application words; the refusal cards' own sentences for
+  the new reasons; the translation label on the reading.
+
 ## The opening kit: law.soufien.lu bound, search engines by deployment, the owner's decisions of 18 October (sole driver, 2026-10-18)
 
 The owner decided on 2026-10-18: the EU authenticity wording for acts published before 1 July 2013 and search-engine

@@ -2,6 +2,136 @@
 
 Updated 2026-10-18.
 
+## The reader's interval rules over index /9: a date's state, its refusals, the row facts, document order, the undated fold (sole driver, 2026-10-18)
+
+- **What.** Slice S7a of the Luxembourg data design (`C:\lex-v3\LU-DATA-DESIGN-2026-10-14-v2.md` §3.2, §3.3, §3.4 and the S7a
+  row), with what S6 (#980) and #982 handed it. On lex-v3-luxembourg-index/9 every dated operation selects a work's state by
+  the interval rules over the index's states and intervals tables; each served state carries its row's catalogue facts, so
+  state digest /2 is recomputed from the answer alone (G5); a bundle's articles come in their document's order, a place the
+  state holds no article at said; an undated search folds one wording into one hit. The server serves a built mount of index
+  9: `V3CorpusMount.ServesIndexNine` and its refusal sentence are gone (`Served` stays the server's one door). On an index 8
+  or 6 every answer is the one the code before sent, byte for byte (`base-answers.json`, recorded on Linux at b1b41312 over
+  the committed schema-8 mount and the schema-6 mount, replayed unchanged: no row re-recorded). No mount over real data is
+  served with it yet: D1 is the next machine step.
+- **The rules** (`V3CorpusMount.Intervals.cs`, `CoverAt`):
+  - A state covers a date D when `from ≤ D < to`: `from` its date, `to` its `applicable_to` (the publisher's end, else the
+    next dated state's start, derived), none when there is neither; an `invalid` boundary covers nothing. The French chain
+    holds the French rows and the rows naming no expression; another language's rows take their French state's interval, as
+    the index records it.
+  - None covers D: `no_version_for_date`, adding on index 9 `reason` and `reason_rule`: `before_history`; `catalogue_hole`
+    (`hole_from`, `hole_to`: the publisher's end to the next start, never bridged); `after_closed_end` (`closed_on`, and only
+    there the base act's `inForceStatus` and `dateNoLongerInForce` verbatim with `base_act_rule`: the end of the catalogue's
+    states is not said to be an end of the law); `publisher_end_convention_unclear` (D is the stated end of a state that ends
+    the day before the next begins: both named, given to neither); `publisher_interval_invalid` (D falls where a state whose
+    end is on or before its start would apply, up to the next start; its own permalink still opens it);
+    `no_expression_in_language` (a French state covers D and none of its expressions in the language asked is held; when no
+    French state covers D either, the French chain's reason). Beside them `named_states` (permalinks, or stable coordinates for
+    a state naming no expression) and `named_state_sha256s`, `language`, `catalogue_read_no_later_than` (the build time the
+    mounted log records), and `nearest_earlier`, now the latest state date on or before D (index 9 knows it; an invalid one
+    included, so a date stands on each side whenever the history holds one).
+  - One covering state with text is served; one without text is `text_withheld` (`withheld_rights`; the official identity and
+    link are the state's legal resource, and `content_sha256` is the state digest, the index binding no body to a textless
+    row) or `text_not_available` (`not_available_pdf`, `_derivation`, `_misfiled`, `not_acquired`; transport evidence "none"),
+    each naming the state, its status, reason, dates, end and boundary, and saying it asserts no absence of law. A textless
+    state's own permalink refuses the same way.
+  - Several covering states with one held wording (the same rule profiles; the same articles by publisher id and wording
+    digest) are served once: the act as published when exactly one is, else the one that begins last; the others under
+    `same_text_states` (basis `identical_text`). Otherwise `ambiguous_version`, adding each candidate's kind, interval, its
+    end's source, boundary and text status in lists aligned on `candidate_state_sha256s`, with `candidate_states_rule`.
+  - Every refusal member is a scalar or a list of scalars, as the web's refusal card reads payloads.
+  - `next_applicability_date` keeps its meaning (the next held state's date in the language), bounded by the date asked.
+- **Per operation.** `as_of`, `provenance`, `evidence_bundle`, `status_on`, `citation`, `relations`, the exact references,
+  `search` with a date and `diff` select through it (`SelectAt`; the refusals through the shared builders, so every
+  operation refuses a date as `as_of` does). `diff` refuses a textless bound for that bound and lists a language not compared
+  with its reason. `in_force_on`: the interval's `until` is the state's end with `until_source`; a covering state without text
+  is a row naming it and why, with no `resolve`; with a work named and no state covering the date it is `as_of`'s refusal; its
+  derivation states the rule (`InForceOnRuleNine`, `InForceOnUntilNine`; "end of validity" is consulted now). `as_observed`
+  selects over the snapshot's own rows: the log /3 fold with its textless rows and logged facts (`ResolveObservedStates(...,
+  includeTextless: true)`), each row's facts from the index that holds it, else from the log, the chain recomputed over them
+  (`Rechain`, the builder's rule, held equal to the index's own by a test).
+- **The row facts** (`WithCatalogueFacts`): `state_kind`, `date_role`, `entry_into_force`, `applicable_to`,
+  `applicable_to_source`, `boundary`, `publication_date`, `text_status`, `text_status_reason`, `in_file_identity`,
+  `in_file_date`, `translation_of`, `provisional` on every state of `as_of`, `provenance`, the bundle, `diff`, `timeline`,
+  `dossier`, `status_on`, `in_force_on`, `changes_in_period` and `as_observed`; `date_role` and `entry_into_force` on every
+  search hit. `as_of` and the bundle add `catalogue_rule` and `states_without_text` (the French state covering the date when
+  it holds no text and a translation is served alone: `loi/2017/07/20/a674`'s shape). Provenance's derivation /9 says each
+  state carries those facts; G5 (`V3ReplayGuaranteesTests`) recomputes state digest /2 from the bundle's state and holds that
+  copy to the mounted row. The dossier's not-held list on index 9 (`DossierNotHeldNine`) no longer says the publication date,
+  the entry into force or the states' ends are not held; the bundle's rights rule on index 9 says the textless refusals.
+- **Document order and missing articles.** On index 9 `ResolveStateArticles` reads `document_position`
+  (`LuxembourgIndexQueries.StateArticlesNine`, planned on the built index and kept off schema 8's plan) and the bundle serves
+  the articles in that order (#978's natural order stays for an index of schema 8 or 6), each with its `document_position`,
+  and each run of places the state holds no article at under `missing_articles` (`from_position`, `to_position`, `count`,
+  `after_publisher_id`, `before_publisher_id`) with `missing_articles_rule`. An article missing after the last one held is
+  not seen by place; the rule says `articles_not_admitted` counts every one.
+- **The undated search fold.** On index 9 a search with no date serves one hit per work, publisher article id and wording
+  digest: the latest state's that holds it, the others under `same_wording_states` (their date, role, digest, article and
+  permalink), and `fold` gives the hits before folding (`SearchFoldRule`; `ResolveArticleWordings` reads each hit's tokens by
+  primary key, as #982's texts are read). With a date nothing is folded. #982's population: `states_withheld_by_rights` now
+  also counts the versions index 9 records as withheld by their rights (with a date, when the interval rules select one); a
+  version not available or not acquired is in no count (`SearchedRuleNine`).
+- **R21 in the exact references.** The phase reads the citation generator's usual form of a version dated by its entry into
+  force ("…, dans sa version publiée, entrée en vigueur le …", "…, as published, entry into force on …") as a date asked.
+- **Driver decisions (reversible):**
+  - **Several covering states with one wording designate the one that begins last, not the earliest** (the design's
+    "otherwise the earliest state"): the readers hold a served state's next held date to be after the date asked, and the
+    state that begins last is the one the rule before index 9 served. The act as published still comes first.
+  - **A publisher-issued expression in another language is served in its own language and in bundles**, labelled with
+    `translation_of` and a rule that says the publisher's record does not state which language version is authentic (R18,
+    R41: publisher-issued German or English texts are expressions, and "only the French text is authentic" is said only of
+    Lex's own translation); the design's "never in an evidence bundle" and its French-only note are superseded where the
+    specification of record disagrees. It is never selected for a French request.
+  - **A language with no held state is still `language_not_available`** (available languages the held ones); the French
+    state covering the date of a translation served alone is named under `states_without_text` instead.
+  - **`no_expression_in_language`**, a reason the design does not list, says a date the French chain covers and no
+    translation does, naming the French state.
+  - **`content_sha256` of a withheld textless state is its state digest**, and its official link and source its own legal
+    resource: the index binds no body to a textless row.
+  - **Every dated operation, not only the five the design names, selects by the interval rules**, so none answers a date
+    another refuses.
+  - **`in_force_on` across works lists a textless covering state as a row** (named, with why, no `resolve`), and a work no
+    state covers on the date gives no row; its population counts stay the index's held-state counts.
+  - **The base act's force facts ride on `after_closed_end` only**, verbatim; the in_force_on vocabulary test sets aside the
+    typed date `entry_into_force` and nothing else.
+  - **Refusal payloads are flat** (scalars and lists of scalars) rather than the nested candidate rows the design sketches:
+    the web's refusal card refuses an object member, by its own rule against "[object Object]".
+  - **The mount tests' second language is a translation** (`AddTranslationAsync`): on index 9 a German text of a French state
+    takes its interval, so the tests that held German independent of the French chain hold it as the builder makes it.
+  - **The undated fold keeps the latest state's hit**, so a wording is read under the last version that holds it, and counts
+    only the versions searched.
+  - **A scope a caller narrows is selected within itself** (an exact reference whose ELI names one version opens that version
+    at its date, as before index 9), and refused within itself: the interval rules select over a work's whole chain only.
+- **Tests.** `V3CorpusIntervalMountTests` (new, 12): the handler on a verified mount of the multi-body fixture (S6's, with two
+  closed ends, a same-date pair that differs, a provisional state and a document that skips a place, bound to the shared
+  acquisition's corpus, which holds none of its bodies, so its log names none): the dates of design §3.4 (before the history,
+  the start, a day inside, the last day, a hole, the inclusive-end day, an invalid interval, a closed end with the base act in
+  force and no longer in force, an overlap, the same-date identical and differing pairs, textless states, a date after an
+  act's withheld consolidation, a translation); textless permalinks; date roles and `provisional`; the bundle's document order
+  and missing article; diff's textless bound; as_observed at the mounted snapshot against as_of; the dated and undated search
+  population; an ELI naming one version opening it though the rules designate another; the API's chain equal to the index's
+  own. Updated to index 9: as_of (the German translation's interval, the
+  refusal property lists), diff (five tests whose German text is now a translation of a French state), in_force_on (twins as
+  translations, the derivation), dossier (shared fields, not-held list, property list), provenance, timeline (a row is as_of's
+  on its own date), as_observed, search (the fold in two tests; two keep their states apart by their wordings),
+  `V3IndexNineServingTests` (a built index-9 mount served), G5 from the answer alone, the query plans (`StateArticlesNine`),
+  `ExactReferenceReaderTests` (two rows). The answer, envelope and refusal samples re-rendered from the handler and verified
+  without the switches; the registry digest did not move.
+- **Measured** (Windows, no browser, no publisher traffic, no custody read): `dotnet build Lex.V3.slnx -c Release` 0 warnings,
+  0 errors; Lex.V3.Tests 3,323 (3,317 passed, 0 failed, 6 skipped); Lex.V3.Ingest.Tests whole, once, at d4fd6089: 3,379
+  (3,345 passed, 0 failed, 34 skipped: the opt-in probes and env-gated writers); after the narrowed-scope repair the filtered
+  set (index, legacy schema 6 and 8, as_of, in_force_on, as_observed, evidence bundle, diff, timeline, provenance, replay,
+  census, samples, privacy, search, reading pages, citation, MCP, dossier, references, pinned, status_on, changes, article
+  history, verify, relations, resolve, journey mounts, gates, content /3 and the interval class): 624 (612 passed, 0 failed,
+  12 skipped); `npm test` 1,279 (1,276 passed, 0 failed, 3 skipped); `eng/verify-v3-tree.ps1` 1,644 tracked paths.
+- **Not done here, and where it goes.** S7b: the timeline's gaps, overlaps and same-date groups, `article_history` across
+  textless states and holes, and the speech roles (the Compare card's same-version note, `reading.validityConflict`, the
+  exports' and the PDF's "applying from", the History table's column, `search.dated` and the dossier's state span still say a
+  state dated by its entry into force with application words; the French review listed each; the timeline speech test).
+  S7c: the refusal cards' own wording for textless states, unclear ends, invalid intervals and the closed end (the cards show
+  today's fields), the translation label on the reading, the consolidation and code caveat, the events page for textless
+  rows. The search hits' order within a version stays #982's reading order of ids (a hit carries no document position yet).
+  F3 (Release 2) as before.
+
 ## S4b: the double builds compare file digests; no index is held in memory (sole driver, 2026-10-18)
 
 - **What.** Slice S4b of the Luxembourg data design (`C:\lex-v3\LU-DATA-DESIGN-2026-10-14-v2.md` §2.5 and the S4b row). No
