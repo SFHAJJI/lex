@@ -13,7 +13,7 @@ import { validateRefusal } from "./refusal-card.mjs";
 import { historyBeginsHint, noCorpusMountedSentence, tableRefusalSentence, unshownRefusal } from "./live-refusals.mjs";
 import { isCalendarDate } from "./temporal.mjs";
 import { MAXIMUM_PAGE } from "./permalinks.mjs";
-import { englishStatement, fillText, liveChrome, refusalTemplate } from "./live-chrome.mjs";
+import { englishStatement, fillCounted, fillText, liveChrome, refusalTemplate } from "./live-chrome.mjs";
 
 /**
  * The languages the form offers besides "any": the platform answers a language the work is not held
@@ -165,6 +165,21 @@ export function readingOutcome(asked) {
     if (code === "ambiguous_version" && asked.envelope.context?.publisher === "eu-eurlex") {
       return { state: "refusal", code, card: false, sentence, context: asked.envelope.context };
     }
+    // A page past the version's last (the review of #978, F2): the anchor refused is a page, not a provision, so the card
+    // (whose note is about provisions) is not shown; the page says how many pages the version is read on, and links its
+    // first and last (`PageNotHeld`).
+    const page = pageNotHeld(code, payload);
+    if (page !== null) {
+      const copy = liveChrome().reading;
+      return {
+        state: "refusal",
+        code,
+        card: false,
+        sentence: fillCounted(asked.envelope.context?.publisher === "eu-eurlex" ? copy.europePageNotHeld : copy.pageNotHeld, page.pages, { page: page.asked }),
+        page,
+        context: asked.envelope.context,
+      };
+    }
     try {
       validateRefusal({ code, sentence, payload });
     } catch (error) {
@@ -189,6 +204,17 @@ export function readingOutcome(asked) {
   }
 
   return { state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(asked.reason)) };
+}
+
+/**
+ * The page a refusal says a version does not have (`anchor_not_in_version` naming `page=N`, with `requested_page` and the
+ * version's `pages`; the review of #978, F2): `{ asked, pages, language }`, or null for any other refusal.
+ */
+export function pageNotHeld(code, payload) {
+  if (code !== "anchor_not_in_version" || payload === null || typeof payload !== "object") return null;
+  const { requested_page: asked, pages, language = null } = payload;
+  if (!Number.isInteger(asked) || !Number.isInteger(pages) || pages < 1 || asked <= pages || payload.requested_anchor !== `page=${asked}`) return null;
+  return Object.freeze({ asked, pages, language });
 }
 
 /** Asks the live API one reading and returns the view state. */

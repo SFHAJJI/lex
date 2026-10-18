@@ -238,6 +238,17 @@ export async function readNextPage({ view, version, request, ask }) {
   return { view: merged, version: versionsOf(merged).find((entry) => digestOf(entry) === digest) };
 }
 
+/**
+ * How the pages asked in place stand, by version digest (`paging`, or the export's `assembling`), once a page of `digest`
+ * is asked and the one asked before for `stopped` is stopped (one is asked at a time): a version still loading when it was
+ * stopped goes back to no state, so its link or control can be used again (the review of #978: it stayed loading, and dead).
+ */
+export function withoutStopped(states, stopped, digest) {
+  if (stopped === null || stopped === digest || states[stopped]?.state !== 'loading') return states;
+  const { [stopped]: _stopped, ...rest } = states;
+  return rest;
+}
+
 /** The view an asked reading's answer is read into, or a throw naming why there is none (`ask` for `readNextPage`). */
 export function viewOf(outcome) {
   if (outcome?.state !== 'success') throw new Error(`the page was not answered (${outcome?.code ?? outcome?.state})`);

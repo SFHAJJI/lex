@@ -295,7 +295,8 @@ export const REQUIRED_PAYLOAD = Object.freeze({
       'nearest_anchors',
       'do_not_fall_back_to_full_text_search',
     ]),
-    optional: RECOGNISED_KEYS,
+    // A page past a version's last (the review of #978, F2) names the page asked, the version's pages and its language.
+    optional: Object.freeze(['requested_page', 'pages', 'language', ...RECOGNISED_KEYS]),
     basis:
       '31-v3-spec: "anchor_not_in_version (with nearest_anchors and the do-not-fall-back note)"',
   }),

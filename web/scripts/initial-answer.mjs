@@ -156,7 +156,7 @@ export function readingPinOf(pathname, envelope = null, now = () => new Date().t
   const named = parseSitePath(pathname);
   if (named === null || named.locale === null || (named.kind !== 'state' && named.kind !== 'current')) return null;
   const date = named.kind === 'state' ? named.date : answeredOn(envelope, now);
-  const askedPage = envelope?.result?.value?.requested_page;
+  const askedPage = envelope?.result?.value?.requested_page ?? envelope?.refusal?.helpful_payload?.requested_page;
   const request = readingRequestFor(named, date, pageOfQuery(search) ?? (Number.isInteger(askedPage) ? askedPage : null));
   if (request === null) return null;
   return Object.freeze({

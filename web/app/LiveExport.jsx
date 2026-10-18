@@ -28,7 +28,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { EuropeWordingHeading, PagesShown, QuoteEvidence, ReadingAnswerView, ReadingForm, versionDigest } from './LiveReading.jsx';
 import { createReadingSession, loadLiveReading, quotationLanguageTag } from '../scripts/live-reading.mjs';
-import { pagesShown, readNextPage, viewOf } from '../scripts/reading-pages.mjs';
+import { pagesShown, readNextPage, viewOf, withoutStopped } from '../scripts/reading-pages.mjs';
 import { EXPORT_FORMATS, LIVE_EXPORT_IDLE, exportState, formatRefused, pinKey, saveExport } from '../scripts/live-export.mjs';
 import { EUROPE_EXPORT_SCHEMA, asPublishedParagraph, exportJson } from '../scripts/export-build.mjs';
 import { citationLang } from '../scripts/citation.mjs';
@@ -422,7 +422,7 @@ export function LiveExport({ contract, fetchImpl, save = saveExport }) {
 
   useEffect(() => () => {
     session.current.cancel();
-    reading.current?.abort();
+    reading.current?.controller.abort();
   }, []);
 
   const shown = whole.base === outcome && whole.view !== null ? { ...outcome, view: whole.view } : outcome;
@@ -434,9 +434,13 @@ export function LiveExport({ contract, fetchImpl, save = saveExport }) {
     const base = outcome;
     const digest = versionDigest(version);
     const controller = new AbortController();
-    reading.current?.abort();
-    reading.current = controller;
+    // One version is read at a time: a reading still going for another version is stopped, and its control comes back, so
+    // it can be asked again (the review of #978).
+    const stopped = reading.current;
+    stopped?.controller.abort();
+    reading.current = { controller, digest };
     const update = (change) => setWhole((current) => change(current.base === base ? current : { base, view: null, assembling: {} }));
+    update((state) => ({ ...state, assembling: withoutStopped(state.assembling, stopped?.digest ?? null, digest) }));
     let view = shown.view;
     let current = (view.publisher === 'eu-eurlex' ? view.wordings : view.states).find((entry) => versionDigest(entry) === digest) ?? version;
     try {
@@ -470,7 +474,7 @@ export function LiveExport({ contract, fetchImpl, save = saveExport }) {
   return (
     <div>
       <ReadingForm submitLabel={FORM.submit.export} onAsk={(request) => {
-        reading.current?.abort();
+        reading.current?.controller.abort();
         asked.current = request;
         session.current.ask(request);
       }} />

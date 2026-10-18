@@ -84,6 +84,8 @@ const EUROPE_ENTRIES = new Set([
   "common.europeAnnexes.one", "common.europeAnnexes.other",
   "reading.europePinReplaced", "reading.europePinNotHeld", "reading.europeWholeAct", "reading.europeNewerWording",
   "reading.europeLaterWordingNotHeld",
+  // A page past an EU wording's last (the review of #978, F2).
+  "reading.europePageNotHeld.one", "reading.europePageNotHeld.other",
   // The citation generator's EU words (`citation.mjs`): an EU act's name and the date it is cited at, the wording's line of
   // the evidence form, the Official Journal reference no index holds, and the EU's authenticity statement.
   "citation.europe.article", "citation.europe.acts.R", "citation.europe.acts.L", "citation.europe.acts.D",
@@ -108,6 +110,8 @@ const SHARED_LEAD_ENTRIES = new Set([
   "reading.contents", "reading.contentsPage", "reading.contentsPageOne", "reading.pageShown", "reading.pageShownOne",
   "reading.pagesShown", "reading.pager", "reading.previousPage", "reading.nextPage", "reading.nextPageFailed",
   "export.pinAll", "export.readingPages", "export.pagesFailed",
+  // The links after a page past a version's last (the review of #978, F2).
+  "reading.firstPage", "reading.lastPage",
 ]);
 
 function fieldsOf(node, found = new Set()) {

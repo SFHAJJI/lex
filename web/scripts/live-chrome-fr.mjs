@@ -265,6 +265,16 @@ export const LIVE_CHROME_FR = Object.freeze({
     previousPage: 'Articles précédents',
     nextPage: 'Articles suivants',
     nextPageFailed: 'Les articles suivants n’ont pas pu être chargés ici ; le lien les ouvre sur une page qui leur est propre.',
+    pageNotHeld: Object.freeze({
+      one: 'Cette version se lit ici sur {count} page ; elle n’a donc pas de page {page}.',
+      other: 'Cette version se lit ici sur {count} pages ; elle n’a donc pas de page {page}.',
+    }),
+    europePageNotHeld: Object.freeze({
+      one: 'Ce libellé se lit ici sur {count} page ; il n’a donc pas de page {page}.',
+      other: 'Ce libellé se lit ici sur {count} pages ; il n’a donc pas de page {page}.',
+    }),
+    firstPage: 'Première page',
+    lastPage: 'Dernière page (page {pages})',
   }),
   history: Object.freeze({
     title: 'Historique d’une disposition',

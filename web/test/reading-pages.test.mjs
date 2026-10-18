@@ -12,10 +12,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { ExportAnswerView, ReadingAnswerView, renderLiveReadingPage } from "../.react-build/app.mjs";
 import { syntheticReading } from "../scripts/reading-weight.mjs";
-import { readingOutcome } from "../scripts/live-reading.mjs";
-import { readingAddressShown } from "../scripts/initial-answer.mjs";
-import { assembleReading, hasNextPage, mergeReadingPage, nextPageRequest, pageAddress, pagesShown, readNextPage, showsWholeVersions, viewOf } from "../scripts/reading-pages.mjs";
-import { cutIntoPages } from "../scripts/reading-page-samples.mjs";
+import { pageNotHeld, readingOutcome } from "../scripts/live-reading.mjs";
+import { readingAddressShown, readingPinOf } from "../scripts/initial-answer.mjs";
+import { assembleReading, hasNextPage, mergeReadingPage, nextPageRequest, pageAddress, pagesShown, readNextPage, showsWholeVersions, viewOf, withoutStopped } from "../scripts/reading-pages.mjs";
+import { asOnePage, cutIntoPages } from "../scripts/reading-page-samples.mjs";
 import { composeExport, exportCsv, exportJson } from "../scripts/export-build.mjs";
 import { exportPdf } from "../scripts/export-pdf.mjs";
 import { readEvidenceBundle } from "../scripts/reading-answer.mjs";
@@ -31,6 +31,8 @@ const FIRST = envelopeOf("a long act's state at its permalink, with its contents
 const SECOND = envelopeOf("the same long act's second page");
 const ONE_PAGE = envelopeOf("a state's permalink at its own date");
 const NOT_HELD = envelopeOf("a state's permalink and an article it does not hold");
+const PAST_LAST = envelopeOf("the same long act's third page, past its last");
+const LATER_NOT_HELD = envelopeOf("an EU wording's permalink whose next wording's text is not held");
 const OBSERVED = "2026-10-17T08:00:00.0000000Z";
 const viewFrom = (envelope) => {
   const outcome = readingOutcome({ state: "success", envelope });
@@ -230,4 +232,94 @@ test("a page of today's version may open to search engines as its first page may
   const head = html.slice(0, html.indexOf("</head>"));
   assert.ok(head.includes('<link rel="canonical" href="https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3/fra?page=2"/>'), head);
   assert.ok(head.includes('data-search-engines="kept-out"'), "today's version: kept out until the switch opens it, as its first page is");
+});
+
+test("a page of a version that is not today's stays out of search engines, at its permalink with its page (the review of #978, F3)", () => {
+  // The census's long act with a later state from 2025-01-01: on the census's day its second page is a superseded version's.
+  const superseded = structuredClone(SECOND);
+  superseded.result.value.states[0].next_applicability_date = "2025-01-01";
+  const permalink = superseded.result.value.states[0].permalink;
+  assert.equal(readingAddressShown(viewFrom(superseded), permalink, null, "2026-09-17"), `${permalink}?page=2`, "its own permalink, with its page");
+  const lu = renderLiveReadingPage({ initial: { envelope: superseded, path: `/en${permalink}` } });
+  const luHead = lu.slice(0, lu.indexOf("</head>"));
+  assert.ok(luHead.includes('<meta name="robots" content="noindex"/>'), luHead);
+  assert.ok(!luHead.includes("data-search-engines"), "never opened by the switch");
+  assert.ok(luHead.includes(`<link rel="canonical" href="https://law.soufien.lu/en${permalink}?page=2"/>`), luHead);
+
+  // The census's EU wording, followed by a later one from 2024-01-01: its 44 provisions cut into pages of 20, the second.
+  const wordingAnswer = structuredClone(LATER_NOT_HELD.result.value);
+  asOnePage(wordingAnswer.wordings[0], { headings: true });
+  const second = cutIntoPages(wordingAnswer, 20)[1];
+  const envelope = { ...structuredClone(LATER_NOT_HELD), result: { ...LATER_NOT_HELD.result, value: second } };
+  const wordingPermalink = second.wordings[0].permalink;
+  assert.equal(readingAddressShown(viewFrom(envelope), wordingPermalink, null, "2026-09-17"), `${wordingPermalink}?page=2`);
+  const eu = renderLiveReadingPage({ initial: { envelope, path: `/fr${wordingPermalink}` } });
+  const euHead = eu.slice(0, eu.indexOf("</head>"));
+  assert.ok(euHead.includes('<meta name="robots" content="noindex"/>'), euHead);
+  assert.ok(!euHead.includes("data-search-engines"), "a superseded wording's page is never opened by the switch");
+});
+
+test("a contents row on another page than the index puts it on is refused (the review of #978, F3)", () => {
+  for (const [at, page, expected] of [[50, 1, /contents\[50\] is on page 1, and the index puts it on page 2/], [0, 2, /contents\[0\] is on page 2, and the index puts it on page 1/]]) {
+    const answer = structuredClone(FIRST.result.value);
+    answer.states[0].contents[at].page = page;
+    assert.throws(() => readEvidenceBundle(answer), expected);
+  }
+});
+
+test("a page past the version's last is refused with its pages: a sentence, its first and last pages, and no search engine (the review of #978, F2)", async () => {
+  const { ArticleNotHeld, PageNotHeld } = await import("../.react-build/app.mjs");
+  assert.equal(PAST_LAST.refusal.code, "anchor_not_in_version");
+  const payload = PAST_LAST.refusal.helpful_payload;
+  assert.deepEqual([payload.requested_anchor, payload.nearest_anchors, payload.requested_page, payload.pages, payload.language], ["page=3", ["page=1", "page=2"], 3, 2, "fra"]);
+  assert.deepEqual({ ...pageNotHeld(PAST_LAST.refusal.code, payload) }, { asked: 3, pages: 2, language: "fra" });
+  assert.equal(pageNotHeld(NOT_HELD.refusal.code, NOT_HELD.refusal.helpful_payload), null, "an article not held is not a page");
+
+  const outcome = readingOutcome({ state: "refusal", envelope: PAST_LAST });
+  assert.equal(outcome.card, false, "no card: its note is about provisions, and a page is none");
+  assert.equal(outcome.sentence, "This version is read here on 2 pages, so it has no page 3.");
+  assert.equal(readingOutcome({ state: "refusal", envelope: { ...PAST_LAST, context: { ...PAST_LAST.context, publisher: "eu-eurlex" } } }).sentence,
+    "This wording is read here on 2 pages, so it has no page 3.");
+  const markup = markupOf(outcome);
+  assert.ok(markup.includes("This version is read here on 2 pages, so it has no page 3."), markup);
+  assert.ok(!markup.includes("full-text search"), "not the provision's note");
+
+  const permalink = SECOND.result.value.states[0].permalink;
+  const pin = readingPinOf(`/en${permalink}`, PAST_LAST);
+  assert.equal(pin.request.page, 3, "the page asks again the page it was refused");
+  assert.equal(renderToStaticMarkup(h(ArticleNotHeld, { outcome, pin })), "", "no whole act after a page");
+  assert.equal(renderToStaticMarkup(h(PageNotHeld, { outcome, pin })).replaceAll("<!-- -->", ""),
+    `<p data-page-not-held="2"><a href="/en${permalink}" data-first-page="">First page</a> <a href="/en${permalink}?page=2" data-last-page="2">Last page (page 2)</a></p>`);
+  const readable = readingPinOf("/en/lu-legilux/loi-1991-08-10-n3/fra", PAST_LAST);
+  assert.ok(renderToStaticMarkup(h(PageNotHeld, { outcome, pin: readable })).includes('<a href="/en/lu-legilux/loi-1991-08-10-n3/fra?page=2" data-last-page="2">'),
+    "at the act's readable address, its pages");
+  assert.equal(renderToStaticMarkup(h(PageNotHeld, { outcome: readingOutcome({ state: "refusal", envelope: NOT_HELD }), pin })), "", "nothing after an article not held");
+
+  // The page the server renders: the sentence and the links, never indexed, and never the malformed request's panel.
+  const html = renderLiveReadingPage({ initial: { envelope: PAST_LAST, path: `/en${permalink}` } }).replaceAll("<!-- -->", "");
+  const head = html.slice(0, html.indexOf("</head>"));
+  assert.ok(head.includes('<meta name="robots" content="noindex"/>') && !head.includes("data-search-engines"), head);
+  assert.ok(html.includes('data-answer-state="refusal"'));
+  assert.ok(html.includes(`<a href="/en${permalink}?page=2" data-last-page="2">Last page (page 2)</a>`));
+  assert.ok(!html.includes("request_schema_invalid"));
+});
+
+test("at an act's readable address a page's links go to that address's pages, not to the permalink's (the review of #978)", () => {
+  const html = renderLiveReadingPage({ initial: { envelope: SECOND, path: "/en/lu-legilux/loi-1991-08-10-n3/fra" } }).replaceAll("<!-- -->", "");
+  const permalink = SECOND.result.value.states[0].permalink;
+  assert.ok(html.includes('<a rel="prev" href="/en/lu-legilux/loi-1991-08-10-n3/fra" data-previous-page="1">Previous articles</a>'), "the page before: the act's address");
+  assert.ok(!html.includes(`href="/en${permalink}?page=`), "no page link at the permalink");
+  // At a permalink, the permalink's pages, as before.
+  const pinned = renderLiveReadingPage({ initial: { envelope: SECOND, path: `/en${permalink}` } }).replaceAll("<!-- -->", "");
+  assert.ok(pinned.includes(`<a rel="prev" href="/en${permalink}" data-previous-page="1">Previous articles</a>`));
+});
+
+test("a page asked in place for another version, stopped by the next one asked, goes back to its link (the review of #978)", () => {
+  const loading = { state: "loading" };
+  assert.deepEqual(withoutStopped({ a: loading, b: { state: "added" } }, "a", "b"), { b: { state: "added" } }, "the stopped one's state is dropped");
+  assert.deepEqual(withoutStopped({ a: { state: "added" } }, "a", "b"), { a: { state: "added" } }, "a page that came in stays");
+  assert.deepEqual(withoutStopped({ a: { state: "failed" } }, "a", "b"), { a: { state: "failed" } });
+  const same = { a: loading };
+  assert.equal(withoutStopped(same, "a", "a"), same, "the same version asked again is not stopped");
+  assert.equal(withoutStopped(same, null, "b"), same, "nothing was asked before");
 });

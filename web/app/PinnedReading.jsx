@@ -9,7 +9,9 @@
 //     article an address names), the cited article in its place too, with the act's contents and its other pages.
 //   - An address whose article the version does not hold is refused (`anchor_not_in_version`, with the ids nearest it):
 //     the page says so on the refusal card, and after it links to the whole act, at that version or today
-//     (`ArticleNotHeld`), so the link's "this version" follows the sentence that names it.
+//     (`ArticleNotHeld`), so the link's "this version" follows the sentence that names it. A page past the version's last
+//     is refused too (`anchor_not_in_version` naming `page=N`): the page says how many pages the version is read on, with
+//     no card, and links its first page and its last (`PageNotHeld`; the review of #978, F2).
 //   - A permalink always shows the bytes it cites (R64), so a version that is not the latest held says so: "A newer version
 //     is applicable from {date} (publisher)" for a Luxembourg state, in the publisher's words (R21), and "A later wording of
 //     this act is held" for an EU wording, whose date is never an applicability date. The date is the answer's next date.
@@ -178,17 +180,11 @@ function CitedArticle({ view, version, pin, cited, observedAt }) {
 }
 
 /**
- * What a reading at a law's address shows before the reading (`pin`, `readingPinOf`): for a permalink refused because its
- * digest is not the version held at its date, the notice with the current version's link; for a reading, what changed
- * since the version shown, then the cited article. Null when there is nothing to say first. The page brings it into view
- * and gives it the focus (`LiveReading.jsx`), so a reader meets the notice before the text it is about.
- */
-/**
  * After the refusal of an article the version does not hold (`anchor_not_in_version`): the whole act, at the version the
- * address pins or at today's (R64, R67); null for any other outcome.
+ * address pins or at today's (R64, R67); null for any other outcome, and for a page the version does not have (`PageNotHeld`).
  */
 export function ArticleNotHeld({ outcome, pin }) {
-  if (pin === null || outcome.state !== 'refusal' || outcome.code !== 'anchor_not_in_version') return null;
+  if (pin === null || outcome.state !== 'refusal' || outcome.code !== 'anchor_not_in_version' || outcome.page) return null;
   const europe = outcome.context?.publisher === 'eu-eurlex';
   const act = pin.kind === 'state' ? pin.permalink : pin.act;
   return (
@@ -198,6 +194,33 @@ export function ArticleNotHeld({ outcome, pin }) {
   );
 }
 
+/**
+ * After the refusal of a page past the version's last (the review of #978, F2): links to its first page and its last, at
+ * the address the page stands at (the permalink, or the act's readable address); null for any other outcome.
+ */
+export function PageNotHeld({ outcome, pin }) {
+  if (pin === null || outcome.state !== 'refusal' || !outcome.page) return null;
+  const first = permalinkHref(pin.kind === 'state' ? pin.permalink : pin.act, CHROME_LOCALE);
+  const { pages } = outcome.page;
+  return (
+    <p data-page-not-held={pages}>
+      <a href={first} data-first-page="">{COPY.firstPage}</a>
+      {pages > 1 ? (
+        <>
+          {' '}
+          <a href={`${first}?page=${pages}`} data-last-page={pages}><Say template={COPY.lastPage} values={{ pages }} /></a>
+        </>
+      ) : null}
+    </p>
+  );
+}
+
+/**
+ * What a reading at a law's address shows before the reading (`pin`, `readingPinOf`): for a permalink refused because its
+ * digest is not the version held at its date, the notice with the current version's link; for a reading, what changed
+ * since the version shown, then the cited article. Null when there is nothing to say first. The page brings it into view
+ * and gives it the focus (`LiveReading.jsx`), so a reader meets the notice before the text it is about.
+ */
 export function PinnedLead({ outcome, pin }) {
   if (outcome.state === 'refusal') {
     const current = outcome.code === 'pinned_digest_mismatch' && pin.kind === 'state' ? outcome.payload?.current_hash_pinned_url : undefined;

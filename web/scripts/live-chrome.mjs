@@ -188,6 +188,17 @@ const EN = Object.freeze({
     previousPage: "Previous articles",
     nextPage: "Next articles",
     nextPageFailed: "The next articles could not be loaded here; the link opens them on a page of their own.",
+    // A page past a version's last (the review of #978, F2): the pages are this site's reading's, not the publisher's.
+    pageNotHeld: Object.freeze({
+      one: "This version is read here on {count} page, so it has no page {page}.",
+      other: "This version is read here on {count} pages, so it has no page {page}.",
+    }),
+    europePageNotHeld: Object.freeze({
+      one: "This wording is read here on {count} page, so it has no page {page}.",
+      other: "This wording is read here on {count} pages, so it has no page {page}.",
+    }),
+    firstPage: "First page",
+    lastPage: "Last page (page {pages})",
   }),
   history: Object.freeze({
     title: "Provision history",
