@@ -264,6 +264,34 @@ public sealed class V3CorpusSearchResultsMountTests
     }
 
     /// <summary>
+    /// Search matches and extracts the searchable text alone, never the token stream (content /3, #981): wording the publisher
+    /// marks deleted is a <c>deleted_text</c> token, kept out of the searchable text, so it is neither matched nor shown in an
+    /// extract.
+    /// </summary>
+    [TestMethod]
+    public async Task DeletedWordingIsNeitherMatchedNorExtracted()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var id = fixture.ArticlesOfOwnState()[0].PublisherId;
+        const string searchable = "La garantie locative est due.";
+        var tokens = JsonSerializer.Serialize(new object[]
+        {
+            new { kind = "text", text = "La garantie locative ", target = (string?)null, marker = (string?)null, note_body = (object?)null },
+            new { kind = "deleted_text", text = "abrogée ", target = (string?)null, marker = (string?)null, note_body = (object?)null },
+            new { kind = "text", text = "est due.", target = (string?)null, marker = (string?)null, note_body = (object?)null },
+        });
+        await fixture.SetArticleTokensAsync(fixture.ExpressionIri, id, searchable, tokens);
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var deleted = (await V3CorpusSearchMountTests.SearchAsync(mount, "abrogée", mode: "strict")).Result!.Value;
+        Assert.AreEqual(0, deleted.GetProperty("hits").GetArrayLength(), "deleted wording is never matched");
+        var hit = (await V3CorpusSearchMountTests.SearchAsync(mount, Phrase, mode: "strict")).Result!.Value.GetProperty("hits")[0];
+        Assert.AreEqual(searchable, string.Concat(Parts(hit.GetProperty("extract")).Select(static part => part.Text)), "the extract is the searchable text, without the deleted wording");
+    }
+
+    /// <summary>
     /// An extract is never cut at a no-break space (the review of #982, F3): the publisher sets "6 septembre" with U+00A0, and a
     /// bound falling on it would print "septembre 2021" without its day, or "le 6" without its month.
     /// </summary>
