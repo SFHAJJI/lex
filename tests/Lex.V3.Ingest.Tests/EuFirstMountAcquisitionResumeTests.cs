@@ -141,7 +141,7 @@ public sealed partial class EuFirstMountAcquisitionTests
                 LuxembourgFirstMountAcquisitionTests.ActRange, buildTime, null, CancellationToken.None);
             var inputsPath = Path.Combine(root, "inputs.json");
             await File.WriteAllTextAsync(inputsPath, ContractJson.Serialize(inputs));
-            var build = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(buildTime)).RunAsync(europe, luxembourg, CancellationToken.None);
+            using var build = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(buildTime)).RunAsync(europe, luxembourg, CancellationToken.None);
             Assert.IsTrue(build.Delivered, build.Detail);
             var expected = Path.Combine(root, "mount");
             await V3CorpusMountWriter.WriteAsync(build, expected, null, CancellationToken.None, buildTime);

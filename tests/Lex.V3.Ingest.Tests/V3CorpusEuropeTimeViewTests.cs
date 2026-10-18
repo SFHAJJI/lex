@@ -39,7 +39,7 @@ public sealed class V3CorpusEuropeTimeViewTests
         Assert.IsTrue(europe.Delivered, europe.Detail);
         Assert.IsTrue(luxembourg.Delivered, luxembourg.Detail);
         var time = DateTimeOffset.FromUnixTimeSeconds(1_800_000_000);
-        var build = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, luxembourg, CancellationToken.None);
+        using var build = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, luxembourg, CancellationToken.None);
         Assert.IsTrue(build.Delivered, build.Detail);
         var mount = Path.Combine(root, "mount");
         await V3CorpusMountWriter.WriteAsync(build, mount, null, CancellationToken.None, time);

@@ -65,7 +65,7 @@ public sealed partial class V3FirstMountBuildTests
             LuxembourgIndexPredecessor? predecessor = null;
             if (chained)
             {
-                var previous = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, luxembourg, CancellationToken.None);
+                using var previous = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, luxembourg, CancellationToken.None);
                 Assert.IsTrue(previous.Delivered, previous.Detail);
                 var previousPath = Path.Combine(root, "previous");
                 await V3CorpusMountWriter.WriteAsync(previous, previousPath, null, CancellationToken.None, time);
@@ -85,7 +85,7 @@ public sealed partial class V3FirstMountBuildTests
                     [seed], LuxembourgFirstMountAcquisitionTests.ActRange, time, generations, CancellationToken.None);
             var referencePath = Path.Combine(root, "inputs.json");
             await File.WriteAllTextAsync(referencePath, ContractJson.Serialize(checkpoint));
-            var baseline = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, luxembourg, predecessor, CancellationToken.None);
+            using var baseline = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, luxembourg, predecessor, CancellationToken.None);
             Assert.IsTrue(baseline.Delivered, baseline.Detail);
             var expected = Path.Combine(root, "baseline");
             await V3CorpusMountWriter.WriteAsync(baseline, expected, generations, CancellationToken.None, time);
@@ -237,7 +237,7 @@ public sealed partial class V3FirstMountBuildTests
 
             // What the derive must reproduce: an in-process build over R1, at the acquisition's build time.
             var rederived = await LuxembourgRederivation.ApplyAsync(store, luxembourg, LuxembourgRederivationTests.Release1(), CancellationToken.None);
-            var build = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, rederived, CancellationToken.None);
+            using var build = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, rederived, CancellationToken.None);
             Assert.IsTrue(build.Delivered, build.Detail);
             var expected = Path.Combine(root, "expected");
             await V3CorpusMountWriter.WriteAsync(build, expected, null, CancellationToken.None, time);
