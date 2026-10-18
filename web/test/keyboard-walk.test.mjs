@@ -13,8 +13,15 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import test from "node:test";
 
 import { Session, findBrowser, keyboardWalk, launchBrowser } from "../scripts/browser-evidence.mjs";
+
+// This file starts a real browser. On the driver's machine none may run (the owner's order of 2026-10-16: headless Chrome
+// runs from tests there locked the owner's Windows account), so it runs only where LEX_BROWSER_TESTS=1 says a browser may
+// (CI's web lane); a plain `npm test` skips it and says why.
+const BROWSER_MAY_RUN = process.env.LEX_BROWSER_TESTS === "1";
+const NO_BROWSER_HERE = "starts a real browser: runs only with LEX_BROWSER_TESTS=1 (CI's web lane); no browser may run on the driver's machine";
 
 const GOOD = `<!doctype html><html lang="en"><head><meta charset="utf-8"><style>
   a:focus-visible { outline: 3px solid #05f; outline-offset: 2px; }
@@ -79,4 +86,5 @@ async function main() {
   }
 }
 
-await main();
+test("the keyboard checker passes a page that shows its focus and fails one that does not, in a real browser",
+  { skip: BROWSER_MAY_RUN ? false : NO_BROWSER_HERE }, main);

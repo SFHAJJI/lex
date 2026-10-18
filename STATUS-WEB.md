@@ -1,8 +1,135 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-17. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-18. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## A release probed without a browser on this PC (sole driver, 2026-10-18)
+
+On 2026-10-16 headless Chrome runs started by tests on the driver's machine made 263 failed Windows sign-ins and locked
+the owner's account; no browser has run on it since. The release command walked the image's pages in a browser, so a
+release from this machine could only skip every probe (`--no-probe`), the ones that need no browser with them.
+- **What there was** (read from the code): `image-rehearsal.mjs` probed the image running in WSL through the journey's
+  runners (`realMountRuns`, `fixtureMountRuns`), whose page steps start a browser (`findBrowser`, `launchBrowser`), then
+  asked V2's routes, the server's readiness and the card on a second start. `--no-probe` skipped all of it: readiness,
+  journeys J6 to J8 at the API, V2's routes, the card at its route and the privacy probe. The deployment probe's HTTP
+  checks of a candidate (`deploy-probe.mjs`) were never asked of the image. `deploy.ps1 -SkipBrowserProbe` ran those
+  checks only, and nothing it printed said that no page was walked.
+- **`image-rehearsal.mjs --no-browser`**, in the mount form and the custody form: the image is built, verified, signed,
+  built again from scratch (unless `--no-reproduce`) and run in WSL as before; then every probe that needs no browser
+  runs on one start of it (`probeImage`):
+  - journeys J6, J7 and J8 at its API (`apiJourneyRuns`): the contained assistant's card; each page's request, ask,
+    events and answer drift through REST and MCP alike; the log polled, its first 25 permalinks verified on a real mount
+    (`REAL_MOUNT_EVENTS_VERIFIED`), every one on the fixture's;
+  - the deployment probe's checks (`servedPageFailures`, split out of `revisionFailures`, which keeps every check):
+    `GET /` to `/fr/` with `Vary: Accept-Language`; the home page as built, or as the release's renderer renders the
+    image's own coverage answer; its CSP with `frame-ancestors 'none'`, HSTS, `Referrer-Policy` and `nosniff`; the 404
+    page byte for byte; the card at its stable route; coverage from the mount's corpus; the clock; an accented title
+    (the check the image's language data section left for the rehearsal's real-mount probes, now asked there in both
+    modes);
+  - V2's 63 routes, readiness with the mount and no synthetic preview, and the card's bytes at its route;
+  - privacy as far as it shows without a page: what the container recorded from its first answer to the last probe (its
+    output and its `/tmp`: `processRecordFailures`, the check `journeyVerdict` held, now shared), no answer setting a
+    cookie, and no request to another origin (`recordedRequests` wraps the global `fetch` while the probes run).
+  - The page steps are skipped whole and named: the report says `browserProbes: "skipped: --no-browser"` and lists
+    `stepsNotWalked` (over `derive-c` the 13 screens, J1, J2, J5 and the three EU steps, 19; over the fixture mount 13).
+    Every report now says `browserProbes`: `"walked"`, `"skipped: --no-browser"` or `"skipped: --no-probe"`, so none reads
+    as browser-probed when it was not. On that path no browser is looked for or started, and the command installs the
+    browser trap itself before it runs anything (`armBrowserTrap`), and sees it hold; `probeImage`, `rehearse` and
+    `rehearseFromCustody` take `browser` with no default, so a value lost on its way stops the release (the review of
+    #979, below).
+  - With the browser (no flag) the same probes run first, then the walk as before, each step on its own start; the API
+    journeys are asked once, on the shared start. The probes' failures are reported together (`probeFailures`), not the
+    first group's alone.
+- **`deploy-probe.mjs` without `--browser`** never calls `findBrowser`, as before, and now says so beside its result: no
+  page of the revision was walked in a browser (`NOT_WALKED_NOTE`), and its result line says "over HTTP only".
+  `deploy/deploy.ps1` walks no page unless `-BrowserProbe` asks (since the review of #979; `-SkipBrowserProbe` is kept and
+  changes nothing), runs both its probes with the trap loaded first, and its help lists what its HTTP probes hold and what
+  is then walked nowhere.
+- **The guard** (`web/scripts/browser-trap.mjs`, `web/test/no-browser-probes.test.mjs`): the trap puts traps in place of
+  the launcher's `findBrowser` and `launchBrowser` (in-thread module hooks, `module.registerHooks`, Node 22.15 or later; a
+  Node without them refuses to install it) and wraps every process start of `node:child_process` (strict: all of them;
+  otherwise a command or script that names a browser or a page walker). The test installs it strict before it imports any
+  script, then runs the rehearsal's probe phase against a stand-in image (a local server that answers as a release image
+  does and exposes a container's record): over a real mount with an EU index, over the fixture mount, and over a stand-in
+  that writes each query and the address on its output and a SQLite file on its `/tmp`, sets a cookie and serves another
+  card, each caught with its own reason. Then the deployment probe, in this process and as `deploy.ps1` runs it without
+  `-BrowserProbe`, as a process with the trap loaded first (`node --import ./scripts/browser-trap.mjs ...`, which arms it,
+  as `LEX_BROWSER_TRAP=exit` does for a script that imports it: a touch throws, so the run's own clean-up still removes its container and work directory, and the run then ends with 97
+  whatever it exits with, a caught error included). The trap is never touched. The controls: with the browser asked for,
+  the probe phase and the command each stop at the trap before anything starts; a run whose own script walks pages
+  (`journey.mjs`) is refused as the trap loads. The run's process check names every browser path the launcher knows (on
+  Windows, Linux and macOS) and none of a release's own processes (`dotnet`, `git`, `wsl` with the container's script).
+  Six mutations each fail the test: the walk run anyway, a browser looked for first, a process started, the deployment
+  probe walking without `--browser`, no step named, the privacy record not held.
+- **Over the real API**: the probe phase without a browser against `Lex.V3.Api` over the journey fixture mount (published
+  from this branch, without the synthetic preview, as the image holds it), its pages served by the API, the trap loaded
+  first: no failure in 2.8 s. 18 API journey runs, the served pages, 63 V2 routes, readiness, the card, and privacy over
+  111 requests (no output after its first answer, no file event in its directory or temporary folder, no cookie); 13 page
+  steps named as not walked. With the preview left in the publish output, readiness answered 503, as a server with the
+  preview does; the image's check that the preview is absent stands before the probes.
+- **What is then walked nowhere.** A release probed with `--no-browser` and a deployment without `-BrowserProbe` leave the
+  page steps over the real mount unwalked: each page held to what its API answers, its hydration, console, paint and
+  security headers, and every printed citation verified. Both walks go by pointer (`keyboard: false`); the keyboard path
+  is CI's journeys', over the fixture mounts. CI's `journeys` walks the four fixture mounts only, never a
+  population; the last walks over `derive-c` recorded here are the release of 2026-10-13 and the journeys of the same day
+  (29 of 29 runs each). The pages changed since are walked over the fixture mounts only.
+- **Driver decisions (reversible)**:
+  - One start of the image for every probe that needs no browser, not one per group: the population image takes about
+    50 s and 2.3 GB of `/tmp` per start. Its privacy record covers them all at once, so a write fails the run without
+    naming the probe that caused it. Reversible: a start per group.
+  - The page steps are skipped whole, not their server half: `--no-browser` does not ask each step's own request beside
+    the walk's (`fromApi`), nor read a law page's bytes as sent (`mustRender`, `frontDoor`). J7 already asks every page's
+    request, on the fixture's identifiers, through REST and MCP; the steps' own expectations stay the walk's. Next below.
+  - The signed release manifest (`lex-v3-release/1`) does not record how the release was probed: it says what was
+    released, and the report kept beside the release says how it was probed. Recording it in the manifest changes its
+    schema and the deployment probe's read-back. Reversible with a manifest field.
+  - The trap is a script (`web/scripts/`; the tree admits only `*.test.mjs` under `web/test/`), and a real run on this
+    machine can load it first. A run's trap is not strict (the rehearsal starts `dotnet`, `wsl` and `git`): it refuses a
+    process whose command or script names a browser or a page walker, and any call of the launcher.
+  - The release with a browser now also runs the deployment probe's checks and the privacy record on the shared start
+    (it ran neither on the image before), so its report gains `servedPages`, `cardRoute.failures` and `privacy`.
+  - The tests that start a browser are opt-in by one variable (`LEX_BROWSER_TESTS=1`, set where a browser may run), each
+    saying why it skips; `launch-browser`'s second test, node standing in for a browser, runs everywhere. A deployment
+    walks pages only when `-BrowserProbe` says so. Reversible: the variable's default.
+- **The review of #979** (an independent reviewer: the wiring correct, the guard incomplete): one medium and three low
+  findings, repaired in one round, and two more paths made opt-in at the coordinator's direction, under the owner's rule.
+  - F1, medium: the release command's own path was not guarded, and its defaults failed open. `probeImage` and `rehearse`
+    took `browser = true`, so the rehearsal's call of `probeImage` leaving it out (M1) or the command setting it (M2) passed
+    every test and would have found Chrome here; the trap loaded by `--import` without `LEX_BROWSER_TRAP` installed
+    nothing, silently; and deleting the `--no-probe` report line (M3) failed nothing. Now with `--no-browser` the command
+    installs the trap itself and sees it hold before it runs anything (`armBrowserTrap`); `browser` is required, as a
+    boolean, by `probeImage`, `rehearse` and `rehearseFromCustody` (asked first there, before the derivations), so M1
+    stops the release; the command's argument mapping is exported (`commandOptions`) and held, M2 failing it, and the
+    command as a process is held to arming the trap before it reads its mount; loaded by `--import`, the trap arms itself
+    and says so on standard error (`ARMED_NOTICE`); both CI rehearsal checks hold `.browserProbes == "skipped: --no-probe"`.
+  - F2: `deploy.ps1`'s help and this section counted the keyboard path among what a walk adds (both walks run by pointer),
+    and said the image run holds privacy, which a `--no-probe` release does not; both reworded, with `REMOTE_PRIVACY_NOTE`.
+  - F3: the deployment probe's `--browser` control did not first see its process's trap armed (with the variable's
+    install disabled it went past the launcher and stopped on an unrelated error). Every process the test starts now has
+    node standing in for the browser (`LEX_BROWSER`), and the control runs only after a process loaded the same way is
+    seen to hold the trap's launcher.
+  - F4: `web/package.json` and its lock say Node 22.15, the first with `module.registerHooks`.
+  - Opt-in, the deployment: `deploy.ps1` added `--browser` unless `-SkipBrowserProbe`, so an `-Apply` here without it
+    would have started Chrome. It walks no page unless `-BrowserProbe` asks; `-SkipBrowserProbe` stays accepted and
+    changes nothing; the two together are refused; without `-BrowserProbe` both probes run under the trap. A plan run,
+    held by a test with stand-ins for `az` and `oras` first on the path (a plan runs neither), found the first version of
+    this broken: PowerShell's names ignore case, so the new switch `-BrowserProbe` and the script's array `$browserProbe`
+    were one variable, and every run of the script would have stopped before reading the release. The array is
+    `$browserArgs`, and the kit's test refuses that spelling.
+  - Opt-in, the tests: `npm test` started a browser in `keyboard-walk`, `launch-browser` and `paint-check`. They now run
+    only with `LEX_BROWSER_TESTS=1`, which CI's `web` lane sets (the only lane that runs `npm test`; `journeys` runs
+    `journey.mjs` itself). Checked here with the trap loaded and node as the browser: unset, each skips with its reason
+    and touches nothing; set, each reaches the launcher and the trap stops it (97).
+- **Not done here**: no image was built or run in WSL (the brief: stand-ins and the fixture mount only; the population
+  image needs 2.6 GB and more, and the machine had about 2.4 GB of memory free); the WSL run of `--no-browser` is the
+  next release's. Nothing was deployed, pushed or asked of Azure.
+- **Measured** after the review's repairs (this branch, from `v3/integration` at #977's merge, 3b7913ec), with no browser
+  started: the web build; the web suite over 111 of its 114 files (all but `keyboard-walk`, `launch-browser` and
+  `paint-check`), 1,234 of 1,234 (`no-browser-probes` 11 of 11); a plain `npm test` over all 114, 1,238 tests, 1,235
+  passed and the three that start a browser skipped with their reason, while a watcher of this machine's processes saw
+  no browser start; seven mutations of the repairs each fail the guard or the kit's test; `eng/verify-v3-tree.ps1`
+  1,610 tracked paths. No C# was touched; the journeys are CI's lane. Before the review: 1,231 of 1,231.
 
 ## Two tests that timed the runner, not the behaviour (sole driver, 2026-10-17)
 
@@ -4547,6 +4674,19 @@ date" now measures EU dated selection, the owner's main use case.
   table (review of #923).
 
 ## Next, in order (web lane; the data lane's items 1 to 3 are in STATUS-DATA.md)
+
+A release probed without a browser on this PC (done on 2026-10-18, above), what is left:
+1. A browser walk of the private candidate from a machine where a browser is allowed, before the opening:
+   `deploy.ps1 ... -BrowserProbe` there, or `deploy-probe.mjs --origin <the candidate's URL> --release <its release>
+   --public-key <the signing key> --browser`: the journey's real-mount steps over the population, which no release from
+   this PC walks and CI never walks (its journeys walk the fixture mounts). Where it runs is the owner's to say: the walk
+   asks nothing but the candidate.
+2. The next release from this PC with `--no-browser` (`node --expose-gc scripts/image-rehearsal.mjs --mount ...
+   --no-browser`, which installs the browser trap itself), its WSL probes then measured on the population image for the
+   first time.
+3. The server half of each page step without a browser: the step's own request held to the step's expectations (J1's and
+   J5's refusals on the held work) and a law page's bytes as sent (its answer state, the home page's facts), so the walk
+   is the only part left to a browser.
 
 The plan's item 3.6, what is left after the switch, the sitemap and the markup (done on 2026-10-17, above):
 1. The owner's O27, asked in the pull request: when it is answered yes, the deploy kit sets `LEX_V3_SEARCH_ENGINES=indexed` on

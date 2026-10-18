@@ -24,7 +24,10 @@
 // - the browser probes (`--browser`): the journey's real-mount steps through a browser against the revision, each
 //   page held to what the API answers its request, its hydration, console, paint and security headers, and every
 //   citation verified. Privacy cannot be observed on a remote revision (its process and files are not ours to watch),
-//   so this probe states that rather than passing it: the image run's privacy probe held the same image digest.
+//   so this probe states that rather than passing it: only the release's own image run observes it, and only when the
+//   release was probed (its report's `privacy`; a release made with `--no-probe` was not).
+//   Without `--browser` no browser is looked for or started (`findBrowser` is never called), and the probe says that no
+//   page of the revision was walked in a browser (`NOT_WALKED_NOTE`); `deploy.ps1` runs it so unless `-BrowserProbe`.
 // It sends no request anywhere but the origin it is given, and writes nothing but a temporary copy of the release's
 // mount report, removed when it ends.
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -157,9 +160,26 @@ export function liveFilesOf(archive) {
  * What a deployed revision must answer at `origin`, as failures (empty when it holds): `web` the release image's live
  * page files, `card` the release's evaluation card, `corpusSha256` the corpus the release names. What the probe can say
  * but not hold (the revision's date in Luxembourg, a check with nothing to check) goes to `notes`; `now` is the probe's
- * clock, `ask` how an operation is asked of the revision.
+ * clock, `ask` how an operation is asked of the revision. Its pages, card and API (`servedPageFailures`), then the
+ * server's own answers (`serverFailures`) and V2's routes.
  */
-export async function revisionFailures(origin, { web, card, corpusSha256, notes = [], now = Date.now, ask = askOperation }) {
+export async function revisionFailures(origin, options) {
+  const failures = await servedPageFailures(origin, options);
+  const served = servedPaths(options.web);
+  if (!served.has("/fr/")) return failures;
+  failures.push(...await serverFailures(origin));
+  failures.push(...await v2RouteFailures(origin, { v3Files: served }));
+  return failures;
+}
+
+/**
+ * Everything `revisionFailures` holds a revision to but the server's own answers and V2's routes, which the image
+ * rehearsal asks for itself and reports apart (`image-rehearsal.mjs`, `probeImage`): the root's redirect, the home page
+ * (as built, or as the release's renderer renders the revision's coverage answer) and its security headers, the 404 page,
+ * the card at its stable route, coverage from the release's corpus, the clock and an accented title. Every one is an HTTP
+ * request; none needs a browser.
+ */
+export async function servedPageFailures(origin, { web, card, corpusSha256, notes = [], now = Date.now, ask = askOperation }) {
   const failures = [];
   const served = servedPaths(web);
   if (!served.has("/fr/")) return ["the release image holds no live page at /fr/, so the revision has nothing to be held to"];
@@ -238,9 +258,6 @@ export async function revisionFailures(origin, { web, card, corpusSha256, notes 
   if (page.status === 200) {
     failures.push(...homePageFailures(body, served.get("/fr/"), { renderer: new Map(web).get("ssr/fr.js") ?? null, coverage: envelope }));
   }
-
-  failures.push(...await serverFailures(origin));
-  failures.push(...await v2RouteFailures(origin, { v3Files: served }));
   return failures;
 }
 
@@ -368,10 +385,19 @@ export async function accentedTitleFailures(origin, { ask = askOperation, notes 
   return [`none of the ${works.length} works the revision's search for "loi" lists names an accented title it resolves without its accents, so no accented title could be checked`];
 }
 
+/**
+ * What a probe without `--browser` says beside its result: its HTTP probes held, and no page was walked in a browser, so the
+ * journey's real-mount steps (each page held to its answer, its hydration, console, paint and citations) were not run.
+ */
+export const NOT_WALKED_NOTE =
+  "the browser probes were not run (no --browser): no page of the revision was walked in a browser, so the journey's real-mount "
+  + "steps were not held here; only the HTTP probes above were";
+
 /** What the browser probes cannot observe on a remote revision, stated with every browser probe run. */
 export const REMOTE_PRIVACY_NOTE =
-  "privacy is not observed here: a deployed revision's process output and files are not this probe's to watch; the image run's "
-  + "privacy probe (nothing written after the first answer, no query text, address or user agent recorded) held the same image digest";
+  "privacy is not observed here: a deployed revision's process output and files are not this probe's to watch; only the release's "
+  + "own image run observes it (nothing written after the first answer, no query text, address or user agent recorded), and only "
+  + "when the release was probed: its report's privacy says so, and a release made with --no-probe was not";
 
 /**
  * A deployed revision as the journey's runner takes a server: its origin, and nothing of its process, which a remote
@@ -458,9 +484,10 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
     failures.push(...await browserFailures(target, release, { browser: await findBrowser() }));
     console.log(REMOTE_PRIVACY_NOTE);
   }
+  if (!withBrowser) console.log(NOT_WALKED_NOTE);
   for (const failure of failures) console.error(`- ${failure}`);
   console.log(failures.length === 0
-    ? `the revision at ${origin} answers as the release holds${withBrowser ? ", in the browser too" : ""}`
+    ? `the revision at ${origin} answers as the release holds${withBrowser ? ", in the browser too" : ", over HTTP only (no page walked in a browser)"}`
     : `${failures.length} probe failure(s)`);
   process.exit(failures.length === 0 ? 0 : 1);
 }

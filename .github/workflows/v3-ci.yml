@@ -463,8 +463,13 @@ jobs:
       # in either is a finding about a declaration or about the page matcher, not a broken step.
       - run: npm run build
         working-directory: web
+      # The three tests that start a real browser (keyboard-walk, launch-browser, paint-check) run only where
+      # LEX_BROWSER_TESTS=1 says a browser may: here. No browser may run on the driver's machine (the owner's order of
+      # 2026-10-16), where a plain `npm test` skips them and says so.
       - run: npm test
         working-directory: web
+        env:
+          LEX_BROWSER_TESTS: "1"
 
   image-conditions:
     name: image-conditions
@@ -660,6 +665,7 @@ jobs:
             and .signatureVerified == true
             and .card.over == "the machine gates over this mount"
             and (.release.readBackFailures | length) == 0
+            and .browserProbes == "skipped: --no-probe"
             and .removed.work == true and .removed.artifacts == true
           ' "$RUNNER_TEMP/image-rehearsal.json"
       - name: Write the release custody
@@ -705,6 +711,7 @@ jobs:
             and ([.card.sets[] | select(.arm | startswith("EU as_of")) | select(.cases > 0 and all(.gates[]; endswith(": pass")))] | length) == 3
             and ([.card.sets[] | select(.set == "refusal" or .set == "retrieval") | select(.cases > 0 and all(.gates[]; endswith(": pass")))] | length) == 2
             and (.release.readBackFailures | length) == 0
+            and .browserProbes == "skipped: --no-probe"
             and .removed.work == true and .removed.artifacts == true
           ' "$RUNNER_TEMP/custody-rehearsal.json"
       - name: Upload the rehearsal report

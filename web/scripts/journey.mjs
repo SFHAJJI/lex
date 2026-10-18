@@ -600,20 +600,7 @@ export function journeyVerdict(observed, expected) {
   }
   if (observed.api !== undefined) {
     // What the API process recorded while serving the run: nothing, on its outputs or in its files.
-    const typed = step.typed === undefined ? [] : [step.typed].flat();
-    const everything = `${observed.api.startup ?? ""}${observed.api.output}`;
-    for (const text of typed) {
-      if (everything.includes(text)) failures.push(`the API process recorded the query text "${text}"`);
-    }
-    if (observed.userAgent && everything.includes(observed.userAgent)) failures.push("the API process recorded the browser's user agent");
-    if (observed.api.output.includes("127.0.0.1")) failures.push("the API process recorded an address");
-    if (observed.api.output.trim() !== "") failures.push(`the API process wrote output during the run: ${observed.api.output.trim().slice(0, 200)}`);
-    if (observed.api.changedFiles.length > 0) failures.push(`the API process wrote files: ${observed.api.changedFiles.join(", ")}`);
-    const fileEvents = observed.api.fileEvents ?? [];
-    const watchErrors = fileEvents.filter(([event]) => event === "error").map(([, message]) => message);
-    if (watchErrors.length > 0) failures.push(`the file watch failed, so the run cannot say the API touched no file: ${watchErrors.join("; ")}`);
-    const touched = [...new Set(fileEvents.filter(([event]) => event !== "error").map(([, path]) => path))];
-    if (touched.length > 0) failures.push(`the API process touched files while serving the run: ${touched.join(", ")}`);
+    failures.push(...processRecordFailures(observed.api, { typed: step.typed === undefined ? [] : [step.typed].flat(), userAgent: observed.userAgent }));
   }
   // Kept out of search engines, as every release is until the owner answers O27 (R67; `search-engines.mjs`): the page names
   // one robots element, noindex, and served by the API it arrives with X-Robots-Tag: noindex. A run against a release opened
@@ -732,6 +719,32 @@ export function journeyVerdict(observed, expected) {
   }
   if (observed.csp !== cspValue()) failures.push("the page's CSP is not the reviewed one");
   if (observed.hydrated !== "clean") failures.push(`hydration was ${observed.hydrated ?? "never reported"}, not clean`);
+  return failures;
+}
+
+/**
+ * What a server process recorded while it served a run, as failures (empty when it recorded nothing): the launch contract's
+ * "no query text, IP or user agent recorded". `record` is `{ startup, output, changedFiles, fileEvents }`: what it wrote
+ * before it first answered, what it wrote after, the files changed under its directory and the watch's events on its
+ * directory and temporary folder (the container's /tmp for the image). `typed` are the texts the run sent, `userAgent`
+ * the browser's when a browser ran. A browser run holds its page's server to it (`journeyVerdict`), and the image's probes
+ * without a browser the one start they all ask (`image-rehearsal.mjs`, `probeImage`).
+ */
+export function processRecordFailures(record, { typed = [], userAgent = null } = {}) {
+  const failures = [];
+  const everything = `${record.startup ?? ""}${record.output}`;
+  for (const text of typed) {
+    if (everything.includes(text)) failures.push(`the API process recorded the query text "${text}"`);
+  }
+  if (userAgent && everything.includes(userAgent)) failures.push("the API process recorded the browser's user agent");
+  if (record.output.includes("127.0.0.1")) failures.push("the API process recorded an address");
+  if (record.output.trim() !== "") failures.push(`the API process wrote output during the run: ${record.output.trim().slice(0, 200)}`);
+  if (record.changedFiles.length > 0) failures.push(`the API process wrote files: ${record.changedFiles.join(", ")}`);
+  const fileEvents = record.fileEvents ?? [];
+  const watchErrors = fileEvents.filter(([event]) => event === "error").map(([, message]) => message);
+  if (watchErrors.length > 0) failures.push(`the file watch failed, so the run cannot say the API touched no file: ${watchErrors.join("; ")}`);
+  const touched = [...new Set(fileEvents.filter(([event]) => event !== "error").map(([, path]) => path))];
+  if (touched.length > 0) failures.push(`the API process touched files while serving the run: ${touched.join(", ")}`);
   return failures;
 }
 
