@@ -164,7 +164,11 @@ The looser search stays off until its own check passes"), to the specification o
   - F3, low: an extract was cut at a no-break space (`char.IsWhiteSpace` counts U+00A0), so "6 septembre 2021" could lose
     its day. Repair: U+00A0, U+202F and U+2007 are no break (`IsExtractBreak`), and the rule says so. Test:
     `AnExtractIsNeverCutAtANoBreakSpace`, a bound on the no-break space before and after the match.
-  - The review's notes on #980: rebased on 4e37df90 (#980's index /9 and #983); the samples re-rendered from the handler;
+  - Content /3 (#981): search matches and extracts the searchable text alone, which holds no `deleted_text` token; a test
+    holds it (`DeletedWordingIsNeitherMatchedNorExtracted`: deleted wording in an article's tokens is neither matched nor
+    in its extract).
+  - The review's notes on #980: rebased on 8e6d3d27 (#980's index /9, #983 and #981's content /3); the samples re-rendered
+    from the handler (identical once rebased, then verified without the switch);
     `StateTextSources` beside #980's queries in `LuxembourgIndexQueries` and the census of their names; the /9 population
     said in `SearchedRuleNine` (a /8 answer's rule unchanged); the version line's /9 dates recorded as S7a's
     (above); item 6 of the citation generator's next steps reconciled with the data lane's finding (below).
@@ -177,6 +181,14 @@ The looser search stays off until its own check passes"), to the specification o
   machine and mounted gates, citation verification, ask, coverage, resolve and journey mounts) 312, 305 passed, 7 skipped
   (each by its variable: a live canary, a journey mount to write, a mount to evaluate); the censuses rendered from the
   handler and verified without the switch; `eng/verify-v3-tree.ps1` passes; the French review's 3,675 checks pass.
+  After the review's repair, rebased on 8e6d3d27: `npm run build` and a plain `npm test`, 116 files, 1,270 tests, 1,267
+  passed, the 3 that start a browser skipped; `dotnet build Lex.V3.slnx -c Release`, 0 warnings, 0 errors; `Lex.V3.Tests`
+  3,321, 3,315 passed, 6 skipped; in `Lex.V3.Ingest.Tests`, filtered while a release ran (the search, results, EU search,
+  reference, EU reference and resolve mount classes, the Census classes, the three sample censuses, the MCP classes,
+  `LuxembourgIndexQueryPlanTests` and `PublicRequestRecordingTests`), 188, 186 passed, 2 skipped (live canaries); the
+  censuses rendered and verified, 7 of 7; three mutations each fail the new mount test (the order before the repair, one
+  title for every act, one work key for every card), and the page's cut by version dropped fails the new web test;
+  `eng/verify-v3-tree.ps1` passes.
 
 ## The release probe's accented title, read by the exact-reference phase (sole driver, 2026-10-18)
 
