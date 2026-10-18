@@ -77,11 +77,12 @@ public sealed class LuxembourgIndexCatalogueStatesTests
         {
             var objectRef = ObjectRefOf(root);
             Body(root, leaf, language, "acquired", "agreed_same_run_cc_by", "inventoried", null, inFileDate, identityClass, [], [new("admitted", articleIds.Length)]);
-            foreach (var id in articleIds)
+            for (var index = 0; index < articleIds.Length; index++)
             {
+                var id = articleIds[index];
                 _articles.Add(new(
                     Digest("article:" + root + "/" + leaf + "#" + id), objectRef, root + "/" + leaf, id, null, null, language,
-                    new string('c', 64), "texte de " + id, "[]"));
+                    new string('c', 64), "texte de " + id, "[]", index + 1));
             }
 
             return this;
@@ -474,6 +475,44 @@ public sealed class LuxembourgIndexCatalogueStatesTests
         var exception = Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexReader.OpenAndVerify(
             reference, tampered, Harness.CorpusRef, RebindManifest(built.CapabilityManifest, reference.Sha256)));
         StringAssert.Contains(exception.Message, expected);
+    }
+
+    /// <summary>
+    /// Index 9 keeps each article's place in its publisher document: its position among the inventory's top-level articles,
+    /// in the publisher's order (the inventory lists them so), from 1; a body's admitted articles hold distinct places, and
+    /// an index giving two of them one place is refused. S7a reads a state's articles in that order (today they are listed by
+    /// digest, and the reading page by the natural order of their ids, #978's stopgap).
+    /// </summary>
+    [TestMethod]
+    public void EachArticleKeepsItsPlaceInItsPublisherDocument()
+    {
+        var built = Fixture().Build();
+        var places = new List<(string, long)>();
+        _ = MutateDatabase(built.IndexBytes.Span, connection =>
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT publisher_id,document_position FROM articles WHERE expression_iri=$e ORDER BY document_position";
+            command.Parameters.AddWithValue("$e", W("code/civil/20160901/fr"));
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) places.Add((reader.GetString(0), reader.GetInt64(1)));
+        });
+        CollectionAssert.AreEqual(new[] { ("art_1", 1L), ("art_141_à_144", 2L) }, places);
+
+        var inventory = new LuxembourgAknArticleInventory(
+            W("loi/2024/01/01/n1/jo/fr"), new string('4', 64),
+            [new("art_2", null, null), new("art_1er", null, null), new("art_10", null, null)],
+            W("loi/2024/01/01/n1"), W("loi/2024/01/01/n1/jo"), "2024-01-05");
+        Assert.AreEqual(2, LuxembourgIndexBuilder.DocumentPositionOf(inventory, "art_1er"), "the publisher's order, not the ids'");
+        Assert.AreEqual(3, LuxembourgIndexBuilder.DocumentPositionOf(inventory, "art_10"));
+        Assert.IsNull(LuxembourgIndexBuilder.DocumentPositionOf(inventory, "art_3"), "an id the inventory does not list has no place");
+        Assert.IsNull(LuxembourgIndexBuilder.DocumentPositionOf(null, "art_1"));
+
+        var tampered = MutateDatabase(built.IndexBytes.Span, connection =>
+            Execute(connection, "UPDATE articles SET document_position=1 WHERE expression_iri=$e", ("$e", W("code/civil/20160901/fr"))));
+        var reference = IndexRefOf(tampered);
+        var exception = Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexReader.OpenAndVerify(
+            reference, tampered, Harness.CorpusRef, RebindManifest(built.CapabilityManifest, reference.Sha256)));
+        StringAssert.Contains(exception.Message, "the same place in its document");
     }
 
     /// <summary>

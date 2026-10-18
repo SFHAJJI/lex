@@ -1268,8 +1268,9 @@ public sealed class V3CorpusResolveMountTests
                 {
                     insert.CommandText = """
                         INSERT INTO articles VALUES(
-                          $identity,$object,$expression,$publisher,$wid,$date,$language,$profile,$text,$tokens)
+                          $identity,$object,$expression,$publisher,$wid,$date,$language,$profile,$text,$tokens,$position)
                         """;
+                    insert.Parameters.AddWithValue("$position", LuxembourgIndexBuilderTests.NextDocumentPosition(connection));
                     insert.Parameters.AddWithValue("$identity", new string('f', 64));
                     insert.Parameters.AddWithValue("$object", source.ObjectRefSha256);
                     insert.Parameters.AddWithValue("$expression", alternateExpression);
@@ -1383,7 +1384,8 @@ public sealed class V3CorpusResolveMountTests
                         Encoding.UTF8.GetBytes(expressionSuffix + ":" + source.ArticleIdentitySha256)));
                     identities.Add(identity);
                     using var insert = connection.CreateCommand();
-                    insert.CommandText = "INSERT INTO articles VALUES($identity,$object,$expression,$publisher,$wid,$date,$language,$profile,$text,$tokens)";
+                    insert.CommandText = "INSERT INTO articles VALUES($identity,$object,$expression,$publisher,$wid,$date,$language,$profile,$text,$tokens,$position)";
+                    insert.Parameters.AddWithValue("$position", LuxembourgIndexBuilderTests.NextDocumentPosition(connection));
                     insert.Parameters.AddWithValue("$identity", identity);
                     insert.Parameters.AddWithValue("$object", source.ObjectRefSha256);
                     insert.Parameters.AddWithValue("$expression", expression);
@@ -1665,7 +1667,8 @@ public sealed class V3CorpusResolveMountTests
                         Encoding.UTF8.GetBytes("de:" + source.ArticleIdentitySha256)));
                     identities.Add(identity);
                     using var insert = connection.CreateCommand();
-                    insert.CommandText = "INSERT INTO articles VALUES($identity,$object,$expression,$publisher,$wid,$date,'deu',$profile,$text,$tokens)";
+                    insert.CommandText = "INSERT INTO articles VALUES($identity,$object,$expression,$publisher,$wid,$date,'deu',$profile,$text,$tokens,$position)";
+                    insert.Parameters.AddWithValue("$position", LuxembourgIndexBuilderTests.NextDocumentPosition(connection));
                     insert.Parameters.AddWithValue("$identity", identity);
                     insert.Parameters.AddWithValue("$object", source.ObjectRefSha256);
                     insert.Parameters.AddWithValue("$expression", expression);
@@ -1998,7 +2001,8 @@ public sealed class V3CorpusResolveMountTests
                 }
                 using (var insertArticle = connection.CreateCommand())
                 {
-                    insertArticle.CommandText = "INSERT INTO articles VALUES($identity,$object,$expression,$publisher,$wid,$date,$language,$profile,$text,$tokens)";
+                    insertArticle.CommandText = "INSERT INTO articles VALUES($identity,$object,$expression,$publisher,$wid,$date,$language,$profile,$text,$tokens,$position)";
+                    insertArticle.Parameters.AddWithValue("$position", LuxembourgIndexBuilderTests.NextDocumentPosition(connection));
                     insertArticle.Parameters.AddWithValue("$identity", new string('e', 64));
                     insertArticle.Parameters.AddWithValue("$object", source.ObjectRefSha256);
                     insertArticle.Parameters.AddWithValue("$expression", ExpressionIri + "/second-work");
@@ -2104,19 +2108,8 @@ public sealed class V3CorpusResolveMountTests
             return values.ToArray();
         }
 
-        private static LuxembourgIndexBuilder.ArticleRow[] ReadArticles(SqliteConnection connection)
-        {
-            using var command = connection.CreateCommand();
-            command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,expression_iri,publisher_id,publisher_wid,applicability_date,language,rule_profile_sha256,searchable_text,tokens_json FROM articles ORDER BY article_identity_sha256";
-            using var reader = command.ExecuteReader();
-            var values = new List<LuxembourgIndexBuilder.ArticleRow>();
-            while (reader.Read()) values.Add(new(
-                reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-                reader.IsDBNull(4) ? null : reader.GetString(4),
-                reader.IsDBNull(5) ? null : reader.GetString(5),
-                reader.GetString(6), reader.GetString(7), reader.GetString(8), reader.GetString(9)));
-            return values.ToArray();
-        }
+        private static LuxembourgIndexBuilder.ArticleRow[] ReadArticles(SqliteConnection connection) =>
+            LuxembourgIndexBuilderTests.ReadArticles(connection);
 
         private static LuxembourgIndexBuilder.StateRow[] ReadStates(SqliteConnection connection) =>
             LuxembourgIndexBuilderTests.ReadStates(connection);

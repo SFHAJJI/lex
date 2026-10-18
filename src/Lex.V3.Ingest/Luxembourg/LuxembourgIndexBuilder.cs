@@ -572,7 +572,8 @@ public static partial class LuxembourgIndexBuilder
           language TEXT COLLATE BINARY NOT NULL,
           rule_profile_sha256 TEXT COLLATE BINARY NOT NULL CHECK (length(rule_profile_sha256) = 64),
           searchable_text TEXT COLLATE BINARY NOT NULL,
-          tokens_json TEXT COLLATE BINARY NOT NULL
+          tokens_json TEXT COLLATE BINARY NOT NULL,
+          document_position INTEGER NOT NULL CHECK (document_position >= 1)
         ) STRICT;
         CREATE INDEX articles_object_ref ON articles(object_ref_sha256);
         CREATE INDEX articles_language_date ON articles(language, applicability_date);
@@ -1124,6 +1125,20 @@ public static partial class LuxembourgIndexBuilder
             }
 
             var article = outcome.Article;
+            // The article's place in its publisher document: its position among the inventory's top-level articles, which
+            // the inventory lists in the publisher's order (index 9; S7a reads a state's articles in that order).
+            var documentPosition = DocumentPositionOf(outcome.SourceInventoryOutcome.Inventory, article.Coordinate.PublisherId);
+            if (documentPosition is null)
+            {
+                articles = [];
+                states = [];
+                workTitles = [];
+                workFacts = [];
+                refusal = LuxembourgIndexBuildRefusal.DerivationMismatch;
+                detail = "An admitted article is not one of its inventory's articles: " + article.Coordinate.PublisherId;
+                return false;
+            }
+
             var language = LanguageToken(member.LuxembourgRights.SelectedWemi.LanguageIri);
             var date = ApplicabilityDate(article.Coordinate.PublisherApplicability);
             projected.Add(new ArticleRow(
@@ -1140,7 +1155,8 @@ public static partial class LuxembourgIndexBuilder
                         LuxembourgAknLegalContentTokenKind.Text or
                         LuxembourgAknLegalContentTokenKind.Reference)
                     .Select(static token => token.Text)),
-                TokensJson(article.Tokens)));
+                TokensJson(article.Tokens),
+                documentPosition));
         }
 
         articles = projected.OrderBy(static row => row.ArticleIdentitySha256, StringComparer.Ordinal).ToArray();
@@ -2185,10 +2201,11 @@ public static partial class LuxembourgIndexBuilder
         foreach (var article in articles)
         {
             Insert(connection, transaction,
-                "INSERT INTO articles VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7,$p8,$p9)",
+                "INSERT INTO articles VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7,$p8,$p9,$p10)",
                 article.ArticleIdentitySha256, article.ObjectRefSha256, article.ExpressionIri,
                 article.PublisherId, article.PublisherWid, article.ApplicabilityDate,
-                article.Language, article.RuleProfileSha256, article.SearchableText, article.TokensJson);
+                article.Language, article.RuleProfileSha256, article.SearchableText, article.TokensJson,
+                article.DocumentPosition ?? throw new InvalidDataException("An index 9 article has no document position."));
         }
         foreach (var relation in relations)
         {
@@ -2275,7 +2292,8 @@ public static partial class LuxembourgIndexBuilder
                 new LuxembourgAknLegalContentToken(
                     LuxembourgAknLegalContentTokenKind.NoteReference, null, null, "1",
                     [new LuxembourgAknLegalContentToken(LuxembourgAknLegalContentTokenKind.Reference, "note fixe", "???", null)]),
-            ]));
+            ]),
+            1);
         var members = new[] { member };
         var articles = new[] { article };
         static WorkFactRow Fact(string subject, string predicate, string kind, string objectKind, string value) =>
@@ -2424,7 +2442,8 @@ public static partial class LuxembourgIndexBuilder
         IReadOnlyList<EventRow> events)
     {
         return ContractJson.Sha256OfDefaultJson(new LegacyLogicalRows8(
-            members, articles, states.Select(LegacyStateRow8.Of).ToArray(), workTitles, relations, workFacts, events));
+            members, articles.Select(LegacyArticleRow8.Of).ToArray(), states.Select(LegacyStateRow8.Of).ToArray(), workTitles,
+            relations, workFacts, events));
     }
 
     internal static SqliteConnection Open(string path, SqliteOpenMode mode)
@@ -2586,6 +2605,11 @@ public static partial class LuxembourgIndexBuilder
         string Stage3OutcomesJson,
         string GapsJson);
 
+    /// <summary>
+    /// One article row. <see cref="DocumentPosition"/> is index 9's: the article's place among its publisher document's
+    /// top-level articles, from 1, in the publisher's order (an article not admitted keeps its place, so the positions of
+    /// a body's admitted articles can skip); null in a row of index 8 or 6, which recorded none.
+    /// </summary>
     internal sealed record ArticleRow(
         string ArticleIdentitySha256,
         string ObjectRefSha256,
@@ -2596,7 +2620,45 @@ public static partial class LuxembourgIndexBuilder
         string Language,
         string RuleProfileSha256,
         string SearchableText,
-        string TokensJson);
+        string TokensJson,
+        int? DocumentPosition = null);
+
+    /// <summary>Schema 8's and 6's article row, exactly as their logical rows hashed it.</summary>
+    private sealed record LegacyArticleRow8(
+        string ArticleIdentitySha256,
+        string ObjectRefSha256,
+        string ExpressionIri,
+        string PublisherId,
+        string? PublisherWid,
+        string? ApplicabilityDate,
+        string Language,
+        string RuleProfileSha256,
+        string SearchableText,
+        string TokensJson)
+    {
+        internal static LegacyArticleRow8 Of(ArticleRow row) => new(
+            row.ArticleIdentitySha256, row.ObjectRefSha256, row.ExpressionIri, row.PublisherId, row.PublisherWid,
+            row.ApplicabilityDate, row.Language, row.RuleProfileSha256, row.SearchableText, row.TokensJson);
+    }
+
+    /// <summary>The 1-based position of <paramref name="publisherId"/> among an inventory's articles, or null.</summary>
+    internal static int? DocumentPositionOf(LuxembourgAknArticleInventory? inventory, string publisherId)
+    {
+        if (inventory is null)
+        {
+            return null;
+        }
+
+        for (var index = 0; index < inventory.Articles.Count; index++)
+        {
+            if (string.Equals(inventory.Articles[index].PublisherId, publisherId, StringComparison.Ordinal))
+            {
+                return index + 1;
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// One state row. Its first nine fields are every schema's; the rest are index 9's and null (false) in a row of index 8
@@ -2762,7 +2824,7 @@ public static partial class LuxembourgIndexBuilder
     /// <summary>Schema 8's and 6's logical rows, exactly as they hashed them.</summary>
     private sealed record LegacyLogicalRows8(
         IReadOnlyList<MemberRow> Members,
-        IReadOnlyList<ArticleRow> Articles,
+        IReadOnlyList<LegacyArticleRow8> Articles,
         IReadOnlyList<LegacyStateRow8> States,
         IReadOnlyList<WorkTitleRow> WorkTitles,
         IReadOnlyList<RelationRow> Relations,
@@ -3013,7 +3075,7 @@ public sealed class LuxembourgIndexReader : IDisposable
             // The two large tables (260,235 members and 1.5 million facts in the population) are read once, as the hash
             // reads them; nothing else here needs them.
             var members = new StreamedRows<LuxembourgIndexBuilder.MemberRow>(StreamMembers(connection));
-            var articles = ReadArticles(connection);
+            var articles = ReadArticles(connection, version);
             var states = ReadStates(connection, version);
             var workTitles = ReadWorkTitles(connection);
             var relations = ReadRelations(connection);
@@ -3029,6 +3091,7 @@ public sealed class LuxembourgIndexReader : IDisposable
                     throw new InvalidDataException("The Luxembourg event log's observations do not number its events.");
                 }
 
+                ValidateDocumentPositions(articles);
                 ValidateCatalogueStates(articles, states, intervals, observations[^1].BuiltAt[..10]);
             }
             else
@@ -4541,18 +4604,38 @@ public sealed class LuxembourgIndexReader : IDisposable
             reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetString(4), reader.GetString(5));
     }
 
-    private static LuxembourgIndexBuilder.ArticleRow[] ReadArticles(SqliteConnection connection)
+    /// <summary>Every article row in identity order: with its document position on index 9, without on index 8 and 6.</summary>
+    private static LuxembourgIndexBuilder.ArticleRow[] ReadArticles(SqliteConnection connection, int version)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,expression_iri,publisher_id,publisher_wid,applicability_date,language,rule_profile_sha256,searchable_text,tokens_json FROM articles ORDER BY article_identity_sha256";
+        command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,expression_iri,publisher_id,publisher_wid,applicability_date,language,rule_profile_sha256,searchable_text,tokens_json" +
+            (version == 9 ? ",document_position" : "") + " FROM articles ORDER BY article_identity_sha256";
         using var reader = command.ExecuteReader();
         var values = new List<LuxembourgIndexBuilder.ArticleRow>();
         while (reader.Read()) values.Add(new(
             reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
             reader.IsDBNull(4) ? null : reader.GetString(4),
             reader.IsDBNull(5) ? null : reader.GetString(5),
-            reader.GetString(6), reader.GetString(7), reader.GetString(8), reader.GetString(9)));
+            reader.GetString(6), reader.GetString(7), reader.GetString(8), reader.GetString(9),
+            version == 9 ? checked((int)reader.GetInt64(10)) : null));
         return values.ToArray();
+    }
+
+    /// <summary>
+    /// Index 9's document positions: one body's articles hold distinct places in its document (the table's CHECK holds
+    /// each to 1 or more); the places themselves are the inventory's, which the corpus binds.
+    /// </summary>
+    private static void ValidateDocumentPositions(IReadOnlyList<LuxembourgIndexBuilder.ArticleRow> articles)
+    {
+        var seen = new HashSet<(string, int)>();
+        foreach (var article in articles)
+        {
+            if (article.DocumentPosition is not int position || !seen.Add((article.ObjectRefSha256, position)))
+            {
+                throw new InvalidDataException(
+                    "The Luxembourg index gives two articles of one body the same place in its document: " + article.PublisherId);
+            }
+        }
     }
 
     /// <summary>Every state row in key order: schema 9's twenty-one columns, or schema 8's and 6's nine.</summary>
@@ -4912,7 +4995,7 @@ public sealed class LuxembourgIndexReader : IDisposable
         {
             var states = ReadStates(_connection, _version);
             var expected = LuxembourgIndexBuilder.SourceBodiesOfStates(
-                ReadArticles(_connection), states, bodies());
+                ReadArticles(_connection, _version), states, bodies());
             var held = LuxembourgIndexBuilder.FoldLog(LuxembourgIndexBuilder.ReadLogEvents(_connection), LogSchema);
             foreach (var state in states)
             {

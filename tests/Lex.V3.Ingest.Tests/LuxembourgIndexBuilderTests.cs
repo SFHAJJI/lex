@@ -19,7 +19,7 @@ public sealed class LuxembourgIndexBuilderTests
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             LuxembourgIndexBuilder.BuildFixedInputDeterminismEvidence()));
-        Assert.AreEqual("46a9b1e70ec21b505c0a105c2bbf074cf52d852efdd2dfb557210fffb2c2a94e", digest);
+        Assert.AreEqual("abb1d264cbe042868553131425d06c3a98523d22be0928411342dd4eff842138", digest);
     }
 
     /// <summary>
@@ -1822,18 +1822,33 @@ public sealed class LuxembourgIndexBuilderTests
         return rows.ToArray();
     }
 
+    /// <summary>Every article row in identity order, with its document position on an index 9.</summary>
     internal static LuxembourgIndexBuilder.ArticleRow[] ReadArticles(SqliteConnection connection)
     {
+        var nine = IndexVersion(connection) == 9;
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,expression_iri,publisher_id,publisher_wid,applicability_date,language,rule_profile_sha256,searchable_text,tokens_json FROM articles ORDER BY article_identity_sha256";
+        command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,expression_iri,publisher_id,publisher_wid,applicability_date,language,rule_profile_sha256,searchable_text,tokens_json" +
+            (nine ? ",document_position" : "") + " FROM articles ORDER BY article_identity_sha256";
         using var reader = command.ExecuteReader();
         var rows = new List<LuxembourgIndexBuilder.ArticleRow>();
         while (reader.Read()) rows.Add(new(
             reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
             reader.IsDBNull(4) ? null : reader.GetString(4),
             reader.IsDBNull(5) ? null : reader.GetString(5),
-            reader.GetString(6), reader.GetString(7), reader.GetString(8), reader.GetString(9)));
+            reader.GetString(6), reader.GetString(7), reader.GetString(8), reader.GetString(9),
+            nine ? reader.GetInt32(10) : null));
         return rows.ToArray();
+    }
+
+    /// <summary>
+    /// The next free place in a document, for an article a test adds to an index 9 by copying another body's: one past
+    /// every place the table holds, so no body's articles share one.
+    /// </summary>
+    internal static long NextDocumentPosition(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COALESCE(MAX(document_position),0)+1 FROM articles";
+        return (long)command.ExecuteScalar()!;
     }
 
     internal static LuxembourgIndexBuilder.StateRow[] ReadStates(SqliteConnection connection) =>
