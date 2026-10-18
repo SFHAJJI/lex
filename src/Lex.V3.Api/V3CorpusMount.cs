@@ -458,7 +458,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         "forward (events: log.ancestors[].log_id)";
 
     internal const string AsObservedLegacyWhatWouldAnswer =
-        "a mount whose Luxembourg index records its builds (lex-v3-luxembourg-index/8 or /9); this one is lex-v3-luxembourg-index/6, built " +
+        "a mount whose Luxembourg index records its builds (lex-v3-luxembourg-index/8); this one is lex-v3-luxembourg-index/6, built " +
         "before builds were recorded, so it names no snapshot and no build time";
 
     internal const string AsObservedNotHeldWorkWhatWouldAnswer =
@@ -4826,6 +4826,12 @@ internal sealed partial class V3CorpusMount : IDisposable
 
     internal const string EventsScope =
         "the event log of the mounted Luxembourg index: a list numbered from 1, polled by cursor, append-only; a genesis log (one observation, " +
+        "no predecessor) holds one first_sighting per held state and nothing else; a chained log carries its predecessors' observations unchanged " +
+        "and appends one observation per later build (log.basis says which)";
+
+    /// <summary>The scope on a mount of lex-v3-luxembourg-index/9, whose log sights every state row, held or not.</summary>
+    internal const string EventsScopeNine =
+        "the event log of the mounted Luxembourg index: a list numbered from 1, polled by cursor, append-only; a genesis log (one observation, " +
         "no predecessor) holds one first_sighting per state row and nothing else (on lex-v3-luxembourg-index/9 a row may be a state whose text " +
         "is not held); a chained log carries its predecessors' observations unchanged " +
         "and appends one observation per later build (log.basis says which)";
@@ -4842,8 +4848,16 @@ internal sealed partial class V3CorpusMount : IDisposable
         "and does not say when the publisher published the text or when it was fetched; observed_from is null because no observation time is held; " +
         "log.built_at is the time the acquiring build read once its acquisition had ended, an upper bound on when its corpus was observed " +
         "and never an observation time, and an index derived again from custody keeps it rather than the time of that derivation; " +
+        "a revision (validity_revised, interval_closed, file_replaced, withdrawn_from_source, ...) needs a later build compared against this one";
+
+    /// <summary>The genesis note on a mount of lex-v3-luxembourg-index/9, whose log records the derivation time beside the build time.</summary>
+    internal const string EventsGenesisNoteNine =
+        "this log comes from one observation with no predecessor, so it holds only first_sighting; first_sighting means first present in this log " +
+        "and does not say when the publisher published the text or when it was fetched; observed_from is null because no observation time is held; " +
+        "log.built_at is the time the acquiring build read once its acquisition had ended, an upper bound on when its corpus was observed " +
+        "and never an observation time, and an index derived again from custody keeps it rather than the time of that derivation; " +
         "log.derived_at is when this index was derived from custody, the time its derivation's inputs state, and null when its " +
-        "derivations are the acquiring build's own or when its schema records none (lex-v3-luxembourg-index/8); " +
+        "derivations are the acquiring build's own; " +
         "a revision (validity_revised, interval_closed, file_replaced, withdrawn_from_source, ...) needs a later build compared against this one";
 
     /// <summary>The genesis note on a schema-6 index, which records no build time: the same, without the build-time sentence.</summary>
@@ -4987,7 +5001,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         var nextSeq = hasMore ? served[^1].Seq : log.LastSeq;
         using var result = JsonSerializer.SerializeToDocument(new
         {
-            scope = EventsScope,
+            scope = _reader!.RecordsCatalogueStates ? EventsScopeNine : EventsScope,
             log = EventLogBlock(logId, log, observations),
             requested_event = eventName,
             events = served.Select(value => new
@@ -5014,7 +5028,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             has_more = hasMore,
             next_after = $"{logId}:{nextSeq}",
             delivery = EventsDeliveryNote,
-            genesis_note = _reader.RecordsBuilds ? EventsGenesisNote : EventsGenesisNoteLegacy,
+            genesis_note = !_reader.RecordsBuilds ? EventsGenesisNoteLegacy : _reader.RecordsCatalogueStates ? EventsGenesisNoteNine : EventsGenesisNote,
             chained_note = chained ? EventsChainedNote : null,
             legacy_note = _reader.RecordsBuilds ? null : EventsLegacyNote,
             silence_note = _reader.RecordsBuilds ? EventsSilenceNote : EventsSilenceNoteLegacy,
@@ -5152,15 +5166,9 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// each ancestor log whose cursors this log still honours, to its last sequence number, with that build's time; and
     /// the events it holds.
     /// </summary>
-    private object EventLogBlock(string logId, LuxembourgIndexEventLog log, IReadOnlyList<LuxembourgIndexObservation> observations) => new
+    private object EventLogBlock(string logId, LuxembourgIndexEventLog log, IReadOnlyList<LuxembourgIndexObservation> observations)
     {
-        log_id = logId,
-        basis = observations.Count <= 1 ? V3EventRegistry.GenesisBasis : V3EventRegistry.ChainedBasis,
-        built_at = observations.Count == 0 ? null : observations[^1].BuiltAt,
-        derived_at = observations.Count == 0 ? null : observations[^1].DerivedAt,
-        predecessor_index_sha256 = observations.Count == 0 ? null : observations[^1].PredecessorIndexSha256,
-        observations_compared = Math.Max(0, observations.Count - 1),
-        ancestors = AncestorLogs(observations)
+        var ancestors = AncestorLogs(observations)
             .Select(ancestor => new
             {
                 log_id = ancestor.LogId,
@@ -5169,10 +5177,38 @@ internal sealed partial class V3CorpusMount : IDisposable
                 text_held = RetainedAs(ancestor.LogId).Length != 0,
                 retained_as = RetainedAs(ancestor.LogId),
             })
-            .ToArray(),
-        events_held = log.Events,
-        last_seq = log.LastSeq,
-    };
+            .ToArray();
+        var basis = observations.Count <= 1 ? V3EventRegistry.GenesisBasis : V3EventRegistry.ChainedBasis;
+        var builtAt = observations.Count == 0 ? null : observations[^1].BuiltAt;
+        var predecessor = observations.Count == 0 ? null : observations[^1].PredecessorIndexSha256;
+        var compared = Math.Max(0, observations.Count - 1);
+        // log.derived_at is index 9's (its log /3 records the derivation time); a schema-8 or schema-6 log block is the
+        // one those mounts answered before index 9, field for field.
+        return _reader!.RecordsCatalogueStates
+            ? (object)new
+            {
+                log_id = logId,
+                basis,
+                built_at = builtAt,
+                derived_at = observations.Count == 0 ? null : observations[^1].DerivedAt,
+                predecessor_index_sha256 = predecessor,
+                observations_compared = compared,
+                ancestors,
+                events_held = log.Events,
+                last_seq = log.LastSeq,
+            }
+            : new
+            {
+                log_id = logId,
+                basis,
+                built_at = builtAt,
+                predecessor_index_sha256 = predecessor,
+                observations_compared = compared,
+                ancestors,
+                events_held = log.Events,
+                last_seq = log.LastSeq,
+            };
+    }
 
     /// <summary>Why the retention line keeps an earlier build of the mounted log beside the mount; none when it is not kept.</summary>
     private string[] RetainedAs(string indexSha256) =>
