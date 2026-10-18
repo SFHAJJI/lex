@@ -19,7 +19,7 @@ public sealed class LuxembourgIndexBuilderTests
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             LuxembourgIndexBuilder.BuildFixedInputDeterminismEvidence()));
-        Assert.AreEqual("97c536e9646dc834758427071ed3df26bed6b44ea40ade7d3b366a4b9e231b02", digest);
+        Assert.AreEqual("7cfd99881fc878616e96b067342f955df11ae908147f69c04ff64fcfce439184", digest);
     }
 
     /// <summary>
@@ -120,7 +120,7 @@ public sealed class LuxembourgIndexBuilderTests
         var schema = (string)typeof(LuxembourgIndexBuilder)
             .GetField(nameof(LuxembourgIndexBuilder.Schema))!
             .GetRawConstantValue()!;
-        Assert.AreEqual("lex-v3-luxembourg-index/8", schema);
+        Assert.AreEqual("lex-v3-luxembourg-index/9", schema);
         Assert.IsTrue(typeof(LuxembourgIndexBuilder).GetMethods().Any(static method => method.Name == nameof(LuxembourgIndexBuilder.TryBuild)));
         Assert.IsNotNull(typeof(LuxembourgIndexReader).GetMethod(nameof(LuxembourgIndexReader.OpenAndVerify)));
     }
@@ -575,13 +575,62 @@ public sealed class LuxembourgIndexBuilderTests
     [DataRow("UPDATE states SET state_sha256='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'", "digest is not derived")]
     [DataRow("UPDATE articles SET expression_iri=expression_iri || '/other'", "does not bind its exact article population")]
     [DataRow("UPDATE states SET work_key='wrong-work-key'", "not canonical")]
-    [DataRow("UPDATE states SET publisher_legal_resource_iri=expression_iri", "omits or crosses")]
+    [DataRow("UPDATE states SET publisher_legal_resource_iri=expression_iri", "not canonical")]
     [DataRow("UPDATE states SET expression_iri=publisher_legal_resource_iri || '/de'", "does not bind its exact article population")]
     public async Task StrictReaderRejectsEachStateInvariantIndependently(string sql, string expected)
     {
         var (built, corpusRef) = await BuildStateIndexAsync();
 
         AssertTamperedDatabaseRejected(built, corpusRef, sql, expected);
+    }
+
+    /// <summary>
+    /// Schema 8 is still read exactly as schema 8 checked it: the same tampers of a schema-8 index (the multi-body fixture's
+    /// index 9, every byte synthetic, rewritten into schema 8's tables) are refused by schema 8's own checks, with schema 8's
+    /// own reasons, and the untampered rewrite opens as schema 8, its held states only and none of index 9's fields.
+    /// </summary>
+    [TestMethod]
+    [DataRow("PRAGMA user_version=2", "schema differs from the exact terminal schema")]
+    [DataRow("PRAGMA user_version=9", "schema differs from the exact terminal schema")]
+    [DataRow("UPDATE states SET state_sha256='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'" + FirstCodeCivilState, "digest is not derived")]
+    [DataRow("UPDATE articles SET expression_iri=expression_iri || '/other'", "does not bind its exact article population")]
+    [DataRow("UPDATE states SET work_key='wrong-work-key'" + FirstCodeCivilState, "not canonical")]
+    [DataRow("UPDATE states SET publisher_legal_resource_iri=expression_iri" + FirstCodeCivilState, "omits or crosses")]
+    [DataRow("UPDATE states SET expression_iri=publisher_legal_resource_iri || '/de'" + FirstCodeCivilState, "does not bind its exact article population")]
+    public void ASchema8IndexIsStillReadExactlyAsSchema8CheckedIt(string sql, string expected)
+    {
+        var built = LuxembourgIndexCatalogueStatesTests.Fixture().Build();
+        var corpusRef = LuxembourgIndexCatalogueStatesTests.Harness.CorpusRef;
+        var schema8 = Schema8Of(built.IndexBytes.Span);
+        var reference = IndexRefOf(schema8);
+        using (var reader = LuxembourgIndexReader.OpenAndVerify(reference, schema8, corpusRef, RebindManifest(built.CapabilityManifest, reference.Sha256)))
+        {
+            Assert.AreEqual(LuxembourgIndexBuilder.LegacySchema8, reader.SchemaIdentity);
+            Assert.IsTrue(reader.RecordsBuilds);
+            Assert.IsFalse(reader.RecordsCatalogueStates);
+            Assert.IsNull(reader.ResolveObservations().Single().DerivedAt, "schema 8 records no derivation time");
+            var code = reader.ResolveCatalogueStates("code-civil");
+            Assert.HasCount(2, code, "schema 8 holds the held states only");
+            Assert.IsTrue(code.All(static row => row.StateKind is null && row.TextStatus == "held"), "and none of index 9's fields");
+            Assert.IsEmpty(reader.ResolveIntervals("code-civil"));
+            Assert.AreEqual(12L, reader.ResolveCoverage().States);
+        }
+
+        var tampered = MutateDatabase(schema8, sql);
+        var tamperedRef = IndexRefOf(tampered);
+        var exception = Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexReader.OpenAndVerify(
+            tamperedRef, tampered, corpusRef, RebindManifest(built.CapabilityManifest, tamperedRef.Sha256)));
+        StringAssert.Contains(exception.Message, expected);
+    }
+
+    /// <summary>One row of the multi-body fixture's states, so a tamper of a keyed column meets no other row's key.</summary>
+    private const string FirstCodeCivilState =
+        " WHERE work_key='code-civil' AND applicability_date=(SELECT min(applicability_date) FROM states WHERE work_key='code-civil')";
+
+    internal static SourceArtifactRef IndexRefOf(byte[] index)
+    {
+        var digest = Convert.ToHexStringLower(SHA256.HashData(index));
+        return new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
     }
 
     /// <summary>
@@ -612,17 +661,7 @@ public sealed class LuxembourgIndexBuilderTests
         {
             var state = ReadStates(connection).Single();
             const string secondDate = "2024-02-02";
-            var profiles = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.RuleProfilesJson)!;
-            var identities = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)!;
-            var digest = LuxembourgIndexBuilder.StateSha256(
-                state.WorkKey, secondDate, state.ExpressionIri, state.PublisherWorkIri,
-                state.PublisherLegalResourceIri, state.Language, profiles, identities);
-            Execute(connection,
-                "INSERT INTO states VALUES($work,$date,$digest,$expression,$workIri,$resource,$language,$profiles,$identities)",
-                ("$work", state.WorkKey), ("$date", secondDate), ("$digest", digest),
-                ("$expression", state.ExpressionIri), ("$workIri", state.PublisherWorkIri),
-                ("$resource", state.PublisherLegalResourceIri), ("$language", state.Language),
-                ("$profiles", state.RuleProfilesJson), ("$identities", state.ArticleIdentitiesJson));
+            RewriteStates(connection, [state, state with { ApplicabilityDate = secondDate, InFileDate = secondDate }]);
         }, "does not bind its exact article population");
     }
 
@@ -634,15 +673,7 @@ public sealed class LuxembourgIndexBuilderTests
         AssertRecomputedStateTamperRejected(built, corpusRef, connection =>
         {
             var state = ReadStates(connection).Single();
-            const string language = "deu";
-            var profiles = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.RuleProfilesJson)!;
-            var identities = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)!;
-            var digest = LuxembourgIndexBuilder.StateSha256(
-                state.WorkKey, state.ApplicabilityDate, state.ExpressionIri, state.PublisherWorkIri,
-                state.PublisherLegalResourceIri, language, profiles, identities);
-            Execute(connection,
-                "UPDATE states SET language=$language,state_sha256=$digest",
-                ("$language", language), ("$digest", digest));
+            ReplaceStatesRedigested(connection, [state with { Language = "deu" }]);
         }, "language contradicts its articles");
     }
 
@@ -654,17 +685,9 @@ public sealed class LuxembourgIndexBuilderTests
         AssertRecomputedStateTamperRejected(built, corpusRef, connection =>
         {
             var state = ReadStates(connection).Single();
-            var profiles = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.RuleProfilesJson)!;
             var identities = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)!;
             Assert.IsGreaterThan(1, identities.Length);
-            identities = [identities[0]];
-            var identitiesJson = System.Text.Json.JsonSerializer.Serialize(identities);
-            var digest = LuxembourgIndexBuilder.StateSha256(
-                state.WorkKey, state.ApplicabilityDate, state.ExpressionIri, state.PublisherWorkIri,
-                state.PublisherLegalResourceIri, state.Language, profiles, identities);
-            Execute(connection,
-                "UPDATE states SET article_identities_json=$identities,state_sha256=$digest",
-                ("$identities", identitiesJson), ("$digest", digest));
+            ReplaceStatesRedigested(connection, [state with { ArticleIdentitiesJson = System.Text.Json.JsonSerializer.Serialize(new[] { identities[0] }) }]);
         }, "omits or crosses its expression population");
     }
 
@@ -679,17 +702,10 @@ public sealed class LuxembourgIndexBuilderTests
         AssertRecomputedStateTamperRejected(built, corpusRef, connection =>
         {
             var state = ReadStates(connection).Single();
-            var profiles = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.RuleProfilesJson)!;
             var identities = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)!;
             Assert.IsGreaterThan(1, identities.Length);
             identities = identities.Append(identities[0]).Order(StringComparer.Ordinal).ToArray();
-            var identitiesJson = System.Text.Json.JsonSerializer.Serialize(identities);
-            var digest = LuxembourgIndexBuilder.StateSha256(
-                state.WorkKey, state.ApplicabilityDate, state.ExpressionIri, state.PublisherWorkIri,
-                state.PublisherLegalResourceIri, state.Language, profiles, identities);
-            Execute(connection,
-                "UPDATE states SET article_identities_json=$identities,state_sha256=$digest",
-                ("$identities", identitiesJson), ("$digest", digest));
+            ReplaceStatesRedigested(connection, [state with { ArticleIdentitiesJson = System.Text.Json.JsonSerializer.Serialize(identities) }]);
         }, "not canonical");
     }
 
@@ -702,15 +718,7 @@ public sealed class LuxembourgIndexBuilderTests
         {
             var state = ReadStates(connection).Single();
             const string workIri = "http://data.legilux.public.lu/eli/etat/leg/loi/2000/01/01/n1";
-            var workKey = LuxembourgIndexBuilder.WorkKeyOf(workIri);
-            var profiles = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.RuleProfilesJson)!;
-            var identities = System.Text.Json.JsonSerializer.Deserialize<string[]>(state.ArticleIdentitiesJson)!;
-            var digest = LuxembourgIndexBuilder.StateSha256(
-                workKey, state.ApplicabilityDate, state.ExpressionIri, workIri,
-                state.PublisherLegalResourceIri, state.Language, profiles, identities);
-            Execute(connection,
-                "UPDATE states SET work_key=$work, publisher_work_iri=$workIri, state_sha256=$digest",
-                ("$work", workKey), ("$workIri", workIri), ("$digest", digest));
+            ReplaceStatesRedigested(connection, [state with { WorkKey = LuxembourgIndexBuilder.WorkKeyOf(workIri), PublisherWorkIri = workIri }]);
         }, "not canonical");
     }
 
@@ -721,7 +729,8 @@ public sealed class LuxembourgIndexBuilderTests
         bool mixExpression)
     {
         const string objectRef = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        const string expression = "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr";
+        const string root = "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo";
+        const string expression = root + "/fr";
         var articles = new[]
         {
             new LuxembourgIndexBuilder.ArticleRow(
@@ -733,25 +742,13 @@ public sealed class LuxembourgIndexBuilderTests
                 "art_2", null, "2024-02-01", mixExpression ? "fra" : "deu",
                 new string('c', 64), "two", "[]"),
         };
-        var builderType = typeof(LuxembourgIndexBuilder);
-        var sourceType = builderType.GetNestedType(
-            "StateSource", System.Reflection.BindingFlags.NonPublic)!;
-        var source = Activator.CreateInstance(sourceType,
-            expression,
-            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
-            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
-            "2024-02-01",
-            new string('c', 64))!;
-        var dictionaryType = typeof(Dictionary<,>).MakeGenericType(typeof(string), sourceType);
-        var sources = (System.Collections.IDictionary)Activator.CreateInstance(dictionaryType)!;
-        sources.Add(objectRef, source);
-        var method = builderType.GetMethod(
-            "ProjectStates", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var body = new LuxembourgIndexBuilder.CatalogueBody(
+            objectRef, root, expression, "fra", "acquired", "agreed_same_run_cc_by", "inventoried", null, new string('c', 64),
+            null, "2024-02-01", [], []);
 
-        var exception = Assert.ThrowsExactly<System.Reflection.TargetInvocationException>(() =>
-            method.Invoke(null, new object[] { articles, sources }));
-        Assert.IsInstanceOfType<InvalidDataException>(exception.InnerException);
-        StringAssert.Contains(exception.InnerException.Message, "does not match its admitted articles");
+        var exception = Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexBuilder.ProjectCatalogueStates(
+            articles, LuxembourgIndexBuilder.CatalogueFacts.From([]), [body], [], "2026-10-01"));
+        StringAssert.Contains(exception.Message, "does not match its admitted articles");
     }
 
     // ---- Index schema /7's event log (STATUS item 4, predecessor chaining, the first slice). ----
@@ -808,9 +805,9 @@ public sealed class LuxembourgIndexBuilderTests
     [TestMethod]
     [DataRow("UPDATE observations SET last_seq=last_seq+1", "do not number its events", DisplayName = "an observation numbering an event the log lacks")]
     [DataRow("UPDATE observations SET corpus_sha256='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'", "is not of this index's corpus", DisplayName = "an observation of another corpus")]
-    [DataRow("INSERT INTO observations VALUES(2,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',2,1,'2026-10-01T09:00:00Z',NULL)", "is not of this index's corpus", DisplayName = "a second observation of another corpus")]
-    [DataRow("INSERT INTO observations VALUES(2,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',2,1,'2026-10-01T07:59:59Z',NULL)", "each later than the one before", DisplayName = "a second build earlier than the first")]
-    [DataRow("INSERT INTO observations VALUES(2,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',2,1,'2026-10-01T08:00:00Z',NULL)", "each later than the one before", DisplayName = "a second build at the first one's time")]
+    [DataRow("INSERT INTO observations VALUES(2,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',2,1,'2026-10-01T09:00:00Z',NULL,NULL)", "is not of this index's corpus", DisplayName = "a second observation of another corpus")]
+    [DataRow("INSERT INTO observations VALUES(2,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',2,1,'2026-10-01T07:59:59Z',NULL,NULL)", "each later than the one before", DisplayName = "a second build earlier than the first")]
+    [DataRow("INSERT INTO observations VALUES(2,'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb','cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',2,1,'2026-10-01T08:00:00Z',NULL,NULL)", "each later than the one before", DisplayName = "a second build at the first one's time")]
     [DataRow("UPDATE observations SET built_at='2026-13-01T08:00:00Z'", "are not UTC seconds", DisplayName = "a build time that is no date")]
     [DataRow("DELETE FROM observations", "do not number its events", DisplayName = "no observation")]
     [DataRow("UPDATE log_stamp SET log_rows_sha256='0000000000000000000000000000000000000000000000000000000000000000'", "does not match its log stamp", DisplayName = "a log stamp of other rows")]
@@ -917,7 +914,13 @@ public sealed class LuxembourgIndexBuilderTests
     public async Task AMountedIndexBuiltBeforeItsCorpussEuCaptureIsRefusedWithItsCorpus()
     {
         var (built, corpus) = await BuildStateIndexWithCorpusAsync();
-        var (early, reference) = Tampered(built.IndexBytes.ToArray(), connection => Execute(connection, "UPDATE observations SET built_at='2000-01-01T00:00:00Z'"));
+        var (early, reference) = Tampered(built.IndexBytes.ToArray(), connection =>
+        {
+            // Index 9's rows say provisional by the observation bound, so they follow the earlier time, re-sealed.
+            Execute(connection, "UPDATE observations SET built_at='2000-01-01T00:00:00Z'");
+            Execute(connection, "UPDATE states SET provisional=(applicability_date>'2000-01-01')");
+            Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1", ("$digest", LogicalRowsOf(connection)));
+        });
         using var reader = LuxembourgIndexReader.OpenAndVerify(reference, early, corpus.ArtifactRef, RebindManifest(built.CapabilityManifest, reference.Sha256));
         var exception = Assert.ThrowsExactly<InvalidDataException>(() => reader.VerifyEventLogSources(corpus));
         StringAssert.Contains(exception.Message, "last build time 2000-01-01T00:00:00Z is earlier than the corpus's EU capture");
@@ -990,7 +993,7 @@ public sealed class LuxembourgIndexBuilderTests
             [other.StateSha256] = [new string('d', 64)],
         };
 
-        var appended = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [other, held, german], bodies, 7, out var changed);
+        var appended = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [other, held, german], bodies, 7, out var changed, Log2);
         Assert.IsNull(changed);
         CollectionAssert.AreEqual(
             new[]
@@ -1005,10 +1008,10 @@ public sealed class LuxembourgIndexBuilderTests
 
         var redigested = held with { StateSha256 = new string('9', 64) };
         bodies[redigested.StateSha256] = [new string('b', 64)];
-        Assert.IsNull(LuxembourgIndexBuilder.ProjectChainedEvents(fold, [redigested], bodies, 7, out changed), "a held key with another digest");
+        Assert.IsNull(LuxembourgIndexBuilder.ProjectChainedEvents(fold, [redigested], bodies, 7, out changed, Log2), "a held key with another digest");
         StringAssert.Contains(changed, "/lu-legilux/loi-a/2024-01-01");
         bodies[held.StateSha256] = [new string('e', 64)];
-        Assert.AreEqual("file_replaced", LuxembourgIndexBuilder.ProjectChainedEvents(fold, [held], bodies, 7, out changed)!.Single().Event,
+        Assert.AreEqual("file_replaced", LuxembourgIndexBuilder.ProjectChainedEvents(fold, [held], bodies, 7, out changed, Log2)!.Single().Event,
             "a held key with other source bodies is a replaced file");
     }
 
@@ -1058,10 +1061,9 @@ public sealed class LuxembourgIndexBuilderTests
         var renamed = MutateDatabase(second.IndexBytes.Span, connection =>
         {
             Execute(connection, "UPDATE events SET event='expression_added' WHERE seq=1");
-            Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1", ("$digest", LuxembourgIndexBuilder.HashLogicalRows(
-                ReadMembers(connection), ReadArticles(connection), ReadStates(connection), ReadWorkTitles(connection), ReadRelations(connection), ReadWorkFacts(connection), ReadEvents(connection))));
+            Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1", ("$digest", LogicalRowsOf(connection)));
             Execute(connection, "UPDATE log_stamp SET log_rows_sha256=$digest WHERE log_stamp_id=1",
-                ("$digest", LuxembourgIndexBuilder.HashEventLog(ReadObservations(connection), ReadEvents(connection))));
+                ("$digest", LogStampOf(connection)));
         });
         var digest = Convert.ToHexStringLower(SHA256.HashData(renamed));
         var exception = Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexReader.OpenAndVerify(
@@ -1111,10 +1113,9 @@ public sealed class LuxembourgIndexBuilderTests
         var renamed = MutateDatabase(chained.IndexBytes.Span, connection =>
         {
             Execute(connection, "UPDATE events SET event='expression_added' WHERE seq=1");
-            Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1", ("$digest", LuxembourgIndexBuilder.HashLogicalRows(
-                ReadMembers(connection), ReadArticles(connection), ReadStates(connection), ReadWorkTitles(connection), ReadRelations(connection), ReadWorkFacts(connection), ReadEvents(connection))));
+            Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1", ("$digest", LogicalRowsOf(connection)));
             Execute(connection, "UPDATE log_stamp SET log_rows_sha256=$digest WHERE log_stamp_id=1",
-                ("$digest", LuxembourgIndexBuilder.HashEventLog(ReadObservations(connection), ReadEvents(connection))));
+                ("$digest", LogStampOf(connection)));
         });
         var digest = Convert.ToHexStringLower(SHA256.HashData(renamed));
         var exception = Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexReader.OpenAndVerify(
@@ -1123,6 +1124,9 @@ public sealed class LuxembourgIndexBuilderTests
     }
 
     // ---- Predecessor chaining, the third slice: comparison events. ----
+
+    /// <summary>Log /2, index 8's: the projection these unit tests pin, which reading an index 8 still runs.</summary>
+    private const string Log2 = LuxembourgIndexBuilder.LegacyEventLogSchema8;
 
     private static LuxembourgIndexBuilder.StateRow ChainState(string work, string date, string language, string digest) =>
         new(work, date, digest, $"https://example.invalid/{work}/{date}/{language}", "w", "r", language, "[]", "[]");
@@ -1145,7 +1149,7 @@ public sealed class LuxembourgIndexBuilderTests
         var fold = ChainFold((held, new string('b', 64)));
         var reworded = held with { StateSha256 = new string('2', 64) };
         var appended = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [reworded],
-            new Dictionary<string, string[]>(StringComparer.Ordinal) { [reworded.StateSha256] = [new string('c', 64)] }, 5, out var changed);
+            new Dictionary<string, string[]>(StringComparer.Ordinal) { [reworded.StateSha256] = [new string('c', 64)] }, 5, out var changed, Log2);
         Assert.IsNull(changed);
         CollectionAssert.AreEqual(
             new[]
@@ -1158,12 +1162,12 @@ public sealed class LuxembourgIndexBuilderTests
             "a new text: a new state digest, the state and bodies it replaces named");
 
         var reissued = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [held],
-            new Dictionary<string, string[]>(StringComparer.Ordinal) { [held.StateSha256] = [new string('c', 64)] }, 5, out changed)!;
+            new Dictionary<string, string[]>(StringComparer.Ordinal) { [held.StateSha256] = [new string('c', 64)] }, 5, out changed, Log2)!;
         Assert.AreEqual("file_replaced", reissued.Single().Event, "new bytes with the same text: file_replaced, the digest unchanged");
         StringAssert.Contains(reissued.Single().DetailJson, $"\"replaced_state_sha256\":\"{held.StateSha256}\"");
 
         Assert.IsNull(LuxembourgIndexBuilder.ProjectChainedEvents(fold, [reworded],
-            new Dictionary<string, string[]>(StringComparer.Ordinal) { [reworded.StateSha256] = [new string('b', 64)] }, 5, out changed));
+            new Dictionary<string, string[]>(StringComparer.Ordinal) { [reworded.StateSha256] = [new string('b', 64)] }, 5, out changed, Log2));
         StringAssert.Contains(changed, "/lu-legilux/loi-a/2020-01-01");
     }
 
@@ -1189,7 +1193,7 @@ public sealed class LuxembourgIndexBuilderTests
             + $"\"previous_to\":{(previous is null ? "null" : $"\"{previous}\"")},\"new_to\":\"{next}\",\"derived\":true}}";
         var fold = ChainFold((first, Body('a')), (last, Body('b')));
 
-        var closed = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [first, last, later], bodies, 3, out _);
+        var closed = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [first, last, later], bodies, 3, out _, Log2);
         CollectionAssert.AreEqual(
             new[]
             {
@@ -1200,7 +1204,7 @@ public sealed class LuxembourgIndexBuilderTests
             closed,
             "the latest held state closes at the later one's date; the first state's end is unchanged");
 
-        var revised = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [first, between, last], bodies, 3, out _);
+        var revised = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [first, between, last], bodies, 3, out _, Log2);
         CollectionAssert.AreEqual(
             new[]
             {
@@ -1211,7 +1215,7 @@ public sealed class LuxembourgIndexBuilderTests
             revised,
             "a state inserted before the next moves the end back; the latest state stays open");
 
-        var absent = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [later], bodies, 3, out _)!;
+        var absent = LuxembourgIndexBuilder.ProjectChainedEvents(fold, [later], bodies, 3, out _, Log2)!;
         CollectionAssert.AreEqual(
             new[] { "interval_closed", "first_sighting" },
             absent.Select(static value => value.Event).ToArray(),
@@ -1313,7 +1317,7 @@ public sealed class LuxembourgIndexBuilderTests
             if (restampLog)
             {
                 Execute(connection, "UPDATE log_stamp SET log_rows_sha256=$digest WHERE log_stamp_id=1",
-                    ("$digest", LuxembourgIndexBuilder.HashEventLog(ReadObservations(connection), ReadEvents(connection))));
+                    ("$digest", LogStampOf(connection)));
             }
         });
         var digest = Convert.ToHexStringLower(SHA256.HashData(bytes));
@@ -1370,10 +1374,9 @@ public sealed class LuxembourgIndexBuilderTests
             readArticles = ReadArticles(connection);
             readStates = ReadStates(connection);
             readTitles = ReadWorkTitles(connection);
-            Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1", ("$digest", LuxembourgIndexBuilder.HashLogicalRows(
-                ReadMembers(connection), readArticles, readStates, readTitles, ReadRelations(connection), ReadWorkFacts(connection), ReadEvents(connection))));
+            Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1", ("$digest", LogicalRowsOf(connection)));
             Execute(connection, "UPDATE log_stamp SET log_rows_sha256=$digest WHERE log_stamp_id=1",
-                ("$digest", LuxembourgIndexBuilder.HashEventLog(ReadObservations(connection), ReadEvents(connection))));
+                ("$digest", LogStampOf(connection)));
         });
         articles = readArticles;
         states = readStates;
@@ -1381,16 +1384,308 @@ public sealed class LuxembourgIndexBuilderTests
         return bytes;
     }
 
-    internal static LuxembourgIndexBuilder.ObservationRow[] ReadObservations(SqliteConnection connection)
+    internal static LuxembourgIndexBuilder.ObservationRow[] ReadObservations(SqliteConnection connection) =>
+        LuxembourgIndexBuilder.ReadLogObservations(connection, LogSchemaOf(connection));
+
+    /// <summary>The index's schema version (<c>user_version</c>): 9, or a legacy 8 or 6 a test rewrote it into.</summary>
+    internal static int IndexVersion(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT observation,corpus_sha256,predecessor_index_sha256,first_seq,last_seq,built_at,observed_from FROM observations ORDER BY observation";
-        using var reader = command.ExecuteReader();
-        var rows = new List<LuxembourgIndexBuilder.ObservationRow>();
-        while (reader.Read()) rows.Add(new(
-            reader.GetInt64(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2),
-            reader.GetInt64(3), reader.GetInt64(4), reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetString(6)));
-        return rows.ToArray();
+        command.CommandText = "PRAGMA user_version";
+        return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>The log schema of the index's version: log /3 for 9, log /2 otherwise.</summary>
+    internal static string LogSchemaOf(SqliteConnection connection) =>
+        IndexVersion(connection) == 9 ? LuxembourgIndexBuilder.EventLogSchema : LuxembourgIndexBuilder.LegacyEventLogSchema8;
+
+    /// <summary>The digest of the index's log as it now stands, as its log stamp records it for its schema.</summary>
+    internal static string LogStampOf(SqliteConnection connection) =>
+        LuxembourgIndexBuilder.HashEventLogOf(LogSchemaOf(connection), ReadObservations(connection), ReadEvents(connection));
+
+    /// <summary>The digest of the index's logical rows as they now stand, as its stamp records it for its schema.</summary>
+    internal static string LogicalRowsOf(SqliteConnection connection) =>
+        IndexVersion(connection) == 9
+            ? LuxembourgIndexBuilder.HashLogicalRows(
+                ReadMembers(connection), ReadArticles(connection), ReadStates(connection), ReadWorkTitles(connection),
+                ReadRelations(connection), ReadWorkFacts(connection), ReadEvents(connection), ReadIntervals(connection))
+            : LuxembourgIndexBuilder.HashLegacyLogicalRows8(
+                ReadMembers(connection), ReadArticles(connection), ReadStates(connection), ReadWorkTitles(connection),
+                ReadRelations(connection), ReadWorkFacts(connection), ReadEvents(connection));
+
+    /// <summary>The index's interval transitions (none before index 9).</summary>
+    internal static LuxembourgIndexBuilder.IntervalRow[] ReadIntervals(SqliteConnection connection) =>
+        IndexVersion(connection) == 9 ? LuxembourgIndexReader.ReadIntervals(connection) : [];
+
+    /// <summary>
+    /// Rewrites the states table as <paramref name="rows"/>, each completed as its schema's builder writes it: under index
+    /// 9 a row's own facts the builder would give it where it carries none (kind from its legal resource, its date's role,
+    /// an act's in-file date, the French expression a translation takes, <c>provisional</c> by the observation bound, held
+    /// text), its digest /2, and the chain fields and interval transitions recomputed over every row; under index 8 or 6,
+    /// digest /1. Returns the rows as written. The caller re-seals the log and the stamp.
+    /// </summary>
+    internal static LuxembourgIndexBuilder.StateRow[] RewriteStates(SqliteConnection connection, IEnumerable<LuxembourgIndexBuilder.StateRow> rows)
+    {
+        var source = rows.ToArray();
+        var version = IndexVersion(connection);
+        LuxembourgIndexBuilder.StateRow[] written;
+        LuxembourgIndexBuilder.IntervalRow[] intervals = [];
+        if (version == 9)
+        {
+            var builtAtDate = ReadObservations(connection)[^1].BuiltAt[..10];
+            var completed = source.Select(row =>
+            {
+                var kind = row.StateKind ?? LuxembourgIndexBuilder.StateKindOf(row.PublisherLegalResourceIri)!;
+                var role = row.DateRole ?? (kind == LuxembourgIndexBuilder.KindAsPublished
+                    ? LuxembourgIndexBuilder.RoleApplicabilityInFile
+                    : LuxembourgIndexBuilder.RoleApplicability);
+                var translation = LuxembourgIndexBuilder.IsTranslationLanguage(row.Language);
+                var french = source.Where(other =>
+                        string.Equals(other.PublisherLegalResourceIri, row.PublisherLegalResourceIri, StringComparison.Ordinal) &&
+                        string.Equals(other.Language, "fra", StringComparison.Ordinal))
+                    .Select(static other => other.ExpressionIri).ToArray();
+                return row with
+                {
+                    StateKind = kind,
+                    DateRole = role,
+                    InFileDate = !translation && role == LuxembourgIndexBuilder.RoleApplicabilityInFile ? row.ApplicabilityDate : row.InFileDate,
+                    TextStatus = row.TextStatus ?? LuxembourgIndexBuilder.TextHeld,
+                    // A translation keeps the French expression it names while that is still one of its legal resource's
+                    // French rows, so a row added later does not move its digest; else the one French row, when there is one.
+                    TranslationOf = !translation ? null
+                        : row.TranslationOf is { } named && french.Contains(named, StringComparer.Ordinal) ? named
+                        : french.Length == 1 ? french[0] : null,
+                    Provisional = string.CompareOrdinal(row.ApplicabilityDate, builtAtDate) > 0,
+                    Boundary = row.Boundary ?? LuxembourgIndexBuilder.BoundaryDerived,
+                };
+            }).ToArray();
+            completed = completed.Select(static row => row with { StateSha256 = LuxembourgIndexBuilder.StateSha256Two(row) }).ToArray();
+            (written, intervals) = LuxembourgIndexBuilder.CompleteIntervals(completed);
+        }
+        else
+        {
+            written = source.Select(static row => row with
+            {
+                StateSha256 = LuxembourgIndexBuilder.StateSha256(
+                    row.WorkKey, row.ApplicabilityDate, row.ExpressionIri, row.PublisherWorkIri, row.PublisherLegalResourceIri, row.Language,
+                    System.Text.Json.JsonSerializer.Deserialize<string[]>(row.RuleProfilesJson)!,
+                    System.Text.Json.JsonSerializer.Deserialize<string[]>(row.ArticleIdentitiesJson)!),
+            }).ToArray();
+        }
+
+        Execute(connection, "DELETE FROM states");
+        if (version == 9)
+        {
+            Execute(connection, "DELETE FROM intervals");
+        }
+
+        foreach (var row in written)
+        {
+            InsertStateRow(connection, version, row);
+        }
+
+        foreach (var interval in intervals)
+        {
+            Execute(connection, "INSERT INTO intervals VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6)",
+                ("$p0", interval.WorkKey), ("$p1", interval.Ordinal), ("$p2", interval.Kind), ("$p3", interval.FromStateSha256),
+                ("$p4", interval.ToStateSha256), ("$p5", (object?)interval.SpanFrom ?? DBNull.Value), ("$p6", (object?)interval.SpanTo ?? DBNull.Value));
+        }
+
+        return ReadStates(connection);
+    }
+
+    /// <summary>
+    /// Rewrites the states table as <paramref name="rows"/> exactly as given but for each digest, recomputed under the
+    /// index's schema, so a tamper test leaves one fact wrong and the digest agreeing with it. The intervals are untouched.
+    /// </summary>
+    internal static void ReplaceStatesRedigested(SqliteConnection connection, IEnumerable<LuxembourgIndexBuilder.StateRow> rows)
+    {
+        var version = IndexVersion(connection);
+        var redigested = rows.Select(row => row with
+        {
+            StateSha256 = version == 9
+                ? LuxembourgIndexBuilder.StateSha256Two(row)
+                : LuxembourgIndexBuilder.StateSha256(
+                    row.WorkKey, row.ApplicabilityDate, row.ExpressionIri, row.PublisherWorkIri, row.PublisherLegalResourceIri, row.Language,
+                    System.Text.Json.JsonSerializer.Deserialize<string[]>(row.RuleProfilesJson)!,
+                    System.Text.Json.JsonSerializer.Deserialize<string[]>(row.ArticleIdentitiesJson)!),
+        }).ToArray();
+        Execute(connection, "DELETE FROM states");
+        foreach (var row in redigested)
+        {
+            InsertStateRow(connection, version, row);
+        }
+    }
+
+    internal static void InsertStateRow(SqliteConnection connection, int version, LuxembourgIndexBuilder.StateRow row)
+    {
+        if (version == 9)
+        {
+            Execute(connection,
+                "INSERT INTO states VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7,$p8,$p9,$p10,$p11,$p12,$p13,$p14,$p15,$p16,$p17,$p18,$p19,$p20,$p21)",
+                ("$p0", row.WorkKey), ("$p1", row.ApplicabilityDate), ("$p2", row.StateSha256), ("$p3", row.ExpressionIri),
+                ("$p4", row.PublisherWorkIri), ("$p5", row.PublisherLegalResourceIri), ("$p6", row.Language), ("$p7", row.RuleProfilesJson),
+                ("$p8", row.ArticleIdentitiesJson), ("$p9", row.StateKind!), ("$p10", row.DateRole!), ("$p11", (object?)row.ApplicableTo ?? DBNull.Value),
+                ("$p12", (object?)row.ApplicableToSource ?? DBNull.Value), ("$p13", row.Boundary!), ("$p14", (object?)row.PublicationDate ?? DBNull.Value),
+                ("$p15", row.TextStatus!), ("$p16", (object?)row.TextStatusReason ?? DBNull.Value), ("$p17", (object?)row.InFileIdentity ?? DBNull.Value),
+                ("$p18", (object?)row.InFileDate ?? DBNull.Value), ("$p19", (object?)row.TranslationOf ?? DBNull.Value), ("$p20", row.Provisional ? 1 : 0),
+                ("$p21", (object?)row.EntryIntoForce ?? DBNull.Value));
+        }
+        else
+        {
+            Execute(connection,
+                "INSERT INTO states VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7,$p8)",
+                ("$p0", row.WorkKey), ("$p1", row.ApplicabilityDate), ("$p2", row.StateSha256), ("$p3", row.ExpressionIri),
+                ("$p4", row.PublisherWorkIri), ("$p5", row.PublisherLegalResourceIri), ("$p6", row.Language), ("$p7", row.RuleProfilesJson),
+                ("$p8", row.ArticleIdentitiesJson));
+        }
+    }
+
+    /// <summary>
+    /// A built index 9 rewritten into schema 8's tables, as schema 8 wrote them: its held rows only, with schema 8's nine
+    /// columns and state digest /1; no interval table; log /2, a genesis log of those rows with the source bodies the log
+    /// named and an observation with no derivation time; user_version 8 and the stamps re-sealed. Every other table is
+    /// copied unchanged. No schema 8 builder remains, so this is how a test holds an index of that schema.
+    /// </summary>
+    internal static byte[] Schema8Of(ReadOnlySpan<byte> schema9, Action<SqliteConnection>? tamper = null)
+    {
+        LuxembourgIndexBuilder.MemberRow[] members = [];
+        LuxembourgIndexBuilder.ArticleRow[] articles = [];
+        LuxembourgIndexBuilder.StateRow[] states = [];
+        LuxembourgIndexBuilder.WorkTitleRow[] titles = [];
+        LuxembourgIndexBuilder.RelationRow[] relations = [];
+        LuxembourgIndexBuilder.WorkFactRow[] facts = [];
+        IReadOnlyDictionary<string, LuxembourgIndexBuilder.LoggedState> fold = new Dictionary<string, LuxembourgIndexBuilder.LoggedState>();
+        LuxembourgIndexBuilder.ObservationRow observation = null!;
+        string corpusSha256 = "";
+        (string Version, string SourceId, string Compile) provenance = ("", "", "");
+        _ = MutateDatabase(schema9, connection =>
+        {
+            members = ReadMembers(connection);
+            articles = ReadArticles(connection);
+            states = ReadStates(connection);
+            titles = ReadWorkTitles(connection);
+            relations = ReadRelations(connection);
+            facts = ReadWorkFacts(connection);
+            fold = LuxembourgIndexBuilder.FoldLog(ReadEvents(connection));
+            observation = ReadObservations(connection)[^1];
+            using var stamp = connection.CreateCommand();
+            stamp.CommandText = "SELECT corpus_sha256,sqlite_version,sqlite_source_id,compile_options_sha256 FROM stamp WHERE stamp_id=1";
+            using var reader = stamp.ExecuteReader();
+            Assert.IsTrue(reader.Read());
+            corpusSha256 = reader.GetString(0);
+            provenance = (reader.GetString(1), reader.GetString(2), reader.GetString(3));
+        });
+
+        var held = states.Where(static row => row.Held).Select(static row => new LuxembourgIndexBuilder.StateRow(
+            row.WorkKey, row.ApplicabilityDate,
+            LuxembourgIndexBuilder.StateSha256(
+                row.WorkKey, row.ApplicabilityDate, row.ExpressionIri, row.PublisherWorkIri, row.PublisherLegalResourceIri, row.Language,
+                System.Text.Json.JsonSerializer.Deserialize<string[]>(row.RuleProfilesJson)!,
+                System.Text.Json.JsonSerializer.Deserialize<string[]>(row.ArticleIdentitiesJson)!),
+            row.ExpressionIri, row.PublisherWorkIri, row.PublisherLegalResourceIri, row.Language, row.RuleProfilesJson,
+            row.ArticleIdentitiesJson)).ToArray();
+        var bodies = held.ToDictionary(
+            static row => row.StateSha256,
+            row => fold[LuxembourgIndexBuilder.StateKey(row)].SourceBodies.ToArray(),
+            StringComparer.Ordinal);
+        var events = LuxembourgIndexBuilder.ProjectGenesisEvents(held, bodies, LuxembourgIndexBuilder.LegacyEventLogSchema8);
+        var observations = LuxembourgIndexBuilder.ProjectGenesisObservations(corpusSha256, events.Length, observation.BuiltAt);
+        var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-index-schema8-{Guid.NewGuid():N}.sqlite");
+        try
+        {
+            using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+                   {
+                       DataSource = path,
+                       Mode = SqliteOpenMode.ReadWriteCreate,
+                       Pooling = false,
+                   }.ToString()))
+            {
+                connection.Open();
+                Execute(connection, "PRAGMA page_size=4096");
+                Execute(connection, "PRAGMA encoding='UTF-8'");
+                Execute(connection, "PRAGMA auto_vacuum=NONE");
+                Execute(connection, "PRAGMA journal_mode=DELETE");
+                Execute(connection, "PRAGMA application_id=1280717574");
+                Execute(connection, "PRAGMA user_version=8");
+                Execute(connection, LuxembourgIndexBuilder.LegacyDdl8);
+                foreach (var member in members)
+                {
+                    Execute(connection, "INSERT INTO members VALUES($p0,$p1,$p2,$p3,$p4,$p5)",
+                        ("$p0", member.ObjectRefSha256), ("$p1", member.SourceOrdinal), ("$p2", member.Outcome),
+                        ("$p3", (object?)member.RightsDisposition ?? DBNull.Value), ("$p4", member.Stage3OutcomesJson), ("$p5", member.GapsJson));
+                }
+
+                foreach (var article in articles)
+                {
+                    Execute(connection, "INSERT INTO articles VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7,$p8,$p9)",
+                        ("$p0", article.ArticleIdentitySha256), ("$p1", article.ObjectRefSha256), ("$p2", article.ExpressionIri),
+                        ("$p3", article.PublisherId), ("$p4", (object?)article.PublisherWid ?? DBNull.Value),
+                        ("$p5", (object?)article.ApplicabilityDate ?? DBNull.Value), ("$p6", article.Language),
+                        ("$p7", article.RuleProfileSha256), ("$p8", article.SearchableText), ("$p9", article.TokensJson));
+                }
+
+                foreach (var relation in relations)
+                {
+                    Execute(connection, "INSERT INTO relations VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7,$p8,$p9)",
+                        ("$p0", relation.FromRef), ("$p1", relation.Ordinal), ("$p2", relation.EdgeType), ("$p3", relation.AssertedBy),
+                        ("$p4", relation.SourcePredicate), ("$p5", relation.InNote ? 1 : 0), ("$p6", (object?)relation.Label ?? DBNull.Value),
+                        ("$p7", (object?)relation.Href ?? DBNull.Value), ("$p8", relation.ToKind), ("$p9", (object?)relation.ToRef ?? DBNull.Value));
+                }
+
+                foreach (var row in held)
+                {
+                    Execute(connection, "INSERT INTO states VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7,$p8)",
+                        ("$p0", row.WorkKey), ("$p1", row.ApplicabilityDate), ("$p2", row.StateSha256), ("$p3", row.ExpressionIri),
+                        ("$p4", row.PublisherWorkIri), ("$p5", row.PublisherLegalResourceIri), ("$p6", row.Language), ("$p7", row.RuleProfilesJson),
+                        ("$p8", row.ArticleIdentitiesJson));
+                }
+
+                foreach (var title in titles)
+                {
+                    Execute(connection, "INSERT INTO work_titles VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7)",
+                        ("$p0", title.WorkIdentifier), ("$p1", title.ExpressionIri), ("$p2", title.Language), ("$p3", title.Title),
+                        ("$p4", title.NormalizedTitle), ("$p5", (object?)title.DocumentDate ?? DBNull.Value), ("$p6", title.TitleKind),
+                        ("$p7", title.EvidenceSha256));
+                }
+
+                foreach (var fact in facts)
+                {
+                    Execute(connection, "INSERT INTO work_facts VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7)",
+                        ("$p0", fact.SubjectIri), ("$p1", fact.Predicate), ("$p2", fact.FactKind), ("$p3", fact.ObjectKind),
+                        ("$p4", fact.ObjectValue), ("$p5", fact.DatatypeIri), ("$p6", fact.LanguageTag), ("$p7", fact.EvidenceSha256));
+                }
+
+                foreach (var value in events)
+                {
+                    Execute(connection, "INSERT INTO events VALUES($p0,$p1,$p2,$p3,NULL,$p4)",
+                        ("$p0", value.Seq), ("$p1", value.Scope), ("$p2", value.Key), ("$p3", value.Event), ("$p4", value.DetailJson));
+                }
+
+                foreach (var row in observations)
+                {
+                    Execute(connection, "INSERT INTO observations VALUES($p0,$p1,NULL,$p2,$p3,$p4,NULL)",
+                        ("$p0", row.Observation), ("$p1", row.CorpusSha256), ("$p2", row.FirstSeq), ("$p3", row.LastSeq), ("$p4", row.BuiltAt));
+                }
+
+                Execute(connection, "INSERT INTO log_stamp VALUES(1,$p0,$p1)",
+                    ("$p0", LuxembourgIndexBuilder.LegacyEventLogSchema8), ("$p1", LuxembourgIndexBuilder.HashLegacyEventLog8(observations, events)));
+                Execute(connection, "INSERT INTO stamp VALUES(1,$p0,$p1,$p2,$p3,$p4,$p5)",
+                    ("$p0", LuxembourgIndexBuilder.LegacySchema8), ("$p1", corpusSha256),
+                    ("$p2", LuxembourgIndexBuilder.HashLegacyLogicalRows8(members, articles, held, titles, relations, facts, events)),
+                    ("$p3", provenance.Version), ("$p4", provenance.SourceId), ("$p5", provenance.Compile));
+                if (tamper is not null)
+                {
+                    tamper(connection);
+                }
+            }
+
+            return File.ReadAllBytes(path);
+        }
+        finally
+        {
+            LuxembourgIndexBuilder.DeleteDatabase(path);
+        }
     }
 
     private static (string Schema, string Digest) ReadLogStamp(SqliteConnection connection)
@@ -1463,9 +1758,7 @@ public sealed class LuxembourgIndexBuilderTests
         var bytes = MutateDatabase(built.IndexBytes.Span, connection =>
         {
             tamper(connection);
-            var logicalRows = LuxembourgIndexBuilder.HashLogicalRows(
-                ReadMembers(connection), ReadArticles(connection), ReadStates(connection),
-                ReadWorkTitles(connection), ReadRelations(connection), ReadWorkFacts(connection), ReadEvents(connection));
+            var logicalRows = LogicalRowsOf(connection);
             Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1",
                 ("$digest", logicalRows));
         });
@@ -1529,32 +1822,37 @@ public sealed class LuxembourgIndexBuilderTests
         return rows.ToArray();
     }
 
+    /// <summary>Every article row in identity order, with its document position on an index 9.</summary>
     internal static LuxembourgIndexBuilder.ArticleRow[] ReadArticles(SqliteConnection connection)
     {
+        var nine = IndexVersion(connection) == 9;
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,expression_iri,publisher_id,publisher_wid,applicability_date,language,rule_profile_sha256,searchable_text,tokens_json FROM articles ORDER BY article_identity_sha256";
+        command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,expression_iri,publisher_id,publisher_wid,applicability_date,language,rule_profile_sha256,searchable_text,tokens_json" +
+            (nine ? ",document_position" : "") + " FROM articles ORDER BY article_identity_sha256";
         using var reader = command.ExecuteReader();
         var rows = new List<LuxembourgIndexBuilder.ArticleRow>();
         while (reader.Read()) rows.Add(new(
             reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
             reader.IsDBNull(4) ? null : reader.GetString(4),
             reader.IsDBNull(5) ? null : reader.GetString(5),
-            reader.GetString(6), reader.GetString(7), reader.GetString(8), reader.GetString(9)));
+            reader.GetString(6), reader.GetString(7), reader.GetString(8), reader.GetString(9),
+            nine ? reader.GetInt32(10) : null));
         return rows.ToArray();
     }
 
-    internal static LuxembourgIndexBuilder.StateRow[] ReadStates(SqliteConnection connection)
+    /// <summary>
+    /// The next free place in a document, for an article a test adds to an index 9 by copying another body's: one past
+    /// every place the table holds, so no body's articles share one.
+    /// </summary>
+    internal static long NextDocumentPosition(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT work_key,applicability_date,state_sha256,expression_iri,publisher_work_iri,publisher_legal_resource_iri,language,rule_profiles_json,article_identities_json FROM states ORDER BY work_key,applicability_date,expression_iri,language";
-        using var reader = command.ExecuteReader();
-        var rows = new List<LuxembourgIndexBuilder.StateRow>();
-        while (reader.Read()) rows.Add(new(
-            reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-            reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7),
-            reader.GetString(8)));
-        return rows.ToArray();
+        command.CommandText = "SELECT COALESCE(MAX(document_position),0)+1 FROM articles";
+        return (long)command.ExecuteScalar()!;
     }
+
+    internal static LuxembourgIndexBuilder.StateRow[] ReadStates(SqliteConnection connection) =>
+        LuxembourgIndexReader.ReadStates(connection, IndexVersion(connection));
 
     internal static LuxembourgIndexBuilder.WorkTitleRow[] ReadWorkTitles(SqliteConnection connection)
     {
@@ -1592,12 +1890,9 @@ public sealed class LuxembourgIndexBuilderTests
     {
         // The genesis log of the edited states, re-sealed whole: its events (each naming its state's source bodies),
         // its one observation (at the build time it held) and its own stamp, as the builder writes them.
-        string builtAt;
-        using (var held = connection.CreateCommand())
-        {
-            held.CommandText = "SELECT built_at FROM observations WHERE observation=1";
-            builtAt = (string)held.ExecuteScalar()!;
-        }
+        var logSchema = LogSchemaOf(connection);
+        var first = ReadObservations(connection)[0];
+        var builtAt = first.BuiltAt;
 
         foreach (var table in new[] { "events", "observations", "log_stamp" })
         {
@@ -1607,7 +1902,7 @@ public sealed class LuxembourgIndexBuilderTests
         }
 
         var events = LuxembourgIndexBuilder.ProjectGenesisEvents(
-            states, LuxembourgIndexBuilder.SourceBodiesOfStates(articles, states, bodyByObjectRef));
+            states, LuxembourgIndexBuilder.SourceBodiesOfStates(articles, states, bodyByObjectRef), logSchema);
         foreach (var value in events)
         {
             using var insert = connection.CreateCommand();
@@ -1628,11 +1923,14 @@ public sealed class LuxembourgIndexBuilderTests
             corpusSha256 = (string)stamp.ExecuteScalar()!;
         }
 
-        var observations = LuxembourgIndexBuilder.ProjectGenesisObservations(corpusSha256, events.Length, builtAt);
+        var observations = LuxembourgIndexBuilder.ProjectGenesisObservations(corpusSha256, events.Length, builtAt, first.DerivedAt);
         foreach (var observation in observations)
         {
             using var insert = connection.CreateCommand();
-            insert.CommandText = "INSERT INTO observations VALUES($observation,$corpus,NULL,$first,$last,$builtAt,NULL)";
+            insert.CommandText = logSchema == LuxembourgIndexBuilder.EventLogSchema
+                ? "INSERT INTO observations VALUES($observation,$corpus,NULL,$first,$last,$builtAt,NULL,$derivedAt)"
+                : "INSERT INTO observations VALUES($observation,$corpus,NULL,$first,$last,$builtAt,NULL)";
+            insert.Parameters.AddWithValue("$derivedAt", (object?)observation.DerivedAt ?? DBNull.Value);
             insert.Parameters.AddWithValue("$builtAt", observation.BuiltAt);
             insert.Parameters.AddWithValue("$observation", observation.Observation);
             insert.Parameters.AddWithValue("$corpus", observation.CorpusSha256);
@@ -1644,8 +1942,8 @@ public sealed class LuxembourgIndexBuilderTests
         using (var logStamp = connection.CreateCommand())
         {
             logStamp.CommandText = "INSERT INTO log_stamp VALUES(1,$schema,$digest)";
-            logStamp.Parameters.AddWithValue("$schema", LuxembourgIndexBuilder.EventLogSchema);
-            logStamp.Parameters.AddWithValue("$digest", LuxembourgIndexBuilder.HashEventLog(observations, events));
+            logStamp.Parameters.AddWithValue("$schema", logSchema);
+            logStamp.Parameters.AddWithValue("$digest", LuxembourgIndexBuilder.HashEventLogOf(logSchema, observations, events));
             Assert.AreEqual(1, logStamp.ExecuteNonQuery());
         }
 

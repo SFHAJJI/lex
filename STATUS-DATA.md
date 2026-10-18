@@ -1,6 +1,282 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-16.
+Updated 2026-10-18.
+
+## Index /9: every catalogue state of a served work, held or textless, dated by role, with ends, boundaries and intervals (Claude, 2026-10-17)
+
+- **What.** Slice S6 of the Luxembourg data design (`C:\lex-v3\LU-DATA-DESIGN-2026-10-14-v2.md` §3.1, §3.3, §3.4), with the two
+  things S4 deferred to it: state digest /2 in rule set `lu-release-1`, and `log.derived_at`. The builder writes
+  `lex-v3-luxembourg-index/9` (`user_version` 9) with event log `lex-v3-event-log/3`; the reader opens /9, /8 and /6, each
+  exactly. On an index 8 or 6 every answer is the one the code before index 9 sent, byte for byte (held by a committed
+  schema-8 mount that code wrote, and the real schema-6 mount: the review of #980). On an index 9 every operation that
+  existed before reads the held rows only, until the reader's interval rules land (S7a), and the server refuses a built
+  mount of index 9 until S7a turns one switch (below). No mount over real data has been built with it: the dry run is the
+  next machine step.
+- **Review and repair (#980).** The independent review found the core sound (digest /2 and its profile recomputed, the
+  probe's counts reproduced, the tampers refused, derive-c's real /8 read identically through base and head over 8,681
+  reader answers) and asked for four repairs and a minor one, all made:
+  - F1: no test read an index 8 this code did not write. `Fixtures/LegacySchema8Mount` holds a schema-8 mount built and
+    verified at `3b7913ec` from a synthetic act (its XML beside it), pinned by digest; `V3CorpusLegacySchema8MountTests`
+    reads it with schema 8's checks, and the query-plan tests plan schema 8's own texts of the three state queries on it.
+    Two fields swapped in `LegacyStateRow8.Of` now fail; they passed before.
+  - F2: a schema-8 or schema-6 answer had gained `log.derived_at`, the "per state row" scope, the genesis note's
+    derivation sentence, as_observed's "/8 or /9" and the MCP events description. Each is index 9's only now, and
+    `base-answers.json` (the integration head's whole envelopes for 29 requests over the schema-8 mount and 9 over the
+    schema-6 one, recorded at `5a659831`) is replayed byte for byte. The answers are recorded on Linux, as the release
+    image runs them (globalization-invariant, UTC; with the language library the bytes are the same): the answers
+    production sends. One request answers otherwise on Windows with the same code, base and head alike: resolve of
+    `/lu-legilux/loi-2026-01-01-a1` is `identifier_unknown` on Linux, where `Uri.TryCreate(UriKind.Absolute)` reads a
+    rooted path as a file URI and `LooksLikeIdentifier` takes it, and `retrieval_mode_unavailable` (title discovery) on
+    Windows. The recording holds that Windows answer beside the Linux one, and a Windows run is held to it (CI's
+    image-conditions lane found it). The platform difference is the base's `LooksLikeIdentifier`, not this slice's: a
+    reading for the web lane (a rooted path should mean the same on every system). Provenance's digest /2 sentence on schema 8 now fails.
+  - F3: the fixture has an end on its start (the real `code/procedure_penale/20211214`): an invalid boundary and
+    transition. `<= 0` made `< 0` now fails.
+  - F4: `V3CorpusMount.ServesIndexNine` is the one switch S7a turns. Until then the server refuses a built mount of index 9
+    (one with its build report, as a release's mount is) with `IndexNineNotServedSentence`; a test fixture mount, with no
+    build report, is served, so the journeys and samples run. G5 from the answer alone is an expected gap on index 9:
+    `V3IndexNineServingTests` and the G5 case of `V3ReplayGuaranteesTests` fail when the switch turns, until S7a updates them.
+  - Minor: a textless row took the in-file facts of another expression's file (`loi/2017/07/20/a674`'s French row carried
+    the English file's); it takes its own expression's only. A catalogue state naming no expression adds no row beside a
+    held row of the same state.
+- **The states table** keeps schema 8's nine columns and adds `state_kind` (`as_published`, `consolidation`, `code`),
+  `date_role` (`applicability`, `applicability_in_file`, `entry_into_force`: the role names the date's source),
+  `applicable_to` and `applicable_to_source` (`publisher` or `derived`), `boundary` (`half_open`, `inclusive_suspected`,
+  `invalid`, `derived`), `publication_date`, `text_status` (`held`, `withheld_rights`, `not_available_pdf`,
+  `not_available_derivation`, `not_available_misfiled`, `not_acquired`) and `text_status_reason`, `in_file_identity`,
+  `in_file_date`, `translation_of`, `provisional`, and `entry_into_force` (beyond the design; the driver decisions). Its CHECKs:
+  an end and its source come together; a row is held exactly when it lists articles, and exactly when it gives no reason; an
+  empty expression comes exactly with an empty language, and only on a `not_acquired` row.
+- **The articles table gains `document_position`** (#978's finding: every state lists its articles by digest, and the
+  index held no document order): an admitted article's place among its publisher document's main-body top-level
+  articles, from 1, in the publisher's order, which inventory /4 lists (its rule profile's `publisher-order`; /3 lists
+  them in document order too). The build takes it from the content outcome's own inventory and refuses an admitted
+  article its inventory does not list; an article not admitted keeps its place, so a body's positions can skip (the gap
+  is the missing article's place). No digest but the logical rows' covers it: it is a fact of the file, not of the
+  state or the wording. The reader checks a body's articles hold distinct places; S7a reads a state's articles in that
+  order, replacing #978's stopgap (the natural order of their ids).
+- **The `intervals` table** (work key, ordinal, kind, from and to state digests, span): each work's French chain in date
+  order, one row from each state to the first state of the next date (`contiguous`, `derived`, `inclusive_suspected`,
+  `hole` and `overlap` with their spans, `invalid`), and one between consecutive states of one date (`same_date`).
+- **Observations gain `derived_at`** (log /3): the time a derivation from custody states it ran (its inputs' `derived_at`),
+  null for the acquiring build's own derivations; a UTC second no earlier than `built_at`. `V3FirstMountBuild` passes the
+  acquisition result's `DerivedAt` to both index builds. The events answer serves `log.derived_at`, and its genesis note
+  says what it is: "log.derived_at is when this index was derived from custody, the time its derivation's inputs state, and
+  null when its derivations are the acquiring build's own or when its schema records none (lex-v3-luxembourg-index/8)".
+- **How a row is made** (`LuxembourgIndexBuilder.ProjectCatalogueStates`, a pure function of the catalogue's facts (the
+  `work_facts` rows), the held bodies with what inventory and content made of them, and the corpus records; the envelope's
+  build and the test harness both reach it, then one writer, `WriteIndex`):
+  - A held row is a held body's selected expression with its admitted articles (as schema 8's states were); its language
+    is the selected WEMI's, refused if the catalogue states another for the expression.
+  - A catalogue state is a `work_facts` subject that spells an act (`…/jo`), a consolidation (`…/consolide/yyyymmdd`) or a
+    code state (`…/code/name/yyyymmdd`); its work is that IRI less the suffix, keyed by `WorkKeyOf` (a code by the code:
+    `code-penal`). A served work is one with at least one held row. Every catalogue state of a served work that has no
+    held row gets a textless row for each of its French catalogue expressions, or one with an empty expression and
+    language when the catalogue names none.
+  - Dates by role: a consolidation or code state by its catalogue `dateApplicability` (`applicability`); an act by its
+    file's own `dateApplicability` (`applicability_in_file`: inventory /4's evidence, or inventory /3's coordinate date)
+    else its catalogue `dateEntryInForce` (`entry_into_force`). One exact value or the state gets no row (its articles stay
+    in the index in no state, as derive-c's undated acts' did).
+  - The act's catalogue entry into force is kept in `entry_into_force` whatever its date's role, so the file's
+    applicability and the entry into force are two values the reader can speak apart (R21).
+  - The publisher's end is the catalogue's `dateEndApplicability` (one exact value; consolidations and codes only); the
+    publication date is the catalogue's `publicationDate`.
+  - Text status, rights first: a held body withheld for rights is `withheld_rights` (its rights disposition, then any
+    content-consistency findings: S2's R8); an acquired PDF `not_available_pdf`; a file inventory /4 refused
+    `not_available_misfiled` (the checks and the states they name); an acquired XML with no admitted article, or rejected,
+    `not_available_derivation`; no body: `not_acquired`, with the record's member outcome and body axis, or
+    `not_a_corpus_member`, or "another expression of this state was acquired".
+  - A translation (a language other than French) takes its French state's date, role and interval, and names its French
+    expression (`translation_of`) when its legal resource has exactly one French row.
+  - Over each work's French chain (French rows and rows naming no expression, by date, then act before consolidation before
+    code): the end is the publisher's when stated, else the next later date's start (`derived`), else none; the boundary is
+    `invalid` for an end on or before its start, `inclusive_suspected` for an end the day before the next start,
+    `half_open` for any other stated end, `derived` without one. `provisional` is a date after `built_at`'s day.
+  - The work check refuses a contradiction: an act or consolidation whose `isMemberOf` names another work, or a code
+    state whose work the catalogue types and not as `jolux:ComplexWork`. Two rows of one key refuse.
+- **State digest /2** (`StateSha256Two`): the prefix `lex-v3-luxembourg-expression-state/2`, the publisher, the key, the
+  date, its role, the kind, the expression, the work and legal resource, the language, the publisher's end, the
+  publication date, the text status and reason, the in-file identity and date, the entry into force, `translation_of`,
+  the count and each profile, the count and each article identity, each length-prefixed UTF-8. The derived end, the
+  boundary and `provisional` are not in it: they move with the work's other states and the build time, so a chained build
+  that adds a state leaves an unchanged state's digest. Its rule profile (`lex-v3-luxembourg-expression-state/2`, 16
+  lines, 1,596 bytes, sha256 `943c77afa168d4f7d10aab5e11b46ed5443ee4a1a70353dbe1a134eb399459c2`, recomputed in Python) is
+  the third rule of `lu-release-1`, after inventory /4 and content /2: inputs /3 written before S6 name two rules and
+  refuse (`RequireImplemented`), so no build runs them under a state rule they did not name.
+- **The event log /3.** One `first_sighting` per state row, held or textless; each sighting (and `file_replaced`) carries
+  the end the publisher states (`applicable_to`, `applicable_to_source` `publisher`, or both null: a derived end is not the
+  state's own and is reported by `interval_closed` and `validity_revised`), `text_status` and `publication_date`; a textless
+  row names no source body. The chain's ends (`ChainEnds`) are the publisher's when stated, so a chained build emits no
+  `validity_revised` for a publisher end that did not change; a translation has no interval events (its French state's
+  cover it). `LoggedState` and `FoldLog` carry the three facts (an interval event keeps its key's last sighting's).
+- **Index 8 is never carried forward.** `LuxembourgIndexPredecessor.TryRead` (a build's predecessor) refuses log /2
+  `PredecessorSchemaDiffers`, so an index 9 build over an index 8 starts a new genesis log (design §3.3, decision 10);
+  `TryReadLog` reads and verifies log /2 or /3 for the mount writer's verification of a mount and its generations.
+- **The reader** (`LuxembourgIndexReader`):
+  - Opens /9, /8 and /6 by `user_version`, each against its exact DDL. /8 and /6 are checked as before: state digest /1,
+    log /2 (or /6's genesis log), schema 8's logical-rows digest (`HashLegacyLogicalRows8`, the old JSON shape). /9:
+    `ValidateCatalogueStates` (each row's own facts canonical; a held row binds exactly its expression's articles, a
+    textless one none; digest /2; the chain fields and the intervals recomputed from the rows and compared), each body's
+    articles in distinct places of its document, then log /3 and the logical rows with the intervals.
+  - `RecordsBuilds` is true for /8 and /9; `RecordsCatalogueStates` for /9 only. `ResolveObservations` gives `DerivedAt`.
+  - Every state query not keyed by a digest takes `text_status='held'` on /9 (`HeldOnly`, and the `HeldWorksNine`,
+    `StatesOfExpressionsNine` and `WorkRecordsNine` texts), #974's `ResolveWorksUnder` among them (the exact references'
+    "held works" under a prefix); the as_observed fold keeps held states. New:
+    `ResolveCatalogueStates(workKey)` and `ResolveIntervals(workKey)`, each a range of its table's primary key.
+  - Provenance on an index 9 states digest /2 (`ProvenanceDerivationNine`), and says the row facts after the language are
+    not carried in the answer yet, so a caller cannot recompute it from the answer alone (S7a serves them); /8 and /6 keep
+    the /1 sentence.
+- **Tests.**
+  - `LuxembourgIndexCatalogueStatesTests` (new, 10 methods, 19 cases): a multi-body harness that states each body's member,
+    record, inventory and content outcome and the catalogue's facts, and builds through the builder's projection and writer
+    (`WriteIndex`, the code `TryBuild` runs after reading its envelope). The fixture of §3.4: a code (its base-act
+    `isMemberOf`, an accented id `art_141_à_144`, a shared-file pair refused as misfiled, a PDF state, a catalogued state
+    with no expression); an act dated by entry into force with a withheld consolidation and a hole; an act whose file
+    applies it before its entry into force; an act and its same-date consolidation, then a state not acquired; an end
+    before its start and an overlap; a suspected inclusive end; an English translation of an act whose French expression was
+    not acquired; a work with no held state; an end on its start (F3). Its tests: every row by role (21 rows, 12 held, 9
+    textless) with each textless reason; each work's transitions with their kinds and spans (14); the pre-/9 operations reading held rows only; the
+    genesis log's sightings with their publisher facts and the observation's derivation time; a chained build emitting
+    `interval_closed` and a `first_sighting` and no `validity_revised` for unchanged publisher ends; ten tampers refused
+    (provisional, boundary, a derived end for a stated one, a translation's French state, an entry into force on a
+    consolidation or off its role's date, a kind, a reason, an interval removed, a span moved); the work check and the
+    catalogue language refusing; an undated state getting no row; each article's place in its document (the
+    publisher's order, not the ids', and two articles of one body in one place refused); and state digest /2 and its rule
+    profile pinned to a Python recomputation (`1c1c403a…` for the code's first state; `943c77af…`).
+  - `LuxembourgIndexBuilderTests`: the schema at /9; the fixed-input index (one held act, a textless consolidation, an
+    interval, a derivation time) re-pinned to `7cfd9988…`; the state tampers recomputed under digest /2; `Schema8Of`, a
+    test-side rewrite of a built index 9 into schema 8's tables (held rows, digest /1, log /2), and
+    `ASchema8IndexIsStillReadExactlyAsSchema8CheckedIt` over the multi-body fixture's index 9, every byte synthetic (seven
+    tampers refused with schema 8's own reasons, and the rewrite opens as schema 8 with no derivation time, its held states
+    only and none of index 9's fields); the log /2 unit tests kept on log /2's projection, which reading an index 8 still
+    runs.
+  - `LuxembourgIndexQueryPlanTests`: the three held-row variants planned on the index as built, and the two work ranges
+    (`CatalogueStatesOfWork`, `IntervalsOfWork`) held to a primary-key search, with no statistics and with statistics shaped
+    like a real index; the reader is held to running exactly those texts; and schema 8's own texts of the three state
+    queries planned on the committed schema-8 index, both ways (F1).
+  - `V3CorpusLegacySchema8MountTests` (F1, F2): the committed schema-8 mount read with schema 8's checks (state digest /1
+    `084f8088…`, log /2, the logical rows), never a predecessor; every recorded request over it and over the schema-6
+    mount answered as the code without index 9 answers it, byte for byte: recorded at `5a659831`, the integration head
+    this branch is based on, over the committed files (`LegacyMountAnswers` is the same code at both commits; 5a659831's
+    answers are 3b7913ec's but for the registry digest and #978's evidence bundle).
+  - `V3IndexNineServingTests` (F4): a synthetic index-9 mount refused when built and served as a fixture; a built schema-8
+    mount served; the switch off.
+  - `V3CorpusLegacySchema6MountTests`: schema 6 made from schema 8 made from the built index 9; the real bounded first
+    mount's schema-6 files still open and serve as before.
+  - `LuxembourgRederivationTests`: `lu-release-1` names three rules; inputs naming the two rules from before S6, or an
+    altered state rule, refuse; the record names the three profiles.
+  - `V3CorpusProvenanceMountTests`: digest /2 recomputed from the table's row facts; the /9 sentence pinned verbatim.
+    `V3ReplayGuaranteesTests` (G5): the evidence bundle and the publisher file still give each article's text, the body,
+    text and identities digests; state digest /2 is recomputed from the bundle's values and the row facts after the
+    language, which the test reads from the mounted index until S7a carries them in the answer. The mount fixture's state edits (`AddStateAsync`, the German state, the profile edit) go through a
+    shared `RewriteStates`, which completes each row as the builder would and recomputes the chain.
+  - Census: the registries, the new guarded type (`CatalogueFacts`) and `TryReadLog`; candidates 272, guarded types 143.
+  - The answer, envelope and refusal samples re-rendered (state digests /2, `log.derived_at`, the derivation sentence); the
+    site paths table follows the fixture state's new digest.
+- **Measured: index 9's projection over run 15, Release 1's rules** (`LuxembourgIndexNineRun15Probe`, opt-in with
+  `LEX_LU_INDEX9_PROBE=1`, `LEX_LU_INDEX9_PROBE_ROOT` (S3a's `run15-held.jsonl` and `csharp_content2.jsonl`, and S2's
+  per-body /4 output, or the reference implementation's `ref_v4.jsonl`, which S2 matched on all 11,205 bodies: this run read
+  it) and `LEX_LU_INDEX9_PROBE_FACTS` (derive-c's Luxembourg index, read-only, whose `work_facts` are run
+  15's typed assertions); no derive, no custody read, no network; never a CI test). The production projection runs over
+  bodies made from those outputs; a body is acquired when its rights are `agreed_same_run_cc_by`. An independent Python
+  reference written from the rule profile's text (`ref9.py`, in the scratch folder) gives the same counts, one boundary
+  apart: the probe counts the translation's, which the reference leaves out of the chains.
+  - Held rows 2,543: 2,417 acts (one of them the English translation `loi/2017/07/20/a674/jo/en`, whose French expression
+    was not acquired) and 126 code states; no consolidation, as Release 1 changes no rights. 2,425 works have a held row; 7
+    of them (the codes but instruction criminelle) have two or more French held states. 131,106 admitted articles.
+  - The 8 codes hold 126 states (civil 16, pénal 31, procédure pénale 30, procédure civile 16, consommation 12, travail 14,
+    commerce 6, instruction criminelle 1): the design's figures. With their 64 textless rows they are the design's 190
+    catalogue states, and their chains have the design's shape: 152 ends meet the next start, 25 holes and one end on its
+    start (`code/procedure_penale/20211214`, kind `invalid`; the design counts it among 26 holes), 4 overlaps.
+  - Textless rows 622: 557 consolidations of served acts, 64 code states and the French row of the English-held act (the
+    design's 620: 556 and 64). The 557 are 557 distinct states (no state has two textless rows); the one more than the
+    design's comes with the 75 more served works the measured /4 and /2 outputs give (2,425 against the design's 2,350),
+    whose per-work list the design does not give, so it cannot be named from the design's text. By status: 609 `withheld_rights`, 12 `not_acquired` (11 naming no expression, among them
+    `code/procedure_penale/20270301`), 1 `not_available_misfiled`. The probe's inputs hold no record of a body not held, so
+    its `not_acquired` reasons name none; the build names the record's member outcome and body axis.
+  - Roles of the held rows: 2,166 `applicability_in_file`, 251 `entry_into_force`, 126 `applicability`; 7 held acts are dated
+    by a file date that is not their entry into force.
+  - Every row: boundaries `derived` 2,631, `half_open` 532, `invalid` 2 (no suspected inclusive end among Release 1's served
+    works); transitions `contiguous` 459, `derived` 232, `hole` 33, `overlap` 7, `invalid` 1, `same_date` 20; 2 rows
+    `provisional` (dated after 2026-10-12).
+  - Against the design: its 2,350 works and 2,469 texts came from its scripts' estimate of content /2; the measured /4 and
+    /2 outputs admit 74 more acts (2,543 texts, 2,425 works). Everything else above is the design's figure or explained.
+  - Articles missing from held states (#978's French review found Art. 2 of the loi du 16 mars 2020 missing; derive-c,
+    under inventory /3 and content /1: 1,004 of its 1,730 states): under Release 1's rules 1,365 of the 2,543 held rows
+    (1,255 acts, 110 code states) hold fewer articles than their document's main body, 118,355 of those documents'
+    126,059. Every one of the 7,704 missing is content /2's `unsupported_content_shape`: `embeddedStructure` 3,126,
+    `embeddedText` 1,839, a non-empty note reference 1,288, `eop` 596, `u` 484, `table` 452, `docNumber` 168, `span`
+    137 (Art. 2 of `loi/2020/03/16/a195` among them), and smaller shapes. The index serves what content admits; which
+    shapes are admitted is the content rules' (a later content version), and with `document_position` and the member's
+    article outcomes the reader can say a state lacks an article and where (S7a).
+  - 9.7 s, peak working set 465 MiB. The summary is written to the probe root (`index9-probe.summary.json`). No derive ran;
+    the dry run measures index 9 over the real population.
+- **derive-c's 209 expressions with articles and no state** (977 articles; the 1798 "Loi sur le timbre" among them, slice
+  4.2's finding): all 209 are acts whose file states no date (`in_date` null under /4 too) and whose catalogue states exactly
+  one `dateEntryInForce`: the set the design's act fallback dates. Under Release 1's rules index 9 gives 207 of them a held
+  state dated `entry_into_force`. The other two, `loi/1948/05/15/n1/jo` and `n2/jo`, hold no text under inventory /4 (their
+  only article is quoted from another instrument: S2's R2) and no other state of their works is held, so their works are
+  not served and they get no row; they leave the index by S2's rule, not by this one.
+- **derive-c's five acts not dated by their entry into force** (the coordinator's note on #975): `loi-2011-11-12-n1`
+  (2011-11-20; entry into force 2011-11-21), `loi-2019-03-05-a129` (2019-01-01; 2019-03-12), `rgd-2015-12-18-n10`
+  (2015-12-28, its publication date; 2014-06-16), `rgd-2018-06-20-a507` (2018-06-26; 2018-01-01), `rgd-2019-09-12-a609`
+  (2018-10-01; 2018-01-01). All 1,730 of derive-c's dates are the files' own `dateApplicability` (inventory /4's in-file
+  date agrees on every one), which equals the catalogue's entry into force on 1,725. Index 9 dates the five by the file
+  with `date_role` `applicability_in_file` and keeps the catalogue's entry into force beside it in `entry_into_force`; over
+  Release 1 seven held acts carry a date that is not their entry into force. The reader can tell the roles apart; S7a and
+  S7c word them (R21).
+- **Driver decisions (reversible):**
+  - **One textless row per French catalogue expression**, not per legal resource; a catalogue state that names no
+    expression gets one row with an empty expression and language (`not_acquired`, "the catalogue names no expression of
+    this state"), in its work's French chain and never a translation. Release 1 has 11 such rows in served works, among them
+    `code/procedure_penale/20270301` (the design's "catalogued but not held" state).
+  - **A translation gets a row only when held**: textless rows are made for French expressions; a held translation takes
+    its French state's date, role, end and boundary, and names its French expression (`translation_of`, the expression IRI
+    rather than its digest, so its own digest does not move when the French row's text status does). Release 1 holds one
+    (`loi/2017/07/20/a674`, an English file whose French expression was not acquired: a French textless row stands for it).
+  - **`entry_into_force` beside the date** (beyond the design, from the coordinator's note on #975): an act's catalogue
+    `dateEntryInForce` is kept on its row whatever its date's role, and is in digest /2, so the file's applicability and
+    the entry into force are two values (R21; S7a and S7c word them). `date_role` names the source.
+  - **An act's file date is read from its own inventory evidence whatever its rights** (a withheld act's file still dates
+    its textless row): a date, never text.
+  - **No end for an act**: `dateNoLongerInForce` is the act's force, not an applicability end, and is not read here.
+  - **Digest /2 leaves out the derived end, the boundary and `provisional`**: each moves with the work's other rows or the
+    build's time, never with the state, so a chained build that adds a state leaves an unchanged state's digest and the log
+    raises no false `PredecessorDerivationDiffers`. The reader recomputes all three from the rows at open.
+  - **A chained build refuses when the catalogue moved a state's own facts** (its end, publication date or text status)
+    with the same source bodies: no event of log /3 records that change; before go-live each release starts a genesis log
+    (design §2.3), and the derivation-change and metadata event path comes after.
+  - **Text status of a body the scope quarantined**: the corpus record carries the body axis (`typed_quarantine`), not
+    the scope's reason, so such a state reads `not_acquired` with "member unavailable, body typed_quarantine" even when the
+    catalogue's licence was the reason; S7a or S5 may give it `withheld_rights` from the catalogue's licence facts.
+  - **The work check refuses a contradiction only**: an act or consolidation the catalogue names no membership for is
+    keyed by its IRI's work (none in run 15: all 11,016 and 189 check, design §3.1).
+  - **Until S7a, the reader's operations from before index 9 read held rows only** (`text_status='held'` on every state
+    query not keyed by a digest, and the as_observed fold): the minimal reader change that opens /9 without serving a
+    textless row as a state. `ResolveCatalogueStates` and `ResolveIntervals` read all rows.
+  - **Provenance on index 9 states digest /2 and does not yet carry its row facts.** Carrying them (`digest_inputs`) is a
+    leaf the web's provenance page must render and its preview teach, in French and English: S7a serves the state rows'
+    new fields and S7c renders them. Until then the sentence says a caller cannot recompute the digest from the answer
+    alone; the mount's reader still recomputes it at open, and no index 9 is served before Release 1.
+  - **The genesis log sights every row**, textless ones included; the events answer serves them as the log holds them
+    (their permalinks refuse until S7a serves textless rows), and the scope sentence says "one first_sighting per state row
+    (on lex-v3-luxembourg-index/9 a row may be a state whose text is not held)".
+  - **The multi-body harness builds through the projection and the writer, not through an envelope**: the shared
+    acquisition fixture serves one body per acquisition, and a many-body SPARQL fixture is a slice of its own. The harness
+    states each body's member, record, inventory and content outcome and the catalogue's facts; `WriteIndex` is the code
+    `TryBuild` runs after its rows are read.
+  - **`document_position` in index 9 rather than later**: the order is a fact the build already holds (the inventory),
+    and carrying it now spares S7a an index 10; it is outside state digest /2, so it moves no digest.
+  - Titles are keyed by the work key of the held expression's legal resource (a code's titles are one work); a title of
+    an expression whose legal resource spells no state keeps index 8's key.
+- **Not yet.** S7a turns `V3CorpusMount.ServesIndexNine` with its reader rules, and updates the two tests that fail then
+  (G5 from the answer alone among them). S7a: a state's articles in their document's order (`document_position`, replacing #978's natural-order
+  stopgap) and the articles a state lacks, said as such; the interval selection for `as_of`, `in_force_on`, `as_observed`, `evidence_bundle` and `diff`, the
+  refusals for textless states, unclear ends and invalid intervals, `provisional`, translations' labels, the state rows'
+  new fields (and with them a provenance chain a caller can recompute again: G5 from the answer alone), and the
+  undated-search fold; S7b: timelines'
+  gaps and speech roles; S7c: the web, including the coverage row "history gives when each build ran" and the events page
+  for textless rows; S8: gates and journeys over D1; S4b; the dry run, which measures index 9 over the real population.
 
 ## R1 for the profiles: inventory /4 and content /2 re-derived from an acquisition's own custody (Claude, 2026-10-15)
 

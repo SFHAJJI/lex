@@ -625,8 +625,14 @@ public sealed class GuardedConstructionCensusTests
                     + "method private static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationPopulation::TryCreateCo"
                     + "re",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder+CatalogueFacts: constructor private instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder+CatalogueFacts::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder+CatalogueFacts::From",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgIndexPredecessor: constructor private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexPredecessor::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexPredecessor::TryReadLog, "
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexPredecessor::TryRead, "
                     + "method public static Lex.V3.Ingest.V3FirstMountBuild::ReadPredecessor",

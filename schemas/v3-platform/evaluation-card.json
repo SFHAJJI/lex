@@ -6,7 +6,7 @@
       "set": "temporal",
       "arm": "as_of in fra",
       "cases": 8,
-      "cases_sha256": "9351df7ba925ba15bc0d94078ac9eabd8d74e0d484e9931d18fbf35cb971b121",
+      "cases_sha256": "842c23704a689463018130f1048099b5870bddc7bbebdc99eefe5c97d6bd06dc",
       "gates": [
         {
           "gate": "temporal_exactness",
@@ -26,7 +26,7 @@
       "set": "temporal",
       "arm": "as_of with no language",
       "cases": 8,
-      "cases_sha256": "9351df7ba925ba15bc0d94078ac9eabd8d74e0d484e9931d18fbf35cb971b121",
+      "cases_sha256": "842c23704a689463018130f1048099b5870bddc7bbebdc99eefe5c97d6bd06dc",
       "gates": [
         {
           "gate": "temporal_exactness",
@@ -46,7 +46,7 @@
       "set": "temporal",
       "arm": "in_force_on in fra",
       "cases": 8,
-      "cases_sha256": "9351df7ba925ba15bc0d94078ac9eabd8d74e0d484e9931d18fbf35cb971b121",
+      "cases_sha256": "842c23704a689463018130f1048099b5870bddc7bbebdc99eefe5c97d6bd06dc",
       "gates": [
         {
           "gate": "temporal_exactness",
@@ -66,7 +66,7 @@
       "set": "temporal",
       "arm": "in_force_on with no language",
       "cases": 8,
-      "cases_sha256": "9351df7ba925ba15bc0d94078ac9eabd8d74e0d484e9931d18fbf35cb971b121",
+      "cases_sha256": "842c23704a689463018130f1048099b5870bddc7bbebdc99eefe5c97d6bd06dc",
       "gates": [
         {
           "gate": "temporal_exactness",
@@ -212,7 +212,7 @@
       "reason": "every expectation broke after the shift",
       "seed": 20260930,
       "cases": 6,
-      "cases_sha256": "d83e30881e28eb2b0602e8eb9d2f55d87ae2652d5dbada04ad49449b28fb351a",
+      "cases_sha256": "04e568d9fa4f0a6e9c37d53cf113b1b4732ce1178069c8d4ff3be2f90ffb41c0",
       "note": "the cases at or after the latest held state are outside the control by its design: a forward shift leaves the same state applying, so they cannot break"
     },
     {
@@ -223,7 +223,7 @@
       "reason": "every expectation broke after the shift",
       "seed": 20260930,
       "cases": 6,
-      "cases_sha256": "d83e30881e28eb2b0602e8eb9d2f55d87ae2652d5dbada04ad49449b28fb351a",
+      "cases_sha256": "04e568d9fa4f0a6e9c37d53cf113b1b4732ce1178069c8d4ff3be2f90ffb41c0",
       "note": "the cases at or after the latest held state are outside the control by its design: a forward shift leaves the same state applying, so they cannot break"
     },
     {
@@ -234,7 +234,7 @@
       "reason": "every expectation broke after the shift",
       "seed": 20260930,
       "cases": 6,
-      "cases_sha256": "d83e30881e28eb2b0602e8eb9d2f55d87ae2652d5dbada04ad49449b28fb351a",
+      "cases_sha256": "04e568d9fa4f0a6e9c37d53cf113b1b4732ce1178069c8d4ff3be2f90ffb41c0",
       "note": "the cases at or after the latest held state are outside the control by its design: a forward shift leaves the same state applying, so they cannot break"
     },
     {
@@ -245,7 +245,7 @@
       "reason": "every expectation broke after the shift",
       "seed": 20260930,
       "cases": 6,
-      "cases_sha256": "d83e30881e28eb2b0602e8eb9d2f55d87ae2652d5dbada04ad49449b28fb351a",
+      "cases_sha256": "04e568d9fa4f0a6e9c37d53cf113b1b4732ce1178069c8d4ff3be2f90ffb41c0",
       "note": "the cases at or after the latest held state are outside the control by its design: a forward shift leaves the same state applying, so they cannot break"
     },
     {

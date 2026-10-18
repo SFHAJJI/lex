@@ -238,10 +238,10 @@ public static class V3CorpusMountWriter
     /// <summary>A Luxembourg index's log as the reader hands it out, read from its verified bytes.</summary>
     private static IReadOnlyList<LuxembourgIndexObservation> LogOf(SourceArtifactRef indexRef, ReadOnlySpan<byte> indexBytes)
     {
-        var read = LuxembourgIndexPredecessor.TryRead(indexRef, indexBytes, out var refusal, out var detail)
+        var read = LuxembourgIndexPredecessor.TryReadLog(indexRef, indexBytes, out var refusal, out var detail)
                    ?? throw new InvalidDataException($"The Luxembourg index's log does not read: {refusal}: {detail}");
         return read.Observations
-            .Select(static row => new LuxembourgIndexObservation(row.Observation, row.CorpusSha256, row.PredecessorIndexSha256, row.FirstSeq, row.LastSeq, row.BuiltAt))
+            .Select(static row => new LuxembourgIndexObservation(row.Observation, row.CorpusSha256, row.PredecessorIndexSha256, row.FirstSeq, row.LastSeq, row.BuiltAt, row.DerivedAt))
             .ToArray();
     }
 
@@ -486,7 +486,7 @@ public static class V3CorpusMountWriter
                 : new V3GenerationsVerification(null, null);
         }
 
-        var mountedLog = LuxembourgIndexPredecessor.TryRead(
+        var mountedLog = LuxembourgIndexPredecessor.TryReadLog(
                 mounted.IndexRef,
                 await File.ReadAllBytesAsync(Path.Combine(directory, V3FirstMountBuildResult.LuxembourgIndexFileName), cancellationToken).ConfigureAwait(false),
                 out var refusal, out var detail)
@@ -527,7 +527,7 @@ public static class V3CorpusMountWriter
                 return new V3GenerationsVerification($"generation {name} is not the build its observation names", null);
             }
 
-            var own = LuxembourgIndexPredecessor.TryRead(
+            var own = LuxembourgIndexPredecessor.TryReadLog(
                     new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(indexSha256), indexSha256), indexBytes, out refusal, out detail)
                 ?? throw new InvalidDataException($"generation {name}'s log does not read: {refusal}: {detail}");
             if (!own.Observations.SequenceEqual(mountedLog.Observations.Take((int)generation.Observation)) ||

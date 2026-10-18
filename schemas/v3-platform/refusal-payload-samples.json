@@ -74,8 +74,8 @@
         {
           "bound": "from",
           "candidates": [
-            "/lu-legilux/loi-1991-08-10-n3/2026-04-11--6c164597ee18b9c4ca661f4732ceb947975d5a6e6f8b712ac6b333263e804f35/fra",
-            "/lu-legilux/loi-1991-08-10-n3/2026-04-11--b1bf4908e5a8193a1bed3573c007566f58210a79312046f1b1556eb322616b38/fra"
+            "/lu-legilux/loi-1991-08-10-n3/2026-04-11--9da1fcd1bb8d396c2e034614512be1d55022092a030621cb4829132a2f0db3a0/fra",
+            "/lu-legilux/loi-1991-08-10-n3/2026-04-11--a19a1e52a6b82583572168c2b7d6893fe6f7541b06604b045efa2d423e482ac1/fra"
           ],
           "requested_date": "2026-04-11"
         }
@@ -93,8 +93,8 @@
       ],
       "payload": {
         "candidates": [
-          "/lu-legilux/loi-1991-08-10-n3/2026-04-11--6c164597ee18b9c4ca661f4732ceb947975d5a6e6f8b712ac6b333263e804f35/fra",
-          "/lu-legilux/loi-1991-08-10-n3/2026-04-11--b1bf4908e5a8193a1bed3573c007566f58210a79312046f1b1556eb322616b38/fra"
+          "/lu-legilux/loi-1991-08-10-n3/2026-04-11--9da1fcd1bb8d396c2e034614512be1d55022092a030621cb4829132a2f0db3a0/fra",
+          "/lu-legilux/loi-1991-08-10-n3/2026-04-11--a19a1e52a6b82583572168c2b7d6893fe6f7541b06604b045efa2d423e482ac1/fra"
         ],
         "recognised_act": "loi du 10 ao\u00FBt 1991",
         "recognised_article": "5",
@@ -160,7 +160,7 @@
         "recognised_date": "2024-03-15",
         "recognised_date_source": "citation",
         "recognised_held_act": "/lu-legilux/loi-1991-08-10-n3",
-        "recognised_held_version": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra",
+        "recognised_held_version": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
         "recognised_kind": "citation",
         "recognised_title": "R\u00E8glement sur l\u0027\u00E9preuve terminale zeta",
         "requested_anchor": "99",
@@ -391,8 +391,8 @@
       "code": "pinned_digest_mismatch",
       "optional_payload_keys": [],
       "payload": {
-        "current_digest": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a",
-        "current_hash_pinned_url": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra",
+        "current_digest": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
+        "current_hash_pinned_url": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
         "requested_digest": "0000000000000000000000000000000000000000000000000000000000000000",
         "rule_profile_sha256s": [
           "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
@@ -412,12 +412,12 @@
       "optional_payload_keys": [],
       "payload": {
         "language": "fra",
-        "left": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra",
+        "left": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
         "left_profile": [
           "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
           "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
         ],
-        "right": "/lu-legilux/loi-1991-08-10-n3/2025-03-07--01c1c6f7bd7ebb3677993e3ee477ea6d36f0b6bc70bbfcb72c338e10c9b4791e/fra",
+        "right": "/lu-legilux/loi-1991-08-10-n3/2025-03-07--58acae944818d90391286984cb8230f6e558428c2eac5b8526fef1eb1e7e7e64/fra",
         "right_profile": [
           "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
           "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -495,7 +495,7 @@
           "language": "fra",
           "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
           "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
-          "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra",
+          "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
           "retained_transport_evidence": "fb59b9fd9372a286c80c90caae9b8676839c85c22f43fcfeec4444bbbf72addb",
           "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
           "what_would_answer": [
@@ -547,12 +547,12 @@
         "language": "fra",
         "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
         "official_link": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
-        "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a/fra",
+        "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
         "rights_disposition": "non_admitting_licence_scl",
         "rule": "rights are enforced when the bundle is composed, before any text is read: every corpus member the state\u0027s articles come from must have been acquired with its two rights channels agreeing CC BY in the same run (rights_disposition agreed_same_run_cc_by); under any other outcome or rights disposition the bundle refuses text_withheld and names the official identity, the official link and the retained body digest, so a derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state none of whose articles holds text refuses text_not_available",
         "source_outcome": "acquired",
         "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
-        "state_sha256": "5bca01f82ef3058cfebe7f8a8a6eb1f1fbeeb32b8a1ea7b2c02ac20963235e3a"
+        "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4"
       },
       "produced_by": [
         "evidence_bundle"

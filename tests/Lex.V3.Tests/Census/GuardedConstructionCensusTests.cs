@@ -71,6 +71,7 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Api.V3CorpusMount: constructor private instance "
                     + "Lex.V3.Api.V3CorpusMount::.ctor, "
                     + "constructor private static Lex.V3.Api.V3CorpusMount::.cctor, "
+                    + "method internal static Lex.V3.Api.V3CorpusMount::Served, "
                     + "method public static Lex.V3.Api.V3CorpusMount::OpenAsync",
                 "Lex.V3.Api.V3PageRenderer: constructor private instance Lex.V3.Api.V3PageRenderer::.ctor, "
                     + "method internal static Lex.V3.Api.V3PageRenderer::Open",

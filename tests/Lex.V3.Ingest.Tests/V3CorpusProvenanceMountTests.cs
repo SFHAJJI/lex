@@ -29,7 +29,7 @@ public sealed class V3CorpusProvenanceMountTests
     private sealed record Ground(
         (string ObjectRef, string Outcome, string? Rights, string GapsJson)[] Members,
         (string StateSha256, string Expression, string Language, string IdentitiesJson, string ProfilesJson,
-            string WorkKey, string Date, string WorkIri, string ResourceIri)[] States,
+            string WorkKey, string Date, string WorkIri, string ResourceIri, JsonElement? DigestInputs)[] States,
         (string Identity, string ObjectRef)[] Articles);
 
     private static Ground ReadGround(MountedFixture fixture)
@@ -47,17 +47,24 @@ public sealed class V3CorpusProvenanceMountTests
             }
         }
 
-        var states = new List<(string, string, string, string, string, string, string, string, string)>();
+        var states = new List<(string, string, string, string, string, string, string, string, string, JsonElement?)>();
         using (var command = connection.CreateCommand())
         {
+            // Index 9's row facts, read from the table by this test's own SQL, for state digest /2.
             command.CommandText =
                 "SELECT state_sha256,expression_iri,language,article_identities_json,rule_profiles_json," +
-                "work_key,applicability_date,publisher_work_iri,publisher_legal_resource_iri FROM states";
+                "work_key,applicability_date,publisher_work_iri,publisher_legal_resource_iri," +
+                "json_object('date_role',date_role,'state_kind',state_kind," +
+                "'publisher_applicable_to',CASE WHEN applicable_to_source='publisher' THEN applicable_to END," +
+                "'publication_date',publication_date,'text_status',text_status,'text_status_reason',text_status_reason," +
+                "'in_file_identity',in_file_identity,'in_file_date',in_file_date,'entry_into_force',entry_into_force," +
+                "'translation_of',translation_of) FROM states";
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
                 states.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4),
-                    reader.GetString(5), reader.GetString(6), reader.GetString(7), reader.GetString(8)));
+                    reader.GetString(5), reader.GetString(6), reader.GetString(7), reader.GetString(8),
+                    JsonDocument.Parse(reader.GetString(9)).RootElement.Clone()));
             }
         }
 
@@ -79,11 +86,48 @@ public sealed class V3CorpusProvenanceMountTests
         DateOnly.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture).AddDays(days)
             .ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-    /// <summary>The digest derivation as the answer states it, written out here from that sentence alone.</summary>
+    /// <summary>
+    /// The digest derivation as the answer states it, written out here from that sentence alone: state digest /2 on index 9,
+    /// over the row's own facts (<paramref name="digestInputs"/>, read from the table: the answer does not carry them until
+    /// S7a), and /1 without them.
+    /// </summary>
     private static string RecomputeStateDigest(
         string publisher, string workKey, string date, string expression, string workIri, string resourceIri, string language,
-        IEnumerable<string> profiles, IEnumerable<string> identities)
+        IEnumerable<string> profiles, IEnumerable<string> identities, JsonElement? digestInputs = null)
     {
+        if (digestInputs is { ValueKind: JsonValueKind.Object } inputs)
+        {
+            using var two = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            void Field(string value)
+            {
+                var bytes = Encoding.UTF8.GetBytes(value);
+                var length = new byte[4];
+                System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(length, bytes.Length);
+                two.AppendData(length);
+                two.AppendData(bytes);
+            }
+
+            string Input(string name) => inputs.GetProperty(name).ValueKind == JsonValueKind.Null ? "" : inputs.GetProperty(name).GetString()!;
+            Field("lex-v3-luxembourg-expression-state/2");
+            foreach (var value in new[] { publisher, workKey, date, Input("date_role"), Input("state_kind"), expression, workIri, resourceIri, language })
+            {
+                Field(value);
+            }
+
+            foreach (var name in new[] { "publisher_applicable_to", "publication_date", "text_status", "text_status_reason", "in_file_identity", "in_file_date", "entry_into_force", "translation_of" })
+            {
+                Field(Input(name));
+            }
+
+            var sortedProfiles = profiles.Order(StringComparer.Ordinal).ToArray();
+            var sortedIdentities = identities.Order(StringComparer.Ordinal).ToArray();
+            Field(sortedProfiles.Length.ToString(CultureInfo.InvariantCulture));
+            foreach (var profile in sortedProfiles) Field(profile);
+            Field(sortedIdentities.Length.ToString(CultureInfo.InvariantCulture));
+            foreach (var identity in sortedIdentities) Field(identity);
+            return Convert.ToHexStringLower(two.GetHashAndReset());
+        }
+
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         void Append(string value)
         {
@@ -177,7 +221,8 @@ public sealed class V3CorpusProvenanceMountTests
         Assert.AreEqual(
             state.GetProperty("state_sha256").GetString(),
             RecomputeStateDigest("lu-legilux", row.WorkKey, row.Date, row.Expression, row.WorkIri, row.ResourceIri, row.Language,
-                JsonSerializer.Deserialize<string[]>(row.ProfilesJson)!, identities));
+                JsonSerializer.Deserialize<string[]>(row.ProfilesJson)!, identities, row.DigestInputs));
+        Assert.AreEqual(V3CorpusMount.ProvenanceDerivationNine, body.GetProperty("derivation").GetString(), "an index 9 states digest /2");
 
         // The sources are the corpus members that hold the state's articles, each once, in digest order,
         // with what the corpus recorded for it. Several articles of one document are one source.
@@ -233,7 +278,8 @@ public sealed class V3CorpusProvenanceMountTests
                 state.GetProperty("applicability_date").GetString()!,
                 state.GetProperty("expression_iri").GetString()!, state.GetProperty("publisher_work_iri").GetString()!,
                 state.GetProperty("publisher_legal_resource_iri").GetString()!, state.GetProperty("language").GetString()!,
-                state.GetProperty("rule_profile_sha256s").EnumerateArray().Select(static p => p.GetString()!).ToArray(), callersList));
+                state.GetProperty("rule_profile_sha256s").EnumerateArray().Select(static p => p.GetString()!).ToArray(), callersList,
+                row.DigestInputs));
         Assert.AreEqual(asOf.GetProperty("state_sha256").GetString(), state.GetProperty("state_sha256").GetString());
         Assert.AreEqual(asOf.GetProperty("permalink").GetString(), state.GetProperty("permalink").GetString());
         Assert.AreEqual(asOf.GetProperty("stable_coordinate").GetString(), state.GetProperty("stable_coordinate").GetString());
@@ -523,14 +569,19 @@ public sealed class V3CorpusProvenanceMountTests
         Assert.AreEqual(
             "the chain from the publisher's identifiers to the digests this mount verified; it holds no first-sighting event and no signature, so none is claimed",
             body.GetProperty("scope").GetString());
+        // The fixture is an index 9: digest /2, and the sentence says what this answer does not carry yet (S7a serves it).
         Assert.AreEqual(
-            "state_sha256 is a SHA-256 over these values, each as UTF-8 preceded by its length as four bytes big-endian: the domain tag " +
-            "lex-v3-luxembourg-expression-state/1, the publisher, the work key, the applicability date, the expression, the publisher work IRI, " +
-            "the publisher legal-resource IRI, the language, each rule-profile digest in sorted order and each article identity in sorted " +
-            "order; the article identities are not carried here (they are article_identities in as_of's answer to the same request, and " +
-            "article_identities_sha256 is the SHA-256 of them in sorted order, each preceded by its length in the same way, so a caller can check " +
-            "the list it holds); this mount's own reader recomputes the state digest when the index is opened and refuses an index in which it " +
-            "does not match its row",
+            "state_sha256 is state digest /2, a SHA-256 over these values, each as UTF-8 preceded by its length as four bytes big-endian: " +
+            "the domain tag lex-v3-luxembourg-expression-state/2, the publisher, the work key, the applicability date, the date's role, the " +
+            "state's kind, the expression, the publisher work IRI, the publisher legal-resource IRI, the language, the end the publisher " +
+            "states, the publication date, the text status, its reason, the in-file identity, the in-file date, the entry into force and the " +
+            "French expression a translation takes its interval from (each the empty string when there is none), then the number of " +
+            "rule-profile digests as decimal text and each digest in sorted order, then the number of article identities as decimal text and " +
+            "each identity in sorted order; an end derived from the next state is not in it; the date's role and the facts after the language " +
+            "are not carried in this answer, so a caller cannot recompute the digest from it alone; the article identities are not carried " +
+            "here either (they are article_identities in as_of's answer to the same request, and article_identities_sha256 is the SHA-256 of " +
+            "them in sorted order, each preceded by its length in the same way, so a caller can check the list it holds); this mount's own " +
+            "reader recomputes the state digest when the index is opened and refuses an index in which it does not match its row",
             body.GetProperty("derivation").GetString());
         Assert.AreEqual(
             "object_ref_sha256 identifies the source object in the corpus; body_sha256 is the digest of the publisher bytes the corpus retained " +

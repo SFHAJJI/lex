@@ -109,7 +109,10 @@ public sealed class LuxembourgRederivationRecord
 /// </remarks>
 public static class LuxembourgRederivation
 {
-    /// <summary>Release 1's rule set: inventory /4 and content /2 over the acquisition's own population, rights unchanged.</summary>
+    /// <summary>
+    /// Release 1's rule set: inventory /4 and content /2 over the acquisition's own population, rights unchanged, and the
+    /// index's states under state digest /2 (index 9).
+    /// </summary>
     public const string Release1RuleSet = "lu-release-1";
 
     /// <summary>The value of the record's <c>rights_resolution</c> under Release 1: the acquisition's own, re-read by nothing.</summary>
@@ -135,6 +138,11 @@ public static class LuxembourgRederivation
             new LuxembourgRederivationRule(
                 FirstLine(LuxembourgAknLegalContentProfile2Producer.CopyRuleProfileBytes()),
                 LuxembourgAknLegalContentProfile2Producer.RuleProfileSha256),
+            // State digest /2 (index 9's states): inputs written before index 9 name two rules and refuse here, so no
+            // build ever runs them under a state rule they did not name.
+            new LuxembourgRederivationRule(
+                FirstLine(LuxembourgIndexBuilder.CopyStateRuleProfileBytes()),
+                LuxembourgIndexBuilder.StateRuleProfileSha256),
         }),
         _ => throw new ArgumentException(
             $"Rule set '{ruleSet}' is not one this build implements ({string.Join(", ", ImplementedRuleSets)}).",

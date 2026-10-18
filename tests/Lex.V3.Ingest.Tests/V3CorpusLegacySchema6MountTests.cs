@@ -156,13 +156,14 @@ public sealed class V3CorpusLegacySchema6MountTests
     }
 
     /// <summary>
-    /// The state fixture's built index in schema 6's tables, as schema 6 wrote them: the event log's three tables replaced by
-    /// schema 6's one, holding its genesis log (state digests only), user_version 6 and the stamp re-sealed. Every other
-    /// table is schema 8's unchanged, which is what schema 6 held.
+    /// The state fixture's built index in schema 6's tables, as schema 6 wrote them: first in schema 8's
+    /// (<see cref="LuxembourgIndexBuilderTests.Schema8Of"/>, since the builder writes index 9), then the event log's three
+    /// tables replaced by schema 6's one, holding its genesis log (state digests only), user_version 6 and the stamp
+    /// re-sealed. Every other table is schema 8's unchanged, which is what schema 6 held.
     /// </summary>
-    private static (byte[] Index, SourceArtifactRef Reference) Schema6Of(ReadOnlySpan<byte> schema8, Action<SqliteConnection>? tamper = null)
+    private static (byte[] Index, SourceArtifactRef Reference) Schema6Of(ReadOnlySpan<byte> schema9, Action<SqliteConnection>? tamper = null)
     {
-        var bytes = MutateDatabase(schema8, connection =>
+        var bytes = MutateDatabase(LuxembourgIndexBuilderTests.Schema8Of(schema9), connection =>
         {
             var states = ReadStates(connection);
             Execute(connection, "DROP TABLE observations");
@@ -184,9 +185,7 @@ public sealed class V3CorpusLegacySchema6MountTests
     }
 
     private static void Restamp(SqliteConnection connection) =>
-        Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1", ("$digest", LuxembourgIndexBuilder.HashLogicalRows(
-            ReadMembers(connection), ReadArticles(connection), ReadStates(connection), ReadWorkTitles(connection), ReadRelations(connection),
-            ReadWorkFacts(connection), ReadEvents(connection))));
+        Execute(connection, "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1", ("$digest", LuxembourgIndexBuilderTests.LogicalRowsOf(connection)));
 
     [TestMethod]
     public async Task ASchema6IndexWithStatesServesItsGenesisLogAndAsObservedRefusesSnapshotUnknown()
@@ -247,24 +246,25 @@ public sealed class V3CorpusLegacySchema6MountTests
     public async Task ASchema6IndexIsReadExactlyOrRefused()
     {
         var (_, built, corpus) = await BuildStateEnvelopeAsync();
-        var schema8 = built.IndexBytes.ToArray();
+        var schema9 = built.IndexBytes.ToArray();
+        var schema8 = LuxembourgIndexBuilderTests.Schema8Of(schema9);
         foreach (var (what, bytes, expected) in new (string, byte[], string)[]
                  {
-                     ("an event naming another state digest", Schema6Of(schema8, connection =>
+                     ("an event naming another state digest", Schema6Of(schema9, connection =>
                          Execute(connection, "UPDATE events SET detail_json=$detail WHERE seq=1", ("$detail", JsonSerializer.Serialize(new { state_sha256 = new string('9', 64) })))).Index,
                          "not the genesis log of its states"),
-                     ("an event naming a source body schema 6 never recorded", Schema6Of(schema8, connection =>
+                     ("an event naming a source body schema 6 never recorded", Schema6Of(schema9, connection =>
                          Execute(connection, "UPDATE events SET detail_json=json_insert(detail_json,'$.source_body_sha256',json('[]')) WHERE seq=1")).Index,
                          "not the genesis log of its states"),
-                     ("schema 6's tables under user_version 8", Schema6Of(schema8, connection => Execute(connection, "PRAGMA user_version=8")).Index,
+                     ("schema 6's tables under user_version 8", Schema6Of(schema9, connection => Execute(connection, "PRAGMA user_version=8")).Index,
                          "schema differs from the exact terminal schema"),
-                     ("schema 6's tables under user_version 7, a schema never read", Schema6Of(schema8, connection => Execute(connection, "PRAGMA user_version=7")).Index,
+                     ("schema 6's tables under user_version 7, a schema never read", Schema6Of(schema9, connection => Execute(connection, "PRAGMA user_version=7")).Index,
                          "schema differs from the exact terminal schema"),
-                     ("schema 6's tables with an observations table", Schema6Of(schema8, connection =>
+                     ("schema 6's tables with an observations table", Schema6Of(schema9, connection =>
                          Execute(connection, "CREATE TABLE observations (observation INTEGER NOT NULL PRIMARY KEY) STRICT")).Index,
                          "schema differs from the exact terminal schema"),
-                     ("schema 6's tables stamped as schema 8", Schema6Of(schema8, connection =>
-                         Execute(connection, "UPDATE stamp SET schema_identity=$schema WHERE stamp_id=1", ("$schema", LuxembourgIndexBuilder.Schema))).Index,
+                     ("schema 6's tables stamped as schema 8", Schema6Of(schema9, connection =>
+                         Execute(connection, "UPDATE stamp SET schema_identity=$schema WHERE stamp_id=1", ("$schema", LuxembourgIndexBuilder.LegacySchema8))).Index,
                          "stamp does not bind the expected corpus"),
                      ("schema 8's tables under user_version 6", MutateDatabase(schema8, connection =>
                      {
@@ -281,7 +281,7 @@ public sealed class V3CorpusLegacySchema6MountTests
         }
 
         // The untampered rewrite is read, so each refusal above is its own check's.
-        var (index, indexRef) = Schema6Of(schema8);
+        var (index, indexRef) = Schema6Of(schema9);
         using var reader = LuxembourgIndexReader.OpenAndVerify(indexRef, index, corpus.ArtifactRef, RebindManifest(built.CapabilityManifest, indexRef.Sha256));
         Assert.AreEqual(LuxembourgIndexBuilder.LegacySchema6, reader.SchemaIdentity);
     }

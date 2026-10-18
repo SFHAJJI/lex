@@ -20,6 +20,23 @@ internal sealed partial class V3CorpusMount : IDisposable
     public const string EuropeIndexFileName = "europe-index.sqlite3";
     public const string EuropeCapabilityManifestFileName = "europe-capability-manifest.json";
     public const string CorpusFileName = "lex-corpus-6.json";
+
+    /// <summary>The report a build or a derivation from custody writes beside the mount; a test fixture mount carries none.</summary>
+    internal const string BuildReportFileName = "build-report.json";
+
+    /// <summary>
+    /// The one switch S7a flips (review of #980, F4). Until the reader's interval rules serve index 9's rows, and a date's
+    /// role is worded apart (an act dated by its entry into force is not "applicable from" it, R21), the server refuses a
+    /// built mount of lex-v3-luxembourg-index/9: one with its build report, as a release's mount is. A test fixture mount,
+    /// which carries no build report, is still served, so the journeys and the samples run over index 9. Flipping it fails
+    /// <c>V3IndexNineServingTests</c> and the G5 case of <c>V3ReplayGuaranteesTests</c> until each is updated with it.
+    /// </summary>
+    internal static readonly bool ServesIndexNine = false;
+
+    internal const string IndexNineNotServedSentence =
+        "this server does not serve a built mount of lex-v3-luxembourg-index/9 yet: until the reader's interval rules land (S7a) it would " +
+        "say that an act dated by its entry into force is applicable from that date, and entry into force and application are separate " +
+        "values (R21); serve a mount of lex-v3-luxembourg-index/8 or /6";
     private const int MaximumCapabilityManifestBytes = 4 * 1024 * 1024;
     private const string EuropeanUnionPublisherDomain = "europa.eu";
 
@@ -52,6 +69,23 @@ internal sealed partial class V3CorpusMount : IDisposable
         _corpus = corpus ?? throw new ArgumentNullException(nameof(corpus));
         _generations = generations;
         _generationReaders = generationReaders ?? [];
+    }
+
+    /// <summary>
+    /// The mount the server serves: <paramref name="mount"/>, opened from <paramref name="directory"/>, unless it is a built
+    /// mount of index 9 and <see cref="ServesIndexNine"/> is not set, which is refused with
+    /// <see cref="IndexNineNotServedSentence"/> (the mount is closed first).
+    /// </summary>
+    internal static V3CorpusMount? Served(V3CorpusMount? mount, string directory)
+    {
+        if (mount is not null && mount._reader?.RecordsCatalogueStates == true && !ServesIndexNine &&
+            File.Exists(Path.Combine(directory, BuildReportFileName)))
+        {
+            mount.Dispose();
+            throw new InvalidDataException(IndexNineNotServedSentence);
+        }
+
+        return mount;
     }
 
     public static async Task<V3CorpusMount?> OpenAsync(
@@ -875,6 +909,24 @@ internal sealed partial class V3CorpusMount : IDisposable
         "the list it holds); this mount's own reader recomputes the state digest when the index is opened and refuses an index in which it " +
         "does not match its row";
 
+    /// <summary>
+    /// The derivation on a mount of lex-v3-luxembourg-index/9, whose state digest is /2: the same encoding over the row's own
+    /// facts as well. Those facts (the date's role and the others after the language) are served with the state rows when the
+    /// reader's interval rules land (S7a); until then this answer says a caller cannot recompute the digest from it alone.
+    /// </summary>
+    internal const string ProvenanceDerivationNine =
+        "state_sha256 is state digest /2, a SHA-256 over these values, each as UTF-8 preceded by its length as four bytes big-endian: " +
+        "the domain tag lex-v3-luxembourg-expression-state/2, the publisher, the work key, the applicability date, the date's role, the " +
+        "state's kind, the expression, the publisher work IRI, the publisher legal-resource IRI, the language, the end the publisher " +
+        "states, the publication date, the text status, its reason, the in-file identity, the in-file date, the entry into force and the " +
+        "French expression a translation takes its interval from (each the empty string when there is none), then the number of " +
+        "rule-profile digests as decimal text and each digest in sorted order, then the number of article identities as decimal text and " +
+        "each identity in sorted order; an end derived from the next state is not in it; the date's role and the facts after the language " +
+        "are not carried in this answer, so a caller cannot recompute the digest from it alone; the article identities are not carried " +
+        "here either (they are article_identities in as_of's answer to the same request, and article_identities_sha256 is the SHA-256 of " +
+        "them in sorted order, each preceded by its length in the same way, so a caller can check the list it holds); this mount's own " +
+        "reader recomputes the state digest when the index is opened and refuses an index in which it does not match its row";
+
     internal const string ProvenanceSourcesNote =
         "object_ref_sha256 identifies the source object in the corpus; body_sha256 is the digest of the publisher bytes the corpus retained " +
         "for it, body_byte_length their length and body_receipt_sha256 the digest of the corpus receipt for that body, each null where the " +
@@ -1019,7 +1071,8 @@ internal sealed partial class V3CorpusMount : IDisposable
                 index_sha256 = _reader!.IndexRef.Sha256,
                 registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
             },
-            derivation = ProvenanceDerivation,
+            // On an index 9 the digest is /2, whose sentence says what this answer does not carry (S7a serves it).
+            derivation = _reader!.RecordsCatalogueStates ? ProvenanceDerivationNine : ProvenanceDerivation,
             sources_note = ProvenanceSourcesNote,
             not_held = ProvenanceNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
         });
@@ -4810,6 +4863,13 @@ internal sealed partial class V3CorpusMount : IDisposable
         "no predecessor) holds one first_sighting per held state and nothing else; a chained log carries its predecessors' observations unchanged " +
         "and appends one observation per later build (log.basis says which)";
 
+    /// <summary>The scope on a mount of lex-v3-luxembourg-index/9, whose log sights every state row, held or not.</summary>
+    internal const string EventsScopeNine =
+        "the event log of the mounted Luxembourg index: a list numbered from 1, polled by cursor, append-only; a genesis log (one observation, " +
+        "no predecessor) holds one first_sighting per state row and nothing else (on lex-v3-luxembourg-index/9 a row may be a state whose text " +
+        "is not held); a chained log carries its predecessors' observations unchanged " +
+        "and appends one observation per later build (log.basis says which)";
+
     internal const string EventsDeliveryNote =
         "cursor polling, at least once: while this index is mounted a request with the same cursor answers the same events again, so a reader " +
         "deduplicates by seq within log_id; next_after is always the cursor to poll next; a build chained to this one carries this log forward " +
@@ -4822,6 +4882,16 @@ internal sealed partial class V3CorpusMount : IDisposable
         "and does not say when the publisher published the text or when it was fetched; observed_from is null because no observation time is held; " +
         "log.built_at is the time the acquiring build read once its acquisition had ended, an upper bound on when its corpus was observed " +
         "and never an observation time, and an index derived again from custody keeps it rather than the time of that derivation; " +
+        "a revision (validity_revised, interval_closed, file_replaced, withdrawn_from_source, ...) needs a later build compared against this one";
+
+    /// <summary>The genesis note on a mount of lex-v3-luxembourg-index/9, whose log records the derivation time beside the build time.</summary>
+    internal const string EventsGenesisNoteNine =
+        "this log comes from one observation with no predecessor, so it holds only first_sighting; first_sighting means first present in this log " +
+        "and does not say when the publisher published the text or when it was fetched; observed_from is null because no observation time is held; " +
+        "log.built_at is the time the acquiring build read once its acquisition had ended, an upper bound on when its corpus was observed " +
+        "and never an observation time, and an index derived again from custody keeps it rather than the time of that derivation; " +
+        "log.derived_at is when this index was derived from custody, the time its derivation's inputs state, and null when its " +
+        "derivations are the acquiring build's own; " +
         "a revision (validity_revised, interval_closed, file_replaced, withdrawn_from_source, ...) needs a later build compared against this one";
 
     /// <summary>The genesis note on a schema-6 index, which records no build time: the same, without the build-time sentence.</summary>
@@ -4965,7 +5035,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         var nextSeq = hasMore ? served[^1].Seq : log.LastSeq;
         using var result = JsonSerializer.SerializeToDocument(new
         {
-            scope = EventsScope,
+            scope = _reader!.RecordsCatalogueStates ? EventsScopeNine : EventsScope,
             log = EventLogBlock(logId, log, observations),
             requested_event = eventName,
             events = served.Select(value => new
@@ -4992,7 +5062,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             has_more = hasMore,
             next_after = $"{logId}:{nextSeq}",
             delivery = EventsDeliveryNote,
-            genesis_note = _reader.RecordsBuilds ? EventsGenesisNote : EventsGenesisNoteLegacy,
+            genesis_note = !_reader.RecordsBuilds ? EventsGenesisNoteLegacy : _reader.RecordsCatalogueStates ? EventsGenesisNoteNine : EventsGenesisNote,
             chained_note = chained ? EventsChainedNote : null,
             legacy_note = _reader.RecordsBuilds ? null : EventsLegacyNote,
             silence_note = _reader.RecordsBuilds ? EventsSilenceNote : EventsSilenceNoteLegacy,
@@ -5130,14 +5200,9 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// each ancestor log whose cursors this log still honours, to its last sequence number, with that build's time; and
     /// the events it holds.
     /// </summary>
-    private object EventLogBlock(string logId, LuxembourgIndexEventLog log, IReadOnlyList<LuxembourgIndexObservation> observations) => new
+    private object EventLogBlock(string logId, LuxembourgIndexEventLog log, IReadOnlyList<LuxembourgIndexObservation> observations)
     {
-        log_id = logId,
-        basis = observations.Count <= 1 ? V3EventRegistry.GenesisBasis : V3EventRegistry.ChainedBasis,
-        built_at = observations.Count == 0 ? null : observations[^1].BuiltAt,
-        predecessor_index_sha256 = observations.Count == 0 ? null : observations[^1].PredecessorIndexSha256,
-        observations_compared = Math.Max(0, observations.Count - 1),
-        ancestors = AncestorLogs(observations)
+        var ancestors = AncestorLogs(observations)
             .Select(ancestor => new
             {
                 log_id = ancestor.LogId,
@@ -5146,10 +5211,38 @@ internal sealed partial class V3CorpusMount : IDisposable
                 text_held = RetainedAs(ancestor.LogId).Length != 0,
                 retained_as = RetainedAs(ancestor.LogId),
             })
-            .ToArray(),
-        events_held = log.Events,
-        last_seq = log.LastSeq,
-    };
+            .ToArray();
+        var basis = observations.Count <= 1 ? V3EventRegistry.GenesisBasis : V3EventRegistry.ChainedBasis;
+        var builtAt = observations.Count == 0 ? null : observations[^1].BuiltAt;
+        var predecessor = observations.Count == 0 ? null : observations[^1].PredecessorIndexSha256;
+        var compared = Math.Max(0, observations.Count - 1);
+        // log.derived_at is index 9's (its log /3 records the derivation time); a schema-8 or schema-6 log block is the
+        // one those mounts answered before index 9, field for field.
+        return _reader!.RecordsCatalogueStates
+            ? (object)new
+            {
+                log_id = logId,
+                basis,
+                built_at = builtAt,
+                derived_at = observations.Count == 0 ? null : observations[^1].DerivedAt,
+                predecessor_index_sha256 = predecessor,
+                observations_compared = compared,
+                ancestors,
+                events_held = log.Events,
+                last_seq = log.LastSeq,
+            }
+            : new
+            {
+                log_id = logId,
+                basis,
+                built_at = builtAt,
+                predecessor_index_sha256 = predecessor,
+                observations_compared = compared,
+                ancestors,
+                events_held = log.Events,
+                last_seq = log.LastSeq,
+            };
+    }
 
     /// <summary>Why the retention line keeps an earlier build of the mounted log beside the mount; none when it is not kept.</summary>
     private string[] RetainedAs(string indexSha256) =>

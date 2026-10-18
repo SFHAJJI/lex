@@ -464,14 +464,7 @@ public sealed class LuxembourgIndexRelationsTests
         var bytes = LuxembourgIndexBuilderTests.MutateDatabase(built.IndexBytes.Span, connection =>
         {
             tamper(connection);
-            var logicalRows = LuxembourgIndexBuilder.HashLogicalRows(
-                LuxembourgIndexBuilderTests.ReadMembers(connection),
-                LuxembourgIndexBuilderTests.ReadArticles(connection),
-                LuxembourgIndexBuilderTests.ReadStates(connection),
-                LuxembourgIndexBuilderTests.ReadWorkTitles(connection),
-                LuxembourgIndexBuilderTests.ReadRelations(connection),
-                LuxembourgIndexBuilderTests.ReadWorkFacts(connection),
-                LuxembourgIndexBuilderTests.ReadEvents(connection));
+            var logicalRows = LuxembourgIndexBuilderTests.LogicalRowsOf(connection);
             LuxembourgIndexBuilderTests.Execute(connection,
                 "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1", ("$digest", logicalRows));
         });
