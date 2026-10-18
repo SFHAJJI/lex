@@ -563,6 +563,74 @@ public sealed class LuxembourgIndexQueryPlanTests
         Assert.AreEqual(0, problems.Count, string.Join(Environment.NewLine, problems));
     }
 
+    /// <summary>
+    /// Schema 8's own texts of the three state queries (the reader runs them on an index 8 and the held-row variants on an
+    /// index 9), planned on the committed schema-8 index that the code before index 9 wrote, with no statistics and with
+    /// statistics shaped like a real index (review of #980, F1); and the per-state queries both schemas share.
+    /// </summary>
+    [TestMethod]
+    public void TheSchema8VariantsArePlannedOnTheCommittedSchema8Index()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"lex-v3-plan8-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var source = Path.Combine(directory, "schema8.sqlite");
+            File.WriteAllBytes(source, V3CorpusLegacySchema8MountTests.Fixture("luxembourg-index.sqlite3.bin"));
+            var problems = new List<string>();
+            foreach (var (label, statistics, stateIsSearched) in new (string, string[], bool)[]
+                     {
+                         ("schema 8, no statistics at all", [], false),
+                         ("schema 8, statistics shaped like a real index", [
+                             "INSERT INTO sqlite_stat1 VALUES ('states','states_digest','9000 1')",
+                             "INSERT INTO sqlite_stat1 VALUES ('states','sqlite_autoindex_states_1','9000 6 1 1 1')",
+                             "INSERT INTO sqlite_stat1 VALUES ('articles','sqlite_autoindex_articles_1','24000 1')",
+                             "INSERT INTO sqlite_stat1 VALUES ('articles','articles_object_ref','24000 8')",
+                             "INSERT INTO sqlite_stat1 VALUES ('articles','articles_language_date','24000 12000 30')",
+                             "INSERT INTO sqlite_stat1 VALUES ('members','sqlite_autoindex_members_1','3000 1')",
+                             "INSERT INTO sqlite_stat1 VALUES ('work_titles','sqlite_autoindex_work_titles_1','30000 5 5 4 2 1 1')",
+                             "INSERT INTO sqlite_stat1 VALUES ('work_titles','work_titles_normalized','30000 3 1')",
+                             "INSERT INTO sqlite_stat1 VALUES ('work_facts','sqlite_autoindex_work_facts_1','60000 20 4 2 1 1 1 1')",
+                         ], true),
+                     })
+            {
+                var copy = Path.Combine(directory, $"plan-{Guid.NewGuid():N}.sqlite");
+                File.Copy(source, copy);
+                using (var edit = LuxembourgIndexBuilder.Open(copy, SqliteOpenMode.ReadWrite))
+                {
+                    using var clear = edit.CreateCommand();
+                    clear.CommandText = "DELETE FROM sqlite_stat1";
+                    clear.ExecuteNonQuery();
+                    foreach (var statement in statistics)
+                    {
+                        using var insert = edit.CreateCommand();
+                        insert.CommandText = statement;
+                        insert.ExecuteNonQuery();
+                    }
+                }
+
+                SqliteConnection.ClearAllPools();
+                using var connection = LuxembourgIndexBuilder.Open(copy, SqliteOpenMode.ReadOnly);
+                problems.AddRange(Queries.SelectMany(query =>
+                    Problems(label, query.Name, Plan(connection, query.Sql, query.Parameters), query.ReadsMembers, stateIsSearched)));
+                problems.AddRange(HeldWorksProblems(label, Plan(connection, LuxembourgIndexQueries.HeldWorks, HeldWorksQuery.Parameters)));
+                problems.AddRange(StatesOfExpressionsProblems(label, Plan(connection, LuxembourgIndexQueries.StatesOfExpressions, StatesOfExpressionsQuery.Parameters)));
+                problems.AddRange(WorkRecordsProblems(label, Plan(connection, LuxembourgIndexQueries.WorkRecords, WorkRecordsQuery.Parameters)));
+                problems.AddRange(TitleProblems(label, Plan(connection, TitleQuery.Sql, TitleQuery.Parameters)));
+                problems.AddRange(MemberOutcomeProblems(label, Plan(connection, MemberOutcomeQuery.Sql, MemberOutcomeQuery.Parameters)));
+                problems.AddRange(StateDocumentProblems(label, Plan(connection, StateDocumentQuery.Sql, StateDocumentQuery.Parameters)));
+                problems.AddRange(CitationsToProblems(label, Plan(connection, CitationsToQuery.Sql, CitationsToQuery.Parameters)));
+            }
+
+            Assert.AreEqual(0, problems.Count, string.Join(Environment.NewLine, problems));
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            try { Directory.Delete(directory, recursive: true); } catch (IOException) { }
+        }
+    }
+
     [TestMethod]
     public void TheReaderRunsTheTextThisTestAsks()
     {
