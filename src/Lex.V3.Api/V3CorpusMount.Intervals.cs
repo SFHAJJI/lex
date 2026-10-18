@@ -84,6 +84,7 @@ internal sealed partial class V3CorpusMount
     internal const string ReasonAfterClosedEnd = "after_closed_end";
     internal const string ReasonEndConventionUnclear = "publisher_end_convention_unclear";
     internal const string ReasonIntervalInvalid = "publisher_interval_invalid";
+    internal const string ReasonNoExpressionInLanguage = "no_expression_in_language";
 
     /// <summary>
     /// The rows of one language's chain: for French, the French rows and the rows that name no expression (the catalogue's
@@ -145,6 +146,19 @@ internal sealed partial class V3CorpusMount
                                                 string.CompareOrdinal(row.ApplicabilityDate, date) <= 0)
             .Select(static row => row.ApplicabilityDate)
             .LastOrDefault();
+
+        // Another language takes its intervals from the French chain: when a French state covers the date and none of this
+        // language does, the state covering it has no expression held in this language, said so, naming it; when no French
+        // state covers it either, the French chain's reason is the reason.
+        if (!string.Equals(language, FrenchLanguage, StringComparison.Ordinal) &&
+            CoverAt(work, FrenchLanguage, date) is { } french && (french.Kind != CoverKind.None || french.HistoryBegins is not null))
+        {
+            return french.Kind == CoverKind.None
+                ? french with { HistoryBegins = historyBegins, NearestEarlier = nearestEarlier, NearestLater = nearestLater }
+                : new Cover(CoverKind.None, null, french.Row is { } row ? [row, .. french.Others] : french.Others,
+                    ReasonNoExpressionInLanguage, historyBegins, nearestEarlier, nearestLater, null);
+        }
+
         if (historyBegins is null || string.CompareOrdinal(date, historyBegins) < 0)
         {
             return new Cover(CoverKind.None, null, [], ReasonBeforeHistory, historyBegins, null, historyBegins, null);
@@ -247,8 +261,16 @@ internal sealed partial class V3CorpusMount
         switch (cover.Kind)
         {
             case CoverKind.Served:
+                // The next held state's date after the date asked: a held state that begins between the served one and the date
+                // and does not cover it (an invalid interval inside an overlap) is not "next" of a date already past it.
                 var served = ofLanguage.Single(state => string.Equals(state.StateSha256, cover.Row!.StateSha256, StringComparison.Ordinal));
-                return ([served], NextDateInLanguage(ofLanguage, served));
+                var after = string.CompareOrdinal(requestedDate, served.ApplicabilityDate) > 0 ? requestedDate : served.ApplicabilityDate;
+                return ([served], ofLanguage
+                    .Where(other => string.Equals(other.Language, served.Language, StringComparison.Ordinal) &&
+                                    string.CompareOrdinal(other.ApplicabilityDate, after) > 0)
+                    .Select(static other => other.ApplicabilityDate)
+                    .Order(StringComparer.Ordinal)
+                    .FirstOrDefault());
             case CoverKind.Ambiguous:
                 return (cover.Others.Select(StateOfRow).ToArray(), null);
             default:
@@ -563,10 +585,12 @@ internal sealed partial class V3CorpusMount
         "reason says why no state covers the date in the publisher's catalogue as this index read it: before_history, the date is " +
         "before the work's first state; catalogue_hole, the state before the date ends (the publisher's end) before the next begins, " +
         "and the gap (hole) is the catalogue's, never bridged; after_closed_end, the work's last state ends before the date and no later " +
-        "state is in the catalogue, which does not say the work is not in force; publisher_end_convention_unclear, the date is the end " +
+        "state is in the catalogue: an end of the catalogue's states, which is not an end of the law; publisher_end_convention_unclear, the date is the end " +
         "the publisher states for a state that ends the day before the next begins, so whether that day belongs to it is unclear and it " +
         "is given to neither; publisher_interval_invalid, the date falls where a state whose stated end is on or before its own start " +
-        "would apply, so no interval is read for it (its permalink still opens it); states names the states the reason is about";
+        "would apply, so no interval is read for it (its permalink still opens it); no_expression_in_language, a French state covers " +
+        "the date and this index holds no expression of it in the language asked (a state in another language takes its interval " +
+        "from its French state); states names the states the reason is about";
 
     internal const string TextlessRule =
         "the state covering the date is in the publisher's catalogue and this index holds none of its text: text_status says why " +
@@ -624,7 +648,7 @@ internal sealed partial class V3CorpusMount
         payload["reason_rule"] = NoVersionReasonRule;
         payload["catalogue_read_no_later_than"] = _reader!.ResolveObservations()[^1].BuiltAt;
         var named = new List<LuxembourgIndexCatalogueState>();
-        if (cover.Row is not null && cover.Reason != ReasonBeforeHistory)
+        if (cover.Row is not null && cover.Reason is not (ReasonBeforeHistory or ReasonNoExpressionInLanguage))
         {
             named.Add(cover.Row);
         }

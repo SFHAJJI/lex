@@ -1661,6 +1661,78 @@ public sealed class V3CorpusResolveMountTests
             AddSecondLanguageStateAsync(null);
 
         /// <summary>
+        /// Adds an expression in <paramref name="language"/> of the French state <paramref name="frenchExpressionIri"/> names (its legal resource, at its
+        /// date, with its own article identities): under index 9 a translation of that French state, which takes its interval, as
+        /// the builder makes one. The shape a later German text has on index 9: a translation of a later French state.
+        /// </summary>
+        public async Task<LuxembourgIndexBuilder.StateRow> AddTranslationAsync(
+            string frenchExpressionIri, string language = "deu", string suffix = "de")
+        {
+            var indexPath = Path.Combine(Directory, V3CorpusMount.IndexFileName);
+            LuxembourgIndexBuilder.MemberRow[] members;
+            LuxembourgIndexBuilder.ArticleRow[] articles;
+            LuxembourgIndexBuilder.StateRow[] states;
+            LuxembourgIndexBuilder.WorkTitleRow[] titles;
+            LuxembourgIndexBuilder.StateRow translation;
+            using (var connection = LuxembourgIndexBuilder.Open(indexPath, SqliteOpenMode.ReadWrite))
+            {
+                var sourceState = ReadStates(connection).Single(state => string.Equals(state.ExpressionIri, frenchExpressionIri, StringComparison.Ordinal));
+                var sourceArticles = ReadArticles(connection)
+                    .Where(article => sourceState.ArticleIdentitiesJson.Contains(article.ArticleIdentitySha256, StringComparison.Ordinal)).ToArray();
+                var expression = sourceState.PublisherLegalResourceIri + "/" + suffix;
+                var identities = new List<string>();
+                foreach (var source in sourceArticles)
+                {
+                    var identity = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(suffix + ":" + source.ArticleIdentitySha256)));
+                    identities.Add(identity);
+                    using var insert = connection.CreateCommand();
+                    insert.CommandText = "INSERT INTO articles VALUES($identity,$object,$expression,$publisher,$wid,$date,$language,$profile,$text,$tokens,$position)";
+                    insert.Parameters.AddWithValue("$position", LuxembourgIndexBuilderTests.NextDocumentPosition(connection));
+                    insert.Parameters.AddWithValue("$identity", identity);
+                    insert.Parameters.AddWithValue("$object", source.ObjectRefSha256);
+                    insert.Parameters.AddWithValue("$expression", expression);
+                    insert.Parameters.AddWithValue("$publisher", source.PublisherId);
+                    insert.Parameters.AddWithValue("$wid", (object?)source.PublisherWid ?? DBNull.Value);
+                    insert.Parameters.AddWithValue("$date", (object?)source.ApplicabilityDate ?? DBNull.Value);
+                    insert.Parameters.AddWithValue("$language", language);
+                    insert.Parameters.AddWithValue("$profile", source.RuleProfileSha256);
+                    insert.Parameters.AddWithValue("$text", source.SearchableText);
+                    insert.Parameters.AddWithValue("$tokens", source.TokensJson);
+                    Assert.AreEqual(1, insert.ExecuteNonQuery());
+                }
+
+                identities.Sort(StringComparer.Ordinal);
+                var added = new LuxembourgIndexBuilder.StateRow(
+                    sourceState.WorkKey, sourceState.ApplicabilityDate, "", expression,
+                    sourceState.PublisherWorkIri, sourceState.PublisherLegalResourceIri, language,
+                    sourceState.RuleProfilesJson, System.Text.Json.JsonSerializer.Serialize(identities))
+                {
+                    DateRole = sourceState.DateRole,
+                    InFileDate = sourceState.InFileDate,
+                    TranslationOf = sourceState.ExpressionIri,
+                };
+                translation = LuxembourgIndexBuilderTests.RewriteStates(connection, ReadStates(connection).Append(added))
+                    .Single(row => string.Equals(row.ExpressionIri, expression, StringComparison.Ordinal));
+                members = ReadMembers(connection);
+                articles = ReadArticles(connection);
+                states = ReadStates(connection);
+                titles = ReadWorkTitles(connection);
+                using var stamp = connection.CreateCommand();
+                stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$digest WHERE stamp_id=1";
+                stamp.Parameters.AddWithValue(
+                    "$digest", LogicalRowsWithRelationsRefreshed(connection, members, articles, states, titles, LuxembourgIndexBuilderTests.CorpusBodies(Directory)));
+                Assert.AreEqual(1, stamp.ExecuteNonQuery());
+            }
+
+            var indexBytes = await File.ReadAllBytesAsync(indexPath);
+            var manifest = LuxembourgIndexBuilder.MeasureCapabilities(Convert.ToHexStringLower(SHA256.HashData(indexBytes)), articles, states, titles);
+            using var stream = new MemoryStream();
+            _ = V3IndexCapabilityManifestArtifact.Write(stream, manifest);
+            await File.WriteAllBytesAsync(Path.Combine(Directory, V3CorpusMount.CapabilityManifestFileName), stream.ToArray());
+            return translation;
+        }
+
+        /// <summary>
         /// Adds a German state of the fixture's work, dated <paramref name="applicabilityDate"/> or the
         /// fixture's own date when null, with its own article identities. Must run while the index holds
         /// the fixture's state alone, which it copies.

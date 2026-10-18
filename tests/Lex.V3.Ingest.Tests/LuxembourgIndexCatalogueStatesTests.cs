@@ -73,16 +73,21 @@ public sealed class LuxembourgIndexCatalogueStatesTests
         }
 
         /// <summary>A held body: acquired, admitted, inventoried, with the given main-body articles of its selected expression.</summary>
-        internal Harness Held(string root, string[] articleIds, string leaf = "fr", string language = "fra", string? inFileDate = null, string identityClass = "own")
+        internal Harness Held(
+            string root, string[] articleIds, string leaf = "fr", string language = "fra", string? inFileDate = null, string identityClass = "own",
+            int[]? positions = null, string? textPrefix = null)
         {
             var objectRef = ObjectRefOf(root);
             Body(root, leaf, language, "acquired", "agreed_same_run_cc_by", "inventoried", null, inFileDate, identityClass, [], [new("admitted", articleIds.Length)]);
             for (var index = 0; index < articleIds.Length; index++)
             {
                 var id = articleIds[index];
+                // An article's place in its document: its index from 1, or the place given (a skipped place is an article of the
+                // document not admitted); its wording a text token of its text, so two bodies' wordings differ when their texts do.
+                var text = (textPrefix ?? "texte de ") + id;
                 _articles.Add(new(
                     Digest("article:" + root + "/" + leaf + "#" + id), objectRef, root + "/" + leaf, id, null, null, language,
-                    new string('c', 64), "texte de " + id, "[]", index + 1));
+                    new string('c', 64), text, textPrefix is null ? "[]" : TextTokens(text), positions?[index] ?? index + 1));
             }
 
             return this;
@@ -142,19 +147,34 @@ public sealed class LuxembourgIndexCatalogueStatesTests
 
         internal static SourceArtifactRef CorpusRef { get; } = new(LexCorpus6Builder.ResourceIdOf(new string('c', 64)), new string('c', 64));
 
-        internal LuxembourgIndexBuildResult Build(string builtAt = BuiltAtText, string? derivedAt = DerivedAtText, LuxembourgIndexPredecessor? predecessor = null)
+        internal LuxembourgIndexBuildResult Build(string builtAt = BuiltAtText, string? derivedAt = DerivedAtText, LuxembourgIndexPredecessor? predecessor = null) =>
+            BuildFor(CorpusRef, _bodyDigests, builtAt, derivedAt, predecessor);
+
+        /// <summary>
+        /// The index bound to <paramref name="corpusRef"/>, a corpus that holds none of the harness's bodies (a mount's real corpus,
+        /// for the handler-level tests): its log names no source body, as a build names none for a member the corpus holds no
+        /// body of, so the mount's check of the log against its corpus holds.
+        /// </summary>
+        internal LuxembourgIndexBuildResult BuildFor(SourceArtifactRef corpusRef, string builtAt = BuiltAtText, string? derivedAt = DerivedAtText) =>
+            BuildFor(corpusRef, new Dictionary<string, string>(StringComparer.Ordinal), builtAt, derivedAt, null);
+
+        private LuxembourgIndexBuildResult BuildFor(
+            SourceArtifactRef corpusRef, IReadOnlyDictionary<string, string> bodyDigests, string builtAt, string? derivedAt, LuxembourgIndexPredecessor? predecessor)
         {
             var (states, intervals) = Project(builtAt);
             var built = LuxembourgIndexBuilder.WriteIndex(
-                CorpusRef,
+                corpusRef,
                 _members.OrderBy(static row => row.ObjectRefSha256, StringComparer.Ordinal).ToArray(),
-                Articles, states, intervals, [], Facts, _bodyDigests, predecessor, builtAt, derivedAt, null, out var refusal, out var detail);
+                Articles, states, intervals, [], Facts, bodyDigests, predecessor, builtAt, derivedAt, null, out var refusal, out var detail);
             Assert.IsNotNull(built, $"{refusal}: {detail}");
             return built;
         }
     }
 
     internal static string W(string path) => Eli + path;
+
+    /// <summary>A token stream of one text token, as content writes it, so a wording digest is the text's.</summary>
+    internal static string TextTokens(string text) => JsonSerializer.Serialize(new[] { new { kind = "text", text } });
 
     /// <summary>
     /// The fixture of design §3.4: a code (its base act named by isMemberOf, an accented article id, a shared-file pair, a

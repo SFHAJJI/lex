@@ -546,6 +546,10 @@ public sealed class V3CorpusProvenanceMountTests
             "states[].sources[].body_sha256", "states[].sources[].gaps", "states[].sources[].object_ref_sha256", "states[].sources[].outcome",
             "states[].sources[].rights_disposition", "states[].stable_coordinate",
             "states[].state_sha256",
+            // Index 9's row facts, which state digest /2 covers, so a caller recomputes it from this answer (S7a; G5).
+            "states[].state_kind", "states[].date_role", "states[].entry_into_force", "states[].applicable_to", "states[].applicable_to_source",
+            "states[].boundary", "states[].publication_date", "states[].text_status", "states[].text_status_reason", "states[].in_file_identity",
+            "states[].in_file_date", "states[].translation_of", "states[].provisional",
             "verified_by", "verified_by.corpus_sha256", "verified_by.index_sha256", "verified_by.registry_sha256",
             "work_key",
         }.Order(StringComparer.Ordinal).ToArray();
@@ -569,7 +573,8 @@ public sealed class V3CorpusProvenanceMountTests
         Assert.AreEqual(
             "the chain from the publisher's identifiers to the digests this mount verified; it holds no first-sighting event and no signature, so none is claimed",
             body.GetProperty("scope").GetString());
-        // The fixture is an index 9: digest /2, and the sentence says what this answer does not carry yet (S7a serves it).
+        // The fixture is an index 9: digest /2, over the row facts each state of this answer carries (S7a).
+        Assert.AreEqual(V3CorpusMount.ProvenanceDerivationNine, body.GetProperty("derivation").GetString());
         Assert.AreEqual(
             "state_sha256 is state digest /2, a SHA-256 over these values, each as UTF-8 preceded by its length as four bytes big-endian: " +
             "the domain tag lex-v3-luxembourg-expression-state/2, the publisher, the work key, the applicability date, the date's role, the " +
@@ -577,9 +582,11 @@ public sealed class V3CorpusProvenanceMountTests
             "states, the publication date, the text status, its reason, the in-file identity, the in-file date, the entry into force and the " +
             "French expression a translation takes its interval from (each the empty string when there is none), then the number of " +
             "rule-profile digests as decimal text and each digest in sorted order, then the number of article identities as decimal text and " +
-            "each identity in sorted order; an end derived from the next state is not in it; the date's role and the facts after the language " +
-            "are not carried in this answer, so a caller cannot recompute the digest from it alone; the article identities are not carried " +
-            "here either (they are article_identities in as_of's answer to the same request, and article_identities_sha256 is the SHA-256 of " +
+            "each identity in sorted order; an end derived from the next state is not in it; each state here carries those facts as " +
+            "date_role, state_kind, applicable_to (the end the publisher states when applicable_to_source is publisher; a derived end is " +
+            "not in the digest), publication_date, text_status, text_status_reason, in_file_identity, in_file_date, entry_into_force and " +
+            "translation_of, so a caller recomputes the digest from this answer and the article identities; the article identities are not " +
+            "carried here (they are article_identities in as_of's answer to the same request, and article_identities_sha256 is the SHA-256 of " +
             "them in sorted order, each preceded by its length in the same way, so a caller can check the list it holds); this mount's own " +
             "reader recomputes the state digest when the index is opened and refuses an index in which it does not match its row",
             body.GetProperty("derivation").GetString());

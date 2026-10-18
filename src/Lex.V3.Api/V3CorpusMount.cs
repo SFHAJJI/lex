@@ -620,11 +620,21 @@ internal sealed partial class V3CorpusMount : IDisposable
                 else if (cover.Kind == CoverKind.Served)
                 {
                     var covering = ofLanguage.Single(state => string.Equals(state.StateSha256, cover.Row!.StateSha256, StringComparison.Ordinal));
-                    served.Add(ObservedStateRow(covering, ofLanguage
+                    // The next held state's date after the date asked, as as_of names it (SelectAt).
+                    var after = string.CompareOrdinal(requestedDate, covering.ApplicabilityDate) > 0 ? requestedDate : covering.ApplicabilityDate;
+                    var row = ObservedStateRow(covering, ofLanguage
                         .Select(static state => state.ApplicabilityDate)
-                        .Where(date => string.CompareOrdinal(date, covering.ApplicabilityDate) > 0)
+                        .Where(date => string.CompareOrdinal(date, after) > 0)
                         .Order(StringComparer.Ordinal)
-                        .FirstOrDefault(), mounted));
+                        .FirstOrDefault(), mounted);
+                    // The snapshot's same-text states, as as_of names the mounted index's.
+                    row["same_text_states"] = new JsonArray(cover.Others.Select(static other =>
+                    {
+                        var summary = CatalogueRowSummary(other);
+                        summary["basis"] = "identical_text";
+                        return (JsonNode)summary;
+                    }).ToArray());
+                    served.Add(row);
                 }
 
                 continue;
@@ -1122,6 +1132,13 @@ internal sealed partial class V3CorpusMount : IDisposable
         "derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state none of whose articles holds text refuses " +
         "text_not_available";
 
+    /// <summary>The rights rule on lex-v3-luxembourg-index/9, whose catalogue states without text cover their own intervals (S7a).</summary>
+    internal const string EvidenceBundleRightsRuleNine =
+        EvidenceBundleRightsRule + "; on lex-v3-luxembourg-index/9 a state of the publisher's catalogue whose text this index does not " +
+        "hold covers its own interval: a date in it refuses text_withheld when its rights withhold its text (text_status withheld_rights) " +
+        "and text_not_available otherwise (a PDF, a derivation gap, a misfiled file, a state not acquired), naming the state, and no " +
+        "other state's text is served in its place";
+
     internal static readonly string[][] EvidenceBundleNotHeld =
     [
         ["publisher_signature", "no signature or attestation of the publisher is held; the digests are this index's own reading of the retained bytes under the named rule profiles"],
@@ -1426,7 +1443,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             requested_article = asked.Article,
             publisher = "lu-legilux",
             work_key = states[0].WorkKey,
-            rights_rule = EvidenceBundleRightsRule,
+            rights_rule = RulesByInterval ? EvidenceBundleRightsRuleNine : EvidenceBundleRightsRule,
             rights_disposition = EvidenceBundleAdmittingRightsDisposition,
             page_rule = LuxembourgReadingPageRule,
             states = bundles,
@@ -3408,8 +3425,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         var comparisons = compared.Select(entry => new
         {
             language = entry.Language,
-            from = StateRow(entry.From, entry.FromNext),
-            to = StateRow(entry.To, entry.ToNext),
+            from = WithSameText(StateRow(entry.From, entry.FromNext), entry.From, dateFrom),
+            to = WithSameText(StateRow(entry.To, entry.ToNext), entry.To, dateTo),
             same_state = entry.Rows is null,
             note = entry.Rows is not null
                 ? "two publisher-dated states; each article is compared by its publisher-minted id and wording digest, and nothing about legal effect is asserted"
@@ -5812,7 +5829,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         var notAdmitted = NotAdmittedMap(scope);
         foreach (var state in scope)
         {
-            rows.Add(WithCatalogueFacts(StateRow(state, NextDateInLanguage(scope, state), datesByIdentity, notAdmitted), state));
+            // On index 9 each row is as_of's on the row's own date, its same-text states included (S7a).
+            rows.Add(WithSameText(WithCatalogueFacts(StateRow(state, NextDateInLanguage(scope, state), datesByIdentity, notAdmitted), state), state, state.ApplicabilityDate));
         }
 
         using var result = JsonSerializer.SerializeToDocument(new
@@ -5925,7 +5943,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             states = rows,
             as_published = AsPublishedAnswer(asPublished),
             articles_not_admitted_note = ArticlesNotAdmittedNote,
-            not_held = NotHeldRows(DossierNotHeld, asPublished),
+            not_held = NotHeldRows(RulesByInterval ? DossierNotHeldNine : DossierNotHeld, asPublished),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader!.IndexRef.Sha256,
         });
@@ -6347,6 +6365,21 @@ internal sealed partial class V3CorpusMount : IDisposable
         ["responsible_ministry", "no responsible ministry is held"],
         ["first_observed", "no observation time is held, so nothing here says when this work was first seen; the event log's first_sighting (events) says only that a state is first present in that log"],
         ["coverage_gaps", "each state carries the date it applies from and no end date, so no gap between states can be stated, and this answer never says there is none"],
+    ];
+
+    /// <summary>
+    /// What the dossier of a work on lex-v3-luxembourg-index/9 does not hold: its states carry their publication date, an act's
+    /// entry into force, the end of their interval and its boundary (S7a), so those are not on this list.
+    /// </summary>
+    internal static readonly string[][] DossierNotHeldNine =
+    [
+        ["document_type", "the publisher's document type is not part of this record; classification serves the typeDocument facts the publisher asserted, verbatim"],
+        ["current_state_flag", "no current-state flag is part of this record; status_on serves the publisher's force assertions for a date, and a flag about now would not be a statement about any date listed here"],
+        ["application", "no date of application is held beyond each state's own date, whose date_role says what it is: a state dated by its entry into force is not dated by an application date"],
+        ["historical_identifiers", "no historical identifier is held, so no earlier or later identifier of this work is mapped to it"],
+        ["responsible_ministry", "no responsible ministry is held"],
+        ["first_observed", "no observation time is held, so nothing here says when this work was first seen; the event log's first_sighting (events) says only that a state is first present in that log"],
+        ["coverage_gaps", "each state carries the end of its interval (applicable_to, the publisher's or derived from the next state) and its boundary, and no gap between states is listed in this record; it never says there is none"],
     ];
 
     /// <summary>

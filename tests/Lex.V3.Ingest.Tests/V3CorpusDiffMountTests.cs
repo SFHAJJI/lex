@@ -323,10 +323,12 @@ public sealed class V3CorpusDiffMountTests
 
         var beforeHistory = await DiffAsync(mount, $"/lu-legilux/{fixture.WorkKey}", Shift(fixture.ApplicabilityDate, -1), laterDate);
         Assert.AreEqual("no_version_for_date", beforeHistory.Refusal!.Code);
+        // On index 9 the interval rules say why (S7a); an index 8 or 6 keeps the seven properties (base-answers.json).
         Assert.AreEqual(
-            "asserts_absence_of_law,bound,history_begins,nearest_earlier,nearest_later,requested_date,what_would_answer",
+            "asserts_absence_of_law,bound,catalogue_read_no_later_than,history_begins,hole,language,nearest_earlier,nearest_later,reason,reason_rule,requested_date,states,what_would_answer",
             string.Join(",", beforeHistory.Refusal.HelpfulPayload.EnumerateObject().Select(static property => property.Name)),
             "diff names the bound: exactly these properties, as served in the envelope's canonical order.");
+        Assert.AreEqual("before_history", beforeHistory.Refusal.HelpfulPayload.GetProperty("reason").GetString());
         Assert.AreEqual(PublisherId.LuLegilux, beforeHistory.Context.Publisher);
         Assert.AreEqual("lu", beforeHistory.Context.Jurisdiction);
         Assert.AreEqual("from", beforeHistory.Refusal.HelpfulPayload.GetProperty("bound").GetString());
@@ -344,7 +346,7 @@ public sealed class V3CorpusDiffMountTests
         var ambiguous = await DiffAsync(mountWithTwin, $"/lu-legilux/{fixture.WorkKey}", fixture.ApplicabilityDate, laterDate);
         Assert.AreEqual("ambiguous_version", ambiguous.Refusal!.Code);
         Assert.AreEqual(
-            "bound,candidates,requested_date",
+            "bound,candidate_states,candidate_states_rule,candidates,requested_date",
             string.Join(",", ambiguous.Refusal.HelpfulPayload.EnumerateObject().Select(static property => property.Name)),
             "diff names the bound: exactly these properties, as served in the envelope's canonical order.");
         Assert.AreEqual(PublisherId.LuLegilux, ambiguous.Context.Publisher);
@@ -374,9 +376,10 @@ public sealed class V3CorpusDiffMountTests
         await using var cleanup = fixture;
         var (_, anchor, text) = fixture.ArticlesOfOwnState()[0];
         var laterDate = Shift(fixture.ApplicabilityDate, 400);
-        // The German text begins only at the later date; the French text is amended there.
-        var german = await fixture.AddSecondLanguageStateAsync(laterDate);
+        // The German text begins only at the later date, as a translation of the French state of that date (index 9: a German
+        // text takes its French state's interval); the French text is amended there.
         var later = await fixture.AddStateAsync(laterDate, "later");
+        var german = await fixture.AddTranslationAsync(later.ExpressionIri);
         await fixture.RewriteArticleTextAsync(later.ExpressionIri, anchor, text + " amended");
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
@@ -389,7 +392,8 @@ public sealed class V3CorpusDiffMountTests
         var skipped = all.Result.Value.GetProperty("languages_not_compared").EnumerateArray().Single();
         Assert.AreEqual("deu", skipped.GetProperty("language").GetString());
         Assert.AreEqual("from", skipped.GetProperty("bound").GetString());
-        Assert.AreEqual("no state at or before the date", skipped.GetProperty("reason").GetString());
+        // On index 9 the reason is the interval rules': a French state covers the date, and none of its German text is held.
+        Assert.AreEqual("no_expression_in_language", skipped.GetProperty("reason").GetString());
         CollectionAssert.AreEqual(new[] { "deu", "fra" },
             all.Result.Value.GetProperty("available_languages").EnumerateArray().Select(static v => v.GetString()).ToArray());
 
@@ -414,10 +418,12 @@ public sealed class V3CorpusDiffMountTests
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
         var laterDate = Shift(fixture.ApplicabilityDate, 400);
-        // German covers both bounds with one state; French has two states on the later date.
+        // German compares cleanly, a translation of each French state it takes its interval from (index 9); French has two
+        // states on the later date.
         var german = await fixture.AddSecondLanguageStateAtSameDateAsync();
         var later = await fixture.AddStateAsync(laterDate, "later");
         var twin = await fixture.AddStateAsync(laterDate, "twin");
+        var germanLater = await fixture.AddTranslationAsync(later.ExpressionIri, suffix: "de-later");
         using (var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None))
         {
             Assert.IsNotNull(mount);
@@ -430,8 +436,9 @@ public sealed class V3CorpusDiffMountTests
                 envelope.Refusal.HelpfulPayload.GetProperty("candidates").EnumerateArray().Select(static v => v.GetString()).ToArray());
             // German alone still answers.
             var germanOnly = await DiffAsync(mount, $"/lu-legilux/{fixture.WorkKey}", fixture.ApplicabilityDate, laterDate, "deu");
-            Assert.IsTrue(germanOnly.Result!.Value.GetProperty("comparisons").EnumerateArray().Single().GetProperty("same_state").GetBoolean());
-            Assert.AreEqual(german.StateSha256, germanOnly.Result.Value.GetProperty("comparisons").EnumerateArray().Single().GetProperty("from").GetProperty("state_sha256").GetString());
+            var germanComparison = germanOnly.Result!.Value.GetProperty("comparisons").EnumerateArray().Single();
+            Assert.AreEqual(german.StateSha256, germanComparison.GetProperty("from").GetProperty("state_sha256").GetString());
+            Assert.AreEqual(germanLater.StateSha256, germanComparison.GetProperty("to").GetProperty("state_sha256").GetString());
         }
 
         // The same shape with a profile mismatch instead: German clean, French with a changed profile set.
@@ -489,10 +496,11 @@ public sealed class V3CorpusDiffMountTests
         await using (ambiguityFirst)
         {
             laterDate = Shift(ambiguityFirst.ApplicabilityDate, 400);
-            var german = await ambiguityFirst.AddSecondLanguageStateAtSameDateAsync();
-            var germanLater = await ambiguityFirst.AddStateAsync(laterDate, "de-later", german.ExpressionIri);
-            var germanTwin = await ambiguityFirst.AddStateAsync(laterDate, "de-twin", german.ExpressionIri);
+            // German twins on date_to are two German translations of the French state of that date (index 9).
+            await ambiguityFirst.AddSecondLanguageStateAtSameDateAsync();
             var frenchLater = await ambiguityFirst.AddStateAsync(laterDate, "later");
+            var germanLater = await ambiguityFirst.AddTranslationAsync(frenchLater.ExpressionIri, suffix: "de-later");
+            var germanTwin = await ambiguityFirst.AddTranslationAsync(frenchLater.ExpressionIri, suffix: "de-twin");
             await ambiguityFirst.AddRuleProfileToStateAsync(frenchLater.ExpressionIri, new string('c', 64));
             using var mount = await V3CorpusMount.OpenAsync(ambiguityFirst.Directory, CancellationToken.None);
             Assert.IsNotNull(mount);
@@ -512,11 +520,11 @@ public sealed class V3CorpusDiffMountTests
         await using (mismatchFirst)
         {
             laterDate = Shift(mismatchFirst.ApplicabilityDate, 400);
-            var german = await mismatchFirst.AddSecondLanguageStateAtSameDateAsync();
-            var germanLater = await mismatchFirst.AddStateAsync(laterDate, "de-later", german.ExpressionIri);
-            await mismatchFirst.AddRuleProfileToStateAsync(germanLater.ExpressionIri, new string('d', 64));
-            await mismatchFirst.AddStateAsync(laterDate, "later");
+            await mismatchFirst.AddSecondLanguageStateAtSameDateAsync();
+            var frenchLater = await mismatchFirst.AddStateAsync(laterDate, "later");
             await mismatchFirst.AddStateAsync(laterDate, "twin");
+            var germanLater = await mismatchFirst.AddTranslationAsync(frenchLater.ExpressionIri, suffix: "de-later");
+            await mismatchFirst.AddRuleProfileToStateAsync(germanLater.ExpressionIri, new string('d', 64));
             using var mount = await V3CorpusMount.OpenAsync(mismatchFirst.Directory, CancellationToken.None);
             Assert.IsNotNull(mount);
             var envelope = await DiffAsync(mount, $"/lu-legilux/{mismatchFirst.WorkKey}", mismatchFirst.ApplicabilityDate, laterDate);
@@ -535,11 +543,11 @@ public sealed class V3CorpusDiffMountTests
         await using (twins)
         {
             var laterDate = Shift(twins.ApplicabilityDate, 400);
-            var german = await twins.AddSecondLanguageStateAtSameDateAsync();
-            var germanLater = await twins.AddStateAsync(laterDate, "de-later", german.ExpressionIri);
-            var germanTwin = await twins.AddStateAsync(laterDate, "de-twin", german.ExpressionIri);
-            await twins.AddStateAsync(laterDate, "later");
+            await twins.AddSecondLanguageStateAtSameDateAsync();
+            var frenchLater = await twins.AddStateAsync(laterDate, "later");
             await twins.AddStateAsync(laterDate, "twin");
+            var germanLater = await twins.AddTranslationAsync(frenchLater.ExpressionIri, suffix: "de-later");
+            var germanTwin = await twins.AddTranslationAsync(frenchLater.ExpressionIri, suffix: "de-twin");
             using var mount = await V3CorpusMount.OpenAsync(twins.Directory, CancellationToken.None);
             Assert.IsNotNull(mount);
             var envelope = await DiffAsync(mount, $"/lu-legilux/{twins.WorkKey}", twins.ApplicabilityDate, laterDate);
@@ -555,10 +563,10 @@ public sealed class V3CorpusDiffMountTests
         await using (mismatches)
         {
             var laterDate = Shift(mismatches.ApplicabilityDate, 400);
-            var german = await mismatches.AddSecondLanguageStateAtSameDateAsync();
-            var germanLater = await mismatches.AddStateAsync(laterDate, "de-later", german.ExpressionIri);
-            await mismatches.AddRuleProfileToStateAsync(germanLater.ExpressionIri, new string('e', 64));
+            await mismatches.AddSecondLanguageStateAtSameDateAsync();
             var frenchLater = await mismatches.AddStateAsync(laterDate, "later");
+            var germanLater = await mismatches.AddTranslationAsync(frenchLater.ExpressionIri, suffix: "de-later");
+            await mismatches.AddRuleProfileToStateAsync(germanLater.ExpressionIri, new string('e', 64));
             await mismatches.AddRuleProfileToStateAsync(frenchLater.ExpressionIri, new string('f', 64));
             using var mount = await V3CorpusMount.OpenAsync(mismatches.Directory, CancellationToken.None);
             Assert.IsNotNull(mount);
@@ -576,7 +584,9 @@ public sealed class V3CorpusDiffMountTests
         await using (reversed)
         {
             var germanBegins = Shift(reversed.ApplicabilityDate, 400);
-            await reversed.AddSecondLanguageStateAsync(germanBegins);
+            // German begins later: a translation of the French state of that date (index 9).
+            var frenchLater = await reversed.AddStateAsync(germanBegins, "later");
+            await reversed.AddTranslationAsync(frenchLater.ExpressionIri);
             using var mount = await V3CorpusMount.OpenAsync(reversed.Directory, CancellationToken.None);
             Assert.IsNotNull(mount);
             var dateFrom = Shift(reversed.ApplicabilityDate, 100);

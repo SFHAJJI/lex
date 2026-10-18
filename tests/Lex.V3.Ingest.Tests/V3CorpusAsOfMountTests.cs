@@ -100,10 +100,14 @@ public sealed class V3CorpusAsOfMountTests
         Assert.AreEqual("no_version_for_date", envelope.Refusal!.Code);
         Assert.AreEqual(PublisherId.LuLegilux, envelope.Context.Publisher);
         var payload = envelope.Refusal.HelpfulPayload;
+        // The fixture is an index 9: the interval rules say why (S7a); an index 8 or 6 keeps the six properties, which
+        // base-answers.json holds byte for byte.
         Assert.AreEqual(
-            "asserts_absence_of_law,history_begins,nearest_earlier,nearest_later,requested_date,what_would_answer",
+            "asserts_absence_of_law,catalogue_read_no_later_than,history_begins,hole,language,nearest_earlier,nearest_later,reason,reason_rule,requested_date,states,what_would_answer",
             string.Join(",", payload.EnumerateObject().Select(static property => property.Name)),
             "as_of has one date, so its refusal names no bound: exactly these properties, as served in the envelope's canonical order.");
+        Assert.AreEqual("before_history", payload.GetProperty("reason").GetString());
+        Assert.AreEqual(0, payload.GetProperty("states").GetArrayLength(), "the date is before every state, so none is named");
         // The absence evidence the refusal card requires: a route out, and no claim that the law is absent.
         Assert.IsFalse(payload.GetProperty("asserts_absence_of_law").GetBoolean());
         CollectionAssert.AreEqual(new[] { "new_official_observation" }, payload.GetProperty("what_would_answer").EnumerateArray().Select(static value => value.GetString()).ToArray());
@@ -137,11 +141,23 @@ public sealed class V3CorpusAsOfMountTests
             both.Result.Value.GetProperty("available_languages").EnumerateArray()
                 .Select(static value => value.GetString()).ToArray());
 
+        // The German expression is a translation of the French state of its date (index 9): it takes that state's interval,
+        // which the later French state ends, so on the later date no German state covers the date, and the refusal names the
+        // French state that does, whose German text this index does not hold (S7a). Its next date is still German's own.
+        Assert.AreEqual(laterDate, states["deu"].GetProperty("applicable_to").GetString());
+        Assert.AreEqual(states["fra"].GetProperty("expression_iri").GetString(), states["deu"].GetProperty("translation_of").GetString());
         var germanOnly = await AsOfAsync(mount, $"/lu-legilux/{fixture.WorkKey}", laterDate, "deu");
-        Assert.AreEqual(V3Verdicts.Answer, germanOnly.Verdict);
-        Assert.AreEqual("deu", germanOnly.Result!.Value.GetProperty("requested_language").GetString());
+        Assert.AreEqual(V3Verdicts.Refuse, germanOnly.Verdict);
+        Assert.AreEqual("no_version_for_date", germanOnly.Refusal!.Code);
+        Assert.AreEqual("no_expression_in_language", germanOnly.Refusal.HelpfulPayload.GetProperty("reason").GetString());
+        Assert.AreEqual("deu", germanOnly.Refusal.HelpfulPayload.GetProperty("language").GetString());
+        Assert.AreEqual(laterDate,
+            germanOnly.Refusal.HelpfulPayload.GetProperty("states").EnumerateArray().Single().GetProperty("applicability_date").GetString());
+        var germanBefore = await AsOfAsync(mount, $"/lu-legilux/{fixture.WorkKey}", Shift(laterDate, -1), "deu");
+        Assert.AreEqual(V3Verdicts.Answer, germanBefore.Verdict);
+        Assert.AreEqual("deu", germanBefore.Result!.Value.GetProperty("requested_language").GetString());
         Assert.AreEqual("deu",
-            germanOnly.Result.Value.GetProperty("states").EnumerateArray().Single()
+            germanBefore.Result.Value.GetProperty("states").EnumerateArray().Single()
                 .GetProperty("language").GetString());
 
         var english = await AsOfAsync(mount, $"/lu-legilux/{fixture.WorkKey}", laterDate, "eng");
@@ -169,10 +185,13 @@ public sealed class V3CorpusAsOfMountTests
 
         Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
         Assert.AreEqual("ambiguous_version", envelope.Refusal!.Code);
+        // On index 9 each candidate is named with its interval, boundary, digest and text status (S7a).
         Assert.AreEqual(
-            "candidates,requested_date",
+            "candidate_states,candidate_states_rule,candidates,requested_date",
             string.Join(",", envelope.Refusal.HelpfulPayload.EnumerateObject().Select(static property => property.Name)),
             "as_of has one date, so its refusal names no bound: exactly these properties, as served in the envelope's canonical order.");
+        Assert.AreEqual(2, envelope.Refusal.HelpfulPayload.GetProperty("candidate_states").GetArrayLength(),
+            "two acts as published on one date with one wording: neither is the one act as published, so none is chosen");
         Assert.AreEqual(PublisherId.LuLegilux, envelope.Context.Publisher);
         Assert.AreEqual("lu", envelope.Context.Jurisdiction);
         Assert.AreEqual(TimelineSemantics.PublisherApplicability, envelope.Context.TimelineSemantics);

@@ -4254,7 +4254,15 @@ public sealed class LuxembourgIndexReader : IDisposable
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
-            command.CommandText = _version == 9 ? LuxembourgIndexQueries.StateArticlesNine : LuxembourgIndexQueries.StateArticles;
+            if (_version == 9)
+            {
+                command.CommandText = LuxembourgIndexQueries.StateArticlesNine;
+            }
+            else
+            {
+                command.CommandText = LuxembourgIndexQueries.StateArticles;
+            }
+
             command.Parameters.AddWithValue("$digest", stateSha256);
             using var reader = command.ExecuteReader();
             var values = new List<LuxembourgIndexStateArticle>();
