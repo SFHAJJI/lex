@@ -104,7 +104,11 @@ test("the release from custody refuses a derive tool its CI artifact does not bi
     await mkdir(join(root, "runtime"));
     const tool = join(root, "runtime", "Lex.V3.Tool.dll");
     await writeFile(tool, "tool bytes");
-    const release = () => rehearseFromCustody({ tool, custody: join(root, "custody"), checkpoint: join(root, "mount-inputs.json") });
+    // A release that does not say whether a browser walks its pages is refused first, before the tool is read (the review
+    // of #979: no default may start one).
+    await assert.rejects(rehearseFromCustody({ tool, custody: join(root, "custody"), checkpoint: join(root, "mount-inputs.json") }),
+      /the release from custody needs browser: true \(the pages walked in a browser\) or false \(--no-browser\), and was given undefined/);
+    const release = () => rehearseFromCustody({ tool, custody: join(root, "custody"), checkpoint: join(root, "mount-inputs.json"), browser: false });
     // No stamp beside runtime/: nothing names the commit the tool was built from. Refused before any derive runs.
     await assert.rejects(release(), /the derive tool is not bound to the source the image is built from: no .*source-head\.txt names the commit/);
     // A stamp naming another commit than this checkout's is refused the same way.

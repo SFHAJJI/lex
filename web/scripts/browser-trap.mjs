@@ -8,8 +8,10 @@
 // and the process then ends with that code whatever else it would end with, once its own clean-up has run (a release's
 // container and work directory are removed as on any failure), even if something caught the error.
 //
-//   LEX_BROWSER_TRAP=exit node --import ./scripts/browser-trap.mjs scripts/image-rehearsal.mjs ... --no-browser
-//     a run with the trap loaded first: a touch fails it with `TRAP_EXIT_CODE` (97).
+//   node --import ./scripts/browser-trap.mjs scripts/deploy-probe.mjs ...
+//     a run with the trap loaded first (or any script run with LEX_BROWSER_TRAP=exit): armed, it says so on standard
+//     error (`ARMED_NOTICE`), and a touch fails the run with `TRAP_EXIT_CODE` (97). `image-rehearsal.mjs --no-browser`
+//     installs it so itself.
 //   installBrowserTrap({ strict: true }) in a test, before it imports any script, then takeTouches().
 //
 // The launcher is replaced through the in-thread module hooks (`module.registerHooks`, Node 22.15 or later); a Node
@@ -114,11 +116,27 @@ export function installBrowserTrap({ strict = false, exitCode = null } = {}) {
   }
   nodeModule.syncBuiltinESMExports();
   installed = Object.freeze({ strict, exitCode });
+  // A run's trap says it is there, so a run's log shows it armed, never silently nothing.
+  if (exitCode !== null) process.stderr.write(`${ARMED_NOTICE} ${exitCode}\n`);
   // A run whose own script walks pages in a browser is refused before it starts: `browser-evidence.mjs` run directly would
   // call its own launcher, behind the trap's (whose process check would still refuse the browser's start).
   if (PAGE_WALKER.test(process.argv[1] ?? "")) browserTrapTouched(`the script ${process.argv[1]}`);
   return installed;
 }
 
-// Loaded first by `--import` for a run: installed with the exit code, so a touch fails the run with it.
-if (process.env.LEX_BROWSER_TRAP === "exit") installBrowserTrap({ exitCode: TRAP_EXIT_CODE });
+/** What a run's trap says on standard error once it is installed, followed by its exit code. */
+export const ARMED_NOTICE = "the browser trap is armed: findBrowser and launchBrowser are traps and no browser process may start; a touch fails the run with";
+
+/** Whether node was asked to load this module first (`--import <this file>`), as a run's trap is loaded. */
+export function preloaded(execArgv = process.execArgv) {
+  for (let at = 0; at < execArgv.length; at++) {
+    const value = execArgv[at] === "--import" ? execArgv[at + 1] : /^--import=(.*)$/s.exec(execArgv[at])?.[1];
+    if (typeof value === "string" && /(?:^|[\\/])browser-trap\.mjs$/i.test(value)) return true;
+  }
+  return false;
+}
+
+// Loaded first by `--import`, or asked for by `LEX_BROWSER_TRAP=exit`: a run's trap, installed with the exit code, so a
+// touch fails the run with it. Loaded first, it is armed with or without the variable (the review of #979: without it,
+// the trap was loaded and installed nothing, silently).
+if (process.env.LEX_BROWSER_TRAP === "exit" || preloaded()) installBrowserTrap({ exitCode: TRAP_EXIT_CODE });

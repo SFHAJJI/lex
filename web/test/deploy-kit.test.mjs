@@ -187,9 +187,20 @@ test("the script deploys only a release that verifies, and only by the image's d
   assert.match(script, /\$image = "\$Registry\/\$Repository@\$digest"/);
   assert.match(script, /\$digest -notmatch '\^sha256:\[0-9a-f\]\{64\}\$'/);
   assert.match(script, /image = \$image;/);
-  // The browser probes run unless -SkipBrowserProbe says they do not, and a skip is stated.
-  assert.match(code, /\$browserProbe = if \(\$SkipBrowserProbe\) \{ @\(\) \} else \{ @\('--browser'\) \}/);
-  assert.match(code, /deploy-probe\.mjs'\) --origin \$origin --release \$releasePath --public-key \$keyPath @signerProbe @browserProbe/);
+  // No browser runs unless -BrowserProbe asks for one (the review of #979: an -Apply that left out -SkipBrowserProbe started
+  // a browser on a machine where none may run); -SkipBrowserProbe stays accepted, a no-op, and the two together are refused.
+  assert.match(code, /\[Parameter\(ParameterSetName = 'Deploy'\)\] \[switch\] \$BrowserProbe,/);
+  assert.match(code, /\[Parameter\(ParameterSetName = 'Deploy'\)\] \[switch\] \$SkipBrowserProbe,/);
+  // Not `$browserProbe`: PowerShell's names are not case-sensitive, so that array would be the -BrowserProbe switch itself.
+  assert.match(code, /\$browserArgs = if \(\$BrowserProbe\) \{ @\('--browser'\) \} else \{ @\(\) \}/);
+  assert.ok(!/\$browserProbe\b/.test(code), "no variable spelled like the switch");
+  assert.match(code, /if \(\$BrowserProbe -and \$SkipBrowserProbe\) \{ throw /);
+  assert.equal((code.match(/\$SkipBrowserProbe/g) ?? []).length, 2, "-SkipBrowserProbe is declared and refused beside -BrowserProbe, and decides nothing else");
+  assert.match(code, /deploy-probe\.mjs'\) --origin \$origin --release \$releasePath --public-key \$keyPath @signerProbe @browserArgs/);
+  // Without -BrowserProbe both probes run with the browser trap loaded first, so nothing they run can find or start one.
+  assert.match(code, /\$nodeTrap = if \(\$BrowserProbe\) \{ @\(\) \} else \{ @\('--import', \(\[System\.Uri\] \(Join-Path \$checkout 'web\/scripts\/browser-trap\.mjs'\)\)\.AbsoluteUri\) \}/);
+  assert.equal((code.match(/& node @nodeTrap \(Join-Path \$checkout 'web\/scripts\/deploy-probe\.mjs'\)/g) ?? []).length, 2, "both probes run under the trap");
+  assert.equal((code.match(/Join-Path \$checkout 'web\/scripts\/deploy-probe\.mjs'\)/g) ?? []).length, 2, "and the probe runs nowhere else");
   // A deployment applies only a release the release signer signed: -Apply requires -SignerIdentity, which both read-backs
   // carry, so a rehearsal release is read in a plan run only.
   assert.match(script, /if \(\$Apply -and \[string\]::IsNullOrWhiteSpace\(\$SignerIdentity\)\) \{\s*throw "-Apply deploys a release signed by the release signer/);
@@ -199,7 +210,7 @@ test("the script deploys only a release that verifies, and only by the image's d
   const guard = code.indexOf('throw "-Apply deploys');
   assert.ok(guard > 0 && guard < code.indexOf('Step "verify the release'), "the -Apply guard runs before the release is read back or any Azure command");
   assert.match(code, /deploy-probe\.mjs'\) --release \$releasePath --public-key \$keyPath @signerProbe\n/);
-  assert.match(code, /the browser probes are skipped \(-SkipBrowserProbe\)/);
+  assert.match(code, /no browser probe \(no -BrowserProbe\): only the HTTP probes run, under the browser trap, and no page of the candidate is walked in a browser/);
   // Rollback and forward again are printed for the owner with promotion, never run.
   assert.match(code, /Write-Host "  > az containerapp ingress traffic set -g \$ResourceGroup -n \$AppName --revision-weight \$LiveRevision=100"/);
   // A failed probe deactivates the candidate (the removal step) and stops.

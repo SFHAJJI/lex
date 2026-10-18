@@ -5,9 +5,10 @@
 // The browser trap (`browser-trap.mjs`) is installed strict before any script is imported: the launcher's `findBrowser`
 // and `launchBrowser` are traps, and so is every process start. Then the rehearsal's probe phase (`probeImage`) runs
 // against a stand-in image, a local server that answers as a release image does and exposes a container's record (its
-// output and its /tmp's events), and the deployment probe against the same stand-in, in this process and as
-// `deploy.ps1 -SkipBrowserProbe` runs it. Each must run every probe that needs no browser, say what it did not walk, and
-// leave the trap untouched; with the browser asked for, each must reach the trap, which shows the trap would catch it.
+// output and its /tmp's events), and the deployment probe against the same stand-in, in this process and as `deploy.ps1`
+// runs it without `-BrowserProbe`. Each must run every probe that needs no browser, say what it did not walk, and leave
+// the trap untouched; with the browser asked for, each must reach the trap, which shows the trap would catch it. Every
+// process this test starts has node standing in for the browser (`LEX_BROWSER`), so even an unarmed trap reaches none.
 
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
@@ -20,15 +21,20 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test, { beforeEach } from "node:test";
 
-import { TRAP_EXIT_CODE, installBrowserTrap, startsBrowser, takeTouches } from "../scripts/browser-trap.mjs";
+import { ARMED_NOTICE, TRAP_EXIT_CODE, installBrowserTrap, preloaded, startsBrowser, takeTouches } from "../scripts/browser-trap.mjs";
 
 // The test's own process starter, kept before the trap wraps every one: the deployment probe's command run as a process
 // is the test's doing, not the code under test's.
 const { execFile } = createRequire(import.meta.url)("node:child_process");
 installBrowserTrap({ strict: true });
+// A stand-in for the browser, here and in every process this test starts: were a trap not to hold, the launcher would find
+// node, which refuses a browser's flags and exits, never a browser (the review of #979, F3).
+process.env.LEX_BROWSER = process.execPath;
 
 // Imported only now, so every script that imports the launcher gets the trap's.
-const { NO_BROWSER, V2_ROUTES, probeFailures, probeImage, recordedRequests, rehearsalKey, signRehearsal } = await import("../scripts/image-rehearsal.mjs");
+const {
+  NO_BROWSER, TRAP_HOLDS, V2_ROUTES, commandOptions, probeFailures, probeImage, recordedRequests, rehearsalKey, rehearse, signRehearsal,
+} = await import("../scripts/image-rehearsal.mjs");
 const { NOT_FOUND_PROBE, NOT_WALKED_NOTE, deployedReleaseFailures } = await import("../scripts/deploy-probe.mjs");
 const { MCP_PROTOCOL_VERSION, REAL_MOUNT_EVENTS_VERIFIED, fixtureMountExpectations, realMountSteps } = await import("../scripts/journey.mjs");
 const { cspValue } = await import("../scripts/csp.mjs");
@@ -57,6 +63,7 @@ const HEADERS = {
 const TRAP_URL = new URL("../scripts/browser-trap.mjs", import.meta.url).href;
 const PROBE_SCRIPT = fileURLToPath(new URL("../scripts/deploy-probe.mjs", import.meta.url));
 const REHEARSAL_SCRIPT = fileURLToPath(new URL("../scripts/image-rehearsal.mjs", import.meta.url));
+const DEPLOY_SCRIPT = fileURLToPath(new URL("../../deploy/deploy.ps1", import.meta.url));
 
 /** An instant as the API writes one: UTC, seven fractional digits. */
 const observedAt = (milliseconds) => new Date(milliseconds).toISOString().replace("Z", "0000Z");
@@ -309,7 +316,7 @@ function imageArchive() {
   return { archive: writeLayout({ index, blobs }, { mtime: SOURCE.epoch }), manifestDigest };
 }
 
-test("the deployment probe without --browser runs its HTTP probes and never reaches the trap, in this process and as deploy.ps1 -SkipBrowserProbe runs it", async () => {
+test("the deployment probe without --browser runs its HTTP probes and never reaches the trap, in this process and as deploy.ps1 runs it without -BrowserProbe", async () => {
   const image = await standInImage();
   const root = await mkdtemp(join(tmpdir(), "lex-no-browser-release-"));
   try {
@@ -324,28 +331,43 @@ test("the deployment probe without --browser runs its HTTP probes and never reac
     assert.deepEqual(await deployedReleaseFailures(image.origin, directory, { publicKeyPem: key.publicKeyPem }), []);
     assert.deepEqual(takeTouches(), []);
 
-    // The command as a process, the trap loaded before it (`--import`, ending the process if touched), as deploy.ps1 runs it
-    // with -SkipBrowserProbe; asynchronously, so the stand-in in this process answers it.
+    // The command as a process, the trap loaded before it by `--import` alone (no LEX_BROWSER_TRAP: loaded first, it arms
+    // itself; the review of #979, F1 d), as deploy.ps1 runs it without -BrowserProbe; the browser a stand-in (node), so an
+    // unarmed trap could reach nothing; asynchronously, so the stand-in revision in this process answers it.
     const publicKey = join(root, "signing.pem");
     await writeFile(publicKey, key.publicKeyPem);
-    const run = (...args) => new Promise((resolve) => execFile(process.execPath, ["--import", TRAP_URL, PROBE_SCRIPT, ...args],
-      { env: { ...process.env, LEX_BROWSER_TRAP: "exit" } }, (error, stdout, stderr) => resolve({ code: error === null ? 0 : error.code, stdout, stderr })));
-    const probed = await run("--release", directory, "--public-key", publicKey, "--origin", image.origin);
+    const env = { ...process.env, LEX_BROWSER: process.execPath, LEX_BROWSER_TRAP: "" };
+    const node = (args) => new Promise((resolve) => execFile(process.execPath, args, { env },
+      (error, stdout, stderr) => resolve({ code: error === null ? 0 : error.code, stdout, stderr })));
+    const armed = `${ARMED_NOTICE} ${TRAP_EXIT_CODE}`;
+    // First, that the trap a process loads this way holds: the launcher it then imports is the trap's (the review's F3: the
+    // control below once passed on an unarmed trap).
+    const launcherUrl = JSON.stringify(new URL("../scripts/browser-evidence.mjs", import.meta.url).href);
+    const holds = await node(["--import", TRAP_URL, "--input-type=module", "--eval",
+      `const { findBrowser, launchBrowser } = await import(${launcherUrl}); console.log(findBrowser.lexBrowserTrap === true && launchBrowser.lexBrowserTrap === true);`]);
+    assert.deepEqual([holds.code, holds.stdout, holds.stderr.includes(armed)], [0, "true\n", true], holds.stderr);
+
+    const probe = (...args) => node(["--import", TRAP_URL, PROBE_SCRIPT, "--release", directory, "--public-key", publicKey, "--origin", image.origin, ...args]);
+    const probed = await probe();
     assert.equal(probed.code, 0, probed.stderr);
+    assert.ok(probed.stderr.includes(armed), "the trap says it is armed");
     assert.ok(probed.stdout.includes(NOT_WALKED_NOTE), "it says no page was walked in a browser");
     assert.match(probed.stdout, /answers as the release holds, over HTTP only \(no page walked in a browser\)/);
-    assert.ok(!probed.stderr.includes("browser trap"), probed.stderr);
-    // The control: with --browser the same command reaches the launcher, and the trap fails it before anything starts.
-    const walked = await run("--release", directory, "--public-key", publicKey, "--origin", image.origin, "--browser");
+    assert.ok(!probed.stderr.includes("was touched"), probed.stderr);
+    // The control, on a trap seen armed: with --browser the same command reaches the launcher, and the trap fails it there.
+    const walked = await probe("--browser");
+    assert.ok(walked.stderr.includes(armed), walked.stderr);
     assert.equal(walked.code, TRAP_EXIT_CODE, walked.stderr);
     assert.match(walked.stderr, /the browser trap was touched: findBrowser\(\); nothing was started, and the run ends with 97/);
-    // A caller that catches the trap's error, or ends with its own code, still ends with the trap's.
-    const caught = await new Promise((resolve) => execFile(process.execPath, ["--import", TRAP_URL, "--input-type=module", "--eval",
-      `const { findBrowser } = await import(${JSON.stringify(new URL("../scripts/browser-evidence.mjs", import.meta.url).href)});
+    // Asked for by LEX_BROWSER_TRAP=exit instead, the trap arms as its module loads; and a caller that catches its error, or
+    // ends with its own code, still ends with the trap's.
+    const caught = await new Promise((resolve) => execFile(process.execPath, ["--input-type=module", "--eval",
+      `await import(${JSON.stringify(TRAP_URL)});
+       const { findBrowser } = await import(${launcherUrl});
        try { await findBrowser(); } catch { console.log("caught"); }
        process.exit(0);`],
-    { env: { ...process.env, LEX_BROWSER_TRAP: "exit" } }, (error, stdout) => resolve({ code: error === null ? 0 : error.code, stdout })));
-    assert.deepEqual(caught, { code: TRAP_EXIT_CODE, stdout: "caught\n" });
+    { env: { ...env, LEX_BROWSER_TRAP: "exit" } }, (error, stdout, stderr) => resolve({ code: error === null ? 0 : error.code, stdout, armed: stderr.includes(armed) })));
+    assert.deepEqual(caught, { code: TRAP_EXIT_CODE, stdout: "caught\n", armed: true });
   } finally {
     await image.close();
     await rm(root, { recursive: true, force: true });
@@ -376,13 +398,118 @@ test("a run's trap refuses every browser the launcher knows and every page walke
   // A run whose own script walks pages is refused as it loads, before the script runs (its API directory does not exist
   // either, so even run it would stop before a browser).
   const refused = await new Promise((resolve) => execFile(process.execPath, ["--import", TRAP_URL, fileURLToPath(new URL("../scripts/journey.mjs", import.meta.url)), "--api", join(tmpdir(), "no-such-api"), "--mount", "none"],
-    { env: { ...process.env, LEX_BROWSER_TRAP: "exit" } }, (error, stdout, stderr) => resolve({ code: error === null ? 0 : error.code, stderr })));
+    { env: { ...process.env, LEX_BROWSER: process.execPath, LEX_BROWSER_TRAP: "" } }, (error, stdout, stderr) => resolve({ code: error === null ? 0 : error.code, stderr })));
   assert.equal(refused.code, TRAP_EXIT_CODE, refused.stderr);
   assert.match(refused.stderr, /the browser trap was touched: the script [^\n]*journey\.mjs; nothing was started/);
+
+  // Loaded first, by `--import` in either spelling, the trap is a run's; imported by a script, it is the script's to install.
+  assert.equal(preloaded(["--import", "./scripts/browser-trap.mjs"]), true);
+  assert.equal(preloaded([`--import=${TRAP_URL}`]), true);
+  assert.equal(preloaded(["--import", "./scripts/other-trap.mjs", "--expose-gc"]), false);
+  assert.equal(preloaded([]), false);
 });
 
 test("the release command names --no-browser beside --no-probe", async () => {
   const usage = await new Promise((resolve) => execFile(process.execPath, [REHEARSAL_SCRIPT], (error, stdout, stderr) => resolve({ code: error?.code ?? 0, stderr })));
   assert.equal(usage.code, 2);
   assert.match(usage.stderr, /\[--no-probe \| --no-browser\]/);
+});
+
+test("the release command's --no-browser is browser: false, and the command then installs the trap before it runs anything", async () => {
+  // The arguments as the command maps them (the review of #979, F1 c: a command that set browser: true passed every test).
+  const base = { keep: false, probe: true, reproduce: true, platformCard: false };
+  assert.deepEqual(commandOptions(["--mount", "m"]), { ...base, browser: true });
+  assert.deepEqual(commandOptions(["--mount", "m", "--no-browser"]), { ...base, browser: false });
+  assert.deepEqual(commandOptions(["--custody", "c", "--checkpoint", "p", "--tool", "t", "--no-browser", "--no-reproduce"]), { ...base, browser: false, reproduce: false });
+  assert.deepEqual(commandOptions(["--mount", "m", "--no-probe", "--keep", "--platform-card"]), { ...base, browser: true, probe: false, keep: true, platformCard: true });
+
+  // As a process, with no trap loaded and none asked for by the environment: --no-browser installs it and sees it hold, before
+  // the rehearsal reads its mount (a mount that does not exist, so nothing is built either way).
+  const missing = join(tmpdir(), `lex-no-such-mount-${process.pid}`);
+  const command = (...args) => new Promise((resolve) => execFile(process.execPath, [REHEARSAL_SCRIPT, "--mount", missing, ...args],
+    { env: { ...process.env, LEX_BROWSER: process.execPath, LEX_BROWSER_TRAP: "" } }, (error, stdout, stderr) => resolve({ code: error === null ? 0 : error.code, stderr })));
+  const without = await command("--no-browser");
+  assert.equal(without.code, 1, without.stderr);
+  const [armedAt, holdsAt, mountAt] = [without.stderr.indexOf(`${ARMED_NOTICE} ${TRAP_EXIT_CODE}`), without.stderr.indexOf(`- ${TRAP_HOLDS}`), without.stderr.indexOf("build-report.json")];
+  assert.ok(armedAt >= 0 && holdsAt > armedAt && mountAt > holdsAt, `armed, then seen to hold, then the mount is read: ${without.stderr}`);
+  // Without --no-browser the command installs no trap (a release with its browser walk, where a browser may run).
+  const walking = await command();
+  assert.equal(walking.code, 1, walking.stderr);
+  assert.ok(!walking.stderr.includes(ARMED_NOTICE) && walking.stderr.includes("build-report.json"), walking.stderr);
+});
+
+test("deploy.ps1 walks no page unless -BrowserProbe asks: a plan run reads the release back under the trap and plans no browser", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lex-no-browser-plan-"));
+  try {
+    const key = rehearsalKey();
+    const { archive, manifestDigest } = imageArchive();
+    const signed = signRehearsal({ manifestDigest, reference: "lex-v3-rehearsal:rehearsal", key });
+    const { directory } = await publishRelease(join(root, "releases"), {
+      version: releaseVersion(SOURCE), source: SOURCE, manifestDigest, corpusSha256: CORPUS, key,
+      assets: [[ASSETS.image, archive], [ASSETS.imageSignature, imageSignatureAsset(signed)], [ASSETS.card, CARD], [ASSETS.mountReport, Buffer.from("{\"files\":[]}")]],
+    });
+    const publicKey = join(root, "signing.pem");
+    await writeFile(publicKey, key.publicKeyPem);
+    // A plan run runs no Azure or registry command (each is only shown without -Apply); stand-ins for both, first on the
+    // path, would say so if one ran.
+    const stubs = join(root, "stubs");
+    const { chmod, mkdir } = await import("node:fs/promises");
+    await mkdir(stubs);
+    for (const tool of ["az", "oras"]) {
+      await writeFile(join(stubs, `${tool}.cmd`), `@echo STUB ${tool} RAN\r\n@exit /b 99\r\n`);
+      await writeFile(join(stubs, tool), `#!/bin/sh\necho "STUB ${tool} RAN"\nexit 99\n`);
+      await chmod(join(stubs, tool), 0o755);
+    }
+    const pathKey = Object.keys(process.env).find((name) => name.toUpperCase() === "PATH") ?? "PATH";
+    const env = { ...process.env, [pathKey]: `${stubs}${process.platform === "win32" ? ";" : ":"}${process.env[pathKey]}`, LEX_BROWSER: process.execPath, LEX_BROWSER_TRAP: "" };
+    const plan = (...extra) => new Promise((resolve) => execFile("pwsh", ["-NoProfile", "-NonInteractive", "-File", DEPLOY_SCRIPT,
+      "-Subscription", "00000000-0000-0000-0000-000000000000", "-ResourceGroup", "rg-plan", "-EnvironmentId", "/subscriptions/plan/environment",
+      "-Registry", "crplan.azurecr.io", "-IdentityResourceId", "/subscriptions/plan/identity", "-SigningPublicKey", publicKey, "-Release", directory,
+      "-AllowedCidr", "203.0.113.7/32", ...extra], { env }, (error, stdout, stderr) => resolve({ code: error === null ? 0 : error.code, stdout, stderr })));
+    const probeLine = (stdout) => stdout.split("\n").find((line) => line.includes("web/scripts/deploy-probe.mjs --origin")) ?? "";
+    const armed = `${ARMED_NOTICE} ${TRAP_EXIT_CODE}`;
+
+    // By default: the release read back under the trap (it says it is armed), the candidate's probe planned under it, with
+    // no --browser, and said to walk no page.
+    for (const [what, extra] of [["by default", []], ["with -SkipBrowserProbe, kept and changing nothing", ["-SkipBrowserProbe"]]]) {
+      const run = await plan(...extra);
+      assert.equal(run.code, 0, `${what}: ${run.stdout}${run.stderr}`);
+      assert.ok(!run.stdout.includes("STUB"), `${what}: a plan run ran no Azure or registry command`);
+      assert.ok(run.stdout.includes("reads back under the signing identity's key, as a rehearsal"), `${what}: ${run.stdout}`);
+      assert.ok(run.stderr.includes(armed), `${what}: the read-back ran under the trap: ${run.stderr}`);
+      assert.match(probeLine(run.stdout), /> node --import file:\/\/\/?\S*\/web\/scripts\/browser-trap\.mjs web\/scripts\/deploy-probe\.mjs --origin /, what);
+      assert.ok(!/--browser\b/.test(probeLine(run.stdout)), `${what}: no --browser planned`);
+      assert.match(run.stdout, /\(no browser probe: only the HTTP probes would run, under the browser trap, and no page of the candidate would be walked in a browser/);
+    }
+    // Asked for, on a machine where a browser may run: planned with --browser and without the trap (a plan run starts no
+    // browser: the probe is only shown).
+    const walking = await plan("-BrowserProbe");
+    assert.equal(walking.code, 0, walking.stdout + walking.stderr);
+    assert.match(probeLine(walking.stdout), /> node web\/scripts\/deploy-probe\.mjs --origin .* --browser\s*$/);
+    assert.ok(!walking.stderr.includes(armed) && !walking.stdout.includes("no browser probe"));
+    // Both at once say opposite things, and nothing is read or planned.
+    const both = await plan("-BrowserProbe", "-SkipBrowserProbe");
+    assert.notEqual(both.code, 0);
+    assert.match(`${both.stdout}${both.stderr}`, /-BrowserProbe asks for the browser probes and -SkipBrowserProbe skips them: name one\./);
+    assert.ok(!both.stdout.includes("reads back"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the probes and the rehearsal take no default for the browser: one left out stops them before anything starts", async () => {
+  const image = await standInImage();
+  const mount = await mountOf("real");
+  try {
+    const probing = { startServer: () => image.start(), mountPath: mount.directory, mountKind: "real", web: WEB, card: CARD, corpusSha256: CORPUS };
+    await assert.rejects(probeImage(probing), /probeImage needs browser: true \(the pages walked in a browser\) or false \(--no-browser\), and was given undefined/);
+    await assert.rejects(probeImage({ ...probing, browser: "false" }), /probeImage needs browser: .* and was given false/);
+    assert.deepEqual(image.counts, { starts: 0, closes: 0 }, "the image was never started");
+    await assert.rejects(rehearse({ mount: mount.directory }), /the rehearsal needs browser: true .* and was given undefined/);
+    await assert.rejects(rehearse({ mount: mount.directory, browser: 0 }), /the rehearsal needs browser: .* and was given 0/);
+    assert.deepEqual(takeTouches(), []);
+  } finally {
+    await image.close();
+    await rm(mount.directory, { recursive: true, force: true });
+  }
 });

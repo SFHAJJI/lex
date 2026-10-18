@@ -41,7 +41,9 @@
 // browser's walk of its pages. `--no-browser` keeps every probe but the walk, for a machine where no browser may run
 // (the driver's, since 2026-10-16: headless Chrome runs there locked the owner's Windows account): no browser is looked
 // for or started, and the report says `browserProbes: "skipped: --no-browser"` and names each page step not walked
-// (`stepsNotWalked`). Nothing is pushed anywhere, and the work directory (both builds, their
+// (`stepsNotWalked`). With it the command installs the browser trap before anything else (`browser-trap.mjs`), so no
+// later step can find or start a browser: a touch fails the run with 97. The probes take `browser` with no default.
+// Nothing is pushed anywhere, and the work directory (both builds, their
 // archives), the build's artifacts directory and the container's run directory are removed at the end,
 // which the report records.
 
@@ -542,6 +544,16 @@ async function mountedCard({ mountPath, into, log }) {
 export const NO_BROWSER = "skipped: --no-browser";
 
 /**
+ * Throws unless `browser` says, as a boolean, whether a browser walks the pages: the release's probes take no default, so a
+ * value lost on its way (a call that leaves it out) stops the release instead of starting a browser (the review of #979).
+ */
+function browserNamed(browser, where) {
+  if (typeof browser !== "boolean") {
+    throw new Error(`${where} needs browser: true (the pages walked in a browser) or false (--no-browser), and was given ${String(browser)}; it has no default, so nothing that leaves it out starts a browser`);
+  }
+}
+
+/**
  * The page steps a browser walks over the image, by the labels a walk reports them under: the real mount's
  * (`realMountSteps`, the EU steps with them when its build report names an EU index) or the fixture mount's
  * (`fixtureMountExpectations`). What a report without the browser lists as not walked; reading them asks nothing of a
@@ -617,7 +629,8 @@ export async function recordedRequests(origin, during) {
  * (`findBrowser` is never called), the report says `browserProbes: "skipped: --no-browser"`, and `stepsNotWalked` names
  * each page step a walk would have reported, so no report reads as browser-probed when it was not.
  */
-export async function probeImage({ startServer, mountPath, mountKind, web, card, corpusSha256, browser = true, log = () => {} }) {
+export async function probeImage({ startServer, mountPath, mountKind, web, card, corpusSha256, browser, log = () => {} }) {
+  browserNamed(browser, "probeImage");
   const { apiJourneyRuns, processRecordFailures, REAL_MOUNT_EVENTS_VERIFIED } = await import("./journey.mjs");
   const { servedPageFailures } = await import("./deploy-probe.mjs");
   const { CARD_ROUTE } = await import("./evaluation-card.mjs");
@@ -696,7 +709,8 @@ export function probeFailures(report) {
 }
 
 /** The rehearsal, end to end. Returns its report; throws on the first step that fails. */
-export async function rehearse({ mount, keep = false, probe = true, browser = true, reproduce = true, platformCard = false, signer = null, log = () => {} }) {
+export async function rehearse({ mount, keep = false, probe = true, browser, reproduce = true, platformCard = false, signer = null, log = () => {} }) {
+  browserNamed(browser, "the rehearsal");
   const mountPath = resolve(mount);
   const { kind: mountKind, report, bytes: mountBytes } = await mountReport(mountPath);
   const work = await mkdtemp(join(tmpdir(), "lex-image-rehearsal-"));
@@ -837,6 +851,8 @@ export async function rehearse({ mount, keep = false, probe = true, browser = tr
  * (`derive-twice.mjs`), then the rehearsal over the first derivation, with the derivation's evidence in the report.
  */
 export async function rehearseFromCustody({ tool, custody, checkpoint, custodyEncoding = "brotli", allowUnboundTool = false, log = () => {}, ...options }) {
+  // Asked first: the two derivations take hours, and the rehearsal after them would refuse a browser left unsaid.
+  browserNamed(options.browser, "the release from custody");
   const { deriveTwice } = await import("./derive-twice.mjs");
   const binding = await toolBinding(resolve(tool));
   if (!binding.bound && !allowUnboundTool) {
@@ -880,10 +896,53 @@ export async function toolBinding(toolPath, checkoutHead = null) {
     : { path: toolPath, sha256: toolSha256, sourceHead, checkoutHead: head, bound: false, reason: `it was built from ${sourceHead}, and the checkout is ${head}` };
 }
 
+/**
+ * The release command's options from its arguments (`argv`, after the script's path), as `rehearse` takes them; the
+ * signer, the log and the custody form's own are the command's. `--no-browser` is `browser: false`, under which the
+ * command installs the browser trap before it runs anything (`armBrowserTrap`).
+ */
+export function commandOptions(argv) {
+  return {
+    keep: argv.includes("--keep"),
+    probe: !argv.includes("--no-probe"),
+    browser: !argv.includes("--no-browser"),
+    reproduce: !argv.includes("--no-reproduce"),
+    platformCard: argv.includes("--platform-card"),
+  };
+}
+
+/** What the release command says once the browser trap holds for a release without a browser. */
+export const TRAP_HOLDS = "--no-browser: the browser trap holds; the launcher this run loads is the trap's, so nothing here can find or start a browser";
+
+/**
+ * The browser trap a release without a browser runs under (`--no-browser`, the review of #979): installed by the command
+ * itself before any script that can find or start a browser is loaded (`browser-trap.mjs`; a touch fails the run with 97
+ * once its clean-up has run), then seen to hold: the launcher this process loads is the trap's. Throws when it does not
+ * hold, and the release does not run.
+ */
+export async function armBrowserTrap(log = () => {}) {
+  const { TRAP_EXIT_CODE, installBrowserTrap } = await import("./browser-trap.mjs");
+  installBrowserTrap({ exitCode: TRAP_EXIT_CODE });
+  const { findBrowser, launchBrowser } = await import("./browser-evidence.mjs");
+  if (findBrowser.lexBrowserTrap !== true || launchBrowser.lexBrowserTrap !== true) {
+    throw new Error("--no-browser: the browser trap does not hold (the launcher was loaded before it), so the release does not run");
+  }
+  log(TRAP_HOLDS);
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const argv = process.argv.slice(2);
   const value = (name) => { const at = argv.indexOf(name); return at < 0 || at + 1 >= argv.length ? null : argv[at + 1]; };
-  const options = { keep: argv.includes("--keep"), probe: !argv.includes("--no-probe"), browser: !argv.includes("--no-browser"), reproduce: !argv.includes("--no-reproduce"), platformCard: argv.includes("--platform-card"), log: (line) => console.error(`- ${line}`) };
+  const options = { ...commandOptions(argv), log: (line) => console.error(`- ${line}`) };
+  // Before anything else: with --no-browser the run cannot reach a browser, whatever a later step asks.
+  if (!options.browser) {
+    try {
+      await armBrowserTrap(options.log);
+    } catch (error) {
+      console.error(error.message);
+      process.exit(2);
+    }
+  }
   // The release signer: the owner's key and the identity it signs as, both or neither.
   const signingKey = value("--signing-key");
   const signerIdentity = value("--signer");
