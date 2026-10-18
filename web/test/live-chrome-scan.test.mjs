@@ -31,6 +31,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
 import { europeEnvelope } from "../scripts/europe-bundle-sample.mjs";
+import { ACCESSIBILITY_LAW, CNPD_SITE, EURLEX_SITE, PUBLISHER_PLACEHOLDERS } from "../scripts/legal-pages.mjs";
 
 const require = createRequire(import.meta.url);
 const { createElement: h } = require("react");
@@ -118,6 +119,19 @@ async function frenchPseudoBuild() {
   });
   return import(`${pathToFileURL(OUT_FRENCH).href}?${Date.now()}`);
 }
+
+/**
+ * The legal pages (the plan's item 7.1) and the data they print that no table holds: the publisher's details (each its
+ * placeholder until the owner fills it), the CNPD's site, the EU acknowledgement's address and the accessibility law's
+ * French title.
+ */
+const legalPages = (app) => ({
+  legalNotice: app.renderLiveLegalNoticePage, privacy: app.renderLivePrivacyPage, terms: app.renderLiveTermsPage,
+  accessibility: app.renderLiveAccessibilityPage, cookies: app.renderLiveCookiesPage,
+});
+const LEGAL_DATA = [...Object.values(PUBLISHER_PLACEHOLDERS), CNPD_SITE.text, EURLEX_SITE, ACCESSIBILITY_LAW];
+const dataOfPage = (name, app) => (name === "coverage" ? dataOf(withoutVerdicts(app.CENSUS_EVALUATION_CARD))
+  : Object.hasOwn(legalPages(app), name) ? dataOf(LEGAL_DATA) : []);
 
 /**
  * Every pin of an EU reading, each article of each wording, quoted or held without text: the EU export is scanned with
@@ -232,6 +246,7 @@ test("no interface text on a live page or a census answer bypasses the chrome ta
     radar: app.renderLiveRadarPage, export: app.renderLiveExportPage,
     // The 404 page and the maintenance page (R60).
     notFound: app.renderLiveNotFoundPage, maintenance: app.renderLiveMaintenancePage,
+    ...legalPages(app),
   };
   for (const [name, render] of Object.entries(pages)) {
     // The locale navigation names each language in that language, which no table translates. Only
@@ -239,7 +254,7 @@ test("no interface text on a live page or a census answer bypasses the chrome ta
     // statute-language selects' "English" hid behind a page-wide exemption). The evaluation card's own
     // values (its target sentence, set names, figures) are the card's.
     const { inside: nav, outside: rest } = split(render(), 'data-locale-nav=""');
-    scan(`${name} page`, rest, name === "coverage" ? dataOf(withoutVerdicts(app.CENSUS_EVALUATION_CARD)) : []);
+    scan(`${name} page`, rest, dataOfPage(name, app));
     scan(`${name} locale navigation`, nav, dataOf(["English", "Français", "Deutsch", "Lëtzebuergesch"]));
   }
 
@@ -341,12 +356,13 @@ test("no interface text on a French page or a census answer bypasses the French 
     radar: app.renderLiveRadarPage, export: app.renderLiveExportPage,
     // The 404 page and the maintenance page (R60).
     notFound: app.renderLiveNotFoundPage, maintenance: app.renderLiveMaintenancePage,
+    ...legalPages(app),
   };
   for (const [name, render] of Object.entries(pages)) {
     const html = render();
     assert.match(html, /<html lang="fr"/, `${name}: compiled for French`);
     const { inside: nav, outside: rest } = split(html, 'data-locale-nav=""');
-    scan(`${name} page`, rest, name === "coverage" ? dataOf(withoutVerdicts(app.CENSUS_EVALUATION_CARD)) : []);
+    scan(`${name} page`, rest, dataOfPage(name, app));
     scan(`${name} locale navigation`, nav, dataOf(["English", "Français", "Deutsch", "Lëtzebuergesch"]));
   }
 

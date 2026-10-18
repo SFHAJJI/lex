@@ -30,6 +30,10 @@ export { LocaleNav, localeHome, localeHref } from './LocaleNav.jsx';
 export { renderLiveLocaleUnavailablePage } from './live-locale-page.jsx';
 export { renderLiveNotFoundPage } from './live-not-found-page.jsx';
 export { renderLiveMaintenancePage } from './live-maintenance-page.jsx';
+export {
+  LegalPageBody, legalValues, renderLiveAccessibilityPage, renderLiveCookiesPage, renderLiveLegalNoticePage, renderLiveLegalPage,
+  renderLivePrivacyPage, renderLiveTermsPage,
+} from './LegalPage.jsx';
 export { LiveSearch, SEARCH_VARIANTS, SearchAnswerView, SearchResultsView, SearchWorkResolution } from './LiveSearch.jsx';
 export { LIVE_SEARCH_ROOT, LiveSearchRoot, liveSearchTree, renderLiveSearchPage } from './live-search-page.jsx';
 export { CoverageLine, HomeLinks, LiveHome } from './LiveHome.jsx';

@@ -19,7 +19,7 @@ import test from "node:test";
 import {
   LIVE_CONTRACT, renderLiveComparePage, renderLiveCoveragePage, renderLiveDossierPage, renderLiveExportPage, renderLiveHistoryPage,
   renderLiveHomePage, renderLiveMaintenancePage, renderLiveNotFoundPage, renderLiveRadarPage, renderLiveReadingPage, renderLiveSearchPage,
-  SearchAnswerView,
+  SearchAnswerView, renderLiveLegalPage,
 } from "../.react-build/app.mjs";
 import { LIVE_CHROME, REFUSAL_TRANSLATIONS, entriesOf } from "../scripts/live-chrome.mjs";
 import { servedRefusalSentences } from "../scripts/refusal-sentences.mjs";
@@ -59,6 +59,16 @@ const NUMBERS_ALLOWED = Object.freeze({
   "citation.europe.authenticity": ["216", "2013", "1", "2"],
   "citation.evidence.textSha256": ["256"],
   "citation.evidence.noText": ["256"],
+  // The legal pages (the plan's item 7.1): the GDPR's articles and its number, the CNPD's postal address, the licence's
+  // version, the EU's reuse decision and the accessibility guidelines' version.
+  "privacy.sections.reading.basis": ["6", "1", "2016", "679"],
+  "privacy.sections.email.basis": ["6", "1"],
+  "privacy.sections.named.basis": ["6", "1"],
+  "privacy.sections.rights.ask": ["15", "18", "21"],
+  "privacy.sections.rights.complaint": ["15", "4370"],
+  "terms.sections.texts.luxembourg": ["4", "0", "4", "0"],
+  "terms.sections.texts.europe": ["2011", "833"],
+  "accessibility.sections.status.text": ["2", "2"],
 });
 
 const TABLES = Object.freeze([
@@ -113,6 +123,7 @@ test("no live page, as built or rendered from the census answers, says a pack fi
     export: renderLiveExportPage(),
     "404": renderLiveNotFoundPage(),
     maintenance: renderLiveMaintenancePage(),
+    ...Object.fromEntries(["legalNotice", "privacy", "terms", "accessibility", "cookies"].map((key) => [key, renderLiveLegalPage(key)])),
   };
   for (const [name, html] of Object.entries(pages)) {
     // What a reader is shown: the text and the human-read attributes, without the scripts and the head's machine links.

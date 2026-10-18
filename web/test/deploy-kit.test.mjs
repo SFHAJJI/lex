@@ -160,18 +160,38 @@ test("each range is an address or a small network, and several may be named in t
 });
 
 test("the opening removes every address rule, reads back that ingress admits everyone, and only then says so", () => {
-  // The Azure CLI, made up: the listing fails or names two rules; the read-back says what is left.
+  // The Azure CLI, made up: the app's address, or none; the listing fails or names two rules; the read-back says what is
+  // left. And the opening's check of the legal pages (`deploy-probe.mjs --opening`), made up as the node it runs: its exit
+  // code is the check's verdict (the check itself is held in deploy-probe.test.mjs).
   const stub = `
     $global:calls = @()
     function global:az { $line = $args -join ' '; $global:calls += $line; $global:LASTEXITCODE = 0
+      if ($line -like 'containerapp show*ingress.fqdn*') { if ($env:NO_FQDN) { $global:LASTEXITCODE = 3; return }; return 'ca-lex-v3.example.azurecontainerapps.io' }
       if ($line -like 'containerapp ingress access-restriction list*') { if ($env:LIST_FAILS) { $global:LASTEXITCODE = 3; return }; return @('private-copy-1', 'private-copy-2') }
       if ($line -like 'containerapp show*') { if ($env:STILL_RESTRICTED) { return '[{"ipAddressRange":"203.0.113.7/32","action":"Allow"}]' }; return '[]' }
     }
+    function global:node { $global:calls += "node $($args -join ' ')"; $global:LASTEXITCODE = [int]($env:OPENING_EXIT ?? '0') }
     try { & ${quote(`${deployDirectory}deploy.ps1`)} -Subscription s -ResourceGroup rg -Open 6>$null; 'RESULT:returned' } catch { "RESULT:threw $($_.Exception.Message)" }
-    'REMOVED:' + (@($global:calls | Where-Object { $_ -like '*access-restriction remove*' }).Count)`;
+    'REMOVED:' + (@($global:calls | Where-Object { $_ -like '*access-restriction remove*' }).Count)
+    'CALLS:' + ($global:calls -join ' | ')`;
   const opened = pwsh(stub);
   assert.match(opened.out, /RESULT:returned/);
   assert.match(opened.out, /REMOVED:2/, "both rules removed");
+  // The legal pages are asked first, at the app's own address, under the browser trap, before any rule is listed or removed.
+  const calls = /CALLS:(.*)/.exec(opened.out)[1];
+  assert.match(calls, /node --import file:\/\/\/\S+browser-trap\.mjs \S+deploy-probe\.mjs --opening --origin https:\/\/ca-lex-v3\.example\.azurecontainerapps\.io/);
+  assert.ok(calls.indexOf("--opening") < calls.indexOf("access-restriction list"), `the check runs before the rules are touched: ${calls}`);
+
+  // A legal page that still says a placeholder, or cannot be read: the check fails, and the site stays private.
+  const unready = pwsh(stub, { OPENING_EXIT: "1" });
+  assert.match(unready.out, /RESULT:threw The legal pages ca-lex-v3 serves are not ready to publish \(above\); nothing was removed, and the site stays private/);
+  assert.match(unready.out, /REMOVED:0/);
+  assert.doesNotMatch(unready.out, /access-restriction list/, "no rule is even listed");
+  // An address that cannot be read: nothing is asked, nothing removed.
+  const unread = pwsh(stub, { NO_FQDN: "1" });
+  assert.match(unread.out, /RESULT:threw The address of ca-lex-v3 could not be read, so its legal pages could not be checked; nothing was removed/);
+  assert.match(unread.out, /REMOVED:0/);
+  assert.doesNotMatch(unread.out, /--opening/);
 
   const unlisted = pwsh(stub, { LIST_FAILS: "1" });
   assert.match(unlisted.out, /RESULT:threw The address rules of ca-lex-v3 could not be listed; nothing was removed/);
@@ -241,13 +261,16 @@ test("the script deploys only a release that verifies, and only by the image's d
   assert.ok(!/\$browserProbe\b/.test(code), "no variable spelled like the switch");
   assert.match(code, /if \(\$BrowserProbe -and \$SkipBrowserProbe\) \{ throw /);
   assert.equal((code.match(/\$SkipBrowserProbe/g) ?? []).length, 2, "-SkipBrowserProbe is declared and refused beside -BrowserProbe, and decides nothing else");
-  assert.match(code, /deploy-probe\.mjs'\) --origin \$origin --release \$releasePath --public-key \$keyPath @signerProbe @browserArgs/);
+  assert.match(code, /deploy-probe\.mjs'\) --origin \$origin --release \$releasePath --public-key \$keyPath @signerProbe @browserArgs /);
   // Without -BrowserProbe both probes run with the browser trap loaded first, so nothing they run can find or start one.
   assert.match(code, /\$trapPath = \[System\.IO\.Path\]::GetFullPath\(\(Join-Path \$checkout 'web\/scripts\/browser-trap\.mjs'\)\)/);
   assert.match(code, /if \(-not \$trapUrl -or -not \$trapUrl\.StartsWith\('file:\/\/\/'\)\) \{ throw /, "an empty or non-file trap URL stops the deployment");
   assert.match(code, /\$nodeTrap = if \(\$BrowserProbe\) \{ @\(\) \} else \{ @\('--import', \$trapUrl\) \}/);
-  assert.equal((code.match(/& node @nodeTrap \(Join-Path \$checkout 'web\/scripts\/deploy-probe\.mjs'\)/g) ?? []).length, 2, "both probes run under the trap");
-  assert.equal((code.match(/Join-Path \$checkout 'web\/scripts\/deploy-probe\.mjs'\)/g) ?? []).length, 2, "and the probe runs nowhere else");
+  assert.equal((code.match(/& node @nodeTrap \(Join-Path \$checkout 'web\/scripts\/deploy-probe\.mjs'\)/g) ?? []).length, 3, "both probes and the opening's check of the legal pages run under the trap");
+  assert.equal((code.match(/Join-Path \$checkout 'web\/scripts\/deploy-probe\.mjs'\)/g) ?? []).length, 3, "and the probe runs nowhere else");
+  // Once the site is open, a -Public deployment's probe holds the candidate's legal pages to the opening's rule.
+  assert.match(code, /\$openingArgs = if \(\$Public\) \{ @\('--opening'\) \} else \{ @\(\) \}/);
+  assert.match(code, /deploy-probe\.mjs'\) --origin \$origin --release \$releasePath --public-key \$keyPath @signerProbe @browserArgs @openingArgs\n/);
   // A deployment applies only a release the release signer signed: -Apply requires -SignerIdentity, which both read-backs
   // carry, so a rehearsal release is read in a plan run only.
   assert.match(script, /if \(\$Apply -and \[string\]::IsNullOrWhiteSpace\(\$SignerIdentity\)\) \{\s*throw "-Apply deploys a release signed by the release signer/);

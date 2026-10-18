@@ -483,6 +483,20 @@ blockquote.law {
   margin: 0;
 }
 
+/* The legal pages' links in every footer (the plan's item 7.1), on one line that wraps, the current page in bold. */
+.site-footer .legal-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-footer .legal-nav a[aria-current="page"] {
+  font-weight: 700;
+}
+
 /* The forms of the live screens: each field under its label, full width up to a reading measure, and one
    clear primary button. Check boxes (the export composer's pins) keep their own size. Field borders keep
    3:1 against the ground (WCAG 1.4.11) and focus is always visible. */
