@@ -27,6 +27,8 @@ internal static class OfflineDeriveCommand
         void Cancel(object? sender, ConsoleCancelEventArgs eventArgs) { eventArgs.Cancel = true; cancellation.Cancel(); }
         try
         {
+            // First, the staging a stopped derive left behind, on the disk this one needs (the review of #986).
+            StaleStagingSweep.Run();
             var custody = Path.GetFullPath(options["--custody"]);
             if (!Directory.Exists(custody)) { Console.Error.WriteLine("The retained custody directory does not exist."); return 2; }
             var checkpoint = ContractJson.Deserialize<SourceArtifactRef>(await File.ReadAllTextAsync(options["--checkpoint"], cancellation.Token));

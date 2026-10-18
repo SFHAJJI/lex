@@ -1076,6 +1076,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method internal static Lex.V3.Ingest.Europe.EuropeIndexBuilder::TryBuildFileAsync, "
                     + "method internal static Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder::TryBuildFileAsync, "
                     + "method internal static Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder::WriteFile, "
+                    + "method private instance Lex.V3.Ingest.V3FirstMountBuild::SecondBuild, "
                     + "method private static Lex.V3.Ingest.Europe.EuropeIndexBuilder::TryWriteFile, "
                     + "method private static Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder::TryWriteFile",
                 "Lex.V3.Ingest.V3CorpusMountFile: constructor internal instance "
@@ -1087,6 +1088,10 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Ingest.V3FirstMountBuild::RunAsync, "
                     + "method public instance Lex.V3.Ingest.V3FirstMountBuild::RunAsync, "
                     + "method public static Lex.V3.Ingest.V3FirstMountBuildResult::Refused",
+                // The review of #986: a mount build's staging directory, which holds its owner file open until disposed.
+                "Lex.V3.Ingest.V3MountStaging: constructor private instance "
+                    + "Lex.V3.Ingest.V3MountStaging::.ctor, "
+                    + "method internal static Lex.V3.Ingest.V3MountStaging::Create",
                 "Lex.V3.Ingest.VerifiedLexCorpus6ManifestSet: by-ref-method public instance "
                     + "Lex.V3.Ingest.LexCorpus6BuildResult::Deconstruct, "
                     + "constructor private instance "

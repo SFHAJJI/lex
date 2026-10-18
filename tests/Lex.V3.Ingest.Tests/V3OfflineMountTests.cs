@@ -310,7 +310,10 @@ public sealed partial class V3FirstMountBuildTests
     }
 
     /// <summary>Runs the built tool in its own process with every proxy pointed at <paramref name="proxy"/>.</summary>
-    internal static async Task<ToolRun> RunToolAsync(string proxy, params string[] arguments)
+    internal static Task<ToolRun> RunToolAsync(string proxy, params string[] arguments) => RunToolAsync(proxy, null, arguments);
+
+    /// <summary>Runs the built tool in its own process with every proxy pointed at <paramref name="proxy"/> and <paramref name="environment"/> set.</summary>
+    internal static async Task<ToolRun> RunToolAsync(string proxy, IReadOnlyDictionary<string, string>? environment, params string[] arguments)
     {
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
         var tool = Path.Combine(CheckoutRoot(), "src", "Lex.V3.Tool", "bin", configuration, "net10.0", "Lex.V3.Tool.dll");
@@ -320,6 +323,7 @@ public sealed partial class V3FirstMountBuildTests
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
         foreach (var name in new[] { "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy" }) start.Environment[name] = proxy;
         start.Environment["NO_PROXY"] = ""; start.Environment["no_proxy"] = "";
+        foreach (var (name, value) in environment ?? new Dictionary<string, string>()) start.Environment[name] = value;
         using var process = Process.Start(start)!;
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();

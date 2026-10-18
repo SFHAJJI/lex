@@ -112,6 +112,8 @@ public static class V3CorpusMountWriter
         var written = new List<V3CorpusMountWrittenFile>(build.Files.Count);
         var reportPath = Path.Combine(target, ReportFileName);
         var reportTemporary = reportPath + ".writing";
+        // The staged index files this write moved out of the build's staging directory, each with where it was staged.
+        var taken = new List<(V3BuiltIndexFile Index, string StagedPath)>();
         try
         {
             foreach (var file in build.Files)
@@ -119,7 +121,7 @@ public static class V3CorpusMountWriter
                 var finalPath = Path.Combine(target, file.Name);
                 var temporaryPath = finalPath + ".writing";
                 var (sha256, byteLength) = file.Index is { } index
-                    ? await PlaceIndexAsync(file.Name, index, temporaryPath, cancellationToken).ConfigureAwait(false)
+                    ? await PlaceIndexAsync(file.Name, index, temporaryPath, taken, cancellationToken).ConfigureAwait(false)
                     : await WriteHeldAsync(file.Held, temporaryPath, cancellationToken).ConfigureAwait(false);
                 File.Move(temporaryPath, finalPath, overwrite: true);
                 if (file.Index is { } placed)
@@ -153,6 +155,9 @@ public static class V3CorpusMountWriter
         }
         catch
         {
+            // A failed write gives the build back the staged files it took (the review of #986): each is moved back to where it
+            // was staged, from its temporary name or from its place in this unfinished mount, so the build can be written again.
+            GiveBack(taken);
             foreach (var file in build.Files)
             {
                 File.Delete(Path.Combine(target, file.Name) + ".writing");
@@ -160,6 +165,30 @@ public static class V3CorpusMountWriter
 
             File.Delete(reportTemporary);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Moves each index a failed write took out of the build's staging directory back there. Best effort: the write's own
+    /// failure is the one reported, and a file that cannot be moved back stays where the failed write left it.
+    /// </summary>
+    private static void GiveBack(IReadOnlyList<(V3BuiltIndexFile Index, string StagedPath)> taken)
+    {
+        foreach (var (index, stagedPath) in taken)
+        {
+            try
+            {
+                if (File.Exists(index.Path) && !File.Exists(stagedPath))
+                {
+                    File.Move(index.Path, stagedPath);
+                    index.Path = stagedPath;
+                    index.Staged = true;
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // Left where the failed write put it; the build's next write copies it from there or reports it missing.
+            }
         }
     }
 
@@ -183,17 +212,20 @@ public static class V3CorpusMountWriter
 
     /// <summary>
     /// An index the build wrote to a file, placed at <paramref name="temporaryPath"/>: moved out of the build's staging
-    /// directory (a rename on one volume), or copied from the mount an earlier write moved it into; then hashed from disk and
-    /// held to the digest and length its two builds compared, so what is moved into place is what was compared.
+    /// directory (a rename on one volume; recorded in <paramref name="taken"/>, so a failed write can move it back), or copied
+    /// from the mount an earlier write moved it into; then hashed from disk and held to the digest and length its two builds
+    /// compared, so what is moved into place is what was compared.
     /// </summary>
     private static async Task<(string Sha256, long Length)> PlaceIndexAsync(
         string name,
         V3BuiltIndexFile index,
         string temporaryPath,
+        List<(V3BuiltIndexFile Index, string StagedPath)> taken,
         CancellationToken cancellationToken)
     {
         if (index.Staged)
         {
+            taken.Add((index, index.Path));
             File.Move(index.Path, temporaryPath, overwrite: true);
             index.Path = temporaryPath;
             index.Staged = false;

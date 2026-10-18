@@ -465,7 +465,9 @@ try
     var checkpointPath = Path.Combine(custodyRoot, "mount-inputs-" + checkpoint.Sha256 + ".json");
     await File.WriteAllTextAsync(checkpointPath, Lex.V3.Contracts.ContractJson.Serialize(checkpoint), token);
     Console.WriteLine($"offline inputs: {checkpointPath}; derive --custody {custodyRoot} --checkpoint {checkpointPath} --out <fresh-directory> --custody-encoding {custodyEncoding}");
-    // The build stages its two index files; disposing it removes whatever the writer did not move into the mount.
+    // The build stages its two index files; disposing it removes whatever the writer did not move into the mount. A stopped
+    // build's staging is removed first (the review of #986).
+    StaleStagingSweep.Run();
     using var build = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(derivationTime)).RunAsync(europe, luxembourg, predecessor, token);
     if (!build.Delivered)
     {
