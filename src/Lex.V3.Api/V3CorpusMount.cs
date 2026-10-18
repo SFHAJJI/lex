@@ -3209,7 +3209,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         IReadOnlyList<LuxembourgIndexResolvedState> scope,
         string requestedDate,
         string? bound) =>
-        RulesByInterval && scope.Count > 0
+        RulesByInterval && scope.Count > 0 && scope.GroupBy(static state => state.Language).All(group => IsWholeLanguage(group.ToArray()))
             ? RefuseUncoveredNine(request, observedAt, scope[0].WorkKey,
                 scope.Select(static state => state.Language).Distinct(StringComparer.Ordinal).ToArray(), requestedDate, bound)
             : RefuseNoVersionForDate(request, observedAt, scope.Select(static state => state.ApplicabilityDate).ToArray(), requestedDate, bound);

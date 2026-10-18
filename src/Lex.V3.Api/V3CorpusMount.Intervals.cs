@@ -244,8 +244,10 @@ internal sealed partial class V3CorpusMount
     private (LuxembourgIndexResolvedState[] Selected, string? NextDate) SelectAt(
         IReadOnlyList<LuxembourgIndexResolvedState> ofLanguage, string requestedDate)
     {
-        if (!RulesByInterval || ofLanguage.Count == 0)
+        if (!RulesByInterval || ofLanguage.Count == 0 || !IsWholeLanguage(ofLanguage))
         {
+            // A scope the caller narrowed (an ELI that names one version) is selected within itself, as before index 9: the
+            // version it names is the one asked for.
             return SelectAtDate(ofLanguage, requestedDate);
         }
 
@@ -268,6 +270,21 @@ internal sealed partial class V3CorpusMount
             default:
                 return ([], null);
         }
+    }
+
+    /// <summary>
+    /// Whether a list of one language's held states is every held state of its work in that language, the scope the interval
+    /// rules select over; a narrower one is a caller's own choice of versions.
+    /// </summary>
+    private bool IsWholeLanguage(IReadOnlyList<LuxembourgIndexResolvedState> ofLanguage)
+    {
+        var language = ofLanguage[0].Language;
+        var held = _reader!.ResolveWorkStates(ofLanguage[0].WorkKey)
+            .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
+            .Select(static state => state.StateSha256)
+            .ToHashSet(StringComparer.Ordinal);
+        return ofLanguage.All(state => string.Equals(state.Language, language, StringComparison.Ordinal)) &&
+               held.SetEquals(ofLanguage.Select(static state => state.StateSha256));
     }
 
     /// <summary>The same-text states served under the designated one (basis <c>identical_text</c>), or none.</summary>
@@ -715,7 +732,11 @@ internal sealed partial class V3CorpusMount
 
         if (cover.Kind != CoverNone)
         {
-            throw new InvalidOperationException("A covered date is not refused as uncovered.");
+            // A caller that refuses a date the interval rules cover (a scope it narrowed itself) gets the refusal of its own
+            // scope, as before index 9: never an answer the rules contradict, and never a failure.
+            return RefuseNoVersionForDate(request, observedAt,
+                work.Rows.Where(row => string.Equals(row.Language, language, StringComparison.Ordinal)).Select(static row => row.ApplicabilityDate).DefaultIfEmpty(requestedDate).ToArray(),
+                requestedDate, bound);
         }
 
         var payload = new JsonObject { ["requested_date"] = requestedDate };

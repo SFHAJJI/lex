@@ -441,6 +441,21 @@ public sealed class V3CorpusIntervalMountTests
     }
 
     [TestMethod]
+    public async Task AnEliThatNamesOneVersionOpensThatVersionThoughTheIntervalRulesDesignateAnother()
+    {
+        await using var fixture = await IntervalMount.CreateAsync();
+        var mount = fixture.Mount;
+
+        // On 2018-09-14 the act as published and its same-date consolidation hold one wording, and the rules serve the act; the
+        // consolidation's own ELI names that version, and the exact reference opens it, selected within the scope it names.
+        var states = (await AskAsync(mount, "dossier", new { identifier = "/lu-legilux/loi-2018-09-14-a883" })).Result!.Value.GetProperty("states").EnumerateArray().ToArray();
+        var consolidation = states.Single(static state => state.GetProperty("publisher_legal_resource_iri").GetString()!.EndsWith("/consolide/20180914", StringComparison.Ordinal));
+        var opened = await AskAsync(mount, "search", new { query = W("loi/2018/09/14/a883/consolide/20180914"), language = "fra" });
+        Assert.AreEqual(V3Verdicts.Answer, opened.Verdict, opened.Refusal?.HelpfulPayload.GetRawText());
+        StringAssert.Contains(opened.Result!.Value.GetRawText(), consolidation.GetProperty("state_sha256").GetString());
+    }
+
+    [TestMethod]
     public async Task TheReadersChainIsTheIndexsOwn()
     {
         await using var fixture = await IntervalMount.CreateAsync();
