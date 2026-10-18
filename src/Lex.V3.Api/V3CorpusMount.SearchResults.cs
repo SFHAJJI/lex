@@ -159,13 +159,33 @@ internal sealed partial class V3CorpusMount
     /// order (<see cref="CompareLuxembourgArticleIds"/>, so the hits of one version are listed as its reading lists them),
     /// article identity and state digest (<see cref="SearchRanking"/>).
     /// </summary>
-    private static LuxembourgIndexSearchHit[] InSearchOrder(IEnumerable<LuxembourgIndexSearchHit> hits) =>
-        hits.OrderBy(static hit => hit.WorkKey, StringComparer.Ordinal)
-            .ThenBy(static hit => hit.ApplicabilityDate, StringComparer.Ordinal)
-            .ThenBy(static hit => hit.PublisherId, Comparer<string>.Create(CompareLuxembourgArticleIds))
-            .ThenBy(static hit => hit.ArticleIdentitySha256, StringComparer.Ordinal)
-            .ThenBy(static hit => hit.StateSha256, StringComparer.Ordinal)
-            .ToArray();
+    private static LuxembourgIndexSearchHit[] InSearchOrder(IEnumerable<LuxembourgIndexSearchHit> hits)
+    {
+        // Each id read into its parts once, as the reading's order reads them (a word every article holds is thousands of
+        // hits); the order is total, since an article of a state is one hit.
+        var keyed = hits.Select(static hit => (Hit: hit, Parts: ArticleIdParts(hit.PublisherId))).ToArray();
+        Array.Sort(keyed, static (left, right) =>
+        {
+            var compared = string.CompareOrdinal(left.Hit.WorkKey, right.Hit.WorkKey);
+            if (compared == 0)
+            {
+                compared = string.CompareOrdinal(left.Hit.ApplicabilityDate, right.Hit.ApplicabilityDate);
+            }
+
+            if (compared == 0)
+            {
+                compared = CompareArticleIdParts(left.Parts, right.Parts, left.Hit.PublisherId, right.Hit.PublisherId);
+            }
+
+            if (compared == 0)
+            {
+                compared = string.CompareOrdinal(left.Hit.ArticleIdentitySha256, right.Hit.ArticleIdentitySha256);
+            }
+
+            return compared != 0 ? compared : string.CompareOrdinal(left.Hit.StateSha256, right.Hit.StateSha256);
+        });
+        return keyed.Select(static entry => entry.Hit).ToArray();
+    }
 
     /// <summary>One part of an extract: a run of the text, and whether it is a whole match.</summary>
     internal sealed record SearchExtractPart(string Text, bool Matched);
