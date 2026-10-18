@@ -278,9 +278,5 @@
   ],
   "written_at_commit": "3b7913ec",
   "recorded_at_commit": "5a659831",
-  "recorded_under": "Linux (Ubuntu 24.04 under WSL), .NET 10.0.11, DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1, TZ=UTC: the release image runs Linux, so these are the answers production sends; the same recording with the language library (ICU) answers the same bytes",
-  "windows_answers": {
-    "schema8-01": "{\"context\":{\"freshness\":{\"observed_at\":\"2026-10-15T07:00:00.0000000Z\",\"upstream_health\":\"stale\"},\"jurisdiction\":\"lu\",\"provisional\":false,\"publisher\":\"lu-legilux\",\"snapshot\":{\"snapshot_id\":\"corpus-b7f50455e85890e5\",\"snapshot_sha256\":\"b7f50455e85890e5f011456bd58e485995e64265a73c3714fb5a2a0209b5eaa2\"},\"status\":\"refusal\",\"timeline_semantics\":\"publisher_applicability\"},\"object_type\":\"envelope\",\"operation_id\":\"resolve\",\"refusal\":{\"code\":\"retrieval_mode_unavailable\",\"helpful_payload\":{\"available_modes\":[\"r0_exact_coordinate\"],\"requested_mode\":\"r1_work_discovery\"},\"schema\":\"lex-v3-refusal/1\"},\"registry_schema\":\"lex-v3-operation-registry/1\",\"registry_sha256\":\"80dc8e29242223f0f4c6dc09b87861b50cbb994c668a99dd4ee2432d7fa48470\",\"request_ref\":\"http_6797193e800e8e30ef8f9477e1226d4422508383228e3229677b8e398f905d18\",\"result\":null,\"schema\":\"lex-v3-envelope/1\",\"verdict\":\"refuse\",\"version\":\"v3\"}\n"
-  },
-  "windows_answers_note": "the answers the same code sends on Windows where they differ: resolve of a rooted path (/lu-legilux/...) is an identifier on Linux, where Uri.TryCreate(UriKind.Absolute) reads a rooted path as a file URI, and goes to title discovery on Windows"
+  "recorded_under": "Linux (Ubuntu 24.04 under WSL), .NET 10.0.11, DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1, TZ=UTC: the release image runs Linux, so these are the answers production sends; the same recording with the language library (ICU) answers the same bytes"
 }

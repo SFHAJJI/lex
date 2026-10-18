@@ -13,7 +13,7 @@ namespace Lex.V3.Ingest.Tests;
 /// sends them: each request's exact body and trace identity, answered at one fixed observation time by the real handler.
 /// The answers were recorded at the integration head this branch is based on (5a659831), over the committed schema-8 mount
 /// (written at 3b7913ec) and the schema-6 one, by this same code, on Linux as the release image runs (globalization-
-/// invariant, UTC), with the answers a Windows run of the same code sends where they differ beside them; a later change that
+/// invariant, UTC), and every system is held to them (a rooted path reads alike everywhere since #983); a later change that
 /// moves one byte of an answer over those schemas fails
 /// <c>V3CorpusLegacySchema8MountTests</c>.
 /// </summary>

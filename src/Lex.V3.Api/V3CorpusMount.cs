@@ -7207,12 +7207,24 @@ internal sealed partial class V3CorpusMount : IDisposable
         value.All(static character =>
             character is >= 'a' and <= 'z' or >= '0' and <= '9' or '-' or '_');
 
-    private static bool LooksLikeIdentifier(string value) =>
-        Uri.TryCreate(value, UriKind.Absolute, out _) ||
-        value.StartsWith("eli/", StringComparison.OrdinalIgnoreCase) ||
-        OfficialIdentifier.ProfileOf(value) is not null ||
-        value.Length == 64 && value.All(static character =>
-            character is >= '0' and <= '9' or >= 'a' and <= 'f');
+    /// <summary>
+    /// Whether a value no record answers is an identifier (refused <c>identifier_unknown</c>) rather than words to look up
+    /// by title. The same on every system, as production answers: a rooted path (a site address) is an identifier, and so
+    /// is an absolute URI written with its scheme; a drive path (<c>C:\…</c>) or a UNC path starting with a backslash is
+    /// words. Uri alone read a rooted path as a file URI on Linux and not on Windows (CI's image lane on #980). The value is
+    /// read after the whitespace Uri itself skips, so a path pasted with a leading space reads as the path does.
+    /// </summary>
+    internal static bool LooksLikeIdentifier(string value)
+    {
+        var written = value.TrimStart(' ', '\t', '\r', '\n');
+        return written.StartsWith('/') ||
+            Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+                (!uri.IsFile || written.StartsWith("file:", StringComparison.OrdinalIgnoreCase)) ||
+            value.StartsWith("eli/", StringComparison.OrdinalIgnoreCase) ||
+            OfficialIdentifier.ProfileOf(value) is not null ||
+            value.Length == 64 && value.All(static character =>
+                character is >= '0' and <= '9' or >= 'a' and <= 'f');
+    }
 
     /// <summary>
     /// The routes out of an absence, in the refusal card's closed vocabulary and its declared order

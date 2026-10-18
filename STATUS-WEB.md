@@ -4,6 +4,25 @@ Updated 2026-10-18. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## A rooted path is an identifier on every system, as production reads it (sole driver, 2026-10-18)
+
+CI's image lane on #980 found that `resolve` of a rooted path (`/lu-legilux/loi-2026-01-01-a1`, which no record answers)
+was answered differently by the same code on Linux and on Windows. `LooksLikeIdentifier` (`V3CorpusMount.cs`) took any
+value `Uri.TryCreate` reads as absolute: on Linux a path starting with `/` is an implicit file URI, so it was an
+identifier (`identifier_unknown`, the answer production sends); on Windows it was words for the title ladder
+(`retrieval_mode_unavailable`).
+- A value is now an identifier when it is a rooted path, or an absolute URI written with its scheme. A drive path
+  (`C:\...`) or a UNC path starting with a backslash is words on every system; Uri had read both as file URIs, on Linux
+  too. The value is read after the whitespace Uri skips, so a path pasted with a leading space reads as the path does.
+  The Linux recording of #980 (`base-answers.json`) is the answer on every system, and its Windows exception
+  (`windows_answers`) is gone; the test refuses one coming back.
+- What changes on Linux, as the review of #983 listed it: drive paths and backslash UNC paths, which no Lex identifier
+  takes, now go to the title ladder instead of `identifier_unknown`. Every Lex identifier and address answers as before,
+  with or without leading whitespace.
+- Measured on Windows: the Ingest legacy schema 6 and 8, resolve, samples, census, reference and privacy classes, 244
+  passed and 3 skipped; `dotnet build Lex.V3.slnx -c Release` 0 warnings. The review ran the legacy schema 8 and resolve
+  classes on Linux too (WSL, invariant, UTC): 124 of 124. CI's Linux lanes run the rest.
+
 ## Reading by article: the cited article's page first, the contents, and the next articles (sole driver, 2026-10-17)
 
 The plan's item 3.7 (`C:\lex-v3\PLAN-2026-10-14.md`), to the specification of record's R73 ("Reading renders the requested
