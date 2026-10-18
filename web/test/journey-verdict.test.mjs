@@ -230,7 +230,7 @@ const HOME = { origin: ORIGIN, step: JOURNEY_STEPS.home, state: "success", texts
 
 test("the home page's run passes when it arrived rendered, dated today in Luxembourg, with the box and the sentence under it in view", () => {
   assert.equal(JOURNEY_STEPS.home.frontDoor, true);
-  assert.deepEqual(JOURNEY_STEPS.home.body.parameters, { query: SEARCH_PHRASE, language: "fra", date: TODAY_IN_LUXEMBOURG });
+  assert.deepEqual(JOURNEY_STEPS.home.body.parameters, { query: SEARCH_PHRASE, language: "fra", mode: "strict", date: TODAY_IN_LUXEMBOURG });
   assert.deepEqual(journeyVerdict(goodHome(), HOME), []);
   // A run across midnight in Luxembourg: the page asked on either of its two days.
   const across = goodHome("2026-10-25");
@@ -977,8 +977,8 @@ annuelle se tient le premier lundi` };
 test("the EU search step names the GDPR by its CELEX, chooses English and is held to the exact body", () => {
   assert.deepEqual(EU_SEARCH_STEP.typed, [EU_SEARCH_PHRASE, EU_SEARCH_IDENTIFIER]);
   assert.deepEqual(EU_SEARCH_STEP.chosen, { value: "eng", label: "English" });
-  assert.deepEqual(EU_SEARCH_STEP.body, { operation_id: "search", parameters: { query: "personal data", language: "eng", identifier: "32016R0679" } },
-    "in the order the page sends them: the phrase, the language, the work");
+  assert.deepEqual(EU_SEARCH_STEP.body, { operation_id: "search", parameters: { query: "personal data", language: "eng", mode: "strict", identifier: "32016R0679" } },
+    "in the order the page sends them: the phrase, the language, the strict lane, the work");
   assert.equal(EU_SEARCH_STEP.path, JOURNEY_STEPS.search.path, "the same search page");
   assert.ok(!Object.values(JOURNEY_STEPS).includes(EU_SEARCH_STEP), "not one of the eight steps every mount runs: it needs an EU index");
 

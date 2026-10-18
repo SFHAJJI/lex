@@ -40,3 +40,14 @@ export const OFFICIAL_SITES = Object.freeze([
   Object.freeze({ key: "legilux", publisher: "lu-legilux", uri: "https://legilux.public.lu/" }),
   Object.freeze({ key: "eurlex", publisher: "eu-eurlex", uri: "https://eur-lex.europa.eu/" }),
 ]);
+
+/**
+ * The publishers' own search pages a search with no hit points to (the plan's item 4.5; R59): Legilux's search and EUR-Lex's
+ * advanced search form, the addresses the platform's contracts name (`PreviewRefusals.LuSearch`, `PreviewRefusals.EuSearch`).
+ * They are links only: nothing on this site requests them, and no request ever goes to eur-lex.europa.eu (Decision 95).
+ * `key` names its label in the chrome table (`search.officialSites`).
+ */
+export const OFFICIAL_SEARCH_PAGES = Object.freeze([
+  Object.freeze({ key: "legilux", publisher: "lu-legilux", uri: "https://legilux.public.lu/search" }),
+  Object.freeze({ key: "eurlex", publisher: "eu-eurlex", uri: "https://eur-lex.europa.eu/advanced-search-form.html" }),
+]);

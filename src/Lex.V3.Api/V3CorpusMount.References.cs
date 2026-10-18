@@ -188,6 +188,9 @@ internal sealed partial class V3CorpusMount
         if (_reader is not null)
         {
             _ = CatalogueSubjects(memorial: true, string.Empty);
+
+            // What every search counts and the rights decision it applies per state (V3CorpusMount.SearchResults.cs).
+            _ = SearchPopulationOf();
         }
     }
 

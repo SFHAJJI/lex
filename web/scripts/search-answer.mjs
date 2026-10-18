@@ -16,8 +16,15 @@
 // all of it; a page after a cursor or before one holds less); the page (a cursor exactly when the
 // page is truncated, naming its last hit); each hit's permalink (the work, the date, the state
 // digest and the language the hit names); the works a dated search could not place (named with their candidate
-// states, contributing no hit); and how the query was resolved to a work, if it was. A search answer
-// carries no text snippet, so none is read.
+// states, contributing no hit); and how the query was resolved to a work, if it was.
+//
+// Results by act (the plan's item 4.3; R59, R21, R11): each Luxembourg hit carries a word-for-word extract of the bytes its
+// lane matched (`extract`: the run's parts, a part marked when it is a whole match, its byte range in the article's text and
+// that text's digest), each act of the page is named once (`acts`: its work key, dossier, title when held, the as-published
+// label, its hits in the whole result), each card of the title ladder names the work key it links to, and the answer
+// counts what its lanes matched against (`searched`: the scope's admitted states, their works and articles with searchable
+// text, and the index's build time). An extract whose parts do not make up its byte range, a marked part that is no match,
+// an act missing for a work of the page or named twice, or a population smaller than the hits, is drift and is thrown.
 //
 // An EU answer states the same lane, page and population rules, and its own: it is in one work, one
 // expression and one language, it names no date (`requested_date` is null and no work is ambiguous),
@@ -36,6 +43,7 @@
 
 import { isCalendarDate } from './temporal.mjs';
 import { articlePermalink, escapeSegment, luxembourgPermalink, parseSitePath } from './permalinks.mjs';
+import { AS_PUBLISHED_LABEL } from './as-published.mjs';
 
 const DIGEST = /^[0-9a-f]{64}$/;
 
@@ -141,6 +149,8 @@ function readLaneCount(population, lane, mode) {
 function readWorkCard(card, where) {
   return Object.freeze({
     workIdentifier: requireText(requireOwn(card, 'work_identifier', where), `${where} work_identifier`),
+    // The work key the index holds the card's expressions under, which the page links (null: none or several).
+    workKey: Object.hasOwn(card, 'work_key') ? requireTextOrNull(card.work_key, `${where} work_key`) : null,
     expressions: requireTexts(requireOwn(card, 'expressions', where), `${where} expressions`, { atLeast: 1 }),
     languages: requireTexts(requireOwn(card, 'languages', where), `${where} languages`),
     matchedTitle: requireText(requireOwn(card, 'matched_title', where), `${where} matched_title`),
@@ -213,6 +223,55 @@ function readAmbiguousWorks(value, requestedDate, hits) {
   }));
 }
 
+const UTF8 = new TextEncoder();
+
+/** A part of an extract: any non-empty run of the text, whitespace included. */
+function requirePartText(value, where) {
+  if (typeof value !== 'string' || value.length === 0) throw new Error(`${where} is not a run of the text`);
+  return value;
+}
+
+/**
+ * A hit's extract (the platform's `extract_rule`): parts that make up exactly its byte range of the article's text, at
+ * least one of them marked, no two unmarked parts side by side, and every marked part a whole match: the query as typed for
+ * a strict hit, a run holding a term for a relaxed one.
+ */
+function readExtract(value, where, lane, { query, terms }) {
+  const at = `${where} extract`;
+  const textSha256 = requireDigest(requireOwn(value, 'text_sha256', at), `${at}.text_sha256`);
+  const textByteLength = requireCount(requireOwn(value, 'text_byte_length', at), `${at}.text_byte_length`);
+  const byteStart = requireCount(requireOwn(value, 'byte_start', at), `${at}.byte_start`);
+  const byteEnd = requireCount(requireOwn(value, 'byte_end', at), `${at}.byte_end`);
+  if (!(byteStart < byteEnd && byteEnd <= textByteLength)) {
+    throw new Error(`${at} covers bytes ${byteStart} to ${byteEnd} of a text of ${textByteLength}`);
+  }
+  const parts = requireList(requireOwn(value, 'parts', at), `${at}.parts`).map((part, index) => Object.freeze({
+    text: requirePartText(requireOwn(part, 'text', `${at}.parts[${index}]`), `${at}.parts[${index}].text`),
+    matched: requireBoolean(requireOwn(part, 'matched', `${at}.parts[${index}]`), `${at}.parts[${index}].matched`),
+  }));
+  if (!parts.some((part) => part.matched)) throw new Error(`${at} marks no match`);
+  if (parts.some((part, index) => index > 0 && !part.matched && !parts[index - 1].matched)) {
+    throw new Error(`${at} has two unmarked parts side by side`);
+  }
+  const bytes = UTF8.encode(parts.map((part) => part.text).join('')).length;
+  if (bytes !== byteEnd - byteStart) {
+    throw new Error(`${at}'s parts are ${bytes} bytes, and its range is ${byteEnd - byteStart}`);
+  }
+  for (const part of parts.filter((candidate) => candidate.matched)) {
+    const whole = lane === 'strict' ? part.text === query : terms.some((term) => part.text.includes(term));
+    if (!whole) throw new Error(`${at} marks ${JSON.stringify(part.text)}, which is no ${lane} match of the query`);
+  }
+  return Object.freeze({
+    textSha256,
+    textByteLength,
+    byteStart,
+    byteEnd,
+    startsText: byteStart === 0,
+    endsText: byteEnd === textByteLength,
+    parts: Object.freeze(parts),
+  });
+}
+
 function readHit(hit, index) {
   const where = `hit ${index + 1}`;
   const lane = requireOwn(hit, 'lane', where);
@@ -251,6 +310,83 @@ function readHit(hit, index) {
     stateSha256,
     permalink,
   });
+}
+
+/** A Luxembourg hit with its extract read (`readExtract`), once the page's own rules have held. */
+function withExtract(hit, value, index, request) {
+  const where = `hit ${index + 1}`;
+  return Object.freeze({ ...hit, extract: readExtract(requireOwn(value, 'extract', where), where, hit.lane, request) });
+}
+
+/**
+ * The acts of a page (the platform's `acts_rule`): one entry for each work its hits name, in the order they first appear,
+ * none for a work with no hit on the page, each counting at least its page's hits, and, on a first page that holds the whole
+ * result, exactly them.
+ */
+function readActs(value, hits, { whole }) {
+  const acts = requireList(value, 'acts').map((act, index) => {
+    const where = `acts[${index}]`;
+    const workKey = requireText(requireOwn(act, 'work_key', where), `${where}.work_key`);
+    const dossier = requireText(requireOwn(act, 'dossier', where), `${where}.dossier`);
+    if (dossier !== `/lu-legilux/${workKey}`) throw new Error(`${where}.dossier ${JSON.stringify(dossier)} is not the dossier of ${workKey}`);
+    const title = requireTextOrNull(requireOwn(act, 'title', where), `${where}.title`);
+    const titleLanguage = requireTextOrNull(requireOwn(act, 'title_language', where), `${where}.title_language`);
+    if ((title === null) !== (titleLanguage === null)) throw new Error(`${where} names a title's language exactly when it names a title`);
+    const asPublished = requireOwn(act, 'as_published', where);
+    if (asPublished !== null && asPublished !== AS_PUBLISHED_LABEL) {
+      throw new Error(`${where}.as_published is ${JSON.stringify(asPublished)}, not the label ${JSON.stringify(AS_PUBLISHED_LABEL)}`);
+    }
+    return Object.freeze({
+      workKey,
+      publisherWorkIri: requireText(requireOwn(act, 'publisher_work_iri', where), `${where}.publisher_work_iri`),
+      dossier,
+      title,
+      titleLanguage,
+      asPublished: asPublished !== null,
+      hits: requireCount(requireOwn(act, 'hits', where), `${where}.hits`),
+    });
+  });
+  const order = [...new Set(hits.map((hit) => hit.workKey))];
+  if (acts.length !== order.length || acts.some((act, index) => act.workKey !== order[index])) {
+    throw new Error(`acts names ${JSON.stringify(acts.map((act) => act.workKey))}, not the works of the page's hits in their order (${JSON.stringify(order)})`);
+  }
+  for (const act of acts) {
+    const onPage = hits.filter((hit) => hit.workKey === act.workKey).length;
+    if (act.hits < onPage || (whole && act.hits !== onPage)) {
+      throw new Error(`acts counts ${act.hits} hits of ${act.workKey}, and the page holds ${onPage}${whole ? ' of a whole result' : ''}`);
+    }
+  }
+  return Object.freeze(acts);
+}
+
+/**
+ * What the lanes matched against (the platform's `searched` rule): the scope asked, counts of this index, the build time
+ * the mounted log records or null; never fewer works than works with hits, nor fewer articles than hits.
+ */
+function readSearched(value, { language, date, population, total }) {
+  const where = 'searched';
+  if (requireOwn(value, 'publisher', where) !== 'lu-legilux') throw new Error('searched is the Luxembourg index\'s population');
+  if (requireOwn(value, 'language', where) !== language) throw new Error(`searched is in ${JSON.stringify(value.language)}, and the search asked ${language}`);
+  if (requireOwn(value, 'date', where) !== date) throw new Error(`searched is at ${JSON.stringify(value.date)}, and the search asked ${JSON.stringify(date)}`);
+  const several = requireOwn(value, 'works_with_several_states_on_date', where);
+  if ((several === null) !== (date === null)) throw new Error('searched counts the works with several states on the date exactly when a date is asked');
+  const builtAt = requireOwn(value, 'index_built_at', where);
+  if (builtAt !== null) requireText(builtAt, `${where}.index_built_at`);
+  const searched = Object.freeze({
+    workKey: requireTextOrNull(requireOwn(value, 'identifier_work_key', where), `${where}.identifier_work_key`),
+    works: requireCount(requireOwn(value, 'works', where), `${where}.works`),
+    states: requireCount(requireOwn(value, 'states', where), `${where}.states`),
+    articles: requireCount(requireOwn(value, 'articles_with_searchable_text', where), `${where}.articles_with_searchable_text`),
+    withheldByRights: requireCount(requireOwn(value, 'states_withheld_by_rights', where), `${where}.states_withheld_by_rights`),
+    severalOnDate: several === null ? null : requireCount(several, `${where}.works_with_several_states_on_date`),
+    builtAt,
+    rule: requireText(requireOwn(value, 'rule', where), `${where}.rule`),
+  });
+  if (searched.works > searched.states) throw new Error(`searched counts ${searched.works} works in ${searched.states} states`);
+  if (population.worksWithHits > searched.works || total > searched.articles) {
+    throw new Error(`searched counts ${searched.works} works and ${searched.articles} articles, fewer than the ${population.worksWithHits} works and ${total} hits found`);
+  }
+  return searched;
 }
 
 /** The request an answer echoes, as both publishers' answers echo it: the mode, the cursor, the query and its terms. */
@@ -379,23 +515,26 @@ export function readSearch(answer) {
   if (requestedDate !== null) requireDate(requestedDate, 'requested_date');
   const identifier = requireTextOrNull(requireOwn(answer, 'requested_identifier', where), 'requested_identifier');
 
-  const hits = requireList(requireOwn(answer, 'hits', where), 'hits').map(readHit);
+  const values = requireList(requireOwn(answer, 'hits', where), 'hits');
+  const read = values.map(readHit);
   requireEachArticleOnce(
-    hits,
+    read,
     (hit) => `${hit.stateSha256}.${hit.articleIdentitySha256}`,
     (hit) => `the page lists the article ${hit.publisherId} of one state twice; each article is served once`,
   );
-  const { limit, truncated, continueAfter, population } = readPage(answer, where, hits, {
+  const { limit, truncated, continueAfter, population, total } = readPage(answer, where, read, {
     mode,
     after,
     cursorOf: (last) => `${last.lane}.${last.stateSha256}.${last.articleIdentitySha256}`,
   });
+  const hits = read.map((hit, index) => withExtract(hit, values[index], index, { query, terms }));
+  const language = requireText(requireOwn(answer, 'requested_language', where), 'requested_language');
 
   return Object.freeze({
     publisher,
     query,
     terms,
-    language: requireText(requireOwn(answer, 'requested_language', where), 'requested_language'),
+    language,
     mode,
     after,
     date: requestedDate,
@@ -405,6 +544,9 @@ export function readSearch(answer) {
     workResolution: readWorkResolution(requireOwn(answer, 'work_resolution', where), identifier),
     reference: readReferencePhase(answer, identifier),
     referenceReason: readReferenceReason(answer),
+    acts: readActs(requireOwn(answer, 'acts', where), hits, { whole: after === null && !truncated }),
+    searched: readSearched(requireOwn(answer, 'searched', where), { language, date: requestedDate, population, total }),
+    extractRule: requireText(requireOwn(answer, 'extract_rule', where), 'extract_rule'),
     limit,
     truncated,
     continueAfter,

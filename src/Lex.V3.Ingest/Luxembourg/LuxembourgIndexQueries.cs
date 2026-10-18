@@ -144,6 +144,24 @@ internal static class LuxembourgIndexQueries
         "SELECT i.work_key,i.ordinal,i.kind,i.from_state_sha256,i.to_state_sha256,i.span_from,i.span_to " +
         "FROM intervals i WHERE i.work_key=$work ORDER BY i.ordinal";
 
+    /// <summary>
+    /// Every state's articles with searchable text, grouped by the outcome and rights disposition of the member each was read
+    /// from: the one pass a search's population is counted from, read once when a mount opens. It reads every state, so its
+    /// cost is the index's articles; it is bounded by them only while each state's identities lead to each article and its
+    /// member by primary key. Written with <c>CROSS JOIN</c>, which SQLite does not reorder: on the population's index the
+    /// engine the server ships chose another order for the plain join, and the server's start on that index took 86 s with
+    /// it, against 29 s in this order.
+    /// </summary>
+    internal const string StateTextSources = """
+        SELECT s.state_sha256, m.outcome, m.rights_disposition,
+               SUM(CASE WHEN length(a.searchable_text) > 0 THEN 1 ELSE 0 END)
+        FROM states s CROSS JOIN json_each(s.article_identities_json) j
+        CROSS JOIN articles a ON a.article_identity_sha256 = j.value AND a.language = s.language
+        CROSS JOIN members m ON m.object_ref_sha256 = a.object_ref_sha256
+        GROUP BY s.state_sha256, m.outcome, m.rights_disposition
+        ORDER BY s.state_sha256, m.outcome, m.rights_disposition
+        """;
+
     internal const string ArticleIds = """
         SELECT DISTINCT a.publisher_id
         FROM states s, json_each(s.article_identities_json) j

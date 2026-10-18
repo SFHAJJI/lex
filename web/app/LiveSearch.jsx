@@ -7,10 +7,18 @@
 // refusal. This file lays the view out and marks the state on the answer (`data-answer-state`) so a
 // browser run can wait for it rather than for a clock.
 //
-// A hit carries no text snippet (the answer holds none), so a row says which article of which work
-// and version matched, in which lane, and links to this site's reading of it at that article (the
-// permalink that pins it, `permalinks.mjs`). The row prints no digest (UX spec section 2: hit rows carry no
-// hashes); the reading shows the pin.
+// Results by act (the plan's item 4.3; R59, R21, R11): a Luxembourg answer is laid out act by act, each act's title once
+// (linked to its dossier; the as-published label when the act is held only as first published) and its passages below it,
+// version by version, each version dated as the publisher dates it ("applicable from", R21). A passage links to this site's
+// reading at its article (the permalink that pins it, `permalinks.mjs`) and quotes the extract the answer carries, word
+// for word, with the matched words marked (`<mark>`). A row prints no digest (UX spec section 2: hit rows carry no
+// hashes); the reading shows the pin. The act whose title the phrase is comes first, above the passages; when several
+// titles match, they are counted and listed, the first few shown and the rest one step away. Above the list, what was found
+// and what was searched, every count the answer's and dated by the index's build (R11).
+//
+// A search with no passage shows the plain no-hit card (the plan's item 4.5; R59, R90): which searches ran (the exact
+// reference, the titles, the text), that only exact matching ran and what that means, the population searched, the
+// publishers' own search pages as links (nothing here requests them), and the absence note.
 //
 // An EU answer (one named EU work, `view.publisher` "eu-eurlex") is laid out with its own words: the
 // one wording the hits are in, its date and its permalink, said once above the hits; each hit's
@@ -35,7 +43,7 @@
 // the article and the date, printed back in words) and the address it opens, then goes there. A reference that opens
 // nothing says why, and a refusal of one says what was recognised above its card, so the reader sees what was read.
 
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
@@ -44,11 +52,16 @@ import {
   LIVE_SEARCH_IDLE,
   SEARCH_LANGUAGES,
   SEARCH_QUERY_MAX,
+  TITLES_SHOWN,
+  actGroups,
+  builtOnOf,
   createSearchSession,
+  languageName,
   longDate,
   todayInLuxembourg,
 } from '../scripts/live-search.mjs';
-import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillText, liveChrome, livePath } from '../scripts/live-chrome.mjs';
+import { OFFICIAL_SEARCH_PAGES } from '../scripts/live-failure.mjs';
+import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillCounted, fillText, liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { articlePermalink, permalinkHref } from '../scripts/permalinks.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
@@ -66,30 +79,48 @@ function laneCount(count) {
   return count === null ? COPY.notCounted : String(count);
 }
 
+/**
+ * A matched title, the publisher's text marked in its own language, linked to the act's dossier when the card names the
+ * work this site holds; a title of an act this site holds no version of (the index holds titles of acts it holds no state
+ * of: on `derive-c`, 168 of the 1,502 titles "règlement grand-ducal" matches) is said so, as a reference's list says it.
+ */
+function TitleOf({ card }) {
+  // The resolver searches every language's titles, so the search's language is not the title's (review of #797).
+  const title = <span lang={quotationLanguageTag(card.matchedTitleLanguage)}>{card.matchedTitle}</span>;
+  return typeof card.workKey !== 'string'
+    ? <Say template={COPY.candidateNotHeld} values={{ act: title }} />
+    : <a href={permalinkHref(`/lu-legilux/${card.workKey}`, CHROME_LOCALE)}>{title}</a>;
+}
+
+/** The sentence for the one act the title ladder names, by how its title matched: is, begins, or holds every word. */
+const TITLE_MATCH = Object.freeze({ exact_normalized_title: 'titleExact', prefix: 'titleStarts', all_tokens_contained: 'titleWords' });
+
+/**
+ * The title ladder's answer, on top of the results (the plan's item 4.3): the act the phrase is the title of (or begins, or
+ * holds every word of), linked to it; or, when several titles match, their count and the first few, the rest one step away.
+ */
 export function SearchWorkResolution({ resolution }) {
-  // A matched title is the publisher's text, marked in the language that title is written in, which the
-  // card names: the resolver searches every language's titles, so the search's language is not it (review
-  // of #797).
-  const titled = (card) => ({
-    title: <span lang={quotationLanguageTag(card.matchedTitleLanguage)}>{card.matchedTitle}</span>,
-    identifier: card.workIdentifier,
-  });
   if (resolution.outcome === 'one_work') {
     return (
-      <p data-work-resolution="one_work">
-        <Say template={COPY.namesWork} values={titled(resolution.work)} />
+      <p data-work-resolution="one_work" data-match-reason={resolution.work.matchReason}>
+        <Say template={COPY[TITLE_MATCH[resolution.work.matchReason] ?? 'titleWords']} values={{ title: <TitleOf card={resolution.work} /> }} />
       </p>
     );
   }
   if (resolution.outcome === 'several_candidates') {
+    const shown = resolution.candidates.slice(0, TITLES_SHOWN);
+    const more = resolution.candidates.slice(TITLES_SHOWN);
+    const item = (card) => <li key={`${card.workIdentifier} ${card.workKey}`}><TitleOf card={card} /></li>;
     return (
-      <div data-work-resolution="several_candidates">
-        <p>{COPY.severalWorks}</p>
-        <ul>
-          {resolution.candidates.map((card) => (
-            <li key={card.workIdentifier}><Say template={COPY.candidate} values={titled(card)} /></li>
-          ))}
-        </ul>
+      <div data-work-resolution="several_candidates" data-candidates={resolution.candidates.length}>
+        <p><Say template={countedEntry(COPY.severalTitles, resolution.candidates.length)} values={{ count: resolution.candidates.length }} /></p>
+        <ul>{shown.map(item)}</ul>
+        {more.length > 0 ? (
+          <details data-more-titles={more.length}>
+            <summary>{fillCounted(COPY.moreTitles, more.length)}</summary>
+            <ul>{more.map(item)}</ul>
+          </details>
+        ) : null}
       </div>
     );
   }
@@ -174,14 +205,63 @@ function NotCovered({ rows }) {
   );
 }
 
-function Hit({ hit }) {
+/** An extract as the answer cuts it: the text word for word, each whole match marked, an elision where the text goes on. */
+export function Extract({ extract, language }) {
+  return (
+    <p className="extract" data-extract="" data-byte-start={extract.byteStart} data-byte-end={extract.byteEnd}>
+      {extract.startsText ? null : <span data-elided="before">… </span>}
+      <q lang={quotationLanguageTag(language)}>
+        {extract.parts.map((part, index) => (part.matched ? <mark key={index}>{part.text}</mark> : <Fragment key={index}>{part.text}</Fragment>))}
+      </q>
+      {extract.endsText ? null : <span data-elided="after"> …</span>}
+    </p>
+  );
+}
+
+/** One passage: the article, linked to its reading at that version, and its extract. A relaxed hit says its lane. */
+function Passage({ hit }) {
   return (
     <li data-lane={hit.lane}>
-      <a href={permalinkHref(articlePermalink(hit.permalink, hit.publisherId), CHROME_LOCALE)}>
-        <Say template={COPY.hit} values={{ article: <strong>{hit.publisherId}</strong>, work: hit.workKey, date: hit.applicabilityDate }} />
-      </a>{' '}
-      <span className="badge">{COPY.lane[hit.lane]}</span>
+      <a href={permalinkHref(articlePermalink(hit.permalink, hit.publisherId), CHROME_LOCALE)}><strong>{hit.publisherId}</strong></a>
+      {hit.lane === 'relaxed' ? <>{' '}<span className="badge">{COPY.lane.relaxed}</span></> : null}
+      <Extract extract={hit.extract} language={hit.language} />
     </li>
+  );
+}
+
+/**
+ * The page's hits, act by act (the plan's item 4.3): each act's title once, linked to its dossier (or its work key, when the
+ * index holds no title), the as-published label when the act is held only as first published, how many passages it has in
+ * the whole result, then each version's passages under that version's date in the publisher's words (R21).
+ */
+function ActGroups({ view }) {
+  const asPublishedLabel = liveChrome().common.asPublished.label;
+  return (
+    <ol className="acts" data-acts={view.acts.length}>
+      {actGroups(view).map(({ act, versions }) => (
+        <li key={act.workKey} data-act={act.workKey}>
+          <h2 className="act-title">
+            {act.title === null
+              ? <Say template={COPY.untitled} values={{ work: <a href={permalinkHref(act.dossier, CHROME_LOCALE)}>{act.workKey}</a> }} />
+              : <a href={permalinkHref(act.dossier, CHROME_LOCALE)}><span lang={quotationLanguageTag(act.titleLanguage)}>{act.title}</span></a>}
+          </h2>
+          <p className="act-facts">
+            {act.asPublished ? <span data-as-published-label="">{`${asPublishedLabel.charAt(0).toUpperCase()}${asPublishedLabel.slice(1)}.`} </span> : null}
+            <span data-act-hits={act.hits}>{fillCounted(COPY.actPassages, act.hits)}</span>
+          </p>
+          {versions.map(({ stateSha256, applicabilityDate, hits }) => (
+            <section key={stateSha256} data-version={applicabilityDate}>
+              <p className="version-line">
+                <Say template={act.asPublished ? COPY.versionAsPublished : COPY.version} values={{ date: applicabilityDate }} />
+              </p>
+              <ol className="passages">
+                {hits.map((hit) => <Passage key={`${hit.stateSha256}.${hit.articleIdentitySha256}`} hit={hit} />)}
+              </ol>
+            </section>
+          ))}
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -198,52 +278,148 @@ function SearchedOn({ view }) {
   );
 }
 
-/** One search view, laid out: the hits and what they are, or the no-hit answer. */
-export function SearchResultsView({ view, onNextPage }) {
+/** What a search found: in the strict lane alone, its passages and acts; otherwise both lanes' counts, as before. */
+function Found({ view }) {
   const { population } = view;
-  const europe = view.publisher === 'eu-eurlex';
-  return (
-    <>
+  if (view.mode === 'strict') {
+    return (
       <p data-population="">
         <Say
-          template={countedEntry(COPY.population, population.worksWithHits)}
+          template={COPY.found}
           values={{
             query: view.query,
-            language: view.language,
-            strict: laneCount(population.strictHits),
-            relaxed: laneCount(population.relaxedHits),
-            works: population.worksWithHits,
+            language: languageName(view.language),
+            passages: fillCounted(COPY.passages, population.strictHits),
+            acts: fillCounted(liveChrome().home.acts, population.worksWithHits),
           }}
         />
       </p>
+    );
+  }
+  return (
+    <p data-population="">
+      <Say
+        template={countedEntry(COPY.population, population.worksWithHits)}
+        values={{
+          query: view.query,
+          language: view.language,
+          strict: laneCount(population.strictHits),
+          relaxed: laneCount(population.relaxedHits),
+          works: population.worksWithHits,
+        }}
+      />
+    </p>
+  );
+}
+
+/**
+ * What a Luxembourg search's lanes matched against (R11): its acts, versions and articles of searchable text, every count
+ * the answer's, as of the index built on its build's date in Luxembourg; and, when there are any, the versions the rights
+ * rule kept out and the acts a date could not place.
+ */
+function Searched({ view }) {
+  const { searched } = view;
+  const home = liveChrome().home;
+  const counts = {
+    acts: fillCounted(home.acts, searched.works),
+    versions: fillCounted(home.versions, searched.states),
+    articles: fillCounted(home.articles, searched.articles),
+    language: languageName(view.language),
+  };
+  const builtOn = builtOnOf(searched.builtAt);
+  return (
+    <>
+      <p data-searched={searched.works} data-built-on={builtOn ?? ''}>
+        {builtOn === null ? fillText(COPY.searchedUndated, counts) : fillText(COPY.searched, { ...counts, date: builtOn })}
+      </p>
+      {searched.withheldByRights > 0 ? <p data-withheld={searched.withheldByRights}>{fillCounted(COPY.withheld, searched.withheldByRights)}</p> : null}
+      {searched.severalOnDate > 0 ? <p data-several-on-date={searched.severalOnDate}>{fillCounted(COPY.severalOnDate, searched.severalOnDate, { date: view.date })}</p> : null}
+    </>
+  );
+}
+
+/**
+ * The plain no-hit card (the plan's item 4.5; R59, R90): which searches ran, each said as what it found; that only exact
+ * matching ran, and what that means, when the answer counted no relaxed lane; the publishers' own search pages, links only;
+ * and the absence note.
+ */
+function NoHitCard({ view }) {
+  const europe = view.publisher === 'eu-eurlex';
+  const resolution = view.workResolution.outcome;
+  const reference = view.reference === 'not_run_identifier_given'
+    ? COPY.runReferenceNotRun
+    : view.referenceReason === 'title_not_held' ? COPY.titleNotHeld : COPY.runReference;
+  const titles = {
+    not_run_identifier_given: COPY.runTitlesNotRun,
+    no_titles_held: COPY.noTitlesHeld,
+    no_title_match: COPY.runTitles,
+    one_work: countedEntry(COPY.runTitlesMatched, 1),
+    several_candidates: countedEntry(COPY.runTitlesMatched, view.workResolution.candidates?.length ?? 2),
+  }[resolution];
+  // Titles are matched with case and accents folded, unlike the text: said where the ladder ran over titles held.
+  const titlesFolded = ['no_title_match', 'one_work', 'several_candidates'].includes(resolution);
+  return (
+    <section className="no-hit-card" data-no-hit-card="">
+      <p data-no-hit="">
+        {/* With no work named, a search is of Luxembourg law alone, and says so. */}
+        <Say template={view.identifier === null ? COPY.noHitLuxembourg : COPY.noHit} values={{ query: view.query }} /> {inEnglish(asSentence(view.matching))}
+      </p>
+      <h2>{COPY.searchesRun}</h2>
+      <ul data-searches-run="">
+        <li data-search-run="reference">{reference}</li>
+        <li data-search-run="titles">{titles}{titlesFolded ? <>{' '}<span data-title-matching="">{COPY.titleMatching}</span></> : null}</li>
+        {view.population.strictHits === null ? null : <li data-search-run="text">{COPY.runText}</li>}
+        {view.population.relaxedHits === null ? null : <li data-search-run="every-word">{COPY.runTextWords}</li>}
+      </ul>
+      {view.population.relaxedHits === null ? <p data-exact-only="">{COPY.exactOnly}</p> : null}
+      {europe ? null : <Searched view={view} />}
+      <div className="official-search" data-official-search="">
+        <p>{COPY.officialSearch}</p>
+        <ul>
+          {OFFICIAL_SEARCH_PAGES.map((page) => (
+            <li key={page.key}>
+              <a href={page.uri} rel="external" data-publisher={page.publisher}>{COPY.officialSites[page.key]}</a>
+            </li>
+          ))}
+        </ul>
+      </div>
+      {/* A search with no hit is not evidence that the law does not exist, said as the refusal card says it (journey J2). */}
+      <p data-absence-note="">{liveChrome().refusalCard.absenceNote}</p>
+    </section>
+  );
+}
+
+/** One search view, laid out: the act a title names on top, what was found and searched, the passages by act, or the no-hit card. */
+export function SearchResultsView({ view, onNextPage }) {
+  const europe = view.publisher === 'eu-eurlex';
+  // With no passage, the no-hit card says that no titles are held among what ran; it is not said twice.
+  const resolutionOnTop = view.hits.length === 0 && view.workResolution.outcome === 'no_titles_held' ? null : view.workResolution;
+  return (
+    <>
+      {resolutionOnTop === null ? null : <SearchWorkResolution resolution={resolutionOnTop} />}
+      <Found view={view} />
+      {/* What was searched: above the passages, or inside the no-hit card, which says it among what ran. */}
+      {europe || view.hits.length === 0 ? null : <Searched view={view} />}
       <SearchedOn view={view} />
-      {view.referenceReason === 'title_not_held' ? <p data-searched-as-words="title_not_held">{COPY.titleNotHeld}</p> : null}
-      <SearchWorkResolution resolution={view.workResolution} />
+      {view.referenceReason === 'title_not_held' && view.hits.length > 0 ? <p data-searched-as-words="title_not_held">{COPY.titleNotHeld}</p> : null}
       {europe ? <EuropeWording view={view} /> : <AmbiguousWorks works={view.ambiguousWorks} date={view.date} />}
       {view.hits.length === 0 ? (
-        <>
-          {view.searchableTextHeld ? (
-            <p data-no-hit="">
-              {/* With no work named, a search is of Luxembourg law alone, and says so. */}
-              <Say template={view.identifier === null ? COPY.noHitLuxembourg : COPY.noHit} values={{ query: view.query }} /> {inEnglish(asSentence(view.matching))}
-            </p>
-          ) : (
+        view.searchableTextHeld ? <NoHitCard view={view} /> : (
+          <>
             <p data-no-hit="">
               <Say template={COPY.noText} values={{ language: view.language, languages: view.searchableLanguages.join(', ') }} />
             </p>
-          )}
-          {/* A search with no hit is not evidence that the law does not exist, said as the refusal card says it (journey J2). */}
-          <p data-absence-note="">{liveChrome().refusalCard.absenceNote}</p>
-        </>
+            <p data-absence-note="">{liveChrome().refusalCard.absenceNote}</p>
+          </>
+        )
       ) : (
         <>
           <p lang={ENGLISH_LANG}>{asSentence(view.pageIs)} {asSentence(view.hitUnit)}</p>
-          <ol className="hits">
-            {view.hits.map((hit) => (europe
-              ? <EuropeHit key={hit.articleIdentitySha256} hit={hit} />
-              : <Hit key={`${hit.stateSha256}.${hit.articleIdentitySha256}`} hit={hit} />
-            ))}
-          </ol>
+          {europe ? (
+            <ol className="hits">
+              {view.hits.map((hit) => <EuropeHit key={hit.articleIdentitySha256} hit={hit} />)}
+            </ol>
+          ) : <ActGroups view={view} />}
         </>
       )}
       {europe ? <NotCovered rows={view.notHeld} /> : null}

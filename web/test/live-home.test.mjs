@@ -99,10 +99,10 @@ test("today in Luxembourg fills the date field, by the shared table's rule, arou
 });
 
 test("the date is sent with the search and printed from the answer; a blank date is no date, and a date that is no day is not sent", async () => {
-  assert.deepEqual(searchParameters({ query: "loi", language: "fra", date: "2026-10-25" }), { query: "loi", language: "fra", date: "2026-10-25" });
-  assert.deepEqual(searchParameters({ query: "loi", language: "fra", date: "" }), { query: "loi", language: "fra" });
-  assert.deepEqual(searchParameters({ query: "loi", language: "fra", date: "  " }), { query: "loi", language: "fra" });
-  assert.deepEqual(Object.keys(searchParameters({ query: "loi", language: "fra", identifier: "32016R0679", date: "2026-10-25", after: "x" })), ["query", "language", "identifier", "date", "after"]);
+  assert.deepEqual(searchParameters({ query: "loi", language: "fra", date: "2026-10-25" }), { query: "loi", language: "fra", mode: "strict", date: "2026-10-25" });
+  assert.deepEqual(searchParameters({ query: "loi", language: "fra", date: "" }), { query: "loi", language: "fra", mode: "strict" });
+  assert.deepEqual(searchParameters({ query: "loi", language: "fra", date: "  " }), { query: "loi", language: "fra", mode: "strict" });
+  assert.deepEqual(Object.keys(searchParameters({ query: "loi", language: "fra", identifier: "32016R0679", date: "2026-10-25", after: "x" })), ["query", "language", "mode", "identifier", "date", "after"]);
   for (const date of ["2026-02-30", "25/10/2026", "2026-10-25T00:00:00Z", 20261025]) {
     assert.throws(() => searchParameters({ query: "loi", language: "fra", date }), /date/, String(date));
   }
@@ -116,7 +116,7 @@ test("the date is sent with the search and printed from the answer; a blank date
   assert.equal(session.ask({ query: "assemblée générale", language: "fra", date: "2026-10-25" }), true);
   assert.equal(session.ask({ query: "assemblée générale", language: "fra", date: "2026-13-01" }), false, "refused before anything is sent");
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.deepEqual(sent, [{ operation_id: "search", parameters: { query: "assemblée générale", language: "fra", date: "2026-10-25" } }]);
+  assert.deepEqual(sent, [{ operation_id: "search", parameters: { query: "assemblée générale", language: "fra", mode: "strict", date: "2026-10-25" } }]);
   assert.equal(outcomes.at(-1).state, "invalid_request");
 });
 
@@ -219,6 +219,8 @@ test("the search page keeps its work identifier and an empty date, and the 404 p
 function searchedAt(date, change = (view) => view) {
   const envelope = envelopeOf("search", "a phrase the held text carries");
   envelope.result.value.requested_date = date;
+  // The population searched is the date's, as the platform counts it (the plan's item 4.3).
+  envelope.result.value.searched = { ...envelope.result.value.searched, date, works_with_several_states_on_date: date === null ? null : 0 };
   const outcome = searchOutcome({ state: "success", envelope });
   assert.equal(outcome.state, "success", outcome.sentence);
   return renderToStaticMarkup(h(SearchAnswerView, { outcome: { ...outcome, view: change(outcome.view) }, onNextPage: () => {} })).replaceAll("<!-- -->", "");

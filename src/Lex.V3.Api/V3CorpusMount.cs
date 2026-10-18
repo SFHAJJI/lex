@@ -3735,7 +3735,7 @@ internal sealed partial class V3CorpusMount : IDisposable
     public const int SearchMaxHits = 200;
 
     internal const string SearchRanking =
-        "none; strict lane before relaxed lane, then work key, publisher date, article identity and state digest. " +
+        "none; strict lane before relaxed lane, then work key, publisher date, state digest, publisher article id (in the reading's order) and article identity, so one state's hits are together. " +
         "This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits";
 
     /// <summary>The ceiling on the characters of a <c>search</c> query; the request document says the same.</summary>
@@ -3794,9 +3794,10 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// the first hits in the stated order and not the best ones. A requested <c>mode</c> other than the
     /// two lanes is refused <c>retrieval_mode_unavailable</c> naming the modes held, never ignored. The
     /// query is bounded (<see cref="SearchMaxQueryCharacters"/> characters, <see cref="SearchMaxTerms"/>
-    /// distinct terms) and a longer one is a request-schema rejection. No
-    /// snippet is served: a hit names its article and its state with the hash-pinned permalink, and
-    /// the text is read there.
+    /// distinct terms) and a longer one is a request-schema rejection. A hit names its article and its state with the
+    /// hash-pinned permalink, where the text is read, and carries a word-for-word extract of the bytes its lane matched with
+    /// the matches marked; the page's acts are named once each with their titles, and the population the lanes matched
+    /// against is counted (V3CorpusMount.SearchResults.cs).
     /// </para>
     /// <para>
     /// A hit is one article of one held state. Without a date every held state is searched and each
@@ -3967,9 +3968,12 @@ internal sealed partial class V3CorpusMount : IDisposable
             : titles.Candidates.Count == 0 ? "no_title_match"
             : titles.Candidates.Count == 1 ? "one_work"
             : "several_candidates";
-        static object Card(LuxembourgIndexResolvedWork work) => new
+        // Each card names the work key the index holds its expressions under, so the page can link the act (or null).
+        var cardKeys = titles is null ? [] : WorkKeysOfCards(titles.Candidates);
+        object Card(LuxembourgIndexResolvedWork work, int index) => new
         {
             work_identifier = work.WorkIdentifier,
+            work_key = cardKeys[index],
             expressions = work.ExpressionIris,
             languages = work.Languages,
             matched_title = work.MatchedTitle,
@@ -4000,23 +4004,9 @@ internal sealed partial class V3CorpusMount : IDisposable
 
         // Rights before any hit is served (SearchRightsRule): a state whose text its rights did not admit is not matched, so
         // no answer says which of its articles hold a word. The rule is evidence_bundle's, applied per state.
-        var admittedByState = new Dictionary<string, bool>(StringComparer.Ordinal);
-        bool Admitted(LuxembourgIndexSearchHit hit)
-        {
-            if (!admittedByState.TryGetValue(hit.StateSha256, out var admitted))
-            {
-                var sources = _reader.ResolveStateSources(hit.StateSha256);
-                admitted = sources.Count > 0 && sources.All(source =>
-                    string.Equals(source.Outcome, AcquiredOutcomeToken, StringComparison.Ordinal) &&
-                    string.Equals(source.RightsDisposition, EvidenceBundleAdmittingRightsDisposition, StringComparison.Ordinal));
-                admittedByState[hit.StateSha256] = admitted;
-            }
-
-            return admitted;
-        }
-
-        strict = strict.Where(Admitted).ToArray();
-        relaxed = relaxed.Where(Admitted).ToArray();
+        // The decision is evidence_bundle's, read once for every state with the population the answer counts (SearchAdmits).
+        strict = strict.Where(hit => SearchAdmits(hit.StateSha256)).ToArray();
+        relaxed = relaxed.Where(hit => SearchAdmits(hit.StateSha256)).ToArray();
 
         var ambiguousWorks = new List<object>();
         if (requestedDate is not null)
@@ -4054,6 +4044,10 @@ internal sealed partial class V3CorpusMount : IDisposable
             relaxed = relaxed.Where(Applies).ToArray();
         }
 
+        // Within each lane, the hits of one version in the reading's order of the publisher's article ids (SearchRanking).
+        strict = InSearchOrder(strict);
+        relaxed = InSearchOrder(relaxed);
+
         // Relaxed never outranks strict: every strict hit, then every relaxed hit.
         var all = strict.Select(static hit => (Lane: "strict", Hit: hit))
             .Concat(relaxed.Select(static hit => (Lane: "relaxed", Hit: hit)))
@@ -4076,6 +4070,8 @@ internal sealed partial class V3CorpusMount : IDisposable
 
         var page = all.Skip(start).Take(limit).ToArray();
         var truncated = start + page.Length < all.Length;
+        // The page's texts, read by article identity: each hit's extract is cut from the bytes its lane matched.
+        var texts = _reader.ResolveArticleSearchableTexts(page.Select(static entry => entry.Hit.ArticleIdentitySha256).ToArray());
         var hits = page.Select(entry =>
         {
             if (!statesByWork.TryGetValue(entry.Hit.WorkKey, out var ofWork))
@@ -4100,6 +4096,11 @@ internal sealed partial class V3CorpusMount : IDisposable
                 state_sha256 = entry.Hit.StateSha256,
                 // The hash-pinned permalink names this state and no other; the text is read there.
                 resolve = new { identifier = StateUrl(state) },
+                extract = ExtractMember(
+                    texts.TryGetValue(entry.Hit.ArticleIdentitySha256, out var text)
+                        ? text
+                        : throw new InvalidDataException("A search hit names an article whose text the index does not hold."),
+                    entry.Lane, query, terms),
             };
         }).ToArray();
 
@@ -4129,7 +4130,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             {
                 retrieval_lane = "r1_work_discovery",
                 outcome = titleOutcome,
-                work = titles is not null && titles.Candidates.Count == 1 ? Card(titles.Candidates[0]) : null,
+                work = titles is not null && titles.Candidates.Count == 1 ? Card(titles.Candidates[0], 0) : null,
                 candidates = titles is not null && titles.Candidates.Count > 1 ? titles.Candidates.Select(Card).ToArray() : null,
             },
             terms,
@@ -4145,6 +4146,9 @@ internal sealed partial class V3CorpusMount : IDisposable
                 distinct_publisher_articles = all.Select(static entry => (entry.Hit.WorkKey, entry.Hit.PublisherId)).Distinct().Count(),
                 works_with_hits = all.Select(static entry => entry.Hit.WorkKey).Distinct(StringComparer.Ordinal).Count(),
             },
+            // What the lanes matched against, counted from this index (R11): the scope's states whose text the rights rule
+            // admits, their works and their articles with searchable text, and the build the mounted log records.
+            searched = Searched(language, requestedDate, workKey),
             ambiguous_works = ambiguousWorks,
             limit,
             truncated,
@@ -4152,6 +4156,10 @@ internal sealed partial class V3CorpusMount : IDisposable
             // Said beside the bound, where a reader of a truncated page looks: there is no ranker, so
             // ten of five hundred hits are the first ten in the stated order and not the ten best.
             page_is = SearchPageIs,
+            extract_rule = SearchExtractRule,
+            acts_rule = SearchActsRule,
+            // Each act of the page once, with its title, so the hits can be read under it (the plan's item 4.3).
+            acts = SearchActs(page.Select(static entry => entry.Hit).ToArray(), all.Select(static entry => entry.Hit).ToArray(), statesByWork, language),
             hits,
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader.IndexRef.Sha256,

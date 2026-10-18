@@ -95,6 +95,39 @@ public sealed class LuxembourgIndexQueryPlanTests
     private static readonly (string Sql, (string, object)[] Parameters) WorkEventsUpToQuery =
         (LuxembourgIndexQueries.WorkEventsUpTo, [("$work", "loi-1991-08-10-n3"), ("$last", 10L)]);
 
+    private static readonly (string Sql, (string, object)[] Parameters) StateTextSourcesQuery =
+        (LuxembourgIndexQueries.StateTextSources, []);
+
+    /// <summary>
+    /// A search's population is read once from every state (the plan's item 4.3): the states are read whole, and that is the
+    /// one scan; each state's identities then lead to each article and its member by primary key, in that order, never a scan
+    /// of the articles or the members, whatever the statistics say. Left to choose, the engine the server ships made the
+    /// server's start on the population's index 86 s, against 29 s in this order.
+    /// </summary>
+    private static IEnumerable<string> StateTextSourcesProblems(string label, string[] plan)
+    {
+        var shown = $"{label}, StateTextSources: {string.Join(" | ", plan)}";
+        foreach (var table in new[] { "a", "m" })
+        {
+            if (plan.Any(line => Regex.IsMatch(line, $@"^SCAN {table}\b")))
+            {
+                yield return $"table {table} is scanned. " + shown;
+            }
+        }
+
+        var order = new[]
+        {
+            Array.FindIndex(plan, static line => Regex.IsMatch(line, @"^SCAN s\b")),
+            Array.FindIndex(plan, static line => Regex.IsMatch(line, @"^SCAN j\b")),
+            Array.FindIndex(plan, static line => line.StartsWith("SEARCH a USING INDEX sqlite_autoindex_articles_1 (article_identity_sha256=?)", StringComparison.Ordinal)),
+            Array.FindIndex(plan, static line => line.StartsWith("SEARCH m USING INDEX sqlite_autoindex_members_1 (object_ref_sha256=?)", StringComparison.Ordinal)),
+        };
+        if (order.Any(static index => index < 0) || !order.SequenceEqual(order.Order()))
+        {
+            yield return "the order is not the states, their identities, the article by primary key, the member by primary key. " + shown;
+        }
+    }
+
     private static readonly (string Sql, (string, object)[] Parameters) EventCountQuery =
         (LuxembourgIndexQueries.EventCount, [("$events", "[\"validity_revised\",\"interval_closed\"]")]);
 
@@ -475,6 +508,7 @@ public sealed class LuxembourgIndexQueryPlanTests
             .Concat(TitleProblems("the index as built", Plan(connection, TitleQuery.Sql, TitleQuery.Parameters)))
             .Concat(MemberOutcomeProblems("the index as built", Plan(connection, MemberOutcomeQuery.Sql, MemberOutcomeQuery.Parameters)))
             .Concat(StateDocumentProblems("the index as built", Plan(connection, StateDocumentQuery.Sql, StateDocumentQuery.Parameters)))
+            .Concat(StateTextSourcesProblems("the index as built", Plan(connection, StateTextSourcesQuery.Sql, StateTextSourcesQuery.Parameters)))
             .Concat(CitationProblems("the index as built", Plan(connection, CitationQuery.Sql, CitationQuery.Parameters)))
             .Concat(HeldWorksProblems("the index as built", Plan(connection, HeldWorksQuery.Sql, HeldWorksQuery.Parameters)))
             .Concat(CitationsToProblems("the index as built", Plan(connection, CitationsToQuery.Sql, CitationsToQuery.Parameters)))
@@ -545,6 +579,7 @@ public sealed class LuxembourgIndexQueryPlanTests
             problems.AddRange(TitleProblems(label, Plan(connection, TitleQuery.Sql, TitleQuery.Parameters)));
             problems.AddRange(MemberOutcomeProblems(label, Plan(connection, MemberOutcomeQuery.Sql, MemberOutcomeQuery.Parameters)));
             problems.AddRange(StateDocumentProblems(label, Plan(connection, StateDocumentQuery.Sql, StateDocumentQuery.Parameters)));
+            problems.AddRange(StateTextSourcesProblems(label, Plan(connection, StateTextSourcesQuery.Sql, StateTextSourcesQuery.Parameters)));
             problems.AddRange(CitationProblems(label, Plan(connection, CitationQuery.Sql, CitationQuery.Parameters)));
             problems.AddRange(HeldWorksProblems(label, Plan(connection, HeldWorksQuery.Sql, HeldWorksQuery.Parameters)));
             problems.AddRange(CitationsToProblems(label, Plan(connection, CitationsToQuery.Sql, CitationsToQuery.Parameters)));
@@ -675,7 +710,7 @@ public sealed class LuxembourgIndexQueryPlanTests
             1,
             Occurrences(reader, "? LuxembourgIndexQueries.CatalogueStatesOfWork"),
             "The reader does not run LuxembourgIndexQueries.CatalogueStatesOfWork exactly once on index 9, so the plan asked of it is not the plan it gets.");
-        foreach (var name in new[] { "EventsAfter", "EventsOfNameAfter", "EventCount" })
+        foreach (var name in new[] { "EventsAfter", "EventsOfNameAfter", "EventCount", "StateTextSources" })
         {
             Assert.AreEqual(
                 1,

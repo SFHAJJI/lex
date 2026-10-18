@@ -97,7 +97,7 @@ public sealed class VocabularyRegistryCensusTests
                     + "const HeldWorksNine, const IntervalsOfWork, const MemberOutcomes, const Observations, "
                     + "const ObservationsNine, const RevisingEventsAfter, const StateArticles, "
                     + "const StateCitations, const StateColumnsNine, const StateDocumentOutcomes, "
-                    + "const StateSources, const StatesOfExpressions, const StatesOfExpressionsNine, "
+                    + "const StateSources, const StateTextSources, const StatesOfExpressions, const StatesOfExpressionsNine, "
                     + "const SubjectFacts, const SubjectFactsUnder, const WorkEventsUpTo, const WorkRecords, "
                     + "const WorkRecordsNine, const WorkTitles",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeProducer: const "

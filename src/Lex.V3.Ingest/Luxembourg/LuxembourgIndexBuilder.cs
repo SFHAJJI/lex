@@ -262,6 +262,17 @@ public sealed record LuxembourgIndexArticleDate(
     string? ApplicabilityDate);
 
 /// <summary>
+/// One state's articles with searchable text that came from corpus members with one outcome and one rights disposition, as
+/// the corpus recorded them: a state whose articles came from one member (the usual case) has one row. What a search may
+/// match is the caller's rule; nothing is admitted or refused here.
+/// </summary>
+public sealed record LuxembourgIndexStateTextSource(
+    string StateSha256,
+    string Outcome,
+    string? RightsDisposition,
+    long ArticlesWithSearchableText);
+
+/// <summary>
 /// One article of one state that carries a publisher-minted article id: the publisher's ids and
 /// article-level date as stored, and the wording digest: the SHA-256 of a canonical JSON array of
 /// <c>[kind, text, target]</c> for the Text and Reference tokens of the stored stream, in order.
@@ -3802,6 +3813,64 @@ public sealed class LuxembourgIndexReader : IDisposable
 
             var disposition = outcome.GetProperty("disposition").GetString()!;
             counts[disposition] = counts.GetValueOrDefault(disposition) + 1;
+        }
+    }
+
+    /// <summary>
+    /// The searchable text of each of the given article identities, the bytes <see cref="SearchStateArticles"/> matches, as
+    /// stored: one lookup by primary key per identity, so the cost is the identities asked and not the table. An identity the
+    /// index does not hold is absent from the result; the caller decides whether that is a defect.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ResolveArticleSearchableTexts(IReadOnlyList<string> articleIdentities)
+    {
+        ArgumentNullException.ThrowIfNull(articleIdentities);
+        var texts = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (articleIdentities.Count == 0)
+        {
+            return texts;
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT article_identity_sha256, searchable_text
+                FROM articles
+                WHERE article_identity_sha256 IN (SELECT value FROM json_each($identities))
+                """;
+            command.Parameters.AddWithValue(
+                "$identities", JsonSerializer.Serialize(articleIdentities.Distinct(StringComparer.Ordinal).ToArray()));
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                texts[reader.GetString(0)] = reader.GetString(1);
+            }
+        }
+
+        return texts;
+    }
+
+    /// <summary>
+    /// For every state the index holds, its articles with searchable text grouped by the outcome and rights disposition the
+    /// corpus recorded for the member each was read from, in state digest, outcome and rights order: what a search's
+    /// population is counted from. One pass over the states' articles and their members; a state none of whose articles
+    /// has searchable text still has its rows, counting zero (<see cref="LuxembourgIndexQueries.StateTextSources"/>).
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexStateTextSource> ResolveStateTextSources()
+    {
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = LuxembourgIndexQueries.StateTextSources;
+            using var reader = command.ExecuteReader();
+            var rows = new List<LuxembourgIndexStateTextSource>();
+            while (reader.Read())
+            {
+                rows.Add(new LuxembourgIndexStateTextSource(
+                    reader.GetString(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2), reader.GetInt64(3)));
+            }
+
+            return Array.AsReadOnly(rows.ToArray());
         }
     }
 

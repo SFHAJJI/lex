@@ -46,9 +46,9 @@ async function capturedRows(publisher, { references = false } = {}) {
 
 async function capturedAnswers() {
   const rows = await capturedRows("lu-legilux");
-  assert.equal(rows.length, 5, "the census holds the five Luxembourg search answers this reader is written against");
-  const [both, paged, next, relaxed, none] = rows;
-  return { both, paged, next, relaxed, none };
+  assert.equal(rows.length, 7, "the census holds the seven Luxembourg search answers this reader is written against");
+  const [both, paged, next, relaxed, none, strict, strictNone] = rows;
+  return { both, paged, next, relaxed, none, strict, strictNone };
 }
 
 async function capturedEuropeAnswers() {
@@ -132,6 +132,8 @@ test("a dated search names the works it could not place, and a resolved work is 
   const state = (date, digit) => `/lu-legilux/other-work/${date}--${digit.repeat(64)}/fra`;
   const dated = mutate(both, (a) => {
     a.requested_date = "2024-02-01";
+    a.searched.date = "2024-02-01";
+    a.searched.works_with_several_states_on_date = 1;
     a.ambiguous_works = [{ work_key: "other-work", reason: "ambiguous_version", candidates: [state("2023-01-01", "a"), state("2023-01-01", "b")] }];
   });
   assert.deepEqual(readSearch(dated).ambiguousWorks, [{ workKey: "other-work", candidates: [state("2023-01-01", "a"), state("2023-01-01", "b")] }]);
@@ -186,6 +188,77 @@ test("each rule the answer states about itself is refused when broken, with that
     ["a digest the census left unfilled", both, (a) => { a.corpus_sha256 = PLACEHOLDER; }, /corpus_sha256 is not a SHA-256 digest/],
     ["a date that is not one", both, (a) => { a.hits[0].applicability_date = "2024-02-30"; }, /not a calendar date/],
     ["no terms", both, (a) => { a.terms = []; }, /at least one term/],
+  ];
+  for (const [what, base, change, reason] of cases) {
+    assert.throws(() => readSearch(mutate(base, change)), reason, what);
+  }
+});
+
+test("a search as the site asks it reads by act: each hit's extract, the page's acts once, and the population searched", async () => {
+  const { both, strict, strictNone, paged } = await capturedAnswers();
+  const view = readSearch(strict);
+  assert.equal(view.mode, "strict");
+  assert.ok(view.hits.length > 0 && view.hits.every((hit) => hit.lane === "strict"));
+  for (const hit of view.hits) {
+    const { extract } = hit;
+    assert.ok(extract.parts.some((part) => part.matched), `${hit.publisherId} marks its match`);
+    assert.ok(extract.parts.filter((part) => part.matched).every((part) => part.text === view.query), "a strict hit marks the phrase as typed");
+    assert.equal(new TextEncoder().encode(extract.parts.map((part) => part.text).join("")).length, extract.byteEnd - extract.byteStart);
+    assert.match(extract.textSha256, /^[0-9a-f]{64}$/);
+  }
+  assert.deepEqual(view.acts.map((act) => act.workKey), [...new Set(view.hits.map((hit) => hit.workKey))]);
+  assert.equal(view.acts[0].hits, view.hits.length, "a whole page's act counts its hits");
+  assert.equal(view.acts[0].asPublished, true, "every held Luxembourg state is the act as first published, and the act says so");
+  assert.equal(view.acts[0].dossier, `/lu-legilux/${view.acts[0].workKey}`);
+  assert.ok(view.searched.works >= view.population.worksWithHits && view.searched.articles >= view.hits.length);
+  assert.equal(view.searched.severalOnDate, null, "an undated search counts no work a date could not place");
+  assert.match(view.extractRule, /word for word/);
+
+  // The same lane's hits are the both-lanes answer's strict hits, in its order.
+  assert.deepEqual(view.hits.map((hit) => hit.articleIdentitySha256), readSearch(both).hits.filter((hit) => hit.lane === "strict").map((hit) => hit.articleIdentitySha256));
+  // A truncated page counts each act's hits over the whole result.
+  const page = readSearch(paged);
+  assert.equal(page.acts.length, 1);
+  assert.ok(page.acts[0].hits > page.hits.length);
+
+  const none = readSearch(strictNone);
+  assert.deepEqual(none.acts, []);
+  assert.equal(none.population.relaxedHits, null, "the strict lane alone counts no relaxed lane, which the no-hit card then says did not run");
+  assert.deepEqual(none.searched, view.searched, "the population searched does not depend on the phrase");
+});
+
+test("each rule of an extract, the acts and the population is refused when broken, with that rule's reason", async () => {
+  const { strict, paged, both } = await capturedAnswers();
+  const unmatched = (a) => a.hits[0].extract.parts.find((part) => !part.matched);
+  const cases = [
+    ["no extract", strict, (a) => { delete a.hits[0].extract; }, /hit 1 does not carry extract/],
+    ["parts that are not the range", strict, (a) => { a.hits[0].extract.byte_end -= 1; }, /parts are \d+ bytes, and its range is/],
+    ["a range past the text", strict, (a) => { a.hits[0].extract.text_byte_length = a.hits[0].extract.byte_end - 1; }, /covers bytes/],
+    ["nothing marked", strict, (a) => { for (const part of a.hits[0].extract.parts) part.matched = false; }, /marks no match|two unmarked parts/],
+    ["a marked part that is no match", strict, (a) => { unmatched(a).matched = true; }, /which is no strict match of the query/],
+    ["two unmarked parts side by side", strict, (a) => {
+      const parts = a.hits[0].extract.parts;
+      const index = parts.findIndex((part) => !part.matched && part.text.length > 1);
+      parts.splice(index, 1, { text: parts[index].text.slice(0, 1), matched: false }, { text: parts[index].text.slice(1), matched: false });
+    }, /two unmarked parts side by side/],
+    ["an empty part", strict, (a) => { a.hits[0].extract.parts.push({ text: "", matched: false }); }, /is not a run of the text/],
+    ["a digest that is not one", strict, (a) => { a.hits[0].extract.text_sha256 = "x"; }, /text_sha256 is not a SHA-256 digest/],
+    ["no act for the page's work", strict, (a) => { a.acts = []; }, /not the works of the page's hits/],
+    ["an act named twice", strict, (a) => { a.acts.push(structuredClone(a.acts[0])); }, /not the works of the page's hits/],
+    ["an act of no hit", strict, (a) => { a.acts.push({ ...structuredClone(a.acts[0]), work_key: "other", dossier: "/lu-legilux/other" }); }, /not the works of the page's hits/],
+    ["an act counting fewer hits than the page holds", paged, (a) => { a.acts[0].hits = 0; }, /counts 0 hits/],
+    ["a whole page's act counting more", strict, (a) => { a.acts[0].hits += 1; }, /of a whole result/],
+    ["a dossier of another act", strict, (a) => { a.acts[0].dossier = "/lu-legilux/other"; }, /is not the dossier of/],
+    ["a label that is not the label", strict, (a) => { a.acts[0].as_published = "consolidated"; }, /not the label/],
+    ["a title without its language", strict, (a) => { a.acts[0].title = "Loi"; }, /exactly when it names a title/],
+    ["no population", strict, (a) => { delete a.searched; }, /does not carry searched/],
+    ["another language's population", strict, (a) => { a.searched.language = "deu"; }, /searched is in "deu"/],
+    ["another date's population", strict, (a) => { a.searched.date = "2024-02-01"; }, /searched is at "2024-02-01"/],
+    ["a date's count without a date", strict, (a) => { a.searched.works_with_several_states_on_date = 0; }, /exactly when a date is asked/],
+    ["fewer articles searched than hits", strict, (a) => { a.searched.articles_with_searchable_text = 0; }, /fewer than the/],
+    ["more works than states", strict, (a) => { a.searched.works = a.searched.states + 1; }, /works in/],
+    ["a count that is not one", strict, (a) => { a.searched.states_withheld_by_rights = -1; }, /rather than a count/],
+    ["the relaxed lane's terms marked on a strict hit", both, (a) => { const part = a.hits[0].extract.parts.find((p) => p.matched); part.text = "assemblée"; }, /parts are|no strict match/],
   ];
   for (const [what, base, change, reason] of cases) {
     assert.throws(() => readSearch(mutate(base, change)), reason, what);

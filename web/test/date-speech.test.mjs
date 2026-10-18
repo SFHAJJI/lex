@@ -236,7 +236,7 @@ test("each screen says and speaks only its publisher's date words, for every cen
   // Each publisher's screens were read, and each says its own date words where it shows a date.
   assert.ok(spokenBy["eu-eurlex"].some((said) => said.startsWith("search:") && /wording of/.test(said)), "an EU search hit is a wording of its date");
   assert.ok(spokenBy["eu-eurlex"].some((said) => said.startsWith("dossier:") && /Wording date/.test(said)), "an EU dossier's date is a wording date");
-  assert.ok(spokenBy["lu-legilux"].some((said) => said.startsWith("search:") && /version of/.test(said)), "a Luxembourg search hit is a version of its date");
+  assert.ok(spokenBy["lu-legilux"].some((said) => said.startsWith("search:") && /applicable from/.test(said)), "a Luxembourg search hit's version is applicable from its date (publisher), R21");
   assert.ok(spokenBy["lu-legilux"].some((said) => said.startsWith("dossier:") && /Applies from/.test(said)), "a Luxembourg dossier's date is when a state applies from");
 });
 
