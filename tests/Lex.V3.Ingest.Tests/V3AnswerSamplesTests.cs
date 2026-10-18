@@ -395,6 +395,10 @@ public sealed class V3AnswerSamplesTests
             await DriveAsync(mount, "search", "the page after the first one-hit page, no limit: the rest of the result, whose population is still the whole result's", new { query = "assemblée générale", language = "fra", after = firstPage.Body["continue_after"]!.GetValue<string>() }),
             await DriveAsync(mount, "search", "the same phrase in the relaxed lane only: every hit relaxed, and the strict lane not counted (null, not zero)", new { query = "assemblée générale", language = "fra", mode = "relaxed" }),
             await DriveAsync(mount, "search", "a word the held text does not carry: no hit is an answer, not a refusal", new { query = "zéphyr", language = "fra" }),
+            // As the site asks every search (the plan's items 4.3 and 4.5): the strict lane alone, its hits by act, each with
+            // its extract, and the population searched; and the same lane where nothing matches, the no-hit card's answer.
+            await DriveAsync(mount, "search", "the phrase in the strict lane alone, as the site asks it: each hit's extract with the phrase marked, the act once, and the population searched", new { query = "assemblée générale", language = "fra", mode = "strict" }),
+            await DriveAsync(mount, "search", "a word the held text does not carry, in the strict lane alone: no act, the population searched, and the relaxed lane not counted", new { query = "zéphyr", language = "fra", mode = "strict" }),
             // EU `search` in one work, for the same screen's EU reader: a phrase with hits in both lanes, the first page of
             // one hit with its cursor, the page that cursor leads to, and a word the held wording does not carry.
             await DriveAsync(europeMount, "search", "one EU work by its CELEX, a phrase its held English wording carries: strict hits, then a relaxed hit, each with the pinned wording's provision permalink", new { query = "joint controllers", language = "eng", identifier = "32016R0679" }),

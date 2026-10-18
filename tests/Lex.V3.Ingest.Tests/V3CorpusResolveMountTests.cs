@@ -1534,6 +1534,26 @@ public sealed class V3CorpusResolveMountTests
                 System.Text.Json.JsonSerializer.Serialize(new[] { new { kind = "text", text, target = (string?)null, marker = (string?)null, note_body = (object?)null } }));
 
         /// <summary>
+        /// Rewrites several articles of one expression to one text token each, as <see cref="RewriteArticleTextAsync"/> does,
+        /// in one change and one re-stamp, keyed by publisher id.
+        /// </summary>
+        public Task RewriteArticleTextsAsync(string expressionIri, IReadOnlyDictionary<string, string> textsByPublisherId) =>
+            MutateArticlesAsync(connection =>
+            {
+                foreach (var (publisherId, text) in textsByPublisherId)
+                {
+                    using var set = connection.CreateCommand();
+                    set.CommandText = "UPDATE articles SET searchable_text=$text, tokens_json=$tokens WHERE expression_iri=$expression AND publisher_id=$id";
+                    set.Parameters.AddWithValue("$text", text);
+                    set.Parameters.AddWithValue("$tokens", System.Text.Json.JsonSerializer.Serialize(
+                        new[] { new { kind = "text", text, target = (string?)null, marker = (string?)null, note_body = (object?)null } }));
+                    set.Parameters.AddWithValue("$expression", expressionIri);
+                    set.Parameters.AddWithValue("$id", publisherId);
+                    Assert.AreEqual(1, set.ExecuteNonQuery(), publisherId);
+                }
+            });
+
+        /// <summary>
         /// Sets the stored token stream and the searchable text of the article with this publisher id in
         /// one expression independently, so a stream that differs while the text stays the same (a
         /// retargeted reference) can be written.

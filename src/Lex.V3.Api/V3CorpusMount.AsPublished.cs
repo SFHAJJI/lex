@@ -65,6 +65,25 @@ internal sealed partial class V3CorpusMount
     private const string ElectronicJournalOfficielFrom = "2017-01-01";
 
     /// <summary>
+    /// Whether a work is held only as published (<see cref="AsPublishedRule"/>): it has held states, and every one
+    /// (<paramref name="states"/>, every language) is an expression of its Journal officiel legal resource.
+    /// </summary>
+    internal static bool HeldOnlyAsPublished(IReadOnlyList<LuxembourgIndexResolvedState> states)
+    {
+        ArgumentNullException.ThrowIfNull(states);
+        if (states.Count == 0)
+        {
+            return false;
+        }
+
+        var work = states[0].PublisherWorkIri;
+        var journalOfficiel = work + "/jo";
+        return states.All(state => string.Equals(state.PublisherWorkIri, work, StringComparison.Ordinal) &&
+                                   string.Equals(state.PublisherLegalResourceIri, journalOfficiel, StringComparison.Ordinal) &&
+                                   state.ExpressionIri.StartsWith(journalOfficiel + "/", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// <c>as_published</c> for a work: null unless every held state of it (<paramref name="states"/>, every language) is an
     /// expression of its Journal officiel legal resource. <paramref name="listed"/> are the states the answer lists, whose
     /// retained publisher files are named with the legalValue the publisher asserts on each.
@@ -73,19 +92,13 @@ internal sealed partial class V3CorpusMount
         IReadOnlyList<LuxembourgIndexResolvedState> states,
         IReadOnlyList<LuxembourgIndexResolvedState> listed)
     {
-        if (states.Count == 0)
+        if (!HeldOnlyAsPublished(states))
         {
             return null;
         }
 
         var work = states[0].PublisherWorkIri;
         var journalOfficiel = work + "/jo";
-        if (states.Any(state => !string.Equals(state.PublisherWorkIri, work, StringComparison.Ordinal) ||
-                                !string.Equals(state.PublisherLegalResourceIri, journalOfficiel, StringComparison.Ordinal) ||
-                                !state.ExpressionIri.StartsWith(journalOfficiel + "/", StringComparison.Ordinal)))
-        {
-            return null;
-        }
 
         var actFacts = _reader!.ResolveFacts([journalOfficiel]);
         var publicationDates = FactsOf(actFacts, LuxembourgAssertionPredicate.PublicationDate, journalOfficiel);

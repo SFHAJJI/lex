@@ -94,7 +94,7 @@ public sealed class V3CorpusSearchMountTests
         var ranking = body.GetProperty("ranking").GetString();
         StringAssert.StartsWith(ranking, "none;");
         StringAssert.Contains(ranking, "strict lane before relaxed lane");
-        StringAssert.Contains(ranking, "work key, publisher date, article identity");
+        StringAssert.Contains(ranking, "work key, publisher date, publisher article id (in the reading's order), article identity");
         StringAssert.Contains(ranking, "no BM25 ranker");
         StringAssert.Contains(ranking, "not the best hits");
         var matching = body.GetProperty("matching").GetString();
@@ -113,8 +113,14 @@ public sealed class V3CorpusSearchMountTests
         CollectionAssert.AreEqual(new[] { "strict", "relaxed" }, Strings(body.GetProperty("modes_held")));
         CollectionAssert.AreEqual(new[] { "bm25", "semantic" }, Strings(body.GetProperty("modes_not_held")));
         Assert.IsFalse(body.GetRawText().Contains("\"score\"", StringComparison.Ordinal), "No score is served.");
-        Assert.IsFalse(body.GetRawText().Contains("snippet", StringComparison.Ordinal), "No snippet is served.");
-        Assert.IsFalse(body.GetRawText().Contains(BothLanes, StringComparison.Ordinal), "No article text is served.");
+        // No text but each hit's extract (the plan's item 4.3): the whole article text is served nowhere in the answer, and
+        // the strict hit's extract is that short text, its phrase marked (V3CorpusSearchResultsMountTests holds the rule).
+        Assert.IsFalse(body.GetRawText().Contains("snippet", StringComparison.Ordinal), "No snippet member beside the extract.");
+        var strictParts = hits[0].GetProperty("extract").GetProperty("parts").EnumerateArray().ToArray();
+        Assert.AreEqual(BothLanes, string.Concat(strictParts.Select(static part => part.GetProperty("text").GetString())));
+        CollectionAssert.AreEqual(
+            new[] { Phrase },
+            strictParts.Where(static part => part.GetProperty("matched").GetBoolean()).Select(static part => part.GetProperty("text").GetString()).ToArray());
         CollectionAssert.AreEqual(new[] { "garantie", "locative" }, Strings(body.GetProperty("terms")));
 
         // The echoes a caller checks its own request against.
@@ -403,17 +409,20 @@ public sealed class V3CorpusSearchMountTests
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
 
-        static (string Lane, string Work, string Date, string Article) OrderKey(JsonElement hit) => (
+        static (string Lane, string Work, string Date, string Id, string Article) OrderKey(JsonElement hit) => (
             hit.GetProperty("lane").GetString()!,
             hit.GetProperty("work_key").GetString()!,
             hit.GetProperty("applicability_date").GetString()!,
+            hit.GetProperty("publisher_id").GetString()!,
             hit.GetProperty("article_identity_sha256").GetString()!);
 
-        static IEnumerable<(string Lane, string Work, string Date, string Article)> InStatedOrder(
-            IEnumerable<(string Lane, string Work, string Date, string Article)> keys) =>
+        // The publisher's article ids in the reading's order (the plan's item 4.3: a version's hits as its reading lists them).
+        static IEnumerable<(string Lane, string Work, string Date, string Id, string Article)> InStatedOrder(
+            IEnumerable<(string Lane, string Work, string Date, string Id, string Article)> keys) =>
             keys.OrderBy(static key => key.Lane == "strict" ? 0 : 1)
                 .ThenBy(static key => key.Work, StringComparer.Ordinal)
                 .ThenBy(static key => key.Date, StringComparer.Ordinal)
+                .ThenBy(static key => key.Id, Comparer<string>.Create(V3CorpusMount.CompareLuxembourgArticleIds))
                 .ThenBy(static key => key.Article, StringComparer.Ordinal);
 
         var whole = (await SearchAsync(mount, Phrase)).Result!.Value;
@@ -430,7 +439,7 @@ public sealed class V3CorpusSearchMountTests
         // Three dates, not four: the two works both begin on the first date, which is what interleaves them.
         Assert.AreEqual(3, served.Select(static hit => hit.GetProperty("applicability_date").GetString()).Distinct().Count());
 
-        // The order is the stated one: lane, work key, publisher date, article identity.
+        // The order is the stated one: lane, work key, publisher date, publisher article id, article identity.
         var keys = served.Select(OrderKey).ToArray();
         CollectionAssert.AreEqual(InStatedOrder(keys).ToArray(), keys, "Served in the order the answer says.");
         // The interleaving is real: the same hits by date first are a different sequence.
@@ -979,7 +988,7 @@ public sealed class V3CorpusSearchMountTests
         await File.WriteAllBytesAsync(Path.Combine(fixture.Directory, V3CorpusMount.CapabilityManifestFileName), stream.ToArray());
     }
 
-    private static async Task<V3Envelope> SearchAsync(
+    internal static async Task<V3Envelope> SearchAsync(
         V3CorpusMount mount, string query, string language = "fra", string? identifier = null, string? date = null,
         string? mode = null, int? limit = null, string? after = null)
     {
