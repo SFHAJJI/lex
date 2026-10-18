@@ -151,7 +151,13 @@ if ($BrowserProbe -and $SkipBrowserProbe) { throw "-BrowserProbe asks for the br
 # `$browserArgs`, not `$browserProbe`: PowerShell's names ignore case, and that would be the -BrowserProbe switch itself.
 $browserArgs = if ($BrowserProbe) { @('--browser') } else { @() }
 # Without them the probes run with the browser trap loaded first, so nothing they run can find or start a browser.
-$nodeTrap = if ($BrowserProbe) { @() } else { @('--import', ([System.Uri] (Join-Path $checkout 'web/scripts/browser-trap.mjs')).AbsoluteUri) }
+# The trap's file URL by the constructor, never a cast: on Linux a cast reads `/home/...` as a relative URI, whose
+# AbsoluteUri throws, and PowerShell turns a getter's throw into $null, so `--import` took the script's path instead (CI
+# on #979). An empty URL stops the deployment here.
+$trapPath = [System.IO.Path]::GetFullPath((Join-Path $checkout 'web/scripts/browser-trap.mjs'))
+$trapUrl = if ($IsWindows) { [System.Uri]::new($trapPath).AbsoluteUri } else { [System.Uri]::new("file://$trapPath").AbsoluteUri }
+if (-not $trapUrl -or -not $trapUrl.StartsWith('file:///')) { throw "The browser trap's file URL could not be formed ($trapUrl); nothing is deployed." }
+$nodeTrap = if ($BrowserProbe) { @() } else { @('--import', $trapUrl) }
 
 # 1. The release, read back under the signing identity's key, before anything touches Azure.
 Step "verify the release under the signing identity's public key"
