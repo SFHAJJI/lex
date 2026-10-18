@@ -51,7 +51,7 @@ date. The server now serves a built mount of index 9.
   note, the citation's two forms and the search's version line and folded line, in English, and the reading in French; every
   form of the slice held to the time-word guard in both languages; a missing article said in place, and a run that does not
   add up refused. Updated: `compare-vocabulary.test.mjs` (the guard's controls), `provenance.test.mjs` (the row facts' nulls).
-  `npm test`: 1,279 tests, 1,276 passed, 0 failed, 3 skipped (the browser tests, which run only with `LEX_BROWSER_TESTS=1`).
+  `npm test` (rebased on 24118293, #985): 1,280 tests, 1,277 passed, 0 failed, 3 skipped (the browser tests, which run only with `LEX_BROWSER_TESTS=1`).
 - **Driver decisions (reversible).** The dossier's cell answers its column ("no date stated") rather than renaming the
   column, which is right for every other row. The provenance page's labels are English, as the rest of that page's are. The
   refusal payloads are flat rather than the card gaining structured members (STATUS-DATA.md).

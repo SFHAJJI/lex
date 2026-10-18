@@ -117,12 +117,12 @@ Updated 2026-10-18.
   `ExactReferenceReaderTests` (two rows). The answer, envelope and refusal samples re-rendered from the handler and verified
   without the switches; the registry digest did not move.
 - **Measured** (Windows, no browser, no publisher traffic, no custody read): `dotnet build Lex.V3.slnx -c Release` 0 warnings,
-  0 errors; Lex.V3.Tests 3,323 (3,317 passed, 0 failed, 6 skipped); Lex.V3.Ingest.Tests whole, once, at d4fd6089: 3,379
+  0 errors; Lex.V3.Tests 3,323 (3,317 passed, 0 failed, 6 skipped); Lex.V3.Ingest.Tests whole, once, at f8174e0f (the commit before the narrowed-scope repair): 3,379
   (3,345 passed, 0 failed, 34 skipped: the opt-in probes and env-gated writers); after the narrowed-scope repair the filtered
   set (index, legacy schema 6 and 8, as_of, in_force_on, as_observed, evidence bundle, diff, timeline, provenance, replay,
   census, samples, privacy, search, reading pages, citation, MCP, dossier, references, pinned, status_on, changes, article
   history, verify, relations, resolve, journey mounts, gates, content /3 and the interval class): 624 (612 passed, 0 failed,
-  12 skipped); `npm test` 1,279 (1,276 passed, 0 failed, 3 skipped); `eng/verify-v3-tree.ps1` 1,644 tracked paths.
+  12 skipped); `npm test` on 24118293 (#985): 1,280 (1,277 passed, 0 failed, 3 skipped); `eng/verify-v3-tree.ps1` 1,644 tracked paths.
 - **Not done here, and where it goes.** S7b: the timeline's gaps, overlaps and same-date groups, `article_history` across
   textless states and holes, and the speech roles (the Compare card's same-version note, `reading.validityConflict`, the
   exports' and the PDF's "applying from", the History table's column, `search.dated` and the dossier's state span still say a
