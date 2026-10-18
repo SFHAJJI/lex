@@ -146,7 +146,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Recherche',
     eyebrow: 'Recherche',
     heading: 'Rechercher dans le texte détenu',
-    intro: 'Trouve les articles dont le texte contient l’expression exactement telle que saisie, ou chacun de ses mots, dans le texte que ce serveur détient et qu’il est autorisé à interroger : un texte que ses droits ne permettent pas de communiquer n’entre pas dans la recherche. L’expression est envoyée à ce serveur dans la requête et nulle part ailleurs, et cette page ne conserve rien.',
+    intro: 'Trouve les actes dont l’intitulé correspond à l’expression, et les articles dont le texte la contient exactement telle que saisie, dans le texte que ce serveur détient et qu’il est autorisé à interroger : un texte que ses droits ne permettent pas de communiquer n’entre pas dans la recherche. L’expression est envoyée à ce serveur dans la requête et nulle part ailleurs, et cette page ne conserve rien.',
     idle: 'Saisissez une expression pour rechercher dans le texte des articles que ce serveur détient et qu’il est autorisé à interroger.',
     population: Object.freeze({
       one: '« {query} » en {language} : {strict} avec l’expression exacte, {relaxed} avec chacun des mots, dans {works} acte.',
@@ -154,14 +154,21 @@ export const LIVE_CHROME_FR = Object.freeze({
     }),
     notCounted: 'non compté',
     lane: Object.freeze({ strict: 'expression exacte', relaxed: 'chacun des mots' }),
-    namesWork: 'L’expression désigne l’acte « {title} » ({identifier}).',
-    severalWorks: 'L’expression correspond aux intitulés de plusieurs actes :',
-    candidate: '« {title} » ({identifier})',
+    titleExact: 'L’expression est l’intitulé de {title}.',
+    titleStarts: 'L’expression est le début de l’intitulé de {title}.',
+    titleWords: 'Chacun des mots de l’expression figure dans l’intitulé de {title}.',
+    severalTitles: Object.freeze({
+      one: 'L’expression correspond à l’intitulé de {count} acte :',
+      other: 'L’expression correspond aux intitulés de {count} actes :',
+    }),
+    moreTitles: Object.freeze({
+      one: '{count} autre acte',
+      other: '{count} autres actes',
+    }),
     noTitlesHeld: 'Cet index ne contient aucun intitulé d’acte ; l’expression a donc été recherchée dans le seul texte des articles.',
     ambiguousHeading: 'Actes ayant plusieurs versions au {date}',
     ambiguousNote: 'Ces actes ont plus d’une version applicable à cette date ; aucune n’est donc retenue et aucune ne fournit de résultat.',
     ambiguousWork: '{work} : {candidates}',
-    hit: '{article} dans {work}, version du {date}',
     noHit: 'Aucun article du texte que ce serveur détient et qu’il est autorisé à interroger ne contient « {query} ».',
     noText: 'Cet index ne contient aucun texte interrogeable en {language} ; il contient du texte en {languages}.',
     nextPage: 'Page suivante',
@@ -187,6 +194,42 @@ export const LIVE_CHROME_FR = Object.freeze({
     titleNotHeld: 'Ce site ne détient aucun acte sous l’intitulé que cite l’expression ; ses mots ont donc été recherchés.',
     candidateNotHeld: '{act} (ce site n’en détient aucune version)',
     catalogueNamesIt: 'Les données de l’éditeur désignent cet acte ({works}), et ce site n’en détient aucune version.',
+    found: '« {query} » en {language} : {passages} avec l’expression exacte, dans {acts}.',
+    passages: Object.freeze({
+      one: '{count} passage',
+      other: '{count} passages',
+    }),
+    searched: 'Recherche effectuée dans {acts} du droit luxembourgeois en {language}, en {versions} comptant {articles} au texte interrogeable, d’après l’index construit le {date}.',
+    searchedUndated: 'Recherche effectuée dans {acts} du droit luxembourgeois en {language}, en {versions} comptant {articles} au texte interrogeable ; l’index que ce site détient ne consigne aucune date de construction.',
+    withheld: Object.freeze({
+      one: '{count} version dont les droits ne permettent pas de communiquer le texte n’a pas été interrogée.',
+      other: '{count} versions dont les droits ne permettent pas de communiquer le texte n’ont pas été interrogées.',
+    }),
+    severalOnDate: Object.freeze({
+      one: '{count} acte ayant plusieurs versions à cette date n’a pas été interrogé, aucune n’étant retenue.',
+      other: '{count} actes ayant plusieurs versions à cette date n’ont pas été interrogés, aucune n’étant retenue.',
+    }),
+    untitled: '{work} (cet index ne contient aucun intitulé pour cet acte)',
+    actPassages: Object.freeze({
+      one: '{count} passage dans cet acte',
+      other: '{count} passages dans cet acte',
+    }),
+    version: 'Version applicable à partir du {date} (éditeur)',
+    versionAsPublished: 'L’acte tel que publié, applicable à partir du {date} (éditeur)',
+    searchesRun: 'Ce qui a été recherché',
+    runReference: 'Références exactes : l’expression n’est aucune des références que ce site sait lire (un ELI, un numéro CELEX, une référence au Mémorial, un permalien ou une citation).',
+    runReferenceNotRun: 'Références exactes : non lues, un acte ayant été désigné.',
+    runTitles: 'Intitulés : aucun intitulé d’un acte que ce site détient ne correspond à l’expression.',
+    runTitlesMatched: 'Intitulés : l’expression correspond aux intitulés indiqués ci-dessus.',
+    runTitlesNotRun: 'Intitulés : non recherchés, un acte ayant été désigné.',
+    runText: 'Texte : aucun article ne contient l’expression exactement telle que saisie.',
+    runTextWords: 'Texte, chacun des mots dans un ordre quelconque : aucun article ne les contient tous.',
+    exactOnly: 'Seule la correspondance exacte a été appliquée : les majuscules, les accents et chacun des autres caractères de l’expression comptent, et rien n’est ramené à une forme commune, réduit à son radical ni étendu. Une recherche moins stricte reste désactivée tant que sa propre vérification n’est pas réussie.',
+    officialSearch: 'Les pages de recherche des éditeurs :',
+    officialSites: Object.freeze({
+      legilux: 'Recherche sur Legilux, pour le droit luxembourgeois',
+      eurlex: 'Recherche sur EUR-Lex, pour le droit de l’UE',
+    }),
   }),
   dossier: Object.freeze({
     title: 'Dossier',
@@ -848,10 +891,10 @@ export const REFUSALS_FR = Object.freeze({
       'Ce site détient l’acte que la référence désigne et la version que la date retient, mais aucun article de cette version ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
     'This site holds the act the reference names and the wording selected, but no article of that wording, so nothing was opened and no word was searched.':
       'Ce site détient l’acte que la référence désigne et le libellé retenu, mais aucun article de ce libellé ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
-    'The wording the date selects holds no article with that number, and no other article is opened in its place.':
-      'Le libellé que la date retient ne comporte aucun article de ce numéro, et aucun autre article n’est ouvert à sa place.',
-    'The version the date selects holds no article with that number, and no other article is opened in its place.':
-      'La version que la date retient ne comporte aucun article de ce numéro, et aucun autre article n’est ouvert à sa place.',
+    'This site holds no article with that number in the wording the date selects, and no other article is opened in its place.':
+      'Ce site ne détient aucun article de ce numéro dans le libellé que la date retient, et aucun autre article n’est ouvert à sa place.',
+    'This site holds no article with that number in the version the date selects, and no other article is opened in its place.':
+      'Ce site ne détient aucun article de ce numéro dans la version que la date retient, et aucun autre article n’est ouvert à sa place.',
     'This server holds this EU act in one wording only, and answers no date for it: leave the date out of the reference.':
       'Ce serveur ne détient cet acte de l’UE que dans un seul libellé, et ne répond à aucune date pour celui-ci : retirez la date de la référence.',
     'This index holds no article with that id in this version.':

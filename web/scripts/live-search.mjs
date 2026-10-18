@@ -29,6 +29,11 @@
 // said with the phase's own sentences (`LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES`, or for an EU act, as the refusal's
 // context names its publisher, `LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES`), so the page says what it read. A
 // reference that may name several acts lists each (`candidates`), linked when this site holds it, and opens none.
+//
+// Only exact matching runs (the plan's item 4.5; the specification of record's R90): the platform's relaxed lane (every
+// word of the phrase, in any order) serves the public only once its own check has passed, so every search from this
+// page asks the strict lane alone (`mode: "strict"`, `SEARCH_MODE`), and the no-hit card says that only exact matching ran.
+// The platform still serves the relaxed lane to a caller who asks for it, and says so in every answer.
 
 import { askV3 } from "./v3-client.mjs";
 import { readReferenceCandidates, readRefusalRecognition, readSearchAnswer } from "./search-answer.mjs";
@@ -38,6 +43,12 @@ import { noCorpusMountedSentence, tableRefusalSentence, unshownRefusal } from ".
 import { CHROME_LOCALE, englishStatement, fillText, liveChrome, refusalTemplate } from "./live-chrome.mjs";
 import { permalinkHref } from "./permalinks.mjs";
 import { isCalendarDate, luxembourgDate } from "./temporal.mjs";
+
+/**
+ * The one lane this page asks for: the phrase exactly as typed. The relaxed lane stays off until its check passes (R90), and
+ * the page says so where a search finds nothing.
+ */
+export const SEARCH_MODE = "strict";
 
 /** The ceiling on a query's characters, the platform's own (`SearchMaxQueryCharacters`). */
 export const SEARCH_QUERY_MAX = 512;
@@ -96,7 +107,9 @@ export const LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES = Object.freeze({
   // Not "several": words after a type and date that name none of the day's acts list them, however many (the French
   // review of #974's repair).
   ambiguous_identifier: "The reference does not name a single act or article for certain, and none is chosen.",
-  anchor_not_in_version: "The version the date selects holds no article with that number, and no other article is opened in its place.",
+  // Said of what this site holds, never of the version (the French review of #978, its point 3: the index may lack an article
+  // the version has).
+  anchor_not_in_version: "This site holds no article with that number in the version the date selects, and no other article is opened in its place.",
   language_not_available: "This work is not held in the language asked for.",
   no_version_for_date: LIVE_SEARCH_REFUSAL_SENTENCES.no_version_for_date,
   ambiguous_version: LIVE_SEARCH_REFUSAL_SENTENCES.ambiguous_version,
@@ -111,7 +124,7 @@ export const LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES = Object.freeze({
 export const LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES = Object.freeze({
   identifier_unknown: LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES.identifier_unknown,
   ambiguous_identifier: LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES.ambiguous_identifier,
-  anchor_not_in_version: "The wording the date selects holds no article with that number, and no other article is opened in its place.",
+  anchor_not_in_version: "This site holds no article with that number in the wording the date selects, and no other article is opened in its place.",
   language_not_available: LIVE_READING_EUROPE_REFUSAL_SENTENCES.language_not_available,
   no_version_for_date: LIVE_READING_EUROPE_REFUSAL_SENTENCES.no_version_for_date,
   ambiguous_version: LIVE_READING_EUROPE_REFUSAL_SENTENCES.ambiguous_version,
@@ -209,10 +222,51 @@ export function todayInLuxembourg(now = Date.now()) {
 }
 
 /**
+ * The date in Luxembourg of an index's build time (`searched.index_built_at`), as the home page's coverage line dates its
+ * index (R11: "as of the index built on {date}"); null for no build time, or one the coded rule does not read.
+ */
+export function builtOnOf(instant) {
+  if (typeof instant !== "string") return null;
+  try {
+    return luxembourgDate(instant);
+  } catch {
+    return null;
+  }
+}
+
+/** A text language's name in the interface's language (French, German, English), or its code for one the table does not name. */
+export function languageName(code, locale = CHROME_LOCALE) {
+  return liveChrome(locale).common.languageNames[code] ?? code;
+}
+
+/** How many of the titles a search matches are shown before the rest are one step away (the plan's item 4.3). */
+export const TITLES_SHOWN = 10;
+
+/**
+ * A Luxembourg search view's hits by act (the plan's item 4.3): each act of the page in the answer's order (`view.acts`),
+ * with its hits in the page's order, cut into runs of one version each (the platform orders a version's hits together, by
+ * the publisher's article ids), so each version's date is said once above its passages.
+ */
+export function actGroups(view) {
+  return view.acts.map((act) => {
+    const versions = [];
+    for (const hit of view.hits.filter((candidate) => candidate.workKey === act.workKey)) {
+      const last = versions.at(-1);
+      if (last !== undefined && last.stateSha256 === hit.stateSha256) {
+        last.hits.push(hit);
+      } else {
+        versions.push({ stateSha256: hit.stateSha256, applicabilityDate: hit.applicabilityDate, hits: [hit] });
+      }
+    }
+    return Object.freeze({ act, versions: Object.freeze(versions.map((version) => Object.freeze({ ...version, hits: Object.freeze(version.hits) }))) });
+  });
+}
+
+/**
  * The request parameters for one search, checked before anything is sent: a query that is not
  * blank and within the platform's two ceilings (characters and distinct terms), a language the form
- * offers, a work identifier only when the reader named one (a blank one is no identifier), a date
- * only when the field holds one, which must then be a calendar date written yyyy-mm-dd (a blank one
+ * offers, the strict lane (`SEARCH_MODE`), a work identifier only when the reader named one (a blank one is no
+ * identifier), a date only when the field holds one, which must then be a calendar date written yyyy-mm-dd (a blank one
  * is no date), and a cursor only when a later page is asked for. Nothing else is sent.
  */
 export function searchParameters({ query, language, identifier = "", date = "", after = null }) {
@@ -245,6 +299,7 @@ export function searchParameters({ query, language, identifier = "", date = "", 
   return {
     query,
     language,
+    mode: SEARCH_MODE,
     ...(identifier.trim().length === 0 ? {} : { identifier }),
     ...(dated ? { date } : {}),
     ...(after === null ? {} : { after }),

@@ -75,12 +75,13 @@ const NUMERIC_NOT_ISO = /\b\d{1,2}[./]\d{1,2}[./]\d{2,4}\b/;
 const ISO = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
 
 /**
- * A render without the publisher's own words: its quotations and whatever is marked in its statute
- * language. Those are the law's text, whose dates are the law's to write; the rule is about the dates
- * the interface states.
+ * A render without the publisher's own words: its quotations (an article quoted whole, and a search result's extract, the
+ * plan's item 4.3) and whatever is marked in its statute language. Those are the law's text, whose dates are the law's to
+ * write; the rule is about the dates the interface states.
  */
 const withoutQuotations = (markup) => markup
   .replace(/<blockquote[\s\S]*?<\/blockquote>/g, "")
+  .replace(/<q(?:\s[^>]*)?>[\s\S]*?<\/q>/g, "")
   .replace(/<span lang="[^"]*">[\s\S]*?<\/span>/g, "");
 
 test("every date a live screen shows is an explicit calendar date, never relative and never a local format", async () => {

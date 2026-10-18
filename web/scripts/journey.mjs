@@ -105,8 +105,17 @@ const SITE_ORIGIN = `https://${CANONICAL_HOST}`;
 
 export const ANSWER_DEADLINE_MS = 30_000;
 
-/** The phrase the search step types: on the fixture mount, 4 strict hits and 1 relaxed. */
+/** The phrase the search step types: on the fixture mount, 4 strict hits (and 1 relaxed, which the pages do not ask). */
 export const SEARCH_PHRASE = "assemblée générale";
+
+/**
+ * What the fixture mount's search says, as the English pages say it (the plan's item 4.3): the passages found by the exact
+ * phrase alone, the population searched (its one act, version and 49 articles), the version under the act, as published,
+ * dated as the publisher dates it, and a passage of art_15.
+ */
+export const SEARCH_FOUND_SAID = `“${SEARCH_PHRASE}” in French: 4 passages with the exact phrase, in 1 act.`;
+export const SEARCH_SEARCHED_SAID = "Searched: 1 act of Luxembourg law in French, in 1 version with 49 articles of searchable text, as of the index built on";
+export const SEARCH_VERSION_SAID = "The act as published, applicable from 2024-02-01 (publisher)";
 
 /**
  * The date a home page's search sends, in a step's body: today, the calendar date in Luxembourg when the page asked
@@ -198,14 +207,14 @@ export function journeyStepsFor({ identifier, date, anchor, language = READING_L
     frontDoor: true,
     operation: "search",
     typed: SEARCH_PHRASE,
-    body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: SEARCH_PHRASE, language: "fra", date: TODAY_IN_LUXEMBOURG }) }),
+    body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: SEARCH_PHRASE, language: "fra", mode: "strict", date: TODAY_IN_LUXEMBOURG }) }),
   }),
   search: Object.freeze({
     path: "/en/search.html",
     cites: true,
     operation: "search",
     typed: SEARCH_PHRASE,
-    body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: SEARCH_PHRASE, language: "fra" }) }),
+    body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: SEARCH_PHRASE, language: "fra", mode: "strict" }) }),
   }),
   dossier: Object.freeze({
     path: "/en/dossier.html",
@@ -375,7 +384,7 @@ export const EU_SEARCH_STEP = Object.freeze({
   chosen: EU_SEARCH_LANGUAGE,
   body: Object.freeze({
     operation_id: "search",
-    parameters: Object.freeze({ query: EU_SEARCH_PHRASE, language: EU_SEARCH_LANGUAGE.value, identifier: EU_SEARCH_IDENTIFIER }),
+    parameters: Object.freeze({ query: EU_SEARCH_PHRASE, language: EU_SEARCH_LANGUAGE.value, mode: "strict", identifier: EU_SEARCH_IDENTIFIER }),
   }),
 });
 
@@ -1704,7 +1713,7 @@ export const RETRIED_SEARCH_STEP = Object.freeze({ ...JOURNEY_STEPS.search, retr
  * the failure panel; and the search with no mount, its failure panel's retry pressed once.
  */
 export function failurePageExpectations() {
-  const searchTexts = [`“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work.`, "art_15 in", "The first hits in the stated order, not the best hits."];
+  const searchTexts = [SEARCH_FOUND_SAID, SEARCH_SEARCHED_SAID, SEARCH_VERSION_SAID, "art_15", "The first hits in the stated order, not the best hits."];
   return [
     ["not found, with the fixture mount", { step: NOT_FOUND_STEP, state: "success", texts: [NOT_FOUND_SAID, ...searchTexts] }, true],
     ["not found, with no mount", { step: NOT_FOUND_STEP, state: "refusal", refusalCode: "no_corpus_mounted", texts: [NOT_FOUND_SAID, FAILURE_LINE] }, false],
@@ -1718,7 +1727,7 @@ export function failurePageExpectations() {
  */
 export function fixtureMountExpectations(journeyMount) {
   const { coverage, home, search, dossier, reading, history, compare, radar, export: exporting, address, permalink, stale, current } = JOURNEY_STEPS;
-  const searchTexts = [`“${SEARCH_PHRASE}” in fra: 4 with the exact phrase, 1 with every word, in 1 work.`, "art_15 in", "The first hits in the stated order, not the best hits.", NOT_ADVICE_SAID];
+  const searchTexts = [SEARCH_FOUND_SAID, SEARCH_SEARCHED_SAID, SEARCH_VERSION_SAID, "art_15", "The first hits in the stated order, not the best hits.", NOT_ADVICE_SAID];
   // The home page's search is dated today, which the fixture's one state (2024-02-01) applies on; its coverage line counts the
   // fixture's one work, one state and 49 articles.
   const homeTexts = [
@@ -1795,7 +1804,7 @@ export const NO_HIT_SEARCH_STEP = Object.freeze({
   cites: true,
   operation: "search",
   typed: NO_HIT_PHRASE,
-  body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: NO_HIT_PHRASE, language: "fra" }) }),
+  body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: NO_HIT_PHRASE, language: "fra", mode: "strict" }) }),
 });
 
 /** Journey J5: a law the corpus does not hold, asked for by its name. */
@@ -1822,7 +1831,9 @@ export function specificationJourneyExpectations() {
   const absence = ABSENCE_NOTE;
   return [
     ["J1, a date before the history", { step: EARLY_READING_STEP, state: "refusal", refusalCode: "no_version_for_date", texts: [NO_EARLIER_STATE, "2024-02-01"] }],
-    ["J2, a question no article carries", { step: NO_HIT_SEARCH_STEP, state: "success", nothingToCite: true, texts: ["0 with the exact phrase, 0 with every word, in 0 works.", absence] }],
+    // The plain no-hit card (the plan's item 4.5): what was searched, that only exact matching ran, the population searched and
+    // the publishers' own search pages, above the absence note.
+    ["J2, a question no article carries", { step: NO_HIT_SEARCH_STEP, state: "success", nothingToCite: true, texts: ["0 passages with the exact phrase, in 0 acts.", "What was searched", "Text: no article contains the phrase exactly as typed.", "Only exact matching ran:", SEARCH_SEARCHED_SAID, "Legilux search, for Luxembourg law", "EUR-Lex search, for EU law", absence] }],
     ["J5, a law not held", { step: UNKNOWN_LAW_STEP, state: "refusal", refusalCode: "identifier_unknown", texts: ["This build's Luxembourg index holds 1 Luxembourg work, with states dated from 2024-02-01 to 2024-02-01.", absence] }],
   ];
 }

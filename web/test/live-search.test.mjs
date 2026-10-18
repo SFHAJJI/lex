@@ -2,9 +2,10 @@
 //
 // The screen asks `search` through the client module when the reader submits, and shows one state.
 // These tests drive it with an injected fetch that answers the census envelopes
-// (`schemas/v3-platform/envelope-samples.json`: a search answer with hits in both lanes, a
+// (`schemas/v3-platform/envelope-samples.json`: a search answer in the strict lane alone, as the page asks it, with its
+// passages by act, and one with no hit; an answer with hits in both lanes, as an API caller may ask it; a
 // `language_not_available` refusal and a `no_corpus_mounted` refusal; and, for an EU work named by
-// its CELEX, an answer whose hits carry the pinned wording's permalink, a language the work is not
+// its CELEX, an answer whose hits carry the pinned wording's permalink, one with no hit, a language the work is not
 // held in and an identifier the EU index does not hold), so every state is the one a real server
 // response produces, and the server render is the idle form a browser hydrates.
 
@@ -17,6 +18,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { FailureFrame, LiveSearch, RefusalCard, SearchAnswerView, SearchResultsView, renderLiveSearchPage } from "../.react-build/app.mjs";
 import {
   LIVE_SEARCH_IDLE,
+  builtOnOf,
   LIVE_SEARCH_REFUSAL_SENTENCES,
   SEARCH_QUERY_MAX,
   SEARCH_TERMS_MAX,
@@ -28,6 +30,8 @@ import {
   startLiveSearch,
 } from "../scripts/live-search.mjs";
 import { REFUSAL_EXAMPLES } from "../scripts/refusal-catalog.mjs";
+import { OFFICIAL_SEARCH_PAGES } from "../scripts/live-failure.mjs";
+import { publisherSourceUri } from "../scripts/routes.mjs";
 
 /** A refusal's card as the screen shows it: one about this service (R60) inside the failure panel, under its line; any other alone. */
 const asShown = (outcome, card) => renderToStaticMarkup(h(FailureFrame, { outcome }, h("lex-card"))).replace("<lex-card></lex-card>", card);
@@ -39,10 +43,16 @@ const envelopeOf = (scenarioStart) => {
   assert.ok(entry, `the census holds the search envelope "${scenarioStart}..."`);
   return entry.envelope;
 };
-const ANSWER = "a phrase the held text carries";
+// The answers as the page asks them (the strict lane alone, the plan's item 4.5), and one in both lanes, as an API caller may ask.
+const ANSWER = "the phrase as the site asks it";
+const BOTH_LANES = "a phrase the held text carries";
+const NO_HIT = "a word no held article carries";
 const REQUEST = { query: "assemblée générale", language: "fra" };
-const EU_ANSWER = "one EU work by its CELEX";
+const ASKED = { ...REQUEST, mode: "strict" };
+const EU_ANSWER = "the EU work as the site asks it";
+const EU_NO_HIT = "a word the EU work's wording does not carry";
 const EU_REQUEST = { query: "joint controllers", language: "eng", identifier: "32016R0679" };
+const EU_ASKED = { query: "joint controllers", language: "eng", mode: "strict", identifier: "32016R0679" };
 
 function answering(status, contentType, body) {
   const calls = [];
@@ -77,15 +87,18 @@ test("the server renders the form in its idle state, and asks nothing", () => {
   assert.ok(form.includes("Work identifier (optional)"), "the form offers to search within one work, which is how an EU work is searched");
 });
 
-test("the request carries the phrase as typed, the language and the work if one is named, and nothing else", () => {
-  assert.deepEqual(searchParameters(REQUEST), REQUEST);
-  assert.deepEqual(searchParameters(EU_REQUEST), EU_REQUEST, "a named work is sent");
-  assert.deepEqual(searchParameters({ ...REQUEST, identifier: "" }), REQUEST, "an empty work field sends no identifier");
-  assert.deepEqual(searchParameters({ ...REQUEST, identifier: "  " }), REQUEST, "nor does a blank one");
-  assert.deepEqual(searchParameters({ ...EU_REQUEST, identifier: " 32016R0679" }), { ...EU_REQUEST, identifier: " 32016R0679" }, "an identifier is sent as typed, as the dossier screen sends it");
-  assert.deepEqual(searchParameters({ ...EU_REQUEST, after: "strict.a" }), { ...EU_REQUEST, after: "strict.a" });
-  assert.deepEqual(searchParameters({ ...REQUEST, query: "  Loyer " }), { query: "  Loyer ", language: "fra" }, "never trimmed or folded: the platform matches bytes");
-  assert.deepEqual(searchParameters({ ...REQUEST, after: "strict.a.b" }), { ...REQUEST, after: "strict.a.b" });
+test("the request carries the phrase as typed, the language, the strict lane and the work if one is named, and nothing else", () => {
+  assert.deepEqual(searchParameters(REQUEST), ASKED);
+  assert.deepEqual(Object.keys(searchParameters(EU_REQUEST)), ["query", "language", "mode", "identifier"], "in the order a journey's body is held to");
+  assert.deepEqual(searchParameters(EU_REQUEST), EU_ASKED, "a named work is sent");
+  assert.deepEqual(searchParameters({ ...REQUEST, identifier: "" }), ASKED, "an empty work field sends no identifier");
+  assert.deepEqual(searchParameters({ ...REQUEST, identifier: "  " }), ASKED, "nor does a blank one");
+  assert.deepEqual(searchParameters({ ...EU_REQUEST, identifier: " 32016R0679" }), { ...EU_ASKED, identifier: " 32016R0679" }, "an identifier is sent as typed, as the dossier screen sends it");
+  assert.deepEqual(searchParameters({ ...EU_REQUEST, after: "strict.a" }), { ...EU_ASKED, after: "strict.a" });
+  assert.deepEqual(searchParameters({ ...REQUEST, query: "  Loyer " }), { query: "  Loyer ", language: "fra", mode: "strict" }, "never trimmed or folded: the platform matches bytes");
+  assert.deepEqual(searchParameters({ ...REQUEST, after: "strict.a.b" }), { ...ASKED, after: "strict.a.b" });
+  // Only exact matching runs until the relaxed lane's own check passes (R90): no request from this page asks for it.
+  assert.equal(searchParameters({ ...REQUEST, mode: "relaxed" }).mode, "strict");
   const words = (count) => Array.from({ length: count }, (_, index) => `w${index}`).join(" ");
   assert.equal(searchParameters({ ...REQUEST, query: words(SEARCH_TERMS_MAX) }).query, words(SEARCH_TERMS_MAX));
   assert.ok(searchParameters({ ...REQUEST, query: `${words(SEARCH_TERMS_MAX)} w0` }), "a repeated word is one term, as the platform counts it");
@@ -105,31 +118,137 @@ test("the request carries the phrase as typed, the language and the work if one 
   assert.equal(searchParameters({ ...REQUEST, query: "x".repeat(SEARCH_QUERY_MAX) }).query.length, SEARCH_QUERY_MAX);
 });
 
-test("a served search answer is the results, read by the search reader", async () => {
+test("a served search answer is the results by act, read by the search reader", async () => {
   const envelope = envelopeOf(ANSWER);
+  const value = envelope.result.value;
   const { calls, fetchImpl } = answering(200, "application/json; charset=utf-8", envelope);
   const outcome = await loadLiveSearch({ contract, fetchImpl, request: REQUEST });
   assert.equal(outcome.state, "success");
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "/api/v3/search");
-  assert.deepEqual(JSON.parse(calls[0].init.body), { operation_id: "search", parameters: REQUEST }, "the body is the operation and the two parameters");
+  assert.deepEqual(JSON.parse(calls[0].init.body), { operation_id: "search", parameters: ASKED }, "the body is the operation, the two parameters and the strict lane");
 
   const markup = view(outcome);
   assert.match(markup, /^<section data-answer-state="success">/);
   const shown = text(markup);
-  for (const hit of envelope.result.value.hits) {
-    assert.ok(markup.includes(`<a href="/en${hit.resolve.identifier}/${hit.publisher_id}">`), `${hit.publisher_id} links to its reading at the article, by its permalink (R64: the article a segment of it)`);
-    assert.ok(shown.includes(`${hit.publisher_id} in ${hit.work_key}, version of ${hit.applicability_date}`));
+  for (const hit of value.hits) {
+    assert.ok(markup.includes(`<a href="/en${hit.resolve.identifier}/${hit.publisher_id}"><strong>${hit.publisher_id}</strong></a>`), `${hit.publisher_id} links to its reading at the article, by its permalink (R64: the article a segment of it)`);
+    // The extract, word for word, each whole match marked (R59).
+    const quoted = hit.extract.parts.map((part) => (part.matched ? `<mark>${part.text}</mark>` : part.text)).join("");
+    assert.ok(markup.includes(`<q lang="fr">${quoted}</q>`), `${hit.publisher_id}'s extract is quoted as the answer cuts it`);
   }
   for (const row of markup.match(/<li data-lane="[^"]*">.*?<\/li>/g)) {
     assert.doesNotMatch(text(row), /[0-9a-f]{64}/, "a hit row prints no digest (UX spec section 2): its link carries the pin");
   }
-  assert.equal((markup.match(/data-lane="strict"/g) ?? []).length, 4);
-  assert.equal((markup.match(/data-lane="relaxed"/g) ?? []).length, 1);
+  assert.equal((markup.match(/data-lane="strict"/g) ?? []).length, value.hits.length);
+  assert.equal((markup.match(/data-lane="relaxed"/g) ?? []).length, 0);
+  assert.equal((markup.match(/<mark>assemblée générale<\/mark>/g) ?? []).length, value.hits.flatMap((hit) => hit.extract.parts.filter((part) => part.matched)).length);
+  assert.doesNotMatch(markup, /class="badge"/, "a strict passage carries no lane badge: every passage is the exact phrase");
+
+  // The act once, its passages under its one version, dated in the publisher's words, said as held only as published (R21).
+  const [act] = value.acts;
+  assert.equal((markup.match(/<li data-act="/g) ?? []).length, 1);
+  assert.ok(markup.includes(`<a href="/en/lu-legilux/${act.work_key}">${act.work_key}</a>`), "an act with no title held is named by its work key, linked to its dossier");
+  assert.ok(shown.includes(`${act.work_key} (this index holds no title for this act)`));
+  assert.ok(shown.includes(`${value.hits.length} passages in this act`));
+  assert.ok(shown.includes("As published; may have been amended since; no consolidated text."));
+  assert.ok(shown.includes(`The act as published, applicable from ${value.hits[0].applicability_date} (publisher)`));
+  assert.doesNotMatch(shown, /version of/, "a version is dated as the publisher dates it, never by its date alone");
+
+  // What was found and what was searched, every count the answer's, dated by the index's build (R11).
+  assert.ok(shown.includes(`“assemblée générale” in French: ${value.hits.length} passages with the exact phrase, in 1 act.`));
+  const { searched } = value;
+  assert.ok(shown.includes(`Searched: ${searched.works} act of Luxembourg law in French, in ${searched.states} version with ${searched.articles_with_searchable_text} articles of searchable text, as of the index built on ${builtOnOf(searched.index_built_at)}.`), shown);
   assert.ok(shown.includes("The first hits in the stated order, not the best hits."), "the page says there is no ranker, where the hits are");
-  assert.ok(shown.includes("4 with the exact phrase, 1 with every word, in 1 work."));
   assert.ok(shown.includes("This index holds no work titles"), "the work resolution the answer gives is shown");
+  assert.doesNotMatch(markup, /data-no-hit-card/, "a search with passages shows no no-hit card");
   assert.doesNotMatch(markup, /Next page/, "a whole page offers no next page");
+});
+
+test("an answer in both lanes, as an API caller may ask it, still says each lane's count, and marks a relaxed passage", () => {
+  const outcome = searchOutcome({ state: "success", envelope: envelopeOf(BOTH_LANES) });
+  assert.equal(outcome.state, "success");
+  const markup = view(outcome);
+  const shown = text(markup);
+  assert.ok(shown.includes("4 with the exact phrase, 1 with every word, in 1 work."));
+  assert.equal((markup.match(/data-lane="relaxed"/g) ?? []).length, 1);
+  assert.match(markup, /<span class="badge">every word<\/span>/, "a relaxed passage says its lane");
+});
+
+test("a search with no hit is the plain no-hit card: what ran, that only exact matching ran, the population, and the publishers' search pages", () => {
+  const value = envelopeOf(NO_HIT).result.value;
+  const outcome = searchOutcome({ state: "success", envelope: envelopeOf(NO_HIT) });
+  assert.equal(outcome.state, "success");
+  const markup = view(outcome);
+  const shown = text(markup);
+  assert.match(markup, /<section class="no-hit-card" data-no-hit-card="">/);
+  assert.ok(shown.includes("No article of the Luxembourg text this server holds and may search contains “zéphyr”."));
+  assert.ok(shown.includes("What was searched"));
+  assert.ok(shown.includes("Exact references: the phrase is no reference this site reads (an ELI, a CELEX number, a Mémorial reference, a permalink or a citation)."));
+  assert.ok(shown.includes("This index holds no work titles, so the phrase was matched against article text only."), "the titles line is the work resolution's own");
+  assert.ok(shown.includes("Text: no article contains the phrase exactly as typed."));
+  assert.doesNotMatch(markup, /data-search-run="every-word"/, "the relaxed lane was not run, so it is not said to have found nothing");
+  assert.ok(shown.includes("Only exact matching ran: capitals, accents and every other character of the phrase count, and nothing is folded, stemmed or expanded. A looser search stays off until its own check has passed."));
+  assert.ok(shown.includes(`Searched: ${value.searched.works} act of Luxembourg law in French`));
+  for (const page of OFFICIAL_SEARCH_PAGES) {
+    assert.ok(markup.includes(`<a href="${page.uri}" rel="external" data-publisher="${page.publisher}">`), page.key);
+  }
+  assert.ok(shown.includes("Legilux search, for Luxembourg law") && shown.includes("EUR-Lex search, for EU law"));
+  assert.ok(shown.includes("It is not evidence that the instrument or the law does not exist."), "the absence note (journey J2)");
+  assert.ok(shown.includes("0 passages with the exact phrase, in 0 acts."));
+});
+
+test("an EU work's no-hit card says the reference and the titles were not run, and counts no Luxembourg population", () => {
+  const outcome = searchOutcome({ state: "success", envelope: envelopeOf(EU_NO_HIT) });
+  assert.equal(outcome.state, "success", outcome.sentence);
+  const markup = view(outcome);
+  const shown = text(markup);
+  assert.ok(shown.includes("Exact references: not read, since a work was named."));
+  assert.ok(shown.includes("Titles: not searched, since a work was named."));
+  assert.ok(shown.includes("Text: no article contains the phrase exactly as typed."));
+  assert.ok(shown.includes("Only exact matching ran:"));
+  assert.doesNotMatch(markup, /data-searched=/, "an EU search counts no Luxembourg population");
+  assert.doesNotMatch(shown, /Searched:/);
+  assert.ok(markup.includes(OFFICIAL_SEARCH_PAGES[1].uri));
+});
+
+test("the publishers' search pages are the contracts' addresses, each on its publisher's own host, and links only", () => {
+  assert.deepEqual(OFFICIAL_SEARCH_PAGES.map((page) => page.uri), ["https://legilux.public.lu/search", "https://eur-lex.europa.eu/advanced-search-form.html"]);
+  for (const page of OFFICIAL_SEARCH_PAGES) assert.equal(publisherSourceUri({ publisher: page.publisher, uri: page.uri }), page.uri);
+});
+
+test("the act a title names is on top, linked; several acts' titles are counted, the first ten shown and the rest one step away", () => {
+  const card = (index, reason = "exact_normalized_title") => ({
+    work_identifier: `http://data.legilux.public.lu/eli/etat/leg/loi/2011/11/12/n${index}/jo/fr`,
+    work_key: `loi-2011-11-12-n${index}`,
+    expressions: [`http://data.legilux.public.lu/eli/etat/leg/loi/2011/11/12/n${index}/jo/fr`],
+    languages: ["fra"],
+    matched_title: `Loi du 12 novembre 2011 numéro ${index}.`,
+    matched_title_language: "fra",
+    match_reason: reason,
+  });
+  const resolved = (resolution) => {
+    const envelope = structuredClone(envelopeOf(ANSWER));
+    envelope.result.value.work_resolution = { retrieval_lane: "r1_work_discovery", candidates: null, work: null, ...resolution };
+    const outcome = searchOutcome({ state: "success", envelope });
+    assert.equal(outcome.state, "success", outcome.sentence);
+    return view(outcome);
+  };
+  for (const [reason, said] of [["exact_normalized_title", "The phrase is the title of"], ["prefix", "The phrase begins the title of"], ["all_tokens_contained", "Every word of the phrase is in the title of"]]) {
+    const markup = resolved({ outcome: "one_work", work: card(1, reason) });
+    assert.ok(markup.includes(`${said} <a href="/en/lu-legilux/loi-2011-11-12-n1"><span lang="fr">Loi du 12 novembre 2011 numéro 1.</span></a>.`), reason);
+    assert.ok(markup.indexOf("data-work-resolution") < markup.indexOf("data-population"), "the act a title names comes first, above what the text search found");
+  }
+  const unlinked = resolved({ outcome: "one_work", work: { ...card(1), work_key: null } });
+  assert.ok(unlinked.includes('The phrase is the title of <span lang="fr">Loi du 12 novembre 2011 numéro 1.</span>.'), "a card naming no held work is said without a link");
+
+  const twelve = resolved({ outcome: "several_candidates", candidates: Array.from({ length: 12 }, (_, index) => card(index + 1, "prefix")) });
+  assert.ok(text(twelve).includes("The phrase matches the titles of 12 acts:"));
+  const shownList = twelve.slice(twelve.indexOf("data-candidates"), twelve.indexOf("<details"));
+  assert.equal((shownList.match(/<li>/g) ?? []).length, 10, "the first ten are shown");
+  assert.match(twelve, /<details data-more-titles="2"><summary>2 more acts<\/summary><ul>(<li>.*?<\/li>){2}<\/ul><\/details>/, "the rest are one step away");
+  const two = resolved({ outcome: "several_candidates", candidates: [card(1), card(2)] });
+  assert.doesNotMatch(two, /<details/, "two titles are both shown");
 });
 
 test("an EU work's search is the EU results: the pinned wording once, each hit's heading, CELEX and wording date, its permalink, and what is not covered", async () => {
@@ -139,7 +258,7 @@ test("an EU work's search is the EU results: the pinned wording once, each hit's
   const outcome = await loadLiveSearch({ contract, fetchImpl, request: EU_REQUEST });
   assert.equal(outcome.state, "success", outcome.sentence);
   assert.equal(outcome.view.publisher, "eu-eurlex");
-  assert.deepEqual(JSON.parse(calls[0].init.body), { operation_id: "search", parameters: EU_REQUEST }, "the work is named in the request");
+  assert.deepEqual(JSON.parse(calls[0].init.body), { operation_id: "search", parameters: EU_ASKED }, "the work is named in the request, and the strict lane asked");
 
   const markup = view(outcome);
   const shown = text(markup);
@@ -157,8 +276,8 @@ test("an EU work's search is the EU results: the pinned wording once, each hit's
   }
   assert.doesNotMatch(shown, /version of/, "an EU wording is never called a version");
   assert.equal((markup.match(/data-lane="strict"/g) ?? []).length, 2);
-  assert.equal((markup.match(/data-lane="relaxed"/g) ?? []).length, 1);
-  assert.ok(shown.includes("2 with the exact phrase, 1 with every word, in 1 work."));
+  assert.equal((markup.match(/data-lane="relaxed"/g) ?? []).length, 0, "the page asks the strict lane alone");
+  assert.ok(shown.includes("“joint controllers” in English: 2 passages with the exact phrase, in 1 act."));
   assert.ok(shown.includes("What this search does not cover"));
   for (const row of value.not_held) assert.ok(shown.includes(`${row.item}: ${row.reason}`), row.item);
   assert.doesNotMatch(markup, /Next page/, "a whole page offers no next page");
@@ -208,7 +327,7 @@ test("a truncated page offers the next page with its own cursor, and a whole-res
 });
 
 test("an answer the search reader refuses is an invalid answer, said, never rendered", () => {
-  const envelope = structuredClone(envelopeOf(ANSWER));
+  const envelope = structuredClone(envelopeOf(BOTH_LANES));
   envelope.result.value.hits.reverse();
   const outcome = searchOutcome({ state: "success", envelope });
   assert.equal(outcome.state, "invalid_envelope");
@@ -294,7 +413,7 @@ test("a session asks when told, says a request it will not send, cancels the sea
   arrived = new Promise((resolve) => { done = resolve; });
   assert.equal(session.next("strict.cursor.last"), true);
   await arrived;
-  assert.deepEqual(JSON.parse(settled.calls[1].init.body).parameters, { ...REQUEST, after: "strict.cursor.last" }, "the next page repeats the search with the cursor");
+  assert.deepEqual(JSON.parse(settled.calls[1].init.body).parameters, { ...ASKED, after: "strict.cursor.last" }, "the next page repeats the search with the cursor");
 
   arrived = new Promise((resolve) => { done = resolve; });
   assert.equal(session.ask(EU_REQUEST), true);
@@ -302,7 +421,7 @@ test("a session asks when told, says a request it will not send, cancels the sea
   arrived = new Promise((resolve) => { done = resolve; });
   assert.equal(session.next("strict.article"), true);
   await arrived;
-  assert.deepEqual(JSON.parse(settled.calls[3].init.body).parameters, { ...EU_REQUEST, after: "strict.article" }, "the next page stays within the work named");
+  assert.deepEqual(JSON.parse(settled.calls[3].init.body).parameters, { ...EU_ASKED, after: "strict.article" }, "the next page stays within the work named");
 
   const aborted = [];
   const hanging = async (url, init) => new Promise((resolve, reject) => {

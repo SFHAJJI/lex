@@ -37,7 +37,9 @@ const EN = Object.freeze({
     title: "Search",
     eyebrow: "Search",
     heading: "Search the held text",
-    intro: "Finds the articles whose text contains the phrase exactly as typed, or every word of it, in the text this server holds and may search: text its rights withhold is not searched. The phrase goes to this server in the request and nowhere else, and this page keeps nothing.",
+    // Only exact matching runs (the plan's item 4.5, R90): the relaxed lane is off until its check passes, so the page no
+    // longer says it finds "every word of it".
+    intro: "Finds the acts whose title matches the phrase, and the articles whose text contains it exactly as typed, in the text this server holds and may search: text its rights withhold is not searched. The phrase goes to this server in the request and nowhere else, and this page keeps nothing.",
     idle: "Type a phrase to search the article text this server holds and may search.",
     population: Object.freeze({
       one: "“{query}” in {language}: {strict} with the exact phrase, {relaxed} with every word, in {works} work.",
@@ -45,14 +47,23 @@ const EN = Object.freeze({
     }),
     notCounted: "not counted",
     lane: Object.freeze({ strict: "exact phrase", relaxed: "every word" }),
-    namesWork: "The phrase names the work “{title}” ({identifier}).",
-    severalWorks: "The phrase matches the titles of several works:",
-    candidate: "“{title}” ({identifier})",
+    // The title ladder's answer, on top (the plan's item 4.3): the act whose title the phrase is, begins or holds every word
+    // of, linked to its dossier; several acts are counted and listed, the first few shown and the rest one step away.
+    titleExact: "The phrase is the title of {title}.",
+    titleStarts: "The phrase begins the title of {title}.",
+    titleWords: "Every word of the phrase is in the title of {title}.",
+    severalTitles: Object.freeze({
+      one: "The phrase matches the title of {count} act:",
+      other: "The phrase matches the titles of {count} acts:",
+    }),
+    moreTitles: Object.freeze({
+      one: "{count} more act",
+      other: "{count} more acts",
+    }),
     noTitlesHeld: "This index holds no work titles, so the phrase was matched against article text only.",
     ambiguousHeading: "Works with several versions on {date}",
     ambiguousNote: "These works have more than one version that applies on that date, so none is chosen and none contributes a hit.",
     ambiguousWork: "{work}: {candidates}",
-    hit: "{article} in {work}, version of {date}",
     noHit: "No article of the text this server holds and may search contains “{query}”.",
     noText: "This index holds no searchable text in {language}; it holds text in {languages}.",
     nextPage: "Next page",
@@ -90,6 +101,47 @@ const EN = Object.freeze({
     titleNotHeld: "This site holds no act under the title the phrase cites, so its words were searched.",
     candidateNotHeld: "{act} (this site holds no version of it)",
     catalogueNamesIt: "The publisher's record names this act ({works}), and this site holds no version of it.",
+    // Results by act (the plan's item 4.3; R59, R21, R11): what was found, counted from the answer; what was searched, every
+    // count the answer's and dated by the index's build; each act once, with its passages below it, each version dated in the
+    // publisher's words ("applicable from", R21), and an act held only as first published said so, as the reading says it.
+    found: "“{query}” in {language}: {passages} with the exact phrase, in {acts}.",
+    passages: Object.freeze({
+      one: "{count} passage",
+      other: "{count} passages",
+    }),
+    searched: "Searched: {acts} of Luxembourg law in {language}, in {versions} with {articles} of searchable text, as of the index built on {date}.",
+    searchedUndated: "Searched: {acts} of Luxembourg law in {language}, in {versions} with {articles} of searchable text; the index this site holds records no build date.",
+    withheld: Object.freeze({
+      one: "{count} version whose rights withhold its text was not searched.",
+      other: "{count} versions whose rights withhold their text were not searched.",
+    }),
+    severalOnDate: Object.freeze({
+      one: "{count} act with several versions on that date was not searched, since none is chosen.",
+      other: "{count} acts with several versions on that date were not searched, since none is chosen.",
+    }),
+    untitled: "{work} (this index holds no title for this act)",
+    actPassages: Object.freeze({
+      one: "{count} passage in this act",
+      other: "{count} passages in this act",
+    }),
+    version: "Version applicable from {date} (publisher)",
+    versionAsPublished: "The act as published, applicable from {date} (publisher)",
+    // The plain no-hit card (the plan's item 4.5; R59, R90): which searches ran, that only exact matching ran and what that
+    // means, the population searched (the line above), and the publishers' own search pages, as links only.
+    searchesRun: "What was searched",
+    runReference: "Exact references: the phrase is no reference this site reads (an ELI, a CELEX number, a Mémorial reference, a permalink or a citation).",
+    runReferenceNotRun: "Exact references: not read, since a work was named.",
+    runTitles: "Titles: no title of an act this site holds matches the phrase.",
+    runTitlesMatched: "Titles: the phrase matches the titles shown above.",
+    runTitlesNotRun: "Titles: not searched, since a work was named.",
+    runText: "Text: no article contains the phrase exactly as typed.",
+    runTextWords: "Text, every word in any order: no article contains them all.",
+    exactOnly: "Only exact matching ran: capitals, accents and every other character of the phrase count, and nothing is folded, stemmed or expanded. A looser search stays off until its own check has passed.",
+    officialSearch: "The publishers' own search pages:",
+    officialSites: Object.freeze({
+      legilux: "Legilux search, for Luxembourg law",
+      eurlex: "EUR-Lex search, for EU law",
+    }),
   }),
   dossier: Object.freeze({
     title: "Dossier",

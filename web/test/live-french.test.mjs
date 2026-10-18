@@ -315,8 +315,9 @@ test("a list's separators and a label's colon are the table's, so a French page 
   const search = {
     publisher: "lu-legilux", query: "garantie", language: "fra", date: "2024-02-01",
     population: { strictHits: 0, relaxedHits: 0, worksWithHits: 0 }, workResolution: { outcome: "not_asked" },
-    ambiguousWorks: [{ workKey: "loi-x", candidates: ["/a", "/b"] }], hits: [], searchableTextHeld: true,
+    ambiguousWorks: [{ workKey: "loi-x", candidates: ["/a", "/b"] }], hits: [], acts: [], searchableTextHeld: true,
     matching: "the phrase is matched byte for byte", truncated: false,
+    searched: { works: 1, states: 1, articles: 1, withheldByRights: 0, severalOnDate: 0, builtAt: null },
   };
   assert.ok(renderToStaticMarkup(h(english.SearchResultsView, { view: search })).includes("<li>loi-x: <span><code>/a</code></span><span>, <code>/b</code></span></li>"));
   assert.ok(renderToStaticMarkup(h(french.SearchResultsView, { view: search })).includes(`<li>loi-x${NB}: <span><code>/a</code></span><span>, <code>/b</code></span></li>`));
