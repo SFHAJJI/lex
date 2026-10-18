@@ -84,7 +84,10 @@ public sealed class V3CorpusLegacySchema8MountTests
     /// Every recorded request, asked again of the same committed files, answers the same bytes: the schema-8 mount (its
     /// provenance's /1 derivation, its events with no derivation time and the scope and genesis note it had, as_of,
     /// as_observed and the rest) and the schema-6 mount (its events and as_observed's refusal). The few sentences index 9
-    /// adds are served on index 9 only.
+    /// adds are served on index 9 only. The answers are those production sends: recorded on Linux, as the release image
+    /// runs (globalization-invariant, UTC; the language library changes no byte). Where the same code answers otherwise on
+    /// Windows, the recording names that answer too (<c>windows_answers</c>), and a Windows run is held to it: today one
+    /// request, resolve of a rooted path, which Linux's Uri reads as an absolute file URI and so as an identifier.
     /// </summary>
     [TestMethod]
     public async Task EveryAnswerOverTheSchema8AndSchema6MountsIsTheOneTheCodeWithoutIndex9Sends()
@@ -96,14 +99,21 @@ public sealed class V3CorpusLegacySchema8MountTests
         Assert.AreEqual(IndexFileSha256, root.GetProperty("index_sha256").GetString());
         Assert.AreEqual(StateSha256, root.GetProperty("state_sha256").GetString());
 
+        StringAssert.StartsWith(root.GetProperty("recorded_under").GetString(), "Linux", "the answers production sends");
+        var windows = root.GetProperty("windows_answers").EnumerateObject()
+            .ToDictionary(static pair => pair.Name, static pair => pair.Value.GetString()!, StringComparer.Ordinal);
+        CollectionAssert.AreEqual(new[] { "schema8-01" }, windows.Keys.ToArray(),
+            "the one request the same code answers otherwise on Windows: resolve of a rooted path");
+        var expected = OperatingSystem.IsWindows() ? windows : new Dictionary<string, string>(StringComparer.Ordinal);
+
         var eight = root.GetProperty("schema8_answers");
         Assert.AreEqual(LegacyMountAnswers.Schema8Requests(IndexFileSha256).Count, eight.GetArrayLength());
         await ReplayAsync(
-            Fixture("lex-corpus-6.json.bin"), Fixture("luxembourg-index.sqlite3.bin"), Fixture("luxembourg-capability-manifest.json.bin"), eight);
+            Fixture("lex-corpus-6.json.bin"), Fixture("luxembourg-index.sqlite3.bin"), Fixture("luxembourg-capability-manifest.json.bin"), eight, expected);
         var six = root.GetProperty("schema6_answers");
         Assert.AreEqual(LegacyMountAnswers.Schema6Requests.Count, six.GetArrayLength());
         await ReplayAsync(
-            Schema6("lex-corpus-6.json"), Schema6("luxembourg-index.sqlite3"), Schema6("luxembourg-capability-manifest.json"), six);
+            Schema6("lex-corpus-6.json"), Schema6("luxembourg-index.sqlite3"), Schema6("luxembourg-capability-manifest.json"), six, expected);
 
         // What the review named, said outright as well as by the bytes.
         JsonElement Answer(JsonElement rows, string operation) =>
@@ -117,7 +127,8 @@ public sealed class V3CorpusLegacySchema8MountTests
         Assert.IsFalse(Answer(six, "events").GetProperty("log").TryGetProperty("derived_at", out _), "no derivation time on schema 6");
     }
 
-    private static async Task ReplayAsync(byte[] corpus, byte[] index, byte[] manifest, JsonElement rows)
+    private static async Task ReplayAsync(
+        byte[] corpus, byte[] index, byte[] manifest, JsonElement rows, IReadOnlyDictionary<string, string> thisSystemsAnswers)
     {
         var directory = Path.Combine(Path.GetTempPath(), $"lex-v3-legacy8-mount-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
@@ -134,7 +145,8 @@ public sealed class V3CorpusLegacySchema8MountTests
                 var trace = row.GetProperty("trace").GetString()!;
                 var (status, body) = await LegacyMountAnswers.RespondAsync(mount, operation, row.GetProperty("request").GetString()!, trace);
                 Assert.AreEqual(row.GetProperty("http_status").GetInt32(), status, $"{trace} {operation}");
-                Assert.AreEqual(row.GetProperty("body").GetString(), body, $"{trace} {operation}: the answer the code without index 9 sends");
+                var answer = thisSystemsAnswers.TryGetValue(trace, out var own) ? own : row.GetProperty("body").GetString();
+                Assert.AreEqual(answer, body, $"{trace} {operation}: the answer the code without index 9 sends");
             }
         }
         finally

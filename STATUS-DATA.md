@@ -22,7 +22,14 @@ Updated 2026-10-18.
   - F2: a schema-8 or schema-6 answer had gained `log.derived_at`, the "per state row" scope, the genesis note's
     derivation sentence, as_observed's "/8 or /9" and the MCP events description. Each is index 9's only now, and
     `base-answers.json` (the integration head's whole envelopes for 29 requests over the schema-8 mount and 9 over the
-    schema-6 one, recorded at `5a659831`) is replayed byte for byte. Provenance's digest /2 sentence on schema 8 now fails.
+    schema-6 one, recorded at `5a659831`) is replayed byte for byte. The answers are recorded on Linux, as the release
+    image runs them (globalization-invariant, UTC; with the language library the bytes are the same): the answers
+    production sends. One request answers otherwise on Windows with the same code, base and head alike: resolve of
+    `/lu-legilux/loi-2026-01-01-a1` is `identifier_unknown` on Linux, where `Uri.TryCreate(UriKind.Absolute)` reads a
+    rooted path as a file URI and `LooksLikeIdentifier` takes it, and `retrieval_mode_unavailable` (title discovery) on
+    Windows. The recording holds that Windows answer beside the Linux one, and a Windows run is held to it (CI's
+    image-conditions lane found it). The platform difference is the base's `LooksLikeIdentifier`, not this slice's: a
+    reading for the web lane (a rooted path should mean the same on every system). Provenance's digest /2 sentence on schema 8 now fails.
   - F3: the fixture has an end on its start (the real `code/procedure_penale/20211214`): an invalid boundary and
     transition. `<= 0` made `< 0` now fails.
   - F4: `V3CorpusMount.ServesIndexNine` is the one switch S7a turns. Until then the server refuses a built mount of index 9
