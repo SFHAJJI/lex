@@ -190,6 +190,8 @@ test("a search with no hit is the plain no-hit card: what ran, that only exact m
   assert.doesNotMatch(markup, /data-search-run="every-word"/, "the relaxed lane was not run, so it is not said to have found nothing");
   assert.ok(shown.includes("Only exact matching ran: capitals, accents and every other character of the phrase count, and nothing is folded, stemmed or expanded. A looser search stays off until its own check has passed."));
   assert.ok(shown.includes(`Searched: ${value.searched.works} act of Luxembourg law in French`));
+  assert.equal((markup.match(/data-searched=/g) ?? []).length, 1, "the population is said once, inside the card");
+  assert.ok(markup.indexOf("data-searched=") > markup.indexOf("data-no-hit-card"));
   for (const page of OFFICIAL_SEARCH_PAGES) {
     assert.ok(markup.includes(`<a href="${page.uri}" rel="external" data-publisher="${page.publisher}">`), page.key);
   }

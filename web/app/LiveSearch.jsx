@@ -394,7 +394,8 @@ export function SearchResultsView({ view, onNextPage }) {
     <>
       <SearchWorkResolution resolution={view.workResolution} />
       <Found view={view} />
-      {europe ? null : <Searched view={view} />}
+      {/* What was searched: above the passages, or inside the no-hit card, which says it among what ran. */}
+      {europe || view.hits.length === 0 ? null : <Searched view={view} />}
       <SearchedOn view={view} />
       {view.referenceReason === 'title_not_held' && view.hits.length > 0 ? <p data-searched-as-words="title_not_held">{COPY.titleNotHeld}</p> : null}
       {europe ? <EuropeWording view={view} /> : <AmbiguousWorks works={view.ambiguousWorks} date={view.date} />}
