@@ -2,6 +2,130 @@
 
 Updated 2026-10-18.
 
+## S4b: the double builds compare file digests; no index is held in memory (sole driver, 2026-10-18)
+
+- **What.** Slice S4b of the Luxembourg data design (`C:\lex-v3\LU-DATA-DESIGN-2026-10-14-v2.md` §2.5 and the S4b row). No
+  rule and no output changes: the mount files are the same bytes (measured below), and no digest pin moved (the
+  censuses gain the new types, under Tests).
+  - **The double builds.** `V3FirstMountBuild` builds each index twice, to two files in its own staging directory
+    (`lex-v3-mount-build-*` under the temporary folder).
+    - It compares the two files' SHA-256, read from disk in order, and their capability manifests byte for byte.
+    - The refusal texts are unchanged ("two builds of the Luxembourg index differ: … then …").
+    - The first file is verified by the reader. The second is not read back: it is held to the first file's digest, so
+      it is either the first file's verified bytes or a refusal. It is removed as soon as it is compared.
+    - The writer moves the first file into the mount (a rename on one volume). It measures the digest again and refuses
+      a file that is not the one the two builds compared.
+    - A refused build removes its staging directory. A delivered build owns it until it is disposed:
+      `V3FirstMountBuildResult` is `IDisposable`, and the tool, the offline derive and the tests dispose theirs.
+    - Before, the build held each index as a byte array, twice: the first build's bytes, then the second's. The
+      Luxembourg verification made a third copy, and the writer copied each file again as it wrote it.
+    - The corpus is still compared in memory (digest, then bytes), because the writer needs its bytes anyway. Its second
+      build is released as soon as it is compared.
+  - **Inside the builders** (`LuxembourgIndexBuilder.TryBuildFileAsync`, `EuropeIndexBuilder.TryBuildFileAsync`):
+    - Each builds from the corpus the mount build built and compared, so the four corpus rebuilds inside the index builds
+      are gone.
+    - The projected rows live in one frame and are released before the file is read back.
+    - The file is verified through the reader's own file door (`OpenAndVerifyFileAsync`: a private copy, hashed and read
+      back), with the same checks as the bytes door. No reader code changed (S7a's area).
+    - The public `TryBuild` methods go through the same writer (`WriteFile`) and return the same bytes.
+  - **The writer and the derive:**
+    - Held files are written straight from their bytes, with no copy.
+    - The Luxembourg log is read from a private copy of the file (`TryReadLogFile`; `TryReadFile` for a predecessor),
+      not from an array of over a gigabyte. The generations are copied file to file.
+    - `V3OfflineMount.DeriveAsync` releases the populations before it verifies the written mount, and writes a restored
+      predecessor's files without a second copy.
+    - The derive tool now prints `process peak_working_set_bytes=… peak_private_bytes=…` (on Windows, the private
+      commit) beside `publisher_requests`, for the dry run.
+- **Measured without the population.** The population: the acquisition fixture with its Luxembourg consolidation replaced
+  by N invented articles of about 1,200 bytes each, every byte written by the probe. The probe is `V3DeriveMemoryProbe`
+  (opt-in, never a CI test). The machine was shared; another session's tests ran during the second round.
+  - **Through the offline tool, in a process of its own: the dry run's whole path.**
+    - The probe writes the population's custody and inputs /3 (Release 1 over inputs /1).
+    - `Lex.V3.Tool derive` then runs over that same custody with the integration build (`8e6d3d27`; #982 and #984 since
+      then change no derive code) and with this slice's build.
+    - A wrapper samples the child process every 100 ms, as the runner's guard does.
+
+    | Articles (body, Luxembourg index) | Peak private commit, before → after | Peak working set, before → after |
+    |---|---|---|
+    | 20,000 (26.0 MiB, 85.4 MiB) | 1,067–1,150 → 606–651 MiB (3 runs each; −40 to −45%) | 1,063–1,141 → 550–633 MiB |
+    | 40,000 (52.0 MiB, 170.7 MiB) | 2,033–2,680 → 1,341–1,416 MiB (2 runs each; −34 to −50%) | 1,953–2,535 → 1,110–1,125 MiB |
+
+    - The old build's peak varies more from run to run: much of it is dead arrays waiting for a collection.
+    - The five mount files are identical, byte for byte, at both sizes. At 40,000: Luxembourg index `296b0454…`, corpus
+      `f8ea14c7…`, EU index `c4338705…`, and both capability manifests.
+    - The re-derivation record is identical too (`3d406f06…` at 40,000, `3f8046f7…` at 20,000), and every derive
+      measured 0 network operations.
+    - The build report differs in one line only: `toolSource`, the commit that ran it.
+  - **The late phase in process** (the build, the write and the verification, sampled per phase after a full collection
+    once R1 is done; measured before the read-back of the second build was dropped):
+    - 10,000 articles: process peak commit 799 → 415 MiB; the late phase above the baseline, 432 → 61 MiB.
+    - 20,000 articles: 1,383 → 889 MiB; the late phase above the baseline, 829 → 307 MiB.
+    - Each in-process run acquires afresh, and an acquisition mints its own identities, so these runs' digests are not
+      compared. The runs through the tool compare digests.
+  - In the synthetic runs, the saving is 4 to 8 times the Luxembourg index's size. Three effects add up: two or three
+    copies of each index's bytes, the corpus rebuilds, and the rows held while the file was read back.
+  - **Disk.** In the late phase, the staging directory holds the first build of each index and one file being built:
+    about L + 2E. Before, it held about 2E: a build's file and its verification copy. For the population that is about
+    1.3 GB more disk at the late phase's peak, against about 4 GB less commit, which the page file no longer has to grow
+    into.
+- **Extrapolated to the population, honestly.** Here L is the Luxembourg index (1.2–1.4 GB under Release 1) and E the EU
+  index (1.4 GB).
+  - **The late phase.** By the code, each of the old build's worst late moments held about 3.6–4.2 GB of index bytes:
+    - the second Luxembourg build's verification: three copies of L;
+    - the second EU build: L and two copies of E;
+    - the write: both indexes, and a copy of the file being written.
+
+    The new build holds none of this. It also no longer rebuilds the corpus inside each index build (four times: a
+    0.21 GB array and its two parsed sets). So the late phase frees at least about 4 GB, likely 4.5–5 GB: the design's
+    "about 4.6 GB".
+  - **What R1 adds to that phase**, by the design, is about the same amount: content tokens for up to about 217,000
+    articles held through the builds (1.5–2 GB in Release 1), and a larger Luxembourg index and its rows.
+  - So the builds should end no lower than derive-c's 0.27 GiB, probably 1–2 GiB higher. That is not a proven 2 GiB.
+  - **R0's replay is untouched.** In derive-c it reached 0.4–0.8 GiB of headroom (minutes 37 to 53; peak working set 15.2
+    GiB; the page file grew 18.6 GiB). D1 runs the same replay.
+  - **So D1 is not expected to keep 2 GiB at its low point under derive-c's conditions** (6.53 GiB of commit headroom at
+    the start). After S4b, the binding phase is R0's replay, not the builds.
+  - **What the dry run must still be given:**
+    - The exclusive window: no IDE, browser, assistant apps, journeys or other sessions' test runs. On 14 October, three
+      stray `grep` processes alone held about 2.5 GB.
+    - About 8 GiB of commit headroom at the start: derive-c's 6.53 GiB plus the 1.2–1.6 GiB that R0's replay took below
+      2 GiB.
+    - Free disk for the page file: Step 0's 40 GiB. Derive-c went from 43.5 to 22.6 GiB free. C: holds 11.8 GiB free now
+      (06:52 UTC; a 14.2 GiB page file allocated), so as things stand the dry run would stop on disk in R0's replay.
+  - The dry run's resource log, with the tool's new peak line, decides. S4b is judged there, on real data.
+- **Tests.**
+  - `V3MountBuildFileTests` (2):
+    - Each index built to a file is the bytes its public builder returns: the genesis Luxembourg index, a chained one
+      with a derivation time, and the EU index. A predecessor read from the file equals one read from the bytes. A
+      refused build leaves no file.
+    - The staging lifecycle: only the two first builds' files are staged. The writer moves them and holds them to their
+      digests. A second write copies byte-identical files, and both mounts verify. Disposing a build removes its staging
+      directory, written or not. A tampered staged file is refused, with no half-written file left. A refused build
+      leaves nothing.
+  - The tests that build mounts now dispose their builds. `V3FirstMountBuildTests` compares two builds' files with
+    `ReadAllBytes`.
+  - The guarded-construction census pins `V3BuiltIndexFile`, `V3CorpusMountFile` and the predecessor's file doors. The
+    partition totals move: 272 → 274 candidates, 143 → 145 guarded types.
+- **Driver decisions (reversible):**
+  - The indexes are compared by file digest. The corpus keeps its byte comparison, because its bytes are in memory for
+    the writer anyway.
+  - Both index builds take the compared corpus. Each index's double build still proves that its own projection and
+    writer reproduce; the corpus's own double build proves the corpus.
+  - The second build is not read back. Equal digests make it the first file's verified bytes.
+  - The first build is verified through the reader's file door, a private copy on disk, so the transient is one index,
+    as before. Opening the staged file in place would save that copy, but it needs a new reader door, and the reader is
+    S7a's file.
+  - The writer moves the staged file. A second write of the same build copies it from the first mount.
+  - The build's public shape changed: `LuxembourgIndex` and `EuropeIndex` are now `V3BuiltIndexFile`;
+    `V3CorpusMountFile` is a class with `ReadAllBytes()`; `V3FirstMountBuildResult.Success` is internal. Only the tool
+    and the tests used them.
+- **Not done; each its own slice if the dry run names it:**
+  - content tokens as UTF-8, or spilled to a temporary file (design §2.5, step 4; about a day);
+  - the Luxembourg reader's verification, which reads every article row into memory (`ReadArticles`): the reader is
+    S7a's area;
+  - the corpus's 0.21 GB of canonical bytes, still held through the index builds;
+  - R0's replay.
+
 ## Content /3: quoted wording, deleted wording, layout markers and unmarked notes; Release 1 runs it (sole driver, 2026-10-18)
 
 - **What.** Slice S3b of the Luxembourg data design (`C:\lex-v3\LU-DATA-DESIGN-2026-10-14-v2.md` §1.4, "Content
