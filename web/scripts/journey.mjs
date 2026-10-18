@@ -1833,7 +1833,7 @@ export function specificationJourneyExpectations() {
     ["J1, a date before the history", { step: EARLY_READING_STEP, state: "refusal", refusalCode: "no_version_for_date", texts: [NO_EARLIER_STATE, "2024-02-01"] }],
     // The plain no-hit card (the plan's item 4.5): what was searched, that only exact matching ran, the population searched and
     // the publishers' own search pages, above the absence note.
-    ["J2, a question no article carries", { step: NO_HIT_SEARCH_STEP, state: "success", nothingToCite: true, texts: ["0 passages with the exact phrase, in 0 acts.", "What was searched", "Text: no article contains the phrase exactly as typed.", "Only exact matching ran:", SEARCH_SEARCHED_SAID, "Legilux search, for Luxembourg law", "EUR-Lex search, for EU law", absence] }],
+    ["J2, a question no article carries", { step: NO_HIT_SEARCH_STEP, state: "success", nothingToCite: true, texts: ["0 passages with the exact phrase, in 0 acts.", "What was searched", "Text: no article searched contains the phrase exactly as typed.", "Only exact matching ran on the text:", SEARCH_SEARCHED_SAID, "Legilux search, for Luxembourg law", "EUR-Lex advanced search, for EU law", absence] }],
     ["J5, a law not held", { step: UNKNOWN_LAW_STEP, state: "refusal", refusalCode: "identifier_unknown", texts: ["This build's Luxembourg index holds 1 Luxembourg work, with states dated from 2024-02-01 to 2024-02-01.", absence] }],
   ];
 }

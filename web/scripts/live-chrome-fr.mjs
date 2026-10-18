@@ -123,6 +123,24 @@
 // delegation in the addendum of 2026-10-18 on deleted wording and unmarked notes (4 forms, 1 changed in review: the struck
 // text is "celui que l’éditeur marque comme supprimé", never "un texte", which in legal French is an instrument, and the
 // text a search covers is "interrogé").
+// Search results by act and the plain no-hit card (the plan's items 4.3 and 4.5; R59, R21, R11, R90): the search page's
+// introduction (`search.intro`), the title ladder's answer on top (`search.titleExact`, `search.titleStarts`,
+// `search.titleWords`, `search.severalTitles`, `search.moreTitles`), what was found and what was searched (`search.found`,
+// `search.passages`, `search.searched`, `search.searchedUndated`, `search.withheld`, `search.severalOnDate`), each act and
+// its versions (`search.untitled`, `search.actPassages`, `search.version`, `search.versionAsPublished`), the no-hit card
+// (`search.searchesRun`, `search.runReference`, `search.runReferenceNotRun`, `search.runTitles`, `search.runTitlesMatched`,
+// `search.runTitlesNotRun`, `search.titleMatching`, `search.runText`, `search.runTextWords`, `search.exactOnly`,
+// `search.officialSearch`, `search.officialSites`), each counted entry's `one` and `other`, and the search phase's two
+// `anchor_not_in_version` sentences in `REFUSALS_FR.sentences` (the renderings the addendum on reading by page gave in its
+// point 3, word for word), were reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the same
+// delegation in the addendum of 2026-10-18 on search results by act (36 forms, 10 changed in review: the title stands last
+// after "l’intitulé d’un acte :", since French puts no bare title after "de" and most titles end with their own full stop;
+// one title is said in the singular; the text alone is said to be matched exactly, "Le texte n’a été interrogé que par
+// correspondance exacte", since the titles are matched with case and accents folded, and "appliquée" is a word R21 refuses;
+// "aucun article interrogé"; a date's acts named with their date; the introduction's scope set inside its second member;
+// the English changed with each). The forms that review gave for its points 4, 6 and 7 (`search.titleMatching`,
+// `search.actPassages` with its full stop, `search.officialSites.eurlex` naming the advanced search) ship as it gave them,
+// with the English it named. `search.namesWork`, `search.severalWorks`, `search.candidate` and `search.hit` were removed.
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -146,7 +164,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Recherche',
     eyebrow: 'Recherche',
     heading: 'Rechercher dans le texte détenu',
-    intro: 'Trouve les actes dont l’intitulé correspond à l’expression, et les articles dont le texte la contient exactement telle que saisie, dans le texte que ce serveur détient et qu’il est autorisé à interroger : un texte que ses droits ne permettent pas de communiquer n’entre pas dans la recherche. L’expression est envoyée à ce serveur dans la requête et nulle part ailleurs, et cette page ne conserve rien.',
+    intro: 'Trouve les actes dont l’intitulé correspond à l’expression et, dans le texte que ce serveur détient et qu’il est autorisé à interroger, les articles qui la contiennent exactement telle que saisie : un texte que ses droits ne permettent pas de communiquer n’entre pas dans la recherche. L’expression est envoyée à ce serveur dans la requête et nulle part ailleurs, et cette page ne conserve rien.',
     idle: 'Saisissez une expression pour rechercher dans le texte des articles que ce serveur détient et qu’il est autorisé à interroger.',
     population: Object.freeze({
       one: '« {query} » en {language} : {strict} avec l’expression exacte, {relaxed} avec chacun des mots, dans {works} acte.',
@@ -154,9 +172,9 @@ export const LIVE_CHROME_FR = Object.freeze({
     }),
     notCounted: 'non compté',
     lane: Object.freeze({ strict: 'expression exacte', relaxed: 'chacun des mots' }),
-    titleExact: 'L’expression est l’intitulé de {title}.',
-    titleStarts: 'L’expression est le début de l’intitulé de {title}.',
-    titleWords: 'Chacun des mots de l’expression figure dans l’intitulé de {title}.',
+    titleExact: 'L’expression est l’intitulé d’un acte : {title}',
+    titleStarts: 'L’expression est le début de l’intitulé d’un acte : {title}',
+    titleWords: 'Chacun des mots de l’expression figure dans l’intitulé d’un acte : {title}',
     severalTitles: Object.freeze({
       one: 'L’expression correspond à l’intitulé de {count} acte :',
       other: 'L’expression correspond aux intitulés de {count} actes :',
@@ -206,13 +224,13 @@ export const LIVE_CHROME_FR = Object.freeze({
       other: '{count} versions dont les droits ne permettent pas de communiquer le texte n’ont pas été interrogées.',
     }),
     severalOnDate: Object.freeze({
-      one: '{count} acte ayant plusieurs versions à cette date n’a pas été interrogé, aucune n’étant retenue.',
-      other: '{count} actes ayant plusieurs versions à cette date n’ont pas été interrogés, aucune n’étant retenue.',
+      one: '{count} acte ayant plusieurs versions au {date} n’a pas été interrogé, aucune n’étant retenue.',
+      other: '{count} actes ayant plusieurs versions au {date} n’ont pas été interrogés, aucune n’étant retenue.',
     }),
     untitled: '{work} (cet index ne contient aucun intitulé pour cet acte)',
     actPassages: Object.freeze({
-      one: '{count} passage dans cet acte',
-      other: '{count} passages dans cet acte',
+      one: '{count} passage dans cet acte.',
+      other: '{count} passages dans cet acte.',
     }),
     version: 'Version applicable à partir du {date} (éditeur)',
     versionAsPublished: 'L’acte tel que publié, applicable à partir du {date} (éditeur)',
@@ -220,15 +238,19 @@ export const LIVE_CHROME_FR = Object.freeze({
     runReference: 'Références exactes : l’expression n’est aucune des références que ce site sait lire (un ELI, un numéro CELEX, une référence au Mémorial, un permalien ou une citation).',
     runReferenceNotRun: 'Références exactes : non lues, un acte ayant été désigné.',
     runTitles: 'Intitulés : aucun intitulé d’un acte que ce site détient ne correspond à l’expression.',
-    runTitlesMatched: 'Intitulés : l’expression correspond aux intitulés indiqués ci-dessus.',
+    runTitlesMatched: Object.freeze({
+      one: 'Intitulés : l’expression correspond à l’intitulé indiqué ci-dessus.',
+      other: 'Intitulés : l’expression correspond aux intitulés indiqués ci-dessus.',
+    }),
+    titleMatching: 'Les intitulés sont comparés sans tenir compte des majuscules ni des accents.',
     runTitlesNotRun: 'Intitulés : non recherchés, un acte ayant été désigné.',
-    runText: 'Texte : aucun article ne contient l’expression exactement telle que saisie.',
-    runTextWords: 'Texte, chacun des mots dans un ordre quelconque : aucun article ne les contient tous.',
-    exactOnly: 'Seule la correspondance exacte a été appliquée : les majuscules, les accents et chacun des autres caractères de l’expression comptent, et rien n’est ramené à une forme commune, réduit à son radical ni étendu. Une recherche moins stricte reste désactivée tant que sa propre vérification n’est pas réussie.',
+    runText: 'Texte : aucun article interrogé ne contient l’expression exactement telle que saisie.',
+    runTextWords: 'Texte, chacun des mots dans un ordre quelconque : aucun article interrogé ne les contient tous.',
+    exactOnly: 'Le texte n’a été interrogé que par correspondance exacte : les majuscules, les accents et chacun des autres caractères de l’expression comptent, et rien n’est ramené à une forme commune, réduit à son radical ni étendu. Une recherche moins stricte dans le texte reste désactivée tant que sa propre vérification n’est pas réussie.',
     officialSearch: 'Les pages de recherche des éditeurs :',
     officialSites: Object.freeze({
       legilux: 'Recherche sur Legilux, pour le droit luxembourgeois',
-      eurlex: 'Recherche sur EUR-Lex, pour le droit de l’UE',
+      eurlex: 'Recherche avancée sur EUR-Lex, pour le droit de l’UE',
     }),
   }),
   dossier: Object.freeze({

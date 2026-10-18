@@ -39,7 +39,7 @@ const EN = Object.freeze({
     heading: "Search the held text",
     // Only exact matching runs (the plan's item 4.5, R90): the relaxed lane is off until its check passes, so the page no
     // longer says it finds "every word of it".
-    intro: "Finds the acts whose title matches the phrase, and the articles whose text contains it exactly as typed, in the text this server holds and may search: text its rights withhold is not searched. The phrase goes to this server in the request and nowhere else, and this page keeps nothing.",
+    intro: "Finds the acts whose title matches the phrase and, in the text this server holds and may search, the articles that contain it exactly as typed: text its rights withhold is not searched. The phrase goes to this server in the request and nowhere else, and this page keeps nothing.",
     idle: "Type a phrase to search the article text this server holds and may search.",
     population: Object.freeze({
       one: "“{query}” in {language}: {strict} with the exact phrase, {relaxed} with every word, in {works} work.",
@@ -48,10 +48,12 @@ const EN = Object.freeze({
     notCounted: "not counted",
     lane: Object.freeze({ strict: "exact phrase", relaxed: "every word" }),
     // The title ladder's answer, on top (the plan's item 4.3): the act whose title the phrase is, begins or holds every word
-    // of, linked to its dossier; several acts are counted and listed, the first few shown and the rest one step away.
-    titleExact: "The phrase is the title of {title}.",
-    titleStarts: "The phrase begins the title of {title}.",
-    titleWords: "Every word of the phrase is in the title of {title}.",
+    // of, linked to its dossier; several acts are counted and listed, the first few shown and the rest one step away. The
+    // title stands last, after a colon, with no final sign of its own: most of the publisher's titles end with a full stop,
+    // and French puts no bare title after "de" (the French review of this slice, entries 2 to 4).
+    titleExact: "The phrase is the title of an act: {title}",
+    titleStarts: "The phrase begins the title of an act: {title}",
+    titleWords: "Every word of the phrase is in the title of an act: {title}",
     severalTitles: Object.freeze({
       one: "The phrase matches the title of {count} act:",
       other: "The phrase matches the titles of {count} acts:",
@@ -116,13 +118,13 @@ const EN = Object.freeze({
       other: "{count} versions whose rights withhold their text were not searched.",
     }),
     severalOnDate: Object.freeze({
-      one: "{count} act with several versions on that date was not searched, since none is chosen.",
-      other: "{count} acts with several versions on that date were not searched, since none is chosen.",
+      one: "{count} act with several versions on {date} was not searched, since none is chosen.",
+      other: "{count} acts with several versions on {date} were not searched, since none is chosen.",
     }),
     untitled: "{work} (this index holds no title for this act)",
     actPassages: Object.freeze({
-      one: "{count} passage in this act",
-      other: "{count} passages in this act",
+      one: "{count} passage in this act.",
+      other: "{count} passages in this act.",
     }),
     version: "Version applicable from {date} (publisher)",
     versionAsPublished: "The act as published, applicable from {date} (publisher)",
@@ -132,15 +134,21 @@ const EN = Object.freeze({
     runReference: "Exact references: the phrase is no reference this site reads (an ELI, a CELEX number, a Mémorial reference, a permalink or a citation).",
     runReferenceNotRun: "Exact references: not read, since a work was named.",
     runTitles: "Titles: no title of an act this site holds matches the phrase.",
-    runTitlesMatched: "Titles: the phrase matches the titles shown above.",
+    runTitlesMatched: Object.freeze({
+      one: "Titles: the phrase matches the title shown above.",
+      other: "Titles: the phrase matches the titles shown above.",
+    }),
+    // How the titles were matched, said under the titles line when the ladder ran: unlike the text, case and accents are
+    // ignored (the French review of this slice, its point 4).
+    titleMatching: "Titles are matched with capitals and accents ignored.",
     runTitlesNotRun: "Titles: not searched, since a work was named.",
-    runText: "Text: no article contains the phrase exactly as typed.",
-    runTextWords: "Text, every word in any order: no article contains them all.",
-    exactOnly: "Only exact matching ran: capitals, accents and every other character of the phrase count, and nothing is folded, stemmed or expanded. A looser search stays off until its own check has passed.",
+    runText: "Text: no article searched contains the phrase exactly as typed.",
+    runTextWords: "Text, every word in any order: no article searched contains them all.",
+    exactOnly: "Only exact matching ran on the text: capitals, accents and every other character of the phrase count, and nothing is folded, stemmed or expanded. A looser search of the text stays off until its own check has passed.",
     officialSearch: "The publishers' own search pages:",
     officialSites: Object.freeze({
       legilux: "Legilux search, for Luxembourg law",
-      eurlex: "EUR-Lex search, for EU law",
+      eurlex: "EUR-Lex advanced search, for EU law",
     }),
   }),
   dossier: Object.freeze({

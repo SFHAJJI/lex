@@ -333,7 +333,7 @@ function Searched({ view }) {
         {builtOn === null ? fillText(COPY.searchedUndated, counts) : fillText(COPY.searched, { ...counts, date: builtOn })}
       </p>
       {searched.withheldByRights > 0 ? <p data-withheld={searched.withheldByRights}>{fillCounted(COPY.withheld, searched.withheldByRights)}</p> : null}
-      {searched.severalOnDate > 0 ? <p data-several-on-date={searched.severalOnDate}>{fillCounted(COPY.severalOnDate, searched.severalOnDate)}</p> : null}
+      {searched.severalOnDate > 0 ? <p data-several-on-date={searched.severalOnDate}>{fillCounted(COPY.severalOnDate, searched.severalOnDate, { date: view.date })}</p> : null}
     </>
   );
 }
@@ -353,9 +353,11 @@ function NoHitCard({ view }) {
     not_run_identifier_given: COPY.runTitlesNotRun,
     no_titles_held: COPY.noTitlesHeld,
     no_title_match: COPY.runTitles,
-    one_work: COPY.runTitlesMatched,
-    several_candidates: COPY.runTitlesMatched,
+    one_work: countedEntry(COPY.runTitlesMatched, 1),
+    several_candidates: countedEntry(COPY.runTitlesMatched, view.workResolution.candidates?.length ?? 2),
   }[resolution];
+  // Titles are matched with case and accents folded, unlike the text: said where the ladder ran over titles held.
+  const titlesFolded = ['no_title_match', 'one_work', 'several_candidates'].includes(resolution);
   return (
     <section className="no-hit-card" data-no-hit-card="">
       <p data-no-hit="">
@@ -365,7 +367,7 @@ function NoHitCard({ view }) {
       <h2>{COPY.searchesRun}</h2>
       <ul data-searches-run="">
         <li data-search-run="reference">{reference}</li>
-        <li data-search-run="titles">{titles}</li>
+        <li data-search-run="titles">{titles}{titlesFolded ? <>{' '}<span data-title-matching="">{COPY.titleMatching}</span></> : null}</li>
         {view.population.strictHits === null ? null : <li data-search-run="text">{COPY.runText}</li>}
         {view.population.relaxedHits === null ? null : <li data-search-run="every-word">{COPY.runTextWords}</li>}
       </ul>
@@ -390,9 +392,11 @@ function NoHitCard({ view }) {
 /** One search view, laid out: the act a title names on top, what was found and searched, the passages by act, or the no-hit card. */
 export function SearchResultsView({ view, onNextPage }) {
   const europe = view.publisher === 'eu-eurlex';
+  // With no passage, the no-hit card says that no titles are held among what ran; it is not said twice.
+  const resolutionOnTop = view.hits.length === 0 && view.workResolution.outcome === 'no_titles_held' ? null : view.workResolution;
   return (
     <>
-      <SearchWorkResolution resolution={view.workResolution} />
+      {resolutionOnTop === null ? null : <SearchWorkResolution resolution={resolutionOnTop} />}
       <Found view={view} />
       {/* What was searched: above the passages, or inside the no-hit card, which says it among what ran. */}
       {europe || view.hits.length === 0 ? null : <Searched view={view} />}

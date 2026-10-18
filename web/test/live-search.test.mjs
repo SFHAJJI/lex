@@ -150,7 +150,7 @@ test("a served search answer is the results by act, read by the search reader", 
   assert.equal((markup.match(/<li data-act="/g) ?? []).length, 1);
   assert.ok(markup.includes(`<a href="/en/lu-legilux/${act.work_key}">${act.work_key}</a>`), "an act with no title held is named by its work key, linked to its dossier");
   assert.ok(shown.includes(`${act.work_key} (this index holds no title for this act)`));
-  assert.ok(shown.includes(`${value.hits.length} passages in this act`));
+  assert.ok(shown.includes(`${value.hits.length} passages in this act.`));
   assert.ok(shown.includes("As published; may have been amended since; no consolidated text."));
   assert.ok(shown.includes(`The act as published, applicable from ${value.hits[0].applicability_date} (publisher)`));
   assert.doesNotMatch(shown, /version of/, "a version is dated as the publisher dates it, never by its date alone");
@@ -186,16 +186,18 @@ test("a search with no hit is the plain no-hit card: what ran, that only exact m
   assert.ok(shown.includes("What was searched"));
   assert.ok(shown.includes("Exact references: the phrase is no reference this site reads (an ELI, a CELEX number, a Mémorial reference, a permalink or a citation)."));
   assert.ok(shown.includes("This index holds no work titles, so the phrase was matched against article text only."), "the titles line is the work resolution's own");
-  assert.ok(shown.includes("Text: no article contains the phrase exactly as typed."));
+  assert.equal(shown.split("This index holds no work titles").length, 2, "and said once, in the card");
+  assert.doesNotMatch(markup, /data-title-matching/, "no title was matched, so how titles are matched is not said");
+  assert.ok(shown.includes("Text: no article searched contains the phrase exactly as typed."));
   assert.doesNotMatch(markup, /data-search-run="every-word"/, "the relaxed lane was not run, so it is not said to have found nothing");
-  assert.ok(shown.includes("Only exact matching ran: capitals, accents and every other character of the phrase count, and nothing is folded, stemmed or expanded. A looser search stays off until its own check has passed."));
+  assert.ok(shown.includes("Only exact matching ran on the text: capitals, accents and every other character of the phrase count, and nothing is folded, stemmed or expanded. A looser search of the text stays off until its own check has passed."));
   assert.ok(shown.includes(`Searched: ${value.searched.works} act of Luxembourg law in French`));
   assert.equal((markup.match(/data-searched=/g) ?? []).length, 1, "the population is said once, inside the card");
   assert.ok(markup.indexOf("data-searched=") > markup.indexOf("data-no-hit-card"));
   for (const page of OFFICIAL_SEARCH_PAGES) {
     assert.ok(markup.includes(`<a href="${page.uri}" rel="external" data-publisher="${page.publisher}">`), page.key);
   }
-  assert.ok(shown.includes("Legilux search, for Luxembourg law") && shown.includes("EUR-Lex search, for EU law"));
+  assert.ok(shown.includes("Legilux search, for Luxembourg law") && shown.includes("EUR-Lex advanced search, for EU law"));
   assert.ok(shown.includes("It is not evidence that the instrument or the law does not exist."), "the absence note (journey J2)");
   assert.ok(shown.includes("0 passages with the exact phrase, in 0 acts."));
 });
@@ -207,8 +209,8 @@ test("an EU work's no-hit card says the reference and the titles were not run, a
   const shown = text(markup);
   assert.ok(shown.includes("Exact references: not read, since a work was named."));
   assert.ok(shown.includes("Titles: not searched, since a work was named."));
-  assert.ok(shown.includes("Text: no article contains the phrase exactly as typed."));
-  assert.ok(shown.includes("Only exact matching ran:"));
+  assert.ok(shown.includes("Text: no article searched contains the phrase exactly as typed."));
+  assert.ok(shown.includes("Only exact matching ran on the text:"));
   assert.doesNotMatch(markup, /data-searched=/, "an EU search counts no Luxembourg population");
   assert.doesNotMatch(shown, /Searched:/);
   assert.ok(markup.includes(OFFICIAL_SEARCH_PAGES[1].uri));
@@ -236,13 +238,14 @@ test("the act a title names is on top, linked; several acts' titles are counted,
     assert.equal(outcome.state, "success", outcome.sentence);
     return view(outcome);
   };
-  for (const [reason, said] of [["exact_normalized_title", "The phrase is the title of"], ["prefix", "The phrase begins the title of"], ["all_tokens_contained", "Every word of the phrase is in the title of"]]) {
+  for (const [reason, said] of [["exact_normalized_title", "The phrase is the title of an act:"], ["prefix", "The phrase begins the title of an act:"], ["all_tokens_contained", "Every word of the phrase is in the title of an act:"]]) {
     const markup = resolved({ outcome: "one_work", work: card(1, reason) });
-    assert.ok(markup.includes(`${said} <a href="/en/lu-legilux/loi-2011-11-12-n1"><span lang="fr">Loi du 12 novembre 2011 numéro 1.</span></a>.`), reason);
+    // The title last, after a colon, its own full stop ending the sentence: never "..".
+    assert.ok(markup.includes(`${said} <a href="/en/lu-legilux/loi-2011-11-12-n1"><span lang="fr">Loi du 12 novembre 2011 numéro 1.</span></a></p>`), reason);
     assert.ok(markup.indexOf("data-work-resolution") < markup.indexOf("data-population"), "the act a title names comes first, above what the text search found");
   }
   const unlinked = resolved({ outcome: "one_work", work: { ...card(1), work_key: null } });
-  assert.ok(unlinked.includes('The phrase is the title of <span lang="fr">Loi du 12 novembre 2011 numéro 1.</span> (this site holds no version of it).'),
+  assert.ok(unlinked.includes('The phrase is the title of an act: <span lang="fr">Loi du 12 novembre 2011 numéro 1.</span> (this site holds no version of it)</p>'),
     "a card naming no held work is said without a link, and said not held");
 
   const twelve = resolved({ outcome: "several_candidates", candidates: Array.from({ length: 12 }, (_, index) => card(index + 1, "prefix")) });
@@ -252,6 +255,17 @@ test("the act a title names is on top, linked; several acts' titles are counted,
   assert.match(twelve, /<details data-more-titles="2"><summary>2 more acts<\/summary><ul>(<li>.*?<\/li>){2}<\/ul><\/details>/, "the rest are one step away");
   const two = resolved({ outcome: "several_candidates", candidates: [card(1), card(2)] });
   assert.doesNotMatch(two, /<details/, "two titles are both shown");
+
+  // With no passage, the card says the titles matched, in the number they did, and how titles are matched.
+  const unmatched = (resolution) => {
+    const envelope = structuredClone(envelopeOf(NO_HIT));
+    envelope.result.value.work_resolution = { retrieval_lane: "r1_work_discovery", candidates: null, work: null, ...resolution };
+    return text(view(searchOutcome({ state: "success", envelope })));
+  };
+  const oneTitle = unmatched({ outcome: "one_work", work: card(1) });
+  assert.ok(oneTitle.includes("Titles: the phrase matches the title shown above. Titles are matched with capitals and accents ignored."), oneTitle);
+  assert.ok(unmatched({ outcome: "several_candidates", candidates: [card(1), card(2)] }).includes("Titles: the phrase matches the titles shown above."));
+  assert.ok(unmatched({ outcome: "no_title_match" }).includes("Titles: no title of an act this site holds matches the phrase. Titles are matched with capitals and accents ignored."));
 });
 
 test("an EU work's search is the EU results: the pinned wording once, each hit's heading, CELEX and wording date, its permalink, and what is not covered", async () => {
