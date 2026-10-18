@@ -79,11 +79,17 @@ function laneCount(count) {
   return count === null ? COPY.notCounted : String(count);
 }
 
-/** A matched title, the publisher's text marked in its own language, linked to the act's dossier when the card names it. */
+/**
+ * A matched title, the publisher's text marked in its own language, linked to the act's dossier when the card names the
+ * work this site holds; a title of an act this site holds no version of (the index holds titles of acts it holds no state
+ * of: on `derive-c`, 168 of the 1,502 titles "règlement grand-ducal" matches) is said so, as a reference's list says it.
+ */
 function TitleOf({ card }) {
   // The resolver searches every language's titles, so the search's language is not the title's (review of #797).
   const title = <span lang={quotationLanguageTag(card.matchedTitleLanguage)}>{card.matchedTitle}</span>;
-  return typeof card.workKey !== 'string' ? title : <a href={permalinkHref(`/lu-legilux/${card.workKey}`, CHROME_LOCALE)}>{title}</a>;
+  return typeof card.workKey !== 'string'
+    ? <Say template={COPY.candidateNotHeld} values={{ act: title }} />
+    : <a href={permalinkHref(`/lu-legilux/${card.workKey}`, CHROME_LOCALE)}>{title}</a>;
 }
 
 /** The sentence for the one act the title ladder names, by how its title matched: is, begins, or holds every word. */

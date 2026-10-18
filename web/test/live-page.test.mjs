@@ -240,6 +240,7 @@ test("the publisher's titles are marked in their own language, apart from the in
   const one = renderToStaticMarkup(h(SearchWorkResolution, { resolution: { outcome: "one_work", work: { matchedTitle: "Loi du 10 août 1991", matchedTitleLanguage: "fra", workIdentifier: "/lu-legilux/x" }, candidates: null } }));
   assert.ok(one.includes('<span lang="fr">Loi du 10 août 1991</span>'), "a matched title is marked in its own language");
   assert.doesNotMatch(one, /<a /, "a card that names no work key is said without a link");
+  assert.ok(one.includes("(this site holds no version of it)"), "and said as an act this site holds no version of");
   const several = renderToStaticMarkup(h(SearchWorkResolution, { resolution: { outcome: "several_candidates", work: null, candidates: [{ matchedTitle: "Gesetz A", matchedTitleLanguage: "deu", workIdentifier: "/a" }, { matchedTitle: "Loi B", matchedTitleLanguage: "fra", workIdentifier: "/b" }] } }));
   assert.ok(several.includes('<span lang="de">Gesetz A</span>') && several.includes('<span lang="fr">Loi B</span>'), "each candidate in its own title's language");
 });

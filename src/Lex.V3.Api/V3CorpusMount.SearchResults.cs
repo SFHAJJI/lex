@@ -377,7 +377,9 @@ internal sealed partial class V3CorpusMount
 
     /// <summary>
     /// The work key of each work the title ladder names, in the order given, by the states this index holds of its
-    /// expressions: the one key they hold, or null when they name none or several (the card is then shown without a link).
+    /// expressions: the key they hold, or null when this index holds no state of them (the title table also holds titles of
+    /// acts with no held state), and the card is then shown as an act this site holds no version of. A state's work key is
+    /// its work IRI's, so one expression's states never name two keys.
     /// </summary>
     private string?[] WorkKeysOfCards(IReadOnlyList<LuxembourgIndexResolvedWork> cards)
     {

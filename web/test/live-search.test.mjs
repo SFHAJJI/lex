@@ -240,7 +240,8 @@ test("the act a title names is on top, linked; several acts' titles are counted,
     assert.ok(markup.indexOf("data-work-resolution") < markup.indexOf("data-population"), "the act a title names comes first, above what the text search found");
   }
   const unlinked = resolved({ outcome: "one_work", work: { ...card(1), work_key: null } });
-  assert.ok(unlinked.includes('The phrase is the title of <span lang="fr">Loi du 12 novembre 2011 numéro 1.</span>.'), "a card naming no held work is said without a link");
+  assert.ok(unlinked.includes('The phrase is the title of <span lang="fr">Loi du 12 novembre 2011 numéro 1.</span> (this site holds no version of it).'),
+    "a card naming no held work is said without a link, and said not held");
 
   const twelve = resolved({ outcome: "several_candidates", candidates: Array.from({ length: 12 }, (_, index) => card(index + 1, "prefix")) });
   assert.ok(text(twelve).includes("The phrase matches the titles of 12 acts:"));
