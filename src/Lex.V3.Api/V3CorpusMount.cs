@@ -7207,8 +7207,16 @@ internal sealed partial class V3CorpusMount : IDisposable
         value.All(static character =>
             character is >= 'a' and <= 'z' or >= '0' and <= '9' or '-' or '_');
 
+    /// <summary>
+    /// Whether a value no record answers is an identifier (refused <c>identifier_unknown</c>) rather than words to look up
+    /// by title. The same on every system, as production answers: a rooted path (a site address) is an identifier, and so
+    /// is an absolute URI written with its scheme; a bare file path is not. Uri alone read <c>/lu-legilux/…</c> as a file
+    /// URI on Linux and not on Windows, and <c>C:\…</c> the other way round (CI's image lane on #980).
+    /// </summary>
     private static bool LooksLikeIdentifier(string value) =>
-        Uri.TryCreate(value, UriKind.Absolute, out _) ||
+        value.StartsWith('/') ||
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+            (!uri.IsFile || value.StartsWith("file:", StringComparison.OrdinalIgnoreCase)) ||
         value.StartsWith("eli/", StringComparison.OrdinalIgnoreCase) ||
         OfficialIdentifier.ProfileOf(value) is not null ||
         value.Length == 64 && value.All(static character =>
