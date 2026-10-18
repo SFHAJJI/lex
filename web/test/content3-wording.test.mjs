@@ -27,6 +27,8 @@ import { readEvidenceBundle } from "../scripts/reading-answer.mjs";
 import { CSV_COLUMNS, composeExport, exportCsv, exportJson } from "../scripts/export-build.mjs";
 import { exportPdf } from "../scripts/export-pdf.mjs";
 import { LIVE_CHROME } from "../scripts/live-chrome.mjs";
+import { mergeReadingPage } from "../scripts/reading-pages.mjs";
+import { cutIntoPages } from "../scripts/reading-page-samples.mjs";
 
 const web = new URL("../", import.meta.url);
 const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", web), "utf8"));
@@ -212,4 +214,20 @@ test("the exports carry the segments, and the deleted wording is never the text 
   const listAt = shown.indexOf("Wording the publisher marks deleted");
   assert.ok(textAt >= 0 && listAt > textAt, "the deleted wording follows the text, under its label");
   assert.ok(!shown.slice(textAt, listAt).includes(DELETED.slice(0, 12)), "and is never inside the text");
+});
+
+test("a later page's segments travel through the pages put together and into the export", () => {
+  const answer = capturedAnswer();
+  const article = answer.states[0].articles[30];
+  article.segments = segmentsFor(article.text);
+  answer.segments_rule = "segments rule";
+  const [one, two] = cutIntoPages(answer, 25);
+  const merged = mergeReadingPage(readEvidenceBundle(one), readEvidenceBundle(two));
+  const [state] = merged.states;
+  const read = state.articles.find((entry) => entry.publisherId === article.publisher_id);
+  assert.equal(read.holdsDeletedWording, true, "the article on the second page keeps its segments");
+  const model = composeExport({ view: merged, pinned: [{ stateSha256: state.stateSha256, publisherId: article.publisher_id }], observedAt: OBSERVED });
+  const [item] = JSON.parse(exportJson(model)).items;
+  assert.equal(item.text, article.text);
+  assert.deepEqual(item.segments.map((segment) => segment.kind), ["text", "quotation_start", "text", "quotation_end", "deleted_text", "text"]);
 });
