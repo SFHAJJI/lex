@@ -3840,14 +3840,16 @@
             "asserts_absence_of_law": false,
             "catalogue_read_no_later_than": "2026-10-01T08:00:00Z",
             "history_begins": "2024-02-01",
-            "hole": null,
+            "hole_from": null,
+            "hole_to": null,
             "language": "fra",
+            "named_state_sha256s": [],
+            "named_states": [],
             "nearest_earlier": null,
             "nearest_later": "2024-02-01",
             "reason": "before_history",
-            "reason_rule": "reason says why no state covers the date in the publisher\u0027s catalogue as this index read it: before_history, the date is before the work\u0027s first state; catalogue_hole, the state before the date ends (the publisher\u0027s end) before the next begins, and the gap (hole) is the catalogue\u0027s, never bridged; after_closed_end, the work\u0027s last state ends before the date and no later state is in the catalogue: an end of the catalogue\u0027s states, which is not an end of the law; publisher_end_convention_unclear, the date is the end the publisher states for a state that ends the day before the next begins, so whether that day belongs to it is unclear and it is given to neither; publisher_interval_invalid, the date falls where a state whose stated end is on or before its own start would apply, so no interval is read for it (its permalink still opens it); no_expression_in_language, a French state covers the date and this index holds no expression of it in the language asked (a state in another language takes its interval from its French state); states names the states the reason is about",
+            "reason_rule": "reason says why no state covers the date in the publisher\u0027s catalogue as this index read it: before_history, the date is before the work\u0027s first state; catalogue_hole, the state before the date ends (the publisher\u0027s end) before the next begins, and the gap (hole) is the catalogue\u0027s, never bridged; after_closed_end, the work\u0027s last state ends before the date and no later state is in the catalogue: an end of the catalogue\u0027s states, which is not an end of the law; publisher_end_convention_unclear, the date is the end the publisher states for a state that ends the day before the next begins, so whether that day belongs to it is unclear and it is given to neither; publisher_interval_invalid, the date falls where a state whose stated end is on or before its own start would apply, so no interval is read for it (its permalink still opens it); no_expression_in_language, a French state covers the date and this index holds no expression of it in the language asked (a state in another language takes its interval from its French state); named_states (with named_state_sha256s) names the states the reason is about, by permalink, or by stable coordinate for a state the catalogue names no expression of; hole_from and hole_to are a hole\u0027s span; after a closed end, closed_on is the last state\u0027s end, and base_act_rule says what the base act\u0027s facts beside it are",
             "requested_date": "1990-01-01",
-            "states": [],
             "what_would_answer": [
               "new_official_observation"
             ]
@@ -9363,14 +9365,16 @@
             "bound": "from",
             "catalogue_read_no_later_than": "2026-10-01T08:00:00Z",
             "history_begins": "2024-02-01",
-            "hole": null,
+            "hole_from": null,
+            "hole_to": null,
             "language": "fra",
+            "named_state_sha256s": [],
+            "named_states": [],
             "nearest_earlier": null,
             "nearest_later": "2024-02-01",
             "reason": "before_history",
-            "reason_rule": "reason says why no state covers the date in the publisher\u0027s catalogue as this index read it: before_history, the date is before the work\u0027s first state; catalogue_hole, the state before the date ends (the publisher\u0027s end) before the next begins, and the gap (hole) is the catalogue\u0027s, never bridged; after_closed_end, the work\u0027s last state ends before the date and no later state is in the catalogue: an end of the catalogue\u0027s states, which is not an end of the law; publisher_end_convention_unclear, the date is the end the publisher states for a state that ends the day before the next begins, so whether that day belongs to it is unclear and it is given to neither; publisher_interval_invalid, the date falls where a state whose stated end is on or before its own start would apply, so no interval is read for it (its permalink still opens it); no_expression_in_language, a French state covers the date and this index holds no expression of it in the language asked (a state in another language takes its interval from its French state); states names the states the reason is about",
+            "reason_rule": "reason says why no state covers the date in the publisher\u0027s catalogue as this index read it: before_history, the date is before the work\u0027s first state; catalogue_hole, the state before the date ends (the publisher\u0027s end) before the next begins, and the gap (hole) is the catalogue\u0027s, never bridged; after_closed_end, the work\u0027s last state ends before the date and no later state is in the catalogue: an end of the catalogue\u0027s states, which is not an end of the law; publisher_end_convention_unclear, the date is the end the publisher states for a state that ends the day before the next begins, so whether that day belongs to it is unclear and it is given to neither; publisher_interval_invalid, the date falls where a state whose stated end is on or before its own start would apply, so no interval is read for it (its permalink still opens it); no_expression_in_language, a French state covers the date and this index holds no expression of it in the language asked (a state in another language takes its interval from its French state); named_states (with named_state_sha256s) names the states the reason is about, by permalink, or by stable coordinate for a state the catalogue names no expression of; hole_from and hole_to are a hole\u0027s span; after a closed end, closed_on is the last state\u0027s end, and base_act_rule says what the base act\u0027s facts beside it are",
             "requested_date": "1990-01-01",
-            "states": [],
             "what_would_answer": [
               "new_official_observation"
             ]

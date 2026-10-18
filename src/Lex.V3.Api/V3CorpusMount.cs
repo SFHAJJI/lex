@@ -3178,7 +3178,12 @@ internal sealed partial class V3CorpusMount : IDisposable
         if (CandidateStates(candidates) is { } candidateStates)
         {
             // Index 9 names each candidate's kind, interval, boundary, digest and text status (design §3.2).
-            payload["candidate_states"] = candidateStates;
+            foreach (var (key, value) in candidateStates.ToArray())
+            {
+                candidateStates.Remove(key);
+                payload[key] = value;
+            }
+
             payload["candidate_states_rule"] = AmbiguousCandidatesRule;
         }
 

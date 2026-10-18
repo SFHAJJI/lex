@@ -325,7 +325,7 @@ public sealed class V3CorpusDiffMountTests
         Assert.AreEqual("no_version_for_date", beforeHistory.Refusal!.Code);
         // On index 9 the interval rules say why (S7a); an index 8 or 6 keeps the seven properties (base-answers.json).
         Assert.AreEqual(
-            "asserts_absence_of_law,bound,catalogue_read_no_later_than,history_begins,hole,language,nearest_earlier,nearest_later,reason,reason_rule,requested_date,states,what_would_answer",
+            "asserts_absence_of_law,bound,catalogue_read_no_later_than,history_begins,hole_from,hole_to,language,named_state_sha256s,named_states,nearest_earlier,nearest_later,reason,reason_rule,requested_date,what_would_answer",
             string.Join(",", beforeHistory.Refusal.HelpfulPayload.EnumerateObject().Select(static property => property.Name)),
             "diff names the bound: exactly these properties, as served in the envelope's canonical order.");
         Assert.AreEqual("before_history", beforeHistory.Refusal.HelpfulPayload.GetProperty("reason").GetString());
@@ -346,7 +346,7 @@ public sealed class V3CorpusDiffMountTests
         var ambiguous = await DiffAsync(mountWithTwin, $"/lu-legilux/{fixture.WorkKey}", fixture.ApplicabilityDate, laterDate);
         Assert.AreEqual("ambiguous_version", ambiguous.Refusal!.Code);
         Assert.AreEqual(
-            "bound,candidate_states,candidate_states_rule,candidates,requested_date",
+            "bound,candidate_applicability_dates,candidate_applicable_to_sources,candidate_applicable_tos,candidate_boundaries,candidate_state_kinds,candidate_state_sha256s,candidate_states_rule,candidate_text_statuses,candidates,requested_date",
             string.Join(",", ambiguous.Refusal.HelpfulPayload.EnumerateObject().Select(static property => property.Name)),
             "diff names the bound: exactly these properties, as served in the envelope's canonical order.");
         Assert.AreEqual(PublisherId.LuLegilux, ambiguous.Context.Publisher);

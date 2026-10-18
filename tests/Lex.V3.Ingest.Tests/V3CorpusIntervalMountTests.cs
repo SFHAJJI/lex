@@ -127,8 +127,9 @@ public sealed class V3CorpusIntervalMountTests
         return envelope.Refusal.HelpfulPayload;
     }
 
+    /// <summary>The states a refusal names, each by its date (the payload names them by permalink, scalars only).</summary>
     private static string[] Named(JsonElement payload) =>
-        payload.GetProperty("states").EnumerateArray().Select(static state => state.GetProperty("publisher_legal_resource_iri").GetString()![Eli.Length..]).ToArray();
+        payload.GetProperty("named_states").EnumerateArray().Select(static state => state.GetString()!.Split('/')[3][..10]).ToArray();
 
     [TestMethod]
     public async Task ACodeStateIsServedFromItsStartToTheDayBeforeItsEndAndNotBeforeItsHistory()
@@ -172,27 +173,36 @@ public sealed class V3CorpusIntervalMountTests
         Assert.AreEqual(W("code/civil/20180401"), misfiled.GetProperty("official_identity").GetString());
         Assert.AreEqual(W("code/civil/20180401"), misfiled.GetProperty("official_source").GetString());
         Assert.AreEqual("none", misfiled.GetProperty("retained_transport_evidence").GetString());
-        Assert.AreEqual("not_available_misfiled", misfiled.GetProperty("state").GetProperty("text_status").GetString());
-        StringAssert.StartsWith(misfiled.GetProperty("state").GetProperty("text_status_reason").GetString(), "content consistency: shared_file:");
+        Assert.AreEqual("not_available_misfiled", misfiled.GetProperty("text_status").GetString());
+        StringAssert.StartsWith(misfiled.GetProperty("text_status_reason").GetString(), "content consistency: shared_file:");
+        Assert.AreEqual("2018-04-01", misfiled.GetProperty("applicability_date").GetString());
+        Assert.AreEqual("code", misfiled.GetProperty("state_kind").GetString());
         Assert.IsFalse(misfiled.GetProperty("asserts_absence_of_law").GetBoolean());
         Assert.AreEqual("not_available_pdf",
-            Refused(await AsOfAsync(mount, "code-civil", "2020-06-01"), "text_not_available").GetProperty("state").GetProperty("text_status").GetString());
-        var notAcquired = Refused(await AsOfAsync(mount, "code-civil", "2027-02-01"), "text_not_available").GetProperty("state");
+            Refused(await AsOfAsync(mount, "code-civil", "2020-06-01"), "text_not_available").GetProperty("text_status").GetString());
+        var notAcquired = Refused(await AsOfAsync(mount, "code-civil", "2027-02-01"), "text_not_available");
         Assert.AreEqual("not_acquired", notAcquired.GetProperty("text_status").GetString());
         Assert.AreEqual(JsonValueKind.Null, notAcquired.GetProperty("permalink").ValueKind, "a state naming no expression has no permalink");
-        Assert.IsTrue(notAcquired.GetProperty("provisional").GetBoolean());
+        Assert.AreEqual("/lu-legilux/code-civil/2027-01-01", notAcquired.GetProperty("stable_coordinate").GetString());
+        // Every member a scalar or a list of scalars, as a refusal card reads payloads.
+        foreach (var payload in new[] { misfiled, notAcquired })
+        {
+            Assert.IsTrue(payload.EnumerateObject().All(static member => member.Value.ValueKind is not JsonValueKind.Object &&
+                (member.Value.ValueKind != JsonValueKind.Array || member.Value.EnumerateArray().All(static item => item.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array)))));
+        }
 
         // After an act's withheld consolidation: the consolidation covers the date, so the act as published is not served.
         var withheld = Refused(await AsOfAsync(mount, "loi-1798-11-03-n1", "2020-06-01"), "text_withheld");
         Assert.AreEqual(W("loi/1798/11/03/n1/consolide/20200101"), withheld.GetProperty("official_identity").GetString());
         Assert.AreEqual(W("loi/1798/11/03/n1/consolide/20200101"), withheld.GetProperty("official_link").GetString());
-        Assert.AreEqual(withheld.GetProperty("state").GetProperty("state_sha256").GetString(), withheld.GetProperty("content_sha256").GetString());
-        Assert.AreEqual("withheld_rights", withheld.GetProperty("state").GetProperty("text_status").GetString());
+        Assert.AreEqual(withheld.GetProperty("state_sha256").GetString(), withheld.GetProperty("content_sha256").GetString());
+        Assert.AreEqual("withheld_rights", withheld.GetProperty("text_status").GetString());
 
         // The textless state's own permalink is refused for its text, never unknown.
-        var permalink = withheld.GetProperty("state").GetProperty("permalink").GetString()!;
-        var pinned = await AskAsync(mount, "as_of", new { identifier = permalink, date = "2020-01-01" });
-        Assert.AreEqual(withheld.GetProperty("state").GetRawText(), Refused(pinned, "text_withheld").GetProperty("state").GetRawText());
+        var permalink = withheld.GetProperty("permalink").GetString()!;
+        var pinned = Refused(await AskAsync(mount, "as_of", new { identifier = permalink, date = "2020-01-01" }), "text_withheld");
+        Assert.AreEqual(withheld.GetProperty("state_sha256").GetString(), pinned.GetProperty("state_sha256").GetString());
+        Assert.AreEqual("withheld_rights", pinned.GetProperty("text_status").GetString());
         Refused(await AskAsync(mount, "evidence_bundle", new { identifier = permalink, date = "2020-01-01" }), "text_withheld");
     }
 
@@ -205,32 +215,33 @@ public sealed class V3CorpusIntervalMountTests
         // The hole between the withheld consolidation's end (2021-06-01, the publisher's) and the next state.
         var hole = Refused(await AsOfAsync(mount, "loi-1798-11-03-n1", "2021-07-01"), "no_version_for_date");
         Assert.AreEqual("catalogue_hole", hole.GetProperty("reason").GetString());
-        Assert.AreEqual("2021-06-01", hole.GetProperty("hole").GetProperty("from").GetString());
-        Assert.AreEqual("2022-01-01", hole.GetProperty("hole").GetProperty("to").GetString());
+        Assert.AreEqual("2021-06-01", hole.GetProperty("hole_from").GetString());
+        Assert.AreEqual("2022-01-01", hole.GetProperty("hole_to").GetString());
         Assert.AreEqual("2020-01-01", hole.GetProperty("nearest_earlier").GetString(), "index 9 names the state before the date");
         Assert.AreEqual("2022-01-01", hole.GetProperty("nearest_later").GetString());
         Assert.AreEqual("1798-11-07", hole.GetProperty("history_begins").GetString());
-        CollectionAssert.AreEqual(new[] { "loi/1798/11/03/n1/consolide/20200101" }, Named(hole));
+        CollectionAssert.AreEqual(new[] { "2020-01-01" }, Named(hole));
         Assert.AreEqual("2026-10-12T18:17:05Z", hole.GetProperty("catalogue_read_no_later_than").GetString());
 
         // The end day of a suspected inclusive end: given to neither state, and never called a hole.
         Assert.AreEqual("loi/1996/11/07/n1/consolide/20200101", Resource(Served(await AsOfAsync(mount, "loi-1996-11-07-n1", "2022-12-30"))));
         var unclear = Refused(await AsOfAsync(mount, "loi-1996-11-07-n1", "2022-12-31"), "no_version_for_date");
         Assert.AreEqual("publisher_end_convention_unclear", unclear.GetProperty("reason").GetString());
-        CollectionAssert.AreEqual(new[] { "loi/1996/11/07/n1/consolide/20200101", "loi/1996/11/07/n1/consolide/20230101" }, Named(unclear));
-        Assert.AreEqual(JsonValueKind.Null, unclear.GetProperty("hole").ValueKind);
+        CollectionAssert.AreEqual(new[] { "2020-01-01", "2023-01-01" }, Named(unclear));
+        Assert.AreEqual(JsonValueKind.Null, unclear.GetProperty("hole_from").ValueKind);
         Assert.AreEqual("loi/1996/11/07/n1/consolide/20230101", Resource(Served(await AsOfAsync(mount, "loi-1996-11-07-n1", "2023-01-01"))));
 
         // Where a state that ends on or before its start would apply: refused, naming it; its own permalink still opens it.
         var invalidFirst = Refused(await AsOfAsync(mount, "rgd-2007-06-07-n2", "2023-01-01"), "no_version_for_date");
         Assert.AreEqual("publisher_interval_invalid", invalidFirst.GetProperty("reason").GetString());
-        CollectionAssert.AreEqual(new[] { "rgd/2007/06/07/n2/consolide/20221214" }, Named(invalidFirst));
+        CollectionAssert.AreEqual(new[] { "2022-12-14" }, Named(invalidFirst));
         var invalidHeld = Refused(await AsOfAsync(mount, "rgd-2007-06-07-n2", "2023-08-01"), "no_version_for_date");
         Assert.AreEqual("publisher_interval_invalid", invalidHeld.GetProperty("reason").GetString());
-        var invalidState = invalidHeld.GetProperty("states").EnumerateArray().Single();
-        Assert.AreEqual("invalid", invalidState.GetProperty("boundary").GetString());
-        var opened = Served(await AskAsync(mount, "as_of", new { identifier = invalidState.GetProperty("permalink").GetString(), date = "2023-07-17" }));
-        Assert.AreEqual(invalidState.GetProperty("state_sha256").GetString(), opened.GetProperty("state_sha256").GetString());
+        CollectionAssert.AreEqual(new[] { "2023-07-17" }, Named(invalidHeld));
+        var invalidPermalink = invalidHeld.GetProperty("named_states").EnumerateArray().Single().GetString();
+        var opened = Served(await AskAsync(mount, "as_of", new { identifier = invalidPermalink, date = "2023-07-17" }));
+        Assert.AreEqual(invalidHeld.GetProperty("named_state_sha256s").EnumerateArray().Single().GetString(), opened.GetProperty("state_sha256").GetString());
+        Assert.AreEqual("invalid", opened.GetProperty("boundary").GetString());
     }
 
     [TestMethod]
@@ -244,12 +255,15 @@ public sealed class V3CorpusIntervalMountTests
         Assert.AreEqual("2015-01-01", closed.GetProperty("closed_on").GetString());
         Assert.AreEqual("2010-01-01", closed.GetProperty("nearest_earlier").GetString());
         Assert.AreEqual(JsonValueKind.Null, closed.GetProperty("nearest_later").ValueKind);
-        Assert.AreEqual(W("loi/2005/01/01/n1/jo"), closed.GetProperty("base_act").GetProperty("iri").GetString());
-        Assert.AreEqual("2015-01-01", closed.GetProperty("base_act").GetProperty("no_longer_in_force").EnumerateArray().Single().GetProperty("value").GetString());
+        Assert.AreEqual(W("loi/2005/01/01/n1/jo"), closed.GetProperty("base_act_iri").GetString());
+        Assert.AreEqual(V3CorpusMount.BaseActRule, closed.GetProperty("base_act_rule").GetString());
+        Assert.IsFalse(Refused(await AsOfAsync(mount, "loi-1798-11-03-n1", "2021-07-01"), "no_version_for_date").TryGetProperty("base_act_iri", out _),
+            "only a closed end names the base act's facts");
+        Assert.AreEqual("2015-01-01", closed.GetProperty("base_act_no_longer_in_force").EnumerateArray().Single().GetString());
 
         var stillInForce = Refused(await AsOfAsync(mount, "loi-2006-02-02-n1", "2016-01-01"), "no_version_for_date");
         Assert.AreEqual("after_closed_end", stillInForce.GetProperty("reason").GetString());
-        Assert.AreEqual(0, stillInForce.GetProperty("base_act").GetProperty("no_longer_in_force").GetArrayLength(),
+        Assert.AreEqual(0, stillInForce.GetProperty("base_act_no_longer_in_force").GetArrayLength(),
             "the catalogue does not mark the base act no longer in force, and the refusal says only what it holds");
         Assert.IsFalse(stillInForce.GetProperty("asserts_absence_of_law").GetBoolean());
 
@@ -285,11 +299,11 @@ public sealed class V3CorpusIntervalMountTests
         // An act and its same-date consolidation whose wordings differ: ambiguous, each candidate named with its interval.
         var differ = Refused(await AsOfAsync(mount, "loi-2021-05-05-n1", "2021-06-01"), "ambiguous_version");
         Assert.AreEqual(2, differ.GetProperty("candidates").GetArrayLength());
-        var candidates = differ.GetProperty("candidate_states").EnumerateArray().ToArray();
+        Assert.AreEqual(2, differ.GetProperty("candidate_state_sha256s").GetArrayLength());
         CollectionAssert.AreEquivalent(new[] { "as_published", "consolidation" },
-            candidates.Select(static candidate => candidate.GetProperty("state_kind").GetString()).ToArray());
-        Assert.IsTrue(candidates.All(static candidate => candidate.GetProperty("applicability_date").GetString() == "2021-05-05" &&
-                                                        candidate.GetProperty("text_status").GetString() == "held"));
+            differ.GetProperty("candidate_state_kinds").EnumerateArray().Select(static kind => kind.GetString()).ToArray());
+        Assert.IsTrue(differ.GetProperty("candidate_applicability_dates").EnumerateArray().All(static date => date.GetString() == "2021-05-05"));
+        Assert.IsTrue(differ.GetProperty("candidate_text_statuses").EnumerateArray().All(static status => status.GetString() == "held"));
         Assert.AreEqual(V3CorpusMount.AmbiguousCandidatesRule, differ.GetProperty("candidate_states_rule").GetString());
     }
 

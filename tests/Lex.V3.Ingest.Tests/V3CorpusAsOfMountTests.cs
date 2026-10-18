@@ -103,11 +103,11 @@ public sealed class V3CorpusAsOfMountTests
         // The fixture is an index 9: the interval rules say why (S7a); an index 8 or 6 keeps the six properties, which
         // base-answers.json holds byte for byte.
         Assert.AreEqual(
-            "asserts_absence_of_law,catalogue_read_no_later_than,history_begins,hole,language,nearest_earlier,nearest_later,reason,reason_rule,requested_date,states,what_would_answer",
+            "asserts_absence_of_law,catalogue_read_no_later_than,history_begins,hole_from,hole_to,language,named_state_sha256s,named_states,nearest_earlier,nearest_later,reason,reason_rule,requested_date,what_would_answer",
             string.Join(",", payload.EnumerateObject().Select(static property => property.Name)),
             "as_of has one date, so its refusal names no bound: exactly these properties, as served in the envelope's canonical order.");
         Assert.AreEqual("before_history", payload.GetProperty("reason").GetString());
-        Assert.AreEqual(0, payload.GetProperty("states").GetArrayLength(), "the date is before every state, so none is named");
+        Assert.AreEqual(0, payload.GetProperty("named_states").GetArrayLength(), "the date is before every state, so none is named");
         // The absence evidence the refusal card requires: a route out, and no claim that the law is absent.
         Assert.IsFalse(payload.GetProperty("asserts_absence_of_law").GetBoolean());
         CollectionAssert.AreEqual(new[] { "new_official_observation" }, payload.GetProperty("what_would_answer").EnumerateArray().Select(static value => value.GetString()).ToArray());
@@ -151,8 +151,7 @@ public sealed class V3CorpusAsOfMountTests
         Assert.AreEqual("no_version_for_date", germanOnly.Refusal!.Code);
         Assert.AreEqual("no_expression_in_language", germanOnly.Refusal.HelpfulPayload.GetProperty("reason").GetString());
         Assert.AreEqual("deu", germanOnly.Refusal.HelpfulPayload.GetProperty("language").GetString());
-        Assert.AreEqual(laterDate,
-            germanOnly.Refusal.HelpfulPayload.GetProperty("states").EnumerateArray().Single().GetProperty("applicability_date").GetString());
+        StringAssert.Contains(germanOnly.Refusal.HelpfulPayload.GetProperty("named_states").EnumerateArray().Single().GetString(), "/" + laterDate + "--");
         var germanBefore = await AsOfAsync(mount, $"/lu-legilux/{fixture.WorkKey}", Shift(laterDate, -1), "deu");
         Assert.AreEqual(V3Verdicts.Answer, germanBefore.Verdict);
         Assert.AreEqual("deu", germanBefore.Result!.Value.GetProperty("requested_language").GetString());
@@ -187,10 +186,10 @@ public sealed class V3CorpusAsOfMountTests
         Assert.AreEqual("ambiguous_version", envelope.Refusal!.Code);
         // On index 9 each candidate is named with its interval, boundary, digest and text status (S7a).
         Assert.AreEqual(
-            "candidate_states,candidate_states_rule,candidates,requested_date",
+            "candidate_applicability_dates,candidate_applicable_to_sources,candidate_applicable_tos,candidate_boundaries,candidate_state_kinds,candidate_state_sha256s,candidate_states_rule,candidate_text_statuses,candidates,requested_date",
             string.Join(",", envelope.Refusal.HelpfulPayload.EnumerateObject().Select(static property => property.Name)),
             "as_of has one date, so its refusal names no bound: exactly these properties, as served in the envelope's canonical order.");
-        Assert.AreEqual(2, envelope.Refusal.HelpfulPayload.GetProperty("candidate_states").GetArrayLength(),
+        Assert.AreEqual(2, envelope.Refusal.HelpfulPayload.GetProperty("candidate_state_sha256s").GetArrayLength(),
             "two acts as published on one date with one wording: neither is the one act as published, so none is chosen");
         Assert.AreEqual(PublisherId.LuLegilux, envelope.Context.Publisher);
         Assert.AreEqual("lu", envelope.Context.Jurisdiction);

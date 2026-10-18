@@ -142,8 +142,9 @@ internal sealed partial class V3CorpusMount
         var historyBegins = chain.Length == 0 ? null : chain[0].ApplicabilityDate;
         var nearestLater = chain.Select(static row => row.ApplicabilityDate)
             .FirstOrDefault(from => string.CompareOrdinal(from, date) > 0);
-        var nearestEarlier = chain.Where(row => !string.Equals(row.Boundary, "invalid", StringComparison.Ordinal) &&
-                                                string.CompareOrdinal(row.ApplicabilityDate, date) <= 0)
+        // The latest state date on or before the date, an invalid interval's included: a state is held there, which its
+        // permalink opens, and a refusal names a date on each side whenever a history holds one.
+        var nearestEarlier = chain.Where(row => string.CompareOrdinal(row.ApplicabilityDate, date) <= 0)
             .Select(static row => row.ApplicabilityDate)
             .LastOrDefault();
 
@@ -677,7 +678,14 @@ internal sealed partial class V3CorpusMount
         "is given to neither; publisher_interval_invalid, the date falls where a state whose stated end is on or before its own start " +
         "would apply, so no interval is read for it (its permalink still opens it); no_expression_in_language, a French state covers " +
         "the date and this index holds no expression of it in the language asked (a state in another language takes its interval " +
-        "from its French state); states names the states the reason is about";
+        "from its French state); named_states (with named_state_sha256s) names the states the reason is about, by permalink, or by " +
+        "stable coordinate for a state the catalogue names no expression of; hole_from and hole_to are a hole's span; after a closed " +
+        "end, closed_on is the last state's end, and base_act_rule says what the base act's facts beside it are";
+
+    internal const string BaseActRule =
+        "base_act_iri is the work's act as published; base_act_in_force_status and base_act_no_longer_in_force are the publisher's own " +
+        "assertions about it (inForceStatus, dateNoLongerInForce), verbatim and unread, empty when it asserts none: the end of the " +
+        "catalogue's last state says nothing of them, and this answer draws nothing from them";
 
     internal const string TextlessRule =
         "the state covering the date is in the publisher's catalogue and this index holds none of its text: text_status says why " +
@@ -734,6 +742,7 @@ internal sealed partial class V3CorpusMount
         payload["reason"] = cover.Reason;
         payload["reason_rule"] = NoVersionReasonRule;
         payload["catalogue_read_no_later_than"] = _reader!.ResolveObservations()[^1].BuiltAt;
+        // Every member a scalar or a list of scalars, so a refusal card reads it as it reads every other (the web's payload rule).
         var named = new List<LuxembourgIndexCatalogueState>();
         if (cover.Row is not null && cover.Reason is not (ReasonBeforeHistory or ReasonNoExpressionInLanguage))
         {
@@ -741,21 +750,23 @@ internal sealed partial class V3CorpusMount
         }
 
         named.AddRange(cover.Others);
-        payload["states"] = new JsonArray(named.Select(static row => (JsonNode)CatalogueRowSummary(row)).ToArray());
-        payload["hole"] = cover.Hole is { } hole ? new JsonObject { ["from"] = hole.From, ["to"] = hole.To } : null;
-        if (cover.Reason == ReasonAfterClosedEnd && cover.Row is { } last)
+        payload["named_states"] = new JsonArray(named.Select(static row => (JsonNode)RowAddress(row)).ToArray());
+        payload["named_state_sha256s"] = new JsonArray(named.Select(static row => (JsonNode)row.StateSha256).ToArray());
+        payload["hole_from"] = cover.Hole?.From;
+        payload["hole_to"] = cover.Hole?.To;
+        // After a closed end only, the base act's own facts, verbatim (BaseActRule): the end of the catalogue's last state is not
+        // the end of the law, and the catalogue may or may not say anything of the base act.
+        if (cover.Reason == ReasonAfterClosedEnd && cover.Row is { } closed)
         {
-            // The base act's own force facts, verbatim, beside the closed end: the end of the catalogue's last state is not the end
-            // of the law, and the catalogue may or may not say the base act is no longer in force.
-            var baseAct = last.PublisherWorkIri + "/jo";
+            var baseAct = closed.PublisherWorkIri + "/jo";
             var facts = _reader.ResolveFacts([baseAct]);
-            payload["closed_on"] = last.ApplicableTo;
-            payload["base_act"] = new JsonObject
-            {
-                ["iri"] = baseAct,
-                ["in_force_status"] = JsonSerializer.SerializeToNode(FactsOf(facts, Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.InForceStatus, baseAct)),
-                ["no_longer_in_force"] = JsonSerializer.SerializeToNode(FactsOf(facts, Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.DateNoLongerInForce, baseAct)),
-            };
+            payload["closed_on"] = closed.ApplicableTo;
+            payload["base_act_iri"] = baseAct;
+            payload["base_act_in_force_status"] = new JsonArray(FactsOf(facts, Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.InForceStatus, baseAct)
+                .Select(static fact => (JsonNode)fact.value).ToArray());
+            payload["base_act_no_longer_in_force"] = new JsonArray(FactsOf(facts, Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.DateNoLongerInForce, baseAct)
+                .Select(static fact => (JsonNode)fact.value).ToArray());
+            payload["base_act_rule"] = BaseActRule;
         }
 
         using var document = JsonSerializer.SerializeToDocument(payload);
@@ -796,7 +807,18 @@ internal sealed partial class V3CorpusMount
             payload["bound"] = bound;
         }
 
-        payload["state"] = CatalogueRowSummary(row);
+        payload["state_sha256"] = row.StateSha256;
+        payload["permalink"] = row.Language.Length == 0 ? null : LuxembourgPermalink(row.WorkKey, row.ApplicabilityDate, row.StateSha256, row.Language);
+        payload["stable_coordinate"] = $"/lu-legilux/{row.WorkKey}/{row.ApplicabilityDate}";
+        payload["language"] = row.Language.Length == 0 ? null : row.Language;
+        payload["applicability_date"] = row.ApplicabilityDate;
+        payload["date_role"] = row.DateRole;
+        payload["state_kind"] = row.StateKind;
+        payload["applicable_to"] = row.ApplicableTo;
+        payload["applicable_to_source"] = row.ApplicableToSource;
+        payload["boundary"] = row.Boundary;
+        payload["text_status"] = row.TextStatus;
+        payload["text_status_reason"] = row.TextStatusReason;
         payload["rule"] = TextlessRule;
         payload["what_would_answer"] = new JsonArray((JsonNode)"new_official_observation");
         payload["asserts_absence_of_law"] = false;
@@ -807,33 +829,49 @@ internal sealed partial class V3CorpusMount
     }
 
     internal const string AmbiguousCandidatesRule =
-        "on lex-v3-luxembourg-index/9 candidate_states names every state whose interval holds the date, with its kind, its interval " +
-        "(applicability_date to applicable_to, and that end's source), its boundary, its digest and its text status; they are not one " +
-        "wording held, so none is chosen";
+        "on lex-v3-luxembourg-index/9 the candidate_ lists name every state whose interval holds the date, each in the order of " +
+        "candidate_state_sha256s: its kind, its interval (candidate_applicability_dates to candidate_applicable_tos, and that end's " +
+        "source), its boundary and its text status; they are not one wording held, so none is chosen";
 
     /// <summary>
     /// The candidates of an index 9 ambiguity, by the permalinks the refusal lists (each <c>/lu-legilux/{work}/{date}--{digest}/{language}</c>):
     /// the catalogue row of each, or none when the index holds no row for it.
     /// </summary>
-    private JsonArray? CandidateStates(IReadOnlyList<string> candidates)
+    private JsonObject? CandidateStates(IReadOnlyList<string> candidates)
     {
         if (!RulesByInterval)
         {
             return null;
         }
 
-        var rows = new List<JsonNode>();
+        var rows = new List<LuxembourgIndexCatalogueState>();
         foreach (var candidate in candidates)
         {
             if (PermalinkSegments(candidate, "lu-legilux") is { } segments &&
                 CatalogueOf(segments.Work).ByDigest.GetValueOrDefault(segments.Digest) is { } row)
             {
-                rows.Add(CatalogueRowSummary(row));
+                rows.Add(row);
             }
         }
 
-        return new JsonArray(rows.ToArray());
+        return new JsonObject
+        {
+            // Lists of scalars, each in the order of candidate_state_sha256s, so a refusal card reads them as every other payload.
+            ["candidate_state_sha256s"] = new JsonArray(rows.Select(static row => (JsonNode)row.StateSha256).ToArray()),
+            ["candidate_state_kinds"] = new JsonArray(rows.Select(static row => (JsonNode?)row.StateKind).ToArray()),
+            ["candidate_applicability_dates"] = new JsonArray(rows.Select(static row => (JsonNode)row.ApplicabilityDate).ToArray()),
+            ["candidate_applicable_tos"] = new JsonArray(rows.Select(static row => (JsonNode?)row.ApplicableTo).ToArray()),
+            ["candidate_applicable_to_sources"] = new JsonArray(rows.Select(static row => (JsonNode?)row.ApplicableToSource).ToArray()),
+            ["candidate_boundaries"] = new JsonArray(rows.Select(static row => (JsonNode?)row.Boundary).ToArray()),
+            ["candidate_text_statuses"] = new JsonArray(rows.Select(static row => (JsonNode)row.TextStatus).ToArray()),
+        };
     }
+
+    /// <summary>A catalogue row's address: its permalink, or its stable coordinate when the catalogue names no expression of it.</summary>
+    private static string RowAddress(LuxembourgIndexCatalogueState row) =>
+        row.Language.Length == 0
+            ? $"/lu-legilux/{row.WorkKey}/{row.ApplicabilityDate}"
+            : LuxembourgPermalink(row.WorkKey, row.ApplicabilityDate, row.StateSha256, row.Language);
 
     /// <summary>
     /// The state a hash-pinned permalink names when it is a textless row of index 9: its text is not held, so the permalink is
