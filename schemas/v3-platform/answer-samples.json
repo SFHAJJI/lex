@@ -5820,14 +5820,48 @@
       "object_type": "quote",
       "scenario": "a phrase the held text carries, in its language: strict hits, then relaxed hits that carry every term",
       "answer": {
+        "acts": [
+          {
+            "as_published": "as published; may have been amended since; no consolidated text",
+            "dossier": "/lu-legilux/loi-1991-08-10-n3",
+            "hits": 5,
+            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "title": null,
+            "title_kind": null,
+            "title_language": null,
+            "work_key": "loi-1991-08-10-n3"
+          }
+        ],
+        "acts_rule": "acts names each act of this page once, in the order its hits first appear: its work key, its dossier, the publisher\u0027s title of it this index holds (in the language searched when one is held, else French, else another; a title before a short title), or null when none is held, the as-published label when every state this index holds of it is the act as first published, and its hits in the whole result, not the page",
         "ambiguous_works": [],
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query as typed for a strict hit, a term or overlapping terms for a relaxed hit; a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
         "hit_unit": "a hit is one article of one held state, not a provision: a provision whose wording never changed is a hit in every state that holds it",
         "hits": [
           {
             "applicability_date": "2024-02-01",
             "article_identity_sha256": "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
+            "extract": {
+              "byte_end": 362,
+              "byte_start": 46,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "se tient dans la premi\u00E8re quinzaine du mois de juillet.(2)L\u2019ordre du jour de l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " annuelle comprend notamment la pr\u00E9sentation du rapport d\u2019activit\u00E9s du B\u00E2tonnier et du Conseil de l\u2019Ordre, la pr\u00E9sentation des comptes relatifs \u00E0 l\u2019ann\u00E9e \u00E9coul\u00E9e, l\u2019approbation de ces comptes, la"
+                }
+              ],
+              "text_byte_length": 1400,
+              "text_sha256": "ad6654247c3b53a0f9bb0b944b7348e2765e2030618e9f8ec1215eb9f772d835"
+            },
             "lane": "strict",
             "language": "fra",
             "match_reasons": [
@@ -5845,6 +5879,34 @@
           {
             "applicability_date": "2024-02-01",
             "article_identity_sha256": "2bcf7567d4fec6a1a48c08e2007848bf9dbcf548c4e759da1cb252870d2dcfb5",
+            "extract": {
+              "byte_end": 623,
+              "byte_start": 310,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "sans d\u00E9passer le nombre de quinze membres.(2)Le Conseil de l\u2019Ordre \u00E9lu par l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " annuelle entre en fonction le 15 septembre qui suit l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " et reste en fonction pendant deux ans.(3)Le B\u00E2tonnier et les membres du Conseil de l\u2019ordre sont r\u00E9\u00E9ligibles.(4)Les membres du"
+                }
+              ],
+              "text_byte_length": 1891,
+              "text_sha256": "e87969f9e9db76c969142a112635b667b33b82b796addde79b95cf168676aa01"
+            },
             "lane": "strict",
             "language": "fra",
             "match_reasons": [
@@ -5861,24 +5923,27 @@
           },
           {
             "applicability_date": "2024-02-01",
-            "article_identity_sha256": "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
-            "lane": "strict",
-            "language": "fra",
-            "match_reasons": [
-              "exact_phrase"
-            ],
-            "publisher_id": "art_24",
-            "publisher_wid": null,
-            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
-            "resolve": {
-              "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
-            },
-            "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
-            "work_key": "loi-1991-08-10-n3"
-          },
-          {
-            "applicability_date": "2024-02-01",
             "article_identity_sha256": "f3c96389f8e28c9a15a4f114bd4506f338444a770fc7a6d17c7910f84ec90b8d",
+            "extract": {
+              "byte_end": 372,
+              "byte_start": 63,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "l\u2019Ordre judiciairement et extrajudiciairement. Il convoque et pr\u00E9side l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " et le Conseil de l\u2019ordre. Il peut d\u00E9l\u00E9guer l\u2019exercice de fonctions d\u00E9termin\u00E9es \u00E0 un ou plusieurs membres du Conseil de l\u2019ordre. En cas de d\u00E9c\u00E8s, de d\u00E9mission ou d\u2019emp\u00EAchement du B\u00E2tonnier, ses"
+                }
+              ],
+              "text_byte_length": 572,
+              "text_sha256": "402630f0d2366799a10fe16c8c49e4812adc0125175af6c12f3727d3ecc33011"
+            },
             "lane": "strict",
             "language": "fra",
             "match_reasons": [
@@ -5895,7 +5960,96 @@
           },
           {
             "applicability_date": "2024-02-01",
+            "article_identity_sha256": "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
+            "extract": {
+              "byte_end": 465,
+              "byte_start": 142,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "\u00E0 la liste I des avocats dont huit sont \u00E9lus \u00E0 la majorit\u00E9 relative par l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " de l\u2019Ordre de Luxembourg et un par l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " de l\u2019Ordre de Diekirch. L\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " de l\u2019Ordre de Luxembourg \u00E9lit huit suppl\u00E9ants et l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " de l\u2019Ordre de Diekirch un"
+                }
+              ],
+              "text_byte_length": 2101,
+              "text_sha256": "3cfa9ac34adacfbcf09bf4b377a065124f303b4806e1905b7753bc4d48542e57"
+            },
+            "lane": "strict",
+            "language": "fra",
+            "match_reasons": [
+              "exact_phrase"
+            ],
+            "publisher_id": "art_24",
+            "publisher_wid": null,
+            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "resolve": {
+              "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
+            },
+            "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
+            "work_key": "loi-1991-08-10-n3"
+          },
+          {
+            "applicability_date": "2024-02-01",
             "article_identity_sha256": "fc1c1fda1d6d768931cf296275582a63259fd60b5078b71f7828f8bfee7a7391",
+            "extract": {
+              "byte_end": 1337,
+              "byte_start": 1038,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "part aux r\u00E9unions et aux c\u00E9r\u00E9monies de l\u2019Ordre; il n\u2019a pas droit de vote aux "
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e"
+                },
+                {
+                  "matched": false,
+                  "text": "s "
+                },
+                {
+                  "matched": true,
+                  "text": "g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": "s. Il peut rev\u00EAtir la robe au cours des c\u00E9r\u00E9monies de l\u2019Ordre auquel il participe. Il prend la place que lui assigne son anciennet\u00E9 d\u2019inscription au tableau. Il a droit d\u2019acc\u00E8s \u00E0 la"
+                }
+              ],
+              "text_byte_length": 1365,
+              "text_sha256": "aa0fdfc78bb365e3d11e4e338825d2d0ba8a4e6301e089d5a836aa9edc4f3a95"
+            },
             "lane": "relaxed",
             "language": "fra",
             "match_reasons": [
@@ -5938,7 +6092,7 @@
           "works_with_hits": 1
         },
         "publisher": "lu-legilux",
-        "ranking": "none; strict lane before relaxed lane, then work key, publisher date, article identity and state digest. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "ranking": "none; strict lane before relaxed lane, then work key, publisher date, state digest, publisher article id (in the reading\u0027s order) and article identity, so one state\u0027s hits are together. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
         "reference": {
           "kind": null,
           "opens": null,
@@ -5959,6 +6113,19 @@
           "fra"
         ],
         "searchable_text_held_for_language": true,
+        "searched": {
+          "articles_with_searchable_text": 49,
+          "date": null,
+          "identifier_work_key": null,
+          "index_built_at": "2026-10-01T08:00:00Z",
+          "language": "fra",
+          "publisher": "lu-legilux",
+          "rule": "searched counts what the lanes matched against, from this index: the states in the language asked whose text the rights rule admits (with a date, the one state the date selects for each work, a work with several on that date contributing none), their works and their articles with searchable text, within the work named when one is; states_withheld_by_rights counts the states of that scope whose text the rights rule keeps out; index_built_at is the build time the mounted log records, null when it records none; nothing here counts what the publisher holds; this index also records versions it holds no text of (withheld by their rights, not available or not acquired): those rows are in none of these counts, states_withheld_by_rights included, which counts only held states whose sources the rights rule does not admit",
+          "states": 1,
+          "states_withheld_by_rights": 0,
+          "works": 1,
+          "works_with_several_states_on_date": null
+        },
         "terms": [
           "assembl\u00E9e",
           "g\u00E9n\u00E9rale"
@@ -5977,14 +6144,48 @@
       "object_type": "quote",
       "scenario": "the same phrase, one hit per page: the first hit and the cursor to the next page",
       "answer": {
+        "acts": [
+          {
+            "as_published": "as published; may have been amended since; no consolidated text",
+            "dossier": "/lu-legilux/loi-1991-08-10-n3",
+            "hits": 5,
+            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "title": null,
+            "title_kind": null,
+            "title_language": null,
+            "work_key": "loi-1991-08-10-n3"
+          }
+        ],
+        "acts_rule": "acts names each act of this page once, in the order its hits first appear: its work key, its dossier, the publisher\u0027s title of it this index holds (in the language searched when one is held, else French, else another; a title before a short title), or null when none is held, the as-published label when every state this index holds of it is the act as first published, and its hits in the whole result, not the page",
         "ambiguous_works": [],
         "continue_after": "strict.803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4.05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query as typed for a strict hit, a term or overlapping terms for a relaxed hit; a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
         "hit_unit": "a hit is one article of one held state, not a provision: a provision whose wording never changed is a hit in every state that holds it",
         "hits": [
           {
             "applicability_date": "2024-02-01",
             "article_identity_sha256": "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
+            "extract": {
+              "byte_end": 362,
+              "byte_start": 46,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "se tient dans la premi\u00E8re quinzaine du mois de juillet.(2)L\u2019ordre du jour de l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " annuelle comprend notamment la pr\u00E9sentation du rapport d\u2019activit\u00E9s du B\u00E2tonnier et du Conseil de l\u2019Ordre, la pr\u00E9sentation des comptes relatifs \u00E0 l\u2019ann\u00E9e \u00E9coul\u00E9e, l\u2019approbation de ces comptes, la"
+                }
+              ],
+              "text_byte_length": 1400,
+              "text_sha256": "ad6654247c3b53a0f9bb0b944b7348e2765e2030618e9f8ec1215eb9f772d835"
+            },
             "lane": "strict",
             "language": "fra",
             "match_reasons": [
@@ -6027,7 +6228,7 @@
           "works_with_hits": 1
         },
         "publisher": "lu-legilux",
-        "ranking": "none; strict lane before relaxed lane, then work key, publisher date, article identity and state digest. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "ranking": "none; strict lane before relaxed lane, then work key, publisher date, state digest, publisher article id (in the reading\u0027s order) and article identity, so one state\u0027s hits are together. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
         "reference": {
           "kind": null,
           "opens": null,
@@ -6048,6 +6249,19 @@
           "fra"
         ],
         "searchable_text_held_for_language": true,
+        "searched": {
+          "articles_with_searchable_text": 49,
+          "date": null,
+          "identifier_work_key": null,
+          "index_built_at": "2026-10-01T08:00:00Z",
+          "language": "fra",
+          "publisher": "lu-legilux",
+          "rule": "searched counts what the lanes matched against, from this index: the states in the language asked whose text the rights rule admits (with a date, the one state the date selects for each work, a work with several on that date contributing none), their works and their articles with searchable text, within the work named when one is; states_withheld_by_rights counts the states of that scope whose text the rights rule keeps out; index_built_at is the build time the mounted log records, null when it records none; nothing here counts what the publisher holds; this index also records versions it holds no text of (withheld by their rights, not available or not acquired): those rows are in none of these counts, states_withheld_by_rights included, which counts only held states whose sources the rights rule does not admit",
+          "states": 1,
+          "states_withheld_by_rights": 0,
+          "works": 1,
+          "works_with_several_states_on_date": null
+        },
         "terms": [
           "assembl\u00E9e",
           "g\u00E9n\u00E9rale"
@@ -6066,14 +6280,56 @@
       "object_type": "quote",
       "scenario": "the page after the first one-hit page, no limit: the rest of the result, whose population is still the whole result\u0027s",
       "answer": {
+        "acts": [
+          {
+            "as_published": "as published; may have been amended since; no consolidated text",
+            "dossier": "/lu-legilux/loi-1991-08-10-n3",
+            "hits": 5,
+            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "title": null,
+            "title_kind": null,
+            "title_language": null,
+            "work_key": "loi-1991-08-10-n3"
+          }
+        ],
+        "acts_rule": "acts names each act of this page once, in the order its hits first appear: its work key, its dossier, the publisher\u0027s title of it this index holds (in the language searched when one is held, else French, else another; a title before a short title), or null when none is held, the as-published label when every state this index holds of it is the act as first published, and its hits in the whole result, not the page",
         "ambiguous_works": [],
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query as typed for a strict hit, a term or overlapping terms for a relaxed hit; a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
         "hit_unit": "a hit is one article of one held state, not a provision: a provision whose wording never changed is a hit in every state that holds it",
         "hits": [
           {
             "applicability_date": "2024-02-01",
             "article_identity_sha256": "2bcf7567d4fec6a1a48c08e2007848bf9dbcf548c4e759da1cb252870d2dcfb5",
+            "extract": {
+              "byte_end": 623,
+              "byte_start": 310,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "sans d\u00E9passer le nombre de quinze membres.(2)Le Conseil de l\u2019Ordre \u00E9lu par l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " annuelle entre en fonction le 15 septembre qui suit l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " et reste en fonction pendant deux ans.(3)Le B\u00E2tonnier et les membres du Conseil de l\u2019ordre sont r\u00E9\u00E9ligibles.(4)Les membres du"
+                }
+              ],
+              "text_byte_length": 1891,
+              "text_sha256": "e87969f9e9db76c969142a112635b667b33b82b796addde79b95cf168676aa01"
+            },
             "lane": "strict",
             "language": "fra",
             "match_reasons": [
@@ -6090,24 +6346,27 @@
           },
           {
             "applicability_date": "2024-02-01",
-            "article_identity_sha256": "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
-            "lane": "strict",
-            "language": "fra",
-            "match_reasons": [
-              "exact_phrase"
-            ],
-            "publisher_id": "art_24",
-            "publisher_wid": null,
-            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
-            "resolve": {
-              "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
-            },
-            "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
-            "work_key": "loi-1991-08-10-n3"
-          },
-          {
-            "applicability_date": "2024-02-01",
             "article_identity_sha256": "f3c96389f8e28c9a15a4f114bd4506f338444a770fc7a6d17c7910f84ec90b8d",
+            "extract": {
+              "byte_end": 372,
+              "byte_start": 63,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "l\u2019Ordre judiciairement et extrajudiciairement. Il convoque et pr\u00E9side l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " et le Conseil de l\u2019ordre. Il peut d\u00E9l\u00E9guer l\u2019exercice de fonctions d\u00E9termin\u00E9es \u00E0 un ou plusieurs membres du Conseil de l\u2019ordre. En cas de d\u00E9c\u00E8s, de d\u00E9mission ou d\u2019emp\u00EAchement du B\u00E2tonnier, ses"
+                }
+              ],
+              "text_byte_length": 572,
+              "text_sha256": "402630f0d2366799a10fe16c8c49e4812adc0125175af6c12f3727d3ecc33011"
+            },
             "lane": "strict",
             "language": "fra",
             "match_reasons": [
@@ -6124,7 +6383,96 @@
           },
           {
             "applicability_date": "2024-02-01",
+            "article_identity_sha256": "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
+            "extract": {
+              "byte_end": 465,
+              "byte_start": 142,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "\u00E0 la liste I des avocats dont huit sont \u00E9lus \u00E0 la majorit\u00E9 relative par l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " de l\u2019Ordre de Luxembourg et un par l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " de l\u2019Ordre de Diekirch. L\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " de l\u2019Ordre de Luxembourg \u00E9lit huit suppl\u00E9ants et l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " de l\u2019Ordre de Diekirch un"
+                }
+              ],
+              "text_byte_length": 2101,
+              "text_sha256": "3cfa9ac34adacfbcf09bf4b377a065124f303b4806e1905b7753bc4d48542e57"
+            },
+            "lane": "strict",
+            "language": "fra",
+            "match_reasons": [
+              "exact_phrase"
+            ],
+            "publisher_id": "art_24",
+            "publisher_wid": null,
+            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "resolve": {
+              "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
+            },
+            "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
+            "work_key": "loi-1991-08-10-n3"
+          },
+          {
+            "applicability_date": "2024-02-01",
             "article_identity_sha256": "fc1c1fda1d6d768931cf296275582a63259fd60b5078b71f7828f8bfee7a7391",
+            "extract": {
+              "byte_end": 1337,
+              "byte_start": 1038,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "part aux r\u00E9unions et aux c\u00E9r\u00E9monies de l\u2019Ordre; il n\u2019a pas droit de vote aux "
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e"
+                },
+                {
+                  "matched": false,
+                  "text": "s "
+                },
+                {
+                  "matched": true,
+                  "text": "g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": "s. Il peut rev\u00EAtir la robe au cours des c\u00E9r\u00E9monies de l\u2019Ordre auquel il participe. Il prend la place que lui assigne son anciennet\u00E9 d\u2019inscription au tableau. Il a droit d\u2019acc\u00E8s \u00E0 la"
+                }
+              ],
+              "text_byte_length": 1365,
+              "text_sha256": "aa0fdfc78bb365e3d11e4e338825d2d0ba8a4e6301e089d5a836aa9edc4f3a95"
+            },
             "lane": "relaxed",
             "language": "fra",
             "match_reasons": [
@@ -6167,7 +6515,7 @@
           "works_with_hits": 1
         },
         "publisher": "lu-legilux",
-        "ranking": "none; strict lane before relaxed lane, then work key, publisher date, article identity and state digest. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "ranking": "none; strict lane before relaxed lane, then work key, publisher date, state digest, publisher article id (in the reading\u0027s order) and article identity, so one state\u0027s hits are together. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
         "reference": {
           "kind": null,
           "opens": null,
@@ -6188,6 +6536,19 @@
           "fra"
         ],
         "searchable_text_held_for_language": true,
+        "searched": {
+          "articles_with_searchable_text": 49,
+          "date": null,
+          "identifier_work_key": null,
+          "index_built_at": "2026-10-01T08:00:00Z",
+          "language": "fra",
+          "publisher": "lu-legilux",
+          "rule": "searched counts what the lanes matched against, from this index: the states in the language asked whose text the rights rule admits (with a date, the one state the date selects for each work, a work with several on that date contributing none), their works and their articles with searchable text, within the work named when one is; states_withheld_by_rights counts the states of that scope whose text the rights rule keeps out; index_built_at is the build time the mounted log records, null when it records none; nothing here counts what the publisher holds; this index also records versions it holds no text of (withheld by their rights, not available or not acquired): those rows are in none of these counts, states_withheld_by_rights included, which counts only held states whose sources the rights rule does not admit",
+          "states": 1,
+          "states_withheld_by_rights": 0,
+          "works": 1,
+          "works_with_several_states_on_date": null
+        },
         "terms": [
           "assembl\u00E9e",
           "g\u00E9n\u00E9rale"
@@ -6206,14 +6567,64 @@
       "object_type": "quote",
       "scenario": "the same phrase in the relaxed lane only: every hit relaxed, and the strict lane not counted (null, not zero)",
       "answer": {
+        "acts": [
+          {
+            "as_published": "as published; may have been amended since; no consolidated text",
+            "dossier": "/lu-legilux/loi-1991-08-10-n3",
+            "hits": 5,
+            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "title": null,
+            "title_kind": null,
+            "title_language": null,
+            "work_key": "loi-1991-08-10-n3"
+          }
+        ],
+        "acts_rule": "acts names each act of this page once, in the order its hits first appear: its work key, its dossier, the publisher\u0027s title of it this index holds (in the language searched when one is held, else French, else another; a title before a short title), or null when none is held, the as-published label when every state this index holds of it is the act as first published, and its hits in the whole result, not the page",
         "ambiguous_works": [],
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query as typed for a strict hit, a term or overlapping terms for a relaxed hit; a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
         "hit_unit": "a hit is one article of one held state, not a provision: a provision whose wording never changed is a hit in every state that holds it",
         "hits": [
           {
             "applicability_date": "2024-02-01",
             "article_identity_sha256": "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
+            "extract": {
+              "byte_end": 242,
+              "byte_start": 0,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "Art. 15.(1)L\u2019Assembl\u00E9e "
+                },
+                {
+                  "matched": true,
+                  "text": "g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " annuelle se tient dans la premi\u00E8re quinzaine du mois de juillet.(2)L\u2019ordre du jour de l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e"
+                },
+                {
+                  "matched": false,
+                  "text": " "
+                },
+                {
+                  "matched": true,
+                  "text": "g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " annuelle comprend notamment la pr\u00E9sentation du rapport d\u2019activit\u00E9s du B\u00E2tonnier et du"
+                }
+              ],
+              "text_byte_length": 1400,
+              "text_sha256": "ad6654247c3b53a0f9bb0b944b7348e2765e2030618e9f8ec1215eb9f772d835"
+            },
             "lane": "relaxed",
             "language": "fra",
             "match_reasons": [
@@ -6231,6 +6642,50 @@
           {
             "applicability_date": "2024-02-01",
             "article_identity_sha256": "2bcf7567d4fec6a1a48c08e2007848bf9dbcf548c4e759da1cb252870d2dcfb5",
+            "extract": {
+              "byte_end": 612,
+              "byte_start": 310,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "sans d\u00E9passer le nombre de quinze membres.(2)Le Conseil de l\u2019Ordre \u00E9lu par l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e"
+                },
+                {
+                  "matched": false,
+                  "text": " "
+                },
+                {
+                  "matched": true,
+                  "text": "g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " annuelle entre en fonction le 15 septembre qui suit l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e"
+                },
+                {
+                  "matched": false,
+                  "text": " "
+                },
+                {
+                  "matched": true,
+                  "text": "g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " et reste en fonction pendant deux ans.(3)Le B\u00E2tonnier et les membres du Conseil de l\u2019ordre sont r\u00E9\u00E9ligibles.(4)Les"
+                }
+              ],
+              "text_byte_length": 1891,
+              "text_sha256": "e87969f9e9db76c969142a112635b667b33b82b796addde79b95cf168676aa01"
+            },
             "lane": "relaxed",
             "language": "fra",
             "match_reasons": [
@@ -6247,24 +6702,35 @@
           },
           {
             "applicability_date": "2024-02-01",
-            "article_identity_sha256": "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
-            "lane": "relaxed",
-            "language": "fra",
-            "match_reasons": [
-              "all_terms"
-            ],
-            "publisher_id": "art_24",
-            "publisher_wid": null,
-            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
-            "resolve": {
-              "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
-            },
-            "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
-            "work_key": "loi-1991-08-10-n3"
-          },
-          {
-            "applicability_date": "2024-02-01",
             "article_identity_sha256": "f3c96389f8e28c9a15a4f114bd4506f338444a770fc7a6d17c7910f84ec90b8d",
+            "extract": {
+              "byte_end": 368,
+              "byte_start": 63,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "l\u2019Ordre judiciairement et extrajudiciairement. Il convoque et pr\u00E9side l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e"
+                },
+                {
+                  "matched": false,
+                  "text": " "
+                },
+                {
+                  "matched": true,
+                  "text": "g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " et le Conseil de l\u2019ordre. Il peut d\u00E9l\u00E9guer l\u2019exercice de fonctions d\u00E9termin\u00E9es \u00E0 un ou plusieurs membres du Conseil de l\u2019ordre. En cas de d\u00E9c\u00E8s, de d\u00E9mission ou d\u2019emp\u00EAchement du B\u00E2tonnier,"
+                }
+              ],
+              "text_byte_length": 572,
+              "text_sha256": "402630f0d2366799a10fe16c8c49e4812adc0125175af6c12f3727d3ecc33011"
+            },
             "lane": "relaxed",
             "language": "fra",
             "match_reasons": [
@@ -6281,7 +6747,128 @@
           },
           {
             "applicability_date": "2024-02-01",
+            "article_identity_sha256": "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
+            "extract": {
+              "byte_end": 453,
+              "byte_start": 142,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "\u00E0 la liste I des avocats dont huit sont \u00E9lus \u00E0 la majorit\u00E9 relative par l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e"
+                },
+                {
+                  "matched": false,
+                  "text": " "
+                },
+                {
+                  "matched": true,
+                  "text": "g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " de l\u2019Ordre de Luxembourg et un par l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e"
+                },
+                {
+                  "matched": false,
+                  "text": " "
+                },
+                {
+                  "matched": true,
+                  "text": "g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " de l\u2019Ordre de Diekirch. L\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e"
+                },
+                {
+                  "matched": false,
+                  "text": " "
+                },
+                {
+                  "matched": true,
+                  "text": "g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " de l\u2019Ordre de Luxembourg \u00E9lit huit suppl\u00E9ants et l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e"
+                },
+                {
+                  "matched": false,
+                  "text": " "
+                },
+                {
+                  "matched": true,
+                  "text": "g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " de l\u2019Ordre de"
+                }
+              ],
+              "text_byte_length": 2101,
+              "text_sha256": "3cfa9ac34adacfbcf09bf4b377a065124f303b4806e1905b7753bc4d48542e57"
+            },
+            "lane": "relaxed",
+            "language": "fra",
+            "match_reasons": [
+              "all_terms"
+            ],
+            "publisher_id": "art_24",
+            "publisher_wid": null,
+            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "resolve": {
+              "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
+            },
+            "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
+            "work_key": "loi-1991-08-10-n3"
+          },
+          {
+            "applicability_date": "2024-02-01",
             "article_identity_sha256": "fc1c1fda1d6d768931cf296275582a63259fd60b5078b71f7828f8bfee7a7391",
+            "extract": {
+              "byte_end": 1337,
+              "byte_start": 1038,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "part aux r\u00E9unions et aux c\u00E9r\u00E9monies de l\u2019Ordre; il n\u2019a pas droit de vote aux "
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e"
+                },
+                {
+                  "matched": false,
+                  "text": "s "
+                },
+                {
+                  "matched": true,
+                  "text": "g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": "s. Il peut rev\u00EAtir la robe au cours des c\u00E9r\u00E9monies de l\u2019Ordre auquel il participe. Il prend la place que lui assigne son anciennet\u00E9 d\u2019inscription au tableau. Il a droit d\u2019acc\u00E8s \u00E0 la"
+                }
+              ],
+              "text_byte_length": 1365,
+              "text_sha256": "aa0fdfc78bb365e3d11e4e338825d2d0ba8a4e6301e089d5a836aa9edc4f3a95"
+            },
             "lane": "relaxed",
             "language": "fra",
             "match_reasons": [
@@ -6324,7 +6911,7 @@
           "works_with_hits": 1
         },
         "publisher": "lu-legilux",
-        "ranking": "none; strict lane before relaxed lane, then work key, publisher date, article identity and state digest. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "ranking": "none; strict lane before relaxed lane, then work key, publisher date, state digest, publisher article id (in the reading\u0027s order) and article identity, so one state\u0027s hits are together. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
         "reference": {
           "kind": null,
           "opens": null,
@@ -6345,6 +6932,19 @@
           "fra"
         ],
         "searchable_text_held_for_language": true,
+        "searched": {
+          "articles_with_searchable_text": 49,
+          "date": null,
+          "identifier_work_key": null,
+          "index_built_at": "2026-10-01T08:00:00Z",
+          "language": "fra",
+          "publisher": "lu-legilux",
+          "rule": "searched counts what the lanes matched against, from this index: the states in the language asked whose text the rights rule admits (with a date, the one state the date selects for each work, a work with several on that date contributing none), their works and their articles with searchable text, within the work named when one is; states_withheld_by_rights counts the states of that scope whose text the rights rule keeps out; index_built_at is the build time the mounted log records, null when it records none; nothing here counts what the publisher holds; this index also records versions it holds no text of (withheld by their rights, not available or not acquired): those rows are in none of these counts, states_withheld_by_rights included, which counts only held states whose sources the rights rule does not admit",
+          "states": 1,
+          "states_withheld_by_rights": 0,
+          "works": 1,
+          "works_with_several_states_on_date": null
+        },
         "terms": [
           "assembl\u00E9e",
           "g\u00E9n\u00E9rale"
@@ -6363,9 +6963,12 @@
       "object_type": "quote",
       "scenario": "a word the held text does not carry: no hit is an answer, not a refusal",
       "answer": {
+        "acts": [],
+        "acts_rule": "acts names each act of this page once, in the order its hits first appear: its work key, its dossier, the publisher\u0027s title of it this index holds (in the language searched when one is held, else French, else another; a title before a short title), or null when none is held, the as-published label when every state this index holds of it is the act as first published, and its hits in the whole result, not the page",
         "ambiguous_works": [],
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query as typed for a strict hit, a term or overlapping terms for a relaxed hit; a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
         "hit_unit": "a hit is one article of one held state, not a provision: a provision whose wording never changed is a hit in every state that holds it",
         "hits": [],
         "index_sha256": "\u003Cvaries-per-run\u003E",
@@ -6395,7 +6998,7 @@
           "works_with_hits": 0
         },
         "publisher": "lu-legilux",
-        "ranking": "none; strict lane before relaxed lane, then work key, publisher date, article identity and state digest. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "ranking": "none; strict lane before relaxed lane, then work key, publisher date, state digest, publisher article id (in the reading\u0027s order) and article identity, so one state\u0027s hits are together. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
         "reference": {
           "kind": null,
           "opens": null,
@@ -6416,6 +7019,384 @@
           "fra"
         ],
         "searchable_text_held_for_language": true,
+        "searched": {
+          "articles_with_searchable_text": 49,
+          "date": null,
+          "identifier_work_key": null,
+          "index_built_at": "2026-10-01T08:00:00Z",
+          "language": "fra",
+          "publisher": "lu-legilux",
+          "rule": "searched counts what the lanes matched against, from this index: the states in the language asked whose text the rights rule admits (with a date, the one state the date selects for each work, a work with several on that date contributing none), their works and their articles with searchable text, within the work named when one is; states_withheld_by_rights counts the states of that scope whose text the rights rule keeps out; index_built_at is the build time the mounted log records, null when it records none; nothing here counts what the publisher holds; this index also records versions it holds no text of (withheld by their rights, not available or not acquired): those rows are in none of these counts, states_withheld_by_rights included, which counts only held states whose sources the rights rule does not admit",
+          "states": 1,
+          "states_withheld_by_rights": 0,
+          "works": 1,
+          "works_with_several_states_on_date": null
+        },
+        "terms": [
+          "z\u00E9phyr"
+        ],
+        "truncated": false,
+        "work_resolution": {
+          "candidates": null,
+          "outcome": "no_titles_held",
+          "retrieval_lane": "r1_work_discovery",
+          "work": null
+        }
+      }
+    },
+    {
+      "operation": "search",
+      "object_type": "quote",
+      "scenario": "the phrase in the strict lane alone, as the site asks it: each hit\u0027s extract with the phrase marked, the act once, and the population searched",
+      "answer": {
+        "acts": [
+          {
+            "as_published": "as published; may have been amended since; no consolidated text",
+            "dossier": "/lu-legilux/loi-1991-08-10-n3",
+            "hits": 4,
+            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "title": null,
+            "title_kind": null,
+            "title_language": null,
+            "work_key": "loi-1991-08-10-n3"
+          }
+        ],
+        "acts_rule": "acts names each act of this page once, in the order its hits first appear: its work key, its dossier, the publisher\u0027s title of it this index holds (in the language searched when one is held, else French, else another; a title before a short title), or null when none is held, the as-published label when every state this index holds of it is the act as first published, and its hits in the whole result, not the page",
+        "ambiguous_works": [],
+        "continue_after": null,
+        "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query as typed for a strict hit, a term or overlapping terms for a relaxed hit; a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
+        "hit_unit": "a hit is one article of one held state, not a provision: a provision whose wording never changed is a hit in every state that holds it",
+        "hits": [
+          {
+            "applicability_date": "2024-02-01",
+            "article_identity_sha256": "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
+            "extract": {
+              "byte_end": 362,
+              "byte_start": 46,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "se tient dans la premi\u00E8re quinzaine du mois de juillet.(2)L\u2019ordre du jour de l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " annuelle comprend notamment la pr\u00E9sentation du rapport d\u2019activit\u00E9s du B\u00E2tonnier et du Conseil de l\u2019Ordre, la pr\u00E9sentation des comptes relatifs \u00E0 l\u2019ann\u00E9e \u00E9coul\u00E9e, l\u2019approbation de ces comptes, la"
+                }
+              ],
+              "text_byte_length": 1400,
+              "text_sha256": "ad6654247c3b53a0f9bb0b944b7348e2765e2030618e9f8ec1215eb9f772d835"
+            },
+            "lane": "strict",
+            "language": "fra",
+            "match_reasons": [
+              "exact_phrase"
+            ],
+            "publisher_id": "art_15",
+            "publisher_wid": null,
+            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "resolve": {
+              "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
+            },
+            "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
+            "work_key": "loi-1991-08-10-n3"
+          },
+          {
+            "applicability_date": "2024-02-01",
+            "article_identity_sha256": "2bcf7567d4fec6a1a48c08e2007848bf9dbcf548c4e759da1cb252870d2dcfb5",
+            "extract": {
+              "byte_end": 623,
+              "byte_start": 310,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "sans d\u00E9passer le nombre de quinze membres.(2)Le Conseil de l\u2019Ordre \u00E9lu par l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " annuelle entre en fonction le 15 septembre qui suit l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " et reste en fonction pendant deux ans.(3)Le B\u00E2tonnier et les membres du Conseil de l\u2019ordre sont r\u00E9\u00E9ligibles.(4)Les membres du"
+                }
+              ],
+              "text_byte_length": 1891,
+              "text_sha256": "e87969f9e9db76c969142a112635b667b33b82b796addde79b95cf168676aa01"
+            },
+            "lane": "strict",
+            "language": "fra",
+            "match_reasons": [
+              "exact_phrase"
+            ],
+            "publisher_id": "art_16",
+            "publisher_wid": null,
+            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "resolve": {
+              "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
+            },
+            "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
+            "work_key": "loi-1991-08-10-n3"
+          },
+          {
+            "applicability_date": "2024-02-01",
+            "article_identity_sha256": "f3c96389f8e28c9a15a4f114bd4506f338444a770fc7a6d17c7910f84ec90b8d",
+            "extract": {
+              "byte_end": 372,
+              "byte_start": 63,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "l\u2019Ordre judiciairement et extrajudiciairement. Il convoque et pr\u00E9side l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " et le Conseil de l\u2019ordre. Il peut d\u00E9l\u00E9guer l\u2019exercice de fonctions d\u00E9termin\u00E9es \u00E0 un ou plusieurs membres du Conseil de l\u2019ordre. En cas de d\u00E9c\u00E8s, de d\u00E9mission ou d\u2019emp\u00EAchement du B\u00E2tonnier, ses"
+                }
+              ],
+              "text_byte_length": 572,
+              "text_sha256": "402630f0d2366799a10fe16c8c49e4812adc0125175af6c12f3727d3ecc33011"
+            },
+            "lane": "strict",
+            "language": "fra",
+            "match_reasons": [
+              "exact_phrase"
+            ],
+            "publisher_id": "art_21",
+            "publisher_wid": null,
+            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "resolve": {
+              "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
+            },
+            "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
+            "work_key": "loi-1991-08-10-n3"
+          },
+          {
+            "applicability_date": "2024-02-01",
+            "article_identity_sha256": "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
+            "extract": {
+              "byte_end": 465,
+              "byte_start": 142,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "\u00E0 la liste I des avocats dont huit sont \u00E9lus \u00E0 la majorit\u00E9 relative par l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " de l\u2019Ordre de Luxembourg et un par l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " de l\u2019Ordre de Diekirch. L\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " de l\u2019Ordre de Luxembourg \u00E9lit huit suppl\u00E9ants et l\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " de l\u2019Ordre de Diekirch un"
+                }
+              ],
+              "text_byte_length": 2101,
+              "text_sha256": "3cfa9ac34adacfbcf09bf4b377a065124f303b4806e1905b7753bc4d48542e57"
+            },
+            "lane": "strict",
+            "language": "fra",
+            "match_reasons": [
+              "exact_phrase"
+            ],
+            "publisher_id": "art_24",
+            "publisher_wid": null,
+            "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "resolve": {
+              "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
+            },
+            "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
+            "work_key": "loi-1991-08-10-n3"
+          }
+        ],
+        "index_sha256": "\u003Cvaries-per-run\u003E",
+        "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes_run": true,
+        "limit": 200,
+        "matching": "byte-exact substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); case and diacritics are significant; nothing is folded, stemmed or expanded",
+        "modes_held": [
+          "strict",
+          "relaxed"
+        ],
+        "modes_not_held": [
+          "bm25",
+          "semantic"
+        ],
+        "page_is": "the first hits in the stated order, not the best hits",
+        "population": {
+          "distinct_publisher_articles": 4,
+          "relaxed_hits": null,
+          "scope": {
+            "date": null,
+            "identifier": null,
+            "language": "fra",
+            "mode": "strict"
+          },
+          "strict_hits": 4,
+          "works_with_hits": 1
+        },
+        "publisher": "lu-legilux",
+        "ranking": "none; strict lane before relaxed lane, then work key, publisher date, state digest, publisher article id (in the reading\u0027s order) and article identity, so one state\u0027s hits are together. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "reference": {
+          "kind": null,
+          "opens": null,
+          "outcome": "no_reference",
+          "phase": "exact_reference",
+          "reason": null,
+          "recognised": null,
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+        },
+        "requested_after": null,
+        "requested_date": null,
+        "requested_identifier": null,
+        "requested_language": "fra",
+        "requested_mode": "strict",
+        "requested_query": "assembl\u00E9e g\u00E9n\u00E9rale",
+        "rights_rule": "a state is searched only when its text is one evidence_bundle would quote: every source acquired and admitted by its rights; the text of any other state is not matched, so no hit and no count says which of its articles hold a word, and nothing about that text is stated here",
+        "searchable_languages": [
+          "fra"
+        ],
+        "searchable_text_held_for_language": true,
+        "searched": {
+          "articles_with_searchable_text": 49,
+          "date": null,
+          "identifier_work_key": null,
+          "index_built_at": "2026-10-01T08:00:00Z",
+          "language": "fra",
+          "publisher": "lu-legilux",
+          "rule": "searched counts what the lanes matched against, from this index: the states in the language asked whose text the rights rule admits (with a date, the one state the date selects for each work, a work with several on that date contributing none), their works and their articles with searchable text, within the work named when one is; states_withheld_by_rights counts the states of that scope whose text the rights rule keeps out; index_built_at is the build time the mounted log records, null when it records none; nothing here counts what the publisher holds; this index also records versions it holds no text of (withheld by their rights, not available or not acquired): those rows are in none of these counts, states_withheld_by_rights included, which counts only held states whose sources the rights rule does not admit",
+          "states": 1,
+          "states_withheld_by_rights": 0,
+          "works": 1,
+          "works_with_several_states_on_date": null
+        },
+        "terms": [
+          "assembl\u00E9e",
+          "g\u00E9n\u00E9rale"
+        ],
+        "truncated": false,
+        "work_resolution": {
+          "candidates": null,
+          "outcome": "no_titles_held",
+          "retrieval_lane": "r1_work_discovery",
+          "work": null
+        }
+      }
+    },
+    {
+      "operation": "search",
+      "object_type": "quote",
+      "scenario": "a word the held text does not carry, in the strict lane alone: no act, the population searched, and the relaxed lane not counted",
+      "answer": {
+        "acts": [],
+        "acts_rule": "acts names each act of this page once, in the order its hits first appear: its work key, its dossier, the publisher\u0027s title of it this index holds (in the language searched when one is held, else French, else another; a title before a short title), or null when none is held, the as-published label when every state this index holds of it is the act as first published, and its hits in the whole result, not the page",
+        "ambiguous_works": [],
+        "continue_after": null,
+        "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query as typed for a strict hit, a term or overlapping terms for a relaxed hit; a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
+        "hit_unit": "a hit is one article of one held state, not a provision: a provision whose wording never changed is a hit in every state that holds it",
+        "hits": [],
+        "index_sha256": "\u003Cvaries-per-run\u003E",
+        "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes_run": true,
+        "limit": 200,
+        "matching": "byte-exact substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); case and diacritics are significant; nothing is folded, stemmed or expanded",
+        "modes_held": [
+          "strict",
+          "relaxed"
+        ],
+        "modes_not_held": [
+          "bm25",
+          "semantic"
+        ],
+        "page_is": "the first hits in the stated order, not the best hits",
+        "population": {
+          "distinct_publisher_articles": 0,
+          "relaxed_hits": null,
+          "scope": {
+            "date": null,
+            "identifier": null,
+            "language": "fra",
+            "mode": "strict"
+          },
+          "strict_hits": 0,
+          "works_with_hits": 0
+        },
+        "publisher": "lu-legilux",
+        "ranking": "none; strict lane before relaxed lane, then work key, publisher date, state digest, publisher article id (in the reading\u0027s order) and article identity, so one state\u0027s hits are together. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "reference": {
+          "kind": null,
+          "opens": null,
+          "outcome": "no_reference",
+          "phase": "exact_reference",
+          "reason": null,
+          "recognised": null,
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+        },
+        "requested_after": null,
+        "requested_date": null,
+        "requested_identifier": null,
+        "requested_language": "fra",
+        "requested_mode": "strict",
+        "requested_query": "z\u00E9phyr",
+        "rights_rule": "a state is searched only when its text is one evidence_bundle would quote: every source acquired and admitted by its rights; the text of any other state is not matched, so no hit and no count says which of its articles hold a word, and nothing about that text is stated here",
+        "searchable_languages": [
+          "fra"
+        ],
+        "searchable_text_held_for_language": true,
+        "searched": {
+          "articles_with_searchable_text": 49,
+          "date": null,
+          "identifier_work_key": null,
+          "index_built_at": "2026-10-01T08:00:00Z",
+          "language": "fra",
+          "publisher": "lu-legilux",
+          "rule": "searched counts what the lanes matched against, from this index: the states in the language asked whose text the rights rule admits (with a date, the one state the date selects for each work, a work with several on that date contributing none), their works and their articles with searchable text, within the work named when one is; states_withheld_by_rights counts the states of that scope whose text the rights rule keeps out; index_built_at is the build time the mounted log records, null when it records none; nothing here counts what the publisher holds; this index also records versions it holds no text of (withheld by their rights, not available or not acquired): those rows are in none of these counts, states_withheld_by_rights included, which counts only held states whose sources the rights rule does not admit",
+          "states": 1,
+          "states_withheld_by_rights": 0,
+          "works": 1,
+          "works_with_several_states_on_date": null
+        },
         "terms": [
           "z\u00E9phyr"
         ],

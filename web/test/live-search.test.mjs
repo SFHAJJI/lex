@@ -165,6 +165,38 @@ test("a served search answer is the results by act, read by the search reader", 
   assert.doesNotMatch(markup, /Next page/, "a whole page offers no next page");
 });
 
+test("an act in two versions says each version's date once, above its own passages, even where the hits of both alternate (the review of #982, F1 and F2)", () => {
+  for (const laterDate of [null, "2025-03-01"]) {
+    const envelope = structuredClone(envelopeOf(ANSWER));
+    const value = envelope.result.value;
+    const [first, second] = value.hits;
+    const otherState = "b".repeat(64);
+    const otherDate = laterDate ?? first.applicability_date;
+    const other = (hit) => ({
+      ...structuredClone(hit),
+      applicability_date: otherDate,
+      state_sha256: otherState,
+      resolve: { identifier: `/lu-legilux/${hit.work_key}/${otherDate}--${otherState}/${hit.language}` },
+    });
+    // Two versions of the act, their hits alternating on the page, as no platform order serves them but a page must survive.
+    value.hits = [first, other(first), second, other(second)];
+    value.population = { ...value.population, strict_hits: 4 };
+    value.acts = [{ ...value.acts[0], hits: 4 }];
+    const outcome = searchOutcome({ state: "success", envelope });
+    assert.equal(outcome.state, "success", outcome.sentence);
+    const markup = view(outcome);
+    const sections = markup.split('<section data-version="').slice(1);
+    assert.equal(sections.length, 2, `${laterDate ?? "one date"}: one section per version, not per run of hits`);
+    const versionLine = (date) => `The act as published, applicable from ${date} (publisher)`;
+    assert.equal((text(markup).match(/The act as published, applicable from/g) ?? []).length, 2, "each version's date said once");
+    for (const [section, state, date] of [[sections[0], first.state_sha256, first.applicability_date], [sections[1], otherState, otherDate]]) {
+      assert.ok(text(section).includes(versionLine(date)), date);
+      const linked = [...section.matchAll(/<a href="\/en\/lu-legilux\/[^/]+\/\d{4}-\d{2}-\d{2}--([0-9a-f]{64})\/fra\/[^"]+">/g)].map((match) => match[1]);
+      assert.deepEqual(linked, [state, state], `${date}: each passage sits under its own version`);
+    }
+  }
+});
+
 test("an answer in both lanes, as an API caller may ask it, still says each lane's count, and marks a relaxed passage", () => {
   const outcome = searchOutcome({ state: "success", envelope: envelopeOf(BOTH_LANES) });
   assert.equal(outcome.state, "success");

@@ -244,21 +244,23 @@ export const TITLES_SHOWN = 10;
 
 /**
  * A Luxembourg search view's hits by act (the plan's item 4.3): each act of the page in the answer's order (`view.acts`),
- * with its hits in the page's order, cut into runs of one version each (the platform orders a version's hits together, by
- * the publisher's article ids), so each version's date is said once above its passages.
+ * with its hits grouped by the version (state) each is in, the versions in the order their first hit appears and each
+ * version's hits in the page's order, so each version's date is said once above its own passages. Grouped by state, not cut
+ * at each change: two versions of one act on one date are kept apart even where hits of both alternate (the review of
+ * #982, F1; the platform also orders one state's hits together).
  */
 export function actGroups(view) {
   return view.acts.map((act) => {
-    const versions = [];
+    const versions = new Map();
     for (const hit of view.hits.filter((candidate) => candidate.workKey === act.workKey)) {
-      const last = versions.at(-1);
-      if (last !== undefined && last.stateSha256 === hit.stateSha256) {
-        last.hits.push(hit);
-      } else {
-        versions.push({ stateSha256: hit.stateSha256, applicabilityDate: hit.applicabilityDate, hits: [hit] });
-      }
+      const version = versions.get(hit.stateSha256) ?? { stateSha256: hit.stateSha256, applicabilityDate: hit.applicabilityDate, hits: [] };
+      version.hits.push(hit);
+      versions.set(hit.stateSha256, version);
     }
-    return Object.freeze({ act, versions: Object.freeze(versions.map((version) => Object.freeze({ ...version, hits: Object.freeze(version.hits) }))) });
+    return Object.freeze({
+      act,
+      versions: Object.freeze([...versions.values()].map((version) => Object.freeze({ ...version, hits: Object.freeze(version.hits) }))),
+    });
   });
 }
 

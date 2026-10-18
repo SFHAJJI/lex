@@ -142,7 +142,32 @@ The looser search stays off until its own check passes"), to the specification o
   languages; the 4.4 items (capitals, accents and quotation marks in the text lanes, the byte budget, the 250 ms target,
   which every search measured here meets); the journeys (CI's lane: the home, search, 404 and J2 steps' bodies now name the
   strict lane, and their texts the new lines). The data lane's content /3 (S3b) changes what the searchable text holds
-  (deleted wording never matched); an extract is cut from that text, so it follows.
+  (deleted wording never matched); an extract is cut from that text, so it follows. Index /9 (#980), before it is served
+  (S7a): a hit carries only `applicability_date`, and the version line says "applicable from"; the line must branch on the
+  state's `date_role` (an act dated by its entry into force is not "applicable from" it, R21), and the hit carry the role.
+  On /9 the population counts held rows only (`SearchedRuleNine` says so): a version recorded without text (withheld by its
+  rights, not available, not acquired) is in no count, `states_withheld_by_rights` included; counting /9's
+  `withheld_rights` rows is S7a's.
+- **The review of #982** (an independent reviewer; R21, R11, the extracts (138 + 200 + 5 checked byte for byte), escaping,
+  the no-hit card, REST against MCP, the start (30.5 s) and speed found sound) and its repair, in one round:
+  - F1, medium (latent): two versions of one act on one date had their passages interleaved: the order was work, date,
+    article id, identity, state, and the page cut a new version section at each change of state, so one "applicable from"
+    heading printed again and again and passages sat under the wrong version. Reproduced with two states added on one date.
+    Repair: the order is work, date, state digest, article id, identity (the ranking sentence says so), and the page groups
+    a version's passages by its state. Tests: `TwoVersionsOnOneDateKeepTheirHitsApartAndEachActAndCardNamesItsOwnWork` (two
+    added states on one date: each state's hits one run) and the web test of one act in two versions, on one date and on
+    two, with the hits alternating (one section per version, each passage under its own).
+  - F2, medium (tests): two mutations passed every test: every act given the first act's title, every card linked to one
+    held work (M3), and the page's cut by version dropped (W4, an R21 error). Tests: the mount test above holds two titled
+    acts on one page and a ladder answer with two held cards and one not held (each act's title, each card's `work_key`);
+    the web test fails W4.
+  - F3, low: an extract was cut at a no-break space (`char.IsWhiteSpace` counts U+00A0), so "6 septembre 2021" could lose
+    its day. Repair: U+00A0, U+202F and U+2007 are no break (`IsExtractBreak`), and the rule says so. Test:
+    `AnExtractIsNeverCutAtANoBreakSpace`, a bound on the no-break space before and after the match.
+  - The review's notes on #980: rebased on 4e37df90 (#980's index /9 and #983); the samples re-rendered from the handler;
+    `StateTextSources` beside #980's queries in `LuxembourgIndexQueries` and the census of their names; the /9 population
+    said in `SearchedRuleNine` (a /8 answer's rule unchanged); the version line's /9 dates recorded as S7a's
+    (above); item 6 of the citation generator's next steps reconciled with the data lane's finding (below).
 - **Measured** (no browser was started on this machine; this branch, from `v3/integration` at #978's merge, 5a659831):
   `npm run build` in `web`, then a plain `npm test`: 115 files, 1,262 tests, 1,259 passed, the 3 that start a browser skipped
   with their reason; `dotnet build Lex.V3.slnx -c Release`, 0 warnings, 0 errors; `Lex.V3.Tests` 3,321, 3,315 passed, 6
@@ -5131,11 +5156,13 @@ The plan's item 3.3, what is left after the generator (done on 2026-10-17, above
    Journal is authentic since 1 July 2013 (Regulation (EU) No 216/2013), the printed edition before") in place of the
    platform's undated sentence, for the 13 of the 63 citable EU acts published before 1 July 2013, checked against the
    regulation's art. 1(2) and art. 3(3) as amended, in the wording the owner gives; then its French, reviewed.
-6. The data lane's note on Luxembourg dates (review of #975): the 1,725 states held only as published are dated by the
-   publisher's `dateEntryInForce`, not `dateApplicability`, yet the site and the citation say "applicable from …
-   (publisher)" and "dans sa version applicable au …". R21 wants entry into force and application said as separate
-   values; index /9's `date_role` (S6) and the reader (S7a, S7c) will carry which one a state's date is, and the
-   generator then says each in its own words.
+6. The data lane's note on Luxembourg dates (review of #975), as the data lane's finding and the slice "search results by
+   act" (above) state it: on `derive-c` every state's date is the publisher file's own `dateApplicability` (inventory /3's
+   coordinate), equal to the catalogue's `dateEntryInForce` for 1,725 of the 1,730 states (the five that differ are listed
+   in STATUS-DATA.md), so "applicable from … (publisher)" and "dans sa version applicable au …" name the date the file
+   calls applicability. Index /9 dates an act whose file states none by its entry into force (`date_role`
+   `entry_into_force`, S6); before /9 is served (S7a), the reader, the search's version line and the generator must say
+   each role in its own words (R21: entry into force and application are separate values).
 
 The plan's item 3.2, what is left after its second part (3.2b, done on 2026-10-16, above), as 3.2c:
 1. The cited bytes of a state only a retained generation holds, quoted from that generation (the mount opens the
