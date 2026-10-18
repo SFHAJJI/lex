@@ -4,6 +4,155 @@ Updated 2026-10-18. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Search results by act, and a plain no-hit card (sole driver, 2026-10-18)
+
+The plan's items 4.3 ("Results grouped by act: the act's title once, with its passages nested below; a word-for-word
+extract, with the matched words marked; Luxembourg dates worded as 'applicable from'; the act whose title matches exactly
+on top, or the candidates listed when several match; the population behind the list") and 4.5 ("A plain no-hit card:
+which searches ran; that only exact matching ran; the population searched; links to the Legilux and EUR-Lex search pages.
+The looser search stays off until its own check passes"), to the specification of record's R59, R21, R11 and R90; and
+4.2's next item, the phase's `anchor_not_in_version` sentences said of what this site holds.
+- **The answer** (`V3CorpusMount.SearchResults.cs`; additive, the request schema unchanged, so the registry digest did not
+  move; REST and MCP answer from the one handler, and on `derive-c` they answered byte for byte alike but the request's own
+  fields):
+  - each Luxembourg hit carries `extract`: a run of the article's searchable text (the bytes the lane matched, the text
+    `evidence_bundle` quotes), word for word, around the first match, at most 80 characters before it and 200 after it, cut
+    at whitespace (a word that alone passes a bound is cut at the bound); `parts` in order, a part `matched` when it is a
+    whole match (the query as typed for a strict hit; a term, or overlapping terms, for a relaxed one; a match the run cuts
+    is not marked); `byte_start` and `byte_end`, the run's UTF-8 offsets in the text whose SHA-256 is `text_sha256` (R59's
+    "verbatim byte-range snippets"); `extract_rule` says it. A page's texts are read by article identity
+    (`ResolveArticleSearchableTexts`, one primary-key lookup each), never a whole state;
+  - `acts`: each act of the page once, in the order its hits first appear: its work key, its dossier, the publisher's title
+    the index holds (the language searched first, then French; a title before a short title) or null, the as-published
+    label when every state held of it is the act as first published (`HeldOnlyAsPublished`, the rule of #964's
+    `as_published`), and its hits over the whole result (`acts_rule`);
+  - `searched`: what the lanes matched against, from this index: the states in the language asked whose text the rights
+    rule admits (with a date, the one state the date selects for each work; a work with several on it counted apart), their
+    works and their articles with searchable text, within the work named when one is; the states the rights rule keeps out;
+    and the build time the mounted log records (`index_built_at`). It is read once when the mount opens (`Warm`; one pass,
+    `ResolveStateTextSources`, in a pinned order, below), and the rights decision every search applies per state now comes
+    from that read (it asked `ResolveStateSources` of each state of the hits on every search);
+  - each card of the title ladder names `work_key`, the work the index holds its expressions under, or null when it holds
+    none (the title table also titles works with no held state: on `derive-c`, 168 of the 1,502 titles "règlement
+    grand-ducal" matches, and "Loi sur le timbre");
+  - a version's hits come in the reading's order of the publisher's article ids (#978's comparer, each id read into its
+    parts once), so art_2 comes before art_10; the ranking sentence says so, and the cursor is unchanged.
+- **The page** (`LiveSearch.jsx`, `live-search.mjs`, `search-answer.mjs`, `styles.css`): every search from the home box,
+  the search page and the 404 page asks the strict lane alone (`mode: "strict"`, `SEARCH_MODE`): the relaxed lane is lane 2,
+  which R90 keeps off until its gate passes. In this order:
+  - the title ladder's answer on top: "The phrase is the title of an act: {title}" (or "begins the title of an act:", or
+    "Every word of the phrase is in the title of an act:"), the title linked to the act's dossier, or said "(this site holds
+    no version of it)"; several titles: "The phrase matches the titles of {count} acts:", the first ten shown and the rest
+    one step away (`<details>`, "{count} more acts");
+  - what was found: "“{query}” in {language}: {passages} with the exact phrase, in {acts}."; an answer in both lanes, as an
+    API caller may ask it, still says each lane's count;
+  - what was searched (R11, every count the answer's): "Searched: {acts} of Luxembourg law in {language}, in {versions}
+    with {articles} of searchable text, as of the index built on {date}.", the build's date in Luxembourg, as the home
+    page's coverage line dates its index; the versions the rights rule kept out and the acts with several versions on the
+    date, when there are any; then the dated or undated sentence, as before;
+  - the acts, each once: its title linked to its dossier (or its work key, "this index holds no title for this act"), the
+    as-published label ("As published; may have been amended since; no consolidated text."), "{count} passages in this
+    act." (over the whole result, so an act a page cuts says so), then each version's passages under "The act as published,
+    applicable from {date} (publisher)" (or "Version applicable from {date} (publisher)" for a consolidated state, none held
+    today): R21's words, the state's date being the publisher's `dateApplicability`; never "version of {date}";
+  - each passage: its article id, linked to the reading at that article and version (the permalink that pins it), and the
+    extract quoted (`<q>` in the text's language), each whole match in `<mark>` (bold as well as highlighted, so the mark
+    does not rest on colour), an elision where the text goes on; a relaxed passage says its lane. No digest in a row.
+- **The no-hit card** (a search with no passage): the no-hit sentence and the matching rule as before, then "What was
+  searched": the exact-reference phase ("the phrase is no reference this site reads (an ELI, a CELEX number, a Mémorial
+  reference, a permalink or a citation)"; not read when a work was named; or the cited title not held), the titles (none
+  matches; the work resolution's own sentence when no title is held; the title or titles shown above; not searched when a
+  work was named; and "Titles are matched with capitals and accents ignored." where the ladder ran), the text ("no article
+  searched contains the phrase exactly as typed"; every word in any order when that lane was counted); "Only exact
+  matching ran on the text: capitals, accents and every other character of the phrase count, and nothing is folded,
+  stemmed or expanded. A looser search of the text stays off until its own check has passed." when no relaxed lane was
+  counted; the population searched (said once, in the card); "The publishers' own search pages:" with Legilux's search
+  (`https://legilux.public.lu/search`) and EUR-Lex's advanced search form
+  (`https://eur-lex.europa.eu/advanced-search-form.html`), the platform's contract addresses (`PreviewRefusals.LuSearch`,
+  `EuSearch`), held to the publisher-link policy, links only (nothing requests either, nothing goes to eur-lex.europa.eu);
+  and the absence note. An EU work's card says the phase and the titles were not run, and counts no Luxembourg population.
+- **4.2's next item, done**: the phase's `anchor_not_in_version` sentences said the version (or wording) holds no such
+  article, while the index may lack an article the version has (the French review of #978, its point 3). They are now "This
+  site holds no article with that number in the version the date selects, and no other article is opened in its place."
+  and "… in the wording the date selects, …", with the French that review gave for this English.
+- **French** (Decision 41): 36 forms (34 interface entries and the 2 phase sentences) were reviewed by an independent
+  reviewer (Claude, AI reviewer, not the author) in the addendum of 2026-10-18 "search results by act and the plain no-hit
+  card" of `C:\lex-v3\lanes\fr-review\review.md`; 10 changed in review, the English with them, all applied: the title
+  stands last after "the title of an act:" (French puts no bare title after "de", and 1,597 of the 1,730 held titles end
+  with their own full stop, which printed ".."); one title is said in the singular; the text alone is said to be matched
+  exactly, since the titles are matched with case and accents folded ("reglement grand-ducal" matches 1,502 titles and no
+  text), and the French no longer says "appliquée", a word R21 refuses; "no article searched"; a date's acts named with the
+  date; the introduction's scope set inside its second member. Its optional points 4 to 7 were taken (how titles are
+  matched, a full stop after an act's passages, the EUR-Lex link named as its advanced search, the no-titles sentence said
+  once); 8 and 9 (digit grouping, a set of the shared entries held to neither publisher's date words) are next. 3,675
+  checks by script; the forms are named in the header comment of `live-chrome-fr.mjs`. `namesWork`, `severalWorks`,
+  `candidate` and `hit` were removed.
+- **Samples**: the answer census samples the phrase in the strict lane alone and a word no article carries in it; the
+  envelope census holds both, and the EU work in the strict lane with and without a hit; every Luxembourg search sample
+  carries the new members (rendered from the handler with `V3_RENDER_ANSWER_SAMPLES` and `V3_RENDER_ENVELOPE_SAMPLES`,
+  verified without them, with the refusal payload census, 7 of 7).
+- **Measured on the population** (`derive-c` opened read-only in place through a junction; the API published from this
+  branch and, for the comparison, from its merge base 5a659831, without the synthetic preview, its index copies in a
+  private temporary folder removed after each stop; no browser; medians of 7 runs, the machine shared):
+  - "congé": 138 passages in 71 acts, all on one page, 252 matches marked (an extract's median 274 characters), 12 titles
+    on top (11 held), 224 KB; 105 ms (merge base: 96 ms, 92 KB); 15 runs: min 76, median 104, p90 186 ms. Dated today: the
+    same, 115 ms.
+  - "congé parental": 15 passages in 12 acts, 5 titles, 86 ms (base 71). "bail commercial": 2 passages in 1 act and the
+    ladder's one act, 82 ms (base 77).
+  - an act's title: "Loi sur le timbre" is the ladder's exact tier, one act this site holds no version of, no passage, 79 ms
+    (base 63); "Loi du 12 novembre 2011 modifiant la loi du 9 mai 2008 relative aux chiens." is read by the phase as a
+    type and date and opens the act, 17 ms (base 10).
+  - "règlement grand-ducal": 932 passages in 470 acts, the first 200 in 51 acts on the page, 1,502 titles listed (1,334
+    held), 1.1 MB (base 0.95 MB), 145 ms (base 203); "article": 2,977 passages in 1,048 acts, 200 on the page in 37 acts,
+    103 ms (base 219): the rights decision now read once at open instead of per state on each search.
+  - no hit: "combien de jours de congé j'ai le droit quand mon père est décédé" 89 ms (base 80), "zéphyrine" 78 ms (base
+    64), each with the no-hit card's population: 1,730 acts in 1,730 versions with 7,877 articles of searchable text, as of
+    the index built on 2026-10-12. Dated 2000-01-01: no act searched.
+  - an EU act named ("personal data" in 32016R0679): 60 hits, 32 ms (base 32), unchanged.
+  - every extract of "congé" (138) is the bytes `evidence_bundle` quotes at its article: the same text digest, and the byte
+    range decoded to the parts joined; REST and MCP identical for "congé", "zéphyrine" and "bail commercial".
+  - **A defect the measure found**: the population read, a plain join, took about 55 s at mount open on the engine the
+    server ships (it read the articles by language for each state): the start took 86 s against the merge base's 34. Written
+    with `CROSS JOIN` (`LuxembourgIndexQueries.StateTextSources`), the start took 29 s; `LuxembourgIndexQueryPlanTests` now
+    holds its plan, and fails the plain join.
+- **Driver decisions** (reversible):
+  - The site asks the strict lane alone (`SEARCH_MODE`); the platform still answers both lanes to a caller who names no
+    mode, as every answer says (`lanes`, and a lane's count null when not scanned). R90 keeps lane 2 off at launch unless its
+    gate passes; making strict the API's default is one line and moves the samples (next, with the gate).
+  - The extract is cut by the platform, not the page, so REST, MCP and the page show the same bytes, each verifiable against
+    `evidence_bundle`'s text by digest and byte range. Its bounds (80 and 200 characters, whole words) are constants; only
+    the first match's neighbourhood is shown, later matches in it marked, the others in the reading.
+  - An extract is a pointer, marked as cut where the text goes on; the whole article, bracket tables and condition lists
+    whole (product spec rule 11), is one link away, on Reading. The accessibility test's date rule reads an extract as the
+    law's text, as it reads a quoted article.
+  - A version's hits in the reading's order of article ids (#978's comparer); across acts the order stays the work key's,
+    which is no rank (the answer says there is none).
+  - The act of a title is on top as a link, not moved among the passages, which stay in the answer's order.
+  - Several titles: the first ten shown, the rest one step away, all from the answer, which still lists every candidate the
+    ladder finds; bounding that list in the API, with its count, is next.
+  - The population counts what was matched against (on `derive-c`, every one of the 1,730 states), never what the
+    publisher holds; it is dated by the mounted log's build, in Luxembourg.
+  - The phase's `anchor_not_in_version` sentences take the French review of #978's renderings (subject "This site"), not
+    the reading's ("This index holds … in this version"): the phase's other sentences say "This site holds", and that French
+    was reviewed for this English.
+  - An EU search keeps its one-act layout (the one wording pinned above its hits); its hits carry no extract yet.
+- **Not in this slice** (next): an EU hit's extract (the EU answer says `text_served: false` and lists `article_text` as not
+  held; served EU text carries its acknowledgement and authenticity statement, which the search page would then show);
+  bounding the title ladder's candidates in the API; strict as the API's default (with R90's gate); digit grouping in both
+  languages; the 4.4 items (capitals, accents and quotation marks in the text lanes, the byte budget, the 250 ms target,
+  which every search measured here meets); the journeys (CI's lane: the home, search, 404 and J2 steps' bodies now name the
+  strict lane, and their texts the new lines). The data lane's content /3 (S3b) changes what the searchable text holds
+  (deleted wording never matched); an extract is cut from that text, so it follows.
+- **Measured** (no browser was started on this machine; this branch, from `v3/integration` at #978's merge, 5a659831):
+  `npm run build` in `web`, then a plain `npm test`: 115 files, 1,262 tests, 1,259 passed, the 3 that start a browser skipped
+  with their reason; `dotnet build Lex.V3.slnx -c Release`, 0 warnings, 0 errors; `Lex.V3.Tests` 3,321, 3,315 passed, 6
+  skipped; in `Lex.V3.Ingest.Tests` the classes the slice touches and those named for it (the Census classes,
+  `PublicRequestRecordingTests`, the answer, envelope and refusal-payload samples, the Search, EU Search, Results, Reference
+  and EU Reference mount classes, the MCP classes, `LuxembourgIndexBuilderTests`, `LuxembourgIndexQueryPlanTests`, the
+  machine and mounted gates, citation verification, ask, coverage, resolve and journey mounts) 312, 305 passed, 7 skipped
+  (each by its variable: a live canary, a journey mount to write, a mount to evaluate); the censuses rendered from the
+  handler and verified without the switch; `eng/verify-v3-tree.ps1` passes; the French review's 3,675 checks pass.
+
 ## The release probe's accented title, read by the exact-reference phase (sole driver, 2026-10-18)
 
 The first release without a browser (from v3/integration at 4e37df90, over derive-c, signed by the release signer) built,
@@ -266,7 +415,7 @@ proxies and a synthetic act of 3,000 articles is the stand-in.
   the review changed here ("La version que la date retient ne comporte aucun article de ce numéro …"); the review gave
   renderings in the phase's own subject ("Ce site ne détient aucun article de ce numéro dans la version que la date retient,
   et aucun autre article n’est ouvert à sa place.", and "dans le libellé que la date retient" for the EU), for the slice that
-  next touches them. The API still reads every article of a state to cut its pages (76 to 118 ms a page of the
+  next touches them (done: search results by act, above). The API still reads every article of a state to cut its pages (76 to 118 ms a page of the
   stand-in on this machine, against 263 to 300 ms for the whole): a reader query of the ids and text lengths alone would
   read only the page's text, in the index reader, after index /9 (the data lane's S6, which changes it) merges. R73's LCP,
   INP and CLS measured in a browser at the 75th percentile, and R107's monitoring. The codes themselves, which wait on the
