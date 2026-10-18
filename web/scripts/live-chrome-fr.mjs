@@ -110,6 +110,12 @@
 // English changed with them). The forms that review gave for its points 4 and 6 (`reading.contentsPageOne`,
 // `reading.pageShownOne`, a page of one article named once; `export.readingPages`, "pages lues : {done} sur {pages}") ship
 // as it gave them, with the English it named.
+// A page past a version's last (the review of #978, F2): its sentence for a Luxembourg version and for an EU wording
+// (`reading.pageNotHeld`, `reading.europePageNotHeld`, each `one` and `other`) and the links after it (`reading.firstPage`,
+// `reading.lastPage`) were reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the same
+// delegation in the addendum of 2026-10-18 on a page past a version's last (6 forms, 4 changed in review: the second clause
+// says "il n’y a donc pas de page {page}", the site's page, never that the version has none, since the publisher's text has
+// printed pages of its own; the English changed with it).
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -266,12 +272,12 @@ export const LIVE_CHROME_FR = Object.freeze({
     nextPage: 'Articles suivants',
     nextPageFailed: 'Les articles suivants n’ont pas pu être chargés ici ; le lien les ouvre sur une page qui leur est propre.',
     pageNotHeld: Object.freeze({
-      one: 'Cette version se lit ici sur {count} page ; elle n’a donc pas de page {page}.',
-      other: 'Cette version se lit ici sur {count} pages ; elle n’a donc pas de page {page}.',
+      one: 'Cette version se lit ici sur {count} page ; il n’y a donc pas de page {page}.',
+      other: 'Cette version se lit ici sur {count} pages ; il n’y a donc pas de page {page}.',
     }),
     europePageNotHeld: Object.freeze({
-      one: 'Ce libellé se lit ici sur {count} page ; il n’a donc pas de page {page}.',
-      other: 'Ce libellé se lit ici sur {count} pages ; il n’a donc pas de page {page}.',
+      one: 'Ce libellé se lit ici sur {count} page ; il n’y a donc pas de page {page}.',
+      other: 'Ce libellé se lit ici sur {count} pages ; il n’y a donc pas de page {page}.',
     }),
     firstPage: 'Première page',
     lastPage: 'Dernière page (page {pages})',

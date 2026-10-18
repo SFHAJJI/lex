@@ -144,7 +144,8 @@ test("a French page says each census refusal in its reviewed French, and never t
         // A page past the version's last (the review of #978, F2): the reading's own counted sentence, with no card.
         const { asked, pages } = englishState.page;
         assert.equal(frenchState.card, false, `${label}: a page refused is said without the provision's card`);
-        assert.equal(frenchState.sentence, FR.reading.pageNotHeld[new Intl.PluralRules("fr").select(pages)].replace("{count}", String(pages)).replace("{page}", String(asked)), label);
+        const table = entry.envelope.context?.publisher === "eu-eurlex" ? FR.reading.europePageNotHeld : FR.reading.pageNotHeld;
+        assert.equal(frenchState.sentence, table[new Intl.PluralRules("fr").select(pages)].replace("{count}", String(pages)).replace("{page}", String(asked)), label);
         const markup = renderToStaticMarkup(h(french[view], props(frenchState)));
         assert.ok(markup.replaceAll("<!-- -->", "").includes(escaped(frenchState.sentence)), `${label}: the page says the French`);
         assert.ok(!markup.replaceAll("<!-- -->", "").includes(escaped(englishState.sentence)), `${label}: and not the English`);

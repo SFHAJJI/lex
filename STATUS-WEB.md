@@ -65,7 +65,7 @@ proxies and a synthetic act of 3,000 articles is the stand-in.
   - an article the version does not hold: the refusal card ("This index holds no article with that id in this version",
     with the ids nearest it), the focus on it, and after it "The whole act at this version" (or the act today, at a readable
     address), where before the whole act stood under the article's address;
-  - a page past the version's last: "This version is read here on 2 pages, so it has no page 3." (an EU wording's own
+  - a page past the version's last: "This version is read here on 2 pages, so there is no page 3." (an EU wording's own
     sentence), with no card, whose note is about provisions, then links to its first page and its last, the focus on the
     refusal; never indexed (the review of #978, F2);
   - a version that fits one page is laid out as before: no contents, no pages line, no links, no numbers of its own.
@@ -157,7 +157,10 @@ proxies and a synthetic act of 3,000 articles is the stand-in.
     and the links to the first and last page, never indexed. Tests: the API's at a permalink, by the work with a language
     asked and none, the long act's fourth page of three, and the EU wording at its permalink and by its CELEX; the cut's
     unit test; the census pin of `RefusePageNotInVersion`; the refusal and envelope censuses; the page's sentence, links,
-    pin and noindex render in `reading-pages.test.mjs`; the French census test.
+    pin and noindex render in `reading-pages.test.mjs`; the French census test, over a Luxembourg state's and an EU
+    wording's page past the last. Its six French forms were reviewed independently in the addendum of 2026-10-18 on a page
+    past a version's last (4 changed, 2 approved): the sentence says "so there is no page 3" ("il n’y a donc pas de page
+    3"), the site's page, never that the version has none, since the publisher's text has printed pages of its own.
   - F3 (low): two web mutants survived. Tests: a superseded version's `?page=2` (a Luxembourg state and an EU wording)
     renders the plain noindex at its permalink with its page; a contents row on another page than the index names is
     refused, both ways.

@@ -6903,6 +6903,58 @@
       }
     },
     {
+      "operation": "evidence_bundle",
+      "scenario": "the same EU wording\u0027s page 100, past its last: a refusal naming its pages",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "freshness": {
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "eu",
+          "provisional": false,
+          "publisher": "eu-eurlex",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "refusal",
+          "timeline_semantics": "official_consolidation_state"
+        },
+        "object_type": "envelope",
+        "operation_id": "evidence_bundle",
+        "refusal": {
+          "code": "anchor_not_in_version",
+          "helpful_payload": {
+            "asserts_absence_of_law": false,
+            "do_not_fall_back_to_full_text_search": true,
+            "language": "eng",
+            "nearest_anchors": [
+              "page=1",
+              "page=3"
+            ],
+            "pages": 3,
+            "requested_anchor": "page=100",
+            "requested_page": 100,
+            "what_would_answer": [
+              "corrected_identifier",
+              "new_official_observation"
+            ]
+          },
+          "schema": "lex-v3-refusal/1"
+        },
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "80dc8e29242223f0f4c6dc09b87861b50cbb994c668a99dd4ee2432d7fa48470",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": null,
+        "schema": "lex-v3-envelope/1",
+        "verdict": "refuse",
+        "version": "v3"
+      }
+    },
+    {
       "operation": "verify",
       "scenario": "an article\u0027s permalink: digest_matches, with the article\u0027s text digest",
       "http_status": 200,

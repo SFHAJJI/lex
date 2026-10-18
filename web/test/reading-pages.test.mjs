@@ -277,11 +277,11 @@ test("a page past the version's last is refused with its pages: a sentence, its 
 
   const outcome = readingOutcome({ state: "refusal", envelope: PAST_LAST });
   assert.equal(outcome.card, false, "no card: its note is about provisions, and a page is none");
-  assert.equal(outcome.sentence, "This version is read here on 2 pages, so it has no page 3.");
+  assert.equal(outcome.sentence, "This version is read here on 2 pages, so there is no page 3.");
   assert.equal(readingOutcome({ state: "refusal", envelope: { ...PAST_LAST, context: { ...PAST_LAST.context, publisher: "eu-eurlex" } } }).sentence,
-    "This wording is read here on 2 pages, so it has no page 3.");
+    "This wording is read here on 2 pages, so there is no page 3.");
   const markup = markupOf(outcome);
-  assert.ok(markup.includes("This version is read here on 2 pages, so it has no page 3."), markup);
+  assert.ok(markup.includes("This version is read here on 2 pages, so there is no page 3."), markup);
   assert.ok(!markup.includes("full-text search"), "not the provision's note");
 
   const permalink = SECOND.result.value.states[0].permalink;
