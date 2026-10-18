@@ -124,10 +124,12 @@ release from this machine could only skip every probe (`--no-probe`), the ones t
 - **Not done here**: no image was built or run in WSL (the brief: stand-ins and the fixture mount only; the population
   image needs 2.6 GB and more, and the machine had about 2.4 GB of memory free); the WSL run of `--no-browser` is the
   next release's. Nothing was deployed, pushed or asked of Azure.
-- **Measured** (this branch, from `v3/integration` at #977's merge, 3b7913ec), with no browser started: the web build; the
-  web suite over 111 of its 114 files (all but `keyboard-walk`, `launch-browser` and `paint-check`, which start a
-  browser), 1,231 of 1,231 (`no-browser-probes` 8 of 8); `eng/verify-v3-tree.ps1` 1,610 tracked paths. No C# was
-  touched; the journeys are CI's lane.
+- **Measured** after the review's repairs (this branch, from `v3/integration` at #977's merge, 3b7913ec), with no browser
+  started: the web build; the web suite over 111 of its 114 files (all but `keyboard-walk`, `launch-browser` and
+  `paint-check`), 1,234 of 1,234 (`no-browser-probes` 11 of 11); a plain `npm test` over all 114, 1,238 tests, 1,235
+  passed and the three that start a browser skipped with their reason, while a watcher of this machine's processes saw
+  no browser start; seven mutations of the repairs each fail the guard or the kit's test; `eng/verify-v3-tree.ps1`
+  1,610 tracked paths. No C# was touched; the journeys are CI's lane. Before the review: 1,231 of 1,231.
 
 ## Two tests that timed the runner, not the behaviour (sole driver, 2026-10-17)
 
