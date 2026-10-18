@@ -19,9 +19,13 @@ card, and privacy clean (142 requests, nothing written, no cookie, no other orig
 - The driver reactivated it, waited until it was the latest ready revision, and ran the same probe: it passed. Then,
   as a driver decision (reversible; the private copy stays restricted, so this is not the opening), all of the private
   copy's traffic moved to it and the revision of 13 October was deactivated, keeping the cost at one replica.
-- `deploy.ps1` now waits, before its probe, until the candidate (named `$AppName--$suffix`) runs, is healthy and is
-  the latest ready revision, for up to 20 minutes; one that never becomes ready is deactivated and nothing moves. A plan
-  run says so. `deploy-kit.test.mjs` pins the order: the wait before the probe.
+- `deploy.ps1` now probes the candidate at the revision's own address (`properties.fqdn`), never through the
+  candidate label, once it is provisioned, active, running and healthy, waiting up to 20 minutes. A failed or inactive
+  revision ends the wait at once; one that never becomes ready is deactivated, and nothing moves. A plan run says so.
+  `deploy-kit.test.mjs` pins it. The review of #985 showed why the label is not enough even after a wait: the release
+  card cannot tell two revisions apart in general (the two releases' cards differ only in six case digests, and both
+  name the same corpus), so a routing lag could let the live revision answer a later probe; the revision's own address
+  routes to the named revision whatever the label does.
 - Measured: `deploy-kit.test.mjs` and `no-browser-probes.test.mjs` 23 of 23.
 
 ## Search results by act, and a plain no-hit card (sole driver, 2026-10-18)

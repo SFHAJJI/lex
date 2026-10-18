@@ -70,15 +70,19 @@ test("a new revision arrives as the candidate with no traffic while a live revis
   assert.match(ingress.traffic, /createObject\('revisionName', parameters\('liveRevision'\), 'weight', 100\), createObject\('latestRevision', true\(\), 'weight', 0, 'label', 'candidate'\)/);
 });
 
-test("the candidate is probed only once it is the latest ready revision, which its label follows", () => {
-  // The label names the latest *ready* revision: probed earlier, the live revision answered (2026-10-18).
+test("the candidate is probed at its own address, once it is ready, never through the candidate label", () => {
+  // The label names the latest *ready* revision: probed through it earlier, the live revision answered (2026-10-18); and
+  // the card cannot tell two revisions apart in general, so only the revision's own address proves which one answered.
   assert.match(code, /\$candidate = "\$AppName--\$suffix"/, "the candidate is the revision this deployment made, by name");
-  const wait = code.indexOf("properties.latestReadyRevisionName");
-  const probe = code.indexOf("& node @nodeTrap (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --origin");
-  assert.ok(wait > 0 && probe > wait, "the wait for the latest ready revision comes before the candidate's probe");
-  assert.match(code, /\$latestReady -eq \$candidate/);
+  assert.doesNotMatch(code, /---candidate\.\$domain/, "the probe never goes through the candidate label");
+  assert.match(code, /\$origin = "https:\/\/\$\(\$state\.fqdn\)"/, "the probe asks the revision's own address");
+  const wait = code.indexOf("fqdn:properties.fqdn");
+  const probe = code.indexOf("& node @nodeTrap (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --origin $origin");
+  assert.ok(wait > 0 && probe > wait, "the wait for the revision comes before its probe");
   assert.match(code, /"\$\(\$state\.running\)"\.StartsWith\('Running'\)/);
   assert.match(code, /\$state\.health -eq 'Healthy'/);
+  assert.match(code, /"\$\(\$state\.provisioning\)" -eq 'Failed' -or "\$\(\$state\.running\)" -eq 'Failed'/, "a failed revision ends the wait at once");
+  assert.match(code, /\$state\.active -eq \$false/, "an inactive revision ends the wait at once");
   assert.match(code, /if \(\(Get-Date\) -gt \$readyBy\) \{\s*Step "the candidate did not become ready: deactivate the candidate \$candidate"\s*az containerapp revision deactivate/,
     "a candidate that never becomes ready is deactivated, and no traffic moves");
 });

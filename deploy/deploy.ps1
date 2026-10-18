@@ -271,35 +271,42 @@ if ($Apply) {
 # 5. The zero-traffic probe against the candidate's own URL.
 Step "probe the candidate"
 if (-not $Apply) {
-    Write-Host "  > wait until $AppName--$suffix runs, is healthy and is the latest ready revision, which the candidate label follows"
-    Write-Host "  > node $(($nodeTrap + @('web/scripts/deploy-probe.mjs')) -join ' ') --origin https://$AppName---candidate.<environment default domain> --release $releasePath --public-key $keyPath $($signerProbe -join ' ') $($browserArgs -join ' ')"
+    Write-Host "  > wait until $AppName--$suffix is provisioned, active, running and healthy"
+    Write-Host "  > node $(($nodeTrap + @('web/scripts/deploy-probe.mjs')) -join ' ') --origin https://<$AppName--$suffix's own address> --release $releasePath --public-key $keyPath $($signerProbe -join ' ') $($browserArgs -join ' ')"
     if (-not $BrowserProbe) { Write-Host "  (no browser probe: only the HTTP probes would run, under the browser trap, and no page of the candidate would be walked in a browser; -BrowserProbe walks them, where a browser may run)" }
     Write-Host "== planned only: run again with -Apply to deploy (the owner's decision)"
     exit 0
 }
-$domain = az containerapp env show --ids $EnvironmentId --query properties.defaultDomain -o tsv
 $candidate = "$AppName--$suffix"
-$origin = "https://$AppName---candidate.$domain"
-# The candidate label follows the latest *ready* revision. Until the new revision is ready (its image pulled and its
-# mount's indexes verified: about four minutes for the population), the label still names the live revision, and the
-# probe would hold the live revision to this release; on 2026-10-18 it did, failed as it should, and deactivated a healthy
-# candidate. So the probe waits until the candidate runs, is healthy and is the latest ready revision.
+# The probe asks the candidate revision at its own address, never through the candidate label: the label follows the
+# latest *ready* revision, so while the new revision pulled its image and verified its indexes (about four minutes for the
+# population) the label still named the live one, and on 2026-10-18 the probe held the live revision to this release.
+# The release card cannot tell two revisions apart in general (a later release over the same corpus and gates answers
+# the same bytes), so only the revision's own address proves which revision answered (the review of #985). The probe
+# waits until the revision is provisioned, active, running and healthy; a failed or inactive one ends the wait at once.
 $readyBy = (Get-Date).AddMinutes(20)
 while ($true) {
-    $state = az containerapp revision show -g $ResourceGroup -n $AppName --revision $candidate --query "{running:properties.runningState,health:properties.healthState}" -o json | ConvertFrom-Json
-    $latestReady = az containerapp show -g $ResourceGroup -n $AppName --query properties.latestReadyRevisionName -o tsv
-    if ($state.health -eq 'Healthy' -and "$($state.running)".StartsWith('Running') -and $latestReady -eq $candidate) {
-        Write-Host "  $candidate is $($state.running) and $($state.health), and the candidate label names it"
+    $state = az containerapp revision show -g $ResourceGroup -n $AppName --revision $candidate --query "{running:properties.runningState,health:properties.healthState,provisioning:properties.provisioningState,active:properties.active,fqdn:properties.fqdn}" -o json | ConvertFrom-Json
+    $failed = "$($state.provisioning)" -eq 'Failed' -or "$($state.running)" -eq 'Failed'
+    if ($failed -or ($null -ne $state -and $state.active -eq $false)) {
+        Step "the candidate cannot become ready: deactivate the candidate $candidate"
+        az containerapp revision deactivate -g $ResourceGroup -n $AppName --revision $candidate
+        $why = if ($failed) { "it failed (provisioning $($state.provisioning), running $($state.running))" } else { 'it is not active: activate it first if it should be probed' }
+        throw "The candidate $candidate cannot become ready: $why. No traffic moved."
+    }
+    if ($state.health -eq 'Healthy' -and "$($state.running)".StartsWith('Running') -and -not [string]::IsNullOrEmpty($state.fqdn)) {
+        Write-Host "  $candidate is $($state.running) and $($state.health), at its own address $($state.fqdn)"
         break
     }
     if ((Get-Date) -gt $readyBy) {
         Step "the candidate did not become ready: deactivate the candidate $candidate"
         az containerapp revision deactivate -g $ResourceGroup -n $AppName --revision $candidate
-        throw "The candidate $candidate was not ready within 20 minutes ($($state.running), $($state.health); latest ready: $latestReady); it was deactivated and no traffic moved."
+        throw "The candidate $candidate was not ready within 20 minutes ($($state.running), $($state.health)); it was deactivated and no traffic moved."
     }
-    Write-Host "  waiting: $candidate is $($state.running), $($state.health); the latest ready revision is $latestReady"
+    Write-Host "  waiting: $candidate is $($state.provisioning), $($state.running), $($state.health)"
     Start-Sleep -Seconds 15
 }
+$origin = "https://$($state.fqdn)"
 if (-not $BrowserProbe) { Write-Host "  no browser probe (no -BrowserProbe): only the HTTP probes run, under the browser trap, and no page of the candidate is walked in a browser" }
 & node @nodeTrap (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --origin $origin --release $releasePath --public-key $keyPath @signerProbe @browserArgs
 if ($LASTEXITCODE -ne 0) {
