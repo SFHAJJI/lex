@@ -160,7 +160,7 @@ public sealed class LuxembourgIndexCatalogueStatesTests
     /// The fixture of design §3.4: a code (its base act named by isMemberOf, an accented article id, a shared-file pair, a
     /// PDF state and a catalogued state with no expression); an act dated by its entry into force with a later withheld
     /// consolidation and a hole; an act whose file's applicability is not its entry into force; an act and its same-date
-    /// consolidation, then a state not acquired; an end before its start and an overlap; a suspected inclusive end; an
+    /// consolidation, then a state not acquired; an end on its start, an end before it and an overlap; a suspected inclusive end; an
     /// English translation; and a work with no held state.
     /// </summary>
     internal static Harness Fixture()
@@ -198,7 +198,10 @@ public sealed class LuxembourgIndexCatalogueStatesTests
         h.State(W("loi/2018/09/14/a883/consolide/20200701"), "2020-07-01", memberOf: W("loi/2018/09/14/a883"), expressions: ("fr", Fra))
             .Unavailable(W("loi/2018/09/14/a883/consolide/20200701"));
 
-        // 5. An end before its start (invalid), then an overlap.
+        // 5. An end on its start (derive-c's code/procedure_penale/20211214, from 2021-12-14 to 2021-12-14; review of #980, F3)
+        // and an end before its start, each invalid, then an overlap.
+        h.State(W("rgd/2007/06/07/n2/consolide/20221214"), "2022-12-14", "2022-12-14", expressions: ("fr", Fra))
+            .Withheld(W("rgd/2007/06/07/n2/consolide/20221214"));
         h.State(W("rgd/2007/06/07/n2/consolide/20230717"), "2023-07-17", "2023-07-01", expressions: ("fr", Fra))
             .Held(W("rgd/2007/06/07/n2/consolide/20230717"), ["art_1"]);
         h.State(W("rgd/2007/06/07/n2/consolide/20240101"), "2024-01-01", "2024-12-31", expressions: ("fr", Fra))
@@ -247,6 +250,7 @@ public sealed class LuxembourgIndexCatalogueStatesTests
         "loi-2018-09-14-a883 2018-09-14 loi/2018/09/14/a883/consolide/20180914 fra consolidation applicability eif=- to=2020-07-01/publisher half_open held - - articles=1",
         "loi-2018-09-14-a883 2018-09-14 loi/2018/09/14/a883/jo fra as_published applicability_in_file eif=2018-09-18 to=2020-07-01/derived derived held - - articles=1",
         "loi-2018-09-14-a883 2020-07-01 loi/2018/09/14/a883/consolide/20200701 fra consolidation applicability eif=- to=-/- derived not_acquired - - articles=0",
+        "rgd-2007-06-07-n2 2022-12-14 rgd/2007/06/07/n2/consolide/20221214 fra consolidation applicability eif=- to=2022-12-14/publisher invalid withheld_rights - - articles=0",
         "rgd-2007-06-07-n2 2023-07-17 rgd/2007/06/07/n2/consolide/20230717 fra consolidation applicability eif=- to=2023-07-01/publisher invalid held - - articles=1",
         "rgd-2007-06-07-n2 2024-01-01 rgd/2007/06/07/n2/consolide/20240101 fra consolidation applicability eif=- to=2024-12-31/publisher half_open held - - articles=1",
         "rgd-2007-06-07-n2 2024-06-01 rgd/2007/06/07/n2/consolide/20240601 fra consolidation applicability eif=- to=-/- derived held - - articles=1",
@@ -333,8 +337,9 @@ public sealed class LuxembourgIndexCatalogueStatesTests
                 "loi-2018-09-14-a883 0 same_date loi/2018/09/14/a883/jo -> loi/2018/09/14/a883/consolide/20180914",
                 "loi-2018-09-14-a883 1 derived loi/2018/09/14/a883/jo -> loi/2018/09/14/a883/consolide/20200701",
                 "loi-2018-09-14-a883 2 contiguous loi/2018/09/14/a883/consolide/20180914 -> loi/2018/09/14/a883/consolide/20200701",
-                "rgd-2007-06-07-n2 0 invalid rgd/2007/06/07/n2/consolide/20230717 -> rgd/2007/06/07/n2/consolide/20240101",
-                "rgd-2007-06-07-n2 1 overlap rgd/2007/06/07/n2/consolide/20240101 -> rgd/2007/06/07/n2/consolide/20240601 [2024-06-01, 2024-12-31)",
+                "rgd-2007-06-07-n2 0 invalid rgd/2007/06/07/n2/consolide/20221214 -> rgd/2007/06/07/n2/consolide/20230717",
+                "rgd-2007-06-07-n2 1 invalid rgd/2007/06/07/n2/consolide/20230717 -> rgd/2007/06/07/n2/consolide/20240101",
+                "rgd-2007-06-07-n2 2 overlap rgd/2007/06/07/n2/consolide/20240101 -> rgd/2007/06/07/n2/consolide/20240601 [2024-06-01, 2024-12-31)",
             },
             intervals,
             string.Join(Environment.NewLine, intervals));
@@ -392,7 +397,7 @@ public sealed class LuxembourgIndexCatalogueStatesTests
         Assert.AreEqual(BuiltAtText, observation.BuiltAt);
         Assert.AreEqual(DerivedAtText, observation.DerivedAt);
         var events = reader.ResolveEvents(0, null, 100);
-        Assert.HasCount(20, events);
+        Assert.HasCount(21, events);
         Assert.IsTrue(events.All(static value => value.Event == "first_sighting"));
         var rows = AllRows(reader).ToDictionary(static row => row.StateSha256, StringComparer.Ordinal);
         foreach (var value in events)
@@ -435,7 +440,7 @@ public sealed class LuxembourgIndexCatalogueStatesTests
             .Held(W("loi/1996/11/07/n1/consolide/20240101"), ["art_1"]);
         var chained = later.Build(builtAt: "2026-10-13T00:00:00Z", derivedAt: "2026-10-17T10:00:00Z", predecessor: predecessor);
         using var reader = Open(chained);
-        var appended = reader.ResolveEvents(20, null, 100);
+        var appended = reader.ResolveEvents(21, null, 100);
         CollectionAssert.AreEqual(
             new[] { "interval_closed loi-1996-11-07-n1 2023-01-01", "first_sighting loi-1996-11-07-n1 2024-01-01" },
             appended.Select(static value => $"{value.Event} {value.WorkKey} {value.ApplicabilityDate}").ToArray());
