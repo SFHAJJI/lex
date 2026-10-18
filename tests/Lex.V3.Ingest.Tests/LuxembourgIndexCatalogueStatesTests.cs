@@ -303,6 +303,10 @@ public sealed class LuxembourgIndexCatalogueStatesTests
         Assert.AreEqual("2019-01-01", act.InFileDate, "the file's applicability is the date, by its role");
         Assert.AreEqual("2019-03-12", act.EntryIntoForce, "and the catalogue's entry into force is a separate value");
         Assert.AreEqual("applicability_in_file", act.DateRole);
+        var french = rows.Single(row => row.PublisherLegalResourceIri == W("loi/2017/07/20/a674/jo") && row.Language == "fra");
+        Assert.IsNull(french.InFileIdentity, "a textless row takes no other expression's file facts: the English file's are its own");
+        Assert.IsNull(french.InFileDate);
+        Assert.AreEqual("own", rows.Single(row => row.PublisherLegalResourceIri == W("loi/2017/07/20/a674/jo") && row.Language == "eng").InFileIdentity);
         Assert.IsTrue(rows.Single(row => row.PublisherLegalResourceIri == W("code/civil/20270101")).ExpressionIri.Length == 0,
             "a state the catalogue names no expression of has an empty expression and language");
     }

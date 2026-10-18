@@ -204,6 +204,13 @@ public sealed class LuxembourgIndexNineRun15Probe
             ["textless_rows_by_kind"] = Counted(textless.Select(KindOf)),
             ["textless_rows_by_status"] = Counted(textless.Select(static state => state.TextStatus!)),
             ["textless_rows_naming_no_expression"] = textless.Count(static state => state.ExpressionIri.Length == 0),
+            ["textless_consolidation_states"] = textless.Where(static state => state.StateKind == LuxembourgIndexBuilder.KindConsolidation)
+                .Select(static state => state.PublisherLegalResourceIri).Distinct(StringComparer.Ordinal).Count(),
+            ["textless_states_with_two_or_more_rows"] = new JsonArray(textless
+                .GroupBy(static state => state.PublisherLegalResourceIri, StringComparer.Ordinal)
+                .Where(static group => group.Count() >= 2)
+                .Select(static group => (JsonNode?)(group.Key + " " + string.Join(",", group.Select(static state => state.ExpressionIri[(state.ExpressionIri.LastIndexOf('/') + 1)..]))))
+                .ToArray()),
             ["works_with_a_held_row"] = held.Select(static state => state.WorkKey).Distinct(StringComparer.Ordinal).Count(),
             ["works_with_two_or_more_held_french_states"] = heldByWork.Count(static group => group.Count() >= 2),
             ["held_code_states"] = codes.Values.Sum(),

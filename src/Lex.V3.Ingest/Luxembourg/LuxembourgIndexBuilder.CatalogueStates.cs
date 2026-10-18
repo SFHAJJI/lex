@@ -245,6 +245,7 @@ public static partial class LuxembourgIndexBuilder
         // ---- Textless rows: the other catalogue states of every served work. ----
         var heldWorks = held.Select(static state => WorkOfState(state.LegalResourceIri)).ToHashSet(StringComparer.Ordinal);
         var heldKeys = held.Select(static state => (state.LegalResourceIri, state.ExpressionIri)).ToHashSet();
+        var heldRoots = held.Select(static state => state.LegalResourceIri).ToHashSet(StringComparer.Ordinal);
         var catalogueStatesByWork = facts.Subjects
             .Where(static subject => StateKindOf(subject) is not null)
             .GroupBy(WorkOfState, StringComparer.Ordinal)
@@ -257,13 +258,6 @@ public static partial class LuxembourgIndexBuilder
             {
                 var kind = StateKindOf(root)!;
                 var rootBodies = bodiesByRoot.GetValueOrDefault(root) ?? [];
-                var evidence = rootBodies.FirstOrDefault(static body => body.InFileIdentity is not null || body.InFileDate is not null);
-                var dated = DateOf(facts, root, kind, evidence?.InFileDate);
-                if (dated is null)
-                {
-                    continue;
-                }
-
                 var frenchExpressions = facts.Values(root, "isRealizedBy")
                     .Where(expression => facts.Values(expression, "language").Contains(FrenchLanguageIri, StringComparer.Ordinal))
                     .ToArray();
@@ -276,7 +270,21 @@ public static partial class LuxembourgIndexBuilder
 
                 foreach (var expression in frenchExpressions.Length == 0 ? [""] : frenchExpressions)
                 {
-                    if (heldKeys.Contains((root, expression)))
+                    // A held state is that state's row: a catalogue that names no expression of it adds no textless row beside it.
+                    if (heldKeys.Contains((root, expression)) || (expression.Length == 0 && heldRoots.Contains(root)))
+                    {
+                        continue;
+                    }
+
+                    // What a file says of itself is that file's: a textless row takes the in-file facts of a body of its own
+                    // expression only, never another expression's file (review of #980), and is dated with them.
+                    var evidence = expression.Length == 0
+                        ? null
+                        : rootBodies.FirstOrDefault(body =>
+                            string.Equals(body.ExpressionIri, expression, StringComparison.Ordinal) &&
+                            (body.InFileIdentity is not null || body.InFileDate is not null));
+                    var dated = DateOf(facts, root, kind, evidence?.InFileDate);
+                    if (dated is null)
                     {
                         continue;
                     }
