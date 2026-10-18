@@ -4,6 +4,24 @@ Updated 2026-10-18. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The release probe's accented title, read by the exact-reference phase (sole driver, 2026-10-18)
+
+The first release without a browser (from v3/integration at 4e37df90, over derive-c, signed by the release signer) built,
+signed and reproduced its image, then failed one probe: the accented-title check searched "Loi du 3 décembre 2015
+relative à certaines utilisations autorisées des oeuvres orphelines." and found no `work_resolution`. The search was
+right: since 4.2 (#974) the exact-reference phase reads a title that begins with its act's type and date as a reference
+to that act, opens it and searches no word. The probe was written before the phase, and CI never runs this check against
+a real API (the fixture index holds no titles, so the check says "not checked" there), so only the population showed it.
+- `accentedTitleFailures` (`deploy-probe.mjs`) now accepts the phase opening the very act whose title was asked
+  (`reference.outcome` "opens", `recognised.act.work` the work's key), as well as the title ladder naming it alone. The
+  title's own fold is still held by the three resolves before it (as published, in capitals, decomposed).
+- A test holds the three cases: the phase opens the act (passes), opens another act or nothing (each fails, saying so).
+- The review of #984 found the failure's wording blamed the phase when the ladder failed: every answer carries the
+  phase's member, with outcome "no_reference" on the ladder's answers, and the stand-in left it out. The phase is now
+  named only when it answered ("opens" or "not_opened"), and the stand-in answers the ladder's searches as the API does.
+  It also confirmed that resolve never goes through the phase, so the three resolves still hold plan 0.8's fold.
+- Measured: `deploy-probe.test.mjs` 12 of 12; `npm run build && npm test` 1,252 passed, 3 skipped (the browser tests).
+
 ## Content /3's wording on the reading and in the exports (sole driver, 2026-10-18)
 
 Slice S3b of the Luxembourg data design (STATUS-DATA.md, the section of the same day): content /3's quoted wording,

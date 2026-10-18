@@ -373,10 +373,21 @@ export async function accentedTitleFailures(origin, { ask = askOperation, notes 
           failures.push(`resolve of "${title}" ${form} finds ${value.work_identifier} by ${value.match_reason}, where without its accents it finds ${found.work_identifier} by ${found.match_reason}`);
         }
       }
+      // A title that begins with its act's type and date ("Loi du 3 décembre 2015 …") is read by the exact-reference phase
+      // first (4.2), which opens that act and searches no word: that is the work named alone too. The title's own fold is
+      // held by the three resolves above.
       const searched = await ask(origin, "search", { query: title, language, mode: "strict", limit: 1 });
       const resolution = searched?.result?.value?.work_resolution;
-      if (resolution?.outcome !== "one_work" || resolution.work?.work_identifier !== found.work_identifier) {
-        failures.push(`search for "${title}" names ${resolution?.outcome ?? (searched === null ? "no envelope" : `a refusal, ${searched.refusal?.code}`)}, not ${found.work_identifier} alone`);
+      const reference = searched?.result?.value?.reference;
+      const opensWork = reference?.outcome === "opens" && reference.recognised?.act?.work === work;
+      if (!opensWork && (resolution?.outcome !== "one_work" || resolution.work?.work_identifier !== found.work_identifier)) {
+        // Every answer carries the phase's member; it answered the search only when it opened something or said why not
+        // (on the ladder's answers its outcome is "no_reference", and the ladder's own outcome is the one to report).
+        const phaseAnswered = reference?.outcome === "opens" || reference?.outcome === "not_opened";
+        const said = phaseAnswered
+          ? `the reference phase's ${reference.outcome} of ${reference.recognised?.act?.work ?? "no act"}`
+          : resolution?.outcome ?? (searched === null ? "no envelope" : `a refusal, ${searched.refusal?.code}`);
+        failures.push(`search for "${title}" names ${said}, not ${found.work_identifier} alone`);
       }
       notes.push(`an accented title: "${title}" (${found.work_identifier}), asked as published, in capitals and decomposed`);
       return failures;
