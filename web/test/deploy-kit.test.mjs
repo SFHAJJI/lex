@@ -103,6 +103,30 @@ test("until the owner opens the site, every deployment admits only the named ran
   assert.equal(allowed.input.action, "Allow");
 });
 
+test("search engines are kept out unless the deployment says indexed, and the API reads the switch the template sets", () => {
+  // The owner's answer to O27 on 2026-10-18 is yes; the switch is set at the opening, never by default.
+  assert.deepEqual(template.parameters.searchEngines.allowedValues, ["kept-out", "indexed"]);
+  assert.equal(template.parameters.searchEngines.defaultValue, "kept-out");
+  const env = app.properties.template.containers[0].env;
+  assert.ok(env.some((variable) => variable.name === "LEX_V3_SEARCH_ENGINES" && variable.value === "[parameters('searchEngines')]"));
+  assert.match(code, /\[ValidateSet\('kept-out', 'indexed'\)\] \[string\] \$SearchEngines = 'kept-out'/);
+  assert.match(code, /searchEngines = \$SearchEngines/);
+});
+
+test("a redeployment keeps the custom domain bound to the app, since the template would otherwise set none", () => {
+  const { ingress } = app.properties.configuration;
+  assert.equal(ingress.customDomains, "[parameters('customDomains')]");
+  assert.deepEqual(template.parameters.customDomains.defaultValue, []);
+  assert.match(code, /az containerapp show -g \$ResourceGroup -n \$AppName --query "properties\.configuration\.ingress\.customDomains"/,
+    "the domains bound now are read back from the app");
+  assert.match(code, /customDomains = @\(\$customDomains\)/, "and passed to the template");
+  const bind = readFileSync(new URL("../../deploy/bind-domain.ps1", import.meta.url), "utf8").replace(/<#[\s\S]*?#>/g, "");
+  assert.match(bind, /Resolve-DnsName \$Hostname -Type CNAME -Server \$Resolver/, "the binding waits for public DNS to answer the CNAME");
+  assert.match(bind, /--validation-method CNAME/, "a managed certificate, validated by the CNAME");
+  assert.match(bind, /if \(-not \$Apply\) \{ Write-Host "== planned only/, "a plan run binds nothing");
+  assert.doesNotMatch(bind, /ipSecurityRestrictions|ingress access-restriction|-Open\b/, "binding the name never opens the site");
+});
+
 test("who ingress admits is held exactly: the named ranges, each allowed, or everyone only after the opening", () => {
   const cases = [
     ["the named ranges", '[{"ipAddressRange":"203.0.113.7/32","action":"Allow"},{"ipAddressRange":"198.51.100.0/24","action":"Allow"}]', "203.0.113.7/32,198.51.100.0/24", false, ""],

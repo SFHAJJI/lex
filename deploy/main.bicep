@@ -45,6 +45,16 @@ param allowedSourceCidrs array = []
 @description('True only once the owner has opened the site (deploy.ps1 -Public): ingress then admits everyone.')
 param openToPublic bool = false
 
+@description('Whether search engines may index the site, read by the API at startup as LEX_V3_SEARCH_ENGINES: kept-out (every page noindex, no sitemap) or indexed (the owner\'s answer to O27 on 2026-10-18; law pages still open only for the works the release\'s indexing record lists).')
+@allowed([
+  'kept-out'
+  'indexed'
+])
+param searchEngines string = 'kept-out'
+
+@description('The custom domains bound to the app, as Azure holds them (name, bindingType, certificateId): deploy.ps1 reads them back and passes them on every deployment, so a redeployment keeps the binding. Empty until law.soufien.lu is bound (deploy/bind-domain.ps1).')
+param customDomains array = []
+
 var firstDeployment = empty(liveRevision)
 
 // Every address range named, each admitted; ingress refuses every other address.
@@ -106,6 +116,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
               }
             ]
         ipSecurityRestrictions: openToPublic ? [] : (empty(allowedSourceCidrs) ? admitNoOne : allowedOnly)
+        customDomains: customDomains
       }
       registries: [
         {
@@ -137,6 +148,11 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'LEX_V3_TEMP_IS_PRIVATE'
               value: '1'
+            }
+            // Search engines (3.6): only the exact value `indexed` opens the pages the indexing record lists.
+            {
+              name: 'LEX_V3_SEARCH_ENGINES'
+              value: searchEngines
             }
           ]
           // The API listens only once its mount is open and verified (32 s on one core over the population mount), so a

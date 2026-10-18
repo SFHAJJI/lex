@@ -76,6 +76,7 @@ param(
     [Parameter(ParameterSetName = 'Deploy')] [switch] $Apply,
     [Parameter(ParameterSetName = 'Deploy')] [switch] $BrowserProbe,
     [Parameter(ParameterSetName = 'Deploy')] [switch] $SkipBrowserProbe,
+    [Parameter(ParameterSetName = 'Deploy')] [ValidateSet('kept-out', 'indexed')] [string] $SearchEngines = 'kept-out',
 
     [Parameter(Mandatory, ParameterSetName = 'Remove')] [switch] $Remove,
     [Parameter(Mandatory, ParameterSetName = 'Remove')] [string] $Revision,
@@ -206,10 +207,25 @@ finally {
 # 3. The candidate revision, with no traffic while a live revision serves, admitting only the named ranges until the
 # opening. The parameters go in a file, since the ranges are an array; it holds no secret.
 Step "deploy the candidate revision $suffix"
+# A domain already bound to the app (deploy/bind-domain.ps1) is read back and passed on, so a redeployment keeps it: the
+# template would otherwise set the app's custom domains to none. A plan run asks Azure nothing, and says so.
+$customDomains = @()
+if ($Apply) {
+    $bound = az containerapp show -g $ResourceGroup -n $AppName --query "properties.configuration.ingress.customDomains" -o json 2>$null
+    if ($LASTEXITCODE -eq 0 -and $bound) {
+        $customDomains = @($bound | ConvertFrom-Json | Where-Object { $_ } | ForEach-Object {
+                [ordered]@{ name = $_.name; bindingType = $_.bindingType; certificateId = $_.certificateId } })
+    }
+    Write-Host "  custom domains kept: $(if ($customDomains.Count) { ($customDomains | ForEach-Object { $_.name }) -join ', ' } else { 'none' })"
+}
+else {
+    Write-Host "  > the custom domains bound to $AppName are read back and kept (a plan run asks Azure nothing)"
+}
 $values = [ordered]@{
     environmentId = $EnvironmentId; appName = $AppName; image = $image; registryServer = $Registry
     identityResourceId = $IdentityResourceId; revisionSuffix = $suffix; liveRevision = $LiveRevision
-    allowedSourceCidrs = @($AllowedCidr); openToPublic = [bool]$Public
+    allowedSourceCidrs = @($AllowedCidr); openToPublic = [bool]$Public; searchEngines = $SearchEngines
+    customDomains = @($customDomains)
 }
 $document = [ordered]@{
     '$schema' = 'https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#'

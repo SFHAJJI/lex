@@ -4,6 +4,27 @@ Updated 2026-10-18. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The opening kit: law.soufien.lu bound, search engines by deployment, the owner's decisions of 18 October (sole driver, 2026-10-18)
+
+The owner decided on 2026-10-18: the EU authenticity wording for acts published before 1 July 2013 and search-engine
+indexing (O27) as recommended ("yes yes go with what you recommend"), and the opening "once we finish v3".
+- **The domain.** The registrar named the "-06" Azure name servers, which hold no zone for soufien.lu (V2's old zone),
+  so every lookup failed; the zone in rg-lex-v3 is served by "-05". The owner switched the registrar to the "-05"
+  servers on 2026-10-18. `deploy/bind-domain.ps1` (new) reads the app's host and verification id, sets or checks the
+  `law` CNAME and `asuid.law` TXT in the Azure zone, waits until a public resolver answers both, then adds the hostname
+  and binds it with a managed certificate validated by the CNAME, and reads the binding back. A plan run binds nothing.
+  It never opens the site: the address rules still admit only the two named addresses. Run on 2026-10-18:
+  law.soufien.lu is bound, SniEnabled, with a managed certificate, and answers over HTTPS.
+- **Redeployments keep the binding.** The template takes `customDomains`; `deploy.ps1` reads the app's bound domains
+  back before every deployment and passes them on (the template would otherwise set none). A plan run says so and asks
+  Azure nothing.
+- **Search engines by deployment.** The template takes `searchEngines` (`kept-out`, the default, or `indexed`) and sets
+  `LEX_V3_SEARCH_ENGINES` for the API; `deploy.ps1 -SearchEngines indexed` sets it. It is set at the opening. Law pages
+  still open only for the works the release's indexing record lists (R92); no record exists yet, so at first only the
+  home and Coverage pages are indexable.
+- `deploy-kit.test.mjs` pins both: the parameter and its default, the variable the API reads, the domains read back and
+  passed on, and the binding's DNS wait, CNAME validation and plan-only default.
+
 ## The private copy on the release of 18 October, and a deployment that waits for its candidate (sole driver, 2026-10-18)
 
 The release `v3-20261018T050235Z-f505b58cee2f` (from v3/integration at f505b58c, #984, over derive-c) was built with
