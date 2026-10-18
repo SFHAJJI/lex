@@ -108,6 +108,16 @@ export const REFUSAL_EXAMPLES = Object.freeze({
       nearest_later: '2001-01-01',
       what_would_answer: ['new_official_observation'],
       asserts_absence_of_law: false,
+      // What a mount of lex-v3-luxembourg-index/9 adds (S7a): why no state covers the date, in the language its chain is,
+      // the states that reason names (none before the history), a hole's span, and when the catalogue was read.
+      language: 'fra',
+      reason: 'before_history',
+      reason_rule: 'reason says why no state covers the date in the publisher catalogue as this index read it',
+      catalogue_read_no_later_than: '2026-01-01T00:00:00Z',
+      named_states: [],
+      named_state_sha256s: [],
+      hole_from: null,
+      hole_to: null,
     },
   },
   ambiguous_version: {
@@ -124,6 +134,19 @@ export const REFUSAL_EXAMPLES = Object.freeze({
         `/${PUBLISHER}/${WORK}/2004-01-01--${CANDIDATE_A}/fra`,
         `/${PUBLISHER}/${WORK}/2004-01-15--${CANDIDATE_B}/fra`,
       ],
+      // What a mount of lex-v3-luxembourg-index/9 adds (S7a): each candidate's kind, interval, boundary and text status, in
+      // lists aligned on candidate_state_sha256s. Here neither has an end recorded, so both hold every later date.
+      candidate_state_sha256s: [CANDIDATE_A, CANDIDATE_B],
+      candidate_state_kinds: ['consolidation', 'consolidation'],
+      candidate_applicability_dates: ['2004-01-01', '2004-01-15'],
+      candidate_applicable_tos: [null, null],
+      candidate_applicable_to_sources: [null, null],
+      candidate_boundaries: ['derived', 'derived'],
+      candidate_text_statuses: ['held', 'held'],
+      candidate_states_rule: 'on lex-v3-luxembourg-index/9 the candidate_ lists name every state whose interval holds the date, '
+        + 'each in the order of candidate_state_sha256s: its kind, its interval (candidate_applicability_dates to '
+        + "candidate_applicable_tos, and that end's source), its boundary and its text status; they are not one wording held, so "
+        + 'none is chosen',
     },
   },
   pinned_digest_mismatch: {

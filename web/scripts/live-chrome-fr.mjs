@@ -141,6 +141,19 @@
 // the English changed with each). The forms that review gave for its points 4, 6 and 7 (`search.titleMatching`,
 // `search.actPassages` with its full stop, `search.officialSites.eurlex` naming the advanced search) ship as it gave them,
 // with the English it named. `search.namesWork`, `search.severalWorks`, `search.candidate` and `search.hit` were removed.
+// A Luxembourg state's date said with its role and a missing article said in place (slice S7a; R21): the reading's headings
+// for a state dated by its entry into force (`reading.stateHeadingEntryIntoForce`, `reading.stateHeadingEntryIntoForceNext`),
+// the notice before an article the version lacks (`reading.missingBefore`, `one` and `other`), the dossier's mark and its note
+// (`dossier.entryIntoForceDate`, `dossier.entryIntoForceNote`), the citation generator's two forms
+// (`citation.luxembourg.versionEntryIntoForce`, `citation.evidence.versionEntryIntoForce`), the search page's version line
+// (`search.versionAsPublishedEntryIntoForce`) and the line under a passage an undated search folded (`search.sameWording`,
+// `one` and `other`) were reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the same delegation
+// in the addendum of 2026-10-18 on dates by role and missing articles (11 forms, 6 changed in review: the notice says "À cet
+// endroit", since "ici" is this table's "on this site"; the dossier's cell answers its column with "aucune date indiquée" and
+// gives the entry into force beside it, and the note classifies the value instead of saying when the act applies; a
+// semicolon parts the act as published from its entry into force; the four English forms changed with them). Its optional
+// points 6 and 7 were taken ("exacte"; the versions "interrogées par ce site"). "entrée en vigueur" is the noun of a typed
+// publisher date, never "en vigueur" over an interval: the time-word guard lets the noun through and refuses the rest.
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -234,6 +247,11 @@ export const LIVE_CHROME_FR = Object.freeze({
     }),
     version: 'Version applicable à partir du {date} (éditeur)',
     versionAsPublished: 'L’acte tel que publié, applicable à partir du {date} (éditeur)',
+    versionAsPublishedEntryIntoForce: 'L’acte tel que publié ; entrée en vigueur le {date} (éditeur)',
+    sameWording: Object.freeze({
+      one: 'Le même libellé figure dans {count} autre version interrogée par ce site.',
+      other: 'Le même libellé figure dans {count} autres versions interrogées par ce site.',
+    }),
     searchesRun: 'Ce qui a été recherché',
     runReference: 'Références exactes : l’expression n’est aucune des références que ce site sait lire (un ELI, un numéro CELEX, une référence au Mémorial, un permalien ou une citation).',
     runReferenceNotRun: 'Références exactes : non lues, un acte ayant été désigné.',
@@ -279,8 +297,8 @@ export const LIVE_CHROME_FR = Object.freeze({
       other: '{count} expressions détenues, chacune présentée avec son libellé original.',
     }),
     wordingDate: 'Date du libellé',
-    entryIntoForceDate: '{date} (entrée en vigueur)',
-    entryIntoForceNote: 'Une date marquée « entrée en vigueur » est l’entrée en vigueur de l’acte dans les données de l’éditeur, donnée parce que son fichier n’indique aucune date d’application : ce n’est pas une date à partir de laquelle l’acte s’applique.',
+    entryIntoForceDate: 'aucune date indiquée (entrée en vigueur : {date})',
+    entryIntoForceNote: 'La mention « aucune date indiquée » signifie que le fichier de l’acte n’indique aucune date d’applicabilité exacte ; la date entre parenthèses est celle de l’entrée en vigueur de l’acte dans les données de l’éditeur, et non une date d’applicabilité.',
   }),
   reading: Object.freeze({
     pinReplaced: 'Ce lien épingle {pinned}, qui n’est pas la version que ce site communique pour cette date ; la version qu’il communique est affichée ci-dessous.',
@@ -308,8 +326,8 @@ export const LIVE_CHROME_FR = Object.freeze({
     stateHeadingEntryIntoForce: '{work}, {language}, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur)',
     stateHeadingEntryIntoForceNext: '{work}, {language}, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) (la version suivante détenue s’applique à partir du {next})',
     missingBefore: Object.freeze({
-      one: 'Ici, le document de l’éditeur comporte un article que ce site ne détient pas dans cette version.',
-      other: 'Ici, le document de l’éditeur comporte {count} articles que ce site ne détient pas dans cette version.',
+      one: 'À cet endroit, le document de l’éditeur comporte un article que ce site ne détient pas dans cette version.',
+      other: 'À cet endroit, le document de l’éditeur comporte {count} articles que ce site ne détient pas dans cette version.',
     }),
     counts: Object.freeze({
       one: '{count} article cité ; détenus sans texte : {withoutText} ; non admis : {notAdmitted} ; date propre différente de celle de la version : {conflicts}.',
@@ -807,7 +825,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       celex: 'CELEX : {celex}',
       title: 'Intitulé (éditeur) : {title}',
       version: 'Version : applicable à partir du {date} (éditeur)',
-      versionEntryIntoForce: 'Version : l’acte tel que publié, entrée en vigueur le {date} (éditeur)',
+      versionEntryIntoForce: 'Version : l’acte tel que publié ; entrée en vigueur le {date} (éditeur)',
       memorial: 'Publication : Mémorial A n° {number} de {year} ({iri})',
       memorialIri: 'Publication : {iri}',
       memorialNotHeld: 'Publication : le numéro du Mémorial A n’est pas détenu par cet index.',

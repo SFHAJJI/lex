@@ -269,6 +269,29 @@ export const RECOGNISED_KEYS = Object.freeze([
   'recognised_held_version',
 ]);
 
+/**
+ * What a refusal of lex-v3-luxembourg-index/9 adds beside its code's mandated keys (the reader's interval rules, S7a), every
+ * member a scalar or a list of scalars: why no state covers the date and the states that reason names
+ * (`no_version_for_date`); each candidate's kind, interval, boundary and text status, in lists aligned on
+ * `candidate_state_sha256s` (`ambiguous_version`); the state covering the date whose text is not held (`text_withheld`,
+ * `text_not_available`). Optional, since an index of schema 8 or 6 sends none of them; this card shows them as the platform
+ * sends them, and their own wording on the card is S7c's.
+ */
+export const INTERVAL_KEYS = Object.freeze({
+  no_version_for_date: Object.freeze([
+    'language', 'reason', 'reason_rule', 'catalogue_read_no_later_than', 'named_states', 'named_state_sha256s',
+    'hole_from', 'hole_to', 'closed_on', 'base_act_iri', 'base_act_in_force_status', 'base_act_no_longer_in_force', 'base_act_rule',
+  ]),
+  ambiguous_version: Object.freeze([
+    'candidate_state_sha256s', 'candidate_state_kinds', 'candidate_applicability_dates', 'candidate_applicable_tos',
+    'candidate_applicable_to_sources', 'candidate_boundaries', 'candidate_text_statuses', 'candidate_states_rule',
+  ]),
+  textless: Object.freeze([
+    'requested_date', 'bound', 'state_sha256', 'applicability_date', 'date_role', 'state_kind', 'applicable_to',
+    'applicable_to_source', 'boundary', 'text_status', 'text_status_reason', 'rule',
+  ]),
+});
+
 export const REQUIRED_PAYLOAD = Object.freeze({
   no_version_for_date: Object.freeze({
     // `requested_date` is OPTIONAL here and required nowhere, which is a smaller answer than the
@@ -280,7 +303,7 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     // make the reader render what the platform sends, not to rewrite the surface's own producers.
     // Named as open work rather than done quietly or left unsaid.
     keys: Object.freeze(['history_begins', 'nearest_earlier', 'nearest_later']),
-    optional: Object.freeze(['requested_date', 'bound', ...RECOGNISED_KEYS]),
+    optional: Object.freeze(['requested_date', 'bound', ...RECOGNISED_KEYS, ...INTERVAL_KEYS.no_version_for_date]),
     basis:
       '33-product-spec: "no_version_for_date carries history_begins, nearest_earlier, ' +
       'nearest_later"',
@@ -325,7 +348,7 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     // producer sends, so it threw on every refusal of this code the platform can make; the work
     // is now read from the candidates themselves, in requireCandidates, which says why.
     keys: Object.freeze(['requested_date', 'candidates']),
-    optional: Object.freeze(['bound', ...RECOGNISED_KEYS]),
+    optional: Object.freeze(['bound', ...RECOGNISED_KEYS, ...INTERVAL_KEYS.ambiguous_version]),
     basis:
       '35-ideal-ux: "listing each candidate as applicable from {date}, hash {8 hex}, ' +
       'published {date} ... there is no default selection"',
@@ -357,7 +380,7 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     // and that is what `evidence_bundle` produces for a state whose articles hold no text. The
     // coordinate, the permalink, the language and the article count travel beside them.
     keys: Object.freeze(['official_identity', 'official_source', 'retained_transport_evidence']),
-    optional: Object.freeze(['articles_held', 'language', 'permalink', 'stable_coordinate', ...RECOGNISED_KEYS]),
+    optional: Object.freeze(['articles_held', 'language', 'permalink', 'stable_coordinate', ...RECOGNISED_KEYS, ...INTERVAL_KEYS.textless]),
     // TWO producers reach this card and they share no key. This surface's own reading view says it
     // for one provision it holds no text for, with that provision's official file and gazette
     // chain (`reading.mjs`), and it is held to exactly that set until it is rebuilt on

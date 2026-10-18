@@ -253,7 +253,7 @@ export function actGroups(view) {
   return view.acts.map((act) => {
     const versions = new Map();
     for (const hit of view.hits.filter((candidate) => candidate.workKey === act.workKey)) {
-      const version = versions.get(hit.stateSha256) ?? { stateSha256: hit.stateSha256, applicabilityDate: hit.applicabilityDate, hits: [] };
+      const version = versions.get(hit.stateSha256) ?? { stateSha256: hit.stateSha256, applicabilityDate: hit.applicabilityDate, dateRole: hit.dateRole ?? null, hits: [] };
       version.hits.push(hit);
       versions.set(hit.stateSha256, version);
     }

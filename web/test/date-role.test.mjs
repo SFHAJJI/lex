@@ -14,9 +14,11 @@ import { build } from "esbuild";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { DossierAnswerView, ReadingAnswerView } from "../.react-build/app.mjs";
+import { DossierAnswerView, ReadingAnswerView, SearchAnswerView } from "../.react-build/app.mjs";
 import { readingOutcome } from "../scripts/live-reading.mjs";
 import { dossierOutcome } from "../scripts/live-dossier.mjs";
+import { searchOutcome } from "../scripts/live-search.mjs";
+import { assertTimeVocabulary } from "../scripts/publisher-vocabulary.mjs";
 import { readEvidenceBundle } from "../scripts/reading-answer.mjs";
 import { readDateFacts, readDateRole } from "../scripts/date-role.mjs";
 import { citationForms } from "../scripts/citation.mjs";
@@ -139,4 +141,59 @@ test("the French pages say the entry into force, the missing article and the dos
   const markup = decode(renderToStaticMarkup(h(french.ReadingAnswerView, { outcome: readingOutcome({ state: "success", envelope }) })));
   assert.ok(markup.includes(fillText(FR.reading.stateHeadingEntryIntoForce, { work: envelope.result.value.work_key, language: state.language, from: state.applicability_date })), "the French heading");
   assert.ok(markup.includes(FR.reading.missingBefore.one), "the French notice");
+});
+
+test("every form this slice adds says no application word of an entry into force, in English and in French", () => {
+  for (const [language, table] of [["en", EN], ["fr", FR]]) {
+    const forms = {
+      "reading.stateHeadingEntryIntoForce": table.reading.stateHeadingEntryIntoForce,
+      "reading.stateHeadingEntryIntoForceNext": table.reading.stateHeadingEntryIntoForceNext,
+      "reading.missingBefore.one": table.reading.missingBefore.one,
+      "reading.missingBefore.other": table.reading.missingBefore.other,
+      "dossier.entryIntoForceDate": table.dossier.entryIntoForceDate,
+      "dossier.entryIntoForceNote": table.dossier.entryIntoForceNote,
+      "citation.luxembourg.versionEntryIntoForce": table.citation.luxembourg.versionEntryIntoForce,
+      "citation.evidence.versionEntryIntoForce": table.citation.evidence.versionEntryIntoForce,
+      "search.versionAsPublishedEntryIntoForce": table.search.versionAsPublishedEntryIntoForce,
+      "search.sameWording.one": table.search.sameWording.one,
+      "search.sameWording.other": table.search.sameWording.other,
+    };
+    for (const [key, form] of Object.entries(forms)) {
+      assert.equal(typeof form, "string", `${language} ${key}`);
+      assertTimeVocabulary(form, `${language} ${key}`);
+      assert.doesNotMatch(form, /applicable from|applying from|applicable à partir|s’applique à partir du \{from\}/i, `${language} ${key}: an entry into force is never an application`);
+    }
+  }
+  // The guard refuses "en vigueur" as a state still, and lets through only the noun of the typed date.
+  assert.throws(() => assertTimeVocabulary("la version en vigueur", "a test"), /R21 never says/);
+  assert.equal(assertTimeVocabulary("entrée en vigueur le 2024-02-01", "a test"), "entrée en vigueur le 2024-02-01");
+});
+
+test("the search page says a version dated by its entry into force as that, and the versions a passage's wording was folded from", () => {
+  const entry = census.envelopes.find((candidate) => candidate.operation === "search" && candidate.scenario.startsWith("the phrase as the site asks it"));
+  assert.ok(entry, "the census holds the page's search");
+  const envelope = structuredClone(entry.envelope);
+  const hits = envelope.result.value.hits;
+  assert.ok(hits.length > 0, "the census search has hits");
+  for (const hit of hits) {
+    hit.date_role = "entry_into_force";
+    hit.entry_into_force = hit.applicability_date;
+  }
+  hits[0].same_wording_states = [{
+    applicability_date: "2001-01-01", date_role: "applicability", state_sha256: "a".repeat(64),
+    article_identity_sha256: "b".repeat(64), permalink: `/lu-legilux/${hits[0].work_key}/2001-01-01--${"a".repeat(64)}/fra`,
+  }];
+  const outcome = searchOutcome({ state: "success", envelope });
+  assert.equal(outcome.state, "success", outcome.sentence);
+  assert.equal(outcome.view.hits[0].dateRole, "entry_into_force");
+  assert.equal(outcome.view.hits[0].sameWording.length, 1);
+  const markup = decode(renderToStaticMarkup(h(SearchAnswerView, { outcome })));
+  assert.ok(markup.includes(fillText(EN.search.versionAsPublishedEntryIntoForce, { date: hits[0].applicability_date })), "the version line");
+  assert.ok(!markup.includes(fillText(EN.search.versionAsPublished, { date: hits[0].applicability_date })), "never applicable from it");
+  assert.ok(markup.includes('data-same-wording="1"'));
+  assert.ok(markup.includes(fillText(EN.search.sameWording.one, { count: 1 })));
+
+  // An answer of an index of schema 8 or 6 names no role, and the page says what it said before.
+  const plain = searchOutcome({ state: "success", envelope: structuredClone(entry.envelope) });
+  assert.equal(plain.view.hits[0].dateRole ?? null, entry.envelope.result.value.hits[0].date_role ?? null);
 });

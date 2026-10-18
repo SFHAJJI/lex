@@ -195,6 +195,42 @@ function readSource(source, where) {
   };
 }
 
+/**
+ * The facts of an index 9 state's row the answer carries (S7a), which state digest /2 covers, so a reader recomputes the
+ * digest from this page (G5), in the platform's order: each a token, a date, a reason in the index's words, or null where
+ * there is none; `provisional` a boolean. Null for an answer of an index of schema 8 or 6, which carries none.
+ */
+export const CATALOGUE_FACTS = Object.freeze([
+  ['state_kind', 'state kind'],
+  ['date_role', 'date role'],
+  ['entry_into_force', 'entry into force (publisher)'],
+  ['applicable_to', 'end of the interval'],
+  ['applicable_to_source', 'source of the end'],
+  ['boundary', 'boundary'],
+  ['publication_date', 'publication date (publisher)'],
+  ['text_status', 'text status'],
+  ['text_status_reason', 'text status reason'],
+  ['in_file_identity', 'identity in the file'],
+  ['in_file_date', 'date in the file'],
+  ['translation_of', 'French expression it takes its interval from'],
+  ['provisional', 'provisional'],
+]);
+
+function readCatalogueFacts(state, where) {
+  if (!Object.hasOwn(state, 'date_role')) return null;
+  const facts = {};
+  for (const [key] of CATALOGUE_FACTS) {
+    const value = requireOwn(state, key, where);
+    if (key === 'provisional') {
+      if (typeof value !== 'boolean') throw new Error(`${where}.provisional is whether the state's date is after the build's day`);
+    } else if (value !== null && (typeof value !== 'string' || value.length === 0)) {
+      throw new Error(`${where}.${key} is a value of the state's row or null`);
+    }
+    facts[key] = value;
+  }
+  return Object.freeze(facts);
+}
+
 function readState(state, where) {
   const profiles = requireOwn(state, 'rule_profile_sha256s', where);
   if (!Array.isArray(profiles) || profiles.length === 0) {
@@ -228,7 +264,18 @@ function readState(state, where) {
     article_identities_sha256: requireDigest(
       state.article_identities_sha256, `${where}.article_identities_sha256`),
     sources: sources.map((source, index) => readSource(source, `${where}.sources[${index}]`)),
+    catalogue: readCatalogueFacts(state, where),
   };
+}
+
+/**
+ * A state's heading: its language and its date said with its role (R21): an act dated by its entry into force is never said
+ * as applicable from it.
+ */
+export function stateHeading(state) {
+  return state.catalogue?.date_role === 'entry_into_force'
+    ? `${state.language}, the act as published, dated by its entry into force on ${state.applicability_date} (publisher)`
+    : `${state.language}, applicable from ${state.applicability_date}`;
 }
 
 /**
@@ -334,7 +381,7 @@ function renderSource(source) {
 function renderState(state) {
   return (
     '<section class="provenance-state">'
-    + `<h3>${escapeHtml(state.language)}, applicable from ${escapeHtml(state.applicability_date)}</h3>`
+    + `<h3>${escapeHtml(stateHeading(state))}</h3>`
     + '<table class="provenance-facts"><tbody>'
     + row('state digest', code(state.state_sha256))
     + row('permalink', code(state.permalink))
@@ -345,6 +392,8 @@ function renderState(state) {
     + row('articles', escapeHtml(String(state.articles)))
     + row('article identities digest', code(state.article_identities_sha256))
     + row('rule profiles', state.rule_profile_sha256s.map(code).join(' '))
+    + (state.catalogue === null ? '' : CATALOGUE_FACTS.map(([key, label]) =>
+      row(label, cell(state.catalogue[key], (value) => code(value)))).join(''))
     + '</tbody></table>'
     + `<p class="provenance-profile-note">${escapeHtml(PROFILE_NOTE)}</p>`
     + '<h4>The documents these articles came from</h4>'

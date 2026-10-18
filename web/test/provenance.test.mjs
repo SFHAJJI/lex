@@ -31,6 +31,7 @@ import {
   provenancePageName,
   readProvenance,
   renderProvenance,
+  CATALOGUE_FACTS,
 } from "../scripts/provenance.mjs";
 import { PREVIEW_ANSWERS, provenancePreviewPages } from "../scripts/provenance-preview.mjs";
 import { Provenance } from "../.react-build/app.mjs";
@@ -296,8 +297,10 @@ test("a value the platform does not hold is said out loud, never left blank", as
 
   const html = renderProvenance(withoutBody);
   // Four nulls, four sentences. A blank cell reads as a fact about the publisher's document; this
-  // is a fact about what this corpus retained, and the two are not the same claim.
-  assert.equal((html.match(new RegExp(NOT_STATED, "g")) ?? []).length, 4);
+  // is a fact about what this corpus retained, and the two are not the same claim. On index 9 each of
+  // the state's row facts that is null is said the same way (S7a).
+  const rowNulls = CATALOGUE_FACTS.filter(([key]) => Object.hasOwn(state, key) && state[key] === null).length;
+  assert.equal((html.match(new RegExp(NOT_STATED, "g")) ?? []).length, 4 + rowNulls);
 
   // But a value that is neither a digest nor null is a producer error, not an absence.
   assert.throws(

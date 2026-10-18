@@ -128,6 +128,13 @@ const EN = Object.freeze({
     }),
     version: "Version applicable from {date} (publisher)",
     versionAsPublished: "The act as published, applicable from {date} (publisher)",
+    // An act dated by its entry into force (index 9's date_role, S7a; R21), and a passage an undated search folded the other
+    // versions holding its wording into.
+    versionAsPublishedEntryIntoForce: "The act as published, entry into force on {date} (publisher)",
+    sameWording: Object.freeze({
+      one: "The same wording is in {count} other version this site searched.",
+      other: "The same wording is in {count} other versions this site searched.",
+    }),
     // The plain no-hit card (the plan's item 4.5; R59, R90): which searches ran, that only exact matching ran and what that
     // means, the population searched (the line above), and the publishers' own search pages, as links only.
     searchesRun: "What was searched",
@@ -178,8 +185,8 @@ const EN = Object.freeze({
     }),
     wordingDate: "Wording date",
     // A state dated by its entry into force (S7a; R21), in the date column, and what that mark means, said once under the table.
-    entryIntoForceDate: "{date} (entry into force)",
-    entryIntoForceNote: "A date marked “entry into force” is the act's entry into force in the publisher's record, given because its file states no date of application: it is not a date from which the act applies.",
+    entryIntoForceDate: "no date stated (entry into force: {date})",
+    entryIntoForceNote: "The mark “no date stated” means that the act's file states no exact applicability date; the date in brackets is the act's entry into force in the publisher's record, not an applicability date.",
   }),
   reading: Object.freeze({
     pinReplaced: "This link pins {pinned}, which is not the version this site serves for that date; the version it serves is shown below.",
@@ -212,8 +219,8 @@ const EN = Object.freeze({
     stateHeadingEntryIntoForceNext: "{work}, {language}, the act as published, dated by its entry into force on {from} (publisher) (the next state held applies from {next})",
     // The places of the publisher's document before an article that its version holds no article at (S7a).
     missingBefore: Object.freeze({
-      one: "Here the publisher's document has an article that this site does not hold in this version.",
-      other: "Here the publisher's document has {count} articles that this site does not hold in this version.",
+      one: "At this point, the publisher's document has an article that this site does not hold in this version.",
+      other: "At this point, the publisher's document has {count} articles that this site does not hold in this version.",
     }),
     counts: Object.freeze({
       one: "{count} article quoted, {withoutText} held without text, {notAdmitted} not admitted; {conflicts} with their own date differing from the state's.",

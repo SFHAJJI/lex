@@ -61,6 +61,9 @@ test("the check refuses each word R21 forbids, in English and in French, in ever
     // And their neighbours: a narrow no-break space, a non-breaking hyphen, a soft hyphen inside the word, capitals, the
     // simple past.
     "en vigueur", "In‑Force", "app­lied", "APPLIQUÉE", "la loi s’appliqua", "elles s’appliquèrent",
+    // "en vigueur" as a state, never the noun of a typed date (the French review of S7a's ten controls).
+    "la version en vigueur", "en vigueur du 2020-01-01 au 2021-01-01", "est en vigueur", "reste en vigueur", "entré en vigueur",
+    "maintenue en vigueur", "demeurée en vigueur", "rentrée en vigueur", "la loi en vigueur à cette date", "l’acte entre en vigueur",
   ]) {
     assert.throws(() => assertTimeVocabulary(said, "a test"), /R21 never says/, said);
   }
@@ -73,6 +76,9 @@ test("the check refuses each word R21 forbids, in English and in French, in ever
     "Both dates select the one text held, the act as published, applicable from 2024-02-01 (publisher); later versions are not held.",
     "la version suivante détenue s’applique à partir du 2025-03-07", "plusieurs versions s’appliquent à cette date",
     "appliquant", "applicabilité", "dateNoLongerInForce", "in_force_on", "Je ne peux pas appliquer le droit à votre situation",
+    // An entry into force, a typed publisher date said as its own value (index 9's date role, S7a; R21).
+    "entry into force on 2024-02-01", "entrée en vigueur le 2024-02-01", "l’entrée en vigueur", "date d’entrée en vigueur",
+    "son entrée en vigueur", "Entrée en vigueur", "entrées en vigueur", "entrée\u00a0en vigueur",
   ]) {
     assert.equal(assertTimeVocabulary(said, "a test"), said);
   }

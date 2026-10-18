@@ -279,7 +279,8 @@ function MissingBefore({ article, state }) {
   if (gap === undefined) return null;
   return (
     <p className="note" data-missing-articles={gap.count}>
-      <Say template={countedEntry(COPY.missingBefore, gap.count)} values={{ count: gap.count }} />
+      {/* The form for one names no count ("an article"), so it is given none (the French review of S7a, point 2). */}
+      <Say template={countedEntry(COPY.missingBefore, gap.count)} values={gap.count === 1 ? {} : { count: gap.count }} />
     </p>
   );
 }
