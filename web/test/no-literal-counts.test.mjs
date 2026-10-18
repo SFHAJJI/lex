@@ -19,10 +19,14 @@ import test from "node:test";
 import {
   LIVE_CONTRACT, renderLiveComparePage, renderLiveCoveragePage, renderLiveDossierPage, renderLiveExportPage, renderLiveHistoryPage,
   renderLiveHomePage, renderLiveMaintenancePage, renderLiveNotFoundPage, renderLiveRadarPage, renderLiveReadingPage, renderLiveSearchPage,
+  SearchAnswerView,
 } from "../.react-build/app.mjs";
 import { LIVE_CHROME, REFUSAL_TRANSLATIONS, entriesOf } from "../scripts/live-chrome.mjs";
 import { servedRefusalSentences } from "../scripts/refusal-sentences.mjs";
 import { homeFacts } from "../scripts/live-home.mjs";
+import { builtOnOf, searchOutcome } from "../scripts/live-search.mjs";
+import { createElement as h } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 
@@ -133,5 +137,23 @@ test("the home page's coverage line says the counts the coverage answer serves, 
     const line = /data-coverage-line="counted"[^>]*>([^<]+)</.exec(html)?.[1];
     assert.ok(line !== undefined, "the line");
     assert.deepEqual(line.match(/\d+(?:-\d+)*/g), [String(works), String(states), String(articles), facts.coverage.builtOn], line);
+  }
+});
+
+test("a search's population line says the counts the search answer serves, and no other number than its index's build date (the plan's item 4.3)", () => {
+  const base = census.envelopes.find((entry) => entry.operation === "search" && entry.scenario.startsWith("the phrase as the site asks it")).envelope;
+  // Counts no table holds, the pack's own figures served as counts, and none: a served figure is shown, as served.
+  for (const [works, states, articles] of [[7919, 7927, 7933], [1402, 24579, 23370], [0, 0, 0]]) {
+    const envelope = structuredClone(base);
+    const value = envelope.result.value;
+    const hits = value.hits.length;
+    value.searched = { ...value.searched, works: Math.max(works, 1), states: Math.max(states, 1), articles_with_searchable_text: Math.max(articles, hits) };
+    const outcome = searchOutcome({ state: "success", envelope });
+    assert.equal(outcome.state, "success", outcome.sentence);
+    const html = renderToStaticMarkup(h(SearchAnswerView, { outcome }));
+    const line = /<p data-searched="\d+"[^>]*>([^<]+)</.exec(html)?.[1];
+    assert.ok(line !== undefined, "the line");
+    const served = value.searched;
+    assert.deepEqual(line.match(/\d+(?:-\d+)*/g), [String(served.works), String(served.states), String(served.articles_with_searchable_text), builtOnOf(served.index_built_at)], line);
   }
 });
