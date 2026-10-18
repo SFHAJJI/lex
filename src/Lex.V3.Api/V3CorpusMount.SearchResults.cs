@@ -149,7 +149,7 @@ internal sealed partial class V3CorpusMount
 
             var selected = SelectAt(ofLanguage.Select(static entry => entry.State).ToArray(), requestedDate).Selected;
             if (selected.Length == 0 && ofLanguage.Length > 0 && RulesByInterval &&
-                CoverAt(CatalogueOf(ofWorkKey), language, requestedDate) is { Kind: CoverKind.Textless, Row.TextStatus: "withheld_rights" })
+                CoverAt(CatalogueOf(ofWorkKey), language, requestedDate) is { Kind: CoverTextless, Row.TextStatus: "withheld_rights" })
             {
                 // The version the date selects is withheld by its rights: kept out as a held state the rule keeps out is.
                 withheld++;

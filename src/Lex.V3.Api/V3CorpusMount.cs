@@ -612,12 +612,12 @@ internal sealed partial class V3CorpusMount : IDisposable
             if (observedWork is not null)
             {
                 var cover = CoverAt(observedWork, language, requestedDate, row => mounted.Contains(row.StateSha256));
-                if (cover.Kind == CoverKind.Ambiguous)
+                if (cover.Kind == CoverAmbiguous)
                 {
                     ambiguous.AddRange(cover.Others.Where(static row => row.Language.Length > 0)
                         .Select(static row => LuxembourgPermalink(row.WorkKey, row.ApplicabilityDate, row.StateSha256, row.Language)));
                 }
-                else if (cover.Kind == CoverKind.Served)
+                else if (cover.Kind == CoverServed)
                 {
                     var covering = ofLanguage.Single(state => string.Equals(state.StateSha256, cover.Row!.StateSha256, StringComparison.Ordinal));
                     // The next held state's date after the date asked, as as_of names it (SelectAt).
@@ -3479,7 +3479,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         }
 
         var cover = CoverAt(CatalogueOf(ofLanguage[0].WorkKey), language, date);
-        return cover.Kind == CoverKind.Textless
+        return cover.Kind == CoverTextless
             ? string.Equals(cover.Row!.TextStatus, "withheld_rights", StringComparison.Ordinal) ? "text_withheld" : "text_not_available"
             : cover.Reason ?? "no state covers the date";
     }
@@ -3729,7 +3729,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                 if (selected.Length == 0)
                 {
                     // On index 9 the state covering the date may hold no text: a row names it and why, and offers no resolve.
-                    if (RulesByInterval && CoverAt(CatalogueOf(workKey), language, requestedDate) is { Kind: CoverKind.Textless, Row: { } textless })
+                    if (RulesByInterval && CoverAt(CatalogueOf(workKey), language, requestedDate) is { Kind: CoverTextless, Row: { } textless })
                     {
                         ofThisWork.Add(InForceOnTextlessRow(workKey, language, textless));
                     }

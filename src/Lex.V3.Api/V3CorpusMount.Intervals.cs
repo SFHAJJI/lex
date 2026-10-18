@@ -48,21 +48,12 @@ internal sealed partial class V3CorpusMount
 
     private const string TextHeld = "held";
 
-    /// <summary>What covered a date in one language, by the interval rules.</summary>
-    private enum CoverKind
-    {
-        /// <summary>One held state covers the date, or several held states with the same wording of which one is designated.</summary>
-        Served,
-
-        /// <summary>One state covers the date and its text is not held.</summary>
-        Textless,
-
-        /// <summary>Several states cover the date and they are not one wording held.</summary>
-        Ambiguous,
-
-        /// <summary>No state covers the date; <see cref="Cover.Reason"/> says why.</summary>
-        None,
-    }
+    // What covered a date in one language, by the interval rules: one held state (or several held with one wording, one of
+    // them designated), one state whose text is not held, several that are not one wording, or none (Cover.Reason says why).
+    private const string CoverServed = "served";
+    private const string CoverTextless = "textless";
+    private const string CoverAmbiguous = "ambiguous";
+    private const string CoverNone = "none";
 
     /// <summary>
     /// The interval rules' answer for one language on one date: the covering row (served or textless) with the same-text
@@ -70,7 +61,7 @@ internal sealed partial class V3CorpusMount
     /// names, the work's first date, the nearest dates around the date and a catalogue hole's span.
     /// </summary>
     private sealed record Cover(
-        CoverKind Kind,
+        string Kind,
         LuxembourgIndexCatalogueState? Row,
         IReadOnlyList<LuxembourgIndexCatalogueState> Others,
         string? Reason,
@@ -128,15 +119,15 @@ internal sealed partial class V3CorpusMount
         if (covering.Length == 1)
         {
             return new Cover(
-                string.Equals(covering[0].TextStatus, TextHeld, StringComparison.Ordinal) ? CoverKind.Served : CoverKind.Textless,
+                string.Equals(covering[0].TextStatus, TextHeld, StringComparison.Ordinal) ? CoverServed : CoverTextless,
                 covering[0], [], null, null, null, null, null);
         }
 
         if (covering.Length > 1)
         {
             return (comparable is null || covering.All(comparable)) && SameWording(covering) is { } designated
-                ? new Cover(CoverKind.Served, designated, covering.Where(row => !ReferenceEquals(row, designated)).ToArray(), null, null, null, null, null)
-                : new Cover(CoverKind.Ambiguous, null, covering, null, null, null, null, null);
+                ? new Cover(CoverServed, designated, covering.Where(row => !ReferenceEquals(row, designated)).ToArray(), null, null, null, null, null)
+                : new Cover(CoverAmbiguous, null, covering, null, null, null, null, null);
         }
 
         var historyBegins = chain.Length == 0 ? null : chain[0].ApplicabilityDate;
@@ -152,17 +143,17 @@ internal sealed partial class V3CorpusMount
         // language does, the state covering it has no expression held in this language, said so, naming it; when no French
         // state covers it either, the French chain's reason is the reason.
         if (!string.Equals(language, FrenchLanguage, StringComparison.Ordinal) &&
-            CoverAt(work, FrenchLanguage, date) is { } french && (french.Kind != CoverKind.None || french.HistoryBegins is not null))
+            CoverAt(work, FrenchLanguage, date) is { } french && (french.Kind != CoverNone || french.HistoryBegins is not null))
         {
-            return french.Kind == CoverKind.None
+            return french.Kind == CoverNone
                 ? french with { HistoryBegins = historyBegins, NearestEarlier = nearestEarlier, NearestLater = nearestLater }
-                : new Cover(CoverKind.None, null, french.Row is { } row ? [row, .. french.Others] : french.Others,
+                : new Cover(CoverNone, null, french.Row is { } row ? [row, .. french.Others] : french.Others,
                     ReasonNoExpressionInLanguage, historyBegins, nearestEarlier, nearestLater, null);
         }
 
         if (historyBegins is null || string.CompareOrdinal(date, historyBegins) < 0)
         {
-            return new Cover(CoverKind.None, null, [], ReasonBeforeHistory, historyBegins, null, historyBegins, null);
+            return new Cover(CoverNone, null, [], ReasonBeforeHistory, historyBegins, null, historyBegins, null);
         }
 
         // The end day of a suspected inclusive end: the earlier state ends the day before the next begins, so this day is the
@@ -174,7 +165,7 @@ internal sealed partial class V3CorpusMount
         {
             var next = chain.Where(row => string.CompareOrdinal(row.ApplicabilityDate, date) > 0).ToArray();
             var nextFrom = next.FirstOrDefault()?.ApplicabilityDate;
-            return new Cover(CoverKind.None, unclear,
+            return new Cover(CoverNone, unclear,
                 next.Where(row => string.Equals(row.ApplicabilityDate, nextFrom, StringComparison.Ordinal)).ToArray(),
                 ReasonEndConventionUnclear, historyBegins, nearestEarlier, nearestLater, null);
         }
@@ -189,7 +180,7 @@ internal sealed partial class V3CorpusMount
             (following is null || string.CompareOrdinal(date, following) < 0));
         if (invalid is not null)
         {
-            return new Cover(CoverKind.None, invalid, [], ReasonIntervalInvalid, historyBegins, nearestEarlier, nearestLater, null);
+            return new Cover(CoverNone, invalid, [], ReasonIntervalInvalid, historyBegins, nearestEarlier, nearestLater, null);
         }
 
         // Otherwise the state before the date has ended: a hole in the catalogue when a later state begins, else a closed end.
@@ -198,11 +189,11 @@ internal sealed partial class V3CorpusMount
             string.CompareOrdinal(row.ApplicabilityDate, date) <= 0);
         if (nearestLater is not null)
         {
-            return new Cover(CoverKind.None, previous, [], ReasonCatalogueHole, historyBegins, nearestEarlier, nearestLater,
+            return new Cover(CoverNone, previous, [], ReasonCatalogueHole, historyBegins, nearestEarlier, nearestLater,
                 (previous?.ApplicableTo ?? date, nearestLater));
         }
 
-        return new Cover(CoverKind.None, previous, [], ReasonAfterClosedEnd, historyBegins, nearestEarlier, null, null);
+        return new Cover(CoverNone, previous, [], ReasonAfterClosedEnd, historyBegins, nearestEarlier, null, null);
     }
 
     /// <summary>
@@ -261,7 +252,7 @@ internal sealed partial class V3CorpusMount
         var cover = CoverAt(CatalogueOf(ofLanguage[0].WorkKey), ofLanguage[0].Language, requestedDate);
         switch (cover.Kind)
         {
-            case CoverKind.Served:
+            case CoverServed:
                 // The next held state's date after the date asked: a held state that begins between the served one and the date
                 // and does not cover it (an invalid interval inside an overlap) is not "next" of a date already past it.
                 var served = ofLanguage.Single(state => string.Equals(state.StateSha256, cover.Row!.StateSha256, StringComparison.Ordinal));
@@ -272,7 +263,7 @@ internal sealed partial class V3CorpusMount
                     .Select(static other => other.ApplicabilityDate)
                     .Order(StringComparer.Ordinal)
                     .FirstOrDefault());
-            case CoverKind.Ambiguous:
+            case CoverAmbiguous:
                 return (cover.Others.Select(StateOfRow).ToArray(), null);
             default:
                 return ([], null);
@@ -288,7 +279,7 @@ internal sealed partial class V3CorpusMount
         }
 
         var cover = CoverAt(CatalogueOf(state.WorkKey), state.Language, requestedDate);
-        return cover.Kind == CoverKind.Served && string.Equals(cover.Row!.StateSha256, state.StateSha256, StringComparison.Ordinal)
+        return cover.Kind == CoverServed && string.Equals(cover.Row!.StateSha256, state.StateSha256, StringComparison.Ordinal)
             ? cover.Others
             : [];
     }
@@ -515,7 +506,7 @@ internal sealed partial class V3CorpusMount
         node["catalogue_rule"] = CatalogueRule;
         var withoutText = new JsonArray();
         if (requestedLanguage is null && !servedLanguages.Contains(FrenchLanguage, StringComparer.Ordinal) &&
-            CoverAt(CatalogueOf(workKey), FrenchLanguage, requestedDate) is { Kind: CoverKind.Textless, Row: { } french })
+            CoverAt(CatalogueOf(workKey), FrenchLanguage, requestedDate) is { Kind: CoverTextless, Row: { } french })
         {
             withoutText.Add(CatalogueRowSummary(french));
         }
@@ -717,12 +708,12 @@ internal sealed partial class V3CorpusMount
     {
         var language = languages.Contains(FrenchLanguage, StringComparer.Ordinal) ? FrenchLanguage : languages.Order(StringComparer.Ordinal).First();
         var cover = CoverAt(work, language, requestedDate);
-        if (cover.Kind == CoverKind.Textless)
+        if (cover.Kind == CoverTextless)
         {
             return RefuseTextless(request, observedAt, cover.Row!, requestedDate, bound);
         }
 
-        if (cover.Kind != CoverKind.None)
+        if (cover.Kind != CoverNone)
         {
             throw new InvalidOperationException("A covered date is not refused as uncovered.");
         }

@@ -102,6 +102,10 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefusePageNotInVersion, "
+                    // The reader's interval rules on index 9 (S7a): a state without text, and a date no state covers.
+                    + "method private instance Lex.V3.Api.V3CorpusMount::RefuseTextless, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUncoveredNine, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUncoveredNine, "
                     + "method private instance "
                     + "Lex.V3.Api.V3CorpusMount::RefuseUnlessCursorOfThisLog, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUnlessPinnedOriginalWording, "
