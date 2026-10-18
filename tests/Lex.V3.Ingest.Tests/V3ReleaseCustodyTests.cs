@@ -40,7 +40,7 @@ public sealed partial class V3FirstMountBuildTests
             [EuFirstMountAcquisitionTests.ConsolidatedSeed], LuxembourgPopulationScope.Legislative, time, null, CancellationToken.None);
         await File.WriteAllTextAsync(Path.Combine(target, "mount-inputs.json"), ContractJson.Serialize(checkpoint));
 
-        var build = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, luxembourg, CancellationToken.None);
+        using var build = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, luxembourg, CancellationToken.None);
         Assert.IsTrue(build.Delivered, build.Detail);
         var live = Path.Combine(Path.GetTempPath(), "lex-v3-release-custody-" + Guid.NewGuid().ToString("N"));
         try

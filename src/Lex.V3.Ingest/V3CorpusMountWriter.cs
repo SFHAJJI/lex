@@ -46,7 +46,10 @@ public sealed record V3GenerationsVerification(string? Failure, V3RetentionDecis
 /// <remarks>
 /// Each file is written to a temporary name beside its final one and moved into place, so a
 /// reader never sees a half-written file; the report is written last, and a write that fails
-/// removes the temporary files it left. The report is evidence for the run record, not an input
+/// removes the temporary files it left. An index is never read into memory (slice S4b): the file
+/// the build staged is moved to the temporary name (copied, when an earlier write already moved it
+/// into another mount), hashed from disk and held to the digest its two builds compared, and its
+/// log is read from a private copy. The report is evidence for the run record, not an input
 /// to the mount: the API opens the five files by name and verifies them itself, and
 /// <see cref="VerifyAsync"/> runs the same public verifiers here so a build can be checked where
 /// it was written before it is shipped anywhere. The API additionally caps each capability
@@ -109,26 +112,36 @@ public static class V3CorpusMountWriter
         var written = new List<V3CorpusMountWrittenFile>(build.Files.Count);
         var reportPath = Path.Combine(target, ReportFileName);
         var reportTemporary = reportPath + ".writing";
+        // The staged index files this write moved out of the build's staging directory, each with where it was staged.
+        var taken = new List<(V3BuiltIndexFile Index, string StagedPath)>();
         try
         {
             foreach (var file in build.Files)
             {
                 var finalPath = Path.Combine(target, file.Name);
                 var temporaryPath = finalPath + ".writing";
-                await File.WriteAllBytesAsync(temporaryPath, file.Bytes.ToArray(), cancellationToken).ConfigureAwait(false);
+                var (sha256, byteLength) = file.Index is { } index
+                    ? await PlaceIndexAsync(file.Name, index, temporaryPath, taken, cancellationToken).ConfigureAwait(false)
+                    : await WriteHeldAsync(file.Held, temporaryPath, cancellationToken).ConfigureAwait(false);
                 File.Move(temporaryPath, finalPath, overwrite: true);
-                written.Add(new V3CorpusMountWrittenFile(file.Name, file.Bytes.Length, Sha256(file.Bytes.Span)));
+                if (file.Index is { } placed)
+                {
+                    placed.Path = finalPath;
+                }
+
+                written.Add(new V3CorpusMountWrittenFile(file.Name, byteLength, sha256));
             }
 
+            var writtenIndex = Path.Combine(target, V3FirstMountBuildResult.LuxembourgIndexFileName);
             IReadOnlyList<V3RetainedGeneration> kept;
             if (generations is not null)
             {
-                kept = await WriteGenerationsAsync(build, target, generations, cancellationToken).ConfigureAwait(false);
+                kept = await WriteGenerationsAsync(build, writtenIndex, target, generations, cancellationToken).ConfigureAwait(false);
             }
             else
             {
                 // Written without its predecessor's directory, a chained build holds none of its earlier builds, and says so.
-                await WriteRetentionRecordAsync(target, build.LuxembourgIndex!.IndexRef, build.LuxembourgIndex.IndexBytes, cancellationToken)
+                await WriteRetentionRecordFileAsync(target, build.LuxembourgIndex!.IndexRef, writtenIndex, cancellationToken)
                     .ConfigureAwait(false);
                 kept = [];
             }
@@ -142,6 +155,9 @@ public static class V3CorpusMountWriter
         }
         catch
         {
+            // A failed write gives the build back the staged files it took (the review of #986): each is moved back to where it
+            // was staged, from its temporary name or from its place in this unfinished mount, so the build can be written again.
+            GiveBack(taken);
             foreach (var file in build.Files)
             {
                 File.Delete(Path.Combine(target, file.Name) + ".writing");
@@ -153,25 +169,103 @@ public static class V3CorpusMountWriter
     }
 
     /// <summary>
+    /// Moves each index a failed write took out of the build's staging directory back there. Best effort: the write's own
+    /// failure is the one reported, and a file that cannot be moved back stays where the failed write left it.
+    /// </summary>
+    private static void GiveBack(IReadOnlyList<(V3BuiltIndexFile Index, string StagedPath)> taken)
+    {
+        foreach (var (index, stagedPath) in taken)
+        {
+            try
+            {
+                if (File.Exists(index.Path) && !File.Exists(stagedPath))
+                {
+                    File.Move(index.Path, stagedPath);
+                    index.Path = stagedPath;
+                    index.Staged = true;
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // Left where the failed write put it; the build's next write copies it from there or reports it missing.
+            }
+        }
+    }
+
+    /// <summary>
+    /// A held file (the corpus, a capability manifest) written to <paramref name="temporaryPath"/> straight from its bytes,
+    /// with its digest and length.
+    /// </summary>
+    private static async Task<(string Sha256, long Length)> WriteHeldAsync(
+        ReadOnlyMemory<byte> bytes,
+        string temporaryPath,
+        CancellationToken cancellationToken)
+    {
+        await using (var stream = new FileStream(
+                         temporaryPath, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, FileOptions.Asynchronous))
+        {
+            await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
+        }
+
+        return (Sha256(bytes.Span), bytes.Length);
+    }
+
+    /// <summary>
+    /// An index the build wrote to a file, placed at <paramref name="temporaryPath"/>: moved out of the build's staging
+    /// directory (a rename on one volume; recorded in <paramref name="taken"/>, so a failed write can move it back), or copied
+    /// from the mount an earlier write moved it into; then hashed from disk and held to the digest and length its two builds
+    /// compared, so what is moved into place is what was compared.
+    /// </summary>
+    private static async Task<(string Sha256, long Length)> PlaceIndexAsync(
+        string name,
+        V3BuiltIndexFile index,
+        string temporaryPath,
+        List<(V3BuiltIndexFile Index, string StagedPath)> taken,
+        CancellationToken cancellationToken)
+    {
+        if (index.Staged)
+        {
+            taken.Add((index, index.Path));
+            File.Move(index.Path, temporaryPath, overwrite: true);
+            index.Path = temporaryPath;
+            index.Staged = false;
+        }
+        else
+        {
+            File.Copy(index.Path, temporaryPath, overwrite: true);
+        }
+
+        var (sha256, length) = await V3BuiltIndexFile.Sha256OfFileAsync(temporaryPath, cancellationToken).ConfigureAwait(false);
+        if (!string.Equals(sha256, index.IndexRef.Sha256, StringComparison.Ordinal) || length != index.ByteLength)
+        {
+            throw new InvalidDataException(
+                $"The {name} the build wrote is {sha256} ({length} bytes), not the {index.IndexRef.Sha256} ({index.ByteLength} bytes) its two builds compared.");
+        }
+
+        return (sha256, length);
+    }
+
+    /// <summary>
     /// Copies the generations the retention line keeps out of the predecessor's directory and records the decision. The
     /// predecessor must be the index this build's log names as its predecessor; each kept generation is copied file by
-    /// file, each file to a temporary name and moved, and its digest checked against the source it was read from.
+    /// file, each file to a temporary name and moved.
     /// </summary>
     private static async Task<IReadOnlyList<V3RetainedGeneration>> WriteGenerationsAsync(
         V3FirstMountBuildResult build,
+        string writtenIndex,
         string target,
         V3GenerationSource generations,
         CancellationToken cancellationToken)
     {
-        var log = LogOf(build.LuxembourgIndex!.IndexRef, build.LuxembourgIndex.IndexBytes.Span);
+        var log = LogOfFile(build.LuxembourgIndex!.IndexRef, writtenIndex);
         if (log.Count < 2)
         {
             throw new ArgumentException("A build whose log has no predecessor keeps no generation.", nameof(generations));
         }
 
         var predecessorDirectory = Path.GetFullPath(generations.PredecessorDirectory);
-        var predecessorIndex = Sha256(await File.ReadAllBytesAsync(
-            Path.Combine(predecessorDirectory, V3FirstMountBuildResult.LuxembourgIndexFileName), cancellationToken).ConfigureAwait(false));
+        var (predecessorIndex, _) = await V3BuiltIndexFile.Sha256OfFileAsync(
+            Path.Combine(predecessorDirectory, V3FirstMountBuildResult.LuxembourgIndexFileName), cancellationToken).ConfigureAwait(false);
         if (!string.Equals(predecessorIndex, log[^1].PredecessorIndexSha256, StringComparison.Ordinal))
         {
             throw new ArgumentException("The predecessor directory is not the build this log names as its predecessor.", nameof(generations));
@@ -198,9 +292,9 @@ public static class V3CorpusMountWriter
             Directory.CreateDirectory(destination);
             foreach (var name in GenerationFiles)
             {
-                var bytes = await File.ReadAllBytesAsync(Path.Combine(source, name), cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
                 var temporary = Path.Combine(destination, name + ".writing");
-                await File.WriteAllBytesAsync(temporary, bytes, cancellationToken).ConfigureAwait(false);
+                File.Copy(Path.Combine(source, name), temporary);
                 File.Move(temporary, Path.Combine(destination, name));
             }
         }
@@ -215,14 +309,28 @@ public static class V3CorpusMountWriter
     /// (<paramref name="present"/>, none by default: each earlier build absent, none claimed). A genesis log has no earlier
     /// build and gets no record. The caller places the held generations; this writes only the record.
     /// </summary>
-    internal static async Task WriteRetentionRecordAsync(
+    internal static Task WriteRetentionRecordAsync(
         string directory,
         SourceArtifactRef indexRef,
         ReadOnlyMemory<byte> indexBytes,
         CancellationToken cancellationToken,
-        IReadOnlySet<string>? present = null)
+        IReadOnlySet<string>? present = null) =>
+        WriteRetentionRecordAsync(directory, LogOf(indexRef, indexBytes.Span), present, cancellationToken);
+
+    /// <summary><see cref="WriteRetentionRecordAsync(string, SourceArtifactRef, ReadOnlyMemory{byte}, CancellationToken, IReadOnlySet{string}?)"/> with the log read from the index file at <paramref name="indexPath"/>.</summary>
+    internal static Task WriteRetentionRecordFileAsync(
+        string directory,
+        SourceArtifactRef indexRef,
+        string indexPath,
+        CancellationToken cancellationToken) =>
+        WriteRetentionRecordAsync(directory, LogOfFile(indexRef, indexPath), present: null, cancellationToken);
+
+    private static async Task WriteRetentionRecordAsync(
+        string directory,
+        IReadOnlyList<LuxembourgIndexObservation> log,
+        IReadOnlySet<string>? present,
+        CancellationToken cancellationToken)
     {
-        var log = LogOf(indexRef, indexBytes.Span);
         if (log.Count < 2)
         {
             return;
@@ -236,14 +344,18 @@ public static class V3CorpusMountWriter
     }
 
     /// <summary>A Luxembourg index's log as the reader hands it out, read from its verified bytes.</summary>
-    private static IReadOnlyList<LuxembourgIndexObservation> LogOf(SourceArtifactRef indexRef, ReadOnlySpan<byte> indexBytes)
-    {
-        var read = LuxembourgIndexPredecessor.TryReadLog(indexRef, indexBytes, out var refusal, out var detail)
-                   ?? throw new InvalidDataException($"The Luxembourg index's log does not read: {refusal}: {detail}");
-        return read.Observations
+    private static IReadOnlyList<LuxembourgIndexObservation> LogOf(SourceArtifactRef indexRef, ReadOnlySpan<byte> indexBytes) =>
+        ObservationsOf(LuxembourgIndexPredecessor.TryReadLog(indexRef, indexBytes, out var refusal, out var detail), refusal, detail);
+
+    /// <summary>A Luxembourg index's log as the reader hands it out, read from a private copy of its file, held to its digest.</summary>
+    private static IReadOnlyList<LuxembourgIndexObservation> LogOfFile(SourceArtifactRef indexRef, string indexPath) =>
+        ObservationsOf(LuxembourgIndexPredecessor.TryReadLogFile(indexRef, indexPath, out var refusal, out var detail), refusal, detail);
+
+    private static IReadOnlyList<LuxembourgIndexObservation> ObservationsOf(
+        LuxembourgIndexPredecessor? read, LuxembourgIndexBuildRefusal refusal, string? detail) =>
+        (read ?? throw new InvalidDataException($"The Luxembourg index's log does not read: {refusal}: {detail}")).Observations
             .Select(static row => new LuxembourgIndexObservation(row.Observation, row.CorpusSha256, row.PredecessorIndexSha256, row.FirstSeq, row.LastSeq, row.BuiltAt, row.DerivedAt))
             .ToArray();
-    }
 
     private static byte[] RenderRetention(V3RetentionDecision decision, IReadOnlySet<string> referenced) =>
         JsonSerializer.SerializeToUtf8Bytes(new
@@ -486,9 +598,9 @@ public static class V3CorpusMountWriter
                 : new V3GenerationsVerification(null, null);
         }
 
-        var mountedLog = LuxembourgIndexPredecessor.TryReadLog(
+        var mountedLog = LuxembourgIndexPredecessor.TryReadLogFile(
                 mounted.IndexRef,
-                await File.ReadAllBytesAsync(Path.Combine(directory, V3FirstMountBuildResult.LuxembourgIndexFileName), cancellationToken).ConfigureAwait(false),
+                Path.Combine(directory, V3FirstMountBuildResult.LuxembourgIndexFileName),
                 out var refusal, out var detail)
             ?? throw new InvalidDataException($"The mounted log does not read: {refusal}: {detail}");
         var generations = V3GenerationRetention.GenerationsOf(log).ToDictionary(static generation => generation.IndexSha256, StringComparer.Ordinal);
@@ -518,8 +630,8 @@ public static class V3CorpusMountWriter
                 return new V3GenerationsVerification($"generation {name} does not verify: {verified.Detail}", null);
             }
 
-            var indexBytes = await File.ReadAllBytesAsync(Path.Combine(path, V3FirstMountBuildResult.LuxembourgIndexFileName), cancellationToken).ConfigureAwait(false);
-            var indexSha256 = Sha256(indexBytes);
+            var indexPath = Path.Combine(path, V3FirstMountBuildResult.LuxembourgIndexFileName);
+            var (indexSha256, _) = await V3BuiltIndexFile.Sha256OfFileAsync(indexPath, cancellationToken).ConfigureAwait(false);
             var observation = log[(int)generation.Observation - 1];
             if (!string.Equals(indexSha256, name, StringComparison.Ordinal) ||
                 !string.Equals(verified.CorpusRef!.Sha256, observation.CorpusSha256, StringComparison.Ordinal))
@@ -527,8 +639,8 @@ public static class V3CorpusMountWriter
                 return new V3GenerationsVerification($"generation {name} is not the build its observation names", null);
             }
 
-            var own = LuxembourgIndexPredecessor.TryReadLog(
-                    new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(indexSha256), indexSha256), indexBytes, out refusal, out detail)
+            var own = LuxembourgIndexPredecessor.TryReadLogFile(
+                    new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(indexSha256), indexSha256), indexPath, out refusal, out detail)
                 ?? throw new InvalidDataException($"generation {name}'s log does not read: {refusal}: {detail}");
             if (!own.Observations.SequenceEqual(mountedLog.Observations.Take((int)generation.Observation)) ||
                 !own.Events.SequenceEqual(mountedLog.Events.Take((int)observation.LastSeq)))

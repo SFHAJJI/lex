@@ -178,6 +178,86 @@ public static partial class EuropeIndexBuilder
             return null;
         }
 
+        var path = Path.Combine(Path.GetTempPath(), $"lex-v3-eu-index-{Guid.NewGuid():N}.sqlite");
+        try
+        {
+            var written = TryWriteFile(envelope, corpus, path, out refusal, out detail);
+            if (written is null)
+                return null;
+            var bytes = File.ReadAllBytes(path);
+            using var verified = EuropeIndexReader.OpenAndVerify(
+                written.IndexRef, bytes, corpus.ArtifactRef, written.CapabilityManifest);
+            return new EuropeIndexBuildResult(
+                written.IndexRef, bytes, written.CapabilityManifestRef, written.CapabilityManifestBytes, written.CapabilityManifest);
+        }
+        catch (Exception exception) when (exception is SqliteException or IOException or InvalidDataException)
+        {
+            refusal = EuropeIndexBuildRefusal.IndexInvalid;
+            detail = exception.Message;
+            return null;
+        }
+        finally
+        {
+            DeleteDatabase(path);
+        }
+    }
+
+    /// <summary>
+    /// The build the mount build runs (<see cref="V3FirstMountBuild"/>, slice S4b): the index written to
+    /// <paramref name="path"/> from <paramref name="corpus"/> (the envelope's corpus, built and compared by the caller, so the
+    /// index does not build it again), its digest read from the file, then the file verified by the reader's own file door
+    /// (<see cref="EuropeIndexReader.OpenAndVerifyFileAsync"/>: a private copy, hashed and read back). The same projection and
+    /// the same writer as <see cref="TryBuild"/>, so the same bytes; the index's bytes are never held, and the projected rows
+    /// are released before the file is read back. With <paramref name="readBack"/> false the file is not read back: the mount
+    /// build's second build, whose file is held to the first's digest. On a refusal the file is removed.
+    /// </summary>
+    internal static async Task<(V3BuiltIndexFile? Index, EuropeIndexBuildRefusal Refusal, string? Detail)> TryBuildFileAsync(
+        Stage3DerivationProfileEnvelope envelope,
+        LexCorpus6BuildResult corpus,
+        string path,
+        CancellationToken cancellationToken,
+        bool readBack = true)
+    {
+        ArgumentNullException.ThrowIfNull(envelope);
+        ArgumentNullException.ThrowIfNull(corpus);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var written = TryWriteFile(envelope, corpus, path, out var refusal, out var detail);
+        if (written is null)
+        {
+            DeleteDatabase(path);
+            return (null, refusal, detail);
+        }
+
+        if (!readBack)
+            return (written, EuropeIndexBuildRefusal.None, null);
+
+        try
+        {
+            using var verified = await EuropeIndexReader.OpenAndVerifyFileAsync(
+                path, written.CapabilityManifestBytes, corpus.ArtifactRef, cancellationToken).ConfigureAwait(false);
+            if (verified.IndexRef != written.IndexRef)
+                throw new InvalidDataException("The EU index file does not read back as the index its build names.");
+            return (written, EuropeIndexBuildRefusal.None, null);
+        }
+        catch (Exception exception) when (exception is SqliteException or IOException or InvalidDataException or ArgumentException)
+        {
+            DeleteDatabase(path);
+            return (null, EuropeIndexBuildRefusal.IndexInvalid, exception.Message);
+        }
+    }
+
+    /// <summary>
+    /// The build from <paramref name="corpus"/> to the file at <paramref name="path"/>: the rows projected, the logical rows
+    /// hashed, the database written, its digest read from the file and its capabilities measured. The projected rows live in
+    /// this frame only, so they are released when it returns, before anything reads the file back.
+    /// </summary>
+    private static V3BuiltIndexFile? TryWriteFile(
+        Stage3DerivationProfileEnvelope envelope,
+        LexCorpus6BuildResult corpus,
+        string path,
+        out EuropeIndexBuildRefusal refusal,
+        out string? detail)
+    {
         try
         {
             if (!TryProjectRows(envelope, corpus, out var members, out var lines, out var gaps,
@@ -185,30 +265,19 @@ public static partial class EuropeIndexBuilder
                 return null;
             var states = ProjectStates(envelope.BodyComposition.Envelope.Europe.ObservedWorkFacts);
             var logicalRowsSha256 = HashLogicalRows(members, lines, gaps, articles, sources, digests, states);
-            var path = Path.Combine(Path.GetTempPath(), $"lex-v3-eu-index-{Guid.NewGuid():N}.sqlite");
-            try
-            {
-                BuildDatabase(path, corpus.ArtifactRef.Sha256, logicalRowsSha256,
-                    members, lines, gaps, articles, sources, digests, states);
-                var bytes = File.ReadAllBytes(path);
-                var digest = Convert.ToHexStringLower(SHA256.HashData(bytes));
-                var indexRef = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
-                var manifest = MeasureCapabilities(digest, articles);
-                using var manifestStream = new MemoryStream();
-                var manifestDigest = V3IndexCapabilityManifestArtifact.Write(manifestStream, manifest);
-                var manifestBytes = manifestStream.ToArray();
-                var manifestRef = new SourceArtifactRef(
-                    LexCorpus6Builder.ResourceIdOf(manifestDigest), manifestDigest);
-                manifest = V3IndexCapabilityManifestArtifact.ParseAndVerify(
-                    manifestRef, manifestBytes, PublisherId.EuEurLex, digest);
-                using var verified = EuropeIndexReader.OpenAndVerify(
-                    indexRef, bytes, corpus.ArtifactRef, manifest);
-                return new EuropeIndexBuildResult(indexRef, bytes, manifestRef, manifestBytes, manifest);
-            }
-            finally
-            {
-                DeleteDatabase(path);
-            }
+            BuildDatabase(path, corpus.ArtifactRef.Sha256, logicalRowsSha256,
+                members, lines, gaps, articles, sources, digests, states);
+            var (digest, length) = V3BuiltIndexFile.Sha256OfFile(path);
+            var indexRef = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
+            var manifest = MeasureCapabilities(digest, articles);
+            using var manifestStream = new MemoryStream();
+            var manifestDigest = V3IndexCapabilityManifestArtifact.Write(manifestStream, manifest);
+            var manifestBytes = manifestStream.ToArray();
+            var manifestRef = new SourceArtifactRef(
+                LexCorpus6Builder.ResourceIdOf(manifestDigest), manifestDigest);
+            manifest = V3IndexCapabilityManifestArtifact.ParseAndVerify(
+                manifestRef, manifestBytes, PublisherId.EuEurLex, digest);
+            return new V3BuiltIndexFile(path, indexRef, length, manifestRef, manifestBytes, manifest);
         }
         catch (Exception exception) when (exception is SqliteException or IOException or InvalidDataException)
         {

@@ -108,7 +108,9 @@ public static class V3OfflineMount
                     var retained = await CustodyRestore.ReadByDigestCheckedAsync(store, file.Sha256, cancellationToken).ConfigureAwait(false);
                     var path = Path.Combine(staging, file.Path.Replace('/', Path.DirectorySeparatorChar));
                     Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                    await File.WriteAllBytesAsync(path, retained.ToArray(), cancellationToken).ConfigureAwait(false);
+                    // Written straight from the checked bytes, not from a second copy of them (an index is over a gigabyte).
+                    await using var restored = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16, FileOptions.Asynchronous);
+                    await restored.WriteAsync(retained, cancellationToken).ConfigureAwait(false);
                 }
                 var verified = await V3CorpusMountWriter.VerifyAsync(staging, cancellationToken).ConfigureAwait(false);
                 if (!verified.Verified) throw new CustodyIntegrityException("Retained predecessor fails mount verification: " + verified.Detail);
@@ -116,21 +118,10 @@ public static class V3OfflineMount
                     ?? throw new CustodyIntegrityException($"Retained predecessor refused: {refusal}: {detail}");
                 generations = new(staging, root.Referenced.ToHashSet(StringComparer.Ordinal));
             }
-            var europe = await EuFirstMountAcquisition.ReopenAsync(store, root.Europe, root.Seeds, cancellationToken).ConfigureAwait(false);
-            // R0: the acquisition reopened byte for byte, its frozen derivations verified against its catalog. For inputs /3,
-            // R1 then runs the later rules over R0's own population; R0's result is handed straight to it and held nowhere
-            // here, so its frozen inventory and content populations are released once R1 has read what it records of them.
-            var luxembourg = rederivation is null
-                ? await ReopenLuxembourgAsync(store, root, populationScope, cancellationToken).ConfigureAwait(false)
-                : await LuxembourgRederivation.ApplyAsync(store,
-                    await ReopenLuxembourgAsync(store, root, populationScope, cancellationToken).ConfigureAwait(false),
-                    rederivation.Request(), cancellationToken).ConfigureAwait(false);
-
-            // The build time stays the acquisition's: a derivation never moves freshness forward.
-            var build = await new V3FirstMountBuild(store, new BuildClock(root.BuildTime))
-                .RunAsync(europe, luxembourg, predecessor, cancellationToken).ConfigureAwait(false);
-            if (!build.Delivered) throw new CustodyIntegrityException($"Offline mount derivation refused: {build.Refusal}: {build.Detail}");
-            var write = await V3CorpusMountWriter.WriteAsync(build, target, generations, cancellationToken, root.BuildTime).ConfigureAwait(false);
+            // The populations, the build and the files it staged live in this call only, so all of them are released before
+            // the written mount is read back (S4b).
+            var write = await BuildAndWriteAsync(
+                store, root, populationScope, rederivation, predecessor, generations, target, cancellationToken).ConfigureAwait(false);
             var verification = await V3CorpusMountWriter.VerifyAsync(target, cancellationToken).ConfigureAwait(false);
             if (!verification.Verified) throw new CustodyIntegrityException("Derived mount does not reopen: " + verification.Detail);
             return write;
@@ -140,6 +131,31 @@ public static class V3OfflineMount
             // This unpredictable directory is created solely for this invocation's verified inputs.
             if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
         }
+    }
+
+    /// <summary>
+    /// R0 (and R1 for inputs /3), the build and its write: the acquisitions reopened, the mount built (each artefact twice) and
+    /// written to <paramref name="target"/>, and the build disposed, so nothing it held outlives the write.
+    /// </summary>
+    private static async Task<V3CorpusMountWrite> BuildAndWriteAsync(ICustodyStore store, Inputs root,
+        LuxembourgPopulationScope? populationScope, RederivationInputs? rederivation, LuxembourgIndexPredecessor? predecessor,
+        V3GenerationSource? generations, string target, CancellationToken cancellationToken)
+    {
+        var europe = await EuFirstMountAcquisition.ReopenAsync(store, root.Europe, root.Seeds, cancellationToken).ConfigureAwait(false);
+        // R0: the acquisition reopened byte for byte, its frozen derivations verified against its catalog. For inputs /3,
+        // R1 then runs the later rules over R0's own population; R0's result is handed straight to it and held nowhere
+        // here, so its frozen inventory and content populations are released once R1 has read what it records of them.
+        var luxembourg = rederivation is null
+            ? await ReopenLuxembourgAsync(store, root, populationScope, cancellationToken).ConfigureAwait(false)
+            : await LuxembourgRederivation.ApplyAsync(store,
+                await ReopenLuxembourgAsync(store, root, populationScope, cancellationToken).ConfigureAwait(false),
+                rederivation.Request(), cancellationToken).ConfigureAwait(false);
+
+        // The build time stays the acquisition's: a derivation never moves freshness forward.
+        using var build = await new V3FirstMountBuild(store, new BuildClock(root.BuildTime))
+            .RunAsync(europe, luxembourg, predecessor, cancellationToken).ConfigureAwait(false);
+        if (!build.Delivered) throw new CustodyIntegrityException($"Offline mount derivation refused: {build.Refusal}: {build.Detail}");
+        return await V3CorpusMountWriter.WriteAsync(build, target, generations, cancellationToken, root.BuildTime).ConfigureAwait(false);
     }
 
     /// <summary>

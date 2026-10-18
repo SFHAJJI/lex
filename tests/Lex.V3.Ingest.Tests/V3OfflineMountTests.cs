@@ -65,7 +65,7 @@ public sealed partial class V3FirstMountBuildTests
             LuxembourgIndexPredecessor? predecessor = null;
             if (chained)
             {
-                var previous = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, luxembourg, CancellationToken.None);
+                using var previous = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, luxembourg, CancellationToken.None);
                 Assert.IsTrue(previous.Delivered, previous.Detail);
                 var previousPath = Path.Combine(root, "previous");
                 await V3CorpusMountWriter.WriteAsync(previous, previousPath, null, CancellationToken.None, time);
@@ -85,7 +85,7 @@ public sealed partial class V3FirstMountBuildTests
                     [seed], LuxembourgFirstMountAcquisitionTests.ActRange, time, generations, CancellationToken.None);
             var referencePath = Path.Combine(root, "inputs.json");
             await File.WriteAllTextAsync(referencePath, ContractJson.Serialize(checkpoint));
-            var baseline = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, luxembourg, predecessor, CancellationToken.None);
+            using var baseline = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, luxembourg, predecessor, CancellationToken.None);
             Assert.IsTrue(baseline.Delivered, baseline.Detail);
             var expected = Path.Combine(root, "baseline");
             await V3CorpusMountWriter.WriteAsync(baseline, expected, generations, CancellationToken.None, time);
@@ -237,7 +237,7 @@ public sealed partial class V3FirstMountBuildTests
 
             // What the derive must reproduce: an in-process build over R1, at the acquisition's build time.
             var rederived = await LuxembourgRederivation.ApplyAsync(store, luxembourg, LuxembourgRederivationTests.Release1(), CancellationToken.None);
-            var build = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, rederived, CancellationToken.None);
+            using var build = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(time)).RunAsync(europe, rederived, CancellationToken.None);
             Assert.IsTrue(build.Delivered, build.Detail);
             var expected = Path.Combine(root, "expected");
             await V3CorpusMountWriter.WriteAsync(build, expected, null, CancellationToken.None, time);
@@ -310,7 +310,10 @@ public sealed partial class V3FirstMountBuildTests
     }
 
     /// <summary>Runs the built tool in its own process with every proxy pointed at <paramref name="proxy"/>.</summary>
-    internal static async Task<ToolRun> RunToolAsync(string proxy, params string[] arguments)
+    internal static Task<ToolRun> RunToolAsync(string proxy, params string[] arguments) => RunToolAsync(proxy, null, arguments);
+
+    /// <summary>Runs the built tool in its own process with every proxy pointed at <paramref name="proxy"/> and <paramref name="environment"/> set.</summary>
+    internal static async Task<ToolRun> RunToolAsync(string proxy, IReadOnlyDictionary<string, string>? environment, params string[] arguments)
     {
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
         var tool = Path.Combine(CheckoutRoot(), "src", "Lex.V3.Tool", "bin", configuration, "net10.0", "Lex.V3.Tool.dll");
@@ -320,6 +323,7 @@ public sealed partial class V3FirstMountBuildTests
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
         foreach (var name in new[] { "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy" }) start.Environment[name] = proxy;
         start.Environment["NO_PROXY"] = ""; start.Environment["no_proxy"] = "";
+        foreach (var (name, value) in environment ?? new Dictionary<string, string>()) start.Environment[name] = value;
         using var process = Process.Start(start)!;
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();

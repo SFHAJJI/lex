@@ -76,7 +76,7 @@ public sealed class LuxembourgContent3MountTests
             string.Join(" | ", rederived.AknLegalContent.Outcomes.Select(static outcome => outcome.Detail)));
 
         var clock = new V3OfflineMount.BuildClock(new DateTimeOffset(2026, 10, 12, 18, 17, 5, TimeSpan.Zero));
-        var build = await new V3FirstMountBuild(store, clock).RunAsync(europe, rederived, CancellationToken.None);
+        using var build = await new V3FirstMountBuild(store, clock).RunAsync(europe, rederived, CancellationToken.None);
         Assert.IsTrue(build.Delivered, $"{build.Refusal}: {build.Detail}");
         var directory = Path.Combine(Path.GetTempPath(), "lex-v3-content3-mount-" + Guid.NewGuid().ToString("N"));
         try

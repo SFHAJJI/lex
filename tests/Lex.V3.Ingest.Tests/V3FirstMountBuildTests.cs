@@ -28,7 +28,7 @@ public sealed partial class V3FirstMountBuildTests
         // One clock read for both runs: the index's event log records the build time, so a run that must reproduce
         // another takes the other's time.
         var clock = new FrozenClock(DateTimeOffset.UtcNow);
-        var build = await new V3FirstMountBuild(store, clock).RunAsync(europe, luxembourg, CancellationToken.None);
+        using var build = await new V3FirstMountBuild(store, clock).RunAsync(europe, luxembourg, CancellationToken.None);
 
         Assert.IsTrue(build.Delivered, $"{build.Refusal}: {build.Detail}");
         Assert.AreEqual(5, build.Files.Count);
@@ -43,12 +43,12 @@ public sealed partial class V3FirstMountBuildTests
             "the EU member's Formex package was acquired and its main body admitted.");
 
         // A second build from the same acquisitions at the same build time reproduces every artefact byte for byte.
-        var again = await new V3FirstMountBuild(store, clock).RunAsync(europe, luxembourg, CancellationToken.None);
+        using var again = await new V3FirstMountBuild(store, clock).RunAsync(europe, luxembourg, CancellationToken.None);
         Assert.IsTrue(again.Delivered, $"{again.Refusal}: {again.Detail}");
         foreach (var (first, second) in build.Files.Zip(again.Files))
         {
             Assert.AreEqual(first.Name, second.Name);
-            CollectionAssert.AreEqual(first.Bytes.ToArray(), second.Bytes.ToArray(), first.Name);
+            CollectionAssert.AreEqual(first.ReadAllBytes(), second.ReadAllBytes(), first.Name);
         }
 
         var directory = Path.Combine(Path.GetTempPath(), "lex-v3-first-mount-" + Guid.NewGuid().ToString("N"));
@@ -91,7 +91,7 @@ public sealed partial class V3FirstMountBuildTests
         var refusedEurope = EuFirstMountAcquisitionResult.Refused(
             EuFirstMountAcquisitionRefusal.RunRefused, "test: the adapter refused");
 
-        var build = await new V3FirstMountBuild(store).RunAsync(refusedEurope, luxembourg, CancellationToken.None);
+        using var build = await new V3FirstMountBuild(store).RunAsync(refusedEurope, luxembourg, CancellationToken.None);
 
         Assert.IsFalse(build.Delivered);
         Assert.AreEqual(V3FirstMountBuildRefusal.EuropeNotDelivered, build.Refusal);
@@ -106,7 +106,7 @@ public sealed partial class V3FirstMountBuildTests
     {
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         var (europe, luxembourg) = await AcquireAsync(store, CheckoutRoot());
-        var build = await new V3FirstMountBuild(store).RunAsync(europe, luxembourg, CancellationToken.None);
+        using var build = await new V3FirstMountBuild(store).RunAsync(europe, luxembourg, CancellationToken.None);
         Assert.IsTrue(build.Delivered, $"{build.Refusal}: {build.Detail}");
         var directory = Path.Combine(Path.GetTempPath(), "lex-v3-first-mount-" + Guid.NewGuid().ToString("N"));
         try
@@ -132,8 +132,10 @@ public sealed partial class V3FirstMountBuildTests
 
     /// <param name="luxembourgXml">When given, the Luxembourg consolidation is published as these Akoma Ntoso bytes rather
     /// than as the retained PDF (<see cref="LuxembourgFirstMountAcquisitionTests.LuxembourgFamilyHandler"/>).</param>
+    /// <param name="luxembourgClock">The Luxembourg acquisition's clock; the fixture's own unless given (S4b's probe gives one
+    /// whose elapsed time moves slower, so a body of tens of megabytes is read within the request timeout).</param>
     internal static async Task<(EuFirstMountAcquisitionResult Europe, LuxembourgFirstMountAcquisitionResult Luxembourg)> AcquireAsync(
-        ICustodyStore store, string checkout, byte[]? luxembourgXml = null)
+        ICustodyStore store, string checkout, byte[]? luxembourgXml = null, TimeProvider? luxembourgClock = null)
     {
         var root = EuAxiomWiringHarness.SeedRoot(null);
         var celex = EuAxiomWiringHarness.Seed(null).Celex;
@@ -151,7 +153,7 @@ public sealed partial class V3FirstMountBuildTests
             LuxembourgFirstMountAcquisitionTests.PdfBytes(), xmlBody: luxembourgXml);
         var luxembourgRenderers = await LuxembourgRendererSources.FromCheckoutAsync(store, checkout, CancellationToken.None);
         var luxembourg = await new LuxembourgFirstMountAcquisition(
-                store, new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), luxembourgHandler)
+                store, luxembourgClock ?? new LuxembourgAcquisitionTestFixture.FixedTimeProvider(), luxembourgHandler)
             .RunAsync(LuxembourgFirstMountAcquisitionTests.ActRange, luxembourgRenderers,
                 LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
         return (europe, luxembourg);
@@ -191,7 +193,7 @@ public sealed partial class V3FirstMountBuildTests
                 var predecessor = build == 0
                     ? null
                     : V3FirstMountBuild.ReadPredecessor(directories[^1], out var refusal, out var detail) ?? throw new AssertFailedException($"{refusal}: {detail}");
-                var result = await new V3FirstMountBuild(store, new FrozenClock(day.AddDays(days[build]))).RunAsync(europe, luxembourg, predecessor, CancellationToken.None);
+                using var result = await new V3FirstMountBuild(store, new FrozenClock(day.AddDays(days[build]))).RunAsync(europe, luxembourg, predecessor, CancellationToken.None);
                 Assert.IsTrue(result.Delivered, $"{result.Refusal}: {result.Detail}");
                 var directory = Path.Combine(root, $"build-{build + 1}");
                 await V3CorpusMountWriter.WriteAsync(

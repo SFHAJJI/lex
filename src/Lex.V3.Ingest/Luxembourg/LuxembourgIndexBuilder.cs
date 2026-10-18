@@ -80,6 +80,29 @@ public sealed class LuxembourgIndexPredecessor
         out string? detail)
     {
         var read = TryReadLog(indexRef, indexBytes, out refusal, out detail);
+        return CarriedForward(read, ref refusal, ref detail);
+    }
+
+    /// <summary>
+    /// <see cref="TryRead"/> over the index file at <paramref name="indexPath"/>: copied to a private file, which is hashed
+    /// and read, so the index is never held in memory (slice S4b) and what is read is what was hashed.
+    /// </summary>
+    internal static LuxembourgIndexPredecessor? TryReadFile(
+        SourceArtifactRef indexRef,
+        string indexPath,
+        out LuxembourgIndexBuildRefusal refusal,
+        out string? detail)
+    {
+        var read = TryReadLogFile(indexRef, indexPath, out refusal, out detail);
+        return CarriedForward(read, ref refusal, ref detail);
+    }
+
+    /// <summary>A read log a build carries forward: of this build's log schema, or refused <see cref="LuxembourgIndexBuildRefusal.PredecessorSchemaDiffers"/>.</summary>
+    private static LuxembourgIndexPredecessor? CarriedForward(
+        LuxembourgIndexPredecessor? read,
+        ref LuxembourgIndexBuildRefusal refusal,
+        ref string? detail)
+    {
         if (read is not null && !string.Equals(read.LogSchema, LuxembourgIndexBuilder.EventLogSchema, StringComparison.Ordinal))
         {
             refusal = LuxembourgIndexBuildRefusal.PredecessorSchemaDiffers;
@@ -105,66 +128,16 @@ public sealed class LuxembourgIndexPredecessor
         refusal = LuxembourgIndexBuildRefusal.None;
         detail = null;
         var digest = Convert.ToHexStringLower(SHA256.HashData(indexBytes));
-        if (!string.Equals(digest, indexRef.Sha256, StringComparison.Ordinal))
+        if (!IsNamed(digest, indexRef, out refusal, out detail))
         {
-            refusal = LuxembourgIndexBuildRefusal.PredecessorMismatch;
-            detail = $"The predecessor index's bytes are {digest}, not the {indexRef.Sha256} its build names.";
             return null;
         }
 
-        var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-predecessor-{Guid.NewGuid():N}.sqlite");
+        var path = PrivatePath();
         try
         {
-            File.WriteAllBytes(path, indexBytes.ToArray());
-            using var connection = LuxembourgIndexBuilder.Open(path, SqliteOpenMode.ReadOnly);
-            using (var tables = connection.CreateCommand())
-            {
-                tables.CommandText = "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='log_stamp'";
-                if (Convert.ToInt64(tables.ExecuteScalar(), CultureInfo.InvariantCulture) != 1)
-                {
-                    refusal = LuxembourgIndexBuildRefusal.PredecessorSchemaDiffers;
-                    detail = "The predecessor index holds no event log stamp (index schema 6 or before), so its log cannot be carried forward.";
-                    return null;
-                }
-            }
-
-            string logSchema;
-            string logDigest;
-            using (var stamp = connection.CreateCommand())
-            {
-                stamp.CommandText = "SELECT log_schema,log_rows_sha256 FROM log_stamp WHERE log_stamp_id=1";
-                using var reader = stamp.ExecuteReader();
-                if (!reader.Read())
-                {
-                    refusal = LuxembourgIndexBuildRefusal.PredecessorMismatch;
-                    detail = "The predecessor index's event log has no stamp row.";
-                    return null;
-                }
-
-                logSchema = reader.GetString(0);
-                logDigest = reader.GetString(1);
-            }
-
-            if (!string.Equals(logSchema, LuxembourgIndexBuilder.EventLogSchema, StringComparison.Ordinal) &&
-                !string.Equals(logSchema, LuxembourgIndexBuilder.LegacyEventLogSchema8, StringComparison.Ordinal))
-            {
-                refusal = LuxembourgIndexBuildRefusal.PredecessorSchemaDiffers;
-                detail = $"The predecessor's event log is {logSchema}; this build carries {LuxembourgIndexBuilder.EventLogSchema} forward.";
-                return null;
-            }
-
-            var observations = LuxembourgIndexBuilder.ReadLogObservations(connection, logSchema);
-            var events = LuxembourgIndexBuilder.ReadLogEvents(connection);
-            if (!string.Equals(LuxembourgIndexBuilder.HashEventLogOf(logSchema, observations, events), logDigest, StringComparison.Ordinal))
-            {
-                refusal = LuxembourgIndexBuildRefusal.PredecessorMismatch;
-                detail = "The predecessor's event log does not match its log stamp.";
-                return null;
-            }
-
-            LuxembourgIndexBuilder.ValidateLogNumbering(observations, events);
-            LuxembourgIndexBuilder.ValidateLogHistory(observations, events, logSchema);
-            return new LuxembourgIndexPredecessor(digest, logSchema, observations, events);
+            File.WriteAllBytes(path, indexBytes);
+            return ReadLogAt(path, digest, out refusal, out detail);
         }
         catch (Exception exception) when (exception is SqliteException or IOException or InvalidDataException)
         {
@@ -176,6 +149,113 @@ public sealed class LuxembourgIndexPredecessor
         {
             LuxembourgIndexBuilder.DeleteDatabase(path);
         }
+    }
+
+    /// <summary>
+    /// <see cref="TryReadLog"/> over the index file at <paramref name="indexPath"/>: the file is copied to a private file,
+    /// the copy hashed and held to <paramref name="indexRef"/>, and the log read from the copy, so the index's bytes are never
+    /// held in memory and what is read is what was hashed (the mount writer reads a 1.2 GB index's log this way, S4b).
+    /// </summary>
+    internal static LuxembourgIndexPredecessor? TryReadLogFile(
+        SourceArtifactRef indexRef,
+        string indexPath,
+        out LuxembourgIndexBuildRefusal refusal,
+        out string? detail)
+    {
+        ArgumentNullException.ThrowIfNull(indexRef);
+        ArgumentException.ThrowIfNullOrWhiteSpace(indexPath);
+        refusal = LuxembourgIndexBuildRefusal.None;
+        detail = null;
+        var path = PrivatePath();
+        try
+        {
+            File.Copy(indexPath, path);
+            var (digest, _) = V3BuiltIndexFile.Sha256OfFile(path);
+            return IsNamed(digest, indexRef, out refusal, out detail) ? ReadLogAt(path, digest, out refusal, out detail) : null;
+        }
+        catch (Exception exception) when (exception is SqliteException or IOException or InvalidDataException)
+        {
+            refusal = LuxembourgIndexBuildRefusal.PredecessorMismatch;
+            detail = exception.Message;
+            return null;
+        }
+        finally
+        {
+            LuxembourgIndexBuilder.DeleteDatabase(path);
+        }
+    }
+
+    private static string PrivatePath() => Path.Combine(Path.GetTempPath(), $"lex-v3-lu-predecessor-{Guid.NewGuid():N}.sqlite");
+
+    /// <summary>Whether <paramref name="digest"/> is the one the caller names; refused <see cref="LuxembourgIndexBuildRefusal.PredecessorMismatch"/> otherwise.</summary>
+    private static bool IsNamed(string digest, SourceArtifactRef indexRef, out LuxembourgIndexBuildRefusal refusal, out string? detail)
+    {
+        refusal = LuxembourgIndexBuildRefusal.None;
+        detail = null;
+        if (string.Equals(digest, indexRef.Sha256, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        refusal = LuxembourgIndexBuildRefusal.PredecessorMismatch;
+        detail = $"The predecessor index's bytes are {digest}, not the {indexRef.Sha256} its build names.";
+        return false;
+    }
+
+    /// <summary>The log of the private copy at <paramref name="path"/>, whose digest is <paramref name="digest"/>, verified by its stamp, numbering and history.</summary>
+    private static LuxembourgIndexPredecessor? ReadLogAt(string path, string digest, out LuxembourgIndexBuildRefusal refusal, out string? detail)
+    {
+        refusal = LuxembourgIndexBuildRefusal.None;
+        detail = null;
+        using var connection = LuxembourgIndexBuilder.Open(path, SqliteOpenMode.ReadOnly);
+        using (var tables = connection.CreateCommand())
+        {
+            tables.CommandText = "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='log_stamp'";
+            if (Convert.ToInt64(tables.ExecuteScalar(), CultureInfo.InvariantCulture) != 1)
+            {
+                refusal = LuxembourgIndexBuildRefusal.PredecessorSchemaDiffers;
+                detail = "The predecessor index holds no event log stamp (index schema 6 or before), so its log cannot be carried forward.";
+                return null;
+            }
+        }
+
+        string logSchema;
+        string logDigest;
+        using (var stamp = connection.CreateCommand())
+        {
+            stamp.CommandText = "SELECT log_schema,log_rows_sha256 FROM log_stamp WHERE log_stamp_id=1";
+            using var reader = stamp.ExecuteReader();
+            if (!reader.Read())
+            {
+                refusal = LuxembourgIndexBuildRefusal.PredecessorMismatch;
+                detail = "The predecessor index's event log has no stamp row.";
+                return null;
+            }
+
+            logSchema = reader.GetString(0);
+            logDigest = reader.GetString(1);
+        }
+
+        if (!string.Equals(logSchema, LuxembourgIndexBuilder.EventLogSchema, StringComparison.Ordinal) &&
+            !string.Equals(logSchema, LuxembourgIndexBuilder.LegacyEventLogSchema8, StringComparison.Ordinal))
+        {
+            refusal = LuxembourgIndexBuildRefusal.PredecessorSchemaDiffers;
+            detail = $"The predecessor's event log is {logSchema}; this build carries {LuxembourgIndexBuilder.EventLogSchema} forward.";
+            return null;
+        }
+
+        var observations = LuxembourgIndexBuilder.ReadLogObservations(connection, logSchema);
+        var events = LuxembourgIndexBuilder.ReadLogEvents(connection);
+        if (!string.Equals(LuxembourgIndexBuilder.HashEventLogOf(logSchema, observations, events), logDigest, StringComparison.Ordinal))
+        {
+            refusal = LuxembourgIndexBuildRefusal.PredecessorMismatch;
+            detail = "The predecessor's event log does not match its log stamp.";
+            return null;
+        }
+
+        LuxembourgIndexBuilder.ValidateLogNumbering(observations, events);
+        LuxembourgIndexBuilder.ValidateLogHistory(observations, events, logSchema);
+        return new LuxembourgIndexPredecessor(digest, logSchema, observations, events);
     }
 }
 
@@ -874,11 +954,10 @@ public static partial class LuxembourgIndexBuilder
         ArgumentNullException.ThrowIfNull(envelope);
         refusal = LuxembourgIndexBuildRefusal.None;
         detail = null;
-        if (predecessor is not null && !string.Equals(predecessor.LogSchema, EventLogSchema, StringComparison.Ordinal))
+        if (PredecessorSchemaRefusal(predecessor) is { } schemaDetail)
         {
             refusal = LuxembourgIndexBuildRefusal.PredecessorSchemaDiffers;
-            detail = $"The predecessor's event log is {predecessor.LogSchema} (index 8); an index 9 build starts a new genesis log "
-                + $"and carries only {EventLogSchema} forward.";
+            detail = schemaDetail;
             return null;
         }
 
@@ -890,6 +969,104 @@ public static partial class LuxembourgIndexBuilder
             return null;
         }
 
+        var path = TemporaryIndexPath();
+        try
+        {
+            var written = TryWriteFile(envelope, corpus, predecessor, builtAt, derivedAt, path, out refusal, out detail);
+            return written is null
+                ? null
+                : ReadAndVerify(written, corpus.ArtifactRef, reader => reader.VerifyEventLogSources(corpus.VerifiedSet), out refusal, out detail);
+        }
+        finally
+        {
+            DeleteDatabase(path);
+        }
+    }
+
+    /// <summary>
+    /// The build the mount build runs (<see cref="V3FirstMountBuild"/>, slice S4b): the index written to
+    /// <paramref name="path"/> from <paramref name="corpus"/> (the envelope's corpus, built and compared by the caller, so the
+    /// index does not build it again), its digest read from the file, then the file verified by the reader's own file door
+    /// (a private copy, hashed and read back) with the corpus's check of the log's source bodies. The same projection and the
+    /// same writer as <see cref="TryBuild(Stage3DerivationProfileEnvelope, LuxembourgIndexPredecessor?, DateTimeOffset, DateTimeOffset?, out LuxembourgIndexBuildRefusal, out string?)"/>,
+    /// so the same bytes; the index's bytes are never held, and the projected rows are released before the file is read back.
+    /// With <paramref name="readBack"/> false the file is not read back: the mount build's second build, whose file is held to
+    /// the first's digest, so it is either the first's verified bytes or a refusal. On a refusal the file is removed.
+    /// </summary>
+    internal static async Task<(V3BuiltIndexFile? Index, LuxembourgIndexBuildRefusal Refusal, string? Detail)> TryBuildFileAsync(
+        Stage3DerivationProfileEnvelope envelope,
+        LexCorpus6BuildResult corpus,
+        LuxembourgIndexPredecessor? predecessor,
+        DateTimeOffset builtAt,
+        DateTimeOffset? derivedAt,
+        string path,
+        CancellationToken cancellationToken,
+        bool readBack = true)
+    {
+        ArgumentNullException.ThrowIfNull(envelope);
+        ArgumentNullException.ThrowIfNull(corpus);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        if (PredecessorSchemaRefusal(predecessor) is { } schemaDetail)
+        {
+            return (null, LuxembourgIndexBuildRefusal.PredecessorSchemaDiffers, schemaDetail);
+        }
+
+        var written = TryWriteFile(envelope, corpus, predecessor, builtAt, derivedAt, path, out var refusal, out var detail);
+        if (written is null)
+        {
+            DeleteDatabase(path);
+            return (null, refusal, detail);
+        }
+
+        if (!readBack)
+        {
+            return (written, LuxembourgIndexBuildRefusal.None, null);
+        }
+
+        try
+        {
+            using var verified = await LuxembourgIndexReader.OpenAndVerifyFileAsync(path, written.CapabilityManifestBytes, cancellationToken)
+                .ConfigureAwait(false);
+            if (verified.IndexRef != written.IndexRef || verified.CorpusRef != corpus.ArtifactRef)
+            {
+                throw new InvalidDataException("The Luxembourg index file does not read back as the index and corpus its build names.");
+            }
+
+            verified.VerifyEventLogSources(corpus.VerifiedSet);
+            return (written, LuxembourgIndexBuildRefusal.None, null);
+        }
+        catch (Exception exception) when (exception is SqliteException or IOException or InvalidDataException or ArgumentException)
+        {
+            DeleteDatabase(path);
+            return (null, LuxembourgIndexBuildRefusal.IndexInvalid, exception.Message);
+        }
+    }
+
+    /// <summary>Why a predecessor cannot be carried forward by this build's log schema, or null when it can (or there is none).</summary>
+    private static string? PredecessorSchemaRefusal(LuxembourgIndexPredecessor? predecessor) =>
+        predecessor is not null && !string.Equals(predecessor.LogSchema, EventLogSchema, StringComparison.Ordinal)
+            ? $"The predecessor's event log is {predecessor.LogSchema} (index 8); an index 9 build starts a new genesis log "
+              + $"and carries only {EventLogSchema} forward."
+            : null;
+
+    private static string TemporaryIndexPath() => Path.Combine(Path.GetTempPath(), $"lex-v3-lu-index-{Guid.NewGuid():N}.sqlite");
+
+    /// <summary>
+    /// The build from <paramref name="corpus"/> to the file at <paramref name="path"/>: the build time and derivation time
+    /// checked, the rows projected, and <see cref="WriteFile"/>. The projected rows live in this frame only, so they are
+    /// released when it returns, before anything reads the file back.
+    /// </summary>
+    private static V3BuiltIndexFile? TryWriteFile(
+        Stage3DerivationProfileEnvelope envelope,
+        LexCorpus6BuildResult corpus,
+        LuxembourgIndexPredecessor? predecessor,
+        DateTimeOffset builtAt,
+        DateTimeOffset? derivedAt,
+        string path,
+        out LuxembourgIndexBuildRefusal refusal,
+        out string? detail)
+    {
+        refusal = LuxembourgIndexBuildRefusal.None;
         var builtAtText = TryBuiltAt(builtAt, predecessor, corpus.VerifiedSet, out detail);
         if (builtAtText is null)
         {
@@ -932,17 +1109,16 @@ public static partial class LuxembourgIndexBuilder
             return null;
         }
 
-        return WriteIndex(
-            corpus.ArtifactRef, members, articles, states, intervals, workTitles, workFacts, BodiesByObjectRef(corpus.VerifiedSet),
-            predecessor, builtAtText, derivedAtText, reader => reader.VerifyEventLogSources(corpus.VerifiedSet), out refusal, out detail);
+        return WriteFile(
+            path, corpus.ArtifactRef, members, articles, states, intervals, workTitles, workFacts, BodiesByObjectRef(corpus.VerifiedSet),
+            predecessor, builtAtText, derivedAtText, out refusal, out detail);
     }
 
     /// <summary>
-    /// The build's tail, from the projected rows: the relations and the event log (a genesis log, or the predecessor's
-    /// carried forward and this observation's events appended), the stamps, the database, the measured capability manifest,
-    /// and the reader's own verification of what was written (with the corpus's check of the log's source bodies when
-    /// <paramref name="verifyWithCorpus"/> is given). <see cref="TryBuild(Stage3DerivationProfileEnvelope, LuxembourgIndexPredecessor?, DateTimeOffset, DateTimeOffset?, out LuxembourgIndexBuildRefusal, out string?)"/>
-    /// runs it over an envelope's rows; a test harness runs it over rows of its own, so both go through one writer.
+    /// The build's tail over rows of a test harness's own: <see cref="WriteFile"/> to a temporary file, then the bytes read
+    /// and verified as <see cref="TryBuild(Stage3DerivationProfileEnvelope, LuxembourgIndexPredecessor?, DateTimeOffset, DateTimeOffset?, out LuxembourgIndexBuildRefusal, out string?)"/>
+    /// verifies them (with the corpus's check of the log's source bodies when <paramref name="verifyWithCorpus"/> is given),
+    /// so a harness and an envelope go through one writer.
     /// </summary>
     internal static LuxembourgIndexBuildResult? WriteIndex(
         SourceArtifactRef corpusRef,
@@ -957,6 +1133,71 @@ public static partial class LuxembourgIndexBuilder
         string builtAtText,
         string? derivedAtText,
         Action<LuxembourgIndexReader>? verifyWithCorpus,
+        out LuxembourgIndexBuildRefusal refusal,
+        out string? detail)
+    {
+        var path = TemporaryIndexPath();
+        try
+        {
+            var written = WriteFile(
+                path, corpusRef, members, articles, states, intervals, workTitles, workFacts, bodyByObjectRef, predecessor, builtAtText,
+                derivedAtText, out refusal, out detail);
+            return written is null ? null : ReadAndVerify(written, corpusRef, verifyWithCorpus, out refusal, out detail);
+        }
+        finally
+        {
+            DeleteDatabase(path);
+        }
+    }
+
+    /// <summary>
+    /// A written index's bytes, read from its file and verified by the reader (the bytes door: a private copy) with
+    /// <paramref name="verifyWithCorpus"/>, as the build result the public builds return.
+    /// </summary>
+    private static LuxembourgIndexBuildResult? ReadAndVerify(
+        V3BuiltIndexFile written,
+        SourceArtifactRef corpusRef,
+        Action<LuxembourgIndexReader>? verifyWithCorpus,
+        out LuxembourgIndexBuildRefusal refusal,
+        out string? detail)
+    {
+        refusal = LuxembourgIndexBuildRefusal.None;
+        detail = null;
+        try
+        {
+            var bytes = File.ReadAllBytes(written.Path);
+            using var verified = LuxembourgIndexReader.OpenAndVerify(written.IndexRef, bytes, corpusRef, written.CapabilityManifest);
+            verifyWithCorpus?.Invoke(verified);
+            return new LuxembourgIndexBuildResult(
+                written.IndexRef, bytes, written.CapabilityManifestRef, written.CapabilityManifestBytes, written.CapabilityManifest);
+        }
+        catch (Exception exception) when (exception is SqliteException or IOException or InvalidDataException)
+        {
+            refusal = LuxembourgIndexBuildRefusal.IndexInvalid;
+            detail = exception.Message;
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The build's tail, from the projected rows to the file at <paramref name="path"/>: the relations and the event log (a
+    /// genesis log, or the predecessor's carried forward and this observation's events appended), the stamps, the database,
+    /// its digest read from the file, and the measured capability manifest. Nothing here reads the database back: each caller
+    /// verifies the file its own way (<see cref="ReadAndVerify"/>, <see cref="TryBuildFileAsync"/>).
+    /// </summary>
+    internal static V3BuiltIndexFile? WriteFile(
+        string path,
+        SourceArtifactRef corpusRef,
+        MemberRow[] members,
+        ArticleRow[] articles,
+        StateRow[] states,
+        IntervalRow[] intervals,
+        WorkTitleRow[] workTitles,
+        WorkFactRow[] workFacts,
+        IReadOnlyDictionary<string, string> bodyByObjectRef,
+        LuxembourgIndexPredecessor? predecessor,
+        string builtAtText,
+        string? derivedAtText,
         out LuxembourgIndexBuildRefusal refusal,
         out string? detail)
     {
@@ -1003,13 +1244,11 @@ public static partial class LuxembourgIndexBuilder
         }
 
         var logicalRowsSha256 = HashLogicalRows(members, articles, states, workTitles, relations, workFacts, events, intervals);
-        var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-index-{Guid.NewGuid():N}.sqlite");
         try
         {
             BuildDatabase(
                 path, corpusRef.Sha256, logicalRowsSha256, members, articles, states, intervals, workTitles, relations, workFacts, events, observations);
-            var bytes = File.ReadAllBytes(path);
-            var digest = Convert.ToHexStringLower(SHA256.HashData(bytes));
+            var (digest, length) = V3BuiltIndexFile.Sha256OfFile(path);
             var indexRef = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
             var manifest = MeasureCapabilities(digest, articles, states, workTitles);
             using var manifestStream = new MemoryStream();
@@ -1019,21 +1258,13 @@ public static partial class LuxembourgIndexBuilder
                 LexCorpus6Builder.ResourceIdOf(manifestDigest), manifestDigest);
             manifest = V3IndexCapabilityManifestArtifact.ParseAndVerify(
                 manifestRef, manifestBytes, PublisherId.LuLegilux, digest);
-            using var verified = LuxembourgIndexReader.OpenAndVerify(
-                indexRef, bytes, corpusRef, manifest);
-            verifyWithCorpus?.Invoke(verified);
-            return new LuxembourgIndexBuildResult(
-                indexRef, bytes, manifestRef, manifestBytes, manifest);
+            return new V3BuiltIndexFile(path, indexRef, length, manifestRef, manifestBytes, manifest);
         }
         catch (Exception exception) when (exception is SqliteException or IOException or InvalidDataException)
         {
             refusal = LuxembourgIndexBuildRefusal.IndexInvalid;
             detail = exception.Message;
             return null;
-        }
-        finally
-        {
-            DeleteDatabase(path);
         }
     }
 

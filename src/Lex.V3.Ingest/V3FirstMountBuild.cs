@@ -52,8 +52,43 @@ public enum V3FirstMountBuildRefusal
     NotByteStable = 13,
 }
 
-/// <summary>One file of the mount directory: its name and its exact bytes.</summary>
-public sealed record V3CorpusMountFile(string Name, ReadOnlyMemory<byte> Bytes);
+/// <summary>
+/// One file of the mount directory: its name, its length, and where its bytes are. The corpus and the two capability
+/// manifests are held; each index is a file the build staged (<see cref="V3BuiltIndexFile"/>), never held in memory (slice
+/// S4b), which the writer moves into the mount.
+/// </summary>
+public sealed class V3CorpusMountFile
+{
+    internal V3CorpusMountFile(string name, ReadOnlyMemory<byte> held)
+    {
+        Name = name;
+        Held = held;
+        ByteLength = held.Length;
+    }
+
+    internal V3CorpusMountFile(string name, V3BuiltIndexFile index)
+    {
+        Name = name;
+        Index = index;
+        ByteLength = index.ByteLength;
+    }
+
+    public string Name { get; }
+
+    public long ByteLength { get; }
+
+    /// <summary>The held bytes (the corpus, a capability manifest); empty for an index.</summary>
+    internal ReadOnlyMemory<byte> Held { get; }
+
+    /// <summary>The staged or written index file; null for a held file.</summary>
+    internal V3BuiltIndexFile? Index { get; }
+
+    /// <summary>
+    /// The file's bytes: the held ones, or the index file's, read from where it is now (the build's staging directory, or the
+    /// mount it was written to). For checks of a build; the writer never reads an index into memory.
+    /// </summary>
+    public byte[] ReadAllBytes() => Index is null ? Held.ToArray() : File.ReadAllBytes(Index.Path);
+}
 
 /// <summary>
 /// A build whose Luxembourg derivations come from a re-derivation of the acquisition's custody: the record that names it,
@@ -63,9 +98,11 @@ public sealed record V3CorpusMountFile(string Name, ReadOnlyMemory<byte> Bytes);
 public sealed record V3LuxembourgDerivation(LuxembourgRederivationRecord Record, DateTimeOffset DerivedAt);
 
 /// <summary>
-/// The five artefacts <c>Lex.V3.Api</c> mounts, each built twice and equal, or one typed refusal.
+/// The five artefacts <c>Lex.V3.Api</c> mounts, each built twice and equal, or one typed refusal. A delivered build owns the
+/// staging directory its two index files are in until the writer moves them into a mount; disposing it removes whatever is
+/// left there, so a build that is never written leaves nothing behind.
 /// </summary>
-public sealed class V3FirstMountBuildResult
+public sealed class V3FirstMountBuildResult : IDisposable
 {
     /// <summary>The file names the API's mount expects under its <c>v3-corpus</c> directory.</summary>
     public const string CorpusFileName = "lex-corpus-6.json";
@@ -74,16 +111,20 @@ public sealed class V3FirstMountBuildResult
     public const string EuropeIndexFileName = "europe-index.sqlite3";
     public const string EuropeCapabilityManifestFileName = "europe-capability-manifest.json";
 
+    private readonly V3MountStaging? _staging;
+
     private V3FirstMountBuildResult(
         LexCorpus6BuildResult? corpus,
-        LuxembourgIndexBuildResult? luxembourgIndex,
-        EuropeIndexBuildResult? europeIndex,
+        V3BuiltIndexFile? luxembourgIndex,
+        V3BuiltIndexFile? europeIndex,
         V3FirstMountBuildRefusal? refusal,
         string? detail,
         AcquisitionResumption? europeResumption = null,
         AcquisitionResumption? luxembourgResumption = null,
-        V3LuxembourgDerivation? luxembourgDerivation = null)
+        V3LuxembourgDerivation? luxembourgDerivation = null,
+        V3MountStaging? staging = null)
     {
+        _staging = staging;
         Corpus = corpus;
         LuxembourgIndex = luxembourgIndex;
         EuropeIndex = europeIndex;
@@ -99,9 +140,11 @@ public sealed class V3FirstMountBuildResult
 
     public LexCorpus6BuildResult? Corpus { get; }
 
-    public LuxembourgIndexBuildResult? LuxembourgIndex { get; }
+    /// <summary>The Luxembourg index, built twice to files whose SHA-256 agreed: the first file, staged until written.</summary>
+    public V3BuiltIndexFile? LuxembourgIndex { get; }
 
-    public EuropeIndexBuildResult? EuropeIndex { get; }
+    /// <summary>The EU index, built twice to files whose SHA-256 agreed: the first file, staged until written.</summary>
+    public V3BuiltIndexFile? EuropeIndex { get; }
 
     /// <summary>What the EU catalog says about the resumed run that acquired its population; null for one observed in one run.</summary>
     public AcquisitionResumption? EuropeResumption { get; }
@@ -120,21 +163,26 @@ public sealed class V3FirstMountBuildResult
         ?
         [
             new(CorpusFileName, Corpus!.CanonicalBytes),
-            new(LuxembourgIndexFileName, LuxembourgIndex!.IndexBytes),
-            new(LuxembourgCapabilityManifestFileName, LuxembourgIndex.CapabilityManifestBytes),
-            new(EuropeIndexFileName, EuropeIndex!.IndexBytes),
-            new(EuropeCapabilityManifestFileName, EuropeIndex.CapabilityManifestBytes),
+            new(LuxembourgIndexFileName, LuxembourgIndex!),
+            new(LuxembourgCapabilityManifestFileName, LuxembourgIndex!.CapabilityManifestBytes),
+            new(EuropeIndexFileName, EuropeIndex!),
+            new(EuropeCapabilityManifestFileName, EuropeIndex!.CapabilityManifestBytes),
         ]
         : [];
 
+    /// <summary>Removes the build's staging directory and whatever the writer has not moved out of it.</summary>
+    public void Dispose() => _staging?.Dispose();
+
+    /// <param name="staging">The build's staging directory, which holds the two index files and which the result owns.</param>
     /// <param name="europeResumption">The EU acquisition's resumption, carried to the build report.</param>
     /// <param name="luxembourgResumption">The Luxembourg acquisition's resumption, carried to the build report.</param>
     /// <param name="luxembourgDerivation">The re-derivation the Luxembourg derivations come from, carried to the build report;
     /// its record must be the one the corpus header names.</param>
-    public static V3FirstMountBuildResult Success(
+    internal static V3FirstMountBuildResult Success(
         LexCorpus6BuildResult corpus,
-        LuxembourgIndexBuildResult luxembourgIndex,
-        EuropeIndexBuildResult europeIndex,
+        V3BuiltIndexFile luxembourgIndex,
+        V3BuiltIndexFile europeIndex,
+        V3MountStaging staging,
         AcquisitionResumption? europeResumption = null,
         AcquisitionResumption? luxembourgResumption = null,
         V3LuxembourgDerivation? luxembourgDerivation = null)
@@ -142,12 +190,13 @@ public sealed class V3FirstMountBuildResult
         ArgumentNullException.ThrowIfNull(corpus);
         ArgumentNullException.ThrowIfNull(luxembourgIndex);
         ArgumentNullException.ThrowIfNull(europeIndex);
+        ArgumentNullException.ThrowIfNull(staging);
         if (!string.Equals(luxembourgDerivation?.Record.Sha256, corpus.VerifiedSet.Set.LuxembourgRederivation, StringComparison.Ordinal))
         {
             throw new ArgumentException("A build states the re-derivation its corpus header names, and only that one.", nameof(luxembourgDerivation));
         }
 
-        return new(corpus, luxembourgIndex, europeIndex, null, null, europeResumption, luxembourgResumption, luxembourgDerivation);
+        return new(corpus, luxembourgIndex, europeIndex, null, null, europeResumption, luxembourgResumption, luxembourgDerivation, staging);
     }
 
     public static V3FirstMountBuildResult Refused(V3FirstMountBuildRefusal refusal, string detail)
@@ -165,8 +214,8 @@ public sealed class V3FirstMountBuildResult
 /// <summary>
 /// The build of the first real mount from the two acquisitions: the Stage 3 evidence envelope, the
 /// body composition, the Luxembourg publisher-PDF derivation chain, the derivation profile envelope,
-/// and the three builders, each run twice and compared byte for byte, in the one process that holds
-/// the acquisition results the envelope checks by reference.
+/// and the three builders, each run twice and compared (the corpus byte for byte, each index by its
+/// file's SHA-256), in the one process that holds the acquisition results the envelope checks by reference.
 /// </summary>
 /// <remarks>
 /// This is the chain the corpus builder's own reference test composes
@@ -174,14 +223,25 @@ public sealed class V3FirstMountBuildResult
 /// its helpers: <see cref="EuFirstMountAcquisitionResult"/> supplies the run, the Formex population
 /// and the notice route; <see cref="LuxembourgFirstMountAcquisitionResult"/> the run and the Akoma
 /// Ntoso populations. The annex classifications close over the empty list, which is valid while no
-/// Formex outcome is acquired (STATUS.md). The index builders rebuild the corpus internally, so the
-/// two builds of each artefact are compared here and a differing pair refuses the whole build
-/// rather than writing files a second run would not reproduce (byte stability is a launch promise).
+/// Formex outcome is acquired (STATUS.md). The two builds of each artefact are compared here and a
+/// differing pair refuses the whole build rather than writing files a second run would not reproduce
+/// (byte stability is a launch promise).
+/// <para>
+/// MEMORY (slice S4b). Each index is built to a file in the build's own staging directory, and the two
+/// builds compare the files' SHA-256, read in order from disk: no index is held in memory, where the
+/// population's two (0.9 GB and 1.4 GB) were held twice each before. The second file is removed as soon
+/// as it is compared, the first is the one the writer moves into the mount, and a refused build removes
+/// the staging directory. Both builds of each index take the corpus built and compared here, rather than
+/// building it again from the same envelope. The staging directory holds an owner file open until the build
+/// is disposed, so that <see cref="SweepStaleStaging"/> removes what a stopped process left there and never
+/// a live build's files (the review of #986).
+/// </para>
 /// </remarks>
 public sealed class V3FirstMountBuild
 {
     private readonly ICustodyStore _custodyStore;
     private readonly TimeProvider _clock;
+    private readonly string _stagingRoot;
 
     /// <summary>
     /// A build over <paramref name="custodyStore"/>. <paramref name="clock"/> (the system clock unless given) gives the
@@ -190,9 +250,34 @@ public sealed class V3FirstMountBuild
     /// reproduce a first one byte for byte takes a clock that gives the first one's time.
     /// </summary>
     public V3FirstMountBuild(ICustodyStore custodyStore, TimeProvider? clock = null)
+        : this(custodyStore, clock, Path.GetTempPath())
+    {
+    }
+
+    /// <summary>
+    /// For tests only (the review of #986): what the build takes the second build of an index to be, given the index's file
+    /// name and the second build's file, so that a test can make the two builds differ and see the build refuse. Null in every
+    /// other build, which compares the second build as it was built.
+    /// </summary>
+    internal Func<string, V3BuiltIndexFile, V3BuiltIndexFile>? SecondBuildForTest { get; init; }
+
+    /// <summary>
+    /// Removes the staging directories mount builds left under <paramref name="stagingRoot"/> (the temporary folder the
+    /// builds use by default) when their processes ended without disposing them, as a derive the runner's guard stops does:
+    /// only directories named <c>lex-v3-mount-build-</c> and 32 hex digits, last written before
+    /// <paramref name="untouchedSince"/> (the sweeping process's start), whose owner file no live build holds open. A
+    /// population build leaves up to about 4 GB there. Returns each removed directory with the bytes it held.
+    /// </summary>
+    public static IReadOnlyList<(string Path, long ByteLength)> SweepStaleStaging(string stagingRoot, DateTimeOffset untouchedSince) =>
+        V3MountStaging.SweepStale(stagingRoot, untouchedSince);
+
+    /// <summary>A build whose staging directories are made under <paramref name="stagingRoot"/> (the temporary folder by default).</summary>
+    internal V3FirstMountBuild(ICustodyStore custodyStore, TimeProvider? clock, string stagingRoot)
     {
         _custodyStore = custodyStore ?? throw new ArgumentNullException(nameof(custodyStore));
         _clock = clock ?? TimeProvider.System;
+        ArgumentException.ThrowIfNullOrWhiteSpace(stagingRoot);
+        _stagingRoot = stagingRoot;
     }
 
     /// <summary>A time rounded up to the next whole UTC second (unchanged when it is one), so it stays an upper bound.</summary>
@@ -225,8 +310,8 @@ public sealed class V3FirstMountBuild
             var index = report.RootElement.GetProperty("luxembourgIndex");
             var reference = new Lex.V3.Contracts.Source.Core.SourceArtifactRef(
                 index.GetProperty("resourceId").GetString()!, index.GetProperty("Sha256").GetString()!);
-            return LuxembourgIndexPredecessor.TryRead(
-                reference, File.ReadAllBytes(Path.Combine(directory, V3FirstMountBuildResult.LuxembourgIndexFileName)), out refusal, out detail);
+            return LuxembourgIndexPredecessor.TryReadFile(
+                reference, Path.Combine(directory, V3FirstMountBuildResult.LuxembourgIndexFileName), out refusal, out detail);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Text.Json.JsonException
                                               or KeyNotFoundException or InvalidOperationException or ArgumentException)
@@ -347,65 +432,100 @@ public sealed class V3FirstMountBuild
                 V3FirstMountBuildRefusal.CorpusRefused, $"{corpusRefusal}: {corpusDetail}");
         }
 
-        var corpusAgain = LexCorpus6Builder.TryBuild(profileEnvelope, out corpusRefusal, out corpusDetail);
-        if (corpusAgain is null || corpusAgain.ArtifactRef != corpus.ArtifactRef
-            || !corpusAgain.CanonicalBytes.Span.SequenceEqual(corpus.CanonicalBytes.Span))
+        if (SecondCorpusBuildDiffers(profileEnvelope, corpus) is { } corpusDifference)
         {
-            return V3FirstMountBuildResult.Refused(
-                V3FirstMountBuildRefusal.NotByteStable,
-                corpusAgain is null
-                    ? $"the second corpus build refused: {corpusRefusal}: {corpusDetail}"
-                    : $"two builds of the corpus differ: {corpus.ArtifactRef.Sha256} then {corpusAgain.ArtifactRef.Sha256}");
+            return V3FirstMountBuildResult.Refused(V3FirstMountBuildRefusal.NotByteStable, corpusDifference);
         }
 
-        var luxembourgIndex = LuxembourgIndexBuilder.TryBuild(profileEnvelope, predecessor, builtAt, luxembourg.DerivedAt, out var luxembourgIndexRefusal, out var luxembourgIndexDetail);
-        if (luxembourgIndex is null)
+        // Each index twice, to files in this build's own staging directory, compared by their SHA-256 (S4b). The first file is
+        // read back by the reader; the second is not, because it is held to the first's digest: equal, it is the first's
+        // verified bytes; different, the build refuses.
+        var staging = V3MountStaging.Create(_stagingRoot);
+        var delivered = false;
+        try
         {
-            return V3FirstMountBuildResult.Refused(
-                V3FirstMountBuildRefusal.LuxembourgIndexRefused, $"{luxembourgIndexRefusal}: {luxembourgIndexDetail}");
-        }
+            var luxembourgIndex = await LuxembourgIndexBuilder.TryBuildFileAsync(
+                profileEnvelope, corpus, predecessor, builtAt, luxembourg.DerivedAt,
+                Path.Combine(staging.Path, V3FirstMountBuildResult.LuxembourgIndexFileName), cancellationToken).ConfigureAwait(false);
+            if (luxembourgIndex.Index is null)
+            {
+                return V3FirstMountBuildResult.Refused(
+                    V3FirstMountBuildRefusal.LuxembourgIndexRefused, $"{luxembourgIndex.Refusal}: {luxembourgIndex.Detail}");
+            }
 
-        var luxembourgIndexAgain = LuxembourgIndexBuilder.TryBuild(profileEnvelope, predecessor, builtAt, luxembourg.DerivedAt, out luxembourgIndexRefusal, out luxembourgIndexDetail);
-        if (luxembourgIndexAgain is null
-            || !SameArtefact(luxembourgIndex.IndexRef, luxembourgIndex.IndexBytes, luxembourgIndexAgain.IndexRef, luxembourgIndexAgain.IndexBytes)
-            || !SameArtefact(luxembourgIndex.CapabilityManifestRef, luxembourgIndex.CapabilityManifestBytes,
-                luxembourgIndexAgain.CapabilityManifestRef, luxembourgIndexAgain.CapabilityManifestBytes))
+            var luxembourgIndexAgain = await LuxembourgIndexBuilder.TryBuildFileAsync(
+                profileEnvelope, corpus, predecessor, builtAt, luxembourg.DerivedAt,
+                Path.Combine(staging.Path, "second-" + V3FirstMountBuildResult.LuxembourgIndexFileName), cancellationToken, readBack: false)
+                .ConfigureAwait(false);
+            var luxembourgSecond = SecondBuild(V3FirstMountBuildResult.LuxembourgIndexFileName, luxembourgIndexAgain.Index);
+            if (luxembourgSecond is null || !V3BuiltIndexFile.Same(luxembourgIndex.Index, luxembourgSecond))
+            {
+                return V3FirstMountBuildResult.Refused(
+                    V3FirstMountBuildRefusal.NotByteStable,
+                    luxembourgSecond is null
+                        ? $"the second Luxembourg index build refused: {luxembourgIndexAgain.Refusal}: {luxembourgIndexAgain.Detail}"
+                        : $"two builds of the Luxembourg index differ: {luxembourgIndex.Index.IndexRef.Sha256} then {luxembourgSecond.IndexRef.Sha256}");
+            }
+
+            File.Delete(luxembourgSecond.Path);
+            var europeIndex = await EuropeIndexBuilder.TryBuildFileAsync(
+                profileEnvelope, corpus, Path.Combine(staging.Path, V3FirstMountBuildResult.EuropeIndexFileName), cancellationToken).ConfigureAwait(false);
+            if (europeIndex.Index is null)
+            {
+                return V3FirstMountBuildResult.Refused(
+                    V3FirstMountBuildRefusal.EuropeIndexRefused, $"{europeIndex.Refusal}: {europeIndex.Detail}");
+            }
+
+            var europeIndexAgain = await EuropeIndexBuilder.TryBuildFileAsync(
+                profileEnvelope, corpus, Path.Combine(staging.Path, "second-" + V3FirstMountBuildResult.EuropeIndexFileName), cancellationToken,
+                readBack: false).ConfigureAwait(false);
+            var europeSecond = SecondBuild(V3FirstMountBuildResult.EuropeIndexFileName, europeIndexAgain.Index);
+            if (europeSecond is null || !V3BuiltIndexFile.Same(europeIndex.Index, europeSecond))
+            {
+                return V3FirstMountBuildResult.Refused(
+                    V3FirstMountBuildRefusal.NotByteStable,
+                    europeSecond is null
+                        ? $"the second Europe index build refused: {europeIndexAgain.Refusal}: {europeIndexAgain.Detail}"
+                        : $"two builds of the Europe index differ: {europeIndex.Index.IndexRef.Sha256} then {europeSecond.IndexRef.Sha256}");
+            }
+
+            File.Delete(europeSecond.Path);
+
+            // A population acquired across an interruption says so in the build report (V3CorpusMountWriter). The catalogs
+            // carry the resumption, so an offline derivation states it exactly as the acquiring build did.
+            var result = V3FirstMountBuildResult.Success(corpus, luxembourgIndex.Index, europeIndex.Index, staging, europe.Resumption,
+                luxembourg.Resumption, luxembourg.Rederivation is { } record ? new V3LuxembourgDerivation(record, luxembourg.DerivedAt!.Value) : null);
+            delivered = true;
+            return result;
+        }
+        finally
         {
-            return V3FirstMountBuildResult.Refused(
-                V3FirstMountBuildRefusal.NotByteStable,
-                luxembourgIndexAgain is null
-                    ? $"the second Luxembourg index build refused: {luxembourgIndexRefusal}: {luxembourgIndexDetail}"
-                    : $"two builds of the Luxembourg index differ: {luxembourgIndex.IndexRef.Sha256} then {luxembourgIndexAgain.IndexRef.Sha256}");
+            // A refused or failed build leaves nothing: the result owns the staging directory only once it is delivered.
+            if (!delivered)
+            {
+                staging.Dispose();
+            }
         }
-
-        var europeIndex = EuropeIndexBuilder.TryBuild(profileEnvelope, out var europeIndexRefusal, out var europeIndexDetail);
-        if (europeIndex is null)
-        {
-            return V3FirstMountBuildResult.Refused(
-                V3FirstMountBuildRefusal.EuropeIndexRefused, $"{europeIndexRefusal}: {europeIndexDetail}");
-        }
-
-        var europeIndexAgain = EuropeIndexBuilder.TryBuild(profileEnvelope, out europeIndexRefusal, out europeIndexDetail);
-        if (europeIndexAgain is null
-            || !SameArtefact(europeIndex.IndexRef, europeIndex.IndexBytes, europeIndexAgain.IndexRef, europeIndexAgain.IndexBytes)
-            || !SameArtefact(europeIndex.CapabilityManifestRef, europeIndex.CapabilityManifestBytes,
-                europeIndexAgain.CapabilityManifestRef, europeIndexAgain.CapabilityManifestBytes))
-        {
-            return V3FirstMountBuildResult.Refused(
-                V3FirstMountBuildRefusal.NotByteStable,
-                europeIndexAgain is null
-                    ? $"the second Europe index build refused: {europeIndexRefusal}: {europeIndexDetail}"
-                    : $"two builds of the Europe index differ: {europeIndex.IndexRef.Sha256} then {europeIndexAgain.IndexRef.Sha256}");
-        }
-
-        // A population acquired across an interruption says so in the build report (V3CorpusMountWriter). The catalogs
-        // carry the resumption, so an offline derivation states it exactly as the acquiring build did.
-        return V3FirstMountBuildResult.Success(corpus, luxembourgIndex, europeIndex, europe.Resumption, luxembourg.Resumption,
-            luxembourg.Rederivation is { } record ? new V3LuxembourgDerivation(record, luxembourg.DerivedAt!.Value) : null);
     }
 
-    private static bool SameArtefact(
-        Lex.V3.Contracts.Source.Core.SourceArtifactRef firstRef, ReadOnlyMemory<byte> firstBytes,
-        Lex.V3.Contracts.Source.Core.SourceArtifactRef secondRef, ReadOnlyMemory<byte> secondBytes) =>
-        firstRef == secondRef && firstBytes.Span.SequenceEqual(secondBytes.Span);
+    /// <summary>The second build of an index as it was built, or as a test makes it (<see cref="SecondBuildForTest"/>).</summary>
+    private V3BuiltIndexFile? SecondBuild(string fileName, V3BuiltIndexFile? built) =>
+        built is not null && SecondBuildForTest is { } alter ? alter(fileName, built) : built;
+
+    /// <summary>
+    /// Why a second build of the corpus does not reproduce <paramref name="first"/> (its digest, then its bytes), or null when
+    /// it does. The second build lives in this frame only, so it is released as soon as it is compared.
+    /// </summary>
+    private static string? SecondCorpusBuildDiffers(Stage3DerivationProfileEnvelope envelope, LexCorpus6BuildResult first)
+    {
+        var again = LexCorpus6Builder.TryBuild(envelope, out var refusal, out var detail);
+        if (again is null)
+        {
+            return $"the second corpus build refused: {refusal}: {detail}";
+        }
+
+        return again.ArtifactRef != first.ArtifactRef || !again.CanonicalBytes.Span.SequenceEqual(first.CanonicalBytes.Span)
+            ? $"two builds of the corpus differ: {first.ArtifactRef.Sha256} then {again.ArtifactRef.Sha256}"
+            : null;
+    }
 }

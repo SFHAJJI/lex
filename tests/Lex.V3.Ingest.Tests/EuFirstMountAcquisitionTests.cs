@@ -59,7 +59,7 @@ public sealed partial class EuFirstMountAcquisitionTests
             .RunAsync(LuxembourgFirstMountAcquisitionTests.ActRange,
                 await Lex.V3.Ingest.Luxembourg.LuxembourgRendererSources.FromCheckoutAsync(store, CheckoutRoot(), CancellationToken.None),
                 LuxembourgAcquisitionTestFixture.TestWireBudget(), CancellationToken.None);
-        var build = await new V3FirstMountBuild(store).RunAsync(result, luxembourg, CancellationToken.None);
+        using var build = await new V3FirstMountBuild(store).RunAsync(result, luxembourg, CancellationToken.None);
         Assert.IsTrue(build.Delivered, $"{build.Refusal}: {build.Detail}");
         Assert.AreEqual(5, build.Files.Count);
     }

@@ -178,9 +178,9 @@ public sealed class LuxembourgRederivationTests
 
         // The first mount, end to end, over the re-derived population, and over R0's for comparison.
         var clock = new V3OfflineMount.BuildClock(new DateTimeOffset(2026, 10, 12, 18, 17, 5, TimeSpan.Zero));
-        var build = await new V3FirstMountBuild(store, clock).RunAsync(europe, rederived, CancellationToken.None);
+        using var build = await new V3FirstMountBuild(store, clock).RunAsync(europe, rederived, CancellationToken.None);
         Assert.IsTrue(build.Delivered, $"{build.Refusal}: {build.Detail}");
-        var baseline = await new V3FirstMountBuild(store, clock).RunAsync(europe, verified, CancellationToken.None);
+        using var baseline = await new V3FirstMountBuild(store, clock).RunAsync(europe, verified, CancellationToken.None);
         Assert.IsTrue(baseline.Delivered, $"{baseline.Refusal}: {baseline.Detail}");
 
         var header = build.Corpus!.VerifiedSet.Set;
@@ -611,7 +611,7 @@ public sealed class LuxembourgRederivationTests
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         var (europe, verified) = await V3FirstMountBuildTests.AcquireAsync(store, V3FirstMountBuildTests.CheckoutRoot(), SyntheticConsolidation());
         var rederived = await LuxembourgRederivation.ApplyAsync(store, verified, Release1(), CancellationToken.None);
-        var build = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(DerivedAt)).RunAsync(europe, rederived, CancellationToken.None);
+        using var build = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(DerivedAt)).RunAsync(europe, rederived, CancellationToken.None);
         Assert.IsTrue(build.Delivered, build.Detail);
         var canonical = build.Corpus!.CanonicalBytes.ToArray();
         Assert.AreEqual(build.Corpus.ArtifactRef, VerifiedLexCorpus6ManifestSet.ParseCanonicalAndVerify(canonical).ArtifactRef);
@@ -719,7 +719,7 @@ public sealed class LuxembourgRederivationTests
                 var scopeManifest = recordDocument.RootElement.GetProperty("acquisition").GetProperty("scope_manifest_sha256");
                 Assert.AreEqual(verified.PopulationScopeManifestRef?.Sha256, scopeManifest.ValueKind == JsonValueKind.Null ? null : scopeManifest.GetString());
             }
-            var expectedBuild = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(buildTime)).RunAsync(europe, rederived, CancellationToken.None);
+            using var expectedBuild = await new V3FirstMountBuild(store, new V3OfflineMount.BuildClock(buildTime)).RunAsync(europe, rederived, CancellationToken.None);
             var expected = Path.Combine(root, "expected");
             await V3CorpusMountWriter.WriteAsync(expectedBuild, expected, null, CancellationToken.None, buildTime);
             CollectionAssert.AreEqual(V3FirstMountBuildTests.MountDigests(expected), V3FirstMountBuildTests.MountDigests(derived));
