@@ -198,7 +198,9 @@ test("the script deploys only a release that verifies, and only by the image's d
   assert.equal((code.match(/\$SkipBrowserProbe/g) ?? []).length, 2, "-SkipBrowserProbe is declared and refused beside -BrowserProbe, and decides nothing else");
   assert.match(code, /deploy-probe\.mjs'\) --origin \$origin --release \$releasePath --public-key \$keyPath @signerProbe @browserArgs/);
   // Without -BrowserProbe both probes run with the browser trap loaded first, so nothing they run can find or start one.
-  assert.match(code, /\$nodeTrap = if \(\$BrowserProbe\) \{ @\(\) \} else \{ @\('--import', \(\[System\.Uri\] \(Join-Path \$checkout 'web\/scripts\/browser-trap\.mjs'\)\)\.AbsoluteUri\) \}/);
+  assert.match(code, /\$trapPath = \[System\.IO\.Path\]::GetFullPath\(\(Join-Path \$checkout 'web\/scripts\/browser-trap\.mjs'\)\)/);
+  assert.match(code, /if \(-not \$trapUrl -or -not \$trapUrl\.StartsWith\('file:\/\/\/'\)\) \{ throw /, "an empty or non-file trap URL stops the deployment");
+  assert.match(code, /\$nodeTrap = if \(\$BrowserProbe\) \{ @\(\) \} else \{ @\('--import', \$trapUrl\) \}/);
   assert.equal((code.match(/& node @nodeTrap \(Join-Path \$checkout 'web\/scripts\/deploy-probe\.mjs'\)/g) ?? []).length, 2, "both probes run under the trap");
   assert.equal((code.match(/Join-Path \$checkout 'web\/scripts\/deploy-probe\.mjs'\)/g) ?? []).length, 2, "and the probe runs nowhere else");
   // A deployment applies only a release the release signer signed: -Apply requires -SignerIdentity, which both read-backs

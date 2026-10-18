@@ -490,7 +490,9 @@ test("deploy.ps1 walks no page unless -BrowserProbe asks: a plan run reads the r
     // Both at once say opposite things, and nothing is read or planned.
     const both = await plan("-BrowserProbe", "-SkipBrowserProbe");
     assert.notEqual(both.code, 0);
-    assert.match(`${both.stdout}${both.stderr}`, /-BrowserProbe asks for the browser probes and -SkipBrowserProbe skips them: name one\./);
+    // PowerShell colours an error and wraps it at the console's width, each continued line after "|": read without either.
+    const said = `${both.stdout}${both.stderr}`.replace(/\x1B\[[0-9;]*m/g, "").replace(/\s*\n\s*\|\s*/g, " ").replace(/\s+/g, " ");
+    assert.match(said, /-BrowserProbe asks for the browser probes and -SkipBrowserProbe skips them: name one\./);
     assert.ok(!both.stdout.includes("reads back"));
   } finally {
     await rm(root, { recursive: true, force: true });
