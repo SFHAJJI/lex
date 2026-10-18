@@ -22,7 +22,8 @@ internal sealed partial class V3CorpusMount
 
     internal const string SearchExtractRule =
         "extract is a run of the article's searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the " +
-        "first match, at most 80 characters before it and 200 after it, cut at whitespace (a word that alone passes a bound is cut at the " +
+        "first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U+00A0, " +
+        "U+202F, U+2007, which hold a date's day to its month or a number to its unit; a word that alone passes a bound is cut at the " +
         "bound); parts are that run in order, and a part is matched when it is a whole match: the query as typed for a strict hit, a term " +
         "or overlapping terms for a relaxed hit; a match the run cuts is not marked; byte_start and byte_end are the run's UTF-8 byte offsets " +
         "in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run";
@@ -39,6 +40,15 @@ internal sealed partial class V3CorpusMount
         "works and their articles with searchable text, within the work named when one is; states_withheld_by_rights counts the states of " +
         "that scope whose text the rights rule keeps out; index_built_at is the build time the mounted log records, null when it records " +
         "none; nothing here counts what the publisher holds";
+
+    /// <summary>
+    /// <see cref="SearchedRule"/> over lex-v3-luxembourg-index/9 (a fixture's, since a built one is not served before S7a), which
+    /// keeps rows for versions it holds no text of: they are in none of the counts, as no text of theirs was matched.
+    /// </summary>
+    internal const string SearchedRuleNine = SearchedRule +
+        "; this index also records versions it holds no text of (withheld by their rights, not available or not acquired): those rows " +
+        "are in none of these counts, states_withheld_by_rights included, which counts only held states whose sources the rights rule " +
+        "does not admit";
 
     private readonly object _searchPopulationGate = new();
     private SearchPopulation? _searchPopulation;
@@ -150,14 +160,16 @@ internal sealed partial class V3CorpusMount
             states_withheld_by_rights = withheld,
             works_with_several_states_on_date = requestedDate is null ? (int?)null : several,
             index_built_at = population.BuiltAt,
-            rule = SearchedRule,
+            rule = _reader!.RecordsCatalogueStates ? SearchedRuleNine : SearchedRule,
         };
     }
 
     /// <summary>
-    /// A lane's hits in the order a page serves them: by work key, publisher date, the publisher's article id in the reading's
-    /// order (<see cref="CompareLuxembourgArticleIds"/>, so the hits of one version are listed as its reading lists them),
-    /// article identity and state digest (<see cref="SearchRanking"/>).
+    /// A lane's hits in the order a page serves them: by work key, publisher date, state digest, the publisher's article id in
+    /// the reading's order (<see cref="CompareLuxembourgArticleIds"/>, so the hits of one version are listed as its reading
+    /// lists them) and article identity (<see cref="SearchRanking"/>). The state comes before the article: two states of one
+    /// work on one date (the ambiguous versions an undated search serves both of) keep their hits apart, so a page never
+    /// interleaves them under one version's date (the review of #982, F1).
     /// </summary>
     private static LuxembourgIndexSearchHit[] InSearchOrder(IEnumerable<LuxembourgIndexSearchHit> hits)
     {
@@ -174,15 +186,15 @@ internal sealed partial class V3CorpusMount
 
             if (compared == 0)
             {
-                compared = CompareArticleIdParts(left.Parts, right.Parts, left.Hit.PublisherId, right.Hit.PublisherId);
+                compared = string.CompareOrdinal(left.Hit.StateSha256, right.Hit.StateSha256);
             }
 
             if (compared == 0)
             {
-                compared = string.CompareOrdinal(left.Hit.ArticleIdentitySha256, right.Hit.ArticleIdentitySha256);
+                compared = CompareArticleIdParts(left.Parts, right.Parts, left.Hit.PublisherId, right.Hit.PublisherId);
             }
 
-            return compared != 0 ? compared : string.CompareOrdinal(left.Hit.StateSha256, right.Hit.StateSha256);
+            return compared != 0 ? compared : string.CompareOrdinal(left.Hit.ArticleIdentitySha256, right.Hit.ArticleIdentitySha256);
         });
         return keyed.Select(static entry => entry.Hit).ToArray();
     }
@@ -236,7 +248,7 @@ internal sealed partial class V3CorpusMount
 
         var first = spans[0];
         var start = Math.Max(0, first.Start - SearchExtractBefore);
-        if (start > 0 && !char.IsWhiteSpace(text[start - 1]))
+        if (start > 0 && !IsExtractBreak(text[start - 1]))
         {
             // Cut at whitespace: the run begins after the first whitespace past the bound, unless the word the bound falls in
             // reaches the match, which is then cut at the bound.
@@ -247,7 +259,7 @@ internal sealed partial class V3CorpusMount
             }
         }
 
-        while (start < first.Start && char.IsWhiteSpace(text[start]))
+        while (start < first.Start && IsExtractBreak(text[start]))
         {
             start++;
         }
@@ -258,7 +270,7 @@ internal sealed partial class V3CorpusMount
         }
 
         var end = Math.Min(text.Length, first.End + SearchExtractAfter);
-        if (end < text.Length && !char.IsWhiteSpace(text[end]) && !char.IsWhiteSpace(text[end - 1]))
+        if (end < text.Length && !IsExtractBreak(text[end]) && !IsExtractBreak(text[end - 1]))
         {
             var space = LastIndexOfWhiteSpace(text, first.End, end);
             if (space >= 0)
@@ -267,7 +279,7 @@ internal sealed partial class V3CorpusMount
             }
         }
 
-        while (end > first.End && char.IsWhiteSpace(text[end - 1]))
+        while (end > first.End && IsExtractBreak(text[end - 1]))
         {
             end--;
         }
@@ -300,11 +312,18 @@ internal sealed partial class V3CorpusMount
         return new SearchExtract(start, end, byteStart, byteStart + Encoding.UTF8.GetByteCount(text.AsSpan(start, end - start)), parts);
     }
 
+    /// <summary>
+    /// A space an extract may be cut at: whitespace, but never a no-break space (U+00A0, U+202F, U+2007), which the publisher
+    /// sets to hold "6 septembre" or "§ 2" together (the review of #982, F3).
+    /// </summary>
+    internal static bool IsExtractBreak(char character) =>
+        char.IsWhiteSpace(character) && character is not '\u00A0' and not '\u202F' and not '\u2007';
+
     private static int IndexOfWhiteSpace(string text, int from, int to)
     {
         for (var index = from; index < to; index++)
         {
-            if (char.IsWhiteSpace(text[index]))
+            if (IsExtractBreak(text[index]))
             {
                 return index;
             }
@@ -317,7 +336,7 @@ internal sealed partial class V3CorpusMount
     {
         for (var index = to - 1; index >= from; index--)
         {
-            if (char.IsWhiteSpace(text[index]))
+            if (IsExtractBreak(text[index]))
             {
                 return index;
             }

@@ -3735,7 +3735,7 @@ internal sealed partial class V3CorpusMount : IDisposable
     public const int SearchMaxHits = 200;
 
     internal const string SearchRanking =
-        "none; strict lane before relaxed lane, then work key, publisher date, publisher article id (in the reading's order), article identity and state digest. " +
+        "none; strict lane before relaxed lane, then work key, publisher date, state digest, publisher article id (in the reading's order) and article identity, so one state's hits are together. " +
         "This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits";
 
     /// <summary>The ceiling on the characters of a <c>search</c> query; the request document says the same.</summary>

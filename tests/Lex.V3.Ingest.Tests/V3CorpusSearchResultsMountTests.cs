@@ -262,4 +262,113 @@ public sealed class V3CorpusSearchResultsMountTests
         // No needle in the text is no extract.
         Assert.IsNull(V3CorpusMount.ExtractOf("rien", ["bail"]));
     }
+
+    /// <summary>
+    /// An extract is never cut at a no-break space (the review of #982, F3): the publisher sets "6 septembre" with U+00A0, and a
+    /// bound falling on it would print "septembre 2021" without its day, or "le 6" without its month.
+    /// </summary>
+    [TestMethod]
+    public void AnExtractIsNeverCutAtANoBreakSpace()
+    {
+        static string Joined(V3CorpusMount.SearchExtract extract) => string.Concat(extract.Parts.Select(static part => part.Text));
+
+        // The bound before the match falls on the no-break space between the day and the month.
+        const string head = "début le 6\u00A0septembre 2021 a";
+        var noBreak = head.IndexOf('\u00A0', StringComparison.Ordinal);
+        var filler = " " + new string('y', noBreak + V3CorpusMount.SearchExtractBefore - head.Length - 2) + " ";
+        var before = head + filler + "CIBLE";
+        Assert.AreEqual(noBreak + V3CorpusMount.SearchExtractBefore, before.IndexOf("CIBLE", StringComparison.Ordinal), "the test sets the bound on the no-break space");
+        var cutBefore = Joined(V3CorpusMount.ExtractOf(before, ["CIBLE"])!);
+        Assert.IsFalse(cutBefore.StartsWith("septembre", StringComparison.Ordinal), cutBefore);
+
+        // The bound after the match falls on it too.
+        var after = "CIBLE " + new string('z', 194) + " le 6\u00A0septembre fin";
+        Assert.AreEqual('\u00A0', after[5 + V3CorpusMount.SearchExtractAfter], "the test sets the bound on the no-break space");
+        var cutAfter = Joined(V3CorpusMount.ExtractOf(after, ["CIBLE"])!);
+        Assert.IsFalse(cutAfter.EndsWith('6'), cutAfter);
+
+        // A no-break space is no break; an ordinary space, a tab and a line break are.
+        foreach (var space in new[] { '\u00A0', '\u202F', '\u2007' })
+        {
+            Assert.IsFalse(V3CorpusMount.IsExtractBreak(space), $"U+{(int)space:X4}");
+        }
+
+        foreach (var space in new[] { ' ', '\t', '\n' })
+        {
+            Assert.IsTrue(V3CorpusMount.IsExtractBreak(space), $"U+{(int)space:X4}");
+        }
+    }
+
+    /// <summary>
+    /// Two versions of one act on one date keep their hits apart (the review of #982, F1): an undated search serves both, and
+    /// the hits of each come together, so a page says each version's date once above its own passages. Two acts on one page
+    /// are each named by their own title (F2), and a title-ladder card names the work it links to, or none for an act this
+    /// site holds no version of.
+    /// </summary>
+    [TestMethod]
+    public async Task TwoVersionsOnOneDateKeepTheirHitsApartAndEachActAndCardNamesItsOwnWork()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var articles = fixture.ArticlesOfOwnState();
+        var carrying = articles.Select(static article => article.PublisherId)
+            .OrderBy(static id => id, Comparer<string>.Create(V3CorpusMount.CompareLuxembourgArticleIds))
+            .Take(4)
+            .ToArray();
+        await fixture.RewriteArticleTextsAsync(fixture.ExpressionIri, carrying.ToDictionary(
+            static id => id, id => "Art. " + id + ". La " + Phrase + " ne peut exceder trois mois.", StringComparer.Ordinal));
+
+        // Two later states of the work on one date (each a copy of the first, with its own article identities), and a
+        // sibling work's state, so the page holds two acts.
+        const string twinDate = "2025-03-01";
+        var later = await fixture.AddStateAsync(twinDate, "later");
+        var twin = await fixture.AddStateAsync(twinDate, "twin");
+        var sibling = await fixture.AddStateAsync(fixture.ApplicabilityDate, "fr", workLeaf: "n77");
+        await fixture.AddTitleRowsAsync(
+            (null, fixture.ExpressionIri, "fra", "title", "Règlement sur la profession d'avocat.", new string('a', 64)),
+            ("sibling-work-identifier", sibling.ExpressionIri, "fra", "title", "Règlement sur les huissiers de justice.", new string('b', 64)),
+            ("unheld-work-identifier", "http://data.legilux.public.lu/eli/etat/leg/loi/1900/01/01/n1/jo/fr", "fra", "title",
+                "Règlement sur les notaires.", new string('c', 64)));
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var body = (await V3CorpusSearchMountTests.SearchAsync(mount, Phrase, mode: "strict")).Result!.Value;
+        var hits = body.GetProperty("hits").EnumerateArray().ToArray();
+        Assert.AreEqual(16, hits.Length, "four articles in each of the work's three states and the sibling's one");
+
+        // Within a work and a date, each state's hits form one run.
+        foreach (var group in hits.GroupBy(static hit => (hit.GetProperty("work_key").GetString(), hit.GetProperty("applicability_date").GetString())))
+        {
+            var states = group.Select(static hit => hit.GetProperty("state_sha256").GetString()!).ToArray();
+            var runs = states.Where((state, index) => index == 0 || state != states[index - 1]).ToArray();
+            CollectionAssert.AllItemsAreUnique(runs, $"{group.Key}: the states' hits interleave: {string.Join(", ", states)}");
+        }
+
+        var onTwinDate = hits.Where(hit => hit.GetProperty("applicability_date").GetString() == twinDate)
+            .Select(static hit => hit.GetProperty("state_sha256").GetString()).Distinct().ToArray();
+        CollectionAssert.AreEquivalent(new[] { later.StateSha256, twin.StateSha256 }, onTwinDate);
+        StringAssert.Contains(body.GetProperty("ranking").GetString(), "state digest, publisher article id (in the reading's order) and article identity");
+
+        // Each act once, each named by its own title.
+        var acts = body.GetProperty("acts").EnumerateArray().ToDictionary(
+            static act => act.GetProperty("work_key").GetString()!, static act => act.GetProperty("title").GetString());
+        Assert.AreEqual(2, acts.Count);
+        Assert.AreEqual("Règlement sur la profession d'avocat.", acts[fixture.WorkKey]);
+        Assert.AreEqual("Règlement sur les huissiers de justice.", acts[sibling.WorkKey]);
+
+        // The ladder: the phrase begins three titles; two acts are held, each card naming its own work, and one is not.
+        var ladder = (await V3CorpusSearchMountTests.SearchAsync(mount, "Règlement sur")).Result!.Value.GetProperty("work_resolution");
+        if (ladder.ValueKind != JsonValueKind.Object)
+        {
+            Assert.Inconclusive("the phase read the phrase as a reference");
+        }
+
+        Assert.AreEqual("several_candidates", ladder.GetProperty("outcome").GetString(), ladder.GetRawText());
+        var keys = ladder.GetProperty("candidates").EnumerateArray().ToDictionary(
+            static card => card.GetProperty("matched_title").GetString()!,
+            static card => card.GetProperty("work_key").ValueKind == JsonValueKind.Null ? null : card.GetProperty("work_key").GetString());
+        Assert.AreEqual(fixture.WorkKey, keys["Règlement sur la profession d'avocat."]);
+        Assert.AreEqual(sibling.WorkKey, keys["Règlement sur les huissiers de justice."]);
+        Assert.IsNull(keys["Règlement sur les notaires."], "a title of a work this index holds no state of links nowhere");
+    }
 }

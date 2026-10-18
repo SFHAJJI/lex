@@ -94,7 +94,7 @@ public sealed class V3CorpusSearchMountTests
         var ranking = body.GetProperty("ranking").GetString();
         StringAssert.StartsWith(ranking, "none;");
         StringAssert.Contains(ranking, "strict lane before relaxed lane");
-        StringAssert.Contains(ranking, "work key, publisher date, publisher article id (in the reading's order), article identity");
+        StringAssert.Contains(ranking, "work key, publisher date, state digest, publisher article id (in the reading's order) and article identity");
         StringAssert.Contains(ranking, "no BM25 ranker");
         StringAssert.Contains(ranking, "not the best hits");
         var matching = body.GetProperty("matching").GetString();
@@ -409,19 +409,22 @@ public sealed class V3CorpusSearchMountTests
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
 
-        static (string Lane, string Work, string Date, string Id, string Article) OrderKey(JsonElement hit) => (
+        static (string Lane, string Work, string Date, string State, string Id, string Article) OrderKey(JsonElement hit) => (
             hit.GetProperty("lane").GetString()!,
             hit.GetProperty("work_key").GetString()!,
             hit.GetProperty("applicability_date").GetString()!,
+            hit.GetProperty("state_sha256").GetString()!,
             hit.GetProperty("publisher_id").GetString()!,
             hit.GetProperty("article_identity_sha256").GetString()!);
 
-        // The publisher's article ids in the reading's order (the plan's item 4.3: a version's hits as its reading lists them).
-        static IEnumerable<(string Lane, string Work, string Date, string Id, string Article)> InStatedOrder(
-            IEnumerable<(string Lane, string Work, string Date, string Id, string Article)> keys) =>
+        // One state's hits together, then the publisher's article ids in the reading's order (the plan's item 4.3: a version's
+        // hits as its reading lists them; the review of #982, F1: two states on one date never interleaved).
+        static IEnumerable<(string Lane, string Work, string Date, string State, string Id, string Article)> InStatedOrder(
+            IEnumerable<(string Lane, string Work, string Date, string State, string Id, string Article)> keys) =>
             keys.OrderBy(static key => key.Lane == "strict" ? 0 : 1)
                 .ThenBy(static key => key.Work, StringComparer.Ordinal)
                 .ThenBy(static key => key.Date, StringComparer.Ordinal)
+                .ThenBy(static key => key.State, StringComparer.Ordinal)
                 .ThenBy(static key => key.Id, Comparer<string>.Create(V3CorpusMount.CompareLuxembourgArticleIds))
                 .ThenBy(static key => key.Article, StringComparer.Ordinal);
 
@@ -439,7 +442,7 @@ public sealed class V3CorpusSearchMountTests
         // Three dates, not four: the two works both begin on the first date, which is what interleaves them.
         Assert.AreEqual(3, served.Select(static hit => hit.GetProperty("applicability_date").GetString()).Distinct().Count());
 
-        // The order is the stated one: lane, work key, publisher date, publisher article id, article identity.
+        // The order is the stated one: lane, work key, publisher date, state digest, publisher article id, article identity.
         var keys = served.Select(OrderKey).ToArray();
         CollectionAssert.AreEqual(InStatedOrder(keys).ToArray(), keys, "Served in the order the answer says.");
         // The interleaving is real: the same hits by date first are a different sequence.
