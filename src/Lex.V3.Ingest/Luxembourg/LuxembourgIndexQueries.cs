@@ -31,6 +31,18 @@ internal static class LuxembourgIndexQueries
         """;
 
     /// <summary>
+    /// <see cref="StateArticles"/> on index 9: each article with its place in its publisher document, in that order (a state's
+    /// articles are one document's, whose places the reader holds distinct), the identity breaking a tie it never has.
+    /// </summary>
+    internal const string StateArticlesNine = """
+        SELECT a.article_identity_sha256, a.publisher_id, a.tokens_json, a.publisher_wid, a.applicability_date, a.searchable_text, a.object_ref_sha256, a.document_position
+        FROM states s, json_each(s.article_identities_json) j
+        JOIN articles a ON a.article_identity_sha256 = j.value
+        WHERE s.state_sha256 = $digest
+        ORDER BY a.document_position, a.article_identity_sha256
+        """;
+
+    /// <summary>
     /// The forward edges of lane R4's edge table for one state: the references written in the articles it binds, or
     /// in the one carrying a publisher id. The state is looked up by its digest, then its identities, then each
     /// article and its edges by primary key, so the cost is the state's articles and their references and not the

@@ -51,7 +51,7 @@ if (Environment.GetEnvironmentVariable(V3StaleIndexCopies.PrivateTemporaryFolder
 V3CorpusMount? corpusMount = null;
 try
 {
-    // A built mount of index 9 is refused until S7a serves it (V3CorpusMount.ServesIndexNine).
+    // The server's one door to a mount (index 9, 8 or 6).
     corpusMount = V3CorpusMount.Served(
         await V3CorpusMount.OpenAsync(
             Path.Combine(AppContext.BaseDirectory, "v3-corpus"),

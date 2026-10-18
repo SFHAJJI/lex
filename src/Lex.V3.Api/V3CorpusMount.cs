@@ -24,19 +24,6 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// <summary>The report a build or a derivation from custody writes beside the mount; a test fixture mount carries none.</summary>
     internal const string BuildReportFileName = "build-report.json";
 
-    /// <summary>
-    /// The one switch S7a flips (review of #980, F4). Until the reader's interval rules serve index 9's rows, and a date's
-    /// role is worded apart (an act dated by its entry into force is not "applicable from" it, R21), the server refuses a
-    /// built mount of lex-v3-luxembourg-index/9: one with its build report, as a release's mount is. A test fixture mount,
-    /// which carries no build report, is still served, so the journeys and the samples run over index 9. Flipping it fails
-    /// <c>V3IndexNineServingTests</c> and the G5 case of <c>V3ReplayGuaranteesTests</c> until each is updated with it.
-    /// </summary>
-    internal static readonly bool ServesIndexNine = false;
-
-    internal const string IndexNineNotServedSentence =
-        "this server does not serve a built mount of lex-v3-luxembourg-index/9 yet: until the reader's interval rules land (S7a) it would " +
-        "say that an act dated by its entry into force is applicable from that date, and entry into force and application are separate " +
-        "values (R21); serve a mount of lex-v3-luxembourg-index/8 or /6";
     private const int MaximumCapabilityManifestBytes = 4 * 1024 * 1024;
     private const string EuropeanUnionPublisherDomain = "europa.eu";
 
@@ -72,19 +59,14 @@ internal sealed partial class V3CorpusMount : IDisposable
     }
 
     /// <summary>
-    /// The mount the server serves: <paramref name="mount"/>, opened from <paramref name="directory"/>, unless it is a built
-    /// mount of index 9 and <see cref="ServesIndexNine"/> is not set, which is refused with
-    /// <see cref="IndexNineNotServedSentence"/> (the mount is closed first).
+    /// The mount the server serves: <paramref name="mount"/>, opened from <paramref name="directory"/>, of index 9, 8 or 6. A built
+    /// mount of index 9 was refused until the reader's interval rules served it (the review of #980, F4); since S7a they do,
+    /// and a date's role is worded apart (R21), so every mount the reader opens is served. Kept as the server's one door to a
+    /// mount.
     /// </summary>
     internal static V3CorpusMount? Served(V3CorpusMount? mount, string directory)
     {
-        if (mount is not null && mount._reader?.RecordsCatalogueStates == true && !ServesIndexNine &&
-            File.Exists(Path.Combine(directory, BuildReportFileName)))
-        {
-            mount.Dispose();
-            throw new InvalidDataException(IndexNineNotServedSentence);
-        }
-
+        ArgumentException.ThrowIfNullOrWhiteSpace(directory);
         return mount;
     }
 
@@ -621,9 +603,33 @@ internal sealed partial class V3CorpusMount : IDisposable
         var mounted = mountedStates.ToLookup(static state => state.StateSha256, StringComparer.Ordinal);
         var served = new List<JsonNode>();
         var ambiguous = new List<string>();
+        // On index 9 the snapshot's every state row, held or textless, with its facts, so the interval rules select over it as
+        // they do over the mounted rows (S7a); the held states of the snapshot still name its languages and next dates.
+        var observedWork = RulesByInterval ? ObservedCatalogue(workKey, _reader.ResolveObservedStates(workKey, at.LastSeq, includeTextless: true)) : null;
         foreach (var language in requestedLanguage is null ? heldLanguages : [requestedLanguage])
         {
             var ofLanguage = scope.Where(state => string.Equals(state.Language, language, StringComparison.Ordinal)).ToArray();
+            if (observedWork is not null)
+            {
+                var cover = CoverAt(observedWork, language, requestedDate, row => mounted.Contains(row.StateSha256));
+                if (cover.Kind == CoverKind.Ambiguous)
+                {
+                    ambiguous.AddRange(cover.Others.Where(static row => row.Language.Length > 0)
+                        .Select(static row => LuxembourgPermalink(row.WorkKey, row.ApplicabilityDate, row.StateSha256, row.Language)));
+                }
+                else if (cover.Kind == CoverKind.Served)
+                {
+                    var covering = ofLanguage.Single(state => string.Equals(state.StateSha256, cover.Row!.StateSha256, StringComparison.Ordinal));
+                    served.Add(ObservedStateRow(covering, ofLanguage
+                        .Select(static state => state.ApplicabilityDate)
+                        .Where(date => string.CompareOrdinal(date, covering.ApplicabilityDate) > 0)
+                        .Order(StringComparer.Ordinal)
+                        .FirstOrDefault(), mounted));
+                }
+
+                continue;
+            }
+
             var atOrBefore = ofLanguage.Where(state => string.CompareOrdinal(state.ApplicabilityDate, requestedDate) <= 0).ToArray();
             if (atOrBefore.Length == 0)
             {
@@ -643,45 +649,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                 .Where(date => string.CompareOrdinal(date, requestedDate) > 0)
                 .Order(StringComparer.Ordinal)
                 .FirstOrDefault();
-            var state = selected[0];
-            if (mounted[state.StateSha256].FirstOrDefault(candidate => string.Equals(candidate.Language, state.Language, StringComparison.Ordinal)) is { } full)
-            {
-                var row = JsonSerializer.SerializeToNode(StateRow(full, nextDate))!.AsObject();
-                row["text_held"] = true;
-                row["text_from"] = null;
-                served.Add(row);
-            }
-            else if (FromGeneration(state.WorkKey, state.ApplicabilityDate, state.Language, state.StateSha256) is var (holder, kept))
-            {
-                var dates = holder.Reader.ResolveArticleDates(kept.ArticleIdentities.Distinct(StringComparer.Ordinal).ToArray())
-                    .ToDictionary(static date => date.ArticleIdentitySha256, static date => date.ApplicabilityDate, StringComparer.Ordinal);
-                var row = JsonSerializer.SerializeToNode(
-                    StateRow(kept, nextDate, dates, holder.Reader.ResolveArticlesNotAdmitted([kept.StateSha256])))!.AsObject();
-                row["text_held"] = true;
-                row["text_from"] = new JsonObject
-                {
-                    ["snapshot_id"] = holder.IndexSha256,
-                    ["observation"] = holder.Observation,
-                    ["built_at"] = holder.BuiltAt,
-                };
-                served.Add(row);
-            }
-            else
-            {
-                served.Add(new JsonObject
-                {
-                    ["language"] = state.Language,
-                    ["applicability_date"] = state.ApplicabilityDate,
-                    ["next_applicability_date"] = nextDate,
-                    ["state_sha256"] = state.StateSha256,
-                    ["expression_iri"] = state.ExpressionIri,
-                    ["source_body_sha256"] = new JsonArray(state.SourceBodySha256.Select(static body => (JsonNode?)JsonValue.Create(body)).ToArray()),
-                    ["stable_coordinate"] = $"/lu-legilux/{state.WorkKey}/{state.ApplicabilityDate}",
-                    ["permalink"] = ObservedStateUrl(state),
-                    ["text_held"] = false,
-                    ["text_from"] = null,
-                });
-            }
+            served.Add(ObservedStateRow(selected[0], nextDate, mounted));
         }
 
         if (ambiguous.Count != 0)
@@ -691,7 +659,9 @@ internal sealed partial class V3CorpusMount : IDisposable
 
         if (served.Count == 0)
         {
-            return RefuseNoVersionForDate(request, observedAt, scope.Select(static state => state.ApplicabilityDate).ToArray(), requestedDate, bound: null);
+            return observedWork is not null
+                ? RefuseUncoveredNine(request, observedAt, observedWork, requestedLanguage is null ? heldLanguages : [requestedLanguage], requestedDate, bound: null)
+                : RefuseNoVersionForDate(request, observedAt, scope.Select(static state => state.ApplicabilityDate).ToArray(), requestedDate, bound: null);
         }
 
         using var result = JsonSerializer.SerializeToDocument(new
@@ -724,6 +694,52 @@ internal sealed partial class V3CorpusMount : IDisposable
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "version_state", result.RootElement));
+    }
+
+    /// <summary>
+    /// One state of an <c>as_observed</c> snapshot as it is served: in full from the mounted index when it still holds it, in
+    /// full from the newest retained generation that does, else named from the log without text.
+    /// </summary>
+    private JsonNode ObservedStateRow(LuxembourgIndexObservedState state, string? nextDate, ILookup<string, LuxembourgIndexResolvedState> mounted)
+    {
+        if (mounted[state.StateSha256].FirstOrDefault(candidate => string.Equals(candidate.Language, state.Language, StringComparison.Ordinal)) is { } full)
+        {
+            var row = JsonSerializer.SerializeToNode(StateRow(full, nextDate))!.AsObject();
+            row["text_held"] = true;
+            row["text_from"] = null;
+            return row;
+        }
+        else if (FromGeneration(state.WorkKey, state.ApplicabilityDate, state.Language, state.StateSha256) is var (holder, kept))
+        {
+            var dates = holder.Reader.ResolveArticleDates(kept.ArticleIdentities.Distinct(StringComparer.Ordinal).ToArray())
+                .ToDictionary(static date => date.ArticleIdentitySha256, static date => date.ApplicabilityDate, StringComparer.Ordinal);
+            var row = JsonSerializer.SerializeToNode(WithCatalogueFacts(
+                StateRow(kept, nextDate, dates, holder.Reader.ResolveArticlesNotAdmitted([kept.StateSha256])), kept, holder.Reader))!.AsObject();
+            row["text_held"] = true;
+            row["text_from"] = new JsonObject
+            {
+                ["snapshot_id"] = holder.IndexSha256,
+                ["observation"] = holder.Observation,
+                ["built_at"] = holder.BuiltAt,
+            };
+            return row;
+        }
+        else
+        {
+            return new JsonObject
+            {
+                ["language"] = state.Language,
+                ["applicability_date"] = state.ApplicabilityDate,
+                ["next_applicability_date"] = nextDate,
+                ["state_sha256"] = state.StateSha256,
+                ["expression_iri"] = state.ExpressionIri,
+                ["source_body_sha256"] = new JsonArray(state.SourceBodySha256.Select(static body => (JsonNode?)JsonValue.Create(body)).ToArray()),
+                ["stable_coordinate"] = $"/lu-legilux/{state.WorkKey}/{state.ApplicabilityDate}",
+                ["permalink"] = ObservedStateUrl(state),
+                ["text_held"] = false,
+                ["text_from"] = null,
+            };
+        }
     }
 
     private static string ObservedStateUrl(LuxembourgIndexObservedState state) =>
@@ -836,7 +852,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                 var ofLanguage = scope
                     .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
                     .ToArray();
-                var (selected, nextDate) = SelectAtDate(ofLanguage, requestedDate);
+                var (selected, nextDate) = SelectAt(ofLanguage, requestedDate);
                 if (selected.Length == 0)
                 {
                     continue;
@@ -848,7 +864,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                     continue;
                 }
 
-                served.Add(StateRow(selected[0], nextDate));
+                served.Add(WithSameText(StateRow(selected[0], nextDate), selected[0], requestedDate));
                 servedStates.Add(selected[0]);
             }
 
@@ -863,7 +879,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             }
         }
 
-        using var result = JsonSerializer.SerializeToDocument(new
+        using var result = JsonSerializer.SerializeToDocument(WithIntervalFacts(new
         {
             requested_identifier = identifier,
             requested_date = requestedDate,
@@ -876,7 +892,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             available_languages = availableLanguages,
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader!.IndexRef.Sha256,
-        });
+        }, states[0].WorkKey, servedStates.Select(static state => state.Language), requestedLanguage, requestedDate));
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "version_state", result.RootElement));
@@ -911,8 +927,7 @@ internal sealed partial class V3CorpusMount : IDisposable
 
     /// <summary>
     /// The derivation on a mount of lex-v3-luxembourg-index/9, whose state digest is /2: the same encoding over the row's own
-    /// facts as well. Those facts (the date's role and the others after the language) are served with the state rows when the
-    /// reader's interval rules land (S7a); until then this answer says a caller cannot recompute the digest from it alone.
+    /// facts as well, which each state of this answer carries (S7a), so a caller recomputes the digest from the answer alone (G5).
     /// </summary>
     internal const string ProvenanceDerivationNine =
         "state_sha256 is state digest /2, a SHA-256 over these values, each as UTF-8 preceded by its length as four bytes big-endian: " +
@@ -921,9 +936,11 @@ internal sealed partial class V3CorpusMount : IDisposable
         "states, the publication date, the text status, its reason, the in-file identity, the in-file date, the entry into force and the " +
         "French expression a translation takes its interval from (each the empty string when there is none), then the number of " +
         "rule-profile digests as decimal text and each digest in sorted order, then the number of article identities as decimal text and " +
-        "each identity in sorted order; an end derived from the next state is not in it; the date's role and the facts after the language " +
-        "are not carried in this answer, so a caller cannot recompute the digest from it alone; the article identities are not carried " +
-        "here either (they are article_identities in as_of's answer to the same request, and article_identities_sha256 is the SHA-256 of " +
+        "each identity in sorted order; an end derived from the next state is not in it; each state here carries those facts as " +
+        "date_role, state_kind, applicable_to (the end the publisher states when applicable_to_source is publisher; a derived end is " +
+        "not in the digest), publication_date, text_status, text_status_reason, in_file_identity, in_file_date, entry_into_force and " +
+        "translation_of, so a caller recomputes the digest from this answer and the article identities; the article identities are not " +
+        "carried here (they are article_identities in as_of's answer to the same request, and article_identities_sha256 is the SHA-256 of " +
         "them in sorted order, each preceded by its length in the same way, so a caller can check the list it holds); this mount's own " +
         "reader recomputes the state digest when the index is opened and refuses an index in which it does not match its row";
 
@@ -1009,7 +1026,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                 var ofLanguage = scope
                     .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
                     .ToArray();
-                var (selected, _) = SelectAtDate(ofLanguage, requestedDate);
+                var (selected, _) = SelectAt(ofLanguage, requestedDate);
                 if (selected.Length == 0)
                 {
                     continue;
@@ -1038,7 +1055,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         var served = new List<object>();
         foreach (var state in chosen)
         {
-            served.Add(new
+            served.Add(WithCatalogueFacts(new
             {
                 language = state.Language,
                 applicability_date = state.ApplicabilityDate,
@@ -1052,7 +1069,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                 articles = state.ArticleIdentities.Count,
                 article_identities_sha256 = ArticleIdentitiesSha256(state.ArticleIdentities),
                 sources = _reader!.ResolveStateSources(state.StateSha256).Select(SourceRow).ToArray(),
-            });
+            }, state));
         }
 
         using var result = JsonSerializer.SerializeToDocument(new
@@ -1071,7 +1088,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                 index_sha256 = _reader!.IndexRef.Sha256,
                 registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
             },
-            // On an index 9 the digest is /2, whose sentence says what this answer does not carry (S7a serves it).
+            // On an index 9 the digest is /2, over the row facts each state here carries.
             derivation = _reader!.RecordsCatalogueStates ? ProvenanceDerivationNine : ProvenanceDerivation,
             sources_note = ProvenanceSourcesNote,
             not_held = ProvenanceNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
@@ -1216,7 +1233,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                 var ofLanguage = scope
                     .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
                     .ToArray();
-                var (candidates, nextDate) = SelectAtDate(ofLanguage, requestedDate);
+                var (candidates, nextDate) = SelectAt(ofLanguage, requestedDate);
                 if (candidates.Length == 0)
                 {
                     continue;
@@ -1279,10 +1296,14 @@ internal sealed partial class V3CorpusMount : IDisposable
         var segmented = false;
         foreach (var (state, nextDate) in selected)
         {
-            // In the reading's order (V3CorpusMount.Reading.cs): the index holds no document order (a state lists its article
-            // identities sorted by digest), so the publisher's ids are compared part by part, then the identity.
-            var articles = InLuxembourgReadingOrder(_reader!.ResolveStateArticles(state.StateSha256),
-                static article => article.PublisherId, static article => article.ArticleIdentitySha256);
+            // In the publisher document's order on index 9, which holds each article's place in it (document_position); on an
+            // index of schema 8 or 6, which holds none (a state lists its article identities sorted by digest), in the reading's
+            // order (V3CorpusMount.Reading.cs): the publisher's ids compared part by part, then the identity.
+            var resolvedArticles = _reader!.ResolveStateArticles(state.StateSha256);
+            var articles = resolvedArticles.Count > 0 && resolvedArticles.All(static article => article.DocumentPosition is not null)
+                ? resolvedArticles.ToArray()
+                : InLuxembourgReadingOrder(resolvedArticles,
+                    static article => article.PublisherId, static article => article.ArticleIdentitySha256);
             if (!articles.Any(static article => article.Text.Length > 0))
             {
                 var member = sourcesByState[state.StateSha256].Select(source => MemberOf(source.ObjectRefSha256)).FirstOrDefault(static value => value is not null);
@@ -1337,7 +1358,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                 }
 
                 var textBytes = Encoding.UTF8.GetBytes(article.Text);
-                rows.Add(WithSegments(new
+                rows.Add(WithDocumentPosition(WithSegments(new
                 {
                     position = position + 1,
                     article_identity_sha256 = article.ArticleIdentitySha256,
@@ -1354,10 +1375,10 @@ internal sealed partial class V3CorpusMount : IDisposable
                     notes = ArticleNotes(article.TokensJson),
                     official_source = state.PublisherLegalResourceIri,
                     article_permalink = ArticlePermalink(StateUrl(state), article.PublisherId),
-                }, article.TokensJson, article.Text, ref segmented));
+                }, article.TokensJson, article.Text, ref segmented), article));
             }
 
-            bundles.Add(new
+            bundles.Add(WithDocumentGaps(WithSameText(WithCatalogueFacts(new
             {
                 language = state.Language,
                 applicability_date = state.ApplicabilityDate,
@@ -1378,24 +1399,24 @@ internal sealed partial class V3CorpusMount : IDisposable
                     .Order(StringComparer.Ordinal)
                     .ToArray(),
                 articles = rows,
-                articles_without_text = withoutText.Select(static entry => new
+                articles_without_text = withoutText.Select(static entry => WithDocumentPosition(new
                 {
                     position = entry.Position + 1,
                     article_identity_sha256 = entry.Article.ArticleIdentitySha256,
                     publisher_id = entry.Article.PublisherId,
                     reason = "no_text_tokens",
-                }).ToArray(),
+                }, entry.Article)).ToArray(),
                 articles_not_admitted = notAdmitted.GetValueOrDefault(state.StateSha256),
                 validity_conflict_count = conflicts,
                 validity_conflict_rule = ValidityConflictRule,
                 page = ReadingPageMember(pages, conflictsInVersion),
                 pages = ReadingPagesMember(pages, headings: false),
                 contents = asked.Contents ? ReadingContentsMember(pages, headings: false) : null,
-            });
+            }, state), state, requestedDate), articles));
         }
 
         var asPublished = AsPublishedOf(states, selected.Select(static entry => entry.State).ToArray());
-        using var result = JsonSerializer.SerializeToDocument(WithSegmentsRule(new
+        using var result = JsonSerializer.SerializeToDocument(WithIntervalFacts(WithSegmentsRule(new
         {
             scope = EvidenceBundleScope,
             requested_identifier = identifier,
@@ -1421,7 +1442,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                 registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
             },
             not_held = NotHeldRows(EvidenceBundleNotHeld, asPublished),
-        }, segmented));
+        }, segmented), states[0].WorkKey, selected.Select(static entry => entry.State.Language), requestedLanguage, requestedDate));
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "evidence_bundle", result.RootElement));
@@ -1832,7 +1853,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             var ofLanguage = scope
                 .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
                 .ToArray();
-            var (candidates, nextDate) = SelectAtDate(ofLanguage, requestedDate);
+            var (candidates, nextDate) = SelectAt(ofLanguage, requestedDate);
             if (candidates.Length == 0)
             {
                 continue;
@@ -1844,7 +1865,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                 continue;
             }
 
-            selected.Add(StateReference(candidates[0], nextDate));
+            selected.Add(WithCatalogueFacts(StateReference(candidates[0], nextDate), candidates[0]));
         }
 
         if (ambiguous.Count != 0)
@@ -2155,7 +2176,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             var ofLanguage = scope
                 .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
                 .ToArray();
-            var (selected, _) = SelectAtDate(ofLanguage, requestedDate);
+            var (selected, _) = SelectAt(ofLanguage, requestedDate);
             if (selected.Length == 0)
             {
                 continue;
@@ -2729,7 +2750,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             }
             else
             {
-                (selected, _) = SelectAtDate(ofLanguage, requestedDate);
+                (selected, _) = SelectAt(ofLanguage, requestedDate);
             }
 
             if (selected.Length == 0)
@@ -3137,6 +3158,13 @@ internal sealed partial class V3CorpusMount : IDisposable
         }
 
         payload["candidates"] = new JsonArray(candidates.Select(static candidate => (JsonNode?)JsonValue.Create(candidate)).ToArray());
+        if (CandidateStates(candidates) is { } candidateStates)
+        {
+            // Index 9 names each candidate's kind, interval, boundary, digest and text status (design §3.2).
+            payload["candidate_states"] = candidateStates;
+            payload["candidate_states_rule"] = AmbiguousCandidatesRule;
+        }
+
         using var document = JsonSerializer.SerializeToDocument(payload);
         return V3PlatformOperationOutcome.Refused(
             Context("refusal", observedAt),
@@ -3148,8 +3176,10 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// than one, the date the history of the states it is given begins, and their nearest later publisher
     /// date. <c>as_of</c> gives every served language's states, since it refuses only when none answered;
     /// <c>diff</c> gives the states of the one language that misses the bound, so the history named is that
-    /// language's. There is never a nearest earlier date, since a state at or before the date would have
-    /// answered.
+    /// language's. On an index of schema 8 or 6 there is never a nearest earlier date, since a state at or before
+    /// the date would have answered. On index 9 the interval rules say why no held state covers the date
+    /// (<see cref="RefuseUncoveredNine"/>): the reason, the states it names and the nearest dates either side, or, when the
+    /// state that covers it holds no text, <c>text_withheld</c> or <c>text_not_available</c> for that state.
     /// </summary>
     private V3PlatformOperationOutcome RefuseNoVersionForDate(
         V3PlatformOperationRequest request,
@@ -3157,7 +3187,10 @@ internal sealed partial class V3CorpusMount : IDisposable
         IReadOnlyList<LuxembourgIndexResolvedState> scope,
         string requestedDate,
         string? bound) =>
-        RefuseNoVersionForDate(request, observedAt, scope.Select(static state => state.ApplicabilityDate).ToArray(), requestedDate, bound);
+        RulesByInterval && scope.Count > 0
+            ? RefuseUncoveredNine(request, observedAt, scope[0].WorkKey,
+                scope.Select(static state => state.Language).Distinct(StringComparer.Ordinal).ToArray(), requestedDate, bound)
+            : RefuseNoVersionForDate(request, observedAt, scope.Select(static state => state.ApplicabilityDate).ToArray(), requestedDate, bound);
 
     /// <summary>The same refusal over the publisher dates of the states it is given (<c>as_observed</c> gives a snapshot's).</summary>
     private V3PlatformOperationOutcome RefuseNoVersionForDate(
@@ -3291,8 +3324,8 @@ internal sealed partial class V3CorpusMount : IDisposable
             var ofLanguage = scope
                 .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
                 .ToArray();
-            var (fromSelected, fromNext) = SelectAtDate(ofLanguage, dateFrom);
-            var (toSelected, toNext) = SelectAtDate(ofLanguage, dateTo);
+            var (fromSelected, fromNext) = SelectAt(ofLanguage, dateFrom);
+            var (toSelected, toNext) = SelectAt(ofLanguage, dateTo);
 
             // Both bounds are resolved before the language is classified: an ambiguity at either bound is
             // recorded first, so a bound with no state cannot mask a twin on the other; only then does a
@@ -3310,7 +3343,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             if (failing is not null)
             {
                 missing ??= (failing, failing == "from" ? dateFrom : dateTo, ofLanguage);
-                notCompared.Add(new { language, bound = failing, reason = "no state at or before the date" });
+                notCompared.Add(new { language, bound = failing, reason = NotComparedReason(ofLanguage, language, failing == "from" ? dateFrom : dateTo) });
                 continue;
             }
 
@@ -3409,6 +3442,24 @@ internal sealed partial class V3CorpusMount : IDisposable
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "diff", result.RootElement));
+    }
+
+    /// <summary>
+    /// Why a bound of <c>diff</c> selects no state in one language: on an index of schema 8 or 6, that no state is at or before
+    /// the date; on index 9, the interval rules' reason (<see cref="NoVersionReasonRule"/>), or the refusal code of the state that
+    /// covers the bound and holds no text, which refuses for that bound.
+    /// </summary>
+    private string NotComparedReason(IReadOnlyList<LuxembourgIndexResolvedState> ofLanguage, string language, string date)
+    {
+        if (!RulesByInterval)
+        {
+            return "no state at or before the date";
+        }
+
+        var cover = CoverAt(CatalogueOf(ofLanguage[0].WorkKey), language, date);
+        return cover.Kind == CoverKind.Textless
+            ? string.Equals(cover.Row!.TextStatus, "withheld_rights", StringComparison.Ordinal) ? "text_withheld" : "text_not_available"
+            : cover.Reason ?? "no state covers the date";
     }
 
     /// <summary>
@@ -3580,7 +3631,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             // reason below is for the question about many works, where one must not hide the others.
             var twins = scoped
                 .GroupBy(static state => state.Language, StringComparer.Ordinal)
-                .Select(ofLanguage => SelectAtDate(ofLanguage.ToArray(), requestedDate).Selected)
+                .Select(ofLanguage => SelectAt(ofLanguage.ToArray(), requestedDate).Selected)
                 .Where(static selected => selected.Length > 1)
                 .SelectMany(static selected => selected.Select(StateUrl))
                 .Order(StringComparer.Ordinal)
@@ -3652,20 +3703,30 @@ internal sealed partial class V3CorpusMount : IDisposable
                 var ofLanguage = ofWork
                     .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
                     .ToArray();
-                var (selected, nextDate) = SelectAtDate(ofLanguage, requestedDate);
+                var (selected, nextDate) = SelectAt(ofLanguage, requestedDate);
                 if (selected.Length == 0)
                 {
+                    // On index 9 the state covering the date may hold no text: a row names it and why, and offers no resolve.
+                    if (RulesByInterval && CoverAt(CatalogueOf(workKey), language, requestedDate) is { Kind: CoverKind.Textless, Row: { } textless })
+                    {
+                        ofThisWork.Add(InForceOnTextlessRow(workKey, language, textless));
+                    }
+
                     continue;
                 }
 
                 var single = selected.Length == 1 ? selected[0] : null;
+                var facts = RulesByInterval && single is not null ? CatalogueOf(workKey).ByDigest.GetValueOrDefault(single.StateSha256) : null;
                 ofThisWork.Add(new
                 {
                     work_key = workKey,
                     publisher_work_iri = selected[0].PublisherWorkIri,
                     language,
-                    interval = new { from = selected[0].ApplicabilityDate, until = nextDate },
-                    state = single is null ? null : StateReference(single, nextDate),
+                    // On index 9 the interval ends where the state's does: the publisher's end, else the next dated state (derived).
+                    interval = facts is null
+                        ? (object)new { from = selected[0].ApplicabilityDate, until = nextDate }
+                        : new { from = facts.ApplicabilityDate, until = facts.ApplicableTo, until_source = facts.ApplicableToSource },
+                    state = single is null ? null : WithCatalogueFacts(StateReference(single, nextDate), single),
                     reason = single is null ? "ambiguous_version" : null,
                     candidates = single is null ? selected.Select(StateUrl).Order(StringComparer.Ordinal).ToArray() : null,
                     // The hash-pinned permalink names this state and no other, so resolve serves it in full.
@@ -3684,6 +3745,16 @@ internal sealed partial class V3CorpusMount : IDisposable
             lastServed = workKey;
         }
 
+        if (identifier is not null && RulesByInterval && rows.Count == 0 && afterWorkKey is null)
+        {
+            // One work, one date, and no state of it covers the date (a hole, a closed end, an unclear end or an invalid
+            // interval on index 9): as_of's refusal, through the shared builder, never an empty answer read as "not in force".
+            var ofWork = statesByWork.Values.Single();
+            return RefuseNoVersionForDate(request, observedAt,
+                ofWork.Where(state => requestedLanguage is null || string.Equals(state.Language, requestedLanguage, StringComparison.Ordinal)).ToArray(),
+                requestedDate, bound: null);
+        }
+
         using var result = JsonSerializer.SerializeToDocument(new
         {
             requested_date = requestedDate,
@@ -3692,13 +3763,21 @@ internal sealed partial class V3CorpusMount : IDisposable
             requested_after_work_key = afterWorkKey,
             publisher = "lu-legilux",
             caveat = InForceOnCaveat,
-            derivation = new
-            {
-                rule = "per work and language, the state on the greatest publisher applicability date at or before the requested date",
-                basis = "versioned works only",
-                interval_until = "the publisher's next dated state in that language, or null; no end date is published or invented",
-                not_consulted = new[] { "repeal", "end of validity", "commencement" },
-            },
+            derivation = RulesByInterval
+                ? (object)new
+                {
+                    rule = InForceOnRuleNine,
+                    basis = "versioned works only",
+                    interval_until = InForceOnUntilNine,
+                    not_consulted = new[] { "repeal", "commencement" },
+                }
+                : new
+                {
+                    rule = "per work and language, the state on the greatest publisher applicability date at or before the requested date",
+                    basis = "versioned works only",
+                    interval_until = "the publisher's next dated state in that language, or null; no end date is published or invented",
+                    not_consulted = new[] { "repeal", "end of validity", "commencement" },
+                },
             population = new
             {
                 // The population is the scope asked for: the one work when an identifier is given, the
@@ -3730,6 +3809,27 @@ internal sealed partial class V3CorpusMount : IDisposable
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "version_state", result.RootElement));
     }
+
+    internal const string InForceOnRuleNine =
+        "per work and language, the state whose interval in the publisher's catalogue holds the requested date (as as_of selects it on " +
+        "lex-v3-luxembourg-index/9); a state whose text is not held is a row that names it and why, and a date no state covers gives no row";
+
+    internal const string InForceOnUntilNine =
+        "the publisher's end of applicability where stated (until_source publisher), else the next dated state's start (derived), " +
+        "else null; the end of the catalogue's last state is not an end of the law";
+
+    /// <summary>An <c>in_force_on</c> row for a state that covers the date and holds no text: named, with why, and no resolve.</summary>
+    private static object InForceOnTextlessRow(string workKey, string language, LuxembourgIndexCatalogueState row) => new
+    {
+        work_key = workKey,
+        publisher_work_iri = row.PublisherWorkIri,
+        language,
+        interval = new { from = row.ApplicabilityDate, until = row.ApplicableTo, until_source = row.ApplicableToSource },
+        state = (object?)CatalogueRowSummary(row),
+        reason = string.Equals(row.TextStatus, "withheld_rights", StringComparison.Ordinal) ? "text_withheld" : "text_not_available",
+        candidates = (string[]?)null,
+        resolve = (object?)null,
+    };
 
     /// <summary>The ceiling on the hits one <c>search</c> answer carries.</summary>
     public const int SearchMaxHits = 200;
@@ -3904,7 +4004,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                 var scoped = states
                     .Where(state => string.Equals(state.Language, language, StringComparison.Ordinal))
                     .ToArray();
-                var selected = SelectAtDate(scoped, requestedDate).Selected;
+                var selected = SelectAt(scoped, requestedDate).Selected;
                 if (selected.Length == 0)
                 {
                     return RefuseNoVersionForDate(request, observedAt, scoped, requestedDate, bound: null);
@@ -4021,7 +4121,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                     statesByWork[key] = ofWork;
                 }
 
-                var selected = SelectAtDate(
+                var selected = SelectAt(
                     ofWork.Where(state => string.Equals(state.Language, language, StringComparison.Ordinal)).ToArray(),
                     requestedDate).Selected;
                 selectedByWork[key] = selected.Length == 1 ? selected[0].StateSha256 : null;
@@ -5593,8 +5693,8 @@ internal sealed partial class V3CorpusMount : IDisposable
             {
                 work_key = state.WorkKey,
                 publisher_work_iri = state.PublisherWorkIri,
-                state = StateReference(state, NextDateInLanguage(ofWork, state)),
-                baseline = baselines.Length == 1 ? StateReference(baselines[0], state.ApplicabilityDate) : null,
+                state = WithCatalogueFacts(StateReference(state, NextDateInLanguage(ofWork, state)), state),
+                baseline = baselines.Length == 1 ? WithCatalogueFacts(StateReference(baselines[0], state.ApplicabilityDate), baselines[0]) : null,
                 wording_changed = wordingChanged,
                 reason,
                 candidates,
@@ -5712,7 +5812,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         var notAdmitted = NotAdmittedMap(scope);
         foreach (var state in scope)
         {
-            rows.Add(StateRow(state, NextDateInLanguage(scope, state), datesByIdentity, notAdmitted));
+            rows.Add(WithCatalogueFacts(StateRow(state, NextDateInLanguage(scope, state), datesByIdentity, notAdmitted), state));
         }
 
         using var result = JsonSerializer.SerializeToDocument(new
@@ -5806,7 +5906,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         var titles = TitleGroups(expressions, requestedLanguage);
         var notAdmitted = NotAdmittedMap(scope);
-        var rows = scope.Select(state => DossierStateRow(state, NextDateInLanguage(scope, state), notAdmitted)).ToArray();
+        var rows = scope.Select(state => WithCatalogueFacts(DossierStateRow(state, NextDateInLanguage(scope, state), notAdmitted), state)).ToArray();
         var asPublished = AsPublishedOf(states, scope);
 
         using var result = JsonSerializer.SerializeToDocument(new
@@ -6533,7 +6633,7 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// publisher-dated state in the same language, or <c>null</c>: never an inferred end.
     /// </summary>
     private object StateRow(LuxembourgIndexResolvedState state, string? nextDate) =>
-        StateRow(state, nextDate, ArticleDateMap([state]), NotAdmittedMap([state]));
+        WithCatalogueFacts(StateRow(state, nextDate, ArticleDateMap([state]), NotAdmittedMap([state])), state);
 
     /// <summary>
     /// How many articles of each state's document the corpus recorded and the state does not hold, read in one

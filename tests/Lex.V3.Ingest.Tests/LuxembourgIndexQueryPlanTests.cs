@@ -26,6 +26,7 @@ public sealed class LuxembourgIndexQueryPlanTests
         ("AnchorArticles", LuxembourgIndexQueries.AnchorArticles,
             [("$states", "[\"" + Digest + "\"]"), ("$anchor", "art_1")], false),
         ("StateArticles", LuxembourgIndexQueries.StateArticles, [("$digest", Digest)], false),
+        ("StateArticlesNine", LuxembourgIndexQueries.StateArticlesNine, [("$digest", Digest)], false),
         ("ArticleIds", LuxembourgIndexQueries.ArticleIds, [("$digest", Digest)], false),
         ("StateSources", LuxembourgIndexQueries.StateSources, [("$state", Digest)], true),
         ("StateCitations", LuxembourgIndexQueries.StateCitations, [("$digest", Digest), ("$anchor", "art_1")], false),

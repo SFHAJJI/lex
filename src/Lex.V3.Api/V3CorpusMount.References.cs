@@ -468,7 +468,7 @@ internal sealed partial class V3CorpusMount
             : requestedDate is not null ? (requestedDate, "search_date")
             : (TodayInLuxembourg(observedAt), "today_in_luxembourg");
         recognition = recognition with { Date = date, DateSource = source, Language = textLanguage };
-        var selected = SelectAtDate(scoped, date).Selected;
+        var selected = SelectAt(scoped, date).Selected;
         if (selected.Length == 0)
         {
             return WithRecognition(request, RefuseNoVersionForDate(request, observedAt, scoped, date, bound: null), recognition);
