@@ -49,6 +49,10 @@ internal static class OfflineDeriveCommand
             if (write.LuxembourgRederivation is { } record)
                 Console.WriteLine($"luxembourg_rederivation={record.Sha256}");
             Console.WriteLine(OfflineNetwork.Line(network));
+            // The process's own peaks (on Windows, the paged figure is the private commit), beside the runner's machine-wide
+            // resource log: the dry run reads both (S4b).
+            using (var self = System.Diagnostics.Process.GetCurrentProcess())
+                Console.WriteLine($"process peak_working_set_bytes={self.PeakWorkingSet64} peak_private_bytes={self.PeakPagedMemorySize64}");
             Console.WriteLine($"verified offline mount; publisher_requests={network.Total}");
             return 0;
         }
