@@ -1276,6 +1276,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         var datesByIdentity = ArticleDateMap(selected.Select(static entry => entry.State).ToArray());
         var notAdmitted = NotAdmittedMap(selected.Select(static entry => entry.State).ToArray());
         var bundles = new List<object>(selected.Count);
+        var segmented = false;
         foreach (var (state, nextDate) in selected)
         {
             // In the reading's order (V3CorpusMount.Reading.cs): the index holds no document order (a state lists its article
@@ -1336,7 +1337,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                 }
 
                 var textBytes = Encoding.UTF8.GetBytes(article.Text);
-                rows.Add(new
+                rows.Add(WithSegments(new
                 {
                     position = position + 1,
                     article_identity_sha256 = article.ArticleIdentitySha256,
@@ -1353,7 +1354,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                     notes = ArticleNotes(article.TokensJson),
                     official_source = state.PublisherLegalResourceIri,
                     article_permalink = ArticlePermalink(StateUrl(state), article.PublisherId),
-                });
+                }, article.TokensJson, article.Text, ref segmented));
             }
 
             bundles.Add(new
@@ -1394,7 +1395,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         }
 
         var asPublished = AsPublishedOf(states, selected.Select(static entry => entry.State).ToArray());
-        using var result = JsonSerializer.SerializeToDocument(new
+        using var result = JsonSerializer.SerializeToDocument(WithSegmentsRule(new
         {
             scope = EvidenceBundleScope,
             requested_identifier = identifier,
@@ -1420,7 +1421,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                 registry_sha256 = V3OperationRegistry.Reviewed.Sha256,
             },
             not_held = NotHeldRows(EvidenceBundleNotHeld, asPublished),
-        });
+        }, segmented));
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "evidence_bundle", result.RootElement));
@@ -1432,15 +1433,20 @@ internal sealed partial class V3CorpusMount : IDisposable
     private LexCorpus6Member? EuropeMemberOf(string objectRefSha256) =>
         _corpus.Member(PublisherId.EuEurLex, objectRefSha256);
 
-    /// <summary>The article's notes, each the publisher's marker and the text of its body's text and reference tokens, in order.</summary>
-    private static object[] ArticleNotes(string tokensJson) =>
-        ArticleNoteParts(tokensJson).Select(static note => (object)new { marker = note.Marker, text = note.Text }).ToArray();
+    /// <summary>
+    /// The article's notes, each the publisher's marker and the text of its body's text and reference tokens, in order; a note
+    /// whose reference the publisher wrote without a marker (content /3) has no marker and says so, <c>unmarked</c>.
+    /// </summary>
+    internal static object[] ArticleNotes(string tokensJson) =>
+        ArticleNoteParts(tokensJson).Select(static note => note.Unmarked
+            ? (object)new { marker = note.Marker, text = note.Text, unmarked = true }
+            : new { marker = note.Marker, text = note.Text }).ToArray();
 
-    /// <summary>The article's notes as <see cref="ArticleNotes"/> serves them: each marker (null when none) and its text.</summary>
-    private static IReadOnlyList<(string? Marker, string Text)> ArticleNoteParts(string tokensJson)
+    /// <summary>The article's notes as <see cref="ArticleNotes"/> serves them: each marker (null when none), its text and whether unmarked.</summary>
+    private static IReadOnlyList<(string? Marker, string Text, bool Unmarked)> ArticleNoteParts(string tokensJson)
     {
         using var document = JsonDocument.Parse(tokensJson);
-        var notes = new List<(string? Marker, string Text)>();
+        var notes = new List<(string? Marker, string Text, bool Unmarked)>();
         foreach (var token in document.RootElement.EnumerateArray())
         {
             if (!string.Equals(token.GetProperty("kind").GetString(), "note_reference", StringComparison.Ordinal))
@@ -1463,7 +1469,8 @@ internal sealed partial class V3CorpusMount : IDisposable
 
             notes.Add((
                 token.TryGetProperty("marker", out var marker) && marker.ValueKind == JsonValueKind.String ? marker.GetString() : null,
-                body.ToString()));
+                body.ToString(),
+                token.TryGetProperty("unmarked", out var unmarked) && unmarked.ValueKind == JsonValueKind.True));
         }
 
         return notes;

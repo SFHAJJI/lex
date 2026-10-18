@@ -1573,7 +1573,11 @@
       ["art_648", "LuRun15FrozenReplay/code-commerce-20231101.bin"],
       ["art_6_information,_conseil,_sensibilisation_et_formation", "LuRun15FrozenReplay/loi-2001-03-29-n1-jo.bin"],
       ["art_71_à_90", "LuRun15FrozenReplay/code-commerce-20231101.bin"],
-      ["art__art_3bis", "LuAknLegalContent/loi-1984-02-24-n1--2020-09-01--fr.bin"]
+      ["art__art_3bis", "LuAknLegalContent/loi-1984-02-24-n1--2020-09-01--fr.bin"],
+      ["art_l_221-1", "LuAknLegalContent3/code-consommation-20220101-deleted-wording.bin"],
+      ["art_l_226-23", "LuAknLegalContent3/code-consommation-20220101-deleted-wording.bin"],
+      ["art_l_311-2", "LuAknLegalContent3/code-consommation-20220101-deleted-wording.bin"],
+      ["art_r302-1", "LuAknLegalContent3/code-consommation-20220101-deleted-wording.bin"]
     ]
   }
 }

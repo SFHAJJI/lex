@@ -14,7 +14,7 @@ namespace Lex.V3.Ingest.Tests;
 
 /// <summary>
 /// R1 for the profiles (slice S4 of the Luxembourg design, Release 1): over an acquisition R0 verified, inventory /4 and
-/// content /2 run over R0's own population, the acquisition result is minted on R0's own run, and a
+/// content /3 run over R0's own population, the acquisition result is minted on R0's own run, and a
 /// <c>lex-lu-rederivation/1</c> record is held; the first mount builds end to end from it, and every refusal the design
 /// names for this release holds.
 /// </summary>
@@ -29,12 +29,13 @@ namespace Lex.V3.Ingest.Tests;
 public sealed class LuxembourgRederivationTests
 {
     // Pinned digests, each computed outside this code base: the frozen rules R0 verifies under (inventory /3, content
-    // /1), the later rules R1 runs (inventory /4, content /2, as S2 and S3a pinned them), and policy /1 (Python, over the
-    // canonical text below).
+    // /1), the later rules R1 runs (inventory /4 as S2 pinned it, content /3 as S3b pinned it; content /2, S3a's, which
+    // the rule set named until S3b, now refuses), and policy /1 (Python, over the canonical text below).
     private const string Inventory3RuleSha256 = "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e";
     private const string Content1RuleSha256 = "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b";
     private const string Inventory4RuleSha256 = "8a011d874aed08b161d90c900d54e9ab26dd9f925ed37323e544e44b2056c63f";
     private const string Content2RuleSha256 = "bf3fea5a5229d1a9f035d8d56816bd054abee30591370dfc6fe62f154dfaef2d";
+    private const string Content3RuleSha256 = LuxembourgAknLegalContentProfile3ProducerTests.Content3RuleSha256;
 
     /// <summary>State digest /2's rule profile (index 9, S6), recomputed in Python from its text.</summary>
     private const string State2RuleSha256 = LuxembourgIndexCatalogueStatesTests.PinnedStateRuleProfileSha256;
@@ -46,7 +47,7 @@ public sealed class LuxembourgRederivationTests
     /// A consolidation in the publisher's Akoma Ntoso shape, every byte synthetic: its identification names the fetched
     /// manifestation with CC BY 4.0 (so both rights channels agree), the work, expression and complex work the frozen
     /// inventory requires, and an applicability date. <c>art_1</c> is plain wording; <c>art_2</c> carries index terms,
-    /// which content /1 cannot read (a typed gap) and content /2 keeps as metadata.
+    /// which content /1 cannot read (a typed gap) and content /3 keeps as metadata, as /2 does.
     /// </summary>
     internal static byte[] SyntheticConsolidation()
     {
@@ -96,7 +97,7 @@ public sealed class LuxembourgRederivationTests
             new[]
             {
                 new LuxembourgRederivationRule("lex-v3-luxembourg-akn-article-inventory-profile/4", Inventory4RuleSha256),
-                new LuxembourgRederivationRule("lex-v3-luxembourg-akn-legal-content-profile/2", Content2RuleSha256),
+                new LuxembourgRederivationRule("lex-v3-luxembourg-akn-legal-content-profile/3", Content3RuleSha256),
                 new LuxembourgRederivationRule("lex-v3-luxembourg-expression-state/2", State2RuleSha256),
             },
             LuxembourgRederivation.RulesOf(LuxembourgRederivation.Release1RuleSet).ToArray());
@@ -156,7 +157,7 @@ public sealed class LuxembourgRederivationTests
         Assert.AreSame(verified.Run.HeldBodyDerivationPopulation, rederived.AknInventory!.SourcePopulation);
         Assert.AreSame(rederived.AknInventory, rederived.AknLegalContent!.SourceInventoryPopulation);
         Assert.AreEqual(Inventory4RuleSha256, rederived.AknInventory.RuleProfileSha256);
-        Assert.AreEqual(Content2RuleSha256, rederived.AknLegalContent.RuleProfileSha256);
+        Assert.AreEqual(Content3RuleSha256, rederived.AknLegalContent.RuleProfileSha256);
         Assert.AreEqual(DerivedAt, rederived.DerivedAt);
         var articles = rederived.AknLegalContent.Outcomes;
         CollectionAssert.AreEqual(
@@ -187,7 +188,7 @@ public sealed class LuxembourgRederivationTests
         Assert.AreEqual(Policy1Sha256, header.LuxembourgRightsAdmissionPolicy);
         Assert.AreSame(record, build.LuxembourgDerivation!.Record);
         Assert.AreEqual(DerivedAt, build.LuxembourgDerivation.DerivedAt);
-        foreach (var identity in new[] { Inventory4RuleSha256, Content2RuleSha256, record.InventoryIdentitySha256, record.ContentIdentitySha256 })
+        foreach (var identity in new[] { Inventory4RuleSha256, Content3RuleSha256, record.InventoryIdentitySha256, record.ContentIdentitySha256 })
         {
             CollectionAssert.Contains(header.ProfileIdentities.ToArray(), identity, "the profile identities name the population's profiles");
         }
@@ -232,7 +233,7 @@ public sealed class LuxembourgRederivationTests
                 command.CommandText = "SELECT count(*) FROM articles";
                 Assert.AreEqual(2L, command.ExecuteScalar());
                 command.CommandText = "SELECT DISTINCT rule_profile_sha256 FROM articles";
-                Assert.AreEqual(Content2RuleSha256, command.ExecuteScalar());
+                Assert.AreEqual(Content3RuleSha256, command.ExecuteScalar());
                 command.CommandText = "SELECT built_at FROM observations";
                 Assert.AreEqual("2026-10-12T18:17:05Z", command.ExecuteScalar(), "the build time stays the acquisition's");
             }
@@ -314,7 +315,7 @@ public sealed class LuxembourgRederivationTests
         Assert.AreEqual(Content1RuleSha256, verifiedUnder.GetProperty("content_profile_sha256").GetString());
         var rules = root.GetProperty("rules");
         Assert.AreEqual(LuxembourgRederivation.Release1RuleSet, rules.GetProperty("rule_set").GetString());
-        CollectionAssert.AreEqual(new[] { Inventory4RuleSha256, Content2RuleSha256, State2RuleSha256 },
+        CollectionAssert.AreEqual(new[] { Inventory4RuleSha256, Content3RuleSha256, State2RuleSha256 },
             rules.GetProperty("profiles").EnumerateArray().Select(static rule => rule.GetProperty("sha256").GetString()).ToArray());
         Assert.AreEqual(Policy1Sha256, rules.GetProperty("admission_policy_sha256").GetString());
         Assert.AreEqual("as_acquired", rules.GetProperty("rights_resolution").GetString());
@@ -382,6 +383,10 @@ public sealed class LuxembourgRederivationTests
                      // under a state rule they did not name.
                      ("the rule set as it was before state digest /2", Release1() with { Rules = [rules[0], rules[1]] }, "no rule digest is substituted"),
                      ("an altered state digest rule", Release1() with { Rules = [rules[0], rules[1], rules[2] with { Sha256 = new string('d', 64) }] },
+                         "no rule digest is substituted"),
+                     // Inputs written before S3b named content /2: they refuse, and no build runs them under content /3.
+                     ("the rule set as it was before content /3", Release1() with
+                         { Rules = [rules[0], new("lex-v3-luxembourg-akn-legal-content-profile/2", Content2RuleSha256), rules[2]] },
                          "no rule digest is substituted"),
                      ("a rule renamed", Release1() with { Rules = [rules[0] with { Profile = "lex-v3-luxembourg-akn-article-inventory-profile/5" }, rules[1], rules[2]] },
                          "no rule digest is substituted"),
@@ -747,7 +752,10 @@ public sealed class LuxembourgRederivationTests
             var text = Encoding.UTF8.GetString(inputsBytes);
             foreach (var (what, altered) in new (string, string)[]
                      {
-                         ("an unimplemented content digest", text.Replace(Content2RuleSha256, new string('c', 64), StringComparison.Ordinal)),
+                         ("an unimplemented content digest", text.Replace(Content3RuleSha256, new string('c', 64), StringComparison.Ordinal)),
+                         ("the content /2 rule the set named before S3b", text
+                             .Replace(Content3RuleSha256, Content2RuleSha256, StringComparison.Ordinal)
+                             .Replace("lex-v3-luxembourg-akn-legal-content-profile/3", "lex-v3-luxembourg-akn-legal-content-profile/2", StringComparison.Ordinal)),
                          ("an unimplemented rule set", text.Replace("\"rule_set\":\"lu-release-1\"", "\"rule_set\":\"lu-release-9\"", StringComparison.Ordinal)),
                          ("an unregistered policy", text.Replace(Policy1Sha256, new string('a', 64), StringComparison.Ordinal)),
                          ("a derivation time that is not a whole second", text.Replace("2026-10-17T06:00:00+00:00", "2026-10-17T06:00:00.5+00:00", StringComparison.Ordinal)),

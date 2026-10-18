@@ -110,8 +110,11 @@ public sealed class LuxembourgRederivationRecord
 public static class LuxembourgRederivation
 {
     /// <summary>
-    /// Release 1's rule set: inventory /4 and content /2 over the acquisition's own population, rights unchanged, and the
-    /// index's states under state digest /2 (index 9).
+    /// Release 1's rule set: inventory /4 and content /3 over the acquisition's own population, rights unchanged, and the
+    /// index's states under state digest /2 (index 9). Content /3 replaced content /2 here before any inputs were sealed
+    /// under this set (a driver decision of 2026-10-18, S3b): it reads every article /2 admits to the same stored tokens and
+    /// admits the quoted, deleted and other shapes the design's /3 table names, so inputs naming content /2 refuse under
+    /// this build and no rule is substituted.
     /// </summary>
     public const string Release1RuleSet = "lu-release-1";
 
@@ -136,8 +139,8 @@ public static class LuxembourgRederivation
                 FirstLine(LuxembourgAknArticleInventoryProducerV4.CopyRuleProfileBytes()),
                 LuxembourgAknArticleInventoryProducerV4.RuleProfileSha256),
             new LuxembourgRederivationRule(
-                FirstLine(LuxembourgAknLegalContentProfile2Producer.CopyRuleProfileBytes()),
-                LuxembourgAknLegalContentProfile2Producer.RuleProfileSha256),
+                FirstLine(LuxembourgAknLegalContentProfile3Producer.CopyRuleProfileBytes()),
+                LuxembourgAknLegalContentProfile3Producer.RuleProfileSha256),
             // State digest /2 (index 9's states): inputs written before index 9 name two rules and refuse here, so no
             // build ever runs them under a state rule they did not name.
             new LuxembourgRederivationRule(
@@ -189,7 +192,7 @@ public static class LuxembourgRederivation
     }
 
     /// <summary>
-    /// R1 over R0's verified result: inventory /4 and content /2 over R0's own held-body population, the acquisition result
+    /// R1 over R0's verified result: inventory /4 and content /3 over R0's own held-body population, the acquisition result
     /// minted on R0's own run with R0's checkpoint, resumption and scope-manifest references, and the record held in
     /// custody. The returned result holds no reference to R0's inventory /3 or content /1 population, so a caller that drops
     /// <paramref name="verified"/> drops them.
@@ -295,7 +298,7 @@ public static class LuxembourgRederivation
             }
         }
 
-        var content = await new LuxembourgAknLegalContentProfile2Producer(custodyStore)
+        var content = await new LuxembourgAknLegalContentProfile3Producer(custodyStore)
             .RunAsync(inventory, cancellationToken).ConfigureAwait(false);
         var unreadable = content.Outcomes.FirstOrDefault(static outcome =>
             outcome.Disposition == LuxembourgAknLegalContentDisposition.RetainedBytesUnavailable);
