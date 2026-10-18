@@ -40,6 +40,14 @@ const EN = LIVE_CHROME.en.reading;
 const FR = LIVE_CHROME.fr.reading;
 const sha256 = (text) => createHash("sha256").update(text, "utf8").digest("hex");
 
+// WinAnsiEncoding's bytes 128 to 159 (PDF 32000-1, Annex D, table D.2); every other byte is Latin-1.
+const WIN_ANSI_128 = ["€", null, "‚", "ƒ", "„", "…", "†", "‡", "ˆ", "‰", "Š", "‹", "Œ", null, "Ž", null,
+  null, "‘", "’", "“", "”", "•", "–", "—", "˜", "™", "š", "›", "œ", null, "ž", "Ÿ"];
+const winAnsi = (text) => Array.from(text, (char) => {
+  const code = char.charCodeAt(0);
+  return code >= 128 && code <= 159 ? WIN_ANSI_128[code - 128] : char;
+}).join("");
+
 /** One article's segments as the platform sends them: a quotation around a run of its text, and deleted wording after it. */
 function segmentsFor(text, { marksInWording = false } = {}) {
   const from = text.indexOf(" ", 10);
@@ -201,14 +209,24 @@ test("the exports carry the segments, and the deleted wording is never the text 
 
   const rows = exportCsv(model).split("\r\n").filter((line) => line.length > 0);
   assert.ok(rows[0].split(",").includes("segments"));
-  assert.equal(CSV_COLUMNS.indexOf("segments"), CSV_COLUMNS.indexOf("text") + 1);
+  assert.equal(CSV_COLUMNS.indexOf("segments"), CSV_COLUMNS.length - 1, "last, so every column before it keeps its place");
+  assert.deepEqual(CSV_COLUMNS.slice(-6, -1), ["observed_at", "rights_rule", "corpus_sha256", "index_sha256", "registry_sha256"]);
   const csv = exportCsv(model);
   assert.ok(csv.includes(DELETED), "the CSV carries the deleted wording, in its segments");
   assert.equal(csv.split(DELETED).length - 1, 1, "once, in the segments cell, never in the text cell");
 
   const pdf = Buffer.from(exportPdf(model)).toString("latin1");
-  const shown = [...pdf.matchAll(/\(((?:\\[\s\S]|[^\\)])*)\) Tj/g)].map((match) => match[1].replace(/\\([0-7]{1,3}|[\s\S])/g, (_, escape) =>
-    /^[0-7]+$/.test(escape) ? String.fromCharCode(parseInt(escape, 8)) : escape)).join(" ");
+  const runs = [...pdf.matchAll(/\(((?:\\[\s\S]|[^\\)])*)\) Tj/g)].map((match) => winAnsi(match[1].replace(/\\([0-7]{1,3}|[\s\S])/g, (_, escape) =>
+    /^[0-7]+$/.test(escape) ? String.fromCharCode(parseInt(escape, 8)) : escape)));
+  const shown = runs.join(" ");
+  // The text line exactly (the review of #981, F5): the text segments with the marks between them, the deleted wording
+  // left out, each run of the wrapped paragraph as it was set.
+  const parts = segmentsFor(article.text);
+  const expected = `${parts[0].text}« ${parts[2].text} »${parts[5].text}`;
+  const from = runs.findIndex((run) => run.length > 0 && expected.startsWith(run));
+  const to = runs.findIndex((run) => run.startsWith("The quotation marks around quoted wording"));
+  assert.ok(from >= 0 && to > from, "the text's runs, then the marks' line");
+  assert.equal(runs.slice(from, to).join(""), expected);
   assert.ok(shown.includes("Wording the publisher marks deleted, in order; none of it is part of the text above:"));
   assert.ok(shown.includes(DELETED.slice(0, 12)), "the deleted wording is listed");
   assert.ok(shown.includes("« "), "the quoted wording is set between its marks");
@@ -254,4 +272,54 @@ test("an added mark stands apart from the words around it only where the wording
   assert.equal(addedMark(nested, 2), "« ", "an inner mark follows the outer one's own space");
   assert.equal(addedMark([{ kind: "text", text: "a" }, { kind: "quotation_start", quotation: "embeddedText", marksInWording: false, marker: "„" }], 1), " „",
     "the publisher's own mark when it gives one");
+});
+
+test("no mark is added where the publisher's wording already holds one (the review of #981, F1)", async () => {
+  const boundary = (kind, quotation = "embeddedText") => ({ kind, quotation, marksInWording: false, marker: null });
+  const text = (value) => ({ kind: "text", text: value });
+  // rgd/2020/09/02/a743/jo art_36's shape: the quoted wording opens and closes with its own marks.
+  const own = [text("sont remplacés par "), boundary("quotation_start"), text("« moyen 1 » et « moyen 2 »"), boundary("quotation_end"), text(".")];
+  assert.equal(addedMark(own, 1), "");
+  assert.equal(addedMark(own, 3), "");
+  // rgd/2017/08/21/a803/jo art_5's shape: the marks stand just outside the quoted wording.
+  const outside = [text("les mots « "), boundary("quotation_start"), text("du premier trimestre"), boundary("quotation_end"), text(" »."), ];
+  assert.equal(addedMark(outside, 1), "");
+  assert.equal(addedMark(outside, 3), "");
+  // Only one side marked: the other side still gets its mark.
+  const left = [text("les mots « "), boundary("quotation_start"), text("du premier trimestre"), boundary("quotation_end"), text(" sont")];
+  assert.equal(addedMark(left, 1), "");
+  assert.equal(addedMark(left, 3), " »");
+  // A quotation that only begins with a mark is not one that holds its marks.
+  const begins = [text("par "), boundary("quotation_start"), text("« moyen 1 » et moyen 2"), boundary("quotation_end"), text(".")];
+  assert.equal(addedMark(begins, 1), "« ");
+  assert.equal(addedMark(begins, 3), " »");
+  // Nested: the outer structure's marks stay when only the inner quotation holds its own.
+  const nested = [text("suit :"), boundary("quotation_start", "embeddedStructure"), text("Le "), boundary("quotation_start"), text("« plan »"),
+    boundary("quotation_end"), text(" est"), boundary("quotation_end", "embeddedStructure")];
+  assert.equal(addedMark(nested, 1), " « ");
+  assert.equal(addedMark(nested, 3), "");
+  assert.equal(addedMark(nested, 5), "");
+  assert.equal(addedMark(nested, 7), " »");
+
+  // Through the page: an article in a743's shape shows no added mark, and its text is untouched.
+  const value = envelope((answer) => {
+    const article = answer.states[0].articles[0];
+    const at = article.text.indexOf(" ", 10);
+    article.text = `${article.text.slice(0, at + 1)}« moyen 1 » et « moyen 2 »${article.text.slice(at)}`;
+    const bytes = new TextEncoder().encode(article.text);
+    article.text_byte_length = bytes.length;
+    article.text_sha256 = sha256(article.text);
+    article.segments = [
+      { kind: "text", text: article.text.slice(0, at + 1) },
+      { kind: "quotation_start", quotation: "embeddedText", marks_in_wording: false, marker: null },
+      { kind: "text", text: "« moyen 1 » et « moyen 2 »" },
+      { kind: "quotation_end", quotation: "embeddedText", marks_in_wording: false, marker: null },
+      { kind: "text", text: article.text.slice(at + 1 + "« moyen 1 » et « moyen 2 »".length) },
+    ];
+    answer.segments_rule = "segments rule";
+  });
+  const article = value.result.value.states[0].articles[0];
+  const quote = quoteOf(renderToStaticMarkup(h(ReadingAnswerView, { outcome: readingOutcome({ state: "success", envelope: value }) })), article.publisher_id);
+  assert.doesNotMatch(quote, /data-quotation-mark/, "no mark doubles the publisher's own");
+  assert.equal(decode(quote.replace(/<[^>]+>/g, "")), article.text);
 });

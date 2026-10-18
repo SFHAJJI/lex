@@ -255,9 +255,9 @@ function addSegmented(add, item, subject) {
   let marked = false;
   const quoted = shown.map((segment, index) => {
     if (segment.kind === 'text') return segment.text;
-    if (segment.marksInWording) return '';
-    marked = true;
-    return addedMark(shown, index);
+    const mark = addedMark(shown, index);
+    marked ||= mark.length > 0;
+    return mark;
   }).join('');
   add(quoted, { field: `${subject}'s text` });
   if (marked) {

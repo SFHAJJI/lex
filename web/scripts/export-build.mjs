@@ -62,16 +62,18 @@ export const EXPORT_WATERMARK = WATERMARK_PREVIEW;
 export const EUROPE_WITHOUT_TEXT = 'articles_without_text';
 
 /**
- * The CSV columns, in order: each row is one pinned article, whole on its own. `segments` is the JSON of an article's
- * segments (content /3), empty for any other. The last five repeat on every row what the export as a whole carries (the
- * snapshot's observation time, the rights rule, the corpus, index and registry digests), so a row copied out alone loses
- * none of it (review of #789).
+ * The CSV columns, in order: each row is one pinned article, whole on its own. The five before the last repeat on every row
+ * what the export as a whole carries (the snapshot's observation time, the rights rule, the corpus, index and registry
+ * digests), so a row copied out alone loses none of it (review of #789). The last, `segments`, is the JSON of an article's
+ * segments (content /3), empty for any other; it comes last so every column before it keeps its place under
+ * `lex-v3-export/1` (the review of #981, F4).
  */
 export const CSV_COLUMNS = Object.freeze([
   'work_key', 'language', 'applies_from', 'article', 'status', 'citation', 'citation_conventional', 'citation_with_permalink', 'citation_evidence', 'state_permalink',
-  'text_sha256', 'body_sha256', 'official_source', 'rights_disposition', 'article_valid_from', 'text', 'segments', 'watermark',
+  'text_sha256', 'body_sha256', 'official_source', 'rights_disposition', 'article_valid_from', 'text', 'watermark',
   'as_published', 'later_versions', 'authenticity',
   'observed_at', 'rights_rule', 'corpus_sha256', 'index_sha256', 'registry_sha256',
+  'segments',
 ]);
 
 /**
@@ -457,16 +459,17 @@ export function exportCsv(model) {
   const rows = [
     ...model.items.map((item) => [
       item.workKey, item.language, item.appliesFrom, item.publisherId, 'exported', item.citation, ...citationsCsv(item.citations), item.statePermalink,
-      item.textSha256, item.bodySha256, item.officialSource, item.rightsDisposition, item.articleValidFrom, item.text,
-      item.segments === null ? '' : JSON.stringify(segmentsJson(item.segments)), model.watermark,
+      item.textSha256, item.bodySha256, item.officialSource, item.rightsDisposition, item.articleValidFrom, item.text, model.watermark,
       ...published,
       ...provenance,
+      item.segments === null ? '' : JSON.stringify(segmentsJson(item.segments)),
     ]),
     ...model.excluded.map((entry) => [
       entry.workKey, entry.language, entry.appliesFrom, entry.publisherId, `excluded: ${entry.reason}`, entry.citation, ...citationsCsv(entry.citations), entry.statePermalink,
-      '', '', '', model.rightsDisposition, '', '', '', model.watermark,
+      '', '', '', model.rightsDisposition, '', '', model.watermark,
       ...published,
       ...provenance,
+      '',
     ]),
   ];
   return [CSV_COLUMNS, ...rows].map((row) => row.map(csvField).join(',')).join('\r\n') + '\r\n';

@@ -118,8 +118,9 @@ export function ArticleText({ article, language, applicabilityDate }) {
  * One article's wording in its state's language. An article with segments (content /3) shows quoted wording between
  * quotation marks, unless the publisher writes them in the wording itself, and the wording the publisher marks deleted
  * struck through, in a `del` that says so to a screen reader (its labels spaced apart from the words around them); its
- * text segments are exactly its text. A mark the page adds stands apart from the word before or after it with a space when
- * the wording has none there (the French review of S3b, point 4); the text and its digest hold neither. Any other article
+ * text segments are exactly its text. No mark is added where the wording already holds one (the review of #981, F1), and a
+ * mark the page adds stands apart from the word before or after it with a space when the wording has none there (the
+ * French review of S3b, point 4); the text and its digest hold neither (`quotation-marks.mjs`). Any other article
  * is its text, as before. Shared with the export composer, which pins the same articles.
  */
 export function ArticleWording({ article, language }) {
@@ -139,8 +140,9 @@ export function ArticleWording({ article, language }) {
             </del>
           );
         }
-        if (segment.marksInWording) return null;
-        return <span key={index} data-quotation-mark={segment.kind === 'quotation_start' ? 'open' : 'close'}>{addedMark(segments, index)}</span>;
+        const mark = addedMark(segments, index);
+        if (mark === '') return null;
+        return <span key={index} data-quotation-mark={segment.kind === 'quotation_start' ? 'open' : 'close'}>{mark}</span>;
       })}
     </blockquote>
   );
