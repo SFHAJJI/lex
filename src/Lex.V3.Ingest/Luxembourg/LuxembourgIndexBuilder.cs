@@ -990,7 +990,8 @@ public static partial class LuxembourgIndexBuilder
     /// (a private copy, hashed and read back) with the corpus's check of the log's source bodies. The same projection and the
     /// same writer as <see cref="TryBuild(Stage3DerivationProfileEnvelope, LuxembourgIndexPredecessor?, DateTimeOffset, DateTimeOffset?, out LuxembourgIndexBuildRefusal, out string?)"/>,
     /// so the same bytes; the index's bytes are never held, and the projected rows are released before the file is read back.
-    /// On a refusal the file is removed.
+    /// With <paramref name="readBack"/> false the file is not read back: the mount build's second build, whose file is held to
+    /// the first's digest, so it is either the first's verified bytes or a refusal. On a refusal the file is removed.
     /// </summary>
     internal static async Task<(V3BuiltIndexFile? Index, LuxembourgIndexBuildRefusal Refusal, string? Detail)> TryBuildFileAsync(
         Stage3DerivationProfileEnvelope envelope,
@@ -999,7 +1000,8 @@ public static partial class LuxembourgIndexBuilder
         DateTimeOffset builtAt,
         DateTimeOffset? derivedAt,
         string path,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool readBack = true)
     {
         ArgumentNullException.ThrowIfNull(envelope);
         ArgumentNullException.ThrowIfNull(corpus);
@@ -1014,6 +1016,11 @@ public static partial class LuxembourgIndexBuilder
         {
             DeleteDatabase(path);
             return (null, refusal, detail);
+        }
+
+        if (!readBack)
+        {
+            return (written, LuxembourgIndexBuildRefusal.None, null);
         }
 
         try

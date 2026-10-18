@@ -208,13 +208,15 @@ public static partial class EuropeIndexBuilder
     /// index does not build it again), its digest read from the file, then the file verified by the reader's own file door
     /// (<see cref="EuropeIndexReader.OpenAndVerifyFileAsync"/>: a private copy, hashed and read back). The same projection and
     /// the same writer as <see cref="TryBuild"/>, so the same bytes; the index's bytes are never held, and the projected rows
-    /// are released before the file is read back. On a refusal the file is removed.
+    /// are released before the file is read back. With <paramref name="readBack"/> false the file is not read back: the mount
+    /// build's second build, whose file is held to the first's digest. On a refusal the file is removed.
     /// </summary>
     internal static async Task<(V3BuiltIndexFile? Index, EuropeIndexBuildRefusal Refusal, string? Detail)> TryBuildFileAsync(
         Stage3DerivationProfileEnvelope envelope,
         LexCorpus6BuildResult corpus,
         string path,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool readBack = true)
     {
         ArgumentNullException.ThrowIfNull(envelope);
         ArgumentNullException.ThrowIfNull(corpus);
@@ -225,6 +227,9 @@ public static partial class EuropeIndexBuilder
             DeleteDatabase(path);
             return (null, refusal, detail);
         }
+
+        if (!readBack)
+            return (written, EuropeIndexBuildRefusal.None, null);
 
         try
         {

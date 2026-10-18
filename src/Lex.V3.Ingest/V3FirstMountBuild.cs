@@ -424,7 +424,9 @@ public sealed class V3FirstMountBuild
             return V3FirstMountBuildResult.Refused(V3FirstMountBuildRefusal.NotByteStable, corpusDifference);
         }
 
-        // Each index twice, to files in this build's own staging directory, compared by their SHA-256 (S4b).
+        // Each index twice, to files in this build's own staging directory, compared by their SHA-256 (S4b). The first file is
+        // read back by the reader; the second is not, because it is held to the first's digest: equal, it is the first's
+        // verified bytes; different, the build refuses.
         var staging = Path.Combine(_stagingRoot, "lex-v3-mount-build-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(staging);
         var delivered = false;
@@ -441,7 +443,8 @@ public sealed class V3FirstMountBuild
 
             var luxembourgIndexAgain = await LuxembourgIndexBuilder.TryBuildFileAsync(
                 profileEnvelope, corpus, predecessor, builtAt, luxembourg.DerivedAt,
-                Path.Combine(staging, "second-" + V3FirstMountBuildResult.LuxembourgIndexFileName), cancellationToken).ConfigureAwait(false);
+                Path.Combine(staging, "second-" + V3FirstMountBuildResult.LuxembourgIndexFileName), cancellationToken, readBack: false)
+                .ConfigureAwait(false);
             if (luxembourgIndexAgain.Index is null || !V3BuiltIndexFile.Same(luxembourgIndex.Index, luxembourgIndexAgain.Index))
             {
                 return V3FirstMountBuildResult.Refused(
@@ -461,7 +464,8 @@ public sealed class V3FirstMountBuild
             }
 
             var europeIndexAgain = await EuropeIndexBuilder.TryBuildFileAsync(
-                profileEnvelope, corpus, Path.Combine(staging, "second-" + V3FirstMountBuildResult.EuropeIndexFileName), cancellationToken).ConfigureAwait(false);
+                profileEnvelope, corpus, Path.Combine(staging, "second-" + V3FirstMountBuildResult.EuropeIndexFileName), cancellationToken,
+                readBack: false).ConfigureAwait(false);
             if (europeIndexAgain.Index is null || !V3BuiltIndexFile.Same(europeIndex.Index, europeIndexAgain.Index))
             {
                 return V3FirstMountBuildResult.Refused(

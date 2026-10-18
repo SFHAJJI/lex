@@ -634,7 +634,15 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Ingest.Luxembourg.LuxembourgIndexPredecessor: constructor private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexPredecessor::.ctor, "
                     + "method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexPredecessor::TryReadFile, "
+                    + "method internal static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexPredecessor::TryReadLog, "
+                    + "method internal static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexPredecessor::TryReadLogFile, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexPredecessor::CarriedForward, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexPredecessor::ReadLogAt, "
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexPredecessor::TryRead, "
                     + "method public static Lex.V3.Ingest.V3FirstMountBuild::ReadPredecessor",
@@ -1061,12 +1069,24 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Stage3FidelityPreservationReconciliation::TryCreate",
                 "Lex.V3.Ingest.Stage3LuxembourgBodyComposition: constructor internal instance "
                     + "Lex.V3.Ingest.Stage3LuxembourgBodyComposition::.ctor",
+                // S4b: an index a build wrote to a file, minted only by the builders' file builds; and a mount file, minted
+                // only by the build result's file list.
+                "Lex.V3.Ingest.V3BuiltIndexFile: constructor internal instance "
+                    + "Lex.V3.Ingest.V3BuiltIndexFile::.ctor, "
+                    + "method internal static Lex.V3.Ingest.Europe.EuropeIndexBuilder::TryBuildFileAsync, "
+                    + "method internal static Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder::TryBuildFileAsync, "
+                    + "method internal static Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder::WriteFile, "
+                    + "method private static Lex.V3.Ingest.Europe.EuropeIndexBuilder::TryWriteFile, "
+                    + "method private static Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder::TryWriteFile",
+                "Lex.V3.Ingest.V3CorpusMountFile: constructor internal instance "
+                    + "Lex.V3.Ingest.V3CorpusMountFile::.ctor, "
+                    + "constructor internal instance Lex.V3.Ingest.V3CorpusMountFile::.ctor",
                 "Lex.V3.Ingest.V3FirstMountBuildResult: constructor private instance "
                     + "Lex.V3.Ingest.V3FirstMountBuildResult::.ctor, "
+                    + "method internal static Lex.V3.Ingest.V3FirstMountBuildResult::Success, "
                     + "method public instance Lex.V3.Ingest.V3FirstMountBuild::RunAsync, "
                     + "method public instance Lex.V3.Ingest.V3FirstMountBuild::RunAsync, "
-                    + "method public static Lex.V3.Ingest.V3FirstMountBuildResult::Refused, "
-                    + "method public static Lex.V3.Ingest.V3FirstMountBuildResult::Success",
+                    + "method public static Lex.V3.Ingest.V3FirstMountBuildResult::Refused",
                 "Lex.V3.Ingest.VerifiedLexCorpus6ManifestSet: by-ref-method public instance "
                     + "Lex.V3.Ingest.LexCorpus6BuildResult::Deconstruct, "
                     + "constructor private instance "
