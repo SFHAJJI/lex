@@ -4,6 +4,54 @@ Updated 2026-10-18. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Content /3's wording on the reading and in the exports (sole driver, 2026-10-18)
+
+Slice S3b of the Luxembourg data design (STATUS-DATA.md, the section of the same day): content /3's quoted wording,
+deleted wording and unmarked notes, from the evidence bundle to the screens and the exports. Release 1's rule set runs
+content /3, so these are on the pages once a re-derived mount is served.
+- **The bundle.** A row whose wording holds a quotation or deleted wording carries `segments`: text segments (their
+  texts concatenate to exactly `text`), `quotation_start` and `quotation_end` (the publisher's element, `marks_in_wording`,
+  its own mark when it gives one) and `deleted_text`; the answer then carries `segments_rule`. An unmarked note is
+  `{marker: null, text, unmarked: true}`. Every other row and answer keeps its bytes, so no census moved.
+- **The reader** (`reading-answer.mjs`) reads the segments and refuses those that break the platform's rules (text
+  segments other than the text, a quotation left open or closed by another, an unknown element or kind, empty deleted
+  wording), and reads an unmarked note, never a note with no marker that does not say so.
+- **The screens.** `ArticleWording` (`LiveReading.jsx`), used by the reading, the cited article and the export composer's
+  pins:
+  - quoted wording between « and » (U+00AB U+00A0 … U+00A0 U+00BB), or the publisher's own mark, unless the publisher
+    writes the marks in its wording (`scl:hide-quote="true"`); a mark stands apart from the word before or after it with
+    a space where the wording has none (`addedMark`, `web/scripts/quotation-marks.mjs`, shared with the PDF);
+  - deleted wording struck through in a `del`, with `reading.deletedWordingStart` before it and
+    `reading.deletedWordingEnd` after it, visually hidden and spaced apart from the words around them, so a screen reader
+    says where it starts and ends;
+  - `reading.deletedWordingNote` under an article that holds deleted wording, on the reading, the cited article and the
+    export composer (`DeletedWordingNote`);
+  - an unmarked note as `[reading.unmarkedNote] text`.
+  The text quoted, cited, digested and searched is never changed: with the marks and the deleted wording taken out, the
+  blockquote is the text, and its digest the one served (tested).
+- **The exports** (`export-build.mjs`, `export-pdf.mjs`). JSON: `segments` on an item that has them, each quotation
+  boundary with `marks_in_text` (the export never borrows the EU's "wording", which its test holds), and notes with
+  `unmarked`. CSV: a `segments` column after `text`, the JSON of the segments or empty. PDF: the text with its quotation
+  marks and a line that the text digest is of the text without them; the deleted wording listed after the text under
+  "Wording the publisher marks deleted, in order; none of it is part of the text above:", never inside it; an unmarked
+  note as `[no marker]`.
+- **The French** of the four entries was reviewed by an independent reviewer (Claude, AI reviewer, not the author)
+  under the owner's delegation, in the record's addendum of 2026-10-18 on deleted wording and unmarked notes: 4 forms, 1
+  changed (`reading.deletedWordingNote`: the struck text is "celui que l’éditeur marque comme supprimé", never "un texte",
+  an instrument in legal French; the text a search covers is "interrogé"), 3 approved, no English changed. Its points
+  1 to 4 and 6 are applied (the labels spaced apart, the sentence in the composer too, no "in force" in the reader's
+  refusal or the API's `segments_rule`, a space outside the added marks, the header comment); point 5 (copying a
+  quotation picks up the hidden labels?) is unchecked without a browser and left for the accessibility audit.
+- **Tests.** `web/test/content3-wording.test.mjs` (6): the reader and its refusals, the reading and the export composer in
+  English and in French, the JSON, CSV and PDF exports, segments through pages put together, and the marks' spacing. `npm test`: 1,260 tests, 1,257 passed, 0 failed, 3 skipped (the
+  browser tests, which run only with `LEX_BROWSER_TESTS=1`).
+- **Driver decisions (reversible).** The deleted wording is shown in place, struck through and said, rather than left
+  out: the publisher shows it, and a reader comparing with the official text needs it; it is never in what a quote,
+  citation or digest takes. The PDF, whose fonts cannot strike through, lists it apart under its label. The CSV's new
+  column sits after `text`, so a reader by name loses nothing; a reader by position sees later columns move by one.
+- **Waits.** On this base no re-derived state is served (STATUS-DATA.md: index /9's states, S6, #980), so these screens
+  first show content /3 after S6 and the dry run.
+
 ## A rooted path is an identifier on every system, as production reads it (sole driver, 2026-10-18)
 
 CI's image lane on #980 found that `resolve` of a rooted path (`/lu-legilux/loi-2026-01-01-a1`, which no record answers)

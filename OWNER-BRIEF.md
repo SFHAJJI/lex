@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-17 at 23:39 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-18 at 02:57 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -13,8 +13,8 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
   ELI, a CELEX number, a Mémorial issue, "loi du 10 août 1991", "Article 6 of Regulation (EU) 2016/679").
 - Long codes are now read page by page: a code of 3,000 articles opens at about 260 KB, not 13 MB. Built and kept
   switched off until you decide: search-engine support. Being built: the Luxembourg index's dated versions.
-- The law is still thin: Luxembourg has 1,730 acts as first published and no codes; EU text covers 511 of 1,170
-  versions. The code that reads the codes is done (about 121,000 more articles); the rebuild needs disk space.
+- Still thin: Luxembourg has 1,730 acts as first published, no codes; EU text covers 511 of 1,170 versions. Done and
+  waiting for disk: the codes (121,000 articles) and quoted or struck-out wording (6,000 more, from 18 October).
 
 ## The plan
 

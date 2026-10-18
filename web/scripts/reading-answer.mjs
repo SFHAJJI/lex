@@ -19,7 +19,7 @@
 //    exactly "its own date is stated and differs from the state's", and the state's count is theirs;
 //  - an article without text is named apart from the quoted ones, never served as a quote;
 //  - an article whose wording holds quoted wording or wording the publisher marks deleted (content /3) carries its
-//    segments: wording in force whose texts concatenate to exactly its text, quotation boundaries that pair, and deleted
+//    segments: text segments that concatenate to exactly its text, quotation boundaries that pair, and deleted
 //    wording, which is never part of the text; a note whose reference the publisher wrote without a marker says so
 //    (`unmarked`) and has no marker;
 //  - a state is read one page at a time (the plan's item 3.7): its page, its index of pages and, when asked, its contents
@@ -121,9 +121,9 @@ function requireBoolean(value, where) {
 const QUOTATIONS = new Set(['embeddedText', 'quotedText', 'embeddedStructure', 'quotedStructure']);
 
 /**
- * An article's segments (content /3), or null when it carries none: wording in force (`text`), quotation boundaries
+ * An article's segments (content /3), or null when it carries none: its text (`text`), quotation boundaries
  * (`quotation_start`, `quotation_end`, each naming its element, whether the publisher writes the marks in the wording and
- * the publisher's own mark when it gives one) and deleted wording (`deleted_text`). The wording in force concatenates to
+ * the publisher's own mark when it gives one) and deleted wording (`deleted_text`). The text segments concatenate to
  * exactly the article's text, so what is quoted, cited and digested is never changed by them, and deleted wording is never
  * part of it.
  */
@@ -162,7 +162,7 @@ function readSegments(article, text, at) {
     throw new Error(`${where} is ${JSON.stringify(kind)}, not a segment of wording`);
   });
   if (open.length > 0) throw new Error(`${at} leaves a quotation open`);
-  if (inForce !== text) throw new Error(`${at}'s wording in force is not its text`);
+  if (inForce !== text) throw new Error(`${at}'s text segments are not its text`);
   return Object.freeze({ segments: Object.freeze(read), deleted });
 }
 

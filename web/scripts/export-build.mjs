@@ -27,7 +27,7 @@
 // same sentence.
 //
 // An article whose wording holds quoted wording or wording the publisher marks deleted (content /3) carries its segments
-// (`segments` in the JSON and a column of the CSV, empty for any other article): its wording in force, the quotation
+// (`segments` in the JSON and a column of the CSV, empty for any other article): its text segments, the quotation
 // boundaries with the publisher's mark evidence (`marks_in_text`: the publisher writes the marks in its text), and the
 // deleted wording, which is never part of `text`, its digest or a citation. The PDF quotes the text with its quotation
 // marks and lists the deleted wording apart, under a label, never inside the text. A note whose reference the publisher
@@ -432,7 +432,7 @@ function noteJson(note) {
 }
 
 /**
- * An article's segments as an export writes them: the wording in force and the deleted wording each with its text, each
+ * An article's segments as an export writes them: the text segments and the deleted wording each with its text, each
  * quotation boundary with its element, whether the publisher writes the marks in its text, and its mark when it gives one.
  */
 export function segmentsJson(segments) {

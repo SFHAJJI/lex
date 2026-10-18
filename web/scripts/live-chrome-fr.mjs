@@ -116,6 +116,13 @@
 // delegation in the addendum of 2026-10-18 on a page past a version's last (6 forms, 4 changed in review: the second clause
 // says "il n’y a donc pas de page {page}", the site's page, never that the version has none, since the publisher's text has
 // printed pages of its own; the English changed with it).
+// Content /3's deleted wording and unmarked notes (slice S3b): the labels a screen reader hears at the start and end of
+// wording the publisher marks deleted (`reading.deletedWordingStart`, `reading.deletedWordingEnd`), the sentence under an
+// article that holds some (`reading.deletedWordingNote`) and the bracket of a note whose reference has no marker
+// (`reading.unmarkedNote`) were reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the same
+// delegation in the addendum of 2026-10-18 on deleted wording and unmarked notes (4 forms, 1 changed in review: the struck
+// text is "celui que l’éditeur marque comme supprimé", never "un texte", which in legal French is an instrument, and the
+// text a search covers is "interrogé").
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -238,7 +245,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     validityConflict: 'La date propre de cet article est le {own} ; sa version s’applique à partir du {state}.',
     deletedWordingStart: 'Texte que l’éditeur marque comme supprimé :',
     deletedWordingEnd: 'Fin du texte marqué comme supprimé.',
-    deletedWordingNote: 'Le texte barré est un texte que l’éditeur marque comme supprimé dans son texte. Il ne fait pas partie du texte que ce site cite ou recherche.',
+    deletedWordingNote: 'Le texte barré est celui que l’éditeur marque comme supprimé dans son texte. Il ne fait pas partie du texte que ce site cite ou interroge.',
     unmarkedNote: 'sans appel de note',
     evidence: 'Empreinte du texte {text}, empreinte du corps {body}, source officielle {source}, {permalink}',
     withoutText: 'Détenus sans texte : {articles}.',

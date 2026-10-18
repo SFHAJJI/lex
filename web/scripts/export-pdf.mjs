@@ -32,6 +32,7 @@
 // refusal is read off that layout, so the page never offers a PDF its layout then refuses.
 
 import { EUROPE_EXPORT_SCHEMA, asPublishedParagraph } from './export-build.mjs';
+import { addedMark } from './quotation-marks.mjs';
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
@@ -243,22 +244,20 @@ function pageLine(model, number, count) {
   return `Page ${number} of ${count}. ${model.identifier}, read on ${model.date}.`;
 }
 
-/** The quotation marks set where the publisher's rendering shows them and its text does not hold them. */
-const QUOTE_OPEN = '« ';
-const QUOTE_CLOSE = ' »';
-
 /**
  * An article with segments (content /3): its text with the quotation marks the publisher's rendering shows, a line saying
  * the marks are not in the text its digest covers, and the wording the publisher marks deleted listed after it, under a
  * label, never inside the text.
  */
 function addSegmented(add, item, subject) {
+  // The PDF sets no deleted wording inside the text, so the marks are spaced against the text segments alone.
+  const shown = item.segments.filter((segment) => segment.kind !== 'deleted_text');
   let marked = false;
-  const quoted = item.segments.map((segment) => {
+  const quoted = shown.map((segment, index) => {
     if (segment.kind === 'text') return segment.text;
-    if (segment.kind === 'deleted_text' || segment.marksInWording) return '';
+    if (segment.marksInWording) return '';
     marked = true;
-    return segment.marker ?? (segment.kind === 'quotation_start' ? QUOTE_OPEN : QUOTE_CLOSE);
+    return addedMark(shown, index);
   }).join('');
   add(quoted, { field: `${subject}'s text` });
   if (marked) {

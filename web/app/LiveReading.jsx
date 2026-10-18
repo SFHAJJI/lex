@@ -52,6 +52,7 @@ import {
 } from '../scripts/live-reading.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { anchorOf, anchorText, permalinkHref } from '../scripts/permalinks.mjs';
+import { addedMark } from '../scripts/quotation-marks.mjs';
 import { hasNextPage, pagesShown, readNextPage, viewOf, withoutStopped } from '../scripts/reading-pages.mjs';
 import { answerHandedWith } from '../scripts/v3-client.mjs';
 import { readingAddressShown, readingPinOf, todayAt } from '../scripts/initial-answer.mjs';
@@ -94,9 +95,7 @@ export function ArticleText({ article, language, applicabilityDate }) {
   return (
     <>
       <ArticleWording article={article} language={language} />
-      {article.holdsDeletedWording ? (
-        <p data-deleted-wording-note="">{COPY.deletedWordingNote}</p>
-      ) : null}
+      <DeletedWordingNote article={article} />
       {applicabilityDate !== null && article.validityConflict ? (
         <p data-validity-conflict="">
           <Say template={COPY.validityConflict} values={{ own: article.validFrom, state: applicabilityDate }} />
@@ -115,38 +114,41 @@ export function ArticleText({ article, language, applicabilityDate }) {
   );
 }
 
-/** The quotation marks a reader adds where the publisher's rendering adds them and its wording does not hold them. */
-const QUOTE_OPEN = '« ';
-const QUOTE_CLOSE = ' »';
-
 /**
  * One article's wording in its state's language. An article with segments (content /3) shows quoted wording between
  * quotation marks, unless the publisher writes them in the wording itself, and the wording the publisher marks deleted
- * struck through, in a `del` that says so to a screen reader; its wording in force is exactly its text. Any other article
+ * struck through, in a `del` that says so to a screen reader (its labels spaced apart from the words around them); its
+ * text segments are exactly its text. A mark the page adds stands apart from the word before or after it with a space when
+ * the wording has none there (the French review of S3b, point 4); the text and its digest hold neither. Any other article
  * is its text, as before. Shared with the export composer, which pins the same articles.
  */
 export function ArticleWording({ article, language }) {
   const lang = quotationLanguageTag(language);
   if (article.segments === null || article.segments === undefined) return <blockquote lang={lang}>{article.text}</blockquote>;
+  const segments = article.segments;
   return (
     <blockquote lang={lang} data-segmented="">
-      {article.segments.map((segment, index) => {
+      {segments.map((segment, index) => {
         if (segment.kind === 'text') return <span key={index}>{segment.text}</span>;
         if (segment.kind === 'deleted_text') {
           return (
             <del key={index} data-deleted-wording="">
-              <span className="visually-hidden" lang={CHROME_LOCALE}>{COPY.deletedWordingStart} </span>
+              <span className="visually-hidden" lang={CHROME_LOCALE}> {COPY.deletedWordingStart} </span>
               {segment.text}
-              <span className="visually-hidden" lang={CHROME_LOCALE}> {COPY.deletedWordingEnd}</span>
+              <span className="visually-hidden" lang={CHROME_LOCALE}> {COPY.deletedWordingEnd} </span>
             </del>
           );
         }
         if (segment.marksInWording) return null;
-        const mark = segment.marker ?? (segment.kind === 'quotation_start' ? QUOTE_OPEN : QUOTE_CLOSE);
-        return <span key={index} data-quotation-mark={segment.kind === 'quotation_start' ? 'open' : 'close'}>{mark}</span>;
+        return <span key={index} data-quotation-mark={segment.kind === 'quotation_start' ? 'open' : 'close'}>{addedMark(segments, index)}</span>;
       })}
     </blockquote>
   );
+}
+
+/** The sentence under an article that holds deleted wording: what struck-through wording is, and that it is never quoted. */
+export function DeletedWordingNote({ article }) {
+  return article.holdsDeletedWording ? <p data-deleted-wording-note="">{COPY.deletedWordingNote}</p> : null;
 }
 
 /** Whether a version is read in more than one page, and so lays out its pages (a version of one page is laid out as before). */

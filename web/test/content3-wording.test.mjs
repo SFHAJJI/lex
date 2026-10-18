@@ -1,9 +1,9 @@
 // Content /3's wording on the live pages and in the exports (slice S3b): an article whose wording holds quoted wording or
 // wording the publisher marks deleted carries its segments, and a note whose reference the publisher wrote without a
 // marker is unmarked. Built from the census bundle the real handler sent (`envelope-samples.json`) and the captured answer
-// (`answer-samples.json`), with segments added to one article as the platform adds them: its wording in force is exactly
+// (`answer-samples.json`), with segments added to one article as the platform adds them: its text segments are exactly
 // its text, so the digests the platform sent stay the text's. The rules held here:
-//  - the reader reads the segments and refuses any that break the platform's rules (wording in force other than the text,
+//  - the reader reads the segments and refuses any that break the platform's rules (text segments other than the text,
 //    a quotation not closed or closed by another, an unknown kind), and reads an unmarked note, never a marked one without
 //    a marker;
 //  - the reading and the export composer show quoted wording between « and », unless the publisher writes the marks in its
@@ -29,6 +29,7 @@ import { exportPdf } from "../scripts/export-pdf.mjs";
 import { LIVE_CHROME } from "../scripts/live-chrome.mjs";
 import { mergeReadingPage } from "../scripts/reading-pages.mjs";
 import { cutIntoPages } from "../scripts/reading-page-samples.mjs";
+import { addedMark } from "../scripts/quotation-marks.mjs";
 
 const web = new URL("../", import.meta.url);
 const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", web), "utf8"));
@@ -99,16 +100,16 @@ test("the reader reads an article's segments and an unmarked note, and refuses s
   const [first, second] = view.states[0].articles;
   assert.deepEqual(first.segments.map((segment) => segment.kind), ["text", "quotation_start", "text", "quotation_end", "deleted_text", "text"]);
   assert.equal(first.holdsDeletedWording, true);
-  assert.equal(first.text, article.text, "the text is the wording in force, untouched");
+  assert.equal(first.text, article.text, "the text is untouched");
   assert.equal(first.textSha256, article.text_sha256);
   assert.deepEqual({ ...first.notes.at(-1) }, { marker: null, unmarked: true, text: "Note synthétique sans appel." });
   assert.equal(second.segments, null, "an article with none has none");
   assert.equal(second.holdsDeletedWording, false);
 
   const cases = [
-    ["wording in force that is not the text", (a) => { a.states[0].articles[0].segments[0].text += "x"; }, /wording in force is not its text/],
-    ["deleted wording counted as text", (a) => { a.states[0].articles[0].segments[4].kind = "text"; }, /wording in force is not its text/],
-    ["a quotation left open", (a) => { a.states[0].articles[0].segments.splice(3, 1); }, /leaves a quotation open|wording in force/],
+    ["text segments that are not the text", (a) => { a.states[0].articles[0].segments[0].text += "x"; }, /text segments are not its text/],
+    ["deleted wording counted as text", (a) => { a.states[0].articles[0].segments[4].kind = "text"; }, /text segments are not its text/],
+    ["a quotation left open", (a) => { a.states[0].articles[0].segments.splice(3, 1); }, /leaves a quotation open|text segments are not its text/],
     ["a quotation closed by another", (a) => { a.states[0].articles[0].segments[3].quotation = "embeddedStructure"; }, /closes a quotation it did not open/],
     ["an unknown element", (a) => { a.states[0].articles[0].segments[1].quotation = "mod"; a.states[0].articles[0].segments[3].quotation = "mod"; }, /not a quotation element/],
     ["an unknown kind", (a) => { a.states[0].articles[0].segments[4].kind = "inserted_text"; }, /not a segment of wording/],
@@ -134,9 +135,9 @@ test("the reading and the export composer quote the marks and strike the deleted
     const quote = quoteOf(markup, article.publisher_id);
     assert.match(quote, /^<blockquote lang="fr" data-segmented="">/);
     const segments = segmentsFor(article.text);
-    assert.ok(decode(quote).includes(`${segments[0].text}</span><span data-quotation-mark="open">« </span><span>${segments[2].text}</span><span data-quotation-mark="close"> »</span>`),
+    assert.ok(decode(quote).includes(`${segments[0].text}</span><span data-quotation-mark="open">« </span><span>${segments[2].text}</span><span data-quotation-mark="close"> » </span>`),
       "the quoted words between « and », the publisher's own words");
-    assert.ok(decode(quote).includes(`<del data-deleted-wording=""><span class="visually-hidden" lang="en">${EN.deletedWordingStart} </span>${DELETED}<span class="visually-hidden" lang="en"> ${EN.deletedWordingEnd}</span></del>`),
+    assert.ok(decode(quote).includes(`<del data-deleted-wording=""><span class="visually-hidden" lang="en"> ${EN.deletedWordingStart} </span>${DELETED}<span class="visually-hidden" lang="en"> ${EN.deletedWordingEnd} </span></del>`),
       "the deleted wording struck through, said to a screen reader at its start and end");
     // What the text says when the marks and the deleted wording are taken out is the text quoted and digested.
     const inForce = decode(quote.replace(/<del[\s\S]*?<\/del>/g, "").replace(/<span data-quotation-mark="(?:open|close)">[^<]*<\/span>/g, "").replace(/<[^>]+>/g, ""));
@@ -145,6 +146,8 @@ test("the reading and the export composer quote the marks and strike the deleted
   }
   const reading = renderToStaticMarkup(h(ReadingAnswerView, { outcome }));
   assert.ok(decode(reading).includes(`<p data-deleted-wording-note="">${EN.deletedWordingNote}</p>`));
+  const composer = renderToStaticMarkup(h(ExportAnswerView, props(outcome)));
+  assert.equal((composer.match(/data-deleted-wording-note/g) ?? []).length, 1, "the export composer says it too, under the struck words");
   assert.ok(decode(reading).includes(`<li data-unmarked=""><span>[${EN.unmarkedNote}]</span> <span lang="fr">Note synthétique sans appel.</span></li>`));
   assert.equal((reading.match(/data-deleted-wording-note/g) ?? []).length, 1, "the sentence stands under the one article that holds deleted wording");
 
@@ -170,7 +173,7 @@ test("the French pages say the deleted wording and the unmarked note in the revi
   const frenchLive = await import(`${new URL("scripts/live-reading.mjs", web).href}`);
   const value = envelope((answer) => segmented(answer));
   const markup = decode(renderToStaticMarkup(h(french.ReadingAnswerView, { outcome: frenchLive.readingOutcome({ state: "success", envelope: value }) })));
-  assert.ok(markup.includes(`<span class="visually-hidden" lang="fr">${FR.deletedWordingStart} </span>${DELETED}<span class="visually-hidden" lang="fr"> ${FR.deletedWordingEnd}</span>`));
+  assert.ok(markup.includes(`<span class="visually-hidden" lang="fr"> ${FR.deletedWordingStart} </span>${DELETED}<span class="visually-hidden" lang="fr"> ${FR.deletedWordingEnd} </span>`));
   assert.ok(markup.includes(`<p data-deleted-wording-note="">${FR.deletedWordingNote}</p>`));
   assert.ok(markup.includes(`<span>[${FR.unmarkedNote}]</span>`));
   for (const key of ["deletedWordingStart", "deletedWordingEnd", "deletedWordingNote", "unmarkedNote"]) {
@@ -230,4 +233,25 @@ test("a later page's segments travel through the pages put together and into the
   const [item] = JSON.parse(exportJson(model)).items;
   assert.equal(item.text, article.text);
   assert.deepEqual(item.segments.map((segment) => segment.kind), ["text", "quotation_start", "text", "quotation_end", "deleted_text", "text"]);
+});
+
+test("an added mark stands apart from the words around it only where the wording has no space", () => {
+  const at = (before, after, kind = "quotation_start") => {
+    const quote = { kind, quotation: "embeddedStructure", marksInWording: false, marker: null };
+    return addedMark([{ kind: "text", text: before }, quote, { kind: "text", text: after }], 1);
+  };
+  assert.equal(at("comme suit :", "La permission"), " « ", "a space before « after a colon");
+  assert.equal(at("comme suit : ", "La permission"), "« ", "none where the wording has one");
+  assert.equal(at("(", "texte"), "« ", "none after an opening bracket");
+  assert.equal(at("texte", "suivant", "quotation_end"), " » ", "a space after » before a word");
+  assert.equal(at("texte", ".", "quotation_end"), " »", "none before a full stop");
+  const nested = [
+    { kind: "text", text: "suit :" },
+    { kind: "quotation_start", quotation: "embeddedStructure", marksInWording: false, marker: null },
+    { kind: "quotation_start", quotation: "embeddedText", marksInWording: false, marker: null },
+    { kind: "text", text: "x" },
+  ];
+  assert.equal(addedMark(nested, 2), "« ", "an inner mark follows the outer one's own space");
+  assert.equal(addedMark([{ kind: "text", text: "a" }, { kind: "quotation_start", quotation: "embeddedText", marksInWording: false, marker: "„" }], 1), " „",
+    "the publisher's own mark when it gives one");
 });

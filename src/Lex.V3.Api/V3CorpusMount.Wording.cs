@@ -7,7 +7,7 @@ namespace Lex.V3.Api;
 /// <summary>
 /// Content /3's wording structure in a Luxembourg article's quote (slice S3b): the article's <c>segments</c>, read from its
 /// stored token stream, so a reader can show quoted wording between quotation marks and the publisher's deleted wording
-/// struck through, while <c>text</c> stays exactly the wording in force the index searches and a quote cites.
+/// struck through, while <c>text</c> stays exactly the text the index searches and a quote cites.
 /// </summary>
 /// <remarks>
 /// An article content /1 or /2 made has no quotation token and no deleted wording, so it gets no <c>segments</c> and its row,
@@ -18,7 +18,7 @@ internal sealed partial class V3CorpusMount
 {
     internal const string SegmentsRule =
         "segments, on an article whose wording holds quoted wording or wording the publisher marks deleted, is that wording in publisher order: " +
-        "text (wording in force; the segments' texts, concatenated, are exactly text), quotation_start and quotation_end around wording the act " +
+        "text (the text the article is quoted, cited and searched by; these segments' texts, concatenated, are exactly text), quotation_start and quotation_end around wording the act " +
         "quotes (quotation names the publisher's element, embeddedText, quotedText, embeddedStructure or quotedStructure; marks_in_wording is true " +
         "when the publisher writes the quotation marks in the wording itself, so a reader adds none, and marker is the publisher's own mark when it " +
         "gives one), and deleted_text, wording the publisher marks deleted in its text (a del or a struck span), which is never part of text, " +
@@ -126,7 +126,7 @@ internal sealed partial class V3CorpusMount
         if (!string.Equals(inForce.ToString(), text, StringComparison.Ordinal))
         {
             throw new InvalidDataException(
-                "An article's stored wording in force is not its searchable text; the index is not the one its build wrote.");
+                "An article's stored text segments are not its searchable text; the index is not the one its build wrote.");
         }
 
         return segments;

@@ -2,6 +2,129 @@
 
 Updated 2026-10-18.
 
+## Content /3: quoted wording, deleted wording, layout markers and unmarked notes; Release 1 runs it (sole driver, 2026-10-18)
+
+- **What.** Slice S3b of the Luxembourg data design (`C:\lex-v3\LU-DATA-DESIGN-2026-10-14-v2.md` §1.4, "Content
+  profiles /2 and /3", and the S3b row). `LuxembourgAknLegalContentProfile3Producer` reads inventory /4's articles
+  with /2's index-term rule and the shapes of the design's /3 table. It sits beside /1 and /2, which keep their rule
+  texts, pins and outputs: /1 `dd32d9a5…` (R0 re-verifies `content_sha256 abc0a299…` in the dry run; the frozen replay
+  passes unchanged), /2 `bf3fea5a…`. /1's producer class is unchanged; the shared types beside it gain /3's kinds,
+  marks and identity layout, their /1 and /2 branches hashing as before; /2's index-term reader is made internal so /3
+  calls it. Rule profile /3: sha256 `68ae07566a136b95a728806056bfccd81e220b4fa9d8f52af8343c78c12111c3` (21 lines,
+  2,746 bytes, recomputed in Python from the text written out line by line). It names inventory /4's and content /2's
+  digests.
+- **The rules.**
+  - `eop`, `eol` and `br` make no token. Where one sits between two characters of wording that are not white space, one
+    text token of a single U+0020 stands at the marker, so words never fuse in the searchable text. Inside deleted wording
+    that space is deleted wording too. A marker that holds anything is a gap.
+  - `sub`, `def`, `abbr`, `em`, `term`, `inline` and a `span` without a class are containers, as `b` and `i` are.
+  - `u` outside quoted and amending structures is a container; its text, reference and deleted tokens carry
+    `underline`. A `u` inside `quotedStructure`, `embeddedStructure`, `quotedText`, `embeddedText` or `mod` is a gap.
+  - The four quotation elements become `quotation_start` and `quotation_end` around their tokens. Each names its element,
+    carries `startQuote`/`endQuote` verbatim as its marker (1 to 64 characters) and says `marks_in_wording` when
+    `scl:hide-quote="true"`. The wording inside is the act's own: searchable, quotable and cited. `book` to `alinea` (and
+    `subpart`) are containers only inside a quotation.
+  - `del`, and a `span` of class `strike`, are deleted wording: each text is a `deleted_text` token, and a reference
+    inside is a `deleted_text` token keeping its target, never a `reference`, so it emits no `cites` row. Inside: text,
+    the inline containers, `u`, layout markers, nested deleted wording, empty modification boundaries and note references.
+    Anything else is a gap. A `del` with a class is a gap.
+  - A `span` of any other class is a gap until reviewed.
+  - A `noteRef` with no `marker`, empty and bound by its id to exactly one note, is a note reference with `unmarked` and
+    no marker. A note body holds no quotation and no deleted wording, so a note's text is never deleted or quoted wording.
+  - Still gaps: tables, a modification span across articles and a non-empty `mod`, MathML and every other namespace,
+    images, processing instructions, embedded documents, and every element the profile does not name (`docNumber`).
+- **The token model.** Three kinds (`quotation_start` 6, `quotation_end` 7, `deleted_text` 8) and four init-only marks on
+  `LuxembourgAknLegalContentToken` (`Underline`, `Unmarked`, `Quotation`, `MarksInWording`). A /1 or /2 article refuses a
+  token carrying any of them, and a population holds /3 articles only under /3's digest.
+  - Article identity layout `/3`: layout /2's fields with each token's four marks after its marker.
+  - `tokens_json`: a token without a /3 mark is written as before, byte for byte (pinned by a test); one with a mark adds
+    only the marks it carries (`underline`, `unmarked`, `quotation` with `marks_in_wording`).
+  - The wording digest (`LuxembourgIndexReader.WordingSha256`) adds deleted wording as `["deleted_text", text, target]`
+    (consecutive deleted text merged as text is) and each quotation boundary as `[kind, null, null]`. A stream with
+    neither digests as before (pinned against the old algorithm).
+  - `searchable_text` and the `cites` projection are unchanged code: they read text and reference tokens only, so deleted
+    wording never reaches them.
+- **Through the reader, the exports and the web.**
+  - The evidence bundle gives a row whose wording holds a quotation or deleted wording its `segments` (text segments,
+    whose texts concatenate to exactly `text`; quotation boundaries; deleted wording) and the answer a `segments_rule`. A
+    row and an answer without them keep their bytes. An unmarked note is `{marker: null, text, unmarked: true}`. A stored
+    stream whose text segments are not its searchable text is refused.
+  - `text`, `text_sha256`, quotes, citations, search and `cites` never hold deleted wording.
+  - Web, exports: STATUS-WEB.md, the section of the same day.
+- **Driver decisions (reversible):**
+  - **Release 1 runs content /3.** Rule set `lu-release-1` is now inventory /4 `8a011d87…` and content /3 `68ae0756…`,
+    policy /1 `a477f4f2…` (`LuxembourgRederivation.RulesOf`, `ApplyAsync`). The design placed /3 in Release 2; the owner
+    wants the fullest correct text as soon as possible, and nothing argues for waiting:
+    - no inputs are sealed under `lu-release-1` yet (the dry run has not run), so the change costs no machine run;
+    - /3 reads every article /2 admits to the same stored tokens (0 disagreements over run 15, below);
+    - it adds 5,946 articles to the bodies admitted today, of the 7,704 S6 measured missing from their held states;
+    - this slice carries the new kinds through the reader, the exports and the web.
+    Inputs that name content /2 now refuse ("no rule digest is substituted"), tested.
+  - **What a re-derivation must be run with.** The same command as before, and the rules it writes are the build's:
+    `rederive-inputs --custody C:\lex-v3\lu-population-20261011-15\custody --base <run 15's mount-inputs-*.json>
+    --rules lu-release-1 --policy a477f4f2e6e0468bc9069da742f6f34f248ec831e01277a40552cb1e5bad2abb --derived-at <utc>`,
+    then `derive`, then `rederive-seal` with the record it prints. The inputs name inventory /4 and content /3. Once S6
+    (#980) merges, the set also names state digest /2; the second of the two to merge rebases both rule lists together.
+  - Deleted references keep their target (as `deleted_text`), so no evidence is lost and no `cites` row is made.
+  - A note reference inside deleted wording stays a note reference (5,123 in run 15's consolidations): the note is the
+    publisher's apparatus on the deletion, and its references are in-note `cites` rows, as every note's are.
+  - An unmarked note has no marker even when the note element carries one (`**` on 344 notes of acts): the reference wrote
+    none.
+  - `scl:hide-quote="true"` means the publisher writes the marks in the wording. Measured over the admitted acts: 2,030 of
+    2,809 such structures begin with «, against 48 of the 3,721 without it. The reader adds « » for the others.
+  - A `span` without a class is a container whatever else it carries (`style="li_symbol"` 637 times, `scl:leader`,
+    `scl:background-color`). In the admitted bodies the only class is `strike`; the withheld consolidations also carry
+    `h2`, `li_symbol`, `p` and `s1` to `s10`, which stay gaps.
+  - The hierarchy inside a quotation is the observed set; `subFlow`, `doc`, `meta` and `longTitle` stay gaps.
+  - The reference rule stays /1's (a label of text, `b`, `i`, `sup`); 106 articles held today stay gaps on it.
+  - `docNumber` is not in the design's /3 table and stays a gap: 168 code articles held today. It is the next shape to
+    review.
+- **Measured: /2 and /3 over run 15** (`LuxembourgAknContent3Run15Probe`, opt-in with `LEX_LU_CONTENT3_PROBE=1` and
+  `LEX_LU_CONTENT3_PROBE_ROOT`, over S3a's probe inputs; custody read by digest through S2's read-only decorator and never
+  written; no network; no R0; never a CI test). Inventory /4 over all 11,205 held inputs, then /2 and /3 over its 308,521
+  main-body articles, in chunks of 32 bodies: 209 s and 127 s, peak working set 1,598 MiB.
+  - **The S6 figure: /3 recovers 5,946 of the 7,704.** In the bodies admitted today that hold an article /2 admits (the
+    held states' documents), /2 refuses exactly S6's 7,704. Recovered, by /2's shape: `embeddedStructure` 1,846,
+    `embeddedText` 1,554, a note reference without a marker 1,288, `eop` 482, `u` 480, `span` 126, `br` 64, `del` 62,
+    `sub` 34, `def` 9, `eol` 1.
+  - **Still refused there: 1,758**, by /3's reason: an underline inside quoted wording 724, `table` 652, `docNumber` 168,
+    a reference label of another shape 106, a non-empty `mod` 33, `img` 28, another namespace or a processing instruction
+    25, `reference lacks a bounded target or publisher label` 11, and 11 other elements (`part` 4, `doc` 2, five of one).
+  - **All of run 15:** /3 admits 298,679 of 308,521 articles (/2: 270,552), 28,127 more: codes 3,091 (149,099 of
+    149,542), acts 14,312 (62,986 of 68,049), consolidations 10,724 (86,594 of 90,930). 9,842 stay gaps.
+  - **0 disagreements:** every article /2 admits reads under /3 to the same disposition and the same stored tokens, and no
+    article /2 admits is lost.
+  - **Independent check.** A Python reading of /3 written from the rule text (lxml; it shares no code with the C#) over
+    the same bodies matches all 308,521 articles: the /2 and /3 verdicts and details, and for the 298,679 admitted the
+    searchable text's digest, the deleted wording's digest, the quotations and the unmarked notes. 0 differences.
+  - The design's estimate was "8,000–13,000 articles to the Release 2 figures"; the measured 28,127 is over every
+    admission class, and 5,946 of it is in the bodies admitted today.
+- **Excerpts (legal care).** Two byte-exact excerpts of bodies run 15 acquired under the agreed CC BY reading, cut as S2
+  and S3a cut theirs (whole element ranges removed, every byte kept the publisher's, in order), in
+  `Fixtures/LuAknLegalContent3/`, a guard holding the folder to them:
+  - `act-loi-2019-12-20-a873-quotations-and-struck-spans.bin` (13,530 bytes, sha256 `c5749008…`) of
+    `loi/2019/12/20/a873/jo` (body `3236529c…`, 37,957,824 bytes; its images among the 4 ranges removed): quoted terms
+    and structures, a structure whose marks the publisher writes, the struck old numbers of `art_13`, and `art_2`, whose
+    struck span sits beside an underline inside a quoted structure (a gap).
+  - `code-consommation-20220101-deleted-wording.bin` (21,533 bytes, sha256 `b5adf8cc…`) of `code/consommation/20220101`
+    (body `9ade6eb0…`, 1,749,582 bytes): deleted wording, deleted wording holding two references, a note reference
+    without a marker and an underlined number.
+  - No consolidation is admitted in run 15, so the consolidation's `del` and the struck span of
+    `loi/2012/03/21/n1/consolide/20220614` are synthetic, in the publisher's shape. The withheld fixtures get no use.
+  - The nine excerpt articles' identities, tokens and searchable texts equal the Python reading's.
+- **Tests.** `LuxembourgAknLegalContentProfile3ProducerTests` (48): the pins, both excerpts, every /3 shape synthetic,
+  the still-typed gaps, the two /1 tests the design names, the door, the identities and the shared types, the stored
+  form and wording digest of a /2 stream unchanged. `LuxembourgContent3MountTests` (1): a synthetic consolidation
+  acquired, re-derived under `lu-release-1`, built, written, verified and opened; its index's searchable text holds no
+  deleted wording, `cites` holds the quoted reference and not the deleted one, and the bundle's composition over the
+  index's own rows gives the segments and the unmarked note. `LuxembourgRederivationTests` move to content /3 and refuse
+  inputs naming content /2. The closed-vocabulary and guarded-construction censuses gain the new kinds and door.
+- **Waits.** The bundle served through the handler for a re-derived population: on this base a re-derived index holds
+  articles and no states (inventory /4 mints no state coordinate; the states are index /9's, S6, #980), so the mount test
+  runs the bundle's composition over the index's rows instead; once S6 merges, a handler-level test over the same
+  consolidation is the follow-up. S8's independent oracle must read the /3 kinds. The dry run, D1 and the gates as
+  planned.
+
 ## Index /9: every catalogue state of a served work, held or textless, dated by role, with ends, boundaries and intervals (Claude, 2026-10-17)
 
 - **What.** Slice S6 of the Luxembourg data design (`C:\lex-v3\LU-DATA-DESIGN-2026-10-14-v2.md` §3.1, §3.3, §3.4), with the two
