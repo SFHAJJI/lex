@@ -24,9 +24,10 @@
 // - the browser probes (`--browser`): the journey's real-mount steps through a browser against the revision, each
 //   page held to what the API answers its request, its hydration, console, paint and security headers, and every
 //   citation verified. Privacy cannot be observed on a remote revision (its process and files are not ours to watch),
-//   so this probe states that rather than passing it: the image run's privacy probe held the same image digest.
+//   so this probe states that rather than passing it: only the release's own image run observes it, and only when the
+//   release was probed (its report's `privacy`; a release made with `--no-probe` was not).
 //   Without `--browser` no browser is looked for or started (`findBrowser` is never called), and the probe says that no
-//   page of the revision was walked in a browser (`NOT_WALKED_NOTE`); `deploy.ps1 -SkipBrowserProbe` runs it so.
+//   page of the revision was walked in a browser (`NOT_WALKED_NOTE`); `deploy.ps1` runs it so unless `-BrowserProbe`.
 // It sends no request anywhere but the origin it is given, and writes nothing but a temporary copy of the release's
 // mount report, removed when it ends.
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -394,8 +395,9 @@ export const NOT_WALKED_NOTE =
 
 /** What the browser probes cannot observe on a remote revision, stated with every browser probe run. */
 export const REMOTE_PRIVACY_NOTE =
-  "privacy is not observed here: a deployed revision's process output and files are not this probe's to watch; the image run's "
-  + "privacy probe (nothing written after the first answer, no query text, address or user agent recorded) held the same image digest";
+  "privacy is not observed here: a deployed revision's process output and files are not this probe's to watch; only the release's "
+  + "own image run observes it (nothing written after the first answer, no query text, address or user agent recorded), and only "
+  + "when the release was probed: its report's privacy says so, and a release made with --no-probe was not";
 
 /**
  * A deployed revision as the journey's runner takes a server: its origin, and nothing of its process, which a remote
