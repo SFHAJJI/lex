@@ -123,6 +123,54 @@ public sealed class V3CorpusLegacySchema8MountTests
         Assert.IsFalse(Answer(six, "events").GetProperty("log").TryGetProperty("derived_at", out _), "no derivation time on schema 6");
     }
 
+    /// <summary>
+    /// Records the answers <see cref="EveryAnswerOverTheSchema8AndSchema6MountsIsTheOneTheCodeWithoutIndex9Sends"/> replays,
+    /// only when <c>V3_RECORD_LEGACY_ANSWERS</c> names a file: every request of <see cref="LegacyMountAnswers"/> over the two
+    /// committed mounts, answered by this code, written as <c>{schema8_answers, schema6_answers}</c> for the fixture's rows. It
+    /// is run where production runs (Linux, globalization-invariant, UTC) when a change moves those answers on purpose, and the
+    /// rows replace the fixture's; it checks nothing, so a run that records fails rather than passes.
+    /// </summary>
+    [TestMethod]
+    public async Task TheAnswersAreRecordedWhereTheRecordingAsks()
+    {
+        var output = Environment.GetEnvironmentVariable("V3_RECORD_LEGACY_ANSWERS");
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            Assert.Inconclusive("V3_RECORD_LEGACY_ANSWERS names no file, so no answer is recorded.");
+        }
+
+        async Task<System.Text.Json.Nodes.JsonArray> RecordAsync(byte[] corpus, byte[] index, byte[] manifest, IReadOnlyList<(string, object)> requests, string prefix)
+        {
+            var directory = Path.Combine(Path.GetTempPath(), $"lex-v3-legacy8-record-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(directory);
+            try
+            {
+                await File.WriteAllBytesAsync(Path.Combine(directory, V3CorpusMount.CorpusFileName), corpus);
+                await File.WriteAllBytesAsync(Path.Combine(directory, V3CorpusMount.IndexFileName), index);
+                await File.WriteAllBytesAsync(Path.Combine(directory, V3CorpusMount.CapabilityManifestFileName), manifest);
+                using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None);
+                Assert.IsNotNull(mount);
+                return await LegacyMountAnswers.RecordAsync(mount, requests, prefix);
+            }
+            finally
+            {
+                try { Directory.Delete(directory, recursive: true); } catch (IOException) { }
+            }
+        }
+
+        var recorded = new System.Text.Json.Nodes.JsonObject
+        {
+            ["schema8_answers"] = await RecordAsync(
+                Fixture("lex-corpus-6.json.bin"), Fixture("luxembourg-index.sqlite3.bin"), Fixture("luxembourg-capability-manifest.json.bin"),
+                LegacyMountAnswers.Schema8Requests(IndexFileSha256), "schema8"),
+            ["schema6_answers"] = await RecordAsync(
+                Schema6("lex-corpus-6.json"), Schema6("luxembourg-index.sqlite3"), Schema6("luxembourg-capability-manifest.json"),
+                LegacyMountAnswers.Schema6Requests, "schema6"),
+        };
+        await File.WriteAllTextAsync(output!, recorded.ToJsonString());
+        Assert.Fail($"V3_RECORD_LEGACY_ANSWERS recorded {output} and checked nothing: run again without the variable, which is the only run that checks anything.");
+    }
+
     private static async Task ReplayAsync(
         byte[] corpus, byte[] index, byte[] manifest, JsonElement rows)
     {
