@@ -5,6 +5,8 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Lex.V3.Artifacts;
+using Lex.V3.Contracts;
 using Lex.V3.Contracts.Source.Corpus;
 using Lex.V3.Ingest.Luxembourg;
 
@@ -36,6 +38,11 @@ namespace Lex.V3.Ingest.Tests;
 /// commit after a full compacting collection, once R1 is done and before the build: what each phase adds above it is what the
 /// late phase costs. The five mount files' lengths and digests are printed, so a run before a change and a run after it are
 /// held to the same bytes.
+/// </para>
+/// <para>
+/// THROUGH THE TOOL. <see cref="TheSyntheticPopulationsCustodyIsWrittenForTheOfflineTool"/> writes the same population's
+/// custody and inputs /3, so that <c>Lex.V3.Tool derive</c> (R0's reopen, R1, the build, the write and the verification, the
+/// dry run's whole path) runs over it in a process of its own, measured from outside as the runner's guard measures a derive.
 /// </para>
 /// </remarks>
 [TestClass]
@@ -171,6 +178,49 @@ public sealed class V3DeriveMemoryProbe
             Directory.CreateDirectory(output);
             await File.WriteAllTextAsync(Path.Combine(output, label + ".json"), summary + "\n");
         }
+    }
+
+    /// <summary>
+    /// The same synthetic population's custody, for a derive in a process of its own, by the offline tool, as the dry run
+    /// runs it: when <c>LEX_DERIVE_MEMORY_PROBE_CUSTODY</c> names a directory that holds no <c>custody</c> yet, the two
+    /// acquisitions are held there raw, inputs /1 over the act range are captured, then inputs /3 for Release 1's rule set
+    /// over them, and inputs /3's reference is written to <c>mount-inputs.json</c> beside the custody: what
+    /// <c>Lex.V3.Tool derive --custody &lt;dir&gt;/custody --checkpoint &lt;dir&gt;/mount-inputs.json</c> takes. Sized by the
+    /// same variables as the late-phase measurement. Otherwise inconclusive; nothing goes over the network.
+    /// </summary>
+    [TestMethod]
+    public async Task TheSyntheticPopulationsCustodyIsWrittenForTheOfflineTool()
+    {
+        var target = Environment.GetEnvironmentVariable("LEX_DERIVE_MEMORY_PROBE_CUSTODY");
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            Assert.Inconclusive("LEX_DERIVE_MEMORY_PROBE_CUSTODY names no directory, so no synthetic custody is written.");
+        }
+
+        var custody = Path.Combine(target, "custody");
+        Assert.IsFalse(Directory.Exists(custody), $"{custody} already exists; the synthetic custody is written once, into a new directory.");
+        var articles = Number("LEX_DERIVE_MEMORY_PROBE_ARTICLES", 20_000);
+        var textBytes = Number("LEX_DERIVE_MEMORY_PROBE_TEXT_BYTES", 1_200);
+        var body = Consolidation(articles, textBytes);
+        var store = new FileSystemCustodyStore(custody);
+        var (europe, verified) = await V3FirstMountBuildTests.AcquireAsync(store, V3FirstMountBuildTests.CheckoutRoot(), body, new ReadingClock());
+        Assert.IsTrue(europe.Delivered, europe.Detail);
+        Assert.IsTrue(verified.Delivered, verified.Detail);
+        var buildTime = new DateTimeOffset(2026, 10, 12, 18, 17, 5, TimeSpan.Zero);
+        var baseInputs = await V3OfflineMount.CaptureAsync(store, europe, verified, [EuAxiomWiringHarness.Seed(null).Celex],
+            LuxembourgFirstMountAcquisitionTests.ActRange, buildTime, null, CancellationToken.None);
+        var release1 = LuxembourgRederivationTests.Release1();
+        var inputs = await V3OfflineMount.CaptureRederivationAsync(
+            store, baseInputs, release1.RuleSet, release1.AdmissionPolicySha256, release1.DerivedAt, CancellationToken.None);
+        await File.WriteAllTextAsync(Path.Combine(target, "mount-inputs.json"), ContractJson.Serialize(inputs));
+        await File.WriteAllTextAsync(Path.Combine(target, "synthetic.json"), JsonSerializer.Serialize(new
+        {
+            note = "a synthetic Luxembourg consolidation (THE CUSTODY IS A FIXTURE) for S4b's memory measurement",
+            articles,
+            text_bytes = textBytes,
+            body_bytes = body.Length,
+            inputs = inputs.Sha256,
+        }) + "\n");
     }
 
     /// <summary>The fixture's synthetic consolidation with <paramref name="count"/> articles of about <paramref name="textBytes"/> bytes of invented French each; every twentieth cites an act.</summary>
