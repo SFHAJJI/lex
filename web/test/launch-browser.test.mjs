@@ -10,7 +10,13 @@ import test from "node:test";
 
 import { findBrowser, launchBrowser } from "../scripts/browser-evidence.mjs";
 
-test("two browsers started together each bind their own debugging port and answer", async () => {
+// The first test here starts real browsers (the second, node standing in for one, starts none). On the driver's machine
+// none may run (the owner's order of 2026-10-16: headless Chrome runs from tests there locked the owner's Windows account),
+// so it runs only where LEX_BROWSER_TESTS=1 says a browser may (CI's web lane); a plain `npm test` skips it and says why.
+const BROWSER_MAY_RUN = process.env.LEX_BROWSER_TESTS === "1";
+const NO_BROWSER_HERE = "starts a real browser: runs only with LEX_BROWSER_TESTS=1 (CI's web lane); no browser may run on the driver's machine";
+
+test("two browsers started together each bind their own debugging port and answer", { skip: BROWSER_MAY_RUN ? false : NO_BROWSER_HERE }, async () => {
   const browser = await findBrowser();
   const profiles = await Promise.all([1, 2].map((n) => mkdtemp(join(tmpdir(), `lex-launch-${n}-`))));
   const launched = [];
