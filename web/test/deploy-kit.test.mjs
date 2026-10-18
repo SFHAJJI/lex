@@ -109,7 +109,7 @@ test("search engines are kept out unless the deployment says indexed, and the AP
   assert.equal(template.parameters.searchEngines.defaultValue, "kept-out");
   const env = app.properties.template.containers[0].env;
   assert.ok(env.some((variable) => variable.name === "LEX_V3_SEARCH_ENGINES" && variable.value === "[parameters('searchEngines')]"));
-  assert.match(code, /\[ValidateSet\('kept-out', 'indexed'\)\] \[string\] \$SearchEngines = 'kept-out'/);
+  assert.match(code, /\[ValidateSet\('kept-out', 'indexed', IgnoreCase = \$false\)\] \[string\] \$SearchEngines = 'kept-out'/);
   assert.match(code, /searchEngines = \$SearchEngines/);
 });
 
@@ -120,6 +120,10 @@ test("a redeployment keeps the custom domain bound to the app, since the templat
   assert.match(code, /az containerapp show -g \$ResourceGroup -n \$AppName --query "properties\.configuration\.ingress\.customDomains"/,
     "the domains bound now are read back from the app");
   assert.match(code, /customDomains = @\(\$customDomains\)/, "and passed to the template");
+  assert.match(code, /if \(\$LASTEXITCODE -ne 0\) \{\s*if \(-not \[string\]::IsNullOrEmpty\(\$LiveRevision\)\) \{\s*throw "The custom domains bound to \$AppName could not be read/,
+    "a failed read stops a redeployment instead of unbinding the domain (the review of #988)");
+  assert.match(code, /throw "The deployment unbound \$\(\$lost -join ', '\)/, "and the domains are read back after it");
+  assert.match(code, /\[ValidateSet\('kept-out', 'indexed', IgnoreCase = \$false\)\]/, "the switch's value is exact, as the API reads it");
   const bind = readFileSync(new URL("../../deploy/bind-domain.ps1", import.meta.url), "utf8").replace(/<#[\s\S]*?#>/g, "");
   assert.match(bind, /Resolve-DnsName \$Hostname -Type CNAME -Server \$Resolver/, "the binding waits for public DNS to answer the CNAME");
   assert.match(bind, /--validation-method CNAME/, "a managed certificate, validated by the CNAME");

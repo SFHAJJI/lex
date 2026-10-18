@@ -24,6 +24,12 @@ indexing (O27) as recommended ("yes yes go with what you recommend"), and the op
   home and Coverage pages are indexable.
 - `deploy-kit.test.mjs` pins both: the parameter and its default, the variable the API reads, the domains read back and
   passed on, and the binding's DNS wait, CNAME validation and plan-only default.
+- The review of #988 found that one failed read of the app's domains would have passed "none" to the template and
+  unbound law.soufien.lu. A failed read now stops a redeployment (only a first deployment, with no live revision, has
+  nothing to read), and the domains are read back after the deployment, which fails if one was lost. The switch's value
+  is exact (`IgnoreCase = $false`), as the API reads it, so `Indexed` is refused rather than silently kept out. STATUS.md
+  records that the domain is now served by the Azure zone, departing from O14, and the owner's decisions of 18 October;
+  the owner's brief no longer asks for the registrar's name servers.
 
 ## The private copy on the release of 18 October, and a deployment that waits for its candidate (sole driver, 2026-10-18)
 
