@@ -15,11 +15,13 @@ namespace Lex.V3.Ingest.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// WHY THE INDEX'S ROWS AND NOT THE HANDLER. On this base a re-derived population's index holds its articles and no state:
-/// inventory /4 never mints a state coordinate from the file (S2), and the states of a re-derived population are index /9's
-/// (S6, in flight as PR #980). The evidence bundle serves a state's articles, so the handler cannot serve these yet; the
-/// composition it runs (<see cref="V3CorpusMount.ArticleSegments"/>, <see cref="V3CorpusMount.WithSegments"/>,
-/// <see cref="V3CorpusMount.ArticleNotes"/>) is run here over the rows the build wrote.
+/// WHY THE INDEX'S ROWS AND NOT THE HANDLER. Inventory /4 never mints a state coordinate from the file (S2); a re-derived
+/// population's states are index /9's (S6, #980), made from the catalogue's facts for each work. The re-derived index of the
+/// shared synthetic acquisition holds this consolidation's articles and no state row (measured on dc06b414), so the evidence
+/// bundle, which serves a state's articles, has nothing to serve; a handler-level test needs a fixture whose catalogue names
+/// the consolidation's states, and is next. The composition the handler runs (<see cref="V3CorpusMount.ArticleSegments"/>,
+/// <see cref="V3CorpusMount.WithSegments"/>, <see cref="V3CorpusMount.ArticleNotes"/>) is run here over the rows the build
+/// wrote.
 /// </para>
 /// <para>
 /// LEGAL CARE. The Luxembourg body is synthetic: every byte of <see cref="Content3Consolidation"/> is written here, in the

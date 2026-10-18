@@ -30,7 +30,9 @@ namespace Lex.V3.Ingest.Tests;
 /// detail (the first element /2 cannot read); "recovered" is an article /3 admits and /2 refused. The S6 comparison
 /// (index /9's probe: 7,704 of 126,059 articles missing from held states under Release 1's rules) is the articles /2
 /// refuses in the bodies admitted today that hold at least one article /2 admits. Every article /2 admits must read
-/// under /3 to the same disposition and stored tokens; the probe counts any that does not.
+/// under /3 to the same disposition and stored tokens, but one: an article whose wording an attribute marks deleted
+/// (<c>style="del"</c>, <c>class="strike"</c>), which /2 reads as in force and /3 refuses (the review of #981, F2), is
+/// counted apart; the probe counts any other that does not.
 /// </para>
 /// </remarks>
 [TestClass]
@@ -40,6 +42,7 @@ public sealed class LuxembourgAknContent3Run15Probe
     private const string EnableVariable = "LEX_LU_CONTENT3_PROBE";
     private const string RootVariable = "LEX_LU_CONTENT3_PROBE_ROOT";
     private const int ChunkBodies = 32;
+    private const string AttributeDeletion = "deletion marked by an attribute holds wording not marked deleted: ";
 
     [TestMethod]
     public async Task Content3OverRun15IsMeasured()
@@ -167,7 +170,15 @@ public sealed class LuxembourgAknContent3Run15Probe
                                 Add(tallies, scope + "|lost|" + why);
                             }
                         }
-                        if (twoAdmits && (second.Disposition != third.Disposition || !string.Equals(
+                        // The one shape /3 refuses that /2 admits: wording an attribute marks deleted, which /2 reads as in
+                        // force (the review of #981, F2). Counted apart; any other difference is a disagreement.
+                        var withdrawn = twoAdmits && !threeAdmits &&
+                            (third.Detail ?? "").StartsWith(AttributeDeletion, StringComparison.Ordinal);
+                        if (withdrawn)
+                        {
+                            Add(tallies, "all|all|withdrawn_attribute_deletion");
+                        }
+                        else if (twoAdmits && (second.Disposition != third.Disposition || !string.Equals(
                                 LuxembourgIndexBuilder.TokensJson(second.Article!.Tokens),
                                 LuxembourgIndexBuilder.TokensJson(third.Article!.Tokens),
                                 StringComparison.Ordinal)))
