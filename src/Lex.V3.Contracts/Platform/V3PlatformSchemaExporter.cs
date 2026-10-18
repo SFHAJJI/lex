@@ -364,7 +364,7 @@ public static class V3PlatformSchemaExporter
 
     /// <summary>
     /// A page of a version's reading, counted from 1 (<c>evidence_bundle</c>): the operation refuses a page past the version's
-    /// last as a malformed request.
+    /// last as an anchor the version does not hold (<c>anchor_not_in_version</c>), naming the version's pages.
     /// </summary>
     private static JsonObject PageNumber() => new()
     {

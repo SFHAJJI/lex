@@ -119,7 +119,26 @@
     },
     {
       "code": "anchor_not_in_version",
+      "more_payloads": [
+        {
+          "asserts_absence_of_law": false,
+          "do_not_fall_back_to_full_text_search": true,
+          "language": "fra",
+          "nearest_anchors": [
+            "page=1"
+          ],
+          "pages": 1,
+          "requested_anchor": "page=2",
+          "requested_page": 2,
+          "what_would_answer": [
+            "corrected_identifier",
+            "new_official_observation"
+          ]
+        }
+      ],
       "optional_payload_keys": [
+        "language",
+        "pages",
         "recognised_act",
         "recognised_article",
         "recognised_date",
@@ -127,7 +146,8 @@
         "recognised_held_act",
         "recognised_held_version",
         "recognised_kind",
-        "recognised_title"
+        "recognised_title",
+        "requested_page"
       ],
       "payload": {
         "asserts_absence_of_law": false,

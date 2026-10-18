@@ -1253,12 +1253,16 @@ internal sealed partial class V3CorpusMount : IDisposable
             // The state cut into pages, and the page asked: its number, the one that holds the article asked, or the first.
             var pages = CutReadingPages(
                 articles.Select(static article => new ReadingEntry(article.PublisherId, null, article.Text.Length > 0, ReadingWeight(article.Text), article.ArticleIdentitySha256)).ToArray(),
-                asked,
-                $"the state in {state.Language}");
+                asked);
             if (pages is null)
             {
                 return RefuseArticleNotInVersion(request, observedAt, PublisherId.LuLegilux, asked.Article!,
                     articles.Select(static article => article.PublisherId).Distinct(StringComparer.Ordinal).ToArray());
+            }
+
+            if (pages.PastLast)
+            {
+                return RefusePageNotInVersion(request, observedAt, PublisherId.LuLegilux, pages, state.Language);
             }
 
             var conflictsInVersion = articles.Count(article => article.Text.Length > 0 &&
@@ -6001,11 +6005,16 @@ internal sealed partial class V3CorpusMount : IDisposable
         foreach (var wording in selected)
         {
             var articles = articlesByExpression[wording.ExpressionId];
-            var pages = CutReadingPages(EuropeReadingEntries(articles), asked, $"the wording in {wording.Language}");
+            var pages = CutReadingPages(EuropeReadingEntries(articles), asked);
             if (pages is null)
             {
                 return RefuseArticleNotInVersion(request, observedAt, PublisherId.EuEurLex, asked.Article!,
                     articles.Select(static article => article.PublisherIdentifier).Distinct(StringComparer.Ordinal).ToArray());
+            }
+
+            if (pages.PastLast)
+            {
+                return RefusePageNotInVersion(request, observedAt, PublisherId.EuEurLex, pages, wording.Language);
             }
 
             cut[wording.ExpressionId] = pages;

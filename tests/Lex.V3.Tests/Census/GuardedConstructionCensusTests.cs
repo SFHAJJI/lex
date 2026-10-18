@@ -100,6 +100,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseEuropeLanguage, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::RefusePageNotInVersion, "
                     + "method private instance "
                     + "Lex.V3.Api.V3CorpusMount::RefuseUnlessCursorOfThisLog, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUnlessPinnedOriginalWording, "

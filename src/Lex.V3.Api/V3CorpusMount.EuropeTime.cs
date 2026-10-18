@@ -890,11 +890,16 @@ internal sealed partial class V3CorpusMount
         {
             var candidate = selection.Entry!.Answer!;
             var articles = EuropeArticlesOf(candidate.ExpressionId);
-            var pages = CutReadingPages(EuropeReadingEntries(articles), asked, $"the wording in {candidate.Language}");
+            var pages = CutReadingPages(EuropeReadingEntries(articles), asked);
             if (pages is null)
             {
                 return RefuseArticleNotInVersion(request, observedAt, PublisherId.EuEurLex, asked.Article!,
                     articles.Select(static article => article.PublisherIdentifier).Distinct(StringComparer.Ordinal).ToArray());
+            }
+
+            if (pages.PastLast)
+            {
+                return RefusePageNotInVersion(request, observedAt, PublisherId.EuEurLex, pages, candidate.Language);
             }
 
             cut.Add(pages);

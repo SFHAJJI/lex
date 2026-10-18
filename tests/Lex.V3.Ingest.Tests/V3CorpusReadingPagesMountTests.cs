@@ -15,8 +15,8 @@ namespace Lex.V3.Ingest.Tests;
 /// answers a version one bounded page at a time, with the index of its pages and, when asked, its contents, on both
 /// publishers, at a permalink and by the work and a date. The fixture act (49 articles) fits one page, so it is answered whole
 /// as before; a synthetic act of 130 articles (<see cref="SyntheticLongAct"/>) is three pages, and the retained GDPR wording
-/// several, by its bytes. An article the version does not hold is <c>anchor_not_in_version</c>; a page past the last, or a
-/// page and an article together, is a malformed request.
+/// several, by its bytes. An article the version does not hold is <c>anchor_not_in_version</c>, and so is a page past the
+/// version's last, naming the version's pages (the review of #978, F2); a page and an article together is a malformed request.
 /// </summary>
 [TestClass]
 public sealed class V3CorpusReadingPagesMountTests
@@ -114,6 +114,8 @@ public sealed class V3CorpusReadingPagesMountTests
 
         CollectionAssert.AreEqual(Enumerable.Range(1, 130).ToArray(), positions.ToArray(), "every article once, in order, across the pages");
         Assert.AreEqual(130, all.Distinct(StringComparer.Ordinal).Count());
+        AssertPageNotInVersion(await EnvelopeAsync(mount, Route, "evidence_bundle", new { asked.identifier, asked.date, asked.language, page = 4 }),
+            4, 3, "fra", "the page after the last of three");
 
         // By an article: the page that holds it; at the permalink too, with the contents.
         var permalink = first.GetProperty("permalink").GetString()!;
@@ -129,8 +131,28 @@ public sealed class V3CorpusReadingPagesMountTests
         Assert.IsLessThan(200_000, pageBytes, "a page of 50 articles with the contents of 130");
     }
 
+    /// <summary>
+    /// The refusal of a page past a version's last (the review of #978, F2): an anchor the version does not hold, <c>page=N</c>,
+    /// with its first and last pages as the nearest anchors, and the page asked, the version's page count and its language.
+    /// </summary>
+    private static void AssertPageNotInVersion(V3Envelope refused, int asked, int pages, string language, string why)
+    {
+        Assert.AreEqual("anchor_not_in_version", refused.Refusal?.Code, why);
+        var payload = refused.Refusal!.HelpfulPayload;
+        Assert.AreEqual($"page={asked}", payload.GetProperty("requested_anchor").GetString(), why);
+        CollectionAssert.AreEqual(pages == 1 ? new[] { "page=1" } : new[] { "page=1", $"page={pages}" },
+            payload.GetProperty("nearest_anchors").EnumerateArray().Select(static anchor => anchor.GetString()).ToArray(), why);
+        Assert.IsTrue(payload.GetProperty("do_not_fall_back_to_full_text_search").GetBoolean(), why);
+        Assert.AreEqual(asked, payload.GetProperty("requested_page").GetInt32(), why);
+        Assert.AreEqual(pages, payload.GetProperty("pages").GetInt32(), why);
+        Assert.AreEqual(language, payload.GetProperty("language").GetString(), why);
+        Assert.IsFalse(payload.GetProperty("asserts_absence_of_law").GetBoolean(), why);
+        Assert.AreEqual(V3OperationRegistry.Reviewed.MandatoryPayloadFields("anchor_not_in_version").Count + 5, payload.EnumerateObject().Count(),
+            "the anchor's mandatory fields, the page asked, the version's pages and language, what would answer, and no claim of absence");
+    }
+
     [TestMethod]
-    public async Task AnArticleTheVersionDoesNotHoldIsRefusedWithItsNeighboursAndAPagePastTheLastIsMalformed()
+    public async Task AnArticleTheVersionDoesNotHoldIsRefusedWithItsNeighboursAndAPagePastTheLastNamesTheVersionsPages()
     {
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
@@ -149,9 +171,18 @@ public sealed class V3CorpusReadingPagesMountTests
                 "the payload every operation sends for an anchor: its mandatory fields, what would answer, and no claim of absence");
         }
 
+        // A page past the state's one page: refused as an anchor the state does not hold, at its permalink and by the work, with a
+        // language asked or none (each state served is cut on its own, and the refusal names the state's language).
+        AssertPageNotInVersion(await EnvelopeAsync(mount, Route, "evidence_bundle", new { identifier = fixture.Permalink, date = fixture.ApplicabilityDate, page = 2 }),
+            2, 1, "fra", "at the permalink");
+        AssertPageNotInVersion(await EnvelopeAsync(mount, Route, "evidence_bundle", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate, language = "fra", page = 100_000 }),
+            100_000, 1, "fra", "by the work, in French");
+        AssertPageNotInVersion(await EnvelopeAsync(mount, Route, "evidence_bundle", new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate, page = 3 }),
+            3, 1, "fra", "by the work, with no language asked");
+
         foreach (var (parameters, why) in new (object Parameters, string Why)[]
                  {
-                     (new { identifier = fixture.Permalink, date = fixture.ApplicabilityDate, page = 2 }, "a page past the state's one page"),
+                     (new { identifier = fixture.Permalink, date = fixture.ApplicabilityDate, page = 100_001 }, "a page past the schema's greatest"),
                      (new { identifier = fixture.Permalink, date = fixture.ApplicabilityDate, page = 1, article = "art_15" }, "a page and an article together"),
                      (new { identifier = fixture.Permalink, date = fixture.ApplicabilityDate, page = 0 }, "page 0"),
                      (new { identifier = fixture.Permalink, date = fixture.ApplicabilityDate, page = "1" }, "a page written as text"),
@@ -216,6 +247,14 @@ public sealed class V3CorpusReadingPagesMountTests
         var missing = await EnvelopeAsync(mount, Route, "evidence_bundle", new { identifier = permalink, date, article = "no-such-provision" });
         Assert.AreEqual("anchor_not_in_version", missing.Refusal?.Code);
         Assert.AreEqual(PublisherId.EuEurLex, missing.Context.Publisher);
+
+        // A page past the wording's last, at its permalink and by its CELEX: the wording's pages and its language.
+        foreach (var (identifier, why) in new[] { (permalink, "at the permalink"), ("32016R0679", "by the CELEX") })
+        {
+            var past = await EnvelopeAsync(mount, Route, "evidence_bundle", new { identifier, date, language = "eng", page = pages + 1 });
+            AssertPageNotInVersion(past, pages + 1, pages, "eng", why);
+            Assert.AreEqual(PublisherId.EuEurLex, past.Context.Publisher, why);
+        }
     }
 
     [TestMethod]
@@ -344,19 +383,22 @@ public sealed class V3CorpusReadingPagesMountTests
         static V3CorpusMount.ReadingEntry Entry(int number, long weight) => new($"art_{number}", null, weight > 0, weight);
         var none = new V3CorpusMount.ReadingPageAsked(null, null, false);
 
-        var counted = V3CorpusMount.CutReadingPages(Enumerable.Range(1, 101).Select(number => Entry(number, 10)).ToArray(), none, "test")!;
+        var counted = V3CorpusMount.CutReadingPages(Enumerable.Range(1, 101).Select(number => Entry(number, 10)).ToArray(), none)!;
         CollectionAssert.AreEqual(new[] { (0, 49), (50, 99), (100, 100) }, counted.Bounds.ToArray(), "50, 50 and 1");
 
         var weighed = V3CorpusMount.CutReadingPages(
-            [Entry(1, 50_000), Entry(2, 40_000), Entry(3, 10_000), Entry(4, 100_000), Entry(5, 0), Entry(6, 98_304)], none, "test")!;
+            [Entry(1, 50_000), Entry(2, 40_000), Entry(3, 10_000), Entry(4, 100_000), Entry(5, 0), Entry(6, 98_304)], none)!;
         CollectionAssert.AreEqual(new[] { (0, 1), (2, 2), (3, 3), (4, 5) }, weighed.Bounds.ToArray(),
             "90,000 bytes, then 10,000 (adding 100,000 would pass the bound), then 100,000 alone, then a text-less article with 98,304");
 
-        var byArticle = V3CorpusMount.CutReadingPages(weighed.Entries, new V3CorpusMount.ReadingPageAsked(null, "art_4", false), "test")!;
+        var byArticle = V3CorpusMount.CutReadingPages(weighed.Entries, new V3CorpusMount.ReadingPageAsked(null, "art_4", false))!;
         Assert.AreEqual(3, byArticle.Served);
-        Assert.IsNull(V3CorpusMount.CutReadingPages(weighed.Entries, new V3CorpusMount.ReadingPageAsked(null, "art_7", false), "test"));
-        Assert.AreEqual(4, V3CorpusMount.CutReadingPages(weighed.Entries, new V3CorpusMount.ReadingPageAsked(4, null, false), "test")!.Served);
-        Assert.ThrowsExactly<V3TransportFailureException>(() => V3CorpusMount.CutReadingPages(weighed.Entries, new V3CorpusMount.ReadingPageAsked(5, null, false), "test"));
+        Assert.IsNull(V3CorpusMount.CutReadingPages(weighed.Entries, new V3CorpusMount.ReadingPageAsked(null, "art_7", false)));
+        Assert.AreEqual(4, V3CorpusMount.CutReadingPages(weighed.Entries, new V3CorpusMount.ReadingPageAsked(4, null, false))!.Served);
+        Assert.IsFalse(V3CorpusMount.CutReadingPages(weighed.Entries, new V3CorpusMount.ReadingPageAsked(4, null, false))!.PastLast);
+        var past = V3CorpusMount.CutReadingPages(weighed.Entries, new V3CorpusMount.ReadingPageAsked(5, null, false))!;
+        Assert.IsTrue(past.PastLast, "a page past the last is cut and not served, for its refusal to name the pages");
+        Assert.AreEqual(4, past.Count);
     }
 
     /// <summary>

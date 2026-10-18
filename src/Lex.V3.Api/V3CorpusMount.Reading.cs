@@ -45,7 +45,8 @@ internal sealed partial class V3CorpusMount
         "and each page holds at most 50 of them and at most 98,304 " +
         "bytes of quoted text (UTF-8), an article whose text alone passes that bound being a page of its own; pages count from 1 and the " +
         "cut depends on the state alone; with neither page nor article asked the first page is served, article serves the page that holds that " +
-        "publisher id (anchor_not_in_version when a served state does not hold it), and contents true adds every article's position, publisher " +
+        "publisher id (anchor_not_in_version when a served state does not hold it, and for a page past a served state's last, naming page=N, " +
+        "the first and last pages, requested_page, pages and the state's language), and contents true adds every article's position, publisher " +
         "id, identity and page, with no text; articles, articles_without_text and validity_conflict_count are the page's, and page counts the state's";
 
     internal const string EuropeReadingPageRule =
@@ -53,7 +54,8 @@ internal sealed partial class V3CorpusMount
         "order the wording digest reads them in), and each page holds at most 50 of them and at most 98,304 bytes of quoted text (UTF-8), a " +
         "provision whose text alone passes that bound being a page of its own; pages count from 1 and the cut depends on the wording alone; with " +
         "neither page nor article asked the first page is served, article serves the page that holds that provision id (anchor_not_in_version " +
-        "when a served wording does not hold it), and contents true adds every provision's position, publisher id, identity, heading and page, with no " +
+        "when a served wording does not hold it, and for a page past a served wording's last, naming page=N, the first and last pages, " +
+        "requested_page, pages and the wording's language), and contents true adds every provision's position, publisher id, identity, heading and page, with no " +
         "text; articles and articles_without_text are the page's, and page counts the wording's";
 
     /// <summary>What a reading asks of the pages: one page by its number or by an article it holds, and whether the contents.</summary>
@@ -73,6 +75,9 @@ internal sealed partial class V3CorpusMount
         int Served)
     {
         internal int Count => Bounds.Count;
+
+        /// <summary>Whether the page asked is past the version's last: the version is cut, and no page is served.</summary>
+        internal bool PastLast => Served > Bounds.Count;
 
         internal (int First, int Last) ServedBounds => Bounds[Served - 1];
 
@@ -131,9 +136,10 @@ internal sealed partial class V3CorpusMount
     /// <summary>
     /// A version's entries cut into pages (<see cref="ReadingPageArticles"/>, <see cref="ReadingPageBytes"/>), and the page
     /// served for <paramref name="asked"/>: its number, the page that holds its article, or the first; null with the
-    /// article's absence when the version does not hold the article asked. A page past the last is a malformed request.
+    /// article's absence when the version does not hold the article asked. A page past the last is cut and not served
+    /// (<see cref="ReadingPages.PastLast"/>), for its refusal to name the version's pages (review of #978, F2).
     /// </summary>
-    internal static ReadingPages? CutReadingPages(IReadOnlyList<ReadingEntry> entries, ReadingPageAsked asked, string versionName)
+    internal static ReadingPages? CutReadingPages(IReadOnlyList<ReadingEntry> entries, ReadingPageAsked asked)
     {
         var pageOf = new int[entries.Count];
         var bounds = new List<(int First, int Last)>();
@@ -167,14 +173,6 @@ internal sealed partial class V3CorpusMount
         var served = 1;
         if (asked.Page is { } page)
         {
-            if (page > bounds.Count)
-            {
-                throw new V3TransportFailureException(
-                    V3TransportFailureKind.RequestSchemaInvalid,
-                    $"The operation request's 'page' is {page.ToString(CultureInfo.InvariantCulture)}, and {versionName} has " +
-                    $"{bounds.Count.ToString(CultureInfo.InvariantCulture)} page{(bounds.Count == 1 ? string.Empty : "s")}.");
-            }
-
             served = page;
         }
         else if (asked.Article is { } article)
@@ -282,6 +280,35 @@ internal sealed partial class V3CorpusMount
             requested_anchor = article,
             nearest_anchors = NearestAnchors(held, article),
             do_not_fall_back_to_full_text_search = true,
+            what_would_answer = AnchorNotInVersionRoutes,
+            asserts_absence_of_law = false,
+        });
+        return V3PlatformOperationOutcome.Refused(
+            Context("refusal", observedAt, publisher),
+            new V3PlatformOperationRefusal(request, "anchor_not_in_version", notInVersion.RootElement));
+    }
+
+    /// <summary>
+    /// The refusal of a page past a served version's last (review of #978, F2), as an anchor the version does not hold: the
+    /// page asked (<c>page=N</c>), its first and last pages as the nearest anchors, and the page asked, the version's page
+    /// count and its language as their own members, so a reader can go to a page the version has.
+    /// </summary>
+    private V3PlatformOperationOutcome RefusePageNotInVersion(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt,
+        Lex.V3.Contracts.PublisherId publisher,
+        ReadingPages pages,
+        string language)
+    {
+        var last = pages.Count.ToString(CultureInfo.InvariantCulture);
+        using var notInVersion = JsonSerializer.SerializeToDocument(new
+        {
+            requested_anchor = "page=" + pages.Served.ToString(CultureInfo.InvariantCulture),
+            nearest_anchors = pages.Count switch { 0 => Array.Empty<string>(), 1 => new[] { "page=1" }, _ => new[] { "page=1", "page=" + last } },
+            do_not_fall_back_to_full_text_search = true,
+            requested_page = pages.Served,
+            pages = pages.Count,
+            language,
             what_would_answer = AnchorNotInVersionRoutes,
             asserts_absence_of_law = false,
         });
