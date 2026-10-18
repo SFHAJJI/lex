@@ -51,9 +51,12 @@ if (Environment.GetEnvironmentVariable(V3StaleIndexCopies.PrivateTemporaryFolder
 V3CorpusMount? corpusMount = null;
 try
 {
-    corpusMount = await V3CorpusMount.OpenAsync(
-        Path.Combine(AppContext.BaseDirectory, "v3-corpus"),
-        app.Lifetime.ApplicationStopping);
+    // A built mount of index 9 is refused until S7a serves it (V3CorpusMount.ServesIndexNine).
+    corpusMount = V3CorpusMount.Served(
+        await V3CorpusMount.OpenAsync(
+            Path.Combine(AppContext.BaseDirectory, "v3-corpus"),
+            app.Lifetime.ApplicationStopping),
+        Path.Combine(AppContext.BaseDirectory, "v3-corpus"));
 
     // What search's exact references read on their first use, read once here, so no request pays it or waits behind it.
     corpusMount?.Warm();

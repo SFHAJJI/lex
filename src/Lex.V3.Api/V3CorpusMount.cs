@@ -20,6 +20,23 @@ internal sealed partial class V3CorpusMount : IDisposable
     public const string EuropeIndexFileName = "europe-index.sqlite3";
     public const string EuropeCapabilityManifestFileName = "europe-capability-manifest.json";
     public const string CorpusFileName = "lex-corpus-6.json";
+
+    /// <summary>The report a build or a derivation from custody writes beside the mount; a test fixture mount carries none.</summary>
+    internal const string BuildReportFileName = "build-report.json";
+
+    /// <summary>
+    /// The one switch S7a flips (review of #980, F4). Until the reader's interval rules serve index 9's rows, and a date's
+    /// role is worded apart (an act dated by its entry into force is not "applicable from" it, R21), the server refuses a
+    /// built mount of lex-v3-luxembourg-index/9: one with its build report, as a release's mount is. A test fixture mount,
+    /// which carries no build report, is still served, so the journeys and the samples run over index 9. Flipping it fails
+    /// <c>V3IndexNineServingTests</c> and the G5 case of <c>V3ReplayGuaranteesTests</c> until each is updated with it.
+    /// </summary>
+    internal static readonly bool ServesIndexNine = false;
+
+    internal const string IndexNineNotServedSentence =
+        "this server does not serve a built mount of lex-v3-luxembourg-index/9 yet: until the reader's interval rules land (S7a) it would " +
+        "say that an act dated by its entry into force is applicable from that date, and entry into force and application are separate " +
+        "values (R21); serve a mount of lex-v3-luxembourg-index/8 or /6";
     private const int MaximumCapabilityManifestBytes = 4 * 1024 * 1024;
     private const string EuropeanUnionPublisherDomain = "europa.eu";
 
@@ -52,6 +69,23 @@ internal sealed partial class V3CorpusMount : IDisposable
         _corpus = corpus ?? throw new ArgumentNullException(nameof(corpus));
         _generations = generations;
         _generationReaders = generationReaders ?? [];
+    }
+
+    /// <summary>
+    /// The mount the server serves: <paramref name="mount"/>, opened from <paramref name="directory"/>, unless it is a built
+    /// mount of index 9 and <see cref="ServesIndexNine"/> is not set, which is refused with
+    /// <see cref="IndexNineNotServedSentence"/> (the mount is closed first).
+    /// </summary>
+    internal static V3CorpusMount? Served(V3CorpusMount? mount, string directory)
+    {
+        if (mount is not null && mount._reader?.RecordsCatalogueStates == true && !ServesIndexNine &&
+            File.Exists(Path.Combine(directory, BuildReportFileName)))
+        {
+            mount.Dispose();
+            throw new InvalidDataException(IndexNineNotServedSentence);
+        }
+
+        return mount;
     }
 
     public static async Task<V3CorpusMount?> OpenAsync(

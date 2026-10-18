@@ -190,7 +190,10 @@ public sealed class V3ReplayGuaranteesTests
             "article_identities_sha256 is the digest of the identities in sorted order, each preceded by its length");
 
         // The fixture is an index 9: state digest /2. The row's own facts after the language are read from the mounted
-        // index by this test's own SQL, since the answer does not carry them until S7a.
+        // index by this test's own SQL, since the answer does not carry them until S7a: G5 from the answer alone is an
+        // expected gap on index 9 (review of #980, F4), and this fails when S7a serves index 9 with the read still here.
+        Assert.IsFalse(V3CorpusMount.ServesIndexNine,
+            "S7a serves index 9: recompute state digest /2 from the answer alone and drop this read of the mounted index");
         var stateSha256 = state.GetProperty("state_sha256").GetString()!;
         var rowFacts = RowFactsOf(fixture.Directory, stateSha256);
         var profiles = state.GetProperty("rule_profile_sha256s").EnumerateArray().Select(static value => value.GetString()!)
