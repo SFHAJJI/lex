@@ -311,6 +311,10 @@ public sealed class V3CorpusDossierMountTests
             "states[].expression_iri", "states[].language",
             "states[].next_applicability_date", "states[].permalink", "states[].publisher_legal_resource_iri",
             "states[].publisher_work_iri", "states[].stable_coordinate", "states[].state_sha256",
+            // Index 9's row facts (S7a).
+            "states[].state_kind", "states[].date_role", "states[].entry_into_force", "states[].applicable_to", "states[].applicable_to_source",
+            "states[].boundary", "states[].publication_date", "states[].text_status", "states[].text_status_reason", "states[].in_file_identity",
+            "states[].in_file_date", "states[].translation_of", "states[].provisional",
             "titles", "titles[].expression_iri", "titles[].language",
             "titles[].short_titles", "titles[].short_titles[].evidence_sha256", "titles[].short_titles[].title",
             "titles[].titles", "titles[].titles[].evidence_sha256", "titles[].titles[].title",

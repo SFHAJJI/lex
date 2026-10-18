@@ -42,13 +42,16 @@ internal sealed partial class V3CorpusMount
         "none; nothing here counts what the publisher holds";
 
     /// <summary>
-    /// <see cref="SearchedRule"/> over lex-v3-luxembourg-index/9 (a fixture's, since a built one is not served before S7a), which
-    /// keeps rows for versions it holds no text of: they are in none of the counts, as no text of theirs was matched.
+    /// <see cref="SearchedRule"/> over lex-v3-luxembourg-index/9, which keeps rows for versions it holds no text of: they are in
+    /// none of the counts of what was matched; the ones its rights withhold are counted with the states the rights rule keeps
+    /// out (S7a, the hand-off of #982); with a date, the state the interval rules select.
     /// </summary>
     internal const string SearchedRuleNine = SearchedRule +
         "; this index also records versions it holds no text of (withheld by their rights, not available or not acquired): those rows " +
-        "are in none of these counts, states_withheld_by_rights included, which counts only held states whose sources the rights rule " +
-        "does not admit";
+        "are in none of the counts of what was matched, and states_withheld_by_rights counts, beside the held states whose sources the " +
+        "rights rule does not admit, the versions in that scope whose text is withheld by their rights (text_status withheld_rights; " +
+        "with a date, when the version the interval rules select for a work is one); a version not available or not acquired is in no " +
+        "count";
 
     private readonly object _searchPopulationGate = new();
     private SearchPopulation? _searchPopulation;
@@ -56,11 +59,15 @@ internal sealed partial class V3CorpusMount
     /// <summary>One held state, whether the rights rule admits its text to search, and its articles with searchable text.</summary>
     private sealed record SearchableState(LuxembourgIndexResolvedState State, bool Admitted, long ArticlesWithText);
 
-    /// <summary>Every held state as a search sees it, by work, and the build time the mounted log records.</summary>
+    /// <summary>
+    /// Every held state as a search sees it, by work, the build time the mounted log records, and on index 9 how many of each
+    /// work's versions in each language its rights withhold the text of (textless rows of <c>withheld_rights</c>).
+    /// </summary>
     private sealed record SearchPopulation(
         IReadOnlyDictionary<string, SearchableState> ByState,
         IReadOnlyDictionary<string, SearchableState[]> ByWork,
-        string? BuiltAt);
+        string? BuiltAt,
+        IReadOnlyDictionary<(string WorkKey, string Language), int>? WithheldTextless = null);
 
     /// <summary>
     /// The states as a search sees them, read once (the index is immutable): every state, whether the rights rule admits it
@@ -93,12 +100,23 @@ internal sealed partial class V3CorpusMount
             }
 
             var observations = _reader.ResolveObservations();
+            var byWork = byState.Values
+                .GroupBy(static entry => entry.State.WorkKey, StringComparer.Ordinal)
+                .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
+            // On index 9, each work's versions withheld by their rights (read from each work's catalogue once, which the interval
+            // rules cache for every later answer).
+            var withheldTextless = RulesByInterval
+                ? byWork.Keys
+                    .SelectMany(work => CatalogueOf(work).Rows.Where(static row =>
+                        string.Equals(row.TextStatus, "withheld_rights", StringComparison.Ordinal) && row.Language.Length > 0))
+                    .GroupBy(static row => (row.WorkKey, row.Language))
+                    .ToDictionary(static group => group.Key, static group => group.Count())
+                : null;
             _searchPopulation = new SearchPopulation(
                 byState,
-                byState.Values
-                    .GroupBy(static entry => entry.State.WorkKey, StringComparer.Ordinal)
-                    .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal),
-                observations.Count == 0 ? null : observations[^1].BuiltAt);
+                byWork,
+                observations.Count == 0 ? null : observations[^1].BuiltAt,
+                withheldTextless);
             return _searchPopulation;
         }
     }
@@ -120,14 +138,24 @@ internal sealed partial class V3CorpusMount
         foreach (var ofWork in works)
         {
             var ofLanguage = ofWork.Where(entry => string.Equals(entry.State.Language, language, StringComparison.Ordinal)).ToArray();
+            var ofWorkKey = ofWork[0].State.WorkKey;
             if (requestedDate is null)
             {
                 searched.AddRange(ofLanguage.Where(static entry => entry.Admitted));
-                withheld += ofLanguage.Count(static entry => !entry.Admitted);
+                withheld += ofLanguage.Count(static entry => !entry.Admitted) +
+                            (population.WithheldTextless?.GetValueOrDefault((ofWorkKey, language)) ?? 0);
                 continue;
             }
 
-            var selected = SelectAtDate(ofLanguage.Select(static entry => entry.State).ToArray(), requestedDate).Selected;
+            var selected = SelectAt(ofLanguage.Select(static entry => entry.State).ToArray(), requestedDate).Selected;
+            if (selected.Length == 0 && ofLanguage.Length > 0 && RulesByInterval &&
+                CoverAt(CatalogueOf(ofWorkKey), language, requestedDate) is { Kind: CoverKind.Textless, Row.TextStatus: "withheld_rights" })
+            {
+                // The version the date selects is withheld by its rights: kept out as a held state the rule keeps out is.
+                withheld++;
+                continue;
+            }
+
             if (selected.Length > 1)
             {
                 several++;

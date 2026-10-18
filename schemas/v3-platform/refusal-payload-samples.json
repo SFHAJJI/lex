@@ -73,6 +73,53 @@
       "more_payloads": [
         {
           "bound": "from",
+          "candidate_states": [
+            {
+              "applicability_date": "2026-04-11",
+              "applicable_to": null,
+              "applicable_to_source": null,
+              "boundary": "derived",
+              "date_role": "applicability_in_file",
+              "entry_into_force": null,
+              "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/twin-a",
+              "in_file_date": "2026-04-11",
+              "in_file_identity": null,
+              "language": "fra",
+              "permalink": "/lu-legilux/loi-1991-08-10-n3/2026-04-11--9da1fcd1bb8d396c2e034614512be1d55022092a030621cb4829132a2f0db3a0/fra",
+              "provisional": false,
+              "publication_date": null,
+              "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+              "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2026-04-11",
+              "state_kind": "as_published",
+              "state_sha256": "9da1fcd1bb8d396c2e034614512be1d55022092a030621cb4829132a2f0db3a0",
+              "text_status": "held",
+              "text_status_reason": null,
+              "translation_of": null
+            },
+            {
+              "applicability_date": "2026-04-11",
+              "applicable_to": null,
+              "applicable_to_source": null,
+              "boundary": "derived",
+              "date_role": "applicability_in_file",
+              "entry_into_force": null,
+              "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/twin-b",
+              "in_file_date": "2026-04-11",
+              "in_file_identity": null,
+              "language": "fra",
+              "permalink": "/lu-legilux/loi-1991-08-10-n3/2026-04-11--a19a1e52a6b82583572168c2b7d6893fe6f7541b06604b045efa2d423e482ac1/fra",
+              "provisional": false,
+              "publication_date": null,
+              "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+              "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2026-04-11",
+              "state_kind": "as_published",
+              "state_sha256": "a19a1e52a6b82583572168c2b7d6893fe6f7541b06604b045efa2d423e482ac1",
+              "text_status": "held",
+              "text_status_reason": null,
+              "translation_of": null
+            }
+          ],
+          "candidate_states_rule": "on lex-v3-luxembourg-index/9 candidate_states names every state whose interval holds the date, with its kind, its interval (applicability_date to applicable_to, and that end\u0027s source), its boundary, its digest and its text status; they are not one wording held, so none is chosen",
           "candidates": [
             "/lu-legilux/loi-1991-08-10-n3/2026-04-11--9da1fcd1bb8d396c2e034614512be1d55022092a030621cb4829132a2f0db3a0/fra",
             "/lu-legilux/loi-1991-08-10-n3/2026-04-11--a19a1e52a6b82583572168c2b7d6893fe6f7541b06604b045efa2d423e482ac1/fra"
@@ -92,6 +139,53 @@
         "recognised_title"
       ],
       "payload": {
+        "candidate_states": [
+          {
+            "applicability_date": "2026-04-11",
+            "applicable_to": null,
+            "applicable_to_source": null,
+            "boundary": "derived",
+            "date_role": "applicability_in_file",
+            "entry_into_force": null,
+            "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/twin-a",
+            "in_file_date": "2026-04-11",
+            "in_file_identity": null,
+            "language": "fra",
+            "permalink": "/lu-legilux/loi-1991-08-10-n3/2026-04-11--9da1fcd1bb8d396c2e034614512be1d55022092a030621cb4829132a2f0db3a0/fra",
+            "provisional": false,
+            "publication_date": null,
+            "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+            "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2026-04-11",
+            "state_kind": "as_published",
+            "state_sha256": "9da1fcd1bb8d396c2e034614512be1d55022092a030621cb4829132a2f0db3a0",
+            "text_status": "held",
+            "text_status_reason": null,
+            "translation_of": null
+          },
+          {
+            "applicability_date": "2026-04-11",
+            "applicable_to": null,
+            "applicable_to_source": null,
+            "boundary": "derived",
+            "date_role": "applicability_in_file",
+            "entry_into_force": null,
+            "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/twin-b",
+            "in_file_date": "2026-04-11",
+            "in_file_identity": null,
+            "language": "fra",
+            "permalink": "/lu-legilux/loi-1991-08-10-n3/2026-04-11--a19a1e52a6b82583572168c2b7d6893fe6f7541b06604b045efa2d423e482ac1/fra",
+            "provisional": false,
+            "publication_date": null,
+            "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+            "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2026-04-11",
+            "state_kind": "as_published",
+            "state_sha256": "a19a1e52a6b82583572168c2b7d6893fe6f7541b06604b045efa2d423e482ac1",
+            "text_status": "held",
+            "text_status_reason": null,
+            "translation_of": null
+          }
+        ],
+        "candidate_states_rule": "on lex-v3-luxembourg-index/9 candidate_states names every state whose interval holds the date, with its kind, its interval (applicability_date to applicable_to, and that end\u0027s source), its boundary, its digest and its text status; they are not one wording held, so none is chosen",
         "candidates": [
           "/lu-legilux/loi-1991-08-10-n3/2026-04-11--9da1fcd1bb8d396c2e034614512be1d55022092a030621cb4829132a2f0db3a0/fra",
           "/lu-legilux/loi-1991-08-10-n3/2026-04-11--a19a1e52a6b82583572168c2b7d6893fe6f7541b06604b045efa2d423e482ac1/fra"
@@ -337,10 +431,16 @@
         {
           "asserts_absence_of_law": false,
           "bound": "from",
+          "catalogue_read_no_later_than": "2026-10-01T08:00:00Z",
           "history_begins": "2024-02-01",
+          "hole": null,
+          "language": "fra",
           "nearest_earlier": null,
           "nearest_later": "2024-02-01",
+          "reason": "before_history",
+          "reason_rule": "reason says why no state covers the date in the publisher\u0027s catalogue as this index read it: before_history, the date is before the work\u0027s first state; catalogue_hole, the state before the date ends (the publisher\u0027s end) before the next begins, and the gap (hole) is the catalogue\u0027s, never bridged; after_closed_end, the work\u0027s last state ends before the date and no later state is in the catalogue: an end of the catalogue\u0027s states, which is not an end of the law; publisher_end_convention_unclear, the date is the end the publisher states for a state that ends the day before the next begins, so whether that day belongs to it is unclear and it is given to neither; publisher_interval_invalid, the date falls where a state whose stated end is on or before its own start would apply, so no interval is read for it (its permalink still opens it); no_expression_in_language, a French state covers the date and this index holds no expression of it in the language asked (a state in another language takes its interval from its French state); states names the states the reason is about",
           "requested_date": "1900-01-01",
+          "states": [],
           "what_would_answer": [
             "new_official_observation"
           ]
@@ -359,9 +459,14 @@
       ],
       "payload": {
         "asserts_absence_of_law": false,
+        "catalogue_read_no_later_than": "2026-10-01T08:00:00Z",
         "history_begins": "2024-02-01",
+        "hole": null,
+        "language": "fra",
         "nearest_earlier": null,
         "nearest_later": "2024-02-01",
+        "reason": "before_history",
+        "reason_rule": "reason says why no state covers the date in the publisher\u0027s catalogue as this index read it: before_history, the date is before the work\u0027s first state; catalogue_hole, the state before the date ends (the publisher\u0027s end) before the next begins, and the gap (hole) is the catalogue\u0027s, never bridged; after_closed_end, the work\u0027s last state ends before the date and no later state is in the catalogue: an end of the catalogue\u0027s states, which is not an end of the law; publisher_end_convention_unclear, the date is the end the publisher states for a state that ends the day before the next begins, so whether that day belongs to it is unclear and it is given to neither; publisher_interval_invalid, the date falls where a state whose stated end is on or before its own start would apply, so no interval is read for it (its permalink still opens it); no_expression_in_language, a French state covers the date and this index holds no expression of it in the language asked (a state in another language takes its interval from its French state); states names the states the reason is about",
         "recognised_act": "loi du 10 ao\u00FBt 1991",
         "recognised_article": "5",
         "recognised_date": "1990-01-01",
@@ -371,6 +476,7 @@
         "recognised_kind": "citation",
         "recognised_title": "R\u00E8glement sur l\u0027\u00E9preuve terminale zeta",
         "requested_date": "1990-01-01",
+        "states": [],
         "what_would_answer": [
           "new_official_observation"
         ]

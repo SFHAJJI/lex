@@ -812,11 +812,18 @@
             "continue_after": null,
             "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query as typed for a strict hit, a term or overlapping terms for a relaxed hit; a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
+            "fold": {
+              "relaxed_hits_before_fold": 1,
+              "rule": "on lex-v3-luxembourg-index/9 a search with no date serves one hit per work, publisher article id and wording (the wording digest of the article\u0027s text and reference tokens): the hit of the latest state that holds that wording, each other state that holds it named under the hit\u0027s same_wording_states, so an article that did not change is one hit and not one per version; strict_hits and relaxed_hits count the hits served, and fold counts the hits before they were folded; with a date, one state per work is searched and nothing is folded",
+              "strict_hits_before_fold": 4
+            },
             "hit_unit": "a hit is one article of one held state, not a provision: a provision whose wording never changed is a hit in every state that holds it",
             "hits": [
               {
                 "applicability_date": "2024-02-01",
                 "article_identity_sha256": "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
+                "date_role": "applicability_in_file",
+                "entry_into_force": null,
                 "extract": {
                   "byte_end": 362,
                   "byte_start": 46,
@@ -848,12 +855,15 @@
                 "resolve": {
                   "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
                 },
+                "same_wording_states": [],
                 "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
                 "work_key": "loi-1991-08-10-n3"
               },
               {
                 "applicability_date": "2024-02-01",
                 "article_identity_sha256": "2bcf7567d4fec6a1a48c08e2007848bf9dbcf548c4e759da1cb252870d2dcfb5",
+                "date_role": "applicability_in_file",
+                "entry_into_force": null,
                 "extract": {
                   "byte_end": 623,
                   "byte_start": 310,
@@ -893,12 +903,15 @@
                 "resolve": {
                   "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
                 },
+                "same_wording_states": [],
                 "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
                 "work_key": "loi-1991-08-10-n3"
               },
               {
                 "applicability_date": "2024-02-01",
                 "article_identity_sha256": "f3c96389f8e28c9a15a4f114bd4506f338444a770fc7a6d17c7910f84ec90b8d",
+                "date_role": "applicability_in_file",
+                "entry_into_force": null,
                 "extract": {
                   "byte_end": 372,
                   "byte_start": 63,
@@ -930,12 +943,15 @@
                 "resolve": {
                   "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
                 },
+                "same_wording_states": [],
                 "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
                 "work_key": "loi-1991-08-10-n3"
               },
               {
                 "applicability_date": "2024-02-01",
                 "article_identity_sha256": "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
+                "date_role": "applicability_in_file",
+                "entry_into_force": null,
                 "extract": {
                   "byte_end": 465,
                   "byte_start": 142,
@@ -991,12 +1007,15 @@
                 "resolve": {
                   "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
                 },
+                "same_wording_states": [],
                 "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
                 "work_key": "loi-1991-08-10-n3"
               },
               {
                 "applicability_date": "2024-02-01",
                 "article_identity_sha256": "fc1c1fda1d6d768931cf296275582a63259fd60b5078b71f7828f8bfee7a7391",
+                "date_role": "applicability_in_file",
+                "entry_into_force": null,
                 "extract": {
                   "byte_end": 1337,
                   "byte_start": 1038,
@@ -1036,6 +1055,7 @@
                 "resolve": {
                   "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
                 },
+                "same_wording_states": [],
                 "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
                 "work_key": "loi-1991-08-10-n3"
               }
@@ -1095,7 +1115,7 @@
               "index_built_at": "2026-10-01T08:00:00Z",
               "language": "fra",
               "publisher": "lu-legilux",
-              "rule": "searched counts what the lanes matched against, from this index: the states in the language asked whose text the rights rule admits (with a date, the one state the date selects for each work, a work with several on that date contributing none), their works and their articles with searchable text, within the work named when one is; states_withheld_by_rights counts the states of that scope whose text the rights rule keeps out; index_built_at is the build time the mounted log records, null when it records none; nothing here counts what the publisher holds; this index also records versions it holds no text of (withheld by their rights, not available or not acquired): those rows are in none of these counts, states_withheld_by_rights included, which counts only held states whose sources the rights rule does not admit",
+              "rule": "searched counts what the lanes matched against, from this index: the states in the language asked whose text the rights rule admits (with a date, the one state the date selects for each work, a work with several on that date contributing none), their works and their articles with searchable text, within the work named when one is; states_withheld_by_rights counts the states of that scope whose text the rights rule keeps out; index_built_at is the build time the mounted log records, null when it records none; nothing here counts what the publisher holds; this index also records versions it holds no text of (withheld by their rights, not available or not acquired): those rows are in none of the counts of what was matched, and states_withheld_by_rights counts, beside the held states whose sources the rights rule does not admit, the versions in that scope whose text is withheld by their rights (text_status withheld_rights; with a date, when the version the interval rules select for a work is one); a version not available or not acquired is in no count",
               "states": 1,
               "states_withheld_by_rights": 0,
               "works": 1,
@@ -1206,11 +1226,18 @@
             "continue_after": null,
             "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query as typed for a strict hit, a term or overlapping terms for a relaxed hit; a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
+            "fold": {
+              "relaxed_hits_before_fold": null,
+              "rule": "on lex-v3-luxembourg-index/9 a search with no date serves one hit per work, publisher article id and wording (the wording digest of the article\u0027s text and reference tokens): the hit of the latest state that holds that wording, each other state that holds it named under the hit\u0027s same_wording_states, so an article that did not change is one hit and not one per version; strict_hits and relaxed_hits count the hits served, and fold counts the hits before they were folded; with a date, one state per work is searched and nothing is folded",
+              "strict_hits_before_fold": 4
+            },
             "hit_unit": "a hit is one article of one held state, not a provision: a provision whose wording never changed is a hit in every state that holds it",
             "hits": [
               {
                 "applicability_date": "2024-02-01",
                 "article_identity_sha256": "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
+                "date_role": "applicability_in_file",
+                "entry_into_force": null,
                 "extract": {
                   "byte_end": 362,
                   "byte_start": 46,
@@ -1242,12 +1269,15 @@
                 "resolve": {
                   "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
                 },
+                "same_wording_states": [],
                 "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
                 "work_key": "loi-1991-08-10-n3"
               },
               {
                 "applicability_date": "2024-02-01",
                 "article_identity_sha256": "2bcf7567d4fec6a1a48c08e2007848bf9dbcf548c4e759da1cb252870d2dcfb5",
+                "date_role": "applicability_in_file",
+                "entry_into_force": null,
                 "extract": {
                   "byte_end": 623,
                   "byte_start": 310,
@@ -1287,12 +1317,15 @@
                 "resolve": {
                   "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
                 },
+                "same_wording_states": [],
                 "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
                 "work_key": "loi-1991-08-10-n3"
               },
               {
                 "applicability_date": "2024-02-01",
                 "article_identity_sha256": "f3c96389f8e28c9a15a4f114bd4506f338444a770fc7a6d17c7910f84ec90b8d",
+                "date_role": "applicability_in_file",
+                "entry_into_force": null,
                 "extract": {
                   "byte_end": 372,
                   "byte_start": 63,
@@ -1324,12 +1357,15 @@
                 "resolve": {
                   "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
                 },
+                "same_wording_states": [],
                 "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
                 "work_key": "loi-1991-08-10-n3"
               },
               {
                 "applicability_date": "2024-02-01",
                 "article_identity_sha256": "c86fe9cf34f27d8bc5f65ecb91e33b2a8a0ec9127ea03bfe6aa9ca498e499cd3",
+                "date_role": "applicability_in_file",
+                "entry_into_force": null,
                 "extract": {
                   "byte_end": 465,
                   "byte_start": 142,
@@ -1385,6 +1421,7 @@
                 "resolve": {
                   "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
                 },
+                "same_wording_states": [],
                 "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
                 "work_key": "loi-1991-08-10-n3"
               }
@@ -1444,7 +1481,7 @@
               "index_built_at": "2026-10-01T08:00:00Z",
               "language": "fra",
               "publisher": "lu-legilux",
-              "rule": "searched counts what the lanes matched against, from this index: the states in the language asked whose text the rights rule admits (with a date, the one state the date selects for each work, a work with several on that date contributing none), their works and their articles with searchable text, within the work named when one is; states_withheld_by_rights counts the states of that scope whose text the rights rule keeps out; index_built_at is the build time the mounted log records, null when it records none; nothing here counts what the publisher holds; this index also records versions it holds no text of (withheld by their rights, not available or not acquired): those rows are in none of these counts, states_withheld_by_rights included, which counts only held states whose sources the rights rule does not admit",
+              "rule": "searched counts what the lanes matched against, from this index: the states in the language asked whose text the rights rule admits (with a date, the one state the date selects for each work, a work with several on that date contributing none), their works and their articles with searchable text, within the work named when one is; states_withheld_by_rights counts the states of that scope whose text the rights rule keeps out; index_built_at is the build time the mounted log records, null when it records none; nothing here counts what the publisher holds; this index also records versions it holds no text of (withheld by their rights, not available or not acquired): those rows are in none of the counts of what was matched, and states_withheld_by_rights counts, beside the held states whose sources the rights rule does not admit, the versions in that scope whose text is withheld by their rights (text_status withheld_rights; with a date, when the version the interval rules select for a work is one); a version not available or not acquired is in no count",
               "states": 1,
               "states_withheld_by_rights": 0,
               "works": 1,
@@ -1505,6 +1542,11 @@
             "continue_after": null,
             "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query as typed for a strict hit, a term or overlapping terms for a relaxed hit; a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
+            "fold": {
+              "relaxed_hits_before_fold": null,
+              "rule": "on lex-v3-luxembourg-index/9 a search with no date serves one hit per work, publisher article id and wording (the wording digest of the article\u0027s text and reference tokens): the hit of the latest state that holds that wording, each other state that holds it named under the hit\u0027s same_wording_states, so an article that did not change is one hit and not one per version; strict_hits and relaxed_hits count the hits served, and fold counts the hits before they were folded; with a date, one state per work is searched and nothing is folded",
+              "strict_hits_before_fold": 0
+            },
             "hit_unit": "a hit is one article of one held state, not a provision: a provision whose wording never changed is a hit in every state that holds it",
             "hits": [],
             "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -1562,7 +1604,7 @@
               "index_built_at": "2026-10-01T08:00:00Z",
               "language": "fra",
               "publisher": "lu-legilux",
-              "rule": "searched counts what the lanes matched against, from this index: the states in the language asked whose text the rights rule admits (with a date, the one state the date selects for each work, a work with several on that date contributing none), their works and their articles with searchable text, within the work named when one is; states_withheld_by_rights counts the states of that scope whose text the rights rule keeps out; index_built_at is the build time the mounted log records, null when it records none; nothing here counts what the publisher holds; this index also records versions it holds no text of (withheld by their rights, not available or not acquired): those rows are in none of these counts, states_withheld_by_rights included, which counts only held states whose sources the rights rule does not admit",
+              "rule": "searched counts what the lanes matched against, from this index: the states in the language asked whose text the rights rule admits (with a date, the one state the date selects for each work, a work with several on that date contributing none), their works and their articles with searchable text, within the work named when one is; states_withheld_by_rights counts the states of that scope whose text the rights rule keeps out; index_built_at is the build time the mounted log records, null when it records none; nothing here counts what the publisher holds; this index also records versions it holds no text of (withheld by their rights, not available or not acquired): those rows are in none of the counts of what was matched, and states_withheld_by_rights counts, beside the held states whose sources the rights rule does not admit, the versions in that scope whose text is withheld by their rights (text_status withheld_rights; with a date, when the version the interval rules select for a work is one); a version not available or not acquired is in no count",
               "states": 1,
               "states_withheld_by_rights": 0,
               "works": 1,
@@ -2227,16 +2269,8 @@
                 "reason": "no current-state flag is part of this record; status_on serves the publisher\u0027s force assertions for a date, and a flag about now would not be a statement about any date listed here"
               },
               {
-                "item": "publication_date",
-                "reason": "no publication date is held; the document date the index stores beside a title falls back to an article\u0027s applicability date, so it is not served as one"
-              },
-              {
-                "item": "entry_into_force",
-                "reason": "no entry-into-force date is part of this record; status_on serves the publisher\u0027s dateEntryInForce when asserted; a state\u0027s applicability date is the date that state applies from, which is a different fact"
-              },
-              {
                 "item": "application",
-                "reason": "no application date is held; a state\u0027s applicability date is the date that state applies from, which is a different fact"
+                "reason": "no date of application is held beyond each state\u0027s own date, whose date_role says what it is: a state dated by its entry into force is not dated by an application date"
               },
               {
                 "item": "historical_identifiers",
@@ -2252,7 +2286,7 @@
               },
               {
                 "item": "coverage_gaps",
-                "reason": "each state carries the date it applies from and no end date, so no gap between states can be stated, and this answer never says there is none"
+                "reason": "each state carries the end of its interval (applicable_to, the publisher\u0027s or derived from the next state) and its boundary, and no gap between states is listed in this record; it never says there is none"
               },
               {
                 "item": "later_versions",
@@ -2268,16 +2302,29 @@
             "states": [
               {
                 "applicability_date": "2024-02-01",
+                "applicable_to": null,
+                "applicable_to_source": null,
                 "article_count": 49,
                 "articles_not_admitted": 5,
+                "boundary": "derived",
+                "date_role": "applicability_in_file",
+                "entry_into_force": null,
                 "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+                "in_file_date": "2024-02-01",
+                "in_file_identity": null,
                 "language": "fra",
                 "next_applicability_date": null,
                 "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
+                "provisional": false,
+                "publication_date": null,
                 "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
                 "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
                 "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
-                "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4"
+                "state_kind": "as_published",
+                "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
+                "text_status": "held",
+                "text_status_reason": null,
+                "translation_of": null
               }
             ],
             "titles": [],
@@ -2645,6 +2692,7 @@
             "available_languages": [
               "fra"
             ],
+            "catalogue_rule": "on lex-v3-luxembourg-index/9 each state carries the publisher catalogue\u0027s facts of its row: state_kind (as_published, consolidation or code); date_role, the source of applicability_date: applicability (the catalogue\u0027s dateApplicability of a consolidation or code state), applicability_in_file (the act\u0027s file\u0027s own dateApplicability) or entry_into_force (the act\u0027s catalogue dateEntryInForce, used when its file states no date: an entry into force, never an applicability date, and never said as one); entry_into_force, an act\u0027s catalogue dateEntryInForce whatever its date\u0027s role; applicable_to, the end of the state\u0027s interval [applicability_date, applicable_to), with applicable_to_source publisher (the catalogue\u0027s dateEndApplicability) or derived (the next dated state\u0027s start), null when there is none; boundary, how that end meets the next state (half_open, inclusive_suspected: an end one day before the next start, invalid: an end on or before the state\u0027s own start, so the state covers no date, derived); publication_date, the catalogue\u0027s publicationDate; text_status and text_status_reason, why the state\u0027s text is or is not held; in_file_identity and in_file_date, what the state\u0027s own file says; translation_of, for an expression in another language than French, the French expression whose interval it takes (the publisher\u0027s record does not state which language version is authentic); provisional, a date after the day this index was built; a state is selected for a date by the interval that holds it, and two states holding it with the same held wording are served once with the others named under same_text_states",
             "citation_facts": {
               "journal_officiel_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
               "memorial_issues": [],
@@ -2682,11 +2730,13 @@
             "requested_language": "fra",
             "requested_page": null,
             "rights_disposition": "agreed_same_run_cc_by",
-            "rights_rule": "rights are enforced when the bundle is composed, before any text is read: every corpus member the state\u0027s articles come from must have been acquired with its two rights channels agreeing CC BY in the same run (rights_disposition agreed_same_run_cc_by); under any other outcome or rights disposition the bundle refuses text_withheld and names the official identity, the official link and the retained body digest, so a derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state none of whose articles holds text refuses text_not_available",
+            "rights_rule": "rights are enforced when the bundle is composed, before any text is read: every corpus member the state\u0027s articles come from must have been acquired with its two rights channels agreeing CC BY in the same run (rights_disposition agreed_same_run_cc_by); under any other outcome or rights disposition the bundle refuses text_withheld and names the official identity, the official link and the retained body digest, so a derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state none of whose articles holds text refuses text_not_available; on lex-v3-luxembourg-index/9 a state of the publisher\u0027s catalogue whose text this index does not hold covers its own interval: a date in it refuses text_withheld when its rights withhold its text (text_status withheld_rights) and text_not_available otherwise (a PDF, a derivation gap, a misfiled file, a state not acquired), naming the state, and no other state\u0027s text is served in its place",
             "scope": "the evidence a reader needs to quote a Luxembourg state: for the state selected as as_of selects it, the hash-pinned permalink and stable coordinate, the state digest and its rule profiles, the source documents with their retained body digests (as provenance names them), and every article of the page served (page_rule; page, pages and, when asked, contents say the state\u0027s pages and articles) with its position, its identity, its wording as the publisher wrote it (text), the digest of that text, the digest of its wording structure, its notes, its official source, the digest of the publisher body it was read from and an article permalink (the state permalink and the article id as a last segment, which verify accepts); the text is the concatenation of the article\u0027s text and reference tokens in publisher order, the same bytes the index searches; an article whose tokens carry no text (the index admits a marker-only article as evidence) is named under articles_without_text and is not served as a quote; citation_facts holds what a citation of the states needs that they do not carry (the publisher\u0027s titles and the act as published with its M\u00E9morial issue and publication date facts, verbatim); given as the identifier, a state\u0027s hash-pinned permalink (/lu-legilux/{work}/{date}--{state sha256}/{language}, R64; with its own date, and the language it names if one is asked) answers the state it pins; a digest the coordinate no longer carries in that language is pinned_digest_mismatch naming the current state, never another state in its place",
             "states": [
               {
                 "applicability_date": "2024-02-01",
+                "applicable_to": null,
+                "applicable_to_source": null,
                 "article_identities_sha256": "eaf554235d9a3eeb497381255b450a14e5602d3949da58b95eb8023ef7085f91",
                 "articles": [
                   {
@@ -2694,6 +2744,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_1er",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 1,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -2711,6 +2762,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_2",
                     "article_valid_from": "2023-01-01",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 2,
                     "language": "fra",
                     "notes": [
                       {
@@ -2733,6 +2785,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_3",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 3,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -2750,6 +2803,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_4",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 4,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -2767,6 +2821,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_5",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 5,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -2784,6 +2839,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_7",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 7,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -2801,6 +2857,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_8",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 8,
                     "language": "fra",
                     "notes": [
                       {
@@ -2831,6 +2888,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_9",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 9,
                     "language": "fra",
                     "notes": [
                       {
@@ -2853,6 +2911,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_10",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 10,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -2870,6 +2929,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_11",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 11,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -2887,6 +2947,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_12",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 12,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -2904,6 +2965,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_13",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 13,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -2921,6 +2983,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_14",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 14,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -2938,6 +3001,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_15",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 15,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -2955,6 +3019,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_16",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 16,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -2972,6 +3037,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_17",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 17,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -2989,6 +3055,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_18",
                     "article_valid_from": "2023-09-16",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 18,
                     "language": "fra",
                     "notes": [
                       {
@@ -3011,6 +3078,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_19",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 19,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3028,6 +3096,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_20",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 20,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3045,6 +3114,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_21",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 21,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3062,6 +3132,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_22",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 22,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3079,6 +3150,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_23",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 23,
                     "language": "fra",
                     "notes": [
                       {
@@ -3101,6 +3173,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_24",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 24,
                     "language": "fra",
                     "notes": [
                       {
@@ -3123,6 +3196,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_24-1",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 25,
                     "language": "fra",
                     "notes": [
                       {
@@ -3145,6 +3219,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_25",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 26,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3162,6 +3237,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_26",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 27,
                     "language": "fra",
                     "notes": [
                       {
@@ -3184,6 +3260,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_28",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 29,
                     "language": "fra",
                     "notes": [
                       {
@@ -3206,6 +3283,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_29",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 30,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3223,6 +3301,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_29-1",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 31,
                     "language": "fra",
                     "notes": [
                       {
@@ -3245,6 +3324,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_30",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 32,
                     "language": "fra",
                     "notes": [
                       {
@@ -3267,6 +3347,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_30-1",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 33,
                     "language": "fra",
                     "notes": [
                       {
@@ -3289,6 +3370,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_30-2",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 34,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3306,6 +3388,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_31",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 35,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3323,6 +3406,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_31-1",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 36,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3340,6 +3424,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_32",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 37,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3357,6 +3442,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_33",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 38,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3374,6 +3460,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_34",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 39,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3391,6 +3478,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_34-1",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 40,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3408,6 +3496,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_34-2",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 41,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3425,6 +3514,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_34-3",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 42,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3442,6 +3532,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_35",
                     "article_valid_from": "2023-01-01",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 43,
                     "language": "fra",
                     "notes": [
                       {
@@ -3468,6 +3559,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_35-1",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 44,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3485,6 +3577,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_36",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 45,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3502,6 +3595,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_37",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 46,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3519,6 +3613,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_38",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 48,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3536,6 +3631,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_39",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 49,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3553,6 +3649,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_40",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 50,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3570,6 +3667,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_41",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 51,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3587,6 +3685,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_42",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 52,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3605,9 +3704,38 @@
                 "body_sha256s": [
                   "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c"
                 ],
+                "boundary": "derived",
                 "contents": null,
+                "date_role": "applicability_in_file",
+                "entry_into_force": null,
                 "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+                "in_file_date": "2024-02-01",
+                "in_file_identity": null,
                 "language": "fra",
+                "missing_articles": [
+                  {
+                    "after_publisher_id": "art_5",
+                    "before_publisher_id": "art_7",
+                    "count": 1,
+                    "from_position": 6,
+                    "to_position": 6
+                  },
+                  {
+                    "after_publisher_id": "art_26",
+                    "before_publisher_id": "art_28",
+                    "count": 1,
+                    "from_position": 28,
+                    "to_position": 28
+                  },
+                  {
+                    "after_publisher_id": "art_37",
+                    "before_publisher_id": "art_38",
+                    "count": 1,
+                    "from_position": 47,
+                    "to_position": 47
+                  }
+                ],
+                "missing_articles_rule": "on lex-v3-luxembourg-index/9 each article carries document_position, its place among its publisher document\u0027s main-body articles (from 1), and the articles are in that order; missing_articles names each run of places this state holds no article at (from_position to to_position, between the articles after_publisher_id and before_publisher_id, null at the start): an article of the publisher\u0027s document this state does not hold, never skipped in silence; an article missing after the last one held is not seen by place, and articles_not_admitted counts every article of the document not held",
                 "next_applicability_date": null,
                 "page": {
                   "articles_in_version": 49,
@@ -3628,12 +3756,15 @@
                   }
                 ],
                 "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
+                "provisional": false,
+                "publication_date": null,
                 "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
                 "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
                 "rule_profile_sha256s": [
                   "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
                   "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
                 ],
+                "same_text_states": [],
                 "sources": [
                   {
                     "article_outcomes": [
@@ -3656,11 +3787,17 @@
                   }
                 ],
                 "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+                "state_kind": "as_published",
                 "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
+                "text_status": "held",
+                "text_status_reason": null,
+                "translation_of": null,
                 "validity_conflict_count": 49,
                 "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date"
               }
             ],
+            "states_without_text": [],
+            "states_without_text_rule": "states_without_text names the French state whose interval holds the requested date when its text is not held and no French text is served beside the other languages\u0027 (a state of another language takes its interval from it); it is never served in another state\u0027s place",
             "verified_by": {
               "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -3701,10 +3838,16 @@
           "code": "no_version_for_date",
           "helpful_payload": {
             "asserts_absence_of_law": false,
+            "catalogue_read_no_later_than": "2026-10-01T08:00:00Z",
             "history_begins": "2024-02-01",
+            "hole": null,
+            "language": "fra",
             "nearest_earlier": null,
             "nearest_later": "2024-02-01",
+            "reason": "before_history",
+            "reason_rule": "reason says why no state covers the date in the publisher\u0027s catalogue as this index read it: before_history, the date is before the work\u0027s first state; catalogue_hole, the state before the date ends (the publisher\u0027s end) before the next begins, and the gap (hole) is the catalogue\u0027s, never bridged; after_closed_end, the work\u0027s last state ends before the date and no later state is in the catalogue: an end of the catalogue\u0027s states, which is not an end of the law; publisher_end_convention_unclear, the date is the end the publisher states for a state that ends the day before the next begins, so whether that day belongs to it is unclear and it is given to neither; publisher_interval_invalid, the date falls where a state whose stated end is on or before its own start would apply, so no interval is read for it (its permalink still opens it); no_expression_in_language, a French state covers the date and this index holds no expression of it in the language asked (a state in another language takes its interval from its French state); states names the states the reason is about",
             "requested_date": "1990-01-01",
+            "states": [],
             "what_would_answer": [
               "new_official_observation"
             ]
@@ -3909,6 +4052,7 @@
             "available_languages": [
               "fra"
             ],
+            "catalogue_rule": "on lex-v3-luxembourg-index/9 each state carries the publisher catalogue\u0027s facts of its row: state_kind (as_published, consolidation or code); date_role, the source of applicability_date: applicability (the catalogue\u0027s dateApplicability of a consolidation or code state), applicability_in_file (the act\u0027s file\u0027s own dateApplicability) or entry_into_force (the act\u0027s catalogue dateEntryInForce, used when its file states no date: an entry into force, never an applicability date, and never said as one); entry_into_force, an act\u0027s catalogue dateEntryInForce whatever its date\u0027s role; applicable_to, the end of the state\u0027s interval [applicability_date, applicable_to), with applicable_to_source publisher (the catalogue\u0027s dateEndApplicability) or derived (the next dated state\u0027s start), null when there is none; boundary, how that end meets the next state (half_open, inclusive_suspected: an end one day before the next start, invalid: an end on or before the state\u0027s own start, so the state covers no date, derived); publication_date, the catalogue\u0027s publicationDate; text_status and text_status_reason, why the state\u0027s text is or is not held; in_file_identity and in_file_date, what the state\u0027s own file says; translation_of, for an expression in another language than French, the French expression whose interval it takes (the publisher\u0027s record does not state which language version is authentic); provisional, a date after the day this index was built; a state is selected for a date by the interval that holds it, and two states holding it with the same held wording are served once with the others named under same_text_states",
             "citation_facts": {
               "journal_officiel_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
               "memorial_issues": [],
@@ -3946,11 +4090,13 @@
             "requested_language": "fra",
             "requested_page": null,
             "rights_disposition": "agreed_same_run_cc_by",
-            "rights_rule": "rights are enforced when the bundle is composed, before any text is read: every corpus member the state\u0027s articles come from must have been acquired with its two rights channels agreeing CC BY in the same run (rights_disposition agreed_same_run_cc_by); under any other outcome or rights disposition the bundle refuses text_withheld and names the official identity, the official link and the retained body digest, so a derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state none of whose articles holds text refuses text_not_available",
+            "rights_rule": "rights are enforced when the bundle is composed, before any text is read: every corpus member the state\u0027s articles come from must have been acquired with its two rights channels agreeing CC BY in the same run (rights_disposition agreed_same_run_cc_by); under any other outcome or rights disposition the bundle refuses text_withheld and names the official identity, the official link and the retained body digest, so a derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state none of whose articles holds text refuses text_not_available; on lex-v3-luxembourg-index/9 a state of the publisher\u0027s catalogue whose text this index does not hold covers its own interval: a date in it refuses text_withheld when its rights withhold its text (text_status withheld_rights) and text_not_available otherwise (a PDF, a derivation gap, a misfiled file, a state not acquired), naming the state, and no other state\u0027s text is served in its place",
             "scope": "the evidence a reader needs to quote a Luxembourg state: for the state selected as as_of selects it, the hash-pinned permalink and stable coordinate, the state digest and its rule profiles, the source documents with their retained body digests (as provenance names them), and every article of the page served (page_rule; page, pages and, when asked, contents say the state\u0027s pages and articles) with its position, its identity, its wording as the publisher wrote it (text), the digest of that text, the digest of its wording structure, its notes, its official source, the digest of the publisher body it was read from and an article permalink (the state permalink and the article id as a last segment, which verify accepts); the text is the concatenation of the article\u0027s text and reference tokens in publisher order, the same bytes the index searches; an article whose tokens carry no text (the index admits a marker-only article as evidence) is named under articles_without_text and is not served as a quote; citation_facts holds what a citation of the states needs that they do not carry (the publisher\u0027s titles and the act as published with its M\u00E9morial issue and publication date facts, verbatim); given as the identifier, a state\u0027s hash-pinned permalink (/lu-legilux/{work}/{date}--{state sha256}/{language}, R64; with its own date, and the language it names if one is asked) answers the state it pins; a digest the coordinate no longer carries in that language is pinned_digest_mismatch naming the current state, never another state in its place",
             "states": [
               {
                 "applicability_date": "2024-02-01",
+                "applicable_to": null,
+                "applicable_to_source": null,
                 "article_identities_sha256": "eaf554235d9a3eeb497381255b450a14e5602d3949da58b95eb8023ef7085f91",
                 "articles": [
                   {
@@ -3958,6 +4104,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_1er",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 1,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -3975,6 +4122,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_2",
                     "article_valid_from": "2023-01-01",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 2,
                     "language": "fra",
                     "notes": [
                       {
@@ -3997,6 +4145,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_3",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 3,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4014,6 +4163,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_4",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 4,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4031,6 +4181,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_5",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 5,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4048,6 +4199,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_7",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 7,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4065,6 +4217,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_8",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 8,
                     "language": "fra",
                     "notes": [
                       {
@@ -4095,6 +4248,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_9",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 9,
                     "language": "fra",
                     "notes": [
                       {
@@ -4117,6 +4271,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_10",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 10,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4134,6 +4289,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_11",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 11,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4151,6 +4307,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_12",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 12,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4168,6 +4325,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_13",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 13,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4185,6 +4343,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_14",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 14,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4202,6 +4361,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_15",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 15,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4219,6 +4379,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_16",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 16,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4236,6 +4397,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_17",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 17,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4253,6 +4415,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_18",
                     "article_valid_from": "2023-09-16",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 18,
                     "language": "fra",
                     "notes": [
                       {
@@ -4275,6 +4438,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_19",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 19,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4292,6 +4456,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_20",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 20,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4309,6 +4474,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_21",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 21,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4326,6 +4492,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_22",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 22,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4343,6 +4510,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_23",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 23,
                     "language": "fra",
                     "notes": [
                       {
@@ -4365,6 +4533,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_24",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 24,
                     "language": "fra",
                     "notes": [
                       {
@@ -4387,6 +4556,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_24-1",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 25,
                     "language": "fra",
                     "notes": [
                       {
@@ -4409,6 +4579,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_25",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 26,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4426,6 +4597,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_26",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 27,
                     "language": "fra",
                     "notes": [
                       {
@@ -4448,6 +4620,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_28",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 29,
                     "language": "fra",
                     "notes": [
                       {
@@ -4470,6 +4643,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_29",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 30,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4487,6 +4661,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_29-1",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 31,
                     "language": "fra",
                     "notes": [
                       {
@@ -4509,6 +4684,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_30",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 32,
                     "language": "fra",
                     "notes": [
                       {
@@ -4531,6 +4707,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_30-1",
                     "article_valid_from": "2023-07-03",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 33,
                     "language": "fra",
                     "notes": [
                       {
@@ -4553,6 +4730,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_30-2",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 34,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4570,6 +4748,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_31",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 35,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4587,6 +4766,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_31-1",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 36,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4604,6 +4784,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_32",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 37,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4621,6 +4802,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_33",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 38,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4638,6 +4820,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_34",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 39,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4655,6 +4838,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_34-1",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 40,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4672,6 +4856,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_34-2",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 41,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4689,6 +4874,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_34-3",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 42,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4706,6 +4892,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_35",
                     "article_valid_from": "2023-01-01",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 43,
                     "language": "fra",
                     "notes": [
                       {
@@ -4732,6 +4919,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_35-1",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 44,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4749,6 +4937,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_36",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 45,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4766,6 +4955,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_37",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 46,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4783,6 +4973,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_38",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 48,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4800,6 +4991,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_39",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 49,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4817,6 +5009,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_40",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 50,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4834,6 +5027,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_41",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 51,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4851,6 +5045,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra/art_42",
                     "article_valid_from": "2021-08-22",
                     "body_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+                    "document_position": 52,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -4869,9 +5064,38 @@
                 "body_sha256s": [
                   "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c"
                 ],
+                "boundary": "derived",
                 "contents": null,
+                "date_role": "applicability_in_file",
+                "entry_into_force": null,
                 "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+                "in_file_date": "2024-02-01",
+                "in_file_identity": null,
                 "language": "fra",
+                "missing_articles": [
+                  {
+                    "after_publisher_id": "art_5",
+                    "before_publisher_id": "art_7",
+                    "count": 1,
+                    "from_position": 6,
+                    "to_position": 6
+                  },
+                  {
+                    "after_publisher_id": "art_26",
+                    "before_publisher_id": "art_28",
+                    "count": 1,
+                    "from_position": 28,
+                    "to_position": 28
+                  },
+                  {
+                    "after_publisher_id": "art_37",
+                    "before_publisher_id": "art_38",
+                    "count": 1,
+                    "from_position": 47,
+                    "to_position": 47
+                  }
+                ],
+                "missing_articles_rule": "on lex-v3-luxembourg-index/9 each article carries document_position, its place among its publisher document\u0027s main-body articles (from 1), and the articles are in that order; missing_articles names each run of places this state holds no article at (from_position to to_position, between the articles after_publisher_id and before_publisher_id, null at the start): an article of the publisher\u0027s document this state does not hold, never skipped in silence; an article missing after the last one held is not seen by place, and articles_not_admitted counts every article of the document not held",
                 "next_applicability_date": null,
                 "page": {
                   "articles_in_version": 49,
@@ -4892,12 +5116,15 @@
                   }
                 ],
                 "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
+                "provisional": false,
+                "publication_date": null,
                 "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
                 "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
                 "rule_profile_sha256s": [
                   "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
                   "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
                 ],
+                "same_text_states": [],
                 "sources": [
                   {
                     "article_outcomes": [
@@ -4920,11 +5147,17 @@
                   }
                 ],
                 "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+                "state_kind": "as_published",
                 "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
+                "text_status": "held",
+                "text_status_reason": null,
+                "translation_of": null,
                 "validity_conflict_count": 49,
                 "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date"
               }
             ],
+            "states_without_text": [],
+            "states_without_text_rule": "states_without_text names the French state whose interval holds the requested date when its text is not held and no French text is served beside the other languages\u0027 (a state of another language takes its interval from it); it is never served in another state\u0027s place",
             "verified_by": {
               "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -5091,6 +5324,7 @@
             "available_languages": [
               "fra"
             ],
+            "catalogue_rule": "on lex-v3-luxembourg-index/9 each state carries the publisher catalogue\u0027s facts of its row: state_kind (as_published, consolidation or code); date_role, the source of applicability_date: applicability (the catalogue\u0027s dateApplicability of a consolidation or code state), applicability_in_file (the act\u0027s file\u0027s own dateApplicability) or entry_into_force (the act\u0027s catalogue dateEntryInForce, used when its file states no date: an entry into force, never an applicability date, and never said as one); entry_into_force, an act\u0027s catalogue dateEntryInForce whatever its date\u0027s role; applicable_to, the end of the state\u0027s interval [applicability_date, applicable_to), with applicable_to_source publisher (the catalogue\u0027s dateEndApplicability) or derived (the next dated state\u0027s start), null when there is none; boundary, how that end meets the next state (half_open, inclusive_suspected: an end one day before the next start, invalid: an end on or before the state\u0027s own start, so the state covers no date, derived); publication_date, the catalogue\u0027s publicationDate; text_status and text_status_reason, why the state\u0027s text is or is not held; in_file_identity and in_file_date, what the state\u0027s own file says; translation_of, for an expression in another language than French, the French expression whose interval it takes (the publisher\u0027s record does not state which language version is authentic); provisional, a date after the day this index was built; a state is selected for a date by the interval that holds it, and two states holding it with the same held wording are served once with the others named under same_text_states",
             "citation_facts": {
               "journal_officiel_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
               "memorial_issues": [],
@@ -5128,11 +5362,13 @@
             "requested_language": "fra",
             "requested_page": null,
             "rights_disposition": "agreed_same_run_cc_by",
-            "rights_rule": "rights are enforced when the bundle is composed, before any text is read: every corpus member the state\u0027s articles come from must have been acquired with its two rights channels agreeing CC BY in the same run (rights_disposition agreed_same_run_cc_by); under any other outcome or rights disposition the bundle refuses text_withheld and names the official identity, the official link and the retained body digest, so a derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state none of whose articles holds text refuses text_not_available",
+            "rights_rule": "rights are enforced when the bundle is composed, before any text is read: every corpus member the state\u0027s articles come from must have been acquired with its two rights channels agreeing CC BY in the same run (rights_disposition agreed_same_run_cc_by); under any other outcome or rights disposition the bundle refuses text_withheld and names the official identity, the official link and the retained body digest, so a derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state none of whose articles holds text refuses text_not_available; on lex-v3-luxembourg-index/9 a state of the publisher\u0027s catalogue whose text this index does not hold covers its own interval: a date in it refuses text_withheld when its rights withhold its text (text_status withheld_rights) and text_not_available otherwise (a PDF, a derivation gap, a misfiled file, a state not acquired), naming the state, and no other state\u0027s text is served in its place",
             "scope": "the evidence a reader needs to quote a Luxembourg state: for the state selected as as_of selects it, the hash-pinned permalink and stable coordinate, the state digest and its rule profiles, the source documents with their retained body digests (as provenance names them), and every article of the page served (page_rule; page, pages and, when asked, contents say the state\u0027s pages and articles) with its position, its identity, its wording as the publisher wrote it (text), the digest of that text, the digest of its wording structure, its notes, its official source, the digest of the publisher body it was read from and an article permalink (the state permalink and the article id as a last segment, which verify accepts); the text is the concatenation of the article\u0027s text and reference tokens in publisher order, the same bytes the index searches; an article whose tokens carry no text (the index admits a marker-only article as evidence) is named under articles_without_text and is not served as a quote; citation_facts holds what a citation of the states needs that they do not carry (the publisher\u0027s titles and the act as published with its M\u00E9morial issue and publication date facts, verbatim); given as the identifier, a state\u0027s hash-pinned permalink (/lu-legilux/{work}/{date}--{state sha256}/{language}, R64; with its own date, and the language it names if one is asked) answers the state it pins; a digest the coordinate no longer carries in that language is pinned_digest_mismatch naming the current state, never another state in its place",
             "states": [
               {
                 "applicability_date": "2024-02-01",
+                "applicable_to": null,
+                "applicable_to_source": null,
                 "article_identities_sha256": "2a251e5a697d5edb4b87038538df63d5726e2f4ca7517fe7c01022cdd8efd2da",
                 "articles": [
                   {
@@ -5140,6 +5376,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_1er",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 1,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5157,6 +5394,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_2",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 2,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5174,6 +5412,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_3",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 3,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5191,6 +5430,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_4",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 4,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5208,6 +5448,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_5",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 5,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5225,6 +5466,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_6",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 6,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5242,6 +5484,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_7",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 7,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5259,6 +5502,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_8",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 8,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5276,6 +5520,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_9",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 9,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5293,6 +5538,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_10",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 10,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5310,6 +5556,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_11",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 11,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5327,6 +5574,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_12",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 12,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5344,6 +5592,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_13",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 13,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5361,6 +5610,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_14",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 14,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5378,6 +5628,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_15",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 15,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5395,6 +5646,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_16",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 16,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5412,6 +5664,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_17",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 17,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5429,6 +5682,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_18",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 18,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5446,6 +5700,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_19",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 19,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5463,6 +5718,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_20",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 20,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5480,6 +5736,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_21",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 21,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5497,6 +5754,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_22",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 22,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5514,6 +5772,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_23",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 23,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5531,6 +5790,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_24",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 24,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5548,6 +5808,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_25",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 25,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5565,6 +5826,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_26",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 26,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5582,6 +5844,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_27",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 27,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5599,6 +5862,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_28",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 28,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5616,6 +5880,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_29",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 29,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5633,6 +5898,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_30",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 30,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5650,6 +5916,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_31",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 31,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5667,6 +5934,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_32",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 32,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5684,6 +5952,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_33",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 33,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5701,6 +5970,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_34",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 34,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5718,6 +5988,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_35",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 35,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5735,6 +6006,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_36",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 36,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5752,6 +6024,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_37",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 37,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5769,6 +6042,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_38",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 38,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5786,6 +6060,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_39",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 39,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5803,6 +6078,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_40",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 40,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5820,6 +6096,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_41",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 41,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5837,6 +6114,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_42",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 42,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5854,6 +6132,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_43",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 43,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5871,6 +6150,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_44",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 44,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5888,6 +6168,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_45",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 45,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5905,6 +6186,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_46",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 46,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5922,6 +6204,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_47",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 47,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5939,6 +6222,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_48",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 48,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5956,6 +6240,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_49",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 49,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5973,6 +6258,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_50",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 50,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -5991,6 +6277,7 @@
                 "body_sha256s": [
                   "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee"
                 ],
+                "boundary": "derived",
                 "contents": [
                   {
                     "article_identity_sha256": "5565d765ee59462923051cf97d7f959ef95cd0aee2277ffbc079b3d1c87bd901",
@@ -6413,8 +6700,14 @@
                     "text_held": true
                   }
                 ],
+                "date_role": "applicability_in_file",
+                "entry_into_force": null,
                 "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+                "in_file_date": "2024-02-01",
+                "in_file_identity": null,
                 "language": "fra",
+                "missing_articles": [],
+                "missing_articles_rule": "on lex-v3-luxembourg-index/9 each article carries document_position, its place among its publisher document\u0027s main-body articles (from 1), and the articles are in that order; missing_articles names each run of places this state holds no article at (from_position to to_position, between the articles after_publisher_id and before_publisher_id, null at the start): an article of the publisher\u0027s document this state does not hold, never skipped in silence; an article missing after the last one held is not seen by place, and articles_not_admitted counts every article of the document not held",
                 "next_applicability_date": null,
                 "page": {
                   "articles_in_version": 60,
@@ -6441,12 +6734,15 @@
                   }
                 ],
                 "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra",
+                "provisional": false,
+                "publication_date": null,
                 "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
                 "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
                 "rule_profile_sha256s": [
                   "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
                   "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
                 ],
+                "same_text_states": [],
                 "sources": [
                   {
                     "article_outcomes": [
@@ -6465,11 +6761,17 @@
                   }
                 ],
                 "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+                "state_kind": "as_published",
                 "state_sha256": "a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794",
+                "text_status": "held",
+                "text_status_reason": null,
+                "translation_of": null,
                 "validity_conflict_count": 0,
                 "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date"
               }
             ],
+            "states_without_text": [],
+            "states_without_text_rule": "states_without_text names the French state whose interval holds the requested date when its text is not held and no French text is served beside the other languages\u0027 (a state of another language takes its interval from it); it is never served in another state\u0027s place",
             "verified_by": {
               "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -6542,6 +6844,7 @@
             "available_languages": [
               "fra"
             ],
+            "catalogue_rule": "on lex-v3-luxembourg-index/9 each state carries the publisher catalogue\u0027s facts of its row: state_kind (as_published, consolidation or code); date_role, the source of applicability_date: applicability (the catalogue\u0027s dateApplicability of a consolidation or code state), applicability_in_file (the act\u0027s file\u0027s own dateApplicability) or entry_into_force (the act\u0027s catalogue dateEntryInForce, used when its file states no date: an entry into force, never an applicability date, and never said as one); entry_into_force, an act\u0027s catalogue dateEntryInForce whatever its date\u0027s role; applicable_to, the end of the state\u0027s interval [applicability_date, applicable_to), with applicable_to_source publisher (the catalogue\u0027s dateEndApplicability) or derived (the next dated state\u0027s start), null when there is none; boundary, how that end meets the next state (half_open, inclusive_suspected: an end one day before the next start, invalid: an end on or before the state\u0027s own start, so the state covers no date, derived); publication_date, the catalogue\u0027s publicationDate; text_status and text_status_reason, why the state\u0027s text is or is not held; in_file_identity and in_file_date, what the state\u0027s own file says; translation_of, for an expression in another language than French, the French expression whose interval it takes (the publisher\u0027s record does not state which language version is authentic); provisional, a date after the day this index was built; a state is selected for a date by the interval that holds it, and two states holding it with the same held wording are served once with the others named under same_text_states",
             "citation_facts": {
               "journal_officiel_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
               "memorial_issues": [],
@@ -6579,11 +6882,13 @@
             "requested_language": "fra",
             "requested_page": 2,
             "rights_disposition": "agreed_same_run_cc_by",
-            "rights_rule": "rights are enforced when the bundle is composed, before any text is read: every corpus member the state\u0027s articles come from must have been acquired with its two rights channels agreeing CC BY in the same run (rights_disposition agreed_same_run_cc_by); under any other outcome or rights disposition the bundle refuses text_withheld and names the official identity, the official link and the retained body digest, so a derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state none of whose articles holds text refuses text_not_available",
+            "rights_rule": "rights are enforced when the bundle is composed, before any text is read: every corpus member the state\u0027s articles come from must have been acquired with its two rights channels agreeing CC BY in the same run (rights_disposition agreed_same_run_cc_by); under any other outcome or rights disposition the bundle refuses text_withheld and names the official identity, the official link and the retained body digest, so a derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state none of whose articles holds text refuses text_not_available; on lex-v3-luxembourg-index/9 a state of the publisher\u0027s catalogue whose text this index does not hold covers its own interval: a date in it refuses text_withheld when its rights withhold its text (text_status withheld_rights) and text_not_available otherwise (a PDF, a derivation gap, a misfiled file, a state not acquired), naming the state, and no other state\u0027s text is served in its place",
             "scope": "the evidence a reader needs to quote a Luxembourg state: for the state selected as as_of selects it, the hash-pinned permalink and stable coordinate, the state digest and its rule profiles, the source documents with their retained body digests (as provenance names them), and every article of the page served (page_rule; page, pages and, when asked, contents say the state\u0027s pages and articles) with its position, its identity, its wording as the publisher wrote it (text), the digest of that text, the digest of its wording structure, its notes, its official source, the digest of the publisher body it was read from and an article permalink (the state permalink and the article id as a last segment, which verify accepts); the text is the concatenation of the article\u0027s text and reference tokens in publisher order, the same bytes the index searches; an article whose tokens carry no text (the index admits a marker-only article as evidence) is named under articles_without_text and is not served as a quote; citation_facts holds what a citation of the states needs that they do not carry (the publisher\u0027s titles and the act as published with its M\u00E9morial issue and publication date facts, verbatim); given as the identifier, a state\u0027s hash-pinned permalink (/lu-legilux/{work}/{date}--{state sha256}/{language}, R64; with its own date, and the language it names if one is asked) answers the state it pins; a digest the coordinate no longer carries in that language is pinned_digest_mismatch naming the current state, never another state in its place",
             "states": [
               {
                 "applicability_date": "2024-02-01",
+                "applicable_to": null,
+                "applicable_to_source": null,
                 "article_identities_sha256": "2a251e5a697d5edb4b87038538df63d5726e2f4ca7517fe7c01022cdd8efd2da",
                 "articles": [
                   {
@@ -6591,6 +6896,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_51",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 51,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -6608,6 +6914,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_52",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 52,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -6625,6 +6932,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_53",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 53,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -6642,6 +6950,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_54",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 54,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -6659,6 +6968,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_55",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 55,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -6676,6 +6986,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_56",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 56,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -6693,6 +7004,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_57",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 57,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -6710,6 +7022,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_58",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 58,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -6727,6 +7040,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_59",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 59,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -6744,6 +7058,7 @@
                     "article_permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra/art_60",
                     "article_valid_from": null,
                     "body_sha256": "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee",
+                    "document_position": 60,
                     "language": "fra",
                     "notes": [],
                     "official_source": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
@@ -6762,9 +7077,16 @@
                 "body_sha256s": [
                   "ae1e5ada0ae873de8f34335da5cc1b116cde2802b6acc506ffad753e3a94ddee"
                 ],
+                "boundary": "derived",
                 "contents": null,
+                "date_role": "applicability_in_file",
+                "entry_into_force": null,
                 "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+                "in_file_date": "2024-02-01",
+                "in_file_identity": null,
                 "language": "fra",
+                "missing_articles": [],
+                "missing_articles_rule": "on lex-v3-luxembourg-index/9 each article carries document_position, its place among its publisher document\u0027s main-body articles (from 1), and the articles are in that order; missing_articles names each run of places this state holds no article at (from_position to to_position, between the articles after_publisher_id and before_publisher_id, null at the start): an article of the publisher\u0027s document this state does not hold, never skipped in silence; an article missing after the last one held is not seen by place, and articles_not_admitted counts every article of the document not held",
                 "next_applicability_date": null,
                 "page": {
                   "articles_in_version": 60,
@@ -6791,12 +7113,15 @@
                   }
                 ],
                 "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794/fra",
+                "provisional": false,
+                "publication_date": null,
                 "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
                 "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
                 "rule_profile_sha256s": [
                   "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
                   "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
                 ],
+                "same_text_states": [],
                 "sources": [
                   {
                     "article_outcomes": [
@@ -6815,11 +7140,17 @@
                   }
                 ],
                 "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+                "state_kind": "as_published",
                 "state_sha256": "a2857d8d494d92b933d934b65a7ad21ff9b7af4970e1fd946e6b86d45b43c794",
+                "text_status": "held",
+                "text_status_reason": null,
+                "translation_of": null,
                 "validity_conflict_count": 0,
                 "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date"
               }
             ],
+            "states_without_text": [],
+            "states_without_text_rule": "states_without_text names the French state whose interval holds the requested date when its text is not held and no French text is served beside the other languages\u0027 (a state of another language takes its interval from it); it is never served in another state\u0027s place",
             "verified_by": {
               "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -8322,6 +8653,8 @@
                 "counts": null,
                 "from": {
                   "applicability_date": "2024-02-01",
+                  "applicable_to": null,
+                  "applicable_to_source": null,
                   "article_identities": [
                     "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
                     "09858b46b63bc2137b430ec31647da23bfa65008575b165ff17daa1262cd34a7",
@@ -8621,14 +8954,26 @@
                     }
                   ],
                   "articles_not_admitted": 5,
+                  "boundary": "derived",
+                  "date_role": "applicability_in_file",
+                  "entry_into_force": null,
                   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+                  "in_file_date": "2024-02-01",
+                  "in_file_identity": null,
                   "language": "fra",
                   "next_applicability_date": null,
                   "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
+                  "provisional": false,
+                  "publication_date": null,
                   "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
                   "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+                  "same_text_states": [],
                   "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+                  "state_kind": "as_published",
                   "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
+                  "text_status": "held",
+                  "text_status_reason": null,
+                  "translation_of": null,
                   "validity_conflict_count": 49,
                   "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date"
                 },
@@ -8637,6 +8982,8 @@
                 "same_state": true,
                 "to": {
                   "applicability_date": "2024-02-01",
+                  "applicable_to": null,
+                  "applicable_to_source": null,
                   "article_identities": [
                     "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
                     "09858b46b63bc2137b430ec31647da23bfa65008575b165ff17daa1262cd34a7",
@@ -8936,14 +9283,26 @@
                     }
                   ],
                   "articles_not_admitted": 5,
+                  "boundary": "derived",
+                  "date_role": "applicability_in_file",
+                  "entry_into_force": null,
                   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+                  "in_file_date": "2024-02-01",
+                  "in_file_identity": null,
                   "language": "fra",
                   "next_applicability_date": null,
                   "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
+                  "provisional": false,
+                  "publication_date": null,
                   "publisher_legal_resource_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
                   "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+                  "same_text_states": [],
                   "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+                  "state_kind": "as_published",
                   "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
+                  "text_status": "held",
+                  "text_status_reason": null,
+                  "translation_of": null,
                   "validity_conflict_count": 49,
                   "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date"
                 }
@@ -9002,10 +9361,16 @@
           "helpful_payload": {
             "asserts_absence_of_law": false,
             "bound": "from",
+            "catalogue_read_no_later_than": "2026-10-01T08:00:00Z",
             "history_begins": "2024-02-01",
+            "hole": null,
+            "language": "fra",
             "nearest_earlier": null,
             "nearest_later": "2024-02-01",
+            "reason": "before_history",
+            "reason_rule": "reason says why no state covers the date in the publisher\u0027s catalogue as this index read it: before_history, the date is before the work\u0027s first state; catalogue_hole, the state before the date ends (the publisher\u0027s end) before the next begins, and the gap (hole) is the catalogue\u0027s, never bridged; after_closed_end, the work\u0027s last state ends before the date and no later state is in the catalogue: an end of the catalogue\u0027s states, which is not an end of the law; publisher_end_convention_unclear, the date is the end the publisher states for a state that ends the day before the next begins, so whether that day belongs to it is unclear and it is given to neither; publisher_interval_invalid, the date falls where a state whose stated end is on or before its own start would apply, so no interval is read for it (its permalink still opens it); no_expression_in_language, a French state covers the date and this index holds no expression of it in the language asked (a state in another language takes its interval from its French state); states names the states the reason is about",
             "requested_date": "1990-01-01",
+            "states": [],
             "what_would_answer": [
               "new_official_observation"
             ]
@@ -9154,17 +9519,30 @@
                 },
                 "state": {
                   "applicability_date": "2024-02-01",
+                  "applicable_to": null,
+                  "applicable_to_source": null,
                   "article_count": 49,
+                  "boundary": "derived",
+                  "date_role": "applicability_in_file",
+                  "entry_into_force": null,
                   "expression_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr",
+                  "in_file_date": "2024-02-01",
+                  "in_file_identity": null,
                   "language": "fra",
                   "next_applicability_date": null,
                   "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
+                  "provisional": false,
+                  "publication_date": null,
                   "rule_profile_sha256s": [
                     "70e926111b25a4d364e96b679de0baaa090a869175a82d42e0052572804cf42e",
                     "dd32d9a59ea33b8c9e9cd51b7b2657a6fa2b716ad00e35db075416ba4cd38a9b"
                   ],
                   "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
-                  "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4"
+                  "state_kind": "as_published",
+                  "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
+                  "text_status": "held",
+                  "text_status_reason": null,
+                  "translation_of": null
                 },
                 "wording_changed": null,
                 "work_key": "loi-1991-08-10-n3"

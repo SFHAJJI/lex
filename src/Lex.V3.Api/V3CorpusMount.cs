@@ -4165,6 +4165,18 @@ internal sealed partial class V3CorpusMount : IDisposable
         strict = InSearchOrder(strict);
         relaxed = InSearchOrder(relaxed);
 
+        // Index 9 without a date: one hit per work, publisher article id and wording, under the latest state holding that
+        // wording, the others named under it (design §3.2; S7a), so a code's unchanged article is not one hit per version.
+        var hitsBeforeFold = (Strict: strict.Count, Relaxed: relaxed.Count);
+        var sameWording = new Dictionary<string, LuxembourgIndexSearchHit[]>(StringComparer.Ordinal);
+        var folds = RulesByInterval && requestedDate is null;
+        if (folds)
+        {
+            var wordings = _reader.ResolveArticleWordings(strict.Concat(relaxed).Select(static hit => hit.ArticleIdentitySha256).ToArray());
+            strict = FoldByWording(strict, wordings, sameWording);
+            relaxed = FoldByWording(relaxed, wordings, sameWording);
+        }
+
         // Relaxed never outranks strict: every strict hit, then every relaxed hit.
         var all = strict.Select(static hit => (Lane: "strict", Hit: hit))
             .Concat(relaxed.Select(static hit => (Lane: "relaxed", Hit: hit)))
@@ -4199,7 +4211,7 @@ internal sealed partial class V3CorpusMount : IDisposable
 
             var state = ofWork.Single(candidate =>
                 string.Equals(candidate.StateSha256, entry.Hit.StateSha256, StringComparison.Ordinal));
-            return (object)new
+            return WithSearchHitFacts(new
             {
                 lane = entry.Lane,
                 match_reasons = new[] { entry.Lane == "strict" ? "exact_phrase" : "all_terms" },
@@ -4218,10 +4230,10 @@ internal sealed partial class V3CorpusMount : IDisposable
                         ? text
                         : throw new InvalidDataException("A search hit names an article whose text the index does not hold."),
                     entry.Lane, query, terms),
-            };
+            }, state, folds ? sameWording.GetValueOrDefault(entry.Hit.ArticleIdentitySha256) ?? [] : null);
         }).ToArray();
 
-        using var result = JsonSerializer.SerializeToDocument(new
+        using var result = JsonSerializer.SerializeToDocument(WithSearchFold(new
         {
             requested_query = query,
             requested_language = language,
@@ -4280,7 +4292,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             hits,
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader.IndexRef.Sha256,
-        });
+        }, folds, wantStrict ? hitsBeforeFold.Strict : null, wantRelaxed ? hitsBeforeFold.Relaxed : null));
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "quote", result.RootElement));

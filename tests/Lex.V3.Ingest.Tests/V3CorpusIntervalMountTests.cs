@@ -397,6 +397,36 @@ public sealed class V3CorpusIntervalMountTests
     }
 
     [TestMethod]
+    public async Task ASearchCountsTheVersionsItsRightsWithholdAndSelectsADatesVersionByTheIntervalRules()
+    {
+        await using var fixture = await IntervalMount.CreateAsync();
+        var mount = fixture.Mount;
+
+        // Undated: every version searched, and the two French versions whose rights withhold their text are counted out.
+        var undated = (await AskAsync(mount, "search", new { query = "texte", language = "fra", mode = "strict" })).Result!.Value;
+        Assert.AreEqual(2, undated.GetProperty("searched").GetProperty("states_withheld_by_rights").GetInt32());
+        Assert.AreEqual(V3CorpusMount.SearchedRuleNine, undated.GetProperty("searched").GetProperty("rule").GetString());
+
+        // Dated: the withheld consolidation of the 1798 act covers the date, so that work contributes no hit and is counted
+        // out; a closed work (2005) and a hole contribute nothing; the act and its same-date consolidation one hit.
+        var dated = (await AskAsync(mount, "search", new { query = "texte", language = "fra", mode = "strict", date = "2020-06-01" })).Result!.Value;
+        Assert.AreEqual(1, dated.GetProperty("searched").GetProperty("states_withheld_by_rights").GetInt32());
+        var works = dated.GetProperty("hits").EnumerateArray().Select(static hit => hit.GetProperty("work_key").GetString()).Distinct().ToArray();
+        CollectionAssert.DoesNotContain(works, "loi-1798-11-03-n1");
+        CollectionAssert.DoesNotContain(works, "loi-2005-01-01-n1");
+        CollectionAssert.Contains(works, "loi-2018-09-14-a883");
+        Assert.IsTrue(dated.GetProperty("hits").EnumerateArray().Where(static hit => hit.GetProperty("work_key").GetString() == "loi-2018-09-14-a883")
+            .All(static hit => hit.GetProperty("state_sha256").GetString() == hit.GetProperty("state_sha256").GetString() &&
+                               hit.GetProperty("date_role").GetString() == "applicability_in_file"), "the act as published is the version served");
+        Assert.AreEqual(JsonValueKind.Undefined, dated.TryGetProperty("fold", out var fold) ? fold.ValueKind : JsonValueKind.Undefined,
+            "with a date nothing is folded");
+
+        // With the work named and the date, it is as_of's question and refusal.
+        var named = await AskAsync(mount, "search", new { query = "texte", language = "fra", identifier = "/lu-legilux/loi-1798-11-03-n1", date = "2020-06-01" });
+        Assert.AreEqual("text_withheld", named.Refusal!.Code);
+    }
+
+    [TestMethod]
     public async Task TheReadersChainIsTheIndexsOwn()
     {
         await using var fixture = await IntervalMount.CreateAsync();

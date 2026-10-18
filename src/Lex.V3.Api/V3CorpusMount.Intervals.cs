@@ -581,6 +581,93 @@ internal sealed partial class V3CorpusMount
         return node;
     }
 
+    internal const string SearchFoldRule =
+        "on lex-v3-luxembourg-index/9 a search with no date serves one hit per work, publisher article id and wording (the wording " +
+        "digest of the article's text and reference tokens): the hit of the latest state that holds that wording, each other state " +
+        "that holds it named under the hit's same_wording_states, so an article that did not change is one hit and not one per " +
+        "version; strict_hits and relaxed_hits count the hits served, and fold counts the hits before they were folded; with a date, " +
+        "one state per work is searched and nothing is folded";
+
+    /// <summary>
+    /// The undated search's fold on index 9 (design §3.2, decision 8; <see cref="SearchFoldRule"/>): one lane's hits grouped by
+    /// work, publisher article id and wording digest; each group kept as the hit of its latest state (then the greatest digest,
+    /// so the choice is total), the others recorded by that hit's article identity; the kept hits in the lane's order again.
+    /// </summary>
+    private static LuxembourgIndexSearchHit[] FoldByWording(
+        IReadOnlyList<LuxembourgIndexSearchHit> hits,
+        IReadOnlyDictionary<string, string> wordings,
+        Dictionary<string, LuxembourgIndexSearchHit[]> others)
+    {
+        var kept = new List<LuxembourgIndexSearchHit>();
+        foreach (var group in hits.GroupBy(hit => (hit.WorkKey, hit.PublisherId,
+                     wordings.TryGetValue(hit.ArticleIdentitySha256, out var wording)
+                         ? wording
+                         : throw new InvalidDataException("A search hit names an article the index does not hold."))))
+        {
+            var ordered = group.OrderBy(static hit => hit.ApplicabilityDate, StringComparer.Ordinal)
+                .ThenBy(static hit => hit.StateSha256, StringComparer.Ordinal)
+                .ToArray();
+            var latest = ordered[^1];
+            kept.Add(latest);
+            others[latest.ArticleIdentitySha256] = ordered[..^1];
+        }
+
+        return InSearchOrder(kept);
+    }
+
+    /// <summary>
+    /// A Luxembourg search hit on index 9: its state's date role (R21: an act dated by its entry into force is not "applicable
+    /// from" it), and without a date the other states holding its wording (<see cref="SearchFoldRule"/>); unchanged on an
+    /// index of schema 8 or 6.
+    /// </summary>
+    private object WithSearchHitFacts(object hit, LuxembourgIndexResolvedState state, IReadOnlyList<LuxembourgIndexSearchHit>? sameWording)
+    {
+        if (!RulesByInterval)
+        {
+            return hit;
+        }
+
+        var node = JsonSerializer.SerializeToNode(hit)!.AsObject();
+        var facts = CatalogueOf(state.WorkKey).ByDigest.GetValueOrDefault(state.StateSha256);
+        node["date_role"] = facts?.DateRole;
+        node["entry_into_force"] = facts?.EntryIntoForce;
+        if (sameWording is not null)
+        {
+            node["same_wording_states"] = new JsonArray(sameWording.Select(other =>
+            {
+                var row = CatalogueOf(other.WorkKey).ByDigest.GetValueOrDefault(other.StateSha256);
+                return (JsonNode)new JsonObject
+                {
+                    ["applicability_date"] = other.ApplicabilityDate,
+                    ["date_role"] = row?.DateRole,
+                    ["state_sha256"] = other.StateSha256,
+                    ["article_identity_sha256"] = other.ArticleIdentitySha256,
+                    ["permalink"] = row is null ? null : LuxembourgPermalink(row.WorkKey, row.ApplicabilityDate, row.StateSha256, row.Language),
+                };
+            }).ToArray());
+        }
+
+        return node;
+    }
+
+    /// <summary>An undated search's answer on index 9 with its fold said (<see cref="SearchFoldRule"/>); otherwise unchanged.</summary>
+    private static object WithSearchFold(object answer, bool folds, int? strictBefore, int? relaxedBefore)
+    {
+        if (!folds)
+        {
+            return answer;
+        }
+
+        var node = JsonSerializer.SerializeToNode(answer)!.AsObject();
+        node["fold"] = new JsonObject
+        {
+            ["rule"] = SearchFoldRule,
+            ["strict_hits_before_fold"] = strictBefore,
+            ["relaxed_hits_before_fold"] = relaxedBefore,
+        };
+        return node;
+    }
+
     internal const string NoVersionReasonRule =
         "reason says why no state covers the date in the publisher's catalogue as this index read it: before_history, the date is " +
         "before the work's first state; catalogue_hole, the state before the date ends (the publisher's end) before the next begins, " +

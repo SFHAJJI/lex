@@ -4280,6 +4280,39 @@ public sealed class LuxembourgIndexReader : IDisposable
         }
     }
 
+    /// <summary>
+    /// Each article's wording digest (<see cref="WordingSha256"/>), by article identity, for the identities asked, read by
+    /// primary key, as <see cref="ResolveArticleSearchableTexts"/> reads their texts; an identity the index does not hold is absent.
+    /// The undated search's fold reads it (S7a): hits of one work and publisher id with one wording are one.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ResolveArticleWordings(IReadOnlyList<string> articleIdentities)
+    {
+        ArgumentNullException.ThrowIfNull(articleIdentities);
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (articleIdentities.Count == 0)
+        {
+            return values;
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT article_identity_sha256, tokens_json
+                FROM articles
+                WHERE article_identity_sha256 IN (SELECT value FROM json_each($identities))
+                """;
+            command.Parameters.AddWithValue("$identities", JsonSerializer.Serialize(articleIdentities.Distinct(StringComparer.Ordinal).ToArray()));
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                values[reader.GetString(0)] = WordingSha256(reader.GetString(1));
+            }
+        }
+
+        return values;
+    }
+
     /// <summary>The distinct publisher-minted article ids of one state, in ordinal order.</summary>
     public IReadOnlyList<string> ResolveArticleIds(string stateSha256)
     {
