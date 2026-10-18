@@ -34,12 +34,15 @@ proxies and a synthetic act of 3,000 articles is the stand-in.
     path); rights are enforced over the whole version before any page is cut, and a version with no text at all is still
     `text_not_available`;
   - refusals stay typed: an article a served version does not hold is `anchor_not_in_version`, with the ids nearest it and
-    the payload every other anchor refusal carries (`article_history`, `citation`, `verify`); a page past the last, a page
-    and an article together, or a page or contents of the wrong type, is `request_schema_invalid`, as a cursor that names
-    nothing is;
+    the payload every other anchor refusal carries (`article_history`, `citation`, `verify`); so is a page past a served
+    version's last, each version cut on its own (`page=N`, the first and last pages as the nearest anchors, and
+    `requested_page`, `pages` and the version's language; the review of #978, F2); a page and an article together, or a
+    page or contents of the wrong type, is `request_schema_invalid`, as a cursor that names nothing is;
   - a Luxembourg state is read in the order of its publisher ids (`CompareLuxembourgArticleIds`: the numbers in an id as
-    numbers, `er` then bis, ter, quater and the Latin adverbs in their order, an id that is a roman numeral by its value,
-    then the identity), since the index holds no document order; the EU order is the publisher's provision ids', as the
+    numbers of any length, `er` then bis, ter, quater and the Latin adverbs in their order, a roman numeral after `art_` or
+    `article_`, alone or with `er` or an adverb (`art_ier`, "Ier", `art_iibis`), by its value, `premier` as 1, `art` written
+    right before its number (`art1er`, `art12`) as `art_1er` and `art_12`, then the identity), since the index holds no
+    document order; the EU order is the publisher's provision ids', as the
     wording digest reads them (zero-padded: `001`, `005A`, `325AO`);
   - MCP's `evidence_bundle` tool says it pages.
 - **Reading renders the requested article first, with the contents, and loads the rest on demand** (`LiveReading.jsx`,
@@ -48,7 +51,8 @@ proxies and a synthetic act of 3,000 articles is the stand-in.
     first, as before, then its page; a version's address asks its first page, and `?page=N` on it that page (both servers
     read the query, `V3WebRoot.SitePageFor` and `sitePageFor` held to one table, now with the queries' rows);
   - a version of more than one page says which pages it shows ("Page 2 of 26: … to …"), lists its pages under a collapsed
-    "Contents" (each by its first and last article, a link to `?page=N` on the version's permalink, the shown ones marked
+    "Contents" (each by its first and last article, a link to `?page=N` on the version's permalink, or on the act's readable
+    address when the page stands at one, the shown ones marked
     `aria-current`), numbers each article by its place in the version, and ends with "Previous articles" and "Next
     articles", plain links to those pages' addresses, which the server renders with no script run;
   - with scripts, "Next articles" asks the next page in place (the same request at that page, `readNextPage`), adds its
@@ -61,6 +65,9 @@ proxies and a synthetic act of 3,000 articles is the stand-in.
   - an article the version does not hold: the refusal card ("This index holds no article with that id in this version",
     with the ids nearest it), the focus on it, and after it "The whole act at this version" (or the act today, at a readable
     address), where before the whole act stood under the article's address;
+  - a page past the version's last: "This version is read here on 2 pages, so it has no page 3." (an EU wording's own
+    sentence), with no card, whose note is about provisions, then links to its first page and its last, the focus on the
+    refusal; never indexed (the review of #978, F2);
   - a version that fits one page is laid out as before: no contents, no pages line, no links, no numbers of its own.
 - **The dossier and the exports ask by page.** The dossier asks no text (titles, states and their counts), and each version
   links to its reading's first page, so it is unchanged. The export composer pins from the page shown, and "Pin every
@@ -83,7 +90,8 @@ proxies and a synthetic act of 3,000 articles is the stand-in.
   | The stand-in, 3,000 synthetic articles through the real derivation (60 pages) | 6,394,661 B, 3,321,730 B, 263 to 300 ms | 143,208 B, 72,745 B, 76 to 118 ms |
   | 3,000 articles at the census's article size, the renderer alone | 13,385,667 B, 168 ms to render | 260,126 B, 5 ms |
 
-  CRR's other pages: page 2, 283,880 B; its Article 4 (66 KB of definitions) cited first, 323,402 B; Article 429's page
+  CRR's row is its 2027-01-01 French wording, the largest held; the wording that answers today (2026-06-26) holds 790
+  provisions, read on 25 pages in French and 22 in English (the review of #978). CRR's other pages: page 2, 283,880 B; its Article 4 (66 KB of definitions) cited first, 323,402 B; Article 429's page
   (21 of 26), 300,042 B. The three largest held versions by bytes are CRR, CRD and MiCA (`derive-c`'s EU index, counted
   read-only); VAT is the next by provisions. CRD and MiCA answer their dates `ambiguous_version` (two held texts), so each
   was read at the permalink of its longer one, as the refusal names them.
@@ -98,8 +106,12 @@ proxies and a synthetic act of 3,000 articles is the stand-in.
   - With neither `page` nor `article` the API serves the first page, never the whole of a long version: every answer is
     bounded, and an old client asking a short act gets what it got.
   - A page's address is `?page=N` on the version's address, page 1 the address with no page: R64's last segment is the
-    article, and a page is not a citation. A page links its pages by its version's permalink, at a readable address too,
-    so the pages shown are of the version shown.
+    article, and a page is not a citation. A page links its pages by its version's permalink, and at an act's readable
+    address by that address (`?page=N` there; changed in the review of #978, which found the links left the readable
+    address for the permalink): the readable address's pages are of today's version, which is the one it shows.
+  - A page past the last is refused as an anchor the version does not hold (`anchor_not_in_version`), not as a malformed
+    request: the request is well formed and only the version decides (the review of #978, F2). No new refusal code: the
+    registry's twenty stand, and the payload's three members are optional on the card's contract.
   - The page lists its pages, not every article: links to 3,000 articles would weigh about 400 KB; the API's `contents`
     lists every article for a client that asks, with identities, so one answer with its contents still lets a reader
     recompute the state's article identities digest (the replay guarantee).
@@ -134,6 +146,24 @@ proxies and a synthetic act of 3,000 articles is the stand-in.
     thirteen shared entries held to neither publisher's date words (`SHARED_LEAD_ENTRIES`).
   - "Sommaire" for the contents (not "Table des matières": the act's own table of its divisions), "{first} à {last}" for a
     run of articles, "Page {n} sur {N}", "Articles précédents" and "Articles suivants" were approved as drafted.
+- **Review and repair (#978)**, one round, by the other model family: three findings and four notes, all taken.
+  - F1 (medium): the reading order put `art_ier`, `art1er` and `art12` out of place (the roman numeral with `er`, and `art`
+    written right before its number, were read as letters). Fixed in `ArticleIdParts`, with numbers of any length compared
+    by their digits (the comment on ids of more than 18 digits was wrong). Tests: the order's cases, and an opt-in sweep
+    over every state of a named index (`V3_READING_ORDER_INDEX`): over `derive-c`, read in place, 1,730 states, 986 with a
+    first article, every one first, and 6,147 pairs of plain ids, none out of order; its listing unchanged.
+  - F2 (low): a page past the last was a bare `request_schema_invalid`, judged across every version served, and the site
+    showed the malformed request's panel. Now the typed refusal above, each version on its own, and on the site the sentence
+    and the links to the first and last page, never indexed. Tests: the API's at a permalink, by the work with a language
+    asked and none, the long act's fourth page of three, and the EU wording at its permalink and by its CELEX; the cut's
+    unit test; the census pin of `RefusePageNotInVersion`; the refusal and envelope censuses; the page's sentence, links,
+    pin and noindex render in `reading-pages.test.mjs`; the French census test.
+  - F3 (low): two web mutants survived. Tests: a superseded version's `?page=2` (a Luxembourg state and an EU wording)
+    renders the plain noindex at its permalink with its page; a contents row on another page than the index names is
+    refused, both ways.
+  - Notes: a page asked in place, or an export's reading of every page, stopped by one asked for another version stayed
+    loading and its control dead; it now goes back to its link (`withoutStopped`, tested). The links at a readable address
+    (above). `PinnedLead`'s comment back above it. CRR's figures (above).
 - **Not in this part** (next): the search phase's own `anchor_not_in_version` sentences (4.2's, approved there) make the claim
   the review changed here ("La version que la date retient ne comporte aucun article de ce numéro …"); the review gave
   renderings in the phase's own subject ("Ce site ne détient aucun article de ce numéro dans la version que la date retient,
