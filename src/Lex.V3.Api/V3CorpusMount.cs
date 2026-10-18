@@ -7210,17 +7210,21 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// <summary>
     /// Whether a value no record answers is an identifier (refused <c>identifier_unknown</c>) rather than words to look up
     /// by title. The same on every system, as production answers: a rooted path (a site address) is an identifier, and so
-    /// is an absolute URI written with its scheme; a bare file path is not. Uri alone read <c>/lu-legilux/…</c> as a file
-    /// URI on Linux and not on Windows, and <c>C:\…</c> the other way round (CI's image lane on #980).
+    /// is an absolute URI written with its scheme; a drive path (<c>C:\…</c>) or a UNC path starting with a backslash is
+    /// words. Uri alone read a rooted path as a file URI on Linux and not on Windows (CI's image lane on #980). The value is
+    /// read after the whitespace Uri itself skips, so a path pasted with a leading space reads as the path does.
     /// </summary>
-    private static bool LooksLikeIdentifier(string value) =>
-        value.StartsWith('/') ||
-        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
-            (!uri.IsFile || value.StartsWith("file:", StringComparison.OrdinalIgnoreCase)) ||
-        value.StartsWith("eli/", StringComparison.OrdinalIgnoreCase) ||
-        OfficialIdentifier.ProfileOf(value) is not null ||
-        value.Length == 64 && value.All(static character =>
-            character is >= '0' and <= '9' or >= 'a' and <= 'f');
+    internal static bool LooksLikeIdentifier(string value)
+    {
+        var written = value.TrimStart(' ', '\t', '\r', '\n');
+        return written.StartsWith('/') ||
+            Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+                (!uri.IsFile || written.StartsWith("file:", StringComparison.OrdinalIgnoreCase)) ||
+            value.StartsWith("eli/", StringComparison.OrdinalIgnoreCase) ||
+            OfficialIdentifier.ProfileOf(value) is not null ||
+            value.Length == 64 && value.All(static character =>
+                character is >= '0' and <= '9' or >= 'a' and <= 'f');
+    }
 
     /// <summary>
     /// The routes out of an absence, in the refusal card's closed vocabulary and its declared order

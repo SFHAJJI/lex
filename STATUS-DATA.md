@@ -27,9 +27,9 @@ Updated 2026-10-18.
     production sends. One request answers otherwise on Windows with the same code, base and head alike: resolve of
     `/lu-legilux/loi-2026-01-01-a1` is `identifier_unknown` on Linux, where `Uri.TryCreate(UriKind.Absolute)` reads a
     rooted path as a file URI and `LooksLikeIdentifier` takes it, and `retrieval_mode_unavailable` (title discovery) on
-    Windows. The recording holds that Windows answer beside the Linux one, and a Windows run is held to it (CI's
-    image-conditions lane found it). The platform difference is the base's `LooksLikeIdentifier`, not this slice's: a
-    reading for the web lane (a rooted path should mean the same on every system). Provenance's digest /2 sentence on schema 8 now fails.
+    Windows. CI's image-conditions lane found it. The platform difference was the base's `LooksLikeIdentifier`, not this
+    slice's; since #983 a rooted path is an identifier on every system, as production reads it, and every system is
+    held to the Linux recording. Provenance's digest /2 sentence on schema 8 now fails.
   - F3: the fixture has an end on its start (the real `code/procedure_penale/20211214`): an invalid boundary and
     transition. `<= 0` made `< 0` now fails.
   - F4: `V3CorpusMount.ServesIndexNine` is the one switch S7a turns. Until then the server refuses a built mount of index 9
