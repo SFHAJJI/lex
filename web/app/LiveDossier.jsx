@@ -25,6 +25,7 @@ import { quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
 import { parseSitePath } from '../scripts/permalinks.mjs';
 import { answerHandedWith } from '../scripts/v3-client.mjs';
+import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -107,7 +108,9 @@ export function DossierView({ view }) {
           {view.states.map((state) => (
             <tr key={state.stateSha256} data-state={state.stateSha256}>
               <td>{state.language}</td>
-              <td>{state.applicabilityDate}</td>
+              <td data-date-role={state.dateRole ?? undefined}>
+                {datedByEntryIntoForce(state) ? <Say template={COPY.entryIntoForceDate} values={{ date: state.applicabilityDate }} /> : state.applicabilityDate}
+              </td>
               <td>{state.nextApplicabilityDate ?? COMMON.noneHeld}</td>
               <td>{state.articleCount}</td>
               <td>{state.articlesNotAdmitted}</td>
@@ -117,6 +120,7 @@ export function DossierView({ view }) {
         </tbody>
       </table>
       </TableRegion>
+      {view.states.some(datedByEntryIntoForce) ? <p data-entry-into-force-note="">{COPY.entryIntoForceNote}</p> : null}
       <p lang={ENGLISH_LANG}>{asSentence(view.articlesNotAdmittedNote)}</p>
       <h3>{COPY.notHeldHeading}</h3>
       <ul data-not-held={view.notHeld.length}>

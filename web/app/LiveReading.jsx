@@ -53,6 +53,7 @@ import {
 import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { anchorOf, anchorText, permalinkHref } from '../scripts/permalinks.mjs';
 import { addedMark } from '../scripts/quotation-marks.mjs';
+import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
 import { hasNextPage, pagesShown, readNextPage, viewOf, withoutStopped } from '../scripts/reading-pages.mjs';
 import { answerHandedWith } from '../scripts/v3-client.mjs';
 import { readingAddressShown, readingPinOf, todayAt } from '../scripts/initial-answer.mjs';
@@ -269,9 +270,24 @@ export function Pager({ version, paging = null, onNext = null, readable = null }
   );
 }
 
+/**
+ * The places of the publisher's document right before an article that its version holds no article at (index 9's
+ * `missing_articles`, S7a): said where they are, never skipped in silence.
+ */
+function MissingBefore({ article, state }) {
+  const gap = (state.missingArticles ?? []).find((entry) => entry.beforePublisherId === article.publisherId);
+  if (gap === undefined) return null;
+  return (
+    <p className="note" data-missing-articles={gap.count}>
+      <Say template={countedEntry(COPY.missingBefore, gap.count)} values={{ count: gap.count }} />
+    </p>
+  );
+}
+
 function Article({ article, state }) {
   return (
     <li id={`${state.language}-${article.publisherId}`} data-article={article.publisherId} value={isPaged(state) ? article.position : undefined}>
+      <MissingBefore article={article} state={state} />
       <h3>{article.publisherId}</h3>
       <ArticleText article={article} language={state.language} applicabilityDate={state.applicabilityDate} />
       <QuoteEvidence article={article} />
@@ -282,8 +298,15 @@ function Article({ article, state }) {
 function StateReading({ state, workKey, paging = null, onNext = null, readable = null }) {
   return (
     <section data-state={state.stateSha256}>
-      <h2>
-        {state.nextApplicabilityDate === null ? (
+      <h2 data-date-role={state.dateRole ?? undefined}>
+        {/* A state dated by its entry into force is never said as applying from it (R21, `date-role.mjs`). */}
+        {datedByEntryIntoForce(state) ? (
+          state.nextApplicabilityDate === null ? (
+            <Say template={COPY.stateHeadingEntryIntoForce} values={{ work: workKey, language: state.language, from: state.applicabilityDate }} />
+          ) : (
+            <Say template={COPY.stateHeadingEntryIntoForceNext} values={{ work: workKey, language: state.language, from: state.applicabilityDate, next: state.nextApplicabilityDate }} />
+          )
+        ) : state.nextApplicabilityDate === null ? (
           <Say template={COPY.stateHeading} values={{ work: workKey, language: state.language, from: state.applicabilityDate }} />
         ) : (
           <Say template={COPY.stateHeadingNext} values={{ work: workKey, language: state.language, from: state.applicabilityDate, next: state.nextApplicabilityDate }} />

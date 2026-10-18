@@ -46,6 +46,7 @@ import { articlePermalink, europePermalink, luxembourgPermalink } from './permal
 import { readAnnexesNotServed } from './europe-annexes.mjs';
 import { readAsPublished } from './as-published.mjs';
 import { readVersionPages } from './reading-pages.mjs';
+import { readDateFacts } from './date-role.mjs';
 
 /** The acknowledgement every EU text served carries (Decision 95). */
 export const EUROPE_TEXT_ACKNOWLEDGEMENT = '© European Union, https://eur-lex.europa.eu';
@@ -214,6 +215,7 @@ function readArticle(article, index, state, where) {
   const wording = readSegments(article, text, at);
   return Object.freeze({
     position: requirePosition(requireOwn(article, 'position', at), `${at} position`),
+    documentPosition: readDocumentPosition(article, at),
     publisherId,
     publisherWid: requireTextOrNull(requireOwn(article, 'publisher_wid', at), `${at} publisher_wid`),
     articleIdentitySha256: requireDigest(requireOwn(article, 'article_identity_sha256', at), `${at} article_identity_sha256`),
@@ -231,6 +233,34 @@ function readArticle(article, index, state, where) {
     holdsDeletedWording: wording !== null && wording.deleted > 0,
     permalink,
   });
+}
+
+/** An article's place in its publisher document (index 9), or null when the answer names none. */
+function readDocumentPosition(article, at) {
+  return Object.hasOwn(article, 'document_position') ? requirePosition(article.document_position, `${at} document_position`) : null;
+}
+
+/**
+ * The runs of its publisher document's places a state holds no article at (index 9's `missing_articles`), each with the
+ * articles it lies between (`afterPublisherId` null at the document's start), or none when the answer names none. A gap is said
+ * where it is, never skipped in silence (S7a).
+ */
+function readMissingArticles(state, where) {
+  if (!Object.hasOwn(state, 'missing_articles')) return Object.freeze([]);
+  return Object.freeze(requireList(state.missing_articles, `${where} missing_articles`).map((gap, gapIndex) => {
+    const at = `${where} missing_articles[${gapIndex}]`;
+    const from = requirePosition(requireOwn(gap, 'from_position', at), `${at}.from_position`);
+    const to = requirePosition(requireOwn(gap, 'to_position', at), `${at}.to_position`);
+    const count = requirePosition(requireOwn(gap, 'count', at), `${at}.count`);
+    if (to < from || count !== to - from + 1) throw new Error(`${at} runs from ${from} to ${to} and counts ${count}`);
+    return Object.freeze({
+      fromPosition: from,
+      toPosition: to,
+      count,
+      afterPublisherId: requireTextOrNull(requireOwn(gap, 'after_publisher_id', at), `${at}.after_publisher_id`),
+      beforePublisherId: requireText(requireOwn(gap, 'before_publisher_id', at), `${at}.before_publisher_id`),
+    });
+  }));
 }
 
 function readState(state, index, context) {
@@ -295,6 +325,7 @@ function readState(state, index, context) {
       }
       return Object.freeze({
         position: requirePosition(requireOwn(entry, 'position', at), `${at} position`),
+        documentPosition: readDocumentPosition(entry, at),
         publisherId: requireText(requireOwn(entry, 'publisher_id', at), `${at} publisher_id`),
         articleIdentitySha256: requireDigest(requireOwn(entry, 'article_identity_sha256', at), `${at} article_identity_sha256`),
       });
@@ -321,6 +352,9 @@ function readState(state, index, context) {
 
   return Object.freeze({
     ...partial,
+    // The date's role and the act's entry into force (index 9; null on an index of schema 8 or 6): R21, `date-role.mjs`.
+    ...readDateFacts(state, applicabilityDate, where),
+    missingArticles: readMissingArticles(state, where),
     nextApplicabilityDate: next,
     stateSha256,
     stableCoordinate: coordinate,

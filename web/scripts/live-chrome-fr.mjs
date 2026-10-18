@@ -279,6 +279,8 @@ export const LIVE_CHROME_FR = Object.freeze({
       other: '{count} expressions détenues, chacune présentée avec son libellé original.',
     }),
     wordingDate: 'Date du libellé',
+    entryIntoForceDate: '{date} (entrée en vigueur)',
+    entryIntoForceNote: 'Une date marquée « entrée en vigueur » est l’entrée en vigueur de l’acte dans les données de l’éditeur, donnée parce que son fichier n’indique aucune date d’application : ce n’est pas une date à partir de laquelle l’acte s’applique.',
   }),
   reading: Object.freeze({
     pinReplaced: 'Ce lien épingle {pinned}, qui n’est pas la version que ce site communique pour cette date ; la version qu’il communique est affichée ci-dessous.',
@@ -303,6 +305,12 @@ export const LIVE_CHROME_FR = Object.freeze({
     rightsIn: 'Texte communiqué sous {rights}. Lu au {date} en {language}.',
     stateHeading: '{work}, {language}, la version applicable à partir du {from}',
     stateHeadingNext: '{work}, {language}, la version applicable à partir du {from} (la version suivante détenue s’applique à partir du {next})',
+    stateHeadingEntryIntoForce: '{work}, {language}, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur)',
+    stateHeadingEntryIntoForceNext: '{work}, {language}, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) (la version suivante détenue s’applique à partir du {next})',
+    missingBefore: Object.freeze({
+      one: 'Ici, le document de l’éditeur comporte un article que ce site ne détient pas dans cette version.',
+      other: 'Ici, le document de l’éditeur comporte {count} articles que ce site ne détient pas dans cette version.',
+    }),
     counts: Object.freeze({
       one: '{count} article cité ; détenus sans texte : {withoutText} ; non admis : {notAdmitted} ; date propre différente de celle de la version : {conflicts}.',
       other: '{count} articles cités ; détenus sans texte : {withoutText} ; non admis : {notAdmitted} ; date propre différente de celle de la version : {conflicts}.',
@@ -775,6 +783,7 @@ export const LIVE_CHROME_FR = Object.freeze({
         amin: 'Arrêté ministériel du {date}',
       }),
       version: '{citation}, dans sa version applicable au {date}',
+      versionEntryIntoForce: '{citation}, dans sa version publiée, entrée en vigueur le {date}',
     }),
     europe: Object.freeze({
       article: 'Article {number}',
@@ -798,6 +807,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       celex: 'CELEX : {celex}',
       title: 'Intitulé (éditeur) : {title}',
       version: 'Version : applicable à partir du {date} (éditeur)',
+      versionEntryIntoForce: 'Version : l’acte tel que publié, entrée en vigueur le {date} (éditeur)',
       memorial: 'Publication : Mémorial A n° {number} de {year} ({iri})',
       memorialIri: 'Publication : {iri}',
       memorialNotHeld: 'Publication : le numéro du Mémorial A n’est pas détenu par cet index.',

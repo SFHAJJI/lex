@@ -55,6 +55,7 @@ import { CHROME_LOCALE, fillText, liveChrome } from './live-chrome.mjs';
 import { articlePermalink } from './permalinks.mjs';
 import { CANONICAL_HOST } from './routes.mjs';
 import { isCalendarDate, luxembourgDate } from './temporal.mjs';
+import { datedByEntryIntoForce } from './date-role.mjs';
 
 /** The origin a citation's permalink is printed under: the site's own (`Document.jsx`'s canonical links). */
 export const CITATION_ORIGIN = `https://${CANONICAL_HOST}`;
@@ -261,7 +262,8 @@ export function citationForms({ view, version, article, observedAt }) {
     const usual = luxembourgConventional(version, luxembourgArticle(article.publisherId, words), view.citationFacts, words);
     conventional = usual === null || luxembourgCurrent(view, version, today)
       ? usual
-      : fillText(words.luxembourg.version, { citation: usual, date: dateInWords(version.applicabilityDate, words) });
+      : fillText(datedByEntryIntoForce(version) ? words.luxembourg.versionEntryIntoForce : words.luxembourg.version,
+        { citation: usual, date: dateInWords(version.applicabilityDate, words) });
   }
   // The usual form is copied text, in its composed form (NFC): a title the publisher wrote with combining accents reaches no
   // copy decomposed. The evidence form quotes the title as served.
@@ -280,7 +282,8 @@ export function citationForms({ view, version, article, observedAt }) {
     lines.push(fillText(evidence.eli, { eli: version.publisherLegalResourceIri }));
     const title = heldTitle(facts, version.expressionIri, version.language);
     if (title !== null) lines.push(fillText(evidence.title, { title }));
-    lines.push(fillText(evidence.version, { date: version.applicabilityDate }));
+    // A version dated by its entry into force is said as that, never as applicable from it (R21; `date-role.mjs`).
+    lines.push(fillText(datedByEntryIntoForce(version) ? evidence.versionEntryIntoForce : evidence.version, { date: version.applicabilityDate }));
     const issues = [...new Set(facts.memorialIssues)];
     if (issues.length === 0) lines.push(evidence.memorialNotHeld);
     for (const iri of issues) {

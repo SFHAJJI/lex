@@ -177,6 +177,9 @@ const EN = Object.freeze({
       other: "{count} expressions held, each shown with its original wording.",
     }),
     wordingDate: "Wording date",
+    // A state dated by its entry into force (S7a; R21), in the date column, and what that mark means, said once under the table.
+    entryIntoForceDate: "{date} (entry into force)",
+    entryIntoForceNote: "A date marked “entry into force” is the act's entry into force in the publisher's record, given because its file states no date of application: it is not a date from which the act applies.",
   }),
   reading: Object.freeze({
     pinReplaced: "This link pins {pinned}, which is not the version this site serves for that date; the version it serves is shown below.",
@@ -204,6 +207,14 @@ const EN = Object.freeze({
     rightsIn: "Text served under {rights}. Read on {date} in {language}.",
     stateHeading: "{work}, {language}, the state applying from {from}",
     stateHeadingNext: "{work}, {language}, the state applying from {from} (the next state held applies from {next})",
+    // A state dated by its entry into force (index 9's date_role, S7a; R21): never said as applying from that date.
+    stateHeadingEntryIntoForce: "{work}, {language}, the act as published, dated by its entry into force on {from} (publisher)",
+    stateHeadingEntryIntoForceNext: "{work}, {language}, the act as published, dated by its entry into force on {from} (publisher) (the next state held applies from {next})",
+    // The places of the publisher's document before an article that its version holds no article at (S7a).
+    missingBefore: Object.freeze({
+      one: "Here the publisher's document has an article that this site does not hold in this version.",
+      other: "Here the publisher's document has {count} articles that this site does not hold in this version.",
+    }),
     counts: Object.freeze({
       one: "{count} article quoted, {withoutText} held without text, {notAdmitted} not admitted; {conflicts} with their own date differing from the state's.",
       other: "{count} articles quoted, {withoutText} held without text, {notAdmitted} not admitted; {conflicts} with their own date differing from the state's.",
@@ -607,6 +618,8 @@ const EN = Object.freeze({
         amin: "Ministerial Decree of {date}",
       }),
       version: "{citation}, as applicable on {date}",
+      // A version dated by its entry into force (S7a; R21): said as that, never as applicable on it.
+      versionEntryIntoForce: "{citation}, as published, entry into force on {date}",
     }),
     europe: Object.freeze({
       article: "Article {number}",
@@ -632,6 +645,7 @@ const EN = Object.freeze({
       celex: "CELEX: {celex}",
       title: "Title (publisher): {title}",
       version: "Version: applicable from {date} (publisher)",
+      versionEntryIntoForce: "Version: the act as published, entry into force on {date} (publisher)",
       memorial: "Published in: Mémorial A No {number} of {year} ({iri})",
       memorialIri: "Published in: {iri}",
       memorialNotHeld: "Published in: the issue of the Mémorial A is not held by this index.",

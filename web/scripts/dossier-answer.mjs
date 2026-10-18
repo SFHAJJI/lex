@@ -27,6 +27,7 @@ import { isCalendarDate } from './temporal.mjs';
 import { europePermalink, luxembourgPermalink } from './permalinks.mjs';
 import { readAnnexesNotServed } from './europe-annexes.mjs';
 import { readAsPublished } from './as-published.mjs';
+import { readDateFacts } from './date-role.mjs';
 
 const DIGEST = /^[0-9a-f]{64}$/;
 
@@ -109,6 +110,8 @@ function readState(state, index, workKey, workIri) {
   return Object.freeze({
     language,
     applicabilityDate,
+    // The date's role and the act's entry into force (index 9; null on an index of schema 8 or 6): R21, `date-role.mjs`.
+    ...readDateFacts(state, applicabilityDate, where),
     nextApplicabilityDate: next,
     stateSha256,
     expressionIri: requireText(requireOwn(state, 'expression_iri', where), `${where} expression_iri`),
