@@ -78,12 +78,14 @@ function titleAnswer(operation, parameters, { folds, titlesHeld, reference }) {
   // `reference` names a work key, the search answers as the phase does, opening that act (or, with null, opening nothing).
   if (reference !== undefined && parameters.query !== "loi") {
     return { refusal: null, result: { value: {
-      reference: { phase: "exact_reference/1", outcome: reference === null ? "not_opened" : "opens", recognised: { act: { work: reference } },
+      reference: { phase: "exact_reference", outcome: reference === null ? "not_opened" : "opens", recognised: { act: { work: reference } },
         opens: reference === null ? null : { address: `/lu-legilux/${reference}` } },
       lanes_run: false, hits: [],
     } } };
   }
+  // As the API answers the ladder's searches: the phase's member is there, with nothing recognised (V3CorpusMount.cs).
   return { refusal: null, result: { value: {
+    reference: { phase: "exact_reference", outcome: "no_reference", recognised: null, opens: null },
     work_resolution: { outcome: !titlesHeld ? "no_titles_held" : found === null ? "no_title_match" : "one_work", work: found, candidates: null },
     hits: parameters.query === "loi" ? [{ work_key: WORK_KEY, state_sha256: "e".repeat(64), applicability_date: "2018-01-01", publisher_id: "art_1" }] : [],
   } } };

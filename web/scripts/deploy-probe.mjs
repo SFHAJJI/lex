@@ -381,7 +381,10 @@ export async function accentedTitleFailures(origin, { ask = askOperation, notes 
       const reference = searched?.result?.value?.reference;
       const opensWork = reference?.outcome === "opens" && reference.recognised?.act?.work === work;
       if (!opensWork && (resolution?.outcome !== "one_work" || resolution.work?.work_identifier !== found.work_identifier)) {
-        const said = reference !== undefined && reference !== null
+        // Every answer carries the phase's member; it answered the search only when it opened something or said why not
+        // (on the ladder's answers its outcome is "no_reference", and the ladder's own outcome is the one to report).
+        const phaseAnswered = reference?.outcome === "opens" || reference?.outcome === "not_opened";
+        const said = phaseAnswered
           ? `the reference phase's ${reference.outcome} of ${reference.recognised?.act?.work ?? "no act"}`
           : resolution?.outcome ?? (searched === null ? "no envelope" : `a refusal, ${searched.refusal?.code}`);
         failures.push(`search for "${title}" names ${said}, not ${found.work_identifier} alone`);
