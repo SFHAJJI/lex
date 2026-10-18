@@ -228,6 +228,13 @@ public sealed class V3CorpusReadingPagesMountTests
                      new[] { "art_i", "art_ii", "art_iii", "art_iv", "art_v", "art_ix", "art_x", "art_xxvii" },
                      new[] { "art_l_121-1", "art_l_121-6", "art_l_121-10", "art_r_11-1" },
                      new[] { "art_40", "art_40bis", "art_40quinquies", "art_40decies", "art_41" },
+                     // The review of #978 (F1): "Ier" written as a roman numeral with er after it, and art written right before
+                     // its number, come first and in their place, as derive-c's states write them.
+                     new[] { "art_ier", "art_ii", "art_iibis", "art_iii", "art_iv", "art_v", "art_viii" },
+                     new[] { "art1er", "art_2", "art_3", "art12", "art_13", "art_32" },
+                     new[] { "art_premier", "art_2", "art_3" },
+                     new[] { "article_1er", "article_2", "article12" },
+                     new[] { "art_9", "art_99999999999999999999", "art_100000000000000000000" },
                  })
         {
             CollectionAssert.AreEqual(expected, expected.Reverse().Order(order).ToArray(), string.Join(" ", expected));
@@ -235,6 +242,100 @@ public sealed class V3CorpusReadingPagesMountTests
 
         Assert.AreEqual(0, V3CorpusMount.CompareLuxembourgArticleIds("art_15", "art_15"));
         Assert.IsLessThan(0, V3CorpusMount.CompareLuxembourgArticleIds("art_05", "art_5"), "a tie in value broken by the text, so the order is total");
+        Assert.AreNotEqual(0, V3CorpusMount.CompareLuxembourgArticleIds("art_1er", "art1er"), "one value, one adverb: the text decides, so the order is total");
+        Assert.IsGreaterThan(0, V3CorpusMount.CompareLuxembourgArticleIds("art_l_121-6", "art_l"), "art_l alone is the roman 50; art_l_121-6 is a code's L. article");
+    }
+
+    /// <summary>
+    /// The reading order over every state a Luxembourg index holds (the review of #978, F1), when
+    /// <c>V3_READING_ORDER_INDEX</c> names a <c>luxembourg-index.sqlite3</c>, read in place and read-only: in each state, the
+    /// first article (an id that is 1, 1er, Ier, I or premier after art or article) comes first wherever one is held, and the ids
+    /// of the plain shapes (art or article, a number or a roman numeral, and er or a Latin adverb) come in the order of their
+    /// numbers. Opt-in, as the probes over a run's population are; it prints what it read.
+    /// </summary>
+    [TestMethod]
+    public void TheReadingOrderPutsTheFirstArticleFirstInEveryStateTheNamedIndexHolds()
+    {
+        var path = Environment.GetEnvironmentVariable("V3_READING_ORDER_INDEX");
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            Assert.Inconclusive("V3_READING_ORDER_INDEX names no Luxembourg index, so no population's order is read.");
+        }
+
+        var first = new System.Text.RegularExpressions.Regex("^(?:art|article)_?(?:1|1er|ier|i|premier)$");
+        var plain = new System.Text.RegularExpressions.Regex("^(?:art|article)_?(?<number>[0-9]+|[ivxlcdm]+)(?<suffix>er|bis|ter|quater|quinquies|sexies|septies|octies|nonies|decies)?$");
+        var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+            $"Data Source=file:{path.Replace('\\', '/')}?immutable=1;Mode=ReadOnly");
+        using var _ = connection;
+        connection.Open();
+        var ids = new Dictionary<string, string>(StringComparer.Ordinal);
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT article_identity_sha256, publisher_id FROM articles";
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                ids[reader.GetString(0)] = reader.GetString(1);
+            }
+        }
+
+        var order = Comparer<string>.Create(V3CorpusMount.CompareLuxembourgArticleIds);
+        int states = 0, withFirst = 0, plainPairs = 0;
+        var failures = new List<string>();
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT work_key, applicability_date, language, article_identities_json FROM states";
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                states++;
+                var held = JsonSerializer.Deserialize<string[]>(reader.GetString(3))!.Select(identity => ids[identity]).Distinct(StringComparer.Ordinal).Order(order).ToArray();
+                var name = $"{reader.GetString(0)} {reader.GetString(1)} {reader.GetString(2)}";
+                if (held.Any(id => first.IsMatch(id)))
+                {
+                    withFirst++;
+                    if (!first.IsMatch(held[0]))
+                    {
+                        failures.Add($"{name}: {held[0]} before its first article");
+                    }
+                }
+
+                var values = held.Select(id => plain.Match(id)).Where(static match => match.Success)
+                    .Select(static match => (Value: NumberOf(match.Groups["number"].Value), Text: match.Value)).ToArray();
+                for (var index = 1; index < values.Length; index++)
+                {
+                    plainPairs++;
+                    if (values[index].Value < values[index - 1].Value)
+                    {
+                        failures.Add($"{name}: {values[index - 1].Text} before {values[index].Text}");
+                    }
+                }
+            }
+        }
+
+        Console.WriteLine($"{states} states, {withFirst} with a first article, {plainPairs} pairs of plain ids in order");
+        // Where the run asks for it (V3_READING_ORDER_REPORT), what it read, written down.
+        if (Environment.GetEnvironmentVariable("V3_READING_ORDER_REPORT") is { Length: > 0 } report)
+            File.WriteAllText(report,
+            $"{states} states, {withFirst} with a first article, {plainPairs} pairs of plain ids, {failures.Count} out of order{Environment.NewLine}{string.Join(Environment.NewLine, failures.Take(50))}{Environment.NewLine}");
+        Assert.IsEmpty(failures, string.Join("; ", failures.Take(20)));
+
+        static long NumberOf(string text) => char.IsAsciiDigit(text[0])
+            ? long.Parse(text.Length > 18 ? text[..18] : text, System.Globalization.CultureInfo.InvariantCulture)
+            : RomanOf(text);
+
+        static long RomanOf(string text)
+        {
+            long value = 0;
+            for (var index = 0; index < text.Length; index++)
+            {
+                long Digit(char character) => character switch { 'i' => 1, 'v' => 5, 'x' => 10, 'l' => 50, 'c' => 100, 'd' => 500, _ => 1000 };
+                var current = Digit(text[index]);
+                value += index + 1 < text.Length && current < Digit(text[index + 1]) ? -current : current;
+            }
+
+            return value;
+        }
     }
 
     [TestMethod]

@@ -39,8 +39,10 @@ internal sealed partial class V3CorpusMount
 
     internal const string LuxembourgReadingPageRule =
         "a state is read in pages: its articles, quoted or held without text, are taken in the order of their publisher ids (the publisher's " +
-        "document order is not held: the numbers in an id compare as numbers, the Latin adverbs bis, ter, quater and the rest in their order, an " +
-        "article id that is a roman numeral by its value, then the article identity), and each page holds at most 50 of them and at most 98,304 " +
+        "document order is not held: the numbers in an id compare as numbers, er (1er, the first) then the Latin adverbs bis, ter, quater and the " +
+        "rest in their order, a roman numeral after art_ or article_, alone or with er or an adverb after it (art_ier, art_iibis), by its value, " +
+        "premier as 1, art or article written right before its number as if separated from it (art1er as art_1er), then the article identity), " +
+        "and each page holds at most 50 of them and at most 98,304 " +
         "bytes of quoted text (UTF-8), an article whose text alone passes that bound being a page of its own; pages count from 1 and the " +
         "cut depends on the state alone; with neither page nor article asked the first page is served, article serves the page that holds that " +
         "publisher id (anchor_not_in_version when a served state does not hold it), and contents true adds every article's position, publisher " +
@@ -315,10 +317,12 @@ internal sealed partial class V3CorpusMount
 
     /// <summary>
     /// The order of a Luxembourg version's articles, which the index does not hold as the publisher's document order (every
-    /// state lists its article identities sorted by digest): the publisher's ids compared part by part, digits as numbers,
-    /// a Latin adverb (bis, ter, quater, ...) by its rank, an id that is <c>art_</c> or <c>article_</c> and a roman numeral by
-    /// the numeral's value, any other letters as text, a separator before letters and digits, and an id before every id
-    /// that extends it. Ties are broken by the caller (the article identity), so the order is total.
+    /// state lists its article identities sorted by digest): the publisher's ids compared part by part, digits as numbers
+    /// (of any length), <c>er</c> and the Latin adverbs (bis, ter, quater, ...) by their rank, an id that is <c>art_</c> or
+    /// <c>article_</c> and a roman numeral, alone or with <c>er</c> or an adverb after it, by the numeral's value (<c>art_ier</c>,
+    /// "Ier", is the first), <c>premier</c> as 1, <c>art</c> or <c>article</c> written right before its number as if separated
+    /// from it (<c>art1er</c>, <c>art12</c>), any other letters as text, a separator before numbers and letters, and an id
+    /// before every id that extends it. Ties are broken by the caller (the article identity), so the order is total.
     /// </summary>
     internal static int CompareLuxembourgArticleIds(string left, string right)
     {
@@ -342,8 +346,10 @@ internal sealed partial class V3CorpusMount
         return byLength != 0 ? byLength : string.CompareOrdinal(left, right);
     }
 
-    /// <summary>One part of an article id: a separator (0), a number (1) or letters (2), with its rank for numbers and adverbs.</summary>
-    private readonly record struct ArticleIdPart(int Kind, string Text, long Rank);
+    /// <summary>
+    /// One part of an article id: a separator (0), a number (1, with its value's digits) or letters (2, with an adverb's rank).
+    /// </summary>
+    private readonly record struct ArticleIdPart(int Kind, string Text, long Rank, string Digits = "");
 
     /// <summary>
     /// The letters a Luxembourg article id writes after a number, by their rank: <c>er</c> (1er, the first) as 1, then the
@@ -359,12 +365,19 @@ internal sealed partial class V3CorpusMount
 
     private static List<ArticleIdPart> ArticleIdParts(string id)
     {
-        // An id that is art_ or article_ and a roman numeral (art_iii, article_xiv) is read as the numeral's value.
+        // An id that is art_ or article_ and a roman numeral, alone or with er or a Latin adverb after it (art_iii, art_ier for
+        // "Ier", art_iibis), is read as the numeral's value with that suffix; "premier" as 1.
         foreach (var prefix in new[] { "art_", "article_" })
         {
-            if (id.StartsWith(prefix, StringComparison.Ordinal) && RomanValue(id[prefix.Length..]) is { } value)
+            if (id.StartsWith(prefix, StringComparison.Ordinal) && RomanWithSuffix(id[prefix.Length..]) is { } roman)
             {
-                return [new(2, prefix[..^1], 0), new(0, "_", 0), new(1, id[prefix.Length..], value)];
+                List<ArticleIdPart> read = [new(2, prefix[..^1], 0), new(0, "_", 0), Number(roman.Numeral, roman.Value.ToString(CultureInfo.InvariantCulture))];
+                if (roman.Suffix.Length > 0)
+                {
+                    read.Add(new(2, roman.Suffix, LatinAdverbs[roman.Suffix]));
+                }
+
+                return read;
             }
         }
 
@@ -380,9 +393,7 @@ internal sealed partial class V3CorpusMount
                     at++;
                 }
 
-                var digits = id[start..at].TrimStart('0');
-                // A number longer than a long holds is ranked by its length, then as text.
-                parts.Add(new(1, id[start..at], digits.Length > 18 ? long.MaxValue : digits.Length == 0 ? 0 : long.Parse(digits, CultureInfo.InvariantCulture)));
+                parts.Add(Number(id[start..at], id[start..at]));
             }
             else if (char.IsLetter(id[at]))
             {
@@ -392,7 +403,20 @@ internal sealed partial class V3CorpusMount
                 }
 
                 var letters = id[start..at];
+                if (string.Equals(letters, "premier", StringComparison.OrdinalIgnoreCase))
+                {
+                    parts.Add(Number(letters, "1"));
+                    continue;
+                }
+
                 parts.Add(new(2, letters, LatinAdverbs.TryGetValue(letters.ToLowerInvariant(), out var rank) ? rank : 0));
+
+                // art or article written right before its number (art1er, art12) is read as art_1er and art_12 are.
+                if (start == 0 && at < id.Length && char.IsAsciiDigit(id[at]) &&
+                    (string.Equals(letters, "art", StringComparison.Ordinal) || string.Equals(letters, "article", StringComparison.Ordinal)))
+                {
+                    parts.Add(new(0, "_", 0));
+                }
             }
             else
             {
@@ -404,6 +428,34 @@ internal sealed partial class V3CorpusMount
         return parts;
     }
 
+    /// <summary>
+    /// A number part: its text as the id writes it, and its value's digits (no leading zeros), which compare by their count,
+    /// then as text, so a number of any length is ordered by its value.
+    /// </summary>
+    private static ArticleIdPart Number(string text, string digits)
+    {
+        var value = digits.TrimStart('0');
+        return new(1, text, 0, value);
+    }
+
+    /// <summary>
+    /// A roman numeral in its usual form (i to mmmcmxcix), alone or followed by er or a Latin adverb (<see cref="LatinAdverbs"/>):
+    /// the numeral, its value and the suffix; null for anything else. The longest numeral that leaves such a suffix is read.
+    /// </summary>
+    private static (string Numeral, int Value, string Suffix)? RomanWithSuffix(string text)
+    {
+        for (var length = Math.Min(text.Length, 15); length > 0; length--)
+        {
+            var suffix = text[length..];
+            if ((suffix.Length == 0 || LatinAdverbs.ContainsKey(suffix)) && RomanValue(text[..length]) is { } value)
+            {
+                return (text[..length], value, suffix);
+            }
+        }
+
+        return null;
+    }
+
     private static int CompareArticleIdPart(ArticleIdPart left, ArticleIdPart right)
     {
         if (left.Kind != right.Kind)
@@ -413,7 +465,13 @@ internal sealed partial class V3CorpusMount
 
         if (left.Kind == 1)
         {
-            var byValue = left.Rank.CompareTo(right.Rank);
+            var byLength = left.Digits.Length.CompareTo(right.Digits.Length);
+            if (byLength != 0)
+            {
+                return byLength;
+            }
+
+            var byValue = string.CompareOrdinal(left.Digits, right.Digits);
             return byValue != 0 ? byValue : string.CompareOrdinal(left.Text, right.Text);
         }
 
