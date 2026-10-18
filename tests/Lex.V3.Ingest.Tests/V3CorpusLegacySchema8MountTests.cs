@@ -11,10 +11,13 @@ namespace Lex.V3.Ingest.Tests;
 /// <summary>
 /// A schema-8 mount that this code did not write (the review of #980, F1 and F2): its three files were built and verified
 /// by the code before index 9 (v3/integration 3b7913ec), from a synthetic act (<c>synthetic-loi-2026-01-01-a1.xml</c>,
-/// written for these tests, no publisher text) run through the acquisition fixture, and committed byte for byte with
-/// that code's answers over it and over the real bounded first mount (schema 6). So the head's schema-8 reading (its exact
-/// DDL, state digest /1, log /2 and logical rows) is checked against bytes it did not produce, and every answer over
-/// schema 8 and 6 against the answer the code before index 9 sent, whole envelope for whole envelope.
+/// written for these tests, no publisher text) run through the acquisition fixture, and committed byte for byte with the
+/// answers over it and over the real bounded first mount (schema 6) of the integration head this branch is based on
+/// (5a659831, which also read the files with its own checks; its answers are 3b7913ec's but for the registry digest and
+/// #978's evidence bundle). So the head's schema-8 reading (its exact DDL, state digest /1, log /2 and logical rows) is
+/// checked against bytes it did not produce, and every answer over schema 8 and 6 against the answer the code without
+/// index 9 sends, whole envelope for whole envelope. A later merge that moves those answers on purpose records them again
+/// at its base (the writer is LegacyMountAnswers with the files read, not rebuilt).
 /// </summary>
 [TestClass]
 public sealed class V3CorpusLegacySchema8MountTests
@@ -84,11 +87,12 @@ public sealed class V3CorpusLegacySchema8MountTests
     /// adds are served on index 9 only.
     /// </summary>
     [TestMethod]
-    public async Task EveryAnswerOverTheSchema8AndSchema6MountsIsTheOneTheCodeBeforeIndex9Sent()
+    public async Task EveryAnswerOverTheSchema8AndSchema6MountsIsTheOneTheCodeWithoutIndex9Sends()
     {
         using var recorded = JsonDocument.Parse(Fixture("base-answers.json"));
         var root = recorded.RootElement;
-        Assert.AreEqual("3b7913ec", root.GetProperty("recorded_at_commit").GetString());
+        Assert.AreEqual("3b7913ec", root.GetProperty("written_at_commit").GetString());
+        Assert.AreEqual("5a659831", root.GetProperty("recorded_at_commit").GetString());
         Assert.AreEqual(IndexFileSha256, root.GetProperty("index_sha256").GetString());
         Assert.AreEqual(StateSha256, root.GetProperty("state_sha256").GetString());
 
@@ -130,7 +134,7 @@ public sealed class V3CorpusLegacySchema8MountTests
                 var trace = row.GetProperty("trace").GetString()!;
                 var (status, body) = await LegacyMountAnswers.RespondAsync(mount, operation, row.GetProperty("request").GetString()!, trace);
                 Assert.AreEqual(row.GetProperty("http_status").GetInt32(), status, $"{trace} {operation}");
-                Assert.AreEqual(row.GetProperty("body").GetString(), body, $"{trace} {operation}: the answer the code before index 9 sent");
+                Assert.AreEqual(row.GetProperty("body").GetString(), body, $"{trace} {operation}: the answer the code without index 9 sends");
             }
         }
         finally

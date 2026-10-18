@@ -21,8 +21,8 @@ Updated 2026-10-18.
     Two fields swapped in `LegacyStateRow8.Of` now fail; they passed before.
   - F2: a schema-8 or schema-6 answer had gained `log.derived_at`, the "per state row" scope, the genesis note's
     derivation sentence, as_observed's "/8 or /9" and the MCP events description. Each is index 9's only now, and
-    `base-answers.json` (that code's whole envelopes for 29 requests over the schema-8 mount and 9 over the schema-6 one)
-    is replayed byte for byte. Provenance's digest /2 sentence on schema 8 now fails.
+    `base-answers.json` (the integration head's whole envelopes for 29 requests over the schema-8 mount and 9 over the
+    schema-6 one, recorded at `5a659831`) is replayed byte for byte. Provenance's digest /2 sentence on schema 8 now fails.
   - F3: the fixture has an end on its start (the real `code/procedure_penale/20211214`): an invalid boundary and
     transition. `<= 0` made `< 0` now fails.
   - F4: `V3CorpusMount.ServesIndexNine` is the one switch S7a turns. Until then the server refuses a built mount of index 9
@@ -149,7 +149,9 @@ Updated 2026-10-18.
     queries planned on the committed schema-8 index, both ways (F1).
   - `V3CorpusLegacySchema8MountTests` (F1, F2): the committed schema-8 mount read with schema 8's checks (state digest /1
     `084f8088…`, log /2, the logical rows), never a predecessor; every recorded request over it and over the schema-6
-    mount answered as at `3b7913ec`, byte for byte (`LegacyMountAnswers` is the same code at both commits).
+    mount answered as the code without index 9 answers it, byte for byte: recorded at `5a659831`, the integration head
+    this branch is based on, over the committed files (`LegacyMountAnswers` is the same code at both commits; 5a659831's
+    answers are 3b7913ec's but for the registry digest and #978's evidence bundle).
   - `V3IndexNineServingTests` (F4): a synthetic index-9 mount refused when built and served as a fixture; a built schema-8
     mount served; the switch off.
   - `V3CorpusLegacySchema6MountTests`: schema 6 made from schema 8 made from the built index 9; the real bounded first

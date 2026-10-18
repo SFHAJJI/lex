@@ -9,10 +9,11 @@ using Microsoft.AspNetCore.Http.Features;
 namespace Lex.V3.Ingest.Tests;
 
 /// <summary>
-/// The requests whose whole answers a mount of an earlier index schema must keep, byte for byte, as the code before index 9
-/// (v3/integration 3b7913ec) sent them: each request's exact body and trace identity, answered at one fixed observation
-/// time by the real handler. The answers were recorded at that commit, over the committed schema-8 and schema-6 mounts, by
-/// this same code; a later change that moves one byte of an answer over those schemas fails
+/// The requests whose whole answers a mount of an earlier index schema must keep, byte for byte, as the code without index 9
+/// sends them: each request's exact body and trace identity, answered at one fixed observation time by the real handler.
+/// The answers were recorded at the integration head this branch is based on (5a659831), over the committed schema-8 mount
+/// (written at 3b7913ec) and the schema-6 one, by this same code; a later change that moves one byte of an answer over
+/// those schemas fails
 /// <c>V3CorpusLegacySchema8MountTests</c>.
 /// </summary>
 internal static class LegacyMountAnswers
