@@ -7,9 +7,31 @@ Updated 2026-10-18.
 - **What.** Slice S6 of the Luxembourg data design (`C:\lex-v3\LU-DATA-DESIGN-2026-10-14-v2.md` §3.1, §3.3, §3.4), with the two
   things S4 deferred to it: state digest /2 in rule set `lu-release-1`, and `log.derived_at`. The builder writes
   `lex-v3-luxembourg-index/9` (`user_version` 9) with event log `lex-v3-event-log/3`; the reader opens /9, /8 and /6, each
-  exactly. On an index 8 or 6 nothing served changes. On an index 9 every operation that existed before reads the held rows
-  only, until the reader's interval rules land (S7a). No mount over real data has been built with it: the dry run is the next
-  machine step.
+  exactly. On an index 8 or 6 every answer is the one the code before index 9 sent, byte for byte (held by a committed
+  schema-8 mount that code wrote, and the real schema-6 mount: the review of #980). On an index 9 every operation that
+  existed before reads the held rows only, until the reader's interval rules land (S7a), and the server refuses a built
+  mount of index 9 until S7a turns one switch (below). No mount over real data has been built with it: the dry run is the
+  next machine step.
+- **Review and repair (#980).** The independent review found the core sound (digest /2 and its profile recomputed, the
+  probe's counts reproduced, the tampers refused, derive-c's real /8 read identically through base and head over 8,681
+  reader answers) and asked for four repairs and a minor one, all made:
+  - F1: no test read an index 8 this code did not write. `Fixtures/LegacySchema8Mount` holds a schema-8 mount built and
+    verified at `3b7913ec` from a synthetic act (its XML beside it), pinned by digest; `V3CorpusLegacySchema8MountTests`
+    reads it with schema 8's checks, and the query-plan tests plan schema 8's own texts of the three state queries on it.
+    Two fields swapped in `LegacyStateRow8.Of` now fail; they passed before.
+  - F2: a schema-8 or schema-6 answer had gained `log.derived_at`, the "per state row" scope, the genesis note's
+    derivation sentence, as_observed's "/8 or /9" and the MCP events description. Each is index 9's only now, and
+    `base-answers.json` (that code's whole envelopes for 29 requests over the schema-8 mount and 9 over the schema-6 one)
+    is replayed byte for byte. Provenance's digest /2 sentence on schema 8 now fails.
+  - F3: the fixture has an end on its start (the real `code/procedure_penale/20211214`): an invalid boundary and
+    transition. `<= 0` made `< 0` now fails.
+  - F4: `V3CorpusMount.ServesIndexNine` is the one switch S7a turns. Until then the server refuses a built mount of index 9
+    (one with its build report, as a release's mount is) with `IndexNineNotServedSentence`; a test fixture mount, with no
+    build report, is served, so the journeys and samples run. G5 from the answer alone is an expected gap on index 9:
+    `V3IndexNineServingTests` and the G5 case of `V3ReplayGuaranteesTests` fail when the switch turns, until S7a updates them.
+  - Minor: a textless row took the in-file facts of another expression's file (`loi/2017/07/20/a674`'s French row carried
+    the English file's); it takes its own expression's only. A catalogue state naming no expression adds no row beside a
+    held row of the same state.
 - **The states table** keeps schema 8's nine columns and adds `state_kind` (`as_published`, `consolidation`, `code`),
   `date_role` (`applicability`, `applicability_in_file`, `entry_into_force`: the role names the date's source),
   `applicable_to` and `applicable_to_source` (`publisher` or `derived`), `boundary` (`half_open`, `inclusive_suspected`,
@@ -105,8 +127,8 @@ Updated 2026-10-18.
     with no expression); an act dated by entry into force with a withheld consolidation and a hole; an act whose file
     applies it before its entry into force; an act and its same-date consolidation, then a state not acquired; an end
     before its start and an overlap; a suspected inclusive end; an English translation of an act whose French expression was
-    not acquired; a work with no held state. Its tests: every row by role (20 rows, 12 held, 8 textless) with each textless
-    reason; each work's transitions with their kinds and spans (13); the pre-/9 operations reading held rows only; the
+    not acquired; a work with no held state; an end on its start (F3). Its tests: every row by role (21 rows, 12 held, 9
+    textless) with each textless reason; each work's transitions with their kinds and spans (14); the pre-/9 operations reading held rows only; the
     genesis log's sightings with their publisher facts and the observation's derivation time; a chained build emitting
     `interval_closed` and a `first_sighting` and no `validity_revised` for unchanged publisher ends; ten tampers refused
     (provisional, boundary, a derived end for a stated one, a translation's French state, an entry into force on a
@@ -115,7 +137,7 @@ Updated 2026-10-18.
     publisher's order, not the ids', and two articles of one body in one place refused); and state digest /2 and its rule
     profile pinned to a Python recomputation (`1c1c403a…` for the code's first state; `943c77af…`).
   - `LuxembourgIndexBuilderTests`: the schema at /9; the fixed-input index (one held act, a textless consolidation, an
-    interval, a derivation time) re-pinned to `abb1d264…`; the state tampers recomputed under digest /2; `Schema8Of`, a
+    interval, a derivation time) re-pinned to `7cfd9988…`; the state tampers recomputed under digest /2; `Schema8Of`, a
     test-side rewrite of a built index 9 into schema 8's tables (held rows, digest /1, log /2), and
     `ASchema8IndexIsStillReadExactlyAsSchema8CheckedIt` over the multi-body fixture's index 9, every byte synthetic (seven
     tampers refused with schema 8's own reasons, and the rewrite opens as schema 8 with no derivation time, its held states
@@ -123,7 +145,13 @@ Updated 2026-10-18.
     runs.
   - `LuxembourgIndexQueryPlanTests`: the three held-row variants planned on the index as built, and the two work ranges
     (`CatalogueStatesOfWork`, `IntervalsOfWork`) held to a primary-key search, with no statistics and with statistics shaped
-    like a real index; the reader is held to running exactly those texts.
+    like a real index; the reader is held to running exactly those texts; and schema 8's own texts of the three state
+    queries planned on the committed schema-8 index, both ways (F1).
+  - `V3CorpusLegacySchema8MountTests` (F1, F2): the committed schema-8 mount read with schema 8's checks (state digest /1
+    `084f8088…`, log /2, the logical rows), never a predecessor; every recorded request over it and over the schema-6
+    mount answered as at `3b7913ec`, byte for byte (`LegacyMountAnswers` is the same code at both commits).
+  - `V3IndexNineServingTests` (F4): a synthetic index-9 mount refused when built and served as a fixture; a built schema-8
+    mount served; the switch off.
   - `V3CorpusLegacySchema6MountTests`: schema 6 made from schema 8 made from the built index 9; the real bounded first
     mount's schema-6 files still open and serve as before.
   - `LuxembourgRederivationTests`: `lu-release-1` names three rules; inputs naming the two rules from before S6, or an
@@ -152,7 +180,9 @@ Updated 2026-10-18.
     catalogue states, and their chains have the design's shape: 152 ends meet the next start, 25 holes and one end on its
     start (`code/procedure_penale/20211214`, kind `invalid`; the design counts it among 26 holes), 4 overlaps.
   - Textless rows 622: 557 consolidations of served acts, 64 code states and the French row of the English-held act (the
-    design's 620: 556 and 64). By status: 609 `withheld_rights`, 12 `not_acquired` (11 naming no expression, among them
+    design's 620: 556 and 64). The 557 are 557 distinct states (no state has two textless rows); the one more than the
+    design's comes with the 75 more served works the measured /4 and /2 outputs give (2,425 against the design's 2,350),
+    whose per-work list the design does not give, so it cannot be named from the design's text. By status: 609 `withheld_rights`, 12 `not_acquired` (11 naming no expression, among them
     `code/procedure_penale/20270301`), 1 `not_available_misfiled`. The probe's inputs hold no record of a body not held, so
     its `not_acquired` reasons name none; the build names the record's member outcome and body axis.
   - Roles of the held rows: 2,166 `applicability_in_file`, 251 `entry_into_force`, 126 `applicability`; 7 held acts are dated
@@ -230,7 +260,8 @@ Updated 2026-10-18.
     and carrying it now spares S7a an index 10; it is outside state digest /2, so it moves no digest.
   - Titles are keyed by the work key of the held expression's legal resource (a code's titles are one work); a title of
     an expression whose legal resource spells no state keeps index 8's key.
-- **Not yet.** S7a: a state's articles in their document's order (`document_position`, replacing #978's natural-order
+- **Not yet.** S7a turns `V3CorpusMount.ServesIndexNine` with its reader rules, and updates the two tests that fail then
+  (G5 from the answer alone among them). S7a: a state's articles in their document's order (`document_position`, replacing #978's natural-order
   stopgap) and the articles a state lacks, said as such; the interval selection for `as_of`, `in_force_on`, `as_observed`, `evidence_bundle` and `diff`, the
   refusals for textless states, unclear ends and invalid intervals, `provisional`, translations' labels, the state rows'
   new fields (and with them a provenance chain a caller can recompute again: G5 from the answer alone), and the
