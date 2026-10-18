@@ -56,7 +56,7 @@ function foldTitle(text, folds) {
 }
 
 /** What the stand-in answers `resolve`, `dossier` and `search`: the ladder's exact and prefix tiers over its one title. */
-function titleAnswer(operation, parameters, { folds, titlesHeld }) {
+function titleAnswer(operation, parameters, { folds, titlesHeld, reference }) {
   const stored = foldTitle(TITLE, true);
   const resolved = (text) => {
     const asked = foldTitle(text, folds);
@@ -74,6 +74,15 @@ function titleAnswer(operation, parameters, { folds, titlesHeld }) {
     return { refusal: null, result: { value: { titles } } };
   }
   const found = resolved(parameters.query);
+  // The exact-reference phase (4.2) reads "Loi du 21 décembre 2017 …" as an act by type and date before any title: when
+  // `reference` names a work key, the search answers as the phase does, opening that act (or, with null, opening nothing).
+  if (reference !== undefined && parameters.query !== "loi") {
+    return { refusal: null, result: { value: {
+      reference: { phase: "exact_reference/1", outcome: reference === null ? "not_opened" : "opens", recognised: { act: { work: reference } },
+        opens: reference === null ? null : { address: `/lu-legilux/${reference}` } },
+      lanes_run: false, hits: [],
+    } } };
+  }
   return { refusal: null, result: { value: {
     work_resolution: { outcome: !titlesHeld ? "no_titles_held" : found === null ? "no_title_match" : "one_work", work: found, candidates: null },
     hits: parameters.query === "loi" ? [{ work_key: WORK_KEY, state_sha256: "e".repeat(64), applicability_date: "2018-01-01", publisher_id: "art_1" }] : [],
@@ -282,6 +291,22 @@ test("a revision that does not fold accents fails the title as published and in 
     ]);
   } finally {
     await served.close();
+  }
+});
+
+test("a title the exact-reference phase reads as its act's type and date passes when the phase opens that act, and fails when it opens another or none", async () => {
+  // The release of 2026-10-18 found it: "Loi du 3 décembre 2015 relative à …" was answered by 4.2's phase, not the ladder.
+  for (const [what, reference, expected] of [
+    ["the phase opens the work", WORK_KEY, []],
+    ["the phase opens another act", "loi-2017-12-21-a1118", [`search for "${TITLE}" names the reference phase's opens of loi-2017-12-21-a1118, not ${WORK} alone`]],
+    ["the phase opens nothing", null, [`search for "${TITLE}" names the reference phase's not_opened of no act, not ${WORK} alone`]],
+  ]) {
+    const served = await revision({ reference });
+    try {
+      assert.deepEqual(await accentedTitleFailures(served.origin), expected, what);
+    } finally {
+      await served.close();
+    }
   }
 });
 
