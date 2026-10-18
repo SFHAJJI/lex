@@ -240,11 +240,11 @@ function ActGroups({ view }) {
     <ol className="acts" data-acts={view.acts.length}>
       {actGroups(view).map(({ act, versions }) => (
         <li key={act.workKey} data-act={act.workKey}>
-          <h3>
+          <h2 className="act-title">
             {act.title === null
               ? <Say template={COPY.untitled} values={{ work: <a href={permalinkHref(act.dossier, CHROME_LOCALE)}>{act.workKey}</a> }} />
               : <a href={permalinkHref(act.dossier, CHROME_LOCALE)}><span lang={quotationLanguageTag(act.titleLanguage)}>{act.title}</span></a>}
-          </h3>
+          </h2>
           <p className="act-facts">
             {act.asPublished ? <span data-as-published-label="">{`${asPublishedLabel.charAt(0).toUpperCase()}${asPublishedLabel.slice(1)}.`} </span> : null}
             <span data-act-hits={act.hits}>{fillCounted(COPY.actPassages, act.hits)}</span>
@@ -362,7 +362,7 @@ function NoHitCard({ view }) {
         {/* With no work named, a search is of Luxembourg law alone, and says so. */}
         <Say template={view.identifier === null ? COPY.noHitLuxembourg : COPY.noHit} values={{ query: view.query }} /> {inEnglish(asSentence(view.matching))}
       </p>
-      <h3>{COPY.searchesRun}</h3>
+      <h2>{COPY.searchesRun}</h2>
       <ul data-searches-run="">
         <li data-search-run="reference">{reference}</li>
         <li data-search-run="titles">{titles}</li>
