@@ -1,0 +1,321 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu">
+	<act name="Code consommation" scl:uri="http://eli.legilux.public.lu/eli/etat/leg/code/consommation">
+		<meta>
+			<identification source="#http://data.legilux.public.lu/eli/etat/leg/code/consommation/20220101">
+				<FRBRWork>
+					<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/code/consommation/20220101"/>
+					<FRBRuri value=""/>
+					<FRBRdate date="2021-07-30" name="document"/>
+					<FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MJ"/>
+					<FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+				</FRBRWork>
+				<FRBRExpression>
+					<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/code/consommation/20220101/fr"/>
+					<FRBRuri value=""/>
+					<FRBRdate date="2021-07-30" name="document"/>
+					<FRBRauthor as="#author" href=""/>
+					<FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+				</FRBRExpression>
+				<FRBRManifestation>
+					<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/code/consommation/20220101/fr/xml"/>
+					<FRBRuri value=""/>
+					<FRBRdate date="2021-07-30" name="document"/>
+					<FRBRauthor as="#author" href=""/>
+				</FRBRManifestation>
+				<scl:JOLUXWork>
+					<scl:JOLUXComplexWork>
+						<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/consommation</scl:jolux>
+					</scl:JOLUXComplexWork>
+					<scl:JOLUXLegalResource>
+                        <scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/consommation/20220101</scl:jolux>
+                        <scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/loi/2011/04/08/n2</scl:jolux>
+                        <scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/CODE</scl:jolux>
+                        <scl:jolux scl:name="version">1</scl:jolux>
+                        <scl:jolux scl:name="dateApplicability">2021-07-30</scl:jolux>
+                        <scl:jolux scl:name="publicationDate">2021-07-30</scl:jolux>
+                        <scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MJ</scl:jolux>
+                        <scl:jolux scl:name="personInCharge">Ministère d’Etat – Service central de législation – du Grand-Duché de Luxembourg</scl:jolux>
+                        <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Code</scl:rdf>
+                        <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Consolidation</scl:rdf>
+                        <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf>
+                        <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf>
+                        <scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf>
+                    </scl:JOLUXLegalResource>
+				</scl:JOLUXWork>
+				<scl:JOLUXExpression>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/consommation/20220101/fr</scl:jolux>
+					<scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/code/consommation/20220101</scl:jolux>
+					<scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+					<scl:jolux scl:lg="fra" scl:name="title">Code consommation</scl:jolux>
+					<scl:jolux scl:lg="fra" scl:name="titleShort">Code consommation</scl:jolux>
+				</scl:JOLUXExpression>
+				<scl:JOLUXManifestation>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/consommation/20220101/fr/xml</scl:jolux>
+					<scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/code/consommation/20220101/fr</scl:jolux>
+					<scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’Etat – Service central de législation – du Grand-Duché de Luxembourg</scl:jolux>
+					<scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+					<scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+					<scl:jolux scl:name="userFormat">http://data.legilux.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+					<scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+					<scl:jolux scl:name="isExemplifiedBy">http://data.legilux.public.lu/file/eli-etat-leg-code-consommation-2022-01-01-fr-xml.xml</scl:jolux>
+				</scl:JOLUXManifestation>
+			</identification>
+			<notes scl:border="50" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n9-jo-fr-xml">
+			</notes>
+			<notes scl:border="50" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n2-jo-fr-xml">
+			</notes>
+			<notes scl:border="50" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n2-jo-fr-xml">
+			</notes>
+			<notes scl:border="50" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n2-jo-fr-xml">
+			</notes>
+			<notes scl:border="50" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n2-jo-fr-xml">
+				<note id="note_3_3_0">
+					<p>Inséré par la <ref href="/eli/etat/leg/loi/2014/04/02/n3/jo" id="8c9a5493-149f-4dd7-81f9-3a9672cd89ee">loi du 2 avril 2014</ref>.</p>
+				</note>
+			</notes>
+			<notes scl:border="50" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n2-jo-fr-xml">
+			</notes>
+			<notes scl:border="50" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n2-jo-fr-xml">
+			</notes>
+			<notes scl:border="50" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n2-jo-fr-xml">
+			</notes>
+			<notes scl:border="50" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n2-jo-fr-xml">
+			</notes>
+			<notes scl:border="50" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n2-jo-fr-xml">
+			</notes>
+			<notes scl:border="50" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n2-jo-fr-xml">
+			</notes>
+			<notes scl:border="50" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n2-jo-fr-xml">
+			</notes>
+			<notes scl:border="50" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n2-jo-fr-xml">
+			</notes>
+			<notes scl:border="50" scl:page-footer="true" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n10-jo-fr-xml">
+			</notes>
+			<notes scl:border="50" scl:page-footer="true" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n3-jo-fr-xml">
+			</notes>
+			<notes scl:border="50" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n5-jo-fr-xml">
+				<note id="note_6_0_0">
+					<p>Base légale: <ref href="/eli/etat/leg/loi/2011/04/08/n2/jo" id="35b70f38-e096-4d42-908a-80f0f5b31a60">Loi du 8 avril 2011</ref> portant introduction d’un Code de la consommation.</p>
+				</note>
+			</notes>
+			<notes scl:border="50" scl:page-footer="true" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n4-jo-fr-xml">
+			</notes>
+			<notes scl:border="50" scl:page-footer="true" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n4-jo-fr-xml">
+			</notes>
+			<notes scl:border="50" scl:page-footer="true" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n4-jo-fr-xml">
+			</notes>
+			<notes scl:border="50" scl:page-footer="true" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n4-jo-fr-xml">
+			</notes>
+			<notes scl:border="50" scl:page-footer="true" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n4-jo-fr-xml">
+			</notes>
+			<notes scl:border="50" scl:page-footer="true" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n4-jo-fr-xml">
+				<note id="note_7_5_0">
+					<p>Renuméroté par le <ref href="http://www.legilux.lu/eli/etat/leg/rgd/2016/12/23/n44/jo" id="bea236e2-cc9b-4b14-8097-8832755971dd">règlement grand-ducal du 23 décembre 2016</ref>.</p>
+				</note>
+			</notes>
+			<notes scl:border="50" scl:page-footer="true" scl:type="document" source="#eli-etat-leg-div-2020-09-01-n4-jo-fr-xml">
+			</notes>
+		</meta>
+		<preface>
+			<longTitle>
+				<p>Code de la consommation</p>
+			</longTitle>
+		</preface>
+		<body>
+			<title id="title_i">
+				<num>I.</num>
+				<heading>CODE - PARTIE LÉGISLATIVE</heading>
+				<book id="title_i.livre_2">
+					<num>
+						<b>LIVRE 2</b>
+					</num>
+					<heading>
+						<b>Contrats conclus avec les consommateurs</b>
+					</heading>
+					<title id="title_i.livre_2.titre_2">
+						<num>
+							<b>Titre 2</b>
+						</num>
+						<heading>
+							<b>Contrats particuliers</b>
+						</heading>
+						<chapter id="title_i.livre_2.titre_2.chapitre_1">
+							<num>
+								<b>Chapitre 1</b>
+							</num>
+							<heading>
+								<b>Dispositions communes</b>
+							</heading>
+							<article id="art_l_221-1">
+								<scl:JOLUXWork>
+									<scl:JOLUXComplexWork>
+										<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/consommation/art_l_221-1</scl:jolux>
+									</scl:JOLUXComplexWork>
+									<scl:JOLUXLegalResource>
+										<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/consommation/art_l_221-1/20180701</scl:jolux>
+										<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/loi/2011/04/08/n2</scl:jolux>
+										<scl:jolux scl:lg="fra" scl:name="title">Art. L. 221-1.</scl:jolux>
+										<scl:jolux scl:name="dateApplicability">2018-07-01</scl:jolux>
+										<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Article</scl:rdf>
+									</scl:JOLUXLegalResource>
+								</scl:JOLUXWork>
+								<num>Art. L. 221-1.</num>
+								<alinea>
+									<content>
+										<p>Sans préjudice de dispositions spécifiques des chapitres 2 à 4, le présent chapitre s’applique aux contrats à distance et hors établissement<noteRef href="#note_3_3_0"/>, aux contrats d’utilisation de biens à temps partagé, aux contrats de produits de vacances à long terme, aux contrats de revente et d’échange et aux contrats de crédit à la consommation.</p>
+									</content>
+								</alinea>
+							</article>
+						</chapter>
+						<chapter id="title_i.livre_2.titre_2.chapitre_6">
+							<num>
+								<b>Chapitre 6</b>
+							</num>
+							<heading>
+								<b>Contrats de crédit immobilier</b>
+							</heading>
+							<section id="title_i.livre_2.titre_2.chapitre_6.section_5">
+								<num>
+									<i>Section 5</i>
+								</num>
+								<heading scl:style-format="n">
+									<i>Intermédiaires de crédit immobilier</i>
+								</heading>
+								<subsection id="title_i.livre_2.titre_2.chapitre_6.section_5.sous-section_1re">
+									<num scl:align="center">Sous-section 1<sup>re</sup>
+									</num>
+									<heading scl:align="center"> Agrément des intermédiaires de crédit immobilier</heading>
+									<article id="art_l_226-23">
+										<scl:JOLUXWork>
+											<scl:JOLUXComplexWork>
+												<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/consommation/art_l_226-23</scl:jolux>
+											</scl:JOLUXComplexWork>
+											<scl:JOLUXLegalResource>
+												<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/consommation/art_l_226-23/20210730</scl:jolux>
+												<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/loi/2011/04/08/n2</scl:jolux>
+												<scl:jolux scl:lg="fra" scl:name="title">Art. L. 226-23.</scl:jolux>
+												<scl:jolux scl:name="dateApplicability">2021-07-30</scl:jolux>
+												<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Article</scl:rdf>
+											</scl:JOLUXLegalResource>
+										</scl:JOLUXWork>
+										<scl:indexterms>
+											<scl:indexterm>
+												<scl:label>intermédiaires (crédit immobilier)</scl:label>
+											</scl:indexterm>
+										</scl:indexterms>
+										<num>Art. L. 226-23.</num>
+										<paragraph>
+											<num>(1)</num>
+											<alinea>
+												<content>
+													<p>(<ref href="/eli/etat/leg/loi/2021/07/21/a560/jo">Loi du 21 juillet 2021</ref>) Nul ne peut être établi au Luxembourg comme intermédiaire de crédit et exercer toute ou partie de l’activité d’intermédiaire de crédit immobilier visée à l’article L. 226-1, point 14 ou, sans préjudice des cas visés à l’article L. 226-15, paragraphe 5, fournir des services de conseil, à titre principal ou accessoire, sans être en possession d’un agrément écrit <del>du ministre ayant la Place financière dans ses attributions</del>de la CSSF.</p>
+												</content>
+											</alinea>
+										</paragraph>
+										<paragraph>
+											<num>(2)</num>
+											<alinea>
+												<content>
+													<p>Le paragraphe 1<sup>er</sup> ne s’applique pas aux établissements de crédit autorisés en vertu de la <ref href="/eli/dir_ue/2013/36/jo" id="7e0e2df0-62d1-4aa6-a667-631fff2ab7ae">directive 2013/36/UE</ref> du Parlement européen et du Conseil du 26 juin 2013 concernant l’accès à l’activité des établissements de crédit et la surveillance prudentielle des établissements de crédit et des entreprises d’investissement, modifiant la <ref href="/eli/dir_ue/2002/87/jo" id="96baa3f1-5413-45e8-9032-2c19c9b6a986">directive 2002/87/CE</ref> et abrogeant les <ref href="/eli/dir_ue/2006/48/jo" id="1bc645cc-e206-4236-8218-fa6dd687c160">directives 2006/48/CE</ref> et <ref href="/eli/dir_ue/2006/49/jo" id="53ddd1b8-54b7-482f-9bb2-4484c7284fba">2006/49/CE</ref>, dénommée ci-après « <ref href="/eli/dir_ue/2013/36/jo" id="94b5c212-d2f8-454e-94c4-f9eec63af091">directive 2013/36/UE</ref> », ni aux professionnels effectuant des opérations de prêts visés à l’article 28-4 de la <ref href="/eli/etat/leg/loi/1993/04/05/n1/jo" id="47b0dbb7-e930-4e47-915d-52bc091f6206">loi modifiée du 5 avril 1993</ref> relative au secteur financier, ni aux établissements financiers d’un autre État membre visés à l’article 31 de la <ref href="/eli/etat/leg/loi/1993/04/05/n1/jo" id="b87cec5d-88ed-4a83-af9e-dbd6b93d5911">loi modifiée du 5 avril 1993</ref> relative au secteur financier.</p>
+												</content>
+											</alinea>
+										</paragraph>
+									</article>
+								</subsection>
+							</section>
+						</chapter>
+					</title>
+				</book>
+				<book id="title_i.livre_3">
+					<num>LIVRE 3 </num>
+					<heading scl:style-format="b"> Mise en œuvre du droit de la consommation</heading>
+					<title id="title_i.livre_3.titre_1">
+						<num>Titre 1 </num>
+						<heading scl:style-format="b"> Organes consultatifs et compétents</heading>
+						<chapter id="title_i.livre_3.titre_1.chapitre_1">
+							<num>Chapitre 1 </num>
+							<heading scl:style-format="b"> Autorités compétentes</heading>
+							<article id="art_l_311-2">
+								<scl:JOLUXWork>
+									<scl:JOLUXComplexWork>
+										<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/consommation/art_l_311-2</scl:jolux>
+									</scl:JOLUXComplexWork>
+									<scl:JOLUXLegalResource>
+										<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/code/consommation/art_l_311-2/20180701</scl:jolux>
+										<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/loi/2011/04/08/n2</scl:jolux>
+										<scl:jolux scl:lg="fra" scl:name="title">Art. L. 311-2.</scl:jolux>
+										<scl:jolux scl:name="dateApplicability">2018-07-01</scl:jolux>
+										<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Article</scl:rdf>
+									</scl:JOLUXLegalResource>
+								</scl:JOLUXWork>
+								<scl:indexterms>
+									<scl:indexterm>
+										<scl:label>agent habilité (autorités compétentes)</scl:label>
+									</scl:indexterm>
+									<scl:indexterm>
+										<scl:label>autorités compétentes</scl:label>
+									</scl:indexterm>
+									<scl:indexterm>
+										<scl:label>lois protégeant les intérêts des consommateurs</scl:label>
+									</scl:indexterm>
+								</scl:indexterms>
+								<num>Art. L. 311-2.</num>
+								<alinea>
+									<content>
+										<p>Pour l’application du présent livre, on entend par:</p>
+										<ol scl:start="1" scl:symbol="1)">
+											<li>(<ref href="/eli/etat/leg/loi/2021/11/19/a833/jo">Loi du 19 novembre 2021</ref>) « <ref href="/eli/reg_ue/2017/2394/jo" id="f14184be-9c45-4389-9fdd-3a72afb0db4c">Règlement 2017/2394</ref> », le <ref href="/eli/reg_ue/2017/2394/jo" id="fcacf357-f369-4fd1-854e-f53cbe2da420">règlement (UE) 2017/2394</ref> du Parlement européen et du Conseil du 12 décembre 2017 sur la coopération entre les autorités nationales chargées de veiller à l’application de la législation en matière de protection des consommateurs et abrogeant le <ref href="/eli/reg_ue/2006/2004/jo" id="be5c2015-21f7-4674-905c-9998733530ec">règlement (CE) n° 2006/2004</ref> » ;<del>«<ref href="/eli/reg_ue/2017/2394/jo" id="f8eda858-2e9c-4525-809e-4a042306c999">Règlement 2017/2394</ref>», le <ref href="/eli/reg_ue/2004/2006/jo" id="47045bcd-e5f7-44e5-8994-975527cf44fe">Règlement (CE) N° 2006/2004</ref> du Parlement européen et du Conseil du 27 octobre 2004 relatif à la coopération en matière de protection des consommateurs.</del>
+											</li>
+											<li>«Agent habilité», l’agent d’une autorité compétente désignée comme responsable pour l’application du <ref href="/eli/reg_ue/2017/2394/jo" id="f8eda858-2e9c-4525-809e-4a042306c999">Règlement 2017/2394</ref> ainsi que des titres 1 et 2 du présent livre.</li>
+											<li>(<ref href="/eli/etat/leg/loi/2021/11/19/a833/jo">Loi du 19 novembre 2021</ref>) «Lois protégeant les intérêts des consommateurs», celles définies par l’article 3.1) du <ref href="/eli/reg_ue/2017/2394/jo" id="f8eda858-2e9c-4525-809e-4a042306c999">Règlement 2017/2394</ref>.</li>
+											<li>«<ref href="/eli/reg_ue/2004/261/jo" id="e8bf1b47-813a-47e5-8068-b0b3cd7e576c">Règlement 261/2004</ref>», le <ref href="/eli/reg_ue/2004/261/jo" id="a6ed0f0f-8927-43c6-8f45-ac6e31199443">Règlement (CE) N° 261/2004</ref> du Parlement européen et du Conseil du 11 février 2004 établissant des règles communes en matière d’indemnisation et d’assistance des passagers en cas de refus d’embarquement et d’annulation ou de retard important d’un vol, et abrogeant le <ref href="/eli/reg_ue/1991/295/jo" id="490b6d3f-f6ee-44d4-baf7-cd301d01842c">Règlement (CEE) N° 295/91</ref>.</li>
+										</ol>
+									</content>
+								</alinea>
+							</article>
+						</chapter>
+					</title>
+				</book>
+			</title>
+			<title id="title_ii">
+				<num>II.</num>
+				<heading>CODE - PARTIE RÉGLEMENTAIRE</heading>
+				<section id="title_ii.section_1">
+					<heading>
+						<b>Règlement grand-ducal du 19 mai 2011 portant introduction d’une partie réglementaire au Code de la consommation</b>
+						<noteRef href="#note_6_0_0"/>
+					</heading>
+					<section id="title_ii.section_1.section_viii">
+						<num>
+							<i>Section VIII</i>
+							<noteRef href="#note_7_5_0"/>. </num>
+						<heading scl:style-format="n">
+							<i> Mise en œuvre du droit de la consommation</i>
+						</heading>
+                        <subsection id="title_ii.section_1.section_viii.sous-section_2">
+									<num>Sous-section 2.</num>
+									<heading scl:align="center" scl:style-format="i">Pouvoirs d’enquête</heading>
+									<article id="art_r302-1">
+										<num>
+											<u>Art. R.302-1</u>
+										</num>
+										<alinea>
+											<content>
+												<p>Le procès-verbal visé à l’article L. 311-8, paragraphe 15, contient les mentions suivantes, en ce qui concerne les modalités de consultation et d’utilisation de l’interface en ligne, au sens de l’article 3, point 15), du <ref href="/eli/reg_ue/2017/2394/jo" id="4756be0a-e5e5-4d81-98b6-cbd89cf8a2a6">règlement (UE) 2017/2394</ref> du Parlement européen et du Conseil du 12 décembre 2017 sur la coopération entre les autorités nationales chargées de veiller à l’application de la législation en matière de protection des consommateurs et abrogeant le <ref href="/eli/reg_ue/2006/2004/jo" id="aa6425cc-7cb4-4298-87b1-bef113e075e0">règlement (CE) n° 2006/2004</ref> :</p>
+												<ol xmlns:ns1="http://www.scl.lu" ns1:start="1" ns1:symbol="1°">
+													<li>Les noms, qualité et résidence administrative de l’agent habilité ;</li>
+													<li>L’identité d’emprunt sous laquelle l’agent habilité a conduit le contrôle ;</li>
+													<li>La date et l’heure du contrôle ;</li>
+													<li>Les modalités de connexion à l’interface et de recueil des informations ;</li>
+													<li>Les modalités selon lesquelles les achats-tests ont été réalisés.</li>
+												</ol>
+											</content>
+										</alinea>
+									</article>
+								</subsection>
+                    </section>
+				</section>
+			</title>
+		</body>
+	</act>
+</akomaNtoso>

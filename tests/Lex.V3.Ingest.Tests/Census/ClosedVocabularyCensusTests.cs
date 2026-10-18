@@ -238,7 +238,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "UpstreamNotInventoried, RetainedBytesUnavailable, XmlRejected, "
                     + "ArticleCoordinatesMismatch, UnsupportedContentShape, MarkerOnlyEvidence",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknLegalContentTokenKind: Text, Reference, "
-                    + "ModificationStart, ModificationEnd, NoteReference",
+                    + "ModificationStart, ModificationEnd, NoteReference, QuotationStart, QuotationEnd, DeletedText",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgConsolidationByActRefusal: None, "
                     + "EnumerationRefused, EnumerationProofRefused, VerifiedRowsRefused, "
                     + "RowNotAdmitted, RowNamesAnotherAct, ConsolidationDeliveredTwice",

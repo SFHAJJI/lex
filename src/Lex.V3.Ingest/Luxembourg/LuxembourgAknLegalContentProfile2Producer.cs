@@ -284,7 +284,7 @@ public sealed class LuxembourgAknLegalContentProfile2Producer
     /// One <c>scl:indexterms</c> block: <c>scl:indexterm</c> elements only, white space between them,
     /// no attribute. Each kept term is appended to <paramref name="terms"/> in document order.
     /// </summary>
-    private static bool TryIndexTerms(
+    internal static bool TryIndexTerms(
         XElement block,
         List<LuxembourgAknIndexTerm> terms,
         out string? failure)

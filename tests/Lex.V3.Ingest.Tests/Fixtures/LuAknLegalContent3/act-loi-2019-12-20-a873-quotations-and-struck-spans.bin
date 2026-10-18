@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu">
+	<act contains="originalVersion" name="" scl:page-proof="many">
+		<meta>
+			<identification source="#somebody">
+				<FRBRWork>
+					<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/loi/2019/12/20/a873/jo"/>
+					<FRBRuri value=""/>
+					<FRBRdate date="2019-12-20" name="document"/>
+					<FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MTR"/>
+					<FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MTP"/>
+					<FRBRauthor as="#author" href="http://data.legilux.public.lu/resource/authority/legal-institution/MFI"/>
+					<FRBRcountry value="http://publications.europa.eu/resource/authority/country/LUX"/>
+				</FRBRWork>
+				<FRBRExpression>
+					<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/loi/2019/12/20/a873/jo/fr"/>
+					<FRBRuri value=""/>
+					<FRBRdate date="2019-12-20" name="document"/>
+					<FRBRauthor as="#author" href=""/>
+					<FRBRlanguage language="http://publications.europa.eu/resource/authority/language/FRA"/>
+				</FRBRExpression>
+				<FRBRManifestation>
+					<FRBRthis value="http://data.legilux.public.lu/eli/etat/leg/loi/2019/12/20/a873/jo/fr/xml"/>
+					<FRBRuri value=""/>
+					<FRBRdate date="2019-12-20" name="document"/>
+					<FRBRauthor as="#author" href=""/>
+				</FRBRManifestation>
+				<scl:JOLUXWork>
+					<scl:JOLUXComplexWork>
+						<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2019/12/20/a873</scl:jolux>
+					</scl:JOLUXComplexWork>
+					<scl:JOLUXLegalResource>
+						<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2019/12/20/a873/jo</scl:jolux>
+						<scl:jolux scl:name="publicationDate">2019-12-23</scl:jolux>
+						<scl:jolux scl:name="typeDocument">http://data.legilux.public.lu/resource/authority/resource-type/LOI</scl:jolux>
+						<scl:jolux scl:name="dateDocument">2019-12-20</scl:jolux>
+						<scl:jolux scl:name="dateEntryInForce">2019-12-27</scl:jolux>
+						<scl:jolux scl:name="dateApplicability">2019-12-27</scl:jolux>
+						<scl:jolux scl:name="isMemberOf">http://data.legilux.public.lu/eli/etat/leg/loi/2019/12/20/a873</scl:jolux>
+						<scl:jolux scl:name="isPartOf">http://data.legilux.public.lu/eli/etat/leg/memorial/2019/a873</scl:jolux>
+						<scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MTR</scl:jolux>
+						<scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MTP</scl:jolux>
+						<scl:jolux scl:name="responsibilityOf">http://data.legilux.public.lu/resource/authority/legal-institution/MFI</scl:jolux>
+						<scl:jolux scl:name="subjectLevel1">http://data.legilux.public.lu/resource/authority/legal-subject/977</scl:jolux>
+						<scl:jolux scl:name="subjectLevel2">http://data.legilux.public.lu/resource/authority/legal-subject/538</scl:jolux>
+						<scl:jolux scl:name="modifies">http://data.legilux.public.lu/eli/etat/leg/loi/2015/04/28/n1/jo</scl:jolux>
+						<scl:jolux scl:name="modifies">http://data.legilux.public.lu/eli/etat/leg/loi/2009/12/21/n1/jo</scl:jolux>
+						<scl:jolux scl:name="cites">http://data.legilux.public.lu/eli/etat/leg/loi/1955/02/14/n3/jo</scl:jolux>
+						<scl:jolux scl:name="draft">http://data.legilux.public.lu/eli/etat/projet/pl/10490</scl:jolux>
+						<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#BaseAct</scl:rdf>
+						<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Act</scl:rdf>
+						<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#Work</scl:rdf>
+						<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#LegalResource</scl:rdf>
+						<scl:rdf scl:name="type">http://data.legilux.public.lu/resource/ontology/jolux#NationalLegalResource</scl:rdf>
+					</scl:JOLUXLegalResource>
+				</scl:JOLUXWork>
+				<scl:JOLUXExpression>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2019/12/20/a873/jo/fr</scl:jolux>
+					<scl:jolux scl:name="realizes">http://data.legilux.public.lu/eli/etat/leg/loi/2019/12/20/a873/jo</scl:jolux>
+					<scl:jolux scl:name="language">http://publications.europa.eu/resource/authority/language/FRA</scl:jolux>
+					<scl:jolux scl:lg="fra" scl:name="title">Loi du 20 décembre 2019 modifiant :\n1° la loi du 28 avril 2015 relative au réseau cyclable national et aux raccordements de ce réseau vers les réseaux cyclables communaux ;\n2° la loi du 21 décembre 2009 relative au régime des permissions de voirie.\n</scl:jolux>
+				</scl:JOLUXExpression>
+				<scl:JOLUXManifestation>
+					<scl:jolux scl:name="uriThis">http://data.legilux.public.lu/eli/etat/leg/loi/2019/12/20/a873/jo/fr/xml</scl:jolux>
+					<scl:jolux scl:name="embodies">http://data.legilux.public.lu/eli/etat/leg/loi/2019/12/20/a873/jo/fr</scl:jolux>
+					<scl:jolux scl:name="publishedIn">http://data.legilux.public.lu/eli/etat/leg/memorial/2019/a873/fr/pdf</scl:jolux>
+					<scl:jolux scl:name="memorialPage">1</scl:jolux>
+					<scl:jolux scl:name="memorialSequence">A</scl:jolux>
+					<scl:jolux scl:name="publisher">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+					<scl:jolux scl:lg="fra" scl:name="rights">Copyright : Ministère d’État du Grand-Duché de Luxembourg – Service central de législation</scl:jolux>
+					<scl:jolux scl:name="rightsHolder">http://data.legilux.public.lu/authority/legal-institution/ME</scl:jolux>
+					<scl:jolux scl:name="license">http://creativecommons.org/licenses/by/4.0/</scl:jolux>
+					<scl:jolux scl:name="userFormat">http://data.legilux.public.lu/resource/authority/user-format/xml-akomantoso</scl:jolux>
+					<scl:jolux scl:name="format">http://publications.europa.eu/resource/authority/file-type/XML</scl:jolux>
+					<scl:jolux scl:name="isExemplifiedBy">http://data.legilux.public.lu/file/eli-etat-leg-loi-2019-12-20-a873-jo-fr-xml.xml</scl:jolux>
+				</scl:JOLUXManifestation>
+			</identification>
+			<lifecycle source="#">
+				<eventRef date="2019-12-20" id="e1" source="#ro1" type="generation"/>
+			</lifecycle>
+			<analysis source="#"/>
+			<references source="#">
+				<original href="/eli/etat/leg/loi/2019/12/20/n12/jo" id="ro1" showAs="Original"/>
+			</references>
+		</meta>
+		<preface>
+			<longTitle>
+				<p>Loi du 20 décembre 2019 modifiant :</p>
+				<ol scl:start="1" scl:symbol="1°">
+					<li>la loi du 28 avril 2015 relative au réseau cyclable national et aux raccordements de ce réseau vers les réseaux cyclables communaux ; </li>
+					<li>la loi du 21 décembre 2009 relative au régime des permissions de voirie.</li>
+				</ol>
+			</longTitle>
+		</preface>
+		<preamble>
+			<container name="preamble">
+				<p>Nous Henri, Grand-Duc de Luxembourg, Duc de Nassau,</p>
+				<p>Notre Conseil d’État entendu ;</p>
+				<p>De l’assentiment de la Chambre des Députés ;</p>
+				<p>Vu la décision de la Chambre des Députés du 11 décembre 2019 et celle du Conseil d’État du 20 décembre 2019 portant qu’il n’y a pas lieu à second vote ; </p>
+			</container>
+			<formula name="">
+				<p>Avons ordonné et ordonnons :</p>
+			</formula>
+		</preamble>
+		<body>
+			<chapter id="chapitre_1er">
+				<num>
+					<u>Chapitre 1<sup>er</sup>
+					</u>
+				</num>
+				<heading scl:style-format="n">
+					<u>Modification de la loi du 28 avril 2015 relative au réseau cyclable national et aux raccordements de ce réseau vers les réseaux cyclables communaux</u>
+				</heading>
+				<article id="art_1er">
+					<num>Art. 1<sup>er</sup>.</num>
+					<alinea>
+						<content>
+							<p>À l’article 1<sup>er</sup>, l’alinéa 1<sup>er</sup>, de la <ref href="/eli/etat/leg/loi/2015/04/28/n1/jo" id="2ae0ce16-7bac-4ffb-b551-b85d1f83b0e8">loi du 28 avril 2015</ref> relative au réseau cyclable national et aux raccordements de ce réseau vers les réseaux cyclables communaux, les termes <embeddedText>le plan</embeddedText> sont remplacés par ceux de <embeddedText>les plans</embeddedText>.</p>
+						</content>
+					</alinea>
+				</article>
+				<article id="art_2">
+					<num>Art. 2.</num>
+					<alinea>
+						<content>
+							<p>À l’article 2 de la même loi sont apportées les modifications suivantes :</p>
+							<p>
+								<span class="strike">4.</span> 1. Le point 3 est remplacé comme suit : <embeddedStructure scl:hide-quote="true">
+									<p>« <u>3</u> « Raccordement » : itinéraire cyclable du réseau communal raccordant les agglomérations de la commune ou une partie des agglomérations de la commune à un itinéraire cyclable du réseau national ».</p>
+								</embeddedStructure>
+							</p>
+							<p>2. Le point 4 est remplacé comme suit : <embeddedStructure scl:hide-quote="true">
+									<p>« <u>4</u> « Infrastructures pour cyclistes » : la partie de la voie publique destinée à la circulation des cyclistes, y inclus le cas échéant les équipements techniques ».</p>
+								</embeddedStructure>
+							</p>
+							<p>3. Est ajouté un nouveau point 5 rédigé comme suit : <embeddedStructure scl:hide-quote="true">
+									<p>« <u>5</u> « Liaison cyclable express » : itinéraire cyclable du réseau national présentant une liaison structurante et rapide entre agglomérations ».</p>
+								</embeddedStructure>
+							</p>
+						</content>
+					</alinea>
+				</article>
+				<article id="art_3">
+					<num>Art. 3.</num>
+					<alinea>
+						<content>
+							<p>À l’article 3 de la même loi sont apportées les modifications suivantes :</p>
+							<ol scl:start="1" scl:symbol="1°">
+								<li>À l’alinéa 1<sup>er</sup>, les termes <embeddedText>réseau national</embeddedText> sont remplacés par ceux de <embeddedText>réseau cyclable national</embeddedText> et les termes <embeddedText>voirie nationale</embeddedText> sont remplacés par ceux de <embeddedText>voirie de l’État</embeddedText>.</li>
+								<li>Les alinéas 2 et 3 sont supprimés.</li>
+								<li>L’ancien alinéa 4, devenu alinéa 2, est remplacé comme suit :<embeddedStructure scl:hide-quote="true">
+										<alinea>
+											<content>
+												<p>« Les itinéraires cyclables du réseau national et ses raccordements peuvent comporter des tronçons ouverts à la circulation d’autres usagers de la route que des cyclistes ».</p>
+											</content>
+										</alinea>
+									</embeddedStructure>
+								</li>
+								<li>L’ancien alinéa 5 devient le nouvel alinéa 3.</li>
+							</ol>
+						</content>
+					</alinea>
+				</article>
+				<article id="art_5">
+					<num>Art. 5.</num>
+					<alinea>
+						<content>
+							<p>L’article 5 de la même loi est abrogé.</p>
+						</content>
+					</alinea>
+				</article>
+			</chapter>
+			<chapter id="chapitre_2">
+				<num>
+					<u>Chapitre 2</u>
+				</num>
+				<heading scl:style-format="n">
+					<u>Modification de la loi du 21 décembre 2009 relative au régime des permissions de voirie</u>
+				</heading>
+				<article id="art_13">
+					<num>
+						<eop/>Art. 13.</num>
+					<alinea>
+						<content>
+							<p>À l’article 5 de la même loi sont apportées les modifications suivantes :</p>
+							<p>
+								<span class="strike">3.</span> 1. L’alinéa 1er est remplacé comme suit :<embeddedStructure>
+									<alinea>
+										<content>
+											<p>La permission de voirie est requise lorsque les travaux définis à l’article 3, que ceux-ci aient un caractère définitif ou provisoire, et qu’ils soient faits sur la voie publique, au-dessus ou en dessous, ont lieu sur la voirie normale de l’État ainsi que sur l’infrastructure pour cyclistes des itinéraires cyclables nationaux en service.</p>
+										</content>
+									</alinea>
+								</embeddedStructure>
+							</p>
+							<p>
+								<span class="strike">4.</span> 2. L’alinéa 2 est remplacé comme suit :<embeddedStructure>
+									<alinea>
+										<content>
+											<p>Elle est également requise lorsque les travaux définis à l’article 3 ont lieu à une distance n’excédant pas 10 mètres à compter de l’alignement de la voie publique de la voirie normale de l’État.</p>
+										</content>
+									</alinea>
+								</embeddedStructure>
+							</p>
+						</content>
+					</alinea>
+				</article>
+			</chapter>
+		</body>
+		<conclusions>
+			<p>
+				<signature>
+					<shortTitle> Le Ministre de la Mobilité<br/>et des Travaux publics,</shortTitle>
+					<person refersTo="">François Bausch</person>
+				</signature>
+				<signature>
+					<shortTitle>Le Ministre des Finances,</shortTitle>
+					<person refersTo="">Pierre Gramegna</person>
+				</signature>
+			</p>
+			<p>
+				<signature>
+					<docDate date="2999-01-01">Crans-Montana, le 20 décembre 2019.</docDate>
+					<person refersTo="">Henri</person>
+				</signature>
+			</p>
+		</conclusions>
+		<components>
+			<component>
+				<interstitial>
+					<p>Doc. parl. <ref href="http://legilux.public.lu/eli/etat/projet/pl/10490" id="3b871448-c585-4ad4-bf51-1efb6e9f285a">7371</ref> ; sess. ord. 2017-2018, 2018-2019 et 2019-2020.</p>
+				</interstitial>
+			</component>
+		</components>
+	</act>
+</akomaNtoso>
