@@ -69,6 +69,16 @@ Facts only from what the mount and the server hold; every count is the answer's 
 - **Samples and legacy answers:** the envelope samples re-rendered from the handler (additive members only), then verified
   without the switch. The 38 recorded schema-8 and schema-6 answers all changed, legitimately and only in `context`:
   every envelope gains `commits` and the new `freshness` members; no result, refusal or registry digest moved (below).
+- **Measured** (no browser was started on this machine; this branch on v3/integration 0b908870): `npm run build` in `web`,
+  then a plain `npm test`: 1,282 tests, 1,279 passed, the 3 that start a browser skipped with their reason;
+  `dotnet build Lex.V3.slnx -c Release`, 0 warnings, 0 errors; `Lex.V3.Tests` 3,326, 3,320 passed, 6 skipped (the
+  vocabulary registry census and its partition total, which the first run failed on the new registry, re-run in their
+  class: 30 of 30); in `Lex.V3.Ingest.Tests` the classes the slice touches and those named for it (the Census classes,
+  `PublicRequestRecordingTests`, the answer, envelope and refusal-payload samples, the two legacy classes, freshness, MCP,
+  index 9 serving, generation quotes, the offline mount, first mount build, mount build file and EU resume classes, the
+  machine and mounted gates, journey mounts, coverage) 199, 189 passed, 10 skipped (each by its variable); the samples
+  rendered from the handler and verified without the switch; the legacy answers recorded on Linux and replayed on Windows
+  (11 of 11, 1 skipped by its variable); `eng/verify-v3-tree.ps1` passes (1,652 tracked paths).
 - **Next:** each half's completion in the build report whether resumed or not (data lane); the lag, once observation
   times are carried (1.12) and the refresh runs (Phase 10), with its own reviewed wording; the re-check line (R69) after
   the first monthly re-check; the staleness alert (R107); the context's published schema; R23's remaining fields.
