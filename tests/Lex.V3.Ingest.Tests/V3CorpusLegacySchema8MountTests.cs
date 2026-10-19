@@ -90,7 +90,9 @@ public sealed class V3CorpusLegacySchema8MountTests
     /// again at 34d493d0 (freshness and the commits, plan 6.1 and 6.5, on 0b908870): all 38 rows, in their context alone, which
     /// gained `commits` (both null: no build report, and a test's host names no service commit) and the freshness header's new
     /// members (the schema-8 log's build time, the Luxembourg channel with no completion stated, no lag, no re-check; the
-    /// schema-6 index records no build time); no result, refusal or registry digest moved. The answers are those production sends: recorded on Linux, as the release image
+    /// schema-6 index records no build time); no result, refusal or registry digest moved. Recorded again at 496eeced (the
+    /// owner's maximum data age of 30 days, O11, 2026-10-19): all 38 rows, each by its `maximum_data_age_days` alone, 10 to
+    /// 30. The answers are those production sends: recorded on Linux, as the release image
     /// runs (globalization-invariant, UTC; the language library changes no byte), and every system is held to them. Resolve
     /// of a rooted path was the one answer Windows sent otherwise, until a rooted path was read as an identifier on every
     /// system (<c>LooksLikeIdentifier</c>).
@@ -101,7 +103,7 @@ public sealed class V3CorpusLegacySchema8MountTests
         using var recorded = JsonDocument.Parse(Fixture("base-answers.json"));
         var root = recorded.RootElement;
         Assert.AreEqual("3b7913ec", root.GetProperty("written_at_commit").GetString());
-        Assert.AreEqual("34d493d0", root.GetProperty("recorded_at_commit").GetString());
+        Assert.AreEqual("496eeced", root.GetProperty("recorded_at_commit").GetString());
         Assert.AreEqual(IndexFileSha256, root.GetProperty("index_sha256").GetString());
         Assert.AreEqual(StateSha256, root.GetProperty("state_sha256").GetString());
 
