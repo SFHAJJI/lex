@@ -77,12 +77,15 @@ const ISO = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
 /**
  * A render without the publisher's own words: its quotations (an article quoted whole, and a search result's extract, the
  * plan's item 4.3) and whatever is marked in its statute language. Those are the law's text, whose dates are the law's to
- * write; the rule is about the dates the interface states.
+ * write; the rule is about the dates the interface states. The EU authenticity statement is left out too: it states the
+ * law's rule in the owner's words (the owner's decision of 2026-10-18, O4), and "before 1 July 2013" is the day Regulation
+ * (EU) No 216/2013 applies from, not a date the interface states.
  */
 const withoutQuotations = (markup) => markup
   .replace(/<blockquote[\s\S]*?<\/blockquote>/g, "")
   .replace(/<q(?:\s[^>]*)?>[\s\S]*?<\/q>/g, "")
-  .replace(/<span lang="[^"]*">[\s\S]*?<\/span>/g, "");
+  .replace(/<span lang="[^"]*">[\s\S]*?<\/span>/g, "")
+  .replace(/<p data-authenticity=""[^>]*>[\s\S]*?<\/p>/g, "");
 
 test("every date a live screen shows is an explicit calendar date, never relative and never a local format", async () => {
   const texts = [...(await renders()).map((one) => [`${one.name}: ${one.scenario}`, textOf(withoutQuotations(one.markup))]),
