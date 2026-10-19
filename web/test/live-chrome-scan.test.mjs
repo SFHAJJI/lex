@@ -31,7 +31,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
 import { europeEnvelope } from "../scripts/europe-bundle-sample.mjs";
-import { ACCESSIBILITY_LAW, CNPD_SITE, EURLEX_ACKNOWLEDGEMENT, PUBLISHER_PLACEHOLDERS } from "../scripts/legal-pages.mjs";
+import { ACCESSIBILITY_LAW, EURLEX_ACKNOWLEDGEMENT } from "../scripts/legal-pages.mjs";
 
 const require = createRequire(import.meta.url);
 const { createElement: h } = require("react");
@@ -121,15 +121,15 @@ async function frenchPseudoBuild() {
 }
 
 /**
- * The legal pages (the plan's item 7.1) and the data they print that no table holds: the publisher's details (each its
- * placeholder until the owner fills it), the CNPD's site, the EU texts' acknowledgement (the platform's English) and the
- * accessibility law's French title.
+ * The legal pages (the plan's item 7.1) and the data they print that no table holds: the EU texts' acknowledgement (the
+ * platform's English) and the accessibility law's French title. They name no person and print no contact (the owner's
+ * decision of 2026-10-19).
  */
 const legalPages = (app) => ({
   legalNotice: app.renderLiveLegalNoticePage, privacy: app.renderLivePrivacyPage, terms: app.renderLiveTermsPage,
   accessibility: app.renderLiveAccessibilityPage, cookies: app.renderLiveCookiesPage,
 });
-const LEGAL_DATA = [...Object.values(PUBLISHER_PLACEHOLDERS), CNPD_SITE.text, EURLEX_ACKNOWLEDGEMENT, ACCESSIBILITY_LAW];
+const LEGAL_DATA = [EURLEX_ACKNOWLEDGEMENT, ACCESSIBILITY_LAW];
 const dataOfPage = (name, app) => (name === "coverage" ? dataOf(withoutVerdicts(app.CENSUS_EVALUATION_CARD))
   : Object.hasOwn(legalPages(app), name) ? dataOf(LEGAL_DATA) : []);
 

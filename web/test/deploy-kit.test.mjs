@@ -182,7 +182,8 @@ test("the opening removes every address rule, reads back that ingress admits eve
   assert.match(calls, /node --import file:\/\/\/\S+browser-trap\.mjs \S+deploy-probe\.mjs --opening --origin https:\/\/ca-lex-v3\.example\.azurecontainerapps\.io/);
   assert.ok(calls.indexOf("--opening") < calls.indexOf("access-restriction list"), `the check runs before the rules are touched: ${calls}`);
 
-  // A legal page that still says a placeholder, or cannot be read: the check fails, and the site stays private.
+  // A legal page that shows an e-mail address, a contact link, a placeholder or a postcode, or cannot be read: the check
+  // fails, and the site stays private.
   const unready = pwsh(stub, { OPENING_EXIT: "1" });
   assert.match(unready.out, /RESULT:threw The legal pages ca-lex-v3 serves are not ready to publish \(above\); nothing was removed, and the site stays private/);
   assert.match(unready.out, /REMOVED:0/);
