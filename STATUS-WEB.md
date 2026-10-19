@@ -1,8 +1,65 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-18. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-19. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## Four web slices in one pull request, and the owner's decisions of 19 October (sole driver, 2026-10-19)
+
+The owner's order of 2026-10-19: "big bang" pull requests to finish V3 today, without sacrificing quality. Four finished
+web slices, each reviewed for French, tested alone and rebased on `v3/integration` at 0b908870, are merged with `--no-ff`
+into `writer/web-bigbang`, in this order: today in Luxembourg and the search after "#" (plan 3.4, 3.5), the five legal
+pages (7.1), the EU authenticity statement by the act's date (the owner's decision of 2026-10-18), and freshness and the
+commits (6.1, 6.5). Each slice's own section follows, newest first. Then three decisions the owner made on 2026-10-19
+("do what you recommend", relayed by the coordinator), one commit each.
+- **Conflicts, each resolved by keeping both sides' behaviour; no test dropped:**
+  - `STATUS-WEB.md`: every top section kept, newest first.
+  - `site-paths.json`: the `about` names both the `file` member (the legal pages) and a readable address's `date=` (3.4).
+    Every row of both sides is kept: 158 = 137 + 11 + 10, none twice. The table is written by hand; no script generates it.
+  - `live-chrome-fr.mjs`'s header: the four reviewed-forms paragraphs.
+  - `Document.jsx`: the footer lists the legal pages, then the freshness strip, last. `Document` takes `localePage` and
+    `freshness`; the header keeps `localePage`, and the staleness banner stands under it.
+  - `styles.css`: both rule sets. `live-chrome.test.mjs`: `freshness` and `legal` are both shared sections.
+  - `deploy-probe.mjs`: the candidate's probe takes `promotion` and `opening`; the command line reads `--opening` and
+    `--promotion-check`. `deploy.ps1` runs the candidate's probe with `@openingArgs --promotion-check`, planned and applied:
+    a `-Public` candidate whose legal page still says a placeholder fails (exit 1, deactivated); one whose data is too old
+    stays without promotion (exit 3). `deploy-kit.test.mjs` holds both.
+- **What the combination moved, and the fix:** the envelope census's sample of an EU act dated 2013-06-26 (the EU slice's)
+  gained the freshness header and the commits (rendered from the handler, verified without the switch; nothing else
+  moved). `no-browser-probes.test.mjs` reads the planned probe line with a private copy's empty `--opening`. The legacy
+  answers did not move with the four (the other three slices add no member to a Luxembourg answer). The census holds 86
+  registries. A legal page carries the footer's freshness strip as built (it ships no script and is served as its file).
+- **The journeys** (CI's; none run here): no expectation needed a change. They walk no legal page; the staleness banner
+  stands outside `main`, where the first-screen check looks; the fixture mounts state no completed collection, so they show
+  no banner; the footer's new links and strip come after every control a step reaches.
+- **The owner's decisions of 2026-10-19:**
+  - **O11, the maximum data age: 30 days** (option A; `V3Freshness.MaximumDataAgeDays`, which held the specification's 10
+    as a driver decision). Every answer states it; the pages, the banner and promotion's data-age check read it from the
+    answer, and no form names a figure. Over derive-c (Luxembourg collected 2026-10-12T18:17:04Z, the EU
+    2026-10-05T03:50:08Z), no page shows the banner today and promotion's data-age check allows a release, until the EU
+    half passes 30 days on 2026-11-04 at 03:50 UTC (Luxembourg's on 2026-11-11). Tests: the boundary is 30 days exactly
+    and a second more; the mounted context's EU channel is 37 days old; a bound report 32 days old is stale; the web's
+    population fixture answers on 2026-11-06 (EU 32 days, stale; Luxembourg 24, not). The envelope census rendered again
+    (46 envelopes, `maximum_data_age_days` 10 to 30, nothing else). The 38 legacy schema-8 and schema-6 answers recorded
+    again on Linux at 496eeced (WSL Ubuntu 24.04, .NET SDK 10.0.400, invariant globalization, UTC, the gated recorder): a
+    script checked each body moved by its maximum alone and equals the recording; Windows replays the same bytes.
+  - **E-mails kept 12 months** once their matter is closed (`reportRetentionMonths: "12"`, the driver's recommendation). The
+    privacy notice says "12 months" and "12 mois". The publisher's name, postal address and contact e-mail stay
+    placeholders: only the owner can give them, and the opening refuses the pages until they are filled.
+  - **The accessibility status: non-conformant** until an audit, the French review's recommendation (entry 13 of the
+    addendum of 2026-10-18), in place of R62's "partially conformant". The English and the French are entry 13's, word
+    for word, so no sentence is new; the WCAG 2.2 AA target and "not audited" stay. The review record has the driver's note.
+- **Measured** (no browser was started on this machine; at 9c65c68a, the code of this pull request): `npm run build` in
+  `web`, then a plain `npm test`: 1,313 tests, 1,310 passed, the 3 that start a browser skipped with their reason;
+  `dotnet build Lex.V3.slnx -c Release`, 0 warnings, 0 errors; `Lex.V3.Tests`, whole, 3,327, 3,321 passed, 6 skipped; in
+  `Lex.V3.Ingest.Tests` the classes the four slices and the decisions touch (the Census classes,
+  `PublicRequestRecordingTests`, the answer, envelope and refusal-payload samples, the legacy schema-8 and schema-6
+  classes, freshness, the EU authenticity, time view and branch, evidence bundle and permalink classes, MCP) 123, 120
+  passed, 3 skipped (each by its variable: a real mount's build report, the legacy recorder, a named mount);
+  `eng/verify-v3-tree.ps1` passes (1,663 tracked paths). The EU time view's
+  `EuAsOfAnswersTheWordingOfTheDateAndNeverADateBeforeTheHistory` failed once while three suites ran at once on a shared
+  machine (a fixture acquisition's observation not executed); alone it passed 6 of 6, and every later run passed it.
+- **Waits on the owner:** the publisher's name, postal address and contact e-mail (`web/scripts/legal-publisher.mjs`).
 
 ## Freshness on every page and in every answer, and the commits behind it (sole driver, 2026-10-18)
 
@@ -11,7 +68,7 @@ commits, labelled 'index built from' and 'service running'"), to the specificati
 Facts only from what the mount and the server hold; every count is the answer's (R11).
 - **Every answer** (REST and MCP alike, from the one host): the envelope's `context.freshness` keeps `observed_at` and
   `upstream_health` and gains `index_built_at` (the mounted Luxembourg log's newest build; null when it records none, an
-  EU index records none), `maximum_data_age_days` (10), `stale`, `channels` and `last_checked_against_publisher`. Each
+  EU index records none), `maximum_data_age_days` (10; 30 since the owner's decision of 2026-10-19, above), `stale`, `channels` and `last_checked_against_publisher`. Each
   channel, one per publisher whose index is mounted, Luxembourg first, names `newest_completed_observation` (when its
   newest acquisition completed, its catalog retained, as the mount's `build-report.json` states it for a half acquired
   across an interruption, `resumption.{half}.catalogedAt`, read down to the second; null when nothing states it),
@@ -43,6 +100,7 @@ Facts only from what the mount and the server hold; every count is the answer's 
   Luxembourg collected 2026-10-12T18:17:04Z, the EU 2026-10-05T03:50:08Z, the index built 2026-10-12T18:17:05Z, and no
   index commit recorded. So on 2026-10-19 every page says Luxembourg 6 full days, the EU 14, shows the EU banner, says
   "Index built from (not recorded)", and **promotion refuses any release over derive-c**: its EU data is past the maximum.
+  (With the owner's 30 days of 2026-10-19, above: no banner and no refusal until the EU half passes 30 days, 2026-11-04.)
   The private copy's live revision is untouched. The ways forward are an EU refresh (publisher traffic, the owner's per-run
   authorisation) or the owner's own maximum for O11.
 - **French** (Decision 41): 15 forms reviewed by an independent reviewer (Claude, AI reviewer, not the author) in the
@@ -51,7 +109,8 @@ Facts only from what the mount and the server hold; every count is the answer's 
   further apart, so it is said before the server's answer; the commit labels are terms ("Révision du code ayant construit
   l'index"), the lag "le décalage entre publication et collecte". The forms are named in `live-chrome-fr.mjs`'s header.
 - **Driver decisions (reversible):**
-  - The declared maximum data age is 10 days, O11's recommended answer, until the owner answers O11
+  - **Superseded on 2026-10-19** (the owner answered O11: 30 days, above). The declared maximum data age is 10 days, O11's
+    recommended answer, until the owner answers O11
     (`V3Freshness.MaximumDataAgeDays`; every answer states it, so the pages never print a figure of their own).
   - A channel's completion is only the catalog time the build report states; a half acquired in one window is "not
     recorded" rather than dated by the index's build time, which bounds the Luxembourg half and says nothing of an EU half
@@ -193,7 +252,7 @@ deployment supports, every detail only the owner can give a marked placeholder i
   - `contactEmail`, «CONTACT_EMAIL»: one dedicated contact address (O5), the pages' only contact for the publisher, errors,
     barriers, privacy requests and objections;
   - `reportRetentionMonths`, «REPORT_RETENTION_MONTHS»: how many months an e-mail is kept once its matter is closed (GDPR art.
-    13(2)(a); R74's "stated short period"; the driver recommends 12).
+    13(2)(a); R74's "stated short period"; the driver recommends 12; **the owner decided 12 on 2026-10-19**, above).
   A detail still unfilled is printed as its placeholder, marked `data-legal-placeholder`; one filled in a form the pages cannot
   print (an e-mail that is none, a retention that is no whole number of months from 1 to 99, a stray space or line break, an
   unknown field) stops the build (`malformedPublisherFailures`, `build-live.mjs`).
@@ -234,7 +293,8 @@ deployment supports, every detail only the owner can give a marked placeholder i
   the EU acknowledgement quoted in English, as the texts carry it (`{eurlexAcknowledgement}`, marked `lang="en"` on the French
   page); "le texte cité" for a quotation, "citation" for the reference; "Veuillez ne faire figurer"; "fournisseur de
   messagerie"; no "servir"; no comma before a list's closing "et". Its script's 2,249 checks pass on the forms as shipped.
-  - **For the owner (a public claim)**: the review recommends declaring the accessibility status "non-conformant" until an
+  - **For the owner (a public claim; decided on 2026-10-19: non-conformant, above)**: the review recommends declaring the
+    accessibility status "non-conformant" until an
     audit, as the Luxembourg State's statement generator (accessibilite.public.lu) declares an unaudited public-sector site.
     The page keeps R62's "partially conformant" (O5's recommended answer; a self-assessment with its known non-conformities
     listed) until the owner chooses; the other wording is one entry in each table (`accessibility.sections.status.text`).
