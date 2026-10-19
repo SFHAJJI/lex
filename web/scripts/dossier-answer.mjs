@@ -27,7 +27,85 @@ import { isCalendarDate } from './temporal.mjs';
 import { europePermalink, luxembourgPermalink } from './permalinks.mjs';
 import { readAnnexesNotServed } from './europe-annexes.mjs';
 import { readAsPublished } from './as-published.mjs';
-import { readDateFacts } from './date-role.mjs';
+import { readCatalogueFacts, readDateFacts } from './date-role.mjs';
+
+/** The text statuses a version of the catalogue held without text names (index 9's `text_status`, S7a). */
+export const TEXTLESS_STATUSES = Object.freeze([
+  'withheld_rights', 'not_available_pdf', 'not_available_derivation', 'not_available_misfiled', 'not_acquired',
+]);
+
+/**
+ * The publisher catalogue's chain of a work on lex-v3-luxembourg-index/9 (S7b; the platform's `catalogue_chain_rule`), or
+ * null on an answer that names none (an index of schema 8 or 6): each version of the catalogue whose text is not held (its
+ * kind, its date's role, why, and its permalink or, when the catalogue names no expression of it, its stable coordinate),
+ * then the chain's gaps, overlaps, same-date groups, unclear end days and invalid intervals. Each date is a calendar date and
+ * each span runs forward; a version listed here is never one of the held states.
+ */
+function readCatalogueChain(answer, workKey, heldDigests) {
+  if (!Object.hasOwn(answer, 'catalogue_chain_rule')) return null;
+  const where = 'the catalogue chain';
+  const span = (entry, at) => {
+    const from = requireDate(requireOwn(entry, 'from', at), `${at}.from`);
+    const to = requireDate(requireOwn(entry, 'to', at), `${at}.to`);
+    if (to <= from) throw new Error(`${at} runs from ${from} to ${to}`);
+    return { from, to };
+  };
+  const textless = Object.freeze(requireList(requireOwn(answer, 'textless_states', where), 'textless_states').map((row, index) => {
+    const at = `textless_states[${index}]`;
+    const applicabilityDate = requireDate(requireOwn(row, 'applicability_date', at), `${at}.applicability_date`);
+    const stateSha256 = requireDigest(requireOwn(row, 'state_sha256', at), `${at}.state_sha256`);
+    if (heldDigests.has(stateSha256)) throw new Error(`${at} is a held state, listed as held without text`);
+    const textStatus = requireOwn(row, 'text_status', at);
+    if (!TEXTLESS_STATUSES.includes(textStatus)) {
+      throw new Error(`${at} is held without text for ${JSON.stringify(textStatus)}; a version without text is ${TEXTLESS_STATUSES.join(', ')}`);
+    }
+    const coordinate = requireText(requireOwn(row, 'stable_coordinate', at), `${at}.stable_coordinate`);
+    if (coordinate !== `/lu-legilux/${workKey}/${applicabilityDate}`) throw new Error(`${at}'s stable coordinate ${coordinate} does not name its work and date`);
+    const language = requireOwn(row, 'language', at);
+    const permalink = requireOwn(row, 'permalink', at);
+    if ((language === null) !== (permalink === null)) throw new Error(`${at} has a permalink exactly when it names its expression's language`);
+    if (permalink !== null && permalink !== luxembourgPermalink({ workKey, date: applicabilityDate, stateSha256, language: requireText(language, `${at}.language`) })) {
+      throw new Error(`${at}'s permalink ${permalink} does not pin its coordinate, digest and language`);
+    }
+    const facts = readCatalogueFacts(row, applicabilityDate, at);
+    if (facts.stateKind === null) throw new Error(`${at} names no state_kind`);
+    return Object.freeze({ applicabilityDate, stateSha256, language, permalink, stableCoordinate: coordinate, textStatus, ...facts });
+  }));
+  const gaps = Object.freeze(requireList(requireOwn(answer, 'gaps', where), 'gaps').map((entry, index) => Object.freeze(span(entry, `gaps[${index}]`))));
+  const overlaps = Object.freeze(requireList(requireOwn(answer, 'overlaps', where), 'overlaps').map((entry, index) => {
+    const at = `overlaps[${index}]`;
+    const states = requireList(requireOwn(entry, 'state_sha256s', at), `${at}.state_sha256s`);
+    if (states.length !== 2) throw new Error(`${at} names ${states.length} states; an overlap is two states' span`);
+    return Object.freeze({ ...span(entry, at), count: states.length });
+  }));
+  const sameDate = Object.freeze(requireList(requireOwn(answer, 'same_date', where), 'same_date').map((entry, index) => {
+    const at = `same_date[${index}]`;
+    const states = requireList(requireOwn(entry, 'state_sha256s', at), `${at}.state_sha256s`);
+    if (states.length < 2) throw new Error(`${at} groups ${states.length} state; a same-date group is two states or more`);
+    states.forEach((digest, position) => requireDigest(digest, `${at}.state_sha256s[${position}]`));
+    return Object.freeze({ date: requireDate(requireOwn(entry, 'applicability_date', at), `${at}.applicability_date`), count: states.length });
+  }));
+  const unclearEndDays = Object.freeze(requireList(requireOwn(answer, 'unclear_end_days', where), 'unclear_end_days').map((entry, index) =>
+    Object.freeze({ date: requireDate(requireOwn(entry, 'date', `unclear_end_days[${index}]`), `unclear_end_days[${index}].date`) })));
+  const invalidIntervals = Object.freeze(requireList(requireOwn(answer, 'invalid_intervals', where), 'invalid_intervals').map((entry, index) => {
+    const at = `invalid_intervals[${index}]`;
+    const date = requireDate(requireOwn(entry, 'applicability_date', at), `${at}.applicability_date`);
+    const to = requireDate(requireOwn(entry, 'applicable_to', at), `${at}.applicable_to`);
+    if (to > date) throw new Error(`${at} ends on ${to}, after its start ${date}; an invalid interval ends on or before it`);
+    return Object.freeze({ date, to });
+  }));
+  // Every transition is read for its shape, so a kind the chain does not name is refused rather than dropped.
+  const kinds = ['same_date', 'contiguous', 'derived', 'inclusive_suspected', 'hole', 'overlap', 'invalid'];
+  requireList(requireOwn(answer, 'transitions', where), 'transitions').forEach((entry, index) => {
+    if (!kinds.includes(requireOwn(entry, 'kind', `transitions[${index}]`))) {
+      throw new Error(`transitions[${index}] is of the kind ${JSON.stringify(entry.kind)}; a transition is ${kinds.join(', ')}`);
+    }
+  });
+  return Object.freeze({
+    textless, gaps, overlaps, sameDate, unclearEndDays, invalidIntervals,
+    rule: requireText(requireOwn(answer, 'catalogue_chain_rule', where), 'catalogue_chain_rule'),
+  });
+}
 
 const DIGEST = /^[0-9a-f]{64}$/;
 
@@ -229,6 +307,8 @@ export function readDossier(answer) {
     notHeld,
     // An act held only as first published says so (the plan's item 0.6): `as-published.mjs` reads it, or null.
     asPublished: readAsPublished(answer, { states, workIri, notHeld }),
+    // Index 9's catalogue chain (S7b), or null on an index of schema 8 or 6.
+    chain: readCatalogueChain(answer, workKey, seen),
     scope: requireText(requireOwn(answer, 'scope', where), 'scope'),
     articlesNotAdmittedNote: requireText(requireOwn(answer, 'articles_not_admitted_note', where), 'articles_not_admitted_note'),
     corpusSha256: requireDigest(requireOwn(answer, 'corpus_sha256', where), 'corpus_sha256'),

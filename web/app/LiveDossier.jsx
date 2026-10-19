@@ -22,10 +22,11 @@ import { RefusalCard } from './RefusalCard.jsx';
 import { DOSSIER_LANGUAGES, LIVE_DOSSIER_IDLE, createDossierSession, dossierOutcome } from '../scripts/live-dossier.mjs';
 import { AsPublished, EuropeAnnexes, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, TableRegion, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
-import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
+import { ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { parseSitePath } from '../scripts/permalinks.mjs';
 import { answerHandedWith } from '../scripts/v3-client.mjs';
 import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
+import { fillCard, versionNameKey } from '../scripts/refusal-card.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -75,6 +76,79 @@ export function DossierTitles({ titles }) {
   );
 }
 
+/**
+ * The span of a dossier's states, said with the first state's role (R21, S7b): an act as published dated by its entry into
+ * force is said as that, alone, or as the first of a span whose latest applies from its date; any other span as before.
+ */
+function StatesSpan({ view }) {
+  const first = view.states[0];
+  const latest = view.states[view.states.length - 1];
+  const count = view.stateCount;
+  const from = view.historyBegins;
+  const to = view.latestApplicabilityDate;
+  const language = view.language;
+  if (!datedByEntryIntoForce(first)) {
+    return language === null
+      ? <Say template={countedEntry(COPY.states, count)} values={{ count, from, to }} />
+      : <Say template={countedEntry(COPY.statesIn, count)} values={{ count, language, from, to }} />;
+  }
+  // Every state an act as published dated by its entry into force: one per language, all on its one date.
+  if (datedByEntryIntoForce(latest)) {
+    return language === null
+      ? <Say template={countedEntry(COPY.statesEntryIntoForce, count)} values={{ count, from }} />
+      : <Say template={COPY.statesInEntryIntoForce} values={{ count, language, from }} />;
+  }
+  return language === null
+    ? <Say template={COPY.statesFromEntryIntoForce} values={{ count, from, to }} />
+    : <Say template={COPY.statesInFromEntryIntoForce} values={{ count, language, from, to }} />;
+}
+
+/**
+ * The publisher's catalogue between the held versions (index 9's chain, S7b; its page S7c): the versions it lists whose text
+ * this site does not hold, each named as the refusal card names it and why, with its own link (its permalink refuses for its
+ * text) or its coordinate; then its gaps, overlaps, same-date groups, unclear end days and invalid intervals, in the page's
+ * words with the answer's dates, and that a gap in the catalogue is not one in the law. Nothing on an index of schema 8 or 6.
+ */
+function CatalogueChain({ chain }) {
+  if (chain === null) return null;
+  const card = liveChrome().refusalCard;
+  const lines = [
+    ...chain.gaps.map((gap) => ['gap', fillText(COPY.gap, gap)]),
+    ...chain.overlaps.map((overlap) => ['overlap', fillText(COPY.overlap, { from: overlap.from, to: overlap.to })]),
+    ...chain.sameDate.map((group) => ['same-date', fillText(COPY.sameDate, group)]),
+    ...chain.unclearEndDays.map((day) => ['unclear-end-day', fillText(COPY.unclearEndDay, day)]),
+    ...chain.invalidIntervals.map((interval) => ['invalid-interval', fillText(COPY.invalidInterval, interval)]),
+  ];
+  if (chain.textless.length === 0 && lines.length === 0) return null;
+  return (
+    <section data-catalogue-chain="">
+      <h3>{COPY.chainHeading}</h3>
+      {chain.textless.length > 0 ? (
+        <>
+          <h4>{COPY.textlessHeading}</h4>
+          <ul data-textless={chain.textless.length}>
+            {chain.textless.map((row) => {
+              const version = fillCard(card.versions[versionNameKey(row.stateKind, row.dateRole)], { date: row.applicabilityDate });
+              return (
+                <li key={row.stateSha256} data-text-status={row.textStatus}>
+                  {fillText(COPY.textlessRow, { version, why: card.textNotHeld[row.textStatus] })}{' '}
+                  {row.permalink === null ? <code>{row.stableCoordinate}</code> : <Permalink value={row.permalink} />}
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      ) : null}
+      {lines.length > 0 ? (
+        <ul data-chain={lines.length}>
+          {lines.map(([kind, text], index) => <li key={`${kind}.${index}`} data-chain-kind={kind}>{text}</li>)}
+        </ul>
+      ) : null}
+      <p>{COPY.chainNote}</p>
+    </section>
+  );
+}
+
 /** One dossier view, laid out: the work, its titles, its held states and what it does not hold. */
 export function DossierView({ view }) {
   return (
@@ -86,11 +160,7 @@ export function DossierView({ view }) {
       <DossierTitles titles={view.titles} />
       <AsPublished asPublished={view.asPublished} />
       <p data-history="" id="dossier-states">
-        {view.language === null ? (
-          <Say template={countedEntry(COPY.states, view.stateCount)} values={{ count: view.stateCount, from: view.historyBegins, to: view.latestApplicabilityDate }} />
-        ) : (
-          <Say template={countedEntry(COPY.statesIn, view.stateCount)} values={{ count: view.stateCount, language: view.language, from: view.historyBegins, to: view.latestApplicabilityDate }} />
-        )}
+        <StatesSpan view={view} />
       </p>
       <TableRegion labelledBy="dossier-states">
       <table>
@@ -121,6 +191,7 @@ export function DossierView({ view }) {
       </table>
       </TableRegion>
       {view.states.some(datedByEntryIntoForce) ? <p data-entry-into-force-note="">{COPY.entryIntoForceNote}</p> : null}
+      <CatalogueChain chain={view.chain} />
       <p lang={ENGLISH_LANG}>{asSentence(view.articlesNotAdmittedNote)}</p>
       <h3>{COPY.notHeldHeading}</h3>
       <ul data-not-held={view.notHeld.length}>

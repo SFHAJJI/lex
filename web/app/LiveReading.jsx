@@ -326,22 +326,28 @@ export function VersionCaveats({ state }) {
   );
 }
 
+/**
+ * A Luxembourg state's heading, by its date's role: a state dated by its entry into force is never said as applying from it
+ * (R21, `date-role.mjs`). Shared with the export's pins and the cited article's source (S7b: both still said "the state
+ * applying from" of every state, which the per-role speech test found).
+ */
+export function StateHeadingWords({ state, workKey }) {
+  const values = { work: workKey, language: state.language, from: state.applicabilityDate };
+  if (datedByEntryIntoForce(state)) {
+    return state.nextApplicabilityDate === null
+      ? <Say template={COPY.stateHeadingEntryIntoForce} values={values} />
+      : <Say template={COPY.stateHeadingEntryIntoForceNext} values={{ ...values, next: state.nextApplicabilityDate }} />;
+  }
+  return state.nextApplicabilityDate === null
+    ? <Say template={COPY.stateHeading} values={values} />
+    : <Say template={COPY.stateHeadingNext} values={{ ...values, next: state.nextApplicabilityDate }} />;
+}
+
 function StateReading({ state, workKey, paging = null, onNext = null, readable = null }) {
   return (
     <section data-state={state.stateSha256}>
       <h2 data-date-role={state.dateRole ?? undefined}>
-        {/* A state dated by its entry into force is never said as applying from it (R21, `date-role.mjs`). */}
-        {datedByEntryIntoForce(state) ? (
-          state.nextApplicabilityDate === null ? (
-            <Say template={COPY.stateHeadingEntryIntoForce} values={{ work: workKey, language: state.language, from: state.applicabilityDate }} />
-          ) : (
-            <Say template={COPY.stateHeadingEntryIntoForceNext} values={{ work: workKey, language: state.language, from: state.applicabilityDate, next: state.nextApplicabilityDate }} />
-          )
-        ) : state.nextApplicabilityDate === null ? (
-          <Say template={COPY.stateHeading} values={{ work: workKey, language: state.language, from: state.applicabilityDate }} />
-        ) : (
-          <Say template={COPY.stateHeadingNext} values={{ work: workKey, language: state.language, from: state.applicabilityDate, next: state.nextApplicabilityDate }} />
-        )}
+        <StateHeadingWords state={state} workKey={workKey} />
       </h2>
       <p>
         <Permalink value={state.permalink} />

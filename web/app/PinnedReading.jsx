@@ -26,7 +26,7 @@
 // from above), so the sentence would state a date Lex does not hold (STATUS-WEB.md, driver decisions).
 
 import { Permalink, Say } from './LiveAnswer.jsx';
-import { ArticleText, EuropeWordingHeading, QuoteEvidence } from './LiveReading.jsx';
+import { ArticleText, EuropeWordingHeading, QuoteEvidence, StateHeadingWords } from './LiveReading.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { CHROME_LOCALE, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { anchorText, currentAddress, permalinkHref } from '../scripts/permalinks.mjs';
@@ -70,9 +70,7 @@ export function citedTitle(outcome, pin) {
 /** The heading of the version an article is quoted from, as the reading heads it. */
 function VersionHeading({ view, version }) {
   if (view.publisher === 'eu-eurlex') return <EuropeWordingHeading wording={version} celex={view.celex} />;
-  return version.nextApplicabilityDate === null
-    ? <Say template={COPY.stateHeading} values={{ work: view.workKey, language: version.language, from: version.applicabilityDate }} />
-    : <Say template={COPY.stateHeadingNext} values={{ work: view.workKey, language: version.language, from: version.applicabilityDate, next: version.nextApplicabilityDate }} />;
+  return <StateHeadingWords state={version} workKey={view.workKey} />;
 }
 
 /**

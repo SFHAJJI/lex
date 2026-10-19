@@ -20,10 +20,18 @@
 // The platform's own sentences are data here, as in the chrome scan: an EU answer says, in its own
 // words, that its date is never merged with a Luxembourg applicability date, and that sentence
 // naming the other kind is the promise kept, not broken.
+//
+// And per date role (slice S7b; R21: "entry into force and application come only from typed publisher dates, spoken as
+// separate values"): on lex-v3-luxembourg-index/9 an act its file does not date is dated by its entry into force, and no
+// screen says that date as an application, in English or in French. Every census Luxembourg answer is said again with its
+// first state so dated, as index 9 dates an act as published (only an act as published is, and it is a work's first state),
+// and no application word stands right before that date in what the screen says or a screen reader hears.
 
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
+import { build } from "esbuild";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -285,4 +293,115 @@ test("the speech test fails a screen that borrows the other publisher's date wor
   const borrowed = markup.replaceAll(", wording of ", ", version of ");
   assert.notEqual(borrowed, markup, "the EU hit row says 'wording of'");
   assert.match(interfaceText(borrowed, envelope), LUXEMBOURG_DATE_WORDS, "an EU hit called a version is caught");
+});
+
+/**
+ * The words of an application said right before a date, in English and in French: what R21 never says of an entry into
+ * force. "applies from" of the next state held is said of that state's own date, which is another date.
+ */
+const APPLICATION_BEFORE = /(?:appl(?:y|ies|ying|icable)(?: (?:from|on|to))?|s[’']appliqu\p{L}*(?: à partir)?(?: du| au| le)?|applicables? (?:à partir )?(?:du|au|le|jusqu[’']au))\s*$/iu;
+
+/** Where a screen says an application word right before a date: each such place, with the words before it. */
+function applicationSaidOf(markup, date) {
+  const plain = decode(markup.replace(/<!--.*?-->/g, "").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ");
+  const found = [];
+  for (let at = plain.indexOf(date); at !== -1; at = plain.indexOf(date, at + 1)) {
+    const before = plain.slice(Math.max(0, at - 48), at);
+    if (APPLICATION_BEFORE.test(before)) found.push(`…${before}${date}`);
+  }
+  return found;
+}
+
+/** The first state of a census Luxembourg answer dated by its entry into force, as index 9 dates an act as published. */
+function datedByItsEntryIntoForce(operation, envelope) {
+  const value = structuredClone(envelope.result.value);
+  const stated = (holder) => holder !== null && typeof holder === "object" && typeof holder.applicability_date === "string" && typeof holder.state_sha256 === "string";
+  const holders = operation === "search" ? value.hits
+    : operation === "diff" ? value.comparisons.flatMap((comparison) => [comparison.from, comparison.to])
+    : operation === "changes_in_period" ? []
+    : value.states;
+  const dated = (holders ?? []).filter(stated);
+  if (dated.length === 0) return null;
+  const first = dated.map((holder) => holder.applicability_date).sort()[0];
+  for (const holder of dated.filter((one) => one.applicability_date === first)) {
+    holder.date_role = "entry_into_force";
+    holder.entry_into_force = first;
+    if (Object.hasOwn(holder, "state_kind")) holder.state_kind = "as_published";
+  }
+  // The platform's same-state note says that date by its role too (`SameVersionNote`, `AsPublishedSameTextNote`).
+  if (operation === "diff") {
+    for (const comparison of value.comparisons.filter((one) => one.same_state && one.from.applicability_date === first)) {
+      comparison.note = comparison.note.replace(`applicable from ${first} (publisher)`, `dated by its entry into force on ${first} (publisher)`);
+    }
+  }
+  return { envelope: { ...structuredClone(envelope), result: { ...envelope.result, value } }, date: first };
+}
+
+async function frenchViews() {
+  const web = new URL("../", import.meta.url);
+  const out = fileURLToPath(new URL(".react-build/app-fr-date-speech-test.mjs", web));
+  await build({
+    stdin: { contents: "export * from './app/index.jsx';", resolveDir: fileURLToPath(web), sourcefile: "date-speech-french-test.jsx", loader: "jsx" },
+    outfile: out,
+    bundle: true,
+    format: "esm",
+    platform: "node",
+    jsx: "automatic",
+    packages: "external",
+    logLevel: "silent",
+    define: { __LEX_CHROME_LOCALE__: JSON.stringify("fr") },
+  });
+  return import(`${pathToFileURL(out).href}?${Date.now()}`);
+}
+
+test("per date role: no screen says an entry into force as an application, in English or in French, for every census answer", async () => {
+  const french = await frenchViews();
+  const views = { en: { SearchAnswerView, DossierAnswerView, ReadingAnswerView, ExportAnswerView, ExportPanel, HistoryAnswerView, CompareAnswerView }, fr: french };
+  const screens = [
+    ["search", searchOutcome, "SearchAnswerView"],
+    ["dossier", dossierOutcome, "DossierAnswerView"],
+    ["evidence_bundle", readingOutcome, "ReadingAnswerView"],
+    ["evidence_bundle", readingOutcome, "ExportAnswerView"],
+    ["article_history", historyOutcome, "HistoryAnswerView"],
+    ["diff", compareOutcome, "CompareAnswerView"],
+  ];
+  let said = 0;
+  for (const [operation, outcomeOf, name] of screens) {
+    for (const entry of census.envelopes.filter((candidate) => candidate.operation === operation && candidate.envelope.result?.value?.publisher === "lu-legilux")) {
+      const redated = datedByItsEntryIntoForce(operation, entry.envelope);
+      if (redated === null) continue;
+      const outcome = outcomeOf({ state: "success", envelope: redated.envelope });
+      assert.equal(outcome.state, "success", `${operation} ${entry.scenario}: ${outcome.sentence}`);
+      for (const [language, view] of Object.entries(views)) {
+        const props = { outcome, pins: new Set(), onPin: () => {}, onNextPage: () => {} };
+        let markup = renderToStaticMarkup(h(view[name], props));
+        if (name === "ExportAnswerView") {
+          // The export composed with every article pinned, so its item lines are said too.
+          const state = outcome.view.states[0];
+          const pins = new Set([...state.articles, ...state.articlesWithoutText].map((article) => pinKey(state.stateSha256, article.publisherId)));
+          markup = renderToStaticMarkup(h(view.ExportAnswerView, { ...props, pins })) + renderToStaticMarkup(h(view.ExportPanel, { outcome, pins, onSave: () => {} }));
+        }
+        assert.ok(decode(markup).includes(redated.date), `${language} ${name} (${entry.scenario}) says the date`);
+        assert.deepEqual(applicationSaidOf(markup, redated.date), [], `${language} ${name} (${entry.scenario}) says an entry into force as an application`);
+        said += 1;
+      }
+    }
+  }
+  assert.ok(said >= 14, `every screen was said in both languages: ${said}`);
+});
+
+test("the per-role speech test fails a screen that says an entry into force as an application", () => {
+  const redated = datedByItsEntryIntoForce("evidence_bundle", census.envelopes.find((entry) => entry.operation === "evidence_bundle" && entry.envelope.result?.value?.publisher === "lu-legilux").envelope);
+  const markup = renderToStaticMarkup(h(ReadingAnswerView, { outcome: readingOutcome({ state: "success", envelope: redated.envelope }) }));
+  assert.deepEqual(applicationSaidOf(markup, redated.date), []);
+  // The heading said as S7a's predecessor said it, and the French of it: both caught.
+  const borrowed = markup.replace(`dated by its entry into force on ${redated.date}`, `the state applying from ${redated.date}`);
+  assert.notEqual(borrowed, markup, "the heading says the entry into force");
+  assert.notDeepEqual(applicationSaidOf(borrowed, redated.date), []);
+  for (const words of ["applicable from", "applies from", "la version applicable à partir du", "s’applique à partir du", "applicable jusqu’au"]) {
+    assert.notDeepEqual(applicationSaidOf(`<p>${words} ${redated.date}</p>`, redated.date), [], words);
+  }
+  for (const words of ["entry into force on", "daté de son entrée en vigueur le", "entrée en vigueur :", "Read on"]) {
+    assert.deepEqual(applicationSaidOf(`<p>${words} ${redated.date}</p>`, redated.date), [], words);
+  }
 });

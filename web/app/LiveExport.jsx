@@ -26,7 +26,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { ArticleWording, DeletedWordingNote, EuropeWordingHeading, PagesShown, QuoteEvidence, ReadingAnswerView, ReadingForm, versionDigest } from './LiveReading.jsx';
+import { ArticleWording, DeletedWordingNote, EuropeWordingHeading, PagesShown, QuoteEvidence, ReadingAnswerView, ReadingForm, StateHeadingWords, versionDigest } from './LiveReading.jsx';
 import { createReadingSession, loadLiveReading, quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { pagesShown, readNextPage, viewOf, withoutStopped } from '../scripts/reading-pages.mjs';
 import { EXPORT_FORMATS, LIVE_EXPORT_IDLE, exportState, formatRefused, pinKey, saveExport } from '../scripts/live-export.mjs';
@@ -38,8 +38,7 @@ import { AsPublished, EuropeAnnexes, LiveAnswer, Permalink, Said, Say, StatusSen
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
 const COPY = liveChrome().export;
-// The export reads what the reading screen reads, so a state is headed as the reading screen heads it.
-const READING = liveChrome().reading;
+// The export reads what the reading screen reads, so a state is headed as the reading screen heads it (`StateHeadingWords`).
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_EXPORT_IDLE });
 
@@ -113,12 +112,8 @@ function PinAll({ version, onPinAll, assembling }) {
 function StatePins({ state, workKey, pins, onPin, onPinAll = null, assembling = null }) {
   return (
     <section data-state={state.stateSha256}>
-      <h2>
-        {state.nextApplicabilityDate === null ? (
-          <Say template={READING.stateHeading} values={{ work: workKey, language: state.language, from: state.applicabilityDate }} />
-        ) : (
-          <Say template={READING.stateHeadingNext} values={{ work: workKey, language: state.language, from: state.applicabilityDate, next: state.nextApplicabilityDate }} />
-        )}
+      <h2 data-date-role={state.dateRole ?? undefined}>
+        <StateHeadingWords state={state} workKey={workKey} />
       </h2>
       <p>
         <Permalink value={state.permalink} linked={false} />
