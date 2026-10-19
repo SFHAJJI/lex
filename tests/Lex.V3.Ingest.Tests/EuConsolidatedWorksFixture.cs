@@ -24,7 +24,8 @@ public sealed partial class EuFirstMountAcquisitionTests
 
     /// <summary>
     /// A package whose text differs from <paramref name="bytes"/>: every <paramref name="find"/> in its XML entries replaced. Throws
-    /// when nothing changed, so a test that needs two different texts cannot pass on two identical ones.
+    /// when nothing changed, so a test that needs two different texts cannot pass on two identical ones. Its bytes are the same
+    /// on every system (<see cref="PortableZip"/>): the envelope samples record its digest.
     /// </summary>
     internal static byte[] RewrittenPackage(byte[] bytes, string find, string replace)
     {
@@ -46,7 +47,7 @@ public sealed partial class EuFirstMountAcquisitionTests
             }
 
         if (!changed) throw new InvalidOperationException($"The package holds no '{find}' to rewrite.");
-        return output.ToArray();
+        return PortableZip.Normalise(output.ToArray());
     }
 
     /// <summary>The census and acquisition of the GDPR's original wording and the consolidated works given.</summary>

@@ -87,7 +87,8 @@ public sealed partial class EuFirstMountAcquisitionTests
     }
 
     // A synthetic language-binding fixture, not a claimed French legal text. The held publisher
-    // ZIP supplies structure; only language coordinates and file references change for this test.
+    // ZIP supplies structure; only language coordinates and file references change for this test. The same bytes on every
+    // system (PortableZip), since the mounts the samples are recorded from hold it.
     private static byte[] SyntheticFrenchPackage(byte[] bytes)
     {
         using var input = new MemoryStream(bytes);
@@ -103,6 +104,6 @@ public sealed partial class EuFirstMountAcquisitionTests
                 writer.Write(reader.ReadToEnd().Replace("2016119EN", "2016119FR", StringComparison.Ordinal)
                     .Replace(">EN<", ">FR<", StringComparison.Ordinal));
             }
-        return output.ToArray();
+        return PortableZip.Normalise(output.ToArray());
     }
 }
