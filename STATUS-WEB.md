@@ -4,6 +4,75 @@ Updated 2026-10-18. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Freshness on every page and in every answer, and the commits behind it (sole driver, 2026-10-18)
+
+The plan's items 6.1 ("Freshness on every page and in every answer") and 6.5 ("The answers and the footer strip name the
+commits, labelled 'index built from' and 'service running'"), to the specification of record's R87, R69, R107 and R23.
+Facts only from what the mount and the server hold; every count is the answer's (R11).
+- **Every answer** (REST and MCP alike, from the one host): the envelope's `context.freshness` keeps `observed_at` and
+  `upstream_health` and gains `index_built_at` (the mounted Luxembourg log's newest build; null when it records none, an
+  EU index records none), `maximum_data_age_days` (10), `stale`, `channels` and `last_checked_against_publisher`. Each
+  channel, one per publisher whose index is mounted, Luxembourg first, names `newest_completed_observation` (when its
+  newest acquisition completed, its catalog retained, as the mount's `build-report.json` states it for a half acquired
+  across an interruption, `resumption.{half}.catalogedAt`, read down to the second; null when nothing states it),
+  `age_days` (whole days elapsed at the answer), `stale` (past the maximum), `lag_days` (null) and `lag_observations` (0):
+  no index schema holds an observation time (index 8 and 9 require `observed_from` to be null; plan 1.12 has not run) and
+  no refresh has run, so no lag is measured and none is stated. `last_checked_against_publisher` is null until the first
+  monthly re-check (R69). `context.commits` names `index_builder_source_commit` (the report's `indexBuilderSource`, which
+  the mount writer now records from its build's stamp, or a re-derived mount's `derivation.toolSource`; a full commit or
+  null) and `serving_runtime_source_commit` (the commit the SDK stamped in the API assembly's informational version, named
+  by the server's own host: `V3PlatformHost.StampedServingRuntimeSourceCommit`). The build report is held to the mount: an
+  artifact it names that is not the mounted one refuses the mount, and a report naming no corpus states nothing.
+- **Every page** (`Freshness.jsx`, `freshness.mjs`, `freshness-client.jsx`): the footer's last strip says "Index built on
+  {date}.", each channel's "{channel}: last complete collection ended on {date}, {count} full days before the server
+  answered on {today}; lag not yet measured." (or that its completion is not recorded), and "Index built from" and
+  "Service running" with each commit whole, or "(not recorded)". Dates are the server's, in Luxembourg. Past the maximum
+  age a banner under the header names each stale channel ("Some texts may be out of date", its sentences one step away so
+  the home page keeps its box and the sentence under it on a phone's first screen, R47). A page the server renders from an
+  answer (home, reading, dossier; both servers, through the one renderer) says them from that answer; a page as built says
+  the strip's as-built line, and every answer `askV3` reads afterwards redraws strip and banner (outside the hydrated root),
+  with no request of its own. The "last checked against the publisher" line is absent: the reader refuses any re-check, and
+  any stated lag.
+- **Promotion's data-age check** (`deploy-probe.mjs`, `dataAgeFailures`): a channel past the maximum, or one whose
+  completion is not stated, refuses promotion. With `--promotion-check` (which `deploy.ps1` passes) a candidate that
+  answers as its release holds exits 3 then: the kit keeps it, with no traffic, and prints no promotion or rollback
+  command. The rehearsal records it beside its probes (`servedPages.promotion`), never as a failure. The deploy probe's
+  home-page check sets the strip and the banner aside when it holds a rendered page to the page as built; the whole
+  rendering still holds them.
+- **On the population** (derive-c's report read as the server reads it, `ARealMountsBuildReportIsReadAsTheServerReadsIt`):
+  Luxembourg collected 2026-10-12T18:17:04Z, the EU 2026-10-05T03:50:08Z, the index built 2026-10-12T18:17:05Z, and no
+  index commit recorded. So on 2026-10-19 every page says Luxembourg 6 full days, the EU 14, shows the EU banner, says
+  "Index built from (not recorded)", and **promotion refuses any release over derive-c**: its EU data is past the maximum.
+  The private copy's live revision is untouched. The ways forward are an EU refresh (publisher traffic, the owner's per-run
+  authorisation) or the owner's own maximum for O11.
+- **French** (Decision 41): 15 forms reviewed by an independent reviewer (Claude, AI reviewer, not the author) in the
+  addendum of 2026-10-19 "freshness and the commits" of `C:\lex-v3\lanes\fr-review\review.md`; 12 changed, all applied,
+  the English with the four blocking ones: the count of whole days was printed between two calendar dates that can be a day
+  further apart, so it is said before the server's answer; the commit labels are terms ("Révision du code ayant construit
+  l'index"), the lag "le décalage entre publication et collecte". The forms are named in `live-chrome-fr.mjs`'s header.
+- **Driver decisions (reversible):**
+  - The declared maximum data age is 10 days, O11's recommended answer, until the owner answers O11
+    (`V3Freshness.MaximumDataAgeDays`; every answer states it, so the pages never print a figure of their own).
+  - A channel's completion is only the catalog time the build report states; a half acquired in one window is "not
+    recorded" rather than dated by the index's build time, which bounds the Luxembourg half and says nothing of an EU half
+    a build reused (derive-c's EU half is 7 days older than its build). Promotion refuses such a mount until the mount
+    writer states each half's completion (next, data lane).
+  - Unstated is refused at promotion, as stale is: a release must show its data's age is within the maximum.
+  - The registry digest does not move: the published envelope schema keeps `context` an object, so the new members are
+    held by `V3EnvelopeJson`'s closed sets and the web reader; describing `context` in the schema (which moves the digest)
+    is next.
+  - R23's other three fields (`corpus_commit`, `manifest_set_id`, `content_digest`) are not added: V3's corpus is
+    content-addressed (`snapshot_sha256` names it) and the plan's item names the two commits; next.
+  - A host made without a commit (tests, censuses) names none; the envelope samples name fixed commits (`e`×40 serving,
+    `f`×40 for a mount the test build wrote) as they name fixed digests.
+  - The staleness alert to the owner (R107) needs monitoring the private copy does not have: next, with R107.
+- **Samples and legacy answers:** the envelope samples re-rendered from the handler (additive members only), then verified
+  without the switch. The 38 recorded schema-8 and schema-6 answers all changed, legitimately and only in `context`:
+  every envelope gains `commits` and the new `freshness` members; no result, refusal or registry digest moved (below).
+- **Next:** each half's completion in the build report whether resumed or not (data lane); the lag, once observation
+  times are carried (1.12) and the refresh runs (Phase 10), with its own reviewed wording; the re-check line (R69) after
+  the first monthly re-check; the staleness alert (R107); the context's published schema; R23's remaining fields.
+
 ## The opening kit: law.soufien.lu bound, search engines by deployment, the owner's decisions of 18 October (sole driver, 2026-10-18)
 
 The owner decided on 2026-10-18: the EU authenticity wording for acts published before 1 July 2013 and search-engine
