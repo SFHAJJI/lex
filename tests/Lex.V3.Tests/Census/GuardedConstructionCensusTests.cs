@@ -101,6 +101,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseEuropeLanguage, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
+                    // A version an ELI names that the interval rules do not serve on the date (S7a; the review of #987, F2).
+                    + "method private instance Lex.V3.Api.V3CorpusMount::RefuseOutsideScope, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefusePageNotInVersion, "
                     // The reader's interval rules on index 9 (S7a): a state without text, and a date no state covers.
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseTextless, "
