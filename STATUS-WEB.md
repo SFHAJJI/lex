@@ -68,8 +68,8 @@ of every index.
     `excludedEntryIntoForce`; the PDF's heading, conflict line and exclusion line; the JSON names `date_role` on index 9.
   - One state heading by role (`StateHeadingWords`) for the reading, the export's pins and the cited article's source: the
     last two still said "the state applying from" of every state, which the per-role speech test found.
-  - `reading.validityConflict` and `search.dated` are S7a's repair's (its F5), as the coordinator moved them there; until this
-    branch is rebased on it, the per-role speech test finds the reading's conflict line, as it should.
+  - `reading.validityConflict` and `search.dated` are S7a's repair's (its F5), as the coordinator moved them there; rebased
+    on S7a's final head, the per-role speech test finds no application word of an entry into force on any page.
   - The dossier's span (`dossier.statesEntryIntoForce`, `statesFromEntryIntoForce`, `statesInEntryIntoForce`,
     `statesInFromEntryIntoForce`): a first state dated by its entry into force is said as that.
   - The refusal card's candidate (`refusalCard.candidateEntryIntoForce`, `…WithdrawalNotStated`), from the platform's new
@@ -126,10 +126,10 @@ of every index.
   dossier's chain and its span by role, and drift refused; the history's breaks, its column by role and a row's mark held;
   the reading's caveat for a consolidation and a code and its translation label; Compare, the export (lines and JSON) by role;
   every added form held to the time-word guard. `date-speech.test.mjs` (+2): the per-role speech test and its control.
-  Updated: `coverage.test.mjs`, `refusal-catalog.mjs`'s worked example. `npm run build` 30 state pages; `npm test` 1,291
-  tests, 1,286 passed, 2 failed, 3 skipped (the browser tests): the two failures are the per-role speech test and its
-  control, which find the reading's validity-conflict line ("its state applies from" an entry into force), S7a's F5; they
-  pass once this branch is rebased on it.
+  Updated: `coverage.test.mjs`, `refusal-catalog.mjs`'s worked example. On the combined data branch (S7a's final head
+  943cbd2d, S7b and S7c rebased on it, `data/eu-force-dates` merged): `npm run build` 30 state pages; `npm test` 1,304 tests,
+  1,301 passed, 0 failed, 3 skipped (the browser tests, which run only with `LEX_BROWSER_TESTS=1`); the per-role speech test
+  and its control pass (before the rebase they found the reading's validity-conflict line, S7a's F5).
 - **Driver decisions (reversible).**
   - **The web's timeline is the dossier's**: the design's `Timeline.jsx` (holes hatched, overlaps stacked) is the pre-V3
     preview, served nowhere; the live dossier says the catalogue's chain in words, under the states table, which needs no

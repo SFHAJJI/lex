@@ -152,7 +152,20 @@ Updated 2026-10-19.
   guarantees, the three sample censuses, every census class, legacy schema 8 and 6, request recording, temporary storage,
   as_observed, in_force_on, provenance, evidence bundle, search, search results, catalogue states): 313 (309 passed, 1 failed,
   3 skipped), the failure coverage's pinned build-time row, fixed, and its class rerun with the continuity class, 27 of 27;
-  `eng/verify-v3-tree.ps1` 1,647 tracked paths. The whole Ingest project was not run here (CI runs it).
+  `eng/verify-v3-tree.ps1` 1,647 tracked paths.
+- **Combined into one data pull request (#987), 2026-10-19.** Rebased on S7a's final head (943cbd2d, on `v3/integration`
+  0b908870): `reading.validityConflict`, `search.dated` and the PDF's lines are S7a's repair's, the history's absent states
+  keep S7a's facts, and both slices' History forms stand side by side. `data/eu-force-dates` (EU 2.1, 6f98b90c) merged in one
+  merge commit (the dossier reader's imports and the status files' top sections were the conflicts). The whole Ingest project
+  then found that the custody conformance census did not declare EU 2.1's opt-in run-16 probe store
+  (`EuForceDatesRun16Probe+HeldOnlyCustody`); it is declared exempt with its reason (swept 34, exempt 25).
+- **Measured on the combined branch** (Windows, no browser, no publisher traffic, no custody read): `dotnet build
+  Lex.V3.slnx -c Release` 0 warnings, 0 errors; Lex.V3.Tests 3,323 (3,317 passed, 0 failed, 6 skipped); Lex.V3.Ingest.Tests,
+  the whole project: 3,423 (3,383 passed, 2 failed, 38 skipped: the conformance census above), then after its fix 3,423
+  (3,385 passed, 0 failed, 38 skipped: the opt-in probes, env-gated writers and recorders); the answer, envelope and
+  refusal-payload samples re-rendered from the handler with `V3_RENDER_*` were the merged files byte for byte, and verify
+  without the switches (7 of 7); `base-answers.json` (schema 8 and 6) and the EU schema-5 base answers unchanged; `npm run
+  build` 30 state pages; `npm test` 1,304 (1,301 passed, 0 failed, 3 skipped); `eng/verify-v3-tree.ps1` 1,666 tracked paths.
 - **Not done here, and where it goes.** Coverage's per-language state range names no date role: on index 9 its first date may
   be an act's entry into force, which `coverageAnswer.stateRange` calls an applicability date (the platform names no role for
   an aggregate's end; a later slice serves one). F3 (Release 2) and S8 (gates and journeys over D1) as before.
