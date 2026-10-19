@@ -102,6 +102,32 @@ public sealed class V3EnvelopeSamplesTests
             Directory.Delete(branchRoot, recursive: true);
         }
 
+        // An EU act dated before 1 July 2013 (the owner's decision of 2026-10-18 on PR #975's question, O4): the same derived mount
+        // with the original's Formex package dated 2013-06-26, a fixture's date (the day CRD IV and the CRR bear), so its bundle
+        // says the dated authenticity sentence. The page that holds its last article, so the census carries one short page.
+        JsonObject datedBefore;
+        var (datedRoot, datedDirectory) = await V3CorpusEuropeTimeViewTests.OriginalDatedMountAsync("20130626",
+            new EuFirstMountAcquisitionTests.ConsolidatedWorkSpec(
+                V3CorpusEuropeTimeViewBranchTests.WorkB, V3CorpusEuropeTimeViewTests.ConsolidationDate, V3CorpusEuropeTimeViewBranchTests.Designated,
+                V3CorpusEuropeTimeViewBranchTests.EnglishPackage, V3CorpusEuropeTimeViewBranchTests.FrenchPackage));
+        try
+        {
+            using var datedMount = await V3CorpusMount.OpenAsync(datedDirectory, CancellationToken.None);
+            Assert.IsNotNull(datedMount);
+            const string scenario = "an EU act dated before 1 July 2013 (a fixture's date, 2013-06-26, in the GDPR's package), the page of its last article: an answer with the dated authenticity sentence";
+            var parameters = new { identifier = V3CorpusEuropeTimeViewTests.GdprSeed, date = "2013-06-26", language = "eng", article = "099" };
+            var probe = (await CaptureAsync(FixedCorpusDigest, FixedIndexDigest, datedMount, "evidence_bundle", scenario, parameters))["envelope"]!;
+            datedBefore = await CaptureAsync(
+                probe["context"]!["snapshot"]!["snapshot_sha256"]!.GetValue<string>(),
+                probe["result"]!["value"]!["index_sha256"]!.GetValue<string>(),
+                datedMount, "evidence_bundle", scenario, parameters);
+            WithFixed(datedBefore["envelope"]!, "body_receipt_sha256", FixedReceiptDigest);
+        }
+        finally
+        {
+            Directory.Delete(datedRoot, recursive: true);
+        }
+
         var envelopes = new JsonArray
         {
             await CaptureAsync(fixture, mount, "coverage", "the whole mount: an answer", new { }),
@@ -141,6 +167,7 @@ public sealed class V3EnvelopeSamplesTests
             await CaptureAsync(longAct, longActMount, "evidence_bundle", "the same long act's third page, past its last: a refusal naming its two pages", new { identifier = longAct.Permalink, date = longAct.ApplicabilityDate, page = 3 }),
             laterNotHeld,
             laterNotHeldPastLast,
+            datedBefore,
             // A citation's evidence form is verified by both its hashes (R65): the version's, in its permalink, and the text's.
             await CaptureAsync(fixture, mount, "verify", "an article's permalink: digest_matches, with the article's text digest", new { identifier = fixture.Permalink + "/art_15" }),
             laterNotHeldVerified,
@@ -163,8 +190,9 @@ public sealed class V3EnvelopeSamplesTests
             ["note"] = "Whole REST envelopes the real handler sent, each verified by V3EnvelopeJson.ParseAndVerify before it was recorded, " +
                 "and the reviewed registry's contract a reader needs to verify one. The fixture's per-run corpus and index digests are replaced " +
                 $"by {FixedCorpusDigest[..8]}... and {FixedIndexDigest[..8]}... (same shape, every occurrence), and every object_ref_sha256 " +
-                $"(the corpus's per-run reference to the object holding a source's bytes) by {FixedObjectRefDigest[..8]}...; in the two envelopes from a " +
-                $"mount derived from custody (the EU time view whose next wording's text is not held in English, and verify at its first provision), every body_receipt_sha256 (that " +
+                $"(the corpus's per-run reference to the object holding a source's bytes) by {FixedObjectRefDigest[..8]}...; in the envelopes from the two " +
+                $"mounts derived from custody (the EU time view whose next wording's text is not held in English, and verify at its first provision; the EU act dated " +
+                $"before 1 July 2013), every body_receipt_sha256 (that " +
                 $"custody's per-run receipt) by {FixedReceiptDigest[..8]}...; nothing else is edited. " +
                 "THE PRODUCER IS REAL AND THE MOUNT IS A FIXTURE.",
             ["contract"] = Contract(),

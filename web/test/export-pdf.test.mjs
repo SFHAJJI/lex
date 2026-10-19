@@ -18,7 +18,7 @@ import test from "node:test";
 import { EUROPE_TEXT_ACKNOWLEDGEMENT, readEuropeEvidenceBundle, readEvidenceBundle } from "../scripts/reading-answer.mjs";
 import { composeEuropeExport, composeExport, EXPORT_WATERMARK } from "../scripts/export-build.mjs";
 import { PDF_SUBSTITUTION_NOTE, PDF_TEXT_WIDTH, exportPdf, pdfRefusal, pdfTextWidth } from "../scripts/export-pdf.mjs";
-import { EUROPE_SAMPLE, europeBundle, sha256 } from "../scripts/europe-bundle-sample.mjs";
+import { EUROPE_SAMPLE, datedBefore1July2013, europeBundle, sha256 } from "../scripts/europe-bundle-sample.mjs";
 import { withoutTextAt } from "../scripts/reading-page-samples.mjs";
 
 const SAMPLES = new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url);
@@ -405,4 +405,18 @@ test("an EU PDF the standard fonts cannot set is refused, naming the characters 
   const prose = normalised(europeBodyOf(readPdf(exportPdf(spaced))).map((run) => run.text).join(" "));
   assert.ok(prose.includes("Article 1 : “personal data” – the data’s subject…"), "WinAnsi's typographic characters are set as themselves");
   assert.ok(prose.includes(normalised(PDF_SUBSTITUTION_NOTE)), "and a thin space plainly, said");
+});
+
+test("an EU act dated before 1 July 2013 has its PDF say the dated statement, on its first page and under every item, never the undated one (O4)", () => {
+  const { model } = europeModelOf(datedBefore1July2013);
+  const dated = "For an act published before 1 July 2013, the printed Official Journal of the European Union is authentic; the electronic edition is authentic since that date (Regulation (EU) No 216/2013). This text is a reproduction read from the Publications Office's Formex package, not the authentic edition.";
+  assert.equal(model.authenticity, dated);
+  assert.equal(pdfRefusal(model), null, "its characters are the standard fonts'");
+  const pages = readPdf(exportPdf(model));
+  const first = normalised(pages[0].map((run) => run.text).join(" "));
+  assert.ok(first.includes(normalised(dated)), "the statement, on the first page");
+  const prose = normalised(europeBodyOf(pages).filter((run) => run.font === "F1").map((run) => run.text).join(" "));
+  assert.equal(prose.split(normalised(`Authenticity: ${dated}`)).length - 1, model.items.length, "under every item");
+  for (const item of model.items) assert.equal(item.citations.evidence.split("\n").at(-1), dated, `${item.publisherId}'s evidence form ends with it`);
+  assert.ok(!prose.includes("Only the Official Journal of the European Union published in electronic form"), "and never the undated statement");
 });
