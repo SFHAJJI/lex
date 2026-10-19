@@ -519,7 +519,7 @@
               },
               {
                 "item": "build_time_and_currency",
-                "reason": "history gives when each build ran, an upper bound on when its corpus was observed and never an observation time, and nothing here says how current these counts are against the publisher; no build time of the corpus file itself is held; the corpus and index digests name exactly which artifacts are mounted"
+                "reason": "history gives each build\u0027s time, when its acquiring build read once its acquisition had ended: an upper bound on when its corpus was observed and never an observation time, which an index derived again from custody keeps; events gives log.derived_at, when the mounted index was derived from custody, null when its derivations are the acquiring build\u0027s own; nothing here says how current these counts are against the publisher; no build time of the corpus file itself is held; the corpus and index digests name exactly which artifacts are mounted"
               },
               {
                 "item": "legal_status",
@@ -2255,9 +2255,12 @@
             "available_languages": [
               "fra"
             ],
+            "catalogue_chain_rule": "on lex-v3-luxembourg-index/9 the publisher catalogue\u0027s states of this work as this index read it, beside the held states: textless_states names each state of the catalogue in scope whose text this index does not hold, with why (text_status), and none of them is served in another\u0027s place; transitions is the chain of the work\u0027s French states (a state of another language takes its French state\u0027s interval), each from one state to the first state of the next later date, its kind how the first state\u0027s end meets that start (contiguous: the end the publisher states is the next start; derived: no end is stated, so the next start ends it; inclusive_suspected: the stated end is the day before the next start; hole: the stated end is before the next start; overlap: the stated end is after the next start; invalid: the stated end is on or before the state\u0027s own start), or to the next state of the same date (same_date); gaps lists each hole, from the earlier state\u0027s end to the next start, which no state covers and nothing bridges; overlaps lists each span two states both cover, from the next start to the earlier state\u0027s end; same_date lists each group of states of one date; unclear_end_days lists each day a suspected inclusive end gives to neither state; invalid_intervals lists each state whose end is on or before its start, which covers no date and whose permalink still opens it; every date here is the catalogue\u0027s own, and a gap in the catalogue is not a gap in the law",
             "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "gaps": [],
             "history_begins": "2024-02-01",
             "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "invalid_intervals": [],
             "latest_applicability_date": "2024-02-01",
             "not_held": [
               {
@@ -2285,18 +2288,20 @@
                 "reason": "no observation time is held, so nothing here says when this work was first seen; the event log\u0027s first_sighting (events) says only that a state is first present in that log"
               },
               {
-                "item": "coverage_gaps",
-                "reason": "each state carries the end of its interval (applicable_to, the publisher\u0027s or derived from the next state) and its boundary, and no gap between states is listed in this record; it never says there is none"
+                "item": "catalogue_completeness",
+                "reason": "the states listed are the publisher catalogue\u0027s as this index read it, held or not (textless_states); a state the catalogue did not list is not here, and a gap in the catalogue (gaps) is not a gap in the law"
               },
               {
                 "item": "later_versions",
                 "reason": "later versions of this act are not held"
               }
             ],
+            "overlaps": [],
             "publisher": "lu-legilux",
             "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
             "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
             "requested_language": "fra",
+            "same_date": [],
             "scope": "The titles and the publisher-dated states the mounted index holds for this work. It is a record of what this corpus holds and not of what the publisher holds: a title or a state absent here may exist at the publisher, and absence from this corpus is neither absence from the publisher\u0027s record nor absence of law. When a language is requested, the titles, the states, the state count and the first and latest applicability dates are that language\u0027s alone, and available_languages still lists every language the work has.",
             "state_count": 1,
             "states": [
@@ -2327,7 +2332,10 @@
                 "translation_of": null
               }
             ],
+            "textless_states": [],
             "titles": [],
+            "transitions": [],
+            "unclear_end_days": [],
             "work_key": "loi-1991-08-10-n3"
           }
         },
@@ -8398,9 +8406,12 @@
           "schema": "lex-v3-article_history-result/1",
           "value": {
             "absent_in_states": [],
+            "anchor_rule": "the lineage follows the one publisher article id asked, exactly: an id the publisher minted with a date suffix (such as art_2_20211219) is another id, never joined to this one, and its own history is asked under that id",
             "available_languages": [
               "fra"
             ],
+            "continuity_breaks": [],
+            "continuity_rule": "on lex-v3-luxembourg-index/9 continuity_breaks names, per language, each run of dates from the language\u0027s first held state on that no state with held text covers, by the interval rules as_of applies: a state of the publisher\u0027s catalogue whose text this index does not hold (reasons names its text_status), a hole in the catalogue (catalogue_hole), the end day of an unclear end (publisher_end_convention_unclear), where a state whose end is on or before its start would apply (publisher_interval_invalid), or a French state with no expression held in the language (no_expression_in_language); from is its first date and to the first date a state with held text covers again, null when none does; named_states names the states each reason is about; a date after the catalogue\u0027s last state ends is not a break, since no state of the catalogue is there; wording_changed compares two held states across a break as it compares any two, and after_break says that a break lies between a row and the row before it in its language, so an unchanged wording across a break says nothing of the dates between",
             "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "distinct_wordings": [
               {
@@ -8416,6 +8427,7 @@
             "requested_language": "fra",
             "states": [
               {
+                "after_break": false,
                 "applicability_date": "2024-02-01",
                 "applicable_to": null,
                 "applicable_to_source": null,

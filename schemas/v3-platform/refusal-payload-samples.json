@@ -89,6 +89,10 @@
             "derived",
             "derived"
           ],
+          "candidate_date_roles": [
+            "applicability_in_file",
+            "applicability_in_file"
+          ],
           "candidate_state_kinds": [
             "as_published",
             "as_published"
@@ -97,7 +101,7 @@
             "9da1fcd1bb8d396c2e034614512be1d55022092a030621cb4829132a2f0db3a0",
             "a19a1e52a6b82583572168c2b7d6893fe6f7541b06604b045efa2d423e482ac1"
           ],
-          "candidate_states_rule": "on lex-v3-luxembourg-index/9 the candidate_ lists name every state whose interval holds the date, each in the order of candidate_state_sha256s: its kind, its interval (candidate_applicability_dates to candidate_applicable_tos, and that end\u0027s source), its boundary and its text status; they are not one wording held, so none is chosen",
+          "candidate_states_rule": "on lex-v3-luxembourg-index/9 the candidate_ lists name every state whose interval holds the date, each in the order of candidate_state_sha256s: its kind, its date\u0027s role, its interval (candidate_applicability_dates to candidate_applicable_tos, and that end\u0027s source), its boundary and its text status; they are not one wording held, so none is chosen",
           "candidate_text_statuses": [
             "held",
             "held"
@@ -137,6 +141,10 @@
           "derived",
           "derived"
         ],
+        "candidate_date_roles": [
+          "applicability_in_file",
+          "applicability_in_file"
+        ],
         "candidate_state_kinds": [
           "as_published",
           "as_published"
@@ -145,7 +153,7 @@
           "9da1fcd1bb8d396c2e034614512be1d55022092a030621cb4829132a2f0db3a0",
           "a19a1e52a6b82583572168c2b7d6893fe6f7541b06604b045efa2d423e482ac1"
         ],
-        "candidate_states_rule": "on lex-v3-luxembourg-index/9 the candidate_ lists name every state whose interval holds the date, each in the order of candidate_state_sha256s: its kind, its interval (candidate_applicability_dates to candidate_applicable_tos, and that end\u0027s source), its boundary and its text status; they are not one wording held, so none is chosen",
+        "candidate_states_rule": "on lex-v3-luxembourg-index/9 the candidate_ lists name every state whose interval holds the date, each in the order of candidate_state_sha256s: its kind, its date\u0027s role, its interval (candidate_applicability_dates to candidate_applicable_tos, and that end\u0027s source), its boundary and its text status; they are not one wording held, so none is chosen",
         "candidate_text_statuses": [
           "held",
           "held"
