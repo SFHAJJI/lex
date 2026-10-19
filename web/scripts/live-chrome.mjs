@@ -625,7 +625,7 @@ const EN = Object.freeze({
     sections: Object.freeze({
       reading: Object.freeze({
         heading: "When you read the site",
-        request: "Each page you open and each search you send is a request from your browser to this site's server. The request carries your device's IP address, the address of the page and the technical details every browser sends. A search's words travel in the body of the request, never in its address; a link that keeps a search holds it after the “#”, a part of the address your browser never sends.",
+        request: "Each page you open and each search you send is a request from your browser to this site's server. The request carries your device's IP address, the address of the page and the technical details every browser sends. A search's words travel in the body of the request, never in the request's address; a link that keeps a search holds it in the part after the “#”, which your browser never sends.",
         host: "Microsoft, which hosts the site, carries each request to the server and its answer back to you, and handles the connection data this needs under its own terms.",
         kept: "The server uses the request only to answer it, and keeps nothing of it once it has answered: it writes no access log and no record of what is read or searched, and the hosting is set up with no log store and no monitoring service that would keep requests. This is tested: the server is run with requests carrying marked values (a search phrase, an address, a browser's name), and none of them may appear in anything it writes.",
         nothingHeld: "Lex has no accounts and no sign-up, so it never knows who you are. Since it keeps nothing about a visit, it holds nothing about you that it could show, correct or erase.",
@@ -646,7 +646,7 @@ const EN = Object.freeze({
     title: "Terms of use",
     eyebrow: "About this site",
     heading: "Terms of use",
-    intro: "How Lex may be used, under which licences its texts are shown, what it does not promise and how to cite it.",
+    intro: "How Lex may be used, under which licences its texts are shown, what it does not promise and how to cite the texts.",
     sections: Object.freeze({
       what: Object.freeze({
         heading: "What Lex is",

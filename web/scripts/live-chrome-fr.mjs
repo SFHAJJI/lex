@@ -162,6 +162,18 @@
 // owner chose it on 2026-10-19 (STATUS-WEB.md), so the statement ships entry 13's recommended English and French word for
 // word, in place of R62's "partiellement conforme". The lawyer's read (O4) of these pages is the owner's choice and has
 // not been done.
+// The legal pages without a person or a contact (the owner's decision of 2026-10-19: no person, no postal address, no
+// e-mail address, no contact): the forms added, changed or moved in the five pages, `legalNotice.intro`,
+// `legalNotice.sections.what` (`heading`, `text`, `notAdvice`), `legalNotice.sections.status` (`heading`, `text`,
+// `prevails`), `legalNotice.sections.sources` (`heading`, `luxembourg`, `europe`, `changes`), `privacy.intro`,
+// `privacy.sections.reading.request`, `.host` and `.nothingHeld`, `terms.intro`, `terms.sections.use` (`heading`, `text`),
+// `terms.sections.texts.licences`, `terms.sections.warranty.text`, `accessibility.intro` and
+// `accessibility.sections.law.text` (22 forms), were reviewed by an independent reviewer (Claude, AI reviewer, not the
+// author) under the same delegation in the addendum of 2026-10-19 "the legal pages without a person or a contact" (7
+// changed in review, the English with two of them: Lex is read "au fil du temps", never "dans le temps"; a text "que Lex
+// montre", never "sur Lex" or "de Lex"; the reader "est libre de" use the texts, a permission, never "peut"; the part
+// after "#" is the only antecedent of what the browser never sends; "Lex ne propose ni compte ni inscription"; the terms
+// announce how to cite the texts, not Lex).
 // The EU authenticity statement chosen by the act's date (the owner's decision of 2026-10-18 on PR #975's question, O4):
 // `citation.europe.authenticity`, one string approved in the addendum of 2026-10-17 on the citation generator, is now two
 // entries keyed by the platform's basis, `citation.europe.authenticity.electronic_edition` (that string, unchanged) and
@@ -802,13 +814,13 @@ export const LIVE_CHROME_FR = Object.freeze({
     sections: Object.freeze({
       what: Object.freeze({
         heading: 'Ce qu’est Lex',
-        text: 'Lex est un outil indépendant et non commercial pour lire le droit luxembourgeois et le droit de l’UE dans le temps : il montre un texte tel qu’il était à la date que vous choisissez, et comment il a changé. Il est gratuit, ne comporte aucune publicité et ne demande la création d’aucun compte.',
+        text: 'Lex est un outil indépendant et non commercial pour lire le droit luxembourgeois et le droit de l’UE au fil du temps : il montre un texte tel qu’il se présentait à la date de votre choix, et comment il a changé. Il est gratuit, ne comporte aucune publicité et ne demande la création d’aucun compte.',
         notAdvice: '{notAdvice}',
       }),
       status: Object.freeze({
         heading: 'Aucun statut officiel',
         text: 'Lex n’a aucun statut officiel. Il n’est un service ni de l’État luxembourgeois, ni du Service central de législation, qui publie Legilux, ni de l’Office des publications de l’Union européenne, et aucun d’eux ne l’approuve.',
-        prevails: '{authenticity} Lorsqu’un texte sur Lex diffère de sa publication officielle, c’est la publication officielle qui prévaut.',
+        prevails: '{authenticity} Lorsqu’un texte que Lex montre diffère de sa publication officielle, c’est la publication officielle qui prévaut.',
       }),
       sources: Object.freeze({
         heading: 'Sources et licences',
@@ -830,10 +842,10 @@ export const LIVE_CHROME_FR = Object.freeze({
     sections: Object.freeze({
       reading: Object.freeze({
         heading: 'Lorsque vous consultez le site',
-        request: 'Chaque page que vous ouvrez et chaque recherche que vous envoyez est une requête de votre navigateur au serveur de ce site. La requête comporte l’adresse IP de votre appareil, l’adresse de la page et les informations techniques que tout navigateur envoie. Les mots d’une recherche sont envoyés dans le corps de la requête, jamais dans son adresse ; un lien qui conserve une recherche la place après « # », dans une partie de l’adresse que votre navigateur n’envoie jamais.',
-        host: 'Microsoft, qui héberge le site, achemine chaque requête jusqu’au serveur, et sa réponse jusqu’à vous, et traite à cette fin les données de connexion nécessaires, selon ses propres conditions.',
+        request: 'Chaque page que vous ouvrez et chaque recherche que vous envoyez est une requête de votre navigateur au serveur de ce site. La requête comporte l’adresse IP de votre appareil, l’adresse de la page et les informations techniques que tout navigateur envoie. Les mots d’une recherche sont envoyés dans le corps de la requête, jamais dans l’adresse de la requête ; un lien qui conserve une recherche la contient après « # », dans une partie que votre navigateur n’envoie jamais.',
+        host: 'Microsoft, qui héberge le site, achemine chaque requête jusqu’au serveur et sa réponse jusqu’à vous, et traite à cette fin les données de connexion nécessaires, selon ses propres conditions.',
         kept: 'Le serveur n’utilise la requête que pour y répondre, et n’en conserve rien une fois qu’il a répondu : il ne tient aucun journal des accès ni aucun relevé de ce qui est lu ou recherché, et l’hébergement est configuré sans stockage de journaux ni service de surveillance qui conserverait les requêtes. Cela est vérifié : le serveur est soumis à des requêtes portant des valeurs repérables (une expression recherchée, une adresse, le nom d’un navigateur), dont aucune ne doit apparaître dans ce qu’il écrit.',
-        nothingHeld: 'Lex n’a ni compte ni inscription : il ne sait donc jamais qui vous êtes. Comme il ne conserve rien d’une visite, il ne détient rien vous concernant qu’il pourrait montrer, rectifier ou effacer.',
+        nothingHeld: 'Lex ne propose ni compte ni inscription : il ne sait donc jamais qui vous êtes. Comme il ne conserve rien d’une visite, il ne détient rien vous concernant qu’il pourrait montrer, rectifier ou effacer.',
       }),
       nothingElse: Object.freeze({
         heading: 'Ni cookie, ni traceur, ni autre site',
@@ -851,7 +863,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Conditions d’utilisation',
     eyebrow: 'À propos de ce site',
     heading: 'Conditions d’utilisation',
-    intro: 'Comment Lex peut être utilisé, sous quelles licences ses textes sont montrés, ce qu’il ne promet pas et comment le citer.',
+    intro: 'Comment Lex peut être utilisé, sous quelles licences ses textes sont montrés, ce qu’il ne promet pas et comment citer les textes.',
     sections: Object.freeze({
       what: Object.freeze({
         heading: 'Ce qu’est Lex',
@@ -860,7 +872,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       }),
       use: Object.freeze({
         heading: 'Utilisation de Lex',
-        text: 'Chacun peut lire, rechercher, citer et exporter les textes de Lex, gratuitement et sans compte.',
+        text: 'Chacun est libre de lire les textes que Lex montre, d’y faire des recherches, de les citer et de les exporter, gratuitement et sans compte.',
       }),
       texts: Object.freeze({
         heading: 'Les textes et leurs licences',
