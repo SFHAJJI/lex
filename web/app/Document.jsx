@@ -21,6 +21,7 @@ import { CHROME_LOCALE, fillText, liveChrome, livePath } from '../scripts/live-c
 import { INTERFACE_LANGUAGES, lawPageLinks } from '../scripts/permalinks.mjs';
 import { jsonInScript } from '../scripts/initial-answer.mjs';
 import { CANONICAL_HOST } from '../scripts/routes.mjs';
+import { FreshnessStripSlot, StalenessBannerSlot } from './Freshness.jsx';
 
 /** The marker that says, in the DOM, that nothing on this page is law. */
 export const SYNTHETIC_MARKER = 'lex-v3-synthetic-preview';
@@ -147,11 +148,12 @@ export function SiteHeader({ state, locale }) {
 
 /**
  * The footer every live page carries: what Lex is not (the specification of record's R50, word for word, which replaced
- * "Documentation, not legal advice."), which texts are authentic, and where the texts come from, then what it holds. The
- * development build's banner said "not a release and not legal advice"; the first half was the build's and went with it,
- * the second is the product's and is said here.
+ * "Documentation, not legal advice."), which texts are authentic, and where the texts come from, then what it holds, and
+ * last how current that is and which commits built and serve it (R87, R23; `Freshness.jsx`), from `freshness`, an answer's
+ * facts (`freshnessFacts`), or as built. The development build's banner said "not a release and not legal advice"; the
+ * first half was the build's and went with it, the second is the product's and is said here.
  */
-export function SiteFooter() {
+export function SiteFooter({ freshness = null }) {
   const site = liveChrome().site;
   return (
     <footer className="site-footer">
@@ -161,6 +163,7 @@ export function SiteFooter() {
       <p>
         <a href={livePath('coverage.html')}>{site.coverage}</a>
       </p>
+      <FreshnessStripSlot facts={freshness} />
     </footer>
   );
 }
@@ -198,6 +201,9 @@ export function Document({
   indexing = 'never',
   // A law's page's schema.org Legislation markup (`structured-data.mjs`), written as JSON-LD in the head, or null.
   structuredData = null,
+  // What the answer a page was rendered from says of the law's freshness and the commits behind it (`freshnessFacts`, R87
+  // and R23), or null for a page as built: the footer's strip, and the staleness banner under the header when it is stale.
+  freshness = null,
   children,
 }) {
   // Each axis names itself. Both guards used to raise the same sentence, so a test feeding an
@@ -271,8 +277,9 @@ export function Document({
         {/* A live page sits in the site (its header, with the interface languages, an unreviewed one answering
             localization_unavailable, and its footer); a preview page under the synthetic banner. */}
         {banner === 'live' ? <SiteHeader state={state} locale={locale} /> : <SyntheticBanner />}
+        {banner === 'live' ? <StalenessBannerSlot facts={freshness} /> : null}
         <main id="main">{children}</main>
-        {banner === 'live' ? <SiteFooter /> : null}
+        {banner === 'live' ? <SiteFooter freshness={freshness} /> : null}
       </body>
     </html>
   );

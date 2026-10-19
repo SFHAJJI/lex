@@ -483,6 +483,62 @@ blockquote.law {
   margin: 0;
 }
 
+/* How current the law is and which commits built and serve it (R87, R23): the footer's last strip, its lines plain text,
+   each commit whole in code, broken anywhere on a narrow screen; and under the header, when a publisher's data is past the
+   maximum age, a banner that says so in words, set apart by a rule and its weight as well as its colour (WCAG 1.4.1). */
+.freshness-strip {
+  display: grid;
+  gap: 0.35rem;
+  padding-block-start: 0.5rem;
+  border-block-start: 1px dashed #d6cfbb;
+}
+
+.freshness-channels {
+  margin: 0;
+  padding-inline-start: 1.1rem;
+}
+
+.freshness-commits {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+}
+
+.freshness-commits .strip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.5rem;
+}
+
+.freshness-commits dt {
+  font-weight: 600;
+}
+
+.freshness-commits dd {
+  margin: 0;
+}
+
+.freshness-commits .commit {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.staleness-banner {
+  display: grid;
+  gap: 0.35rem;
+  max-inline-size: 48rem;
+  margin: 0.75rem auto 0;
+  padding: 0.75rem clamp(1rem, 4vw, 1.25rem);
+  border: 2px solid #8a5a00;
+  border-inline-start-width: 0.5rem;
+  background: #fff6e0;
+  color: #3d2a00;
+}
+
+.staleness-banner p {
+  margin: 0;
+}
+
 /* The forms of the live screens: each field under its label, full width up to a reading measure, and one
    clear primary button. Check boxes (the export composer's pins) keep their own size. Field borders keep
    3:1 against the ground (WCAG 1.4.11) and focus is always visible. */
@@ -558,6 +614,16 @@ blockquote.law {
   .site-tagline,
   .site-footer {
     color: #b8c6bc;
+  }
+
+  .freshness-strip {
+    border-color: #2f3d33;
+  }
+
+  .staleness-banner {
+    border-color: #e0b04a;
+    background: #2b2310;
+    color: #f4e6c4;
   }
 }
 

@@ -619,7 +619,8 @@ export async function recordedRequests(origin, during) {
  * - what the deployment probe holds a candidate to (`servedPageFailures`, `deploy-probe.mjs`): the root's redirect to
  *   `/fr/`, the home page as built or as the release's renderer renders the image's own coverage answer, its security
  *   headers (CSP with `frame-ancestors 'none'`, HSTS, `Referrer-Policy`, `nosniff`), the 404 page byte for byte, the card
- *   at its stable route, coverage from the mount's corpus, the clock, and an accented title found as typed;
+ *   at its stable route, coverage from the mount's corpus, the clock, and an accented title found as typed; and, beside
+ *   them and never a failure, what promotion would say of the data's age (`servedPages.promotion`, `dataAgeFailures`);
  * - V2's routes (`v2RouteFailures`), the server's readiness and no synthetic preview (`serverFailures`), and the card's
  *   bytes at its route;
  * - privacy, as far as it shows: what the container recorded once it first answered (nothing on its output, no file on its
@@ -644,7 +645,9 @@ export async function probeImage({ startServer, mountPath, mountKind, web, card,
         startServer: async () => kept, eventsToVerify: mountKind === "fixture" ? Number.POSITIVE_INFINITY : REAL_MOUNT_EVENTS_VERIFIED,
       });
       const notes = [];
-      const servedPages = { failures: await servedPageFailures(server.origin, { web, card, corpusSha256, notes }), notes };
+      // What promotion would say of the data's age (R87, O11), recorded beside the probes and never one of their failures.
+      const promotion = [];
+      const servedPages = { failures: await servedPageFailures(server.origin, { web, card, corpusSha256, notes, promotion }), notes, promotion };
       const v2Routes = { routesAsked: V2_ROUTES.length, routeFailures: await v2RouteFailures(server.origin, { v3Files: servedPaths(web) }) };
       // Ready with its mount, and no synthetic preview (plan 0.7).
       const serverAnswers = { failures: await serverFailures(server.origin) };

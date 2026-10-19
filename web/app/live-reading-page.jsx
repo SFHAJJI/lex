@@ -5,6 +5,7 @@
 // `client-live-reading-entry.jsx` hydrates the same tree; at a permalink the server renders it from
 // its own answer (R67), and the browser hydrates the same tree from the answer the page carries.
 
+import { freshnessFacts } from '../scripts/freshness.mjs';
 import { Document } from './Document.jsx';
 import { liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { LiveReading } from './LiveReading.jsx';
@@ -102,6 +103,7 @@ export function renderLiveReadingPage({ initial = null } = {}) {
       lawPath={initial === null ? null : readingLawPath(initial)}
       indexing={searchEngines.indexing}
       structuredData={searchEngines.structuredData}
+      freshness={initial === null ? null : freshnessFacts(initial.envelope)}
     >
       <p className="eyebrow">{copy.eyebrow}</p>
       <h1>{copy.heading}</h1>

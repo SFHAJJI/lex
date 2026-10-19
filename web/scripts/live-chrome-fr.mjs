@@ -671,6 +671,29 @@ export const LIVE_CHROME_FR = Object.freeze({
     authenticity: 'Les textes consolidés n’ont aucun effet juridique : seuls font foi les textes publiés au Journal officiel du Grand-Duché de Luxembourg (Mémorial A) et au Journal officiel de l’Union européenne.',
     sources: 'Les textes proviennent de Legilux et de l’Office des publications de l’Union européenne, tels que ce site les détient ; chaque article cité indique sa source officielle.',
   }),
+  freshness: Object.freeze({
+    heading: 'Actualité des données',
+    asBuilt: 'Chaque réponse du serveur indique quand son index a été construit, quand les textes de chaque éditeur ont été collectés pour la dernière fois et quel code l’a construit et le sert ; cette page l’affiche dès qu’elle a une réponse.',
+    built: 'Index construit le {date}.',
+    builtUndated: 'L’index ne consigne aucune date de construction.',
+    channels: Object.freeze({
+      'lu-legilux': 'Droit luxembourgeois, depuis Legilux',
+      'eu-eurlex': 'Droit de l’UE, depuis l’Office des publications de l’Union européenne',
+    }),
+    collected: Object.freeze({
+      one: '{channel} : la dernière collecte complète s’est achevée le {date}, {count} jour avant le {today} ; délai pas encore mesuré.',
+      other: '{channel} : la dernière collecte complète s’est achevée le {date}, {count} jours avant le {today} ; délai pas encore mesuré.',
+    }),
+    collectedUnstated: '{channel} : la date à laquelle sa dernière collecte complète s’est achevée n’est pas consignée avec cet index ; délai pas encore mesuré.',
+    indexCommit: 'Index construit à partir de',
+    serviceCommit: 'Service en fonctionnement',
+    commitUnstated: 'non consigné',
+    staleHeading: 'Certains textes peuvent ne pas être à jour',
+    stale: Object.freeze({
+      one: '{channel} : sa dernière collecte complète s’est achevée le {date}, plus de {count} jour avant le {today}. L’éditeur a pu publier des modifications depuis ; consultez son site officiel.',
+      other: '{channel} : sa dernière collecte complète s’est achevée le {date}, plus de {count} jours avant le {today}. L’éditeur a pu publier des modifications depuis ; consultez son site officiel.',
+    }),
+  }),
   home: Object.freeze({
     title: 'Le droit luxembourgeois et de l’UE à la date de votre choix',
     eyebrow: 'Rechercher dans le droit',

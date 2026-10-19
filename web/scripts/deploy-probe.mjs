@@ -5,8 +5,8 @@
 //   the manifest's signature, every asset by size and hash, the image blob by blob and its signature);
 // - health and the page: `GET /` sends a reader who names no language to `/fr/` (R61), with `Vary: Accept-Language`,
 //   and `GET /fr/` answers 200 with the release image's own home page (`homePageFailures`: byte for byte as built, or
-//   as the server renders it from its coverage answer: everything outside the root's content and the facts block the
-//   built page's, byte for byte, facts a home page's, and the whole page what the release's own renderer renders from
+//   as the server renders it from its coverage answer: everything outside the root's content, the facts block and the
+//   freshness strip and banner the built page's, byte for byte, facts a home page's, and the whole page what the release's own renderer renders from
 //   the probe's coverage answer on the facts' day), carrying the security headers the image run probes (CSP with
 //   `frame-ancestors 'none'`, HSTS, `Referrer-Policy: no-referrer`, `nosniff`);
 // - the 404 page (R60): an address nothing claims answers 404 with the release image's own French 404 page, byte for
@@ -97,7 +97,9 @@ export function renderedHomePage(renderer, coverage, today, language = "fr") {
  * - everything outside the root's content and the facts block is the built page's, byte for byte (the head, the
  *   heading, the footer: nothing there depends on the answer), but its robots element, which follows the facts (a home
  *   page that counts the mounted law carries the kept-out marker, which a server opened to search engines removes; the
- *   page as built never is: `search-engines.mjs`, review of #976, F2);
+ *   page as built never is: `search-engines.mjs`, review of #976, F2), and the footer's freshness strip and the staleness
+ *   banner's container, which say the answer's freshness and commits (R87, R23; `withoutFreshness`) and are held by the
+ *   whole page's rendering below;
  * - the facts block is a home page's facts (`readHomeFactsValue`), today and a coverage line of served counts;
  * - the whole page is what the release's own renderer (`renderer`, the bytes of `ssr/fr.js`) renders from the probe's
  *   own coverage answer (`coverage`) on the facts' day, byte for byte, so the root says that answer's counts and nothing
@@ -105,6 +107,18 @@ export function renderedHomePage(renderer, coverage, today, language = "fr") {
  */
 /** A page's head with its robots element left out, either one (`search-engines.mjs`). */
 const withoutRobots = (text) => text.replace(KEPT_OUT_META, "").replace(NEVER_INDEXED_META, "");
+
+// The footer's freshness strip and the staleness banner's container (`Freshness.jsx`; R87, R23): said from the answer the
+// page was rendered from, so they are held by the whole page's rendering below, and set aside where the page is held to the
+// page as built. The strip holds no section inside it and the banner no aside, so each ends at its first closing tag.
+const FRESHNESS_SLOT = /<div id="site-freshness"[^>]*><section class="freshness-strip"[\s\S]*?<\/section><\/div>/g;
+const STALENESS_SLOT = /<div id="site-staleness"[^>]*>(?:<aside class="staleness-banner"[\s\S]*?<\/aside>)?<\/div>/g;
+
+/** A page with its freshness strip and its staleness banner's container each set aside as one mark. */
+export const withoutFreshness = (text) => text.replace(FRESHNESS_SLOT, "<!--freshness-->").replace(STALENESS_SLOT, "<!--staleness-->");
+
+/** What a page is held to outside its root and its facts: its head without its robots element, and without its freshness. */
+const outsideAnswer = (text) => withoutFreshness(withoutRobots(text));
 
 export function homePageFailures(served, built, { renderer = null, coverage = null } = {}) {
   if (served.equals(built)) return [];
@@ -115,7 +129,7 @@ export function homePageFailures(served, built, { renderer = null, coverage = nu
   const parts = homePageParts(page);
   if (parts === null || parts.facts === null) return [`${notOwn}: it carries no root followed by the facts it was rendered from`];
   const failures = [];
-  if (withoutRobots(parts.before) !== withoutRobots(own.before) || parts.after !== own.after) {
+  if (outsideAnswer(parts.before) !== outsideAnswer(own.before) || withoutFreshness(parts.after) !== withoutFreshness(own.after)) {
     failures.push(`${notOwn}: outside its root and its facts it is not the built page, byte for byte`);
   }
   let facts = null;
@@ -179,7 +193,7 @@ export async function revisionFailures(origin, options) {
  * the card at its stable route, coverage from the release's corpus, the clock and an accented title. Every one is an HTTP
  * request; none needs a browser.
  */
-export async function servedPageFailures(origin, { web, card, corpusSha256, notes = [], now = Date.now, ask = askOperation }) {
+export async function servedPageFailures(origin, { web, card, corpusSha256, notes = [], promotion = [], now = Date.now, ask = askOperation }) {
   const failures = [];
   const served = servedPaths(web);
   if (!served.has("/fr/")) return ["the release image holds no live page at /fr/, so the revision has nothing to be held to"];
@@ -246,6 +260,9 @@ export async function servedPageFailures(origin, { web, card, corpusSha256, note
     failures.push(`coverage answers from corpus ${envelope.result?.value?.mounted?.corpus_sha256}, not the release's ${corpusSha256}`);
   }
   if (envelope !== null) {
+    // What the coverage answer says of the data's age decides whether promotion may go ahead (R87, O11), apart from
+    // whether the revision answers as the release holds.
+    promotion.push(...dataAgeFailures(envelope));
     const observedAt = envelope.context?.freshness?.observed_at;
     const clock = clockFailures(observedAt, { asked, answered });
     failures.push(...clock);
@@ -257,6 +274,32 @@ export async function servedPageFailures(origin, { web, card, corpusSha256, note
   // The home page (R67): the release's own, as built or as its renderer renders this revision's coverage answer.
   if (page.status === 200) {
     failures.push(...homePageFailures(body, served.get("/fr/"), { renderer: new Map(web).get("ssr/fr.js") ?? null, coverage: envelope }));
+  }
+  return failures;
+}
+
+/**
+ * Why promotion refuses the data a revision serves, from its answer's freshness header (the specification of record's R87;
+ * O11's recommended maximum, which the answer states): a publisher channel whose newest completed collection is past the
+ * maximum data age at the answer, or one whose completion the mount does not state, so that its age cannot be shown to be
+ * within it; an answer with no channel, or no header, states no data age at all. Each failure names the channel and what the
+ * answer says. Empty when every channel is within the maximum. Not a probe failure: a revision with old data still answers
+ * as its release holds; `deploy.ps1` prints no promotion command while any of these stands.
+ */
+export function dataAgeFailures(envelope) {
+  const freshness = envelope?.context?.freshness;
+  if (freshness === null || typeof freshness !== "object" || !Array.isArray(freshness.channels)) {
+    return ["the answer carries no freshness header, so the data's age is not known"];
+  }
+  if (freshness.channels.length === 0) return ["the answer names no publisher channel, so the data's age is not known"];
+  const maximum = freshness.maximum_data_age_days;
+  const failures = [];
+  for (const channel of freshness.channels) {
+    if (channel?.newest_completed_observation === null || channel?.newest_completed_observation === undefined) {
+      failures.push(`${channel?.publisher}: the mount states no completed collection, so its data's age is not known to be within ${maximum} days`);
+    } else if (channel.stale !== false) {
+      failures.push(`${channel.publisher}: its newest completed collection ended at ${channel.newest_completed_observation}, ${channel.age_days} days before the answer, past the maximum data age of ${maximum} days`);
+    }
   }
   return failures;
 }
@@ -449,7 +492,7 @@ export async function browserFailures(origin, releaseDirectory, { browser, runs 
  * identity's key (`publicKeyPem`), and as signed by the release signer `identity` when one is named, then the revision
  * held to what the release holds. Failures, empty when both hold; what the probe says but does not hold goes to `notes`.
  */
-export async function deployedReleaseFailures(origin, releaseDirectory, { publicKeyPem, identity = null, notes = [] }) {
+export async function deployedReleaseFailures(origin, releaseDirectory, { publicKeyPem, identity = null, notes = [], promotion = [] }) {
   const release = await releaseFailures(releaseDirectory, { publicKeyPem, identity });
   if (release.length > 0) return release.map((failure) => `the release does not read back: ${failure}`);
   const manifest = JSON.parse(await readFile(join(releaseDirectory, RELEASE_MANIFEST), "utf8"));
@@ -458,6 +501,7 @@ export async function deployedReleaseFailures(origin, releaseDirectory, { public
     card: await readFile(join(releaseDirectory, ASSETS.card)),
     corpusSha256: manifest.corpus.sha256,
     notes,
+    promotion,
   });
 }
 
@@ -472,8 +516,11 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
   const publicKey = value("--public-key");
   const identity = value("--signer");
   const withBrowser = argv.includes("--browser");
+  // With --promotion-check, a revision that passes its probe while promotion refuses its data exits 3 (deploy.ps1).
+  const promotionCheck = argv.includes("--promotion-check");
   if (release === null || publicKey === null || (origin !== null && !/^https?:\/\//.test(origin)) || (argv.includes("--signer") && !identity)) {
-    console.error("usage: node scripts/deploy-probe.mjs --release <release directory> --public-key <signing identity's public key, PEM> [--signer <the release signer's identity>] [--origin <the candidate revision's URL> [--browser]]");
+    console.error("usage: node scripts/deploy-probe.mjs --release <release directory> --public-key <signing identity's public key, PEM> [--signer <the release signer's identity>] [--origin <the candidate revision's URL> [--browser] [--promotion-check]]");
+    console.error("       with --promotion-check, a revision that answers as its release holds while promotion refuses its data's age exits 3");
     console.error("       with --signer, the release must be signed by that release signer, never a rehearsal");
     console.error("       without --origin, only the release is read back (deploy.ps1 does this before it touches Azure)");
     process.exit(2);
@@ -489,7 +536,8 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
   }
   const target = origin.replace(/\/+$/, "");
   const notes = [];
-  const failures = await deployedReleaseFailures(target, release, { publicKeyPem, identity, notes });
+  const promotion = [];
+  const failures = await deployedReleaseFailures(target, release, { publicKeyPem, identity, notes, promotion });
   for (const note of notes) console.log(note);
   if (failures.length === 0 && withBrowser) {
     failures.push(...await browserFailures(target, release, { browser: await findBrowser() }));
@@ -500,5 +548,8 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
   console.log(failures.length === 0
     ? `the revision at ${origin} answers as the release holds${withBrowser ? ", in the browser too" : ", over HTTP only (no page walked in a browser)"}`
     : `${failures.length} probe failure(s)`);
-  process.exit(failures.length === 0 ? 0 : 1);
+  // The data's age at promotion (R87, O11): said whatever the probe found, and with --promotion-check its exit says it.
+  for (const refusal of promotion) console.log(`promotion refuses the data: ${refusal}`);
+  if (promotion.length === 0) console.log("the data's age allows promotion: every publisher channel's newest completed collection is within the maximum data age");
+  process.exit(failures.length > 0 ? 1 : promotionCheck && promotion.length > 0 ? 3 : 0);
 }

@@ -241,7 +241,7 @@ test("the script deploys only a release that verifies, and only by the image's d
   assert.ok(!/\$browserProbe\b/.test(code), "no variable spelled like the switch");
   assert.match(code, /if \(\$BrowserProbe -and \$SkipBrowserProbe\) \{ throw /);
   assert.equal((code.match(/\$SkipBrowserProbe/g) ?? []).length, 2, "-SkipBrowserProbe is declared and refused beside -BrowserProbe, and decides nothing else");
-  assert.match(code, /deploy-probe\.mjs'\) --origin \$origin --release \$releasePath --public-key \$keyPath @signerProbe @browserArgs/);
+  assert.match(code, /deploy-probe\.mjs'\) --origin \$origin --release \$releasePath --public-key \$keyPath @signerProbe @browserArgs --promotion-check\n/);
   // Without -BrowserProbe both probes run with the browser trap loaded first, so nothing they run can find or start one.
   assert.match(code, /\$trapPath = \[System\.IO\.Path\]::GetFullPath\(\(Join-Path \$checkout 'web\/scripts\/browser-trap\.mjs'\)\)/);
   assert.match(code, /if \(-not \$trapUrl -or -not \$trapUrl\.StartsWith\('file:\/\/\/'\)\) \{ throw /, "an empty or non-file trap URL stops the deployment");
@@ -260,8 +260,12 @@ test("the script deploys only a release that verifies, and only by the image's d
   assert.match(code, /no browser probe \(no -BrowserProbe\): only the HTTP probes run, under the browser trap, and no page of the candidate is walked in a browser/);
   // Rollback and forward again are printed for the owner with promotion, never run.
   assert.match(code, /Write-Host "  > az containerapp ingress traffic set -g \$ResourceGroup -n \$AppName --revision-weight \$LiveRevision=100"/);
-  // A failed probe deactivates the candidate (the removal step) and stops.
-  assert.match(script, /if \(\$LASTEXITCODE -ne 0\) \{[\s\S]*?revision deactivate[\s\S]*?throw "The candidate failed its probe/);
+  // A failed probe deactivates the candidate (the removal step) and stops; a candidate that passes while promotion refuses
+  // its data's age (the probe's exit 3, R87 and O11) stays, with no traffic, and no promotion or rollback command is printed.
+  assert.match(script, /\$dataAgeRefused = \$LASTEXITCODE -eq 3\r?\nif \(\$LASTEXITCODE -ne 0 -and -not \$dataAgeRefused\) \{[\s\S]*?revision deactivate[\s\S]*?throw "The candidate failed its probe/);
+  const answered = code.slice(code.indexOf('Step "the candidate $candidate answers as the release holds"'));
+  assert.match(answered, /^Step [^\n]*\n[^\n]*\nif \(\$dataAgeRefused\) \{\n[^}]*Promotion refuses this release's data[^}]*\}\nelseif \(\[string\]::IsNullOrEmpty\(\$LiveRevision\)\) \{[^}]*\}\nelse \{\n[^}]*--revision-weight \$candidate=100"\n\}/, "the promotion command only when the data's age allows it");
+  assert.match(answered, /if \(-not \[string\]::IsNullOrEmpty\(\$LiveRevision\) -and -not \$dataAgeRefused\) \{\n    Write-Host "  After promotion, deactivate/, "and the rollback lines, which follow a promotion, only then");
   // A candidate that never becomes ready fails the deployment itself, before the probe: it is deactivated too, if active,
   // and the run stops (review of #963: readiness answers 503 without the law, so Azure's deadline ends the deployment).
   assert.match(code, /catch \{[\s\S]*?\$failedCandidate = "\$AppName--\$suffix"[\s\S]*?revision show [^\n]*--revision \$failedCandidate --query properties\.active[\s\S]*?revision deactivate -g \$ResourceGroup -n \$AppName --revision \$failedCandidate[\s\S]*?throw "The candidate revision did not deploy/);
