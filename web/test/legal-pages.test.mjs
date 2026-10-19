@@ -273,3 +273,13 @@ test("the data file holds the owner's retention of 12 months (2026-10-19), and t
   // The opening still refuses the pages, for the three alone.
   assert.deepEqual(publisherFailures(LEGAL_PUBLISHER).length, 3);
 });
+
+test("the accessibility statement declares Lex non-conformant until an audit, the owner's decision of 2026-10-19, in the review's words", () => {
+  const english = said(app.renderLiveLegalPage("accessibility"));
+  assert.ok(english.includes("Lex is built to meet the Web Content Accessibility Guidelines (WCAG) 2.2 at level AA. It has not been audited yet, so it does not claim to meet them: until an audit of the site in service is done, it is non-conformant, as a public sector body's site with no audit is declared in Luxembourg."), english);
+  assert.ok(!english.includes("partially conformant"), "the status the owner replaced is said nowhere");
+  // The French, entry 13 of the review's addendum of 2026-10-18, word for word (a no-break space before the colon).
+  const french = LIVE_CHROME.fr.accessibility.sections.status.text;
+  assert.equal(french, "Lex est conçu pour respecter les Règles pour l’accessibilité des contenus Web (WCAG) 2.2 au niveau AA. Il n’a pas encore été audité et ne prétend donc pas les respecter : tant qu’un audit du site en service n’a pas été réalisé, il est non conforme, comme est déclaré au Luxembourg le site d’un organisme du secteur public qui n’a fait l’objet d’aucun audit.");
+  assert.ok(!JSON.stringify(LIVE_CHROME.fr).includes("partiellement conforme"));
+});

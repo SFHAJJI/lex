@@ -697,7 +697,7 @@ const EN = Object.freeze({
     sections: Object.freeze({
       status: Object.freeze({
         heading: "Conformance status",
-        text: "Lex is built to meet the Web Content Accessibility Guidelines (WCAG) 2.2 at level AA. It has not been audited yet, so it does not claim to meet them: until an audit of the site in service passes, it is partially conformant.",
+        text: "Lex is built to meet the Web Content Accessibility Guidelines (WCAG) 2.2 at level AA. It has not been audited yet, so it does not claim to meet them: until an audit of the site in service is done, it is non-conformant, as a public sector body's site with no audit is declared in Luxembourg.",
       }),
       done: Object.freeze({
         heading: "What has been done",

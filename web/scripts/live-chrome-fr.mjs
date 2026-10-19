@@ -158,9 +158,10 @@
 // publishers; a test's condition and a search engine's permission are "ne doit" and "ne sont autorisés à", never "ne
 // peut"; the EU texts' acknowledgement quoted in English, as they carry it, through `{eurlexAcknowledgement}`; the
 // quotation "le texte cité", the reference "citation"; "Veuillez ne faire figurer"; "fournisseur de messagerie"; no
-// "servir"). Its entry 13 recommended "non conforme" for the accessibility status; the statement keeps R62's "partiellement
-// conforme" with the review's fallback French, and the choice is the owner's (STATUS-WEB.md). The lawyer's read (O4) of
-// these pages is the owner's choice and has not been done.
+// "servir"). Its entry 13 recommended "non conforme" for the accessibility status, with the English "non-conformant": the
+// owner chose it on 2026-10-19 (STATUS-WEB.md), so the statement ships entry 13's recommended English and French word for
+// word, in place of R62's "partiellement conforme". The lawyer's read (O4) of these pages is the owner's choice and has
+// not been done.
 // The EU authenticity statement chosen by the act's date (the owner's decision of 2026-10-18 on PR #975's question, O4):
 // `citation.europe.authenticity`, one string approved in the addendum of 2026-10-17 on the citation generator, is now two
 // entries keyed by the platform's basis, `citation.europe.authenticity.electronic_edition` (that string, unchanged) and
@@ -902,7 +903,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     sections: Object.freeze({
       status: Object.freeze({
         heading: 'État de conformité',
-        text: 'Lex est conçu pour respecter les Règles pour l’accessibilité des contenus Web (WCAG) 2.2 au niveau AA. Il n’a pas encore été audité et ne prétend donc pas les respecter : tant qu’un audit du site en service n’a pas été concluant, il est partiellement conforme.',
+        text: 'Lex est conçu pour respecter les Règles pour l’accessibilité des contenus Web (WCAG) 2.2 au niveau AA. Il n’a pas encore été audité et ne prétend donc pas les respecter : tant qu’un audit du site en service n’a pas été réalisé, il est non conforme, comme est déclaré au Luxembourg le site d’un organisme du secteur public qui n’a fait l’objet d’aucun audit.',
       }),
       done: Object.freeze({
         heading: 'Ce qui a été fait',
