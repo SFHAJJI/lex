@@ -79,3 +79,43 @@ export function holdsToday(state, today) {
 
 /** Whether a state's date is an entry into force, which no page says as "applicable from" (R21). */
 export const datedByEntryIntoForce = (state) => state?.dateRole === 'entry_into_force';
+
+/**
+ * A Luxembourg state's kind on lex-v3-luxembourg-index/9 (`state_kind`: the act as published, a consolidated version or a
+ * version of a code; S7a), or null on an index of schema 8 or 6, which names none. Read where a page says what a version is
+ * (S7c: the consolidation and code caveat on the reading; the versions the dossier lists without text). Any other kind is
+ * refused, so a new one is worded before it is shown.
+ */
+export const STATE_KINDS = Object.freeze(['as_published', 'consolidation', 'code']);
+
+export function readStateKind(state, where) {
+  if (!Object.hasOwn(state, 'state_kind')) return null;
+  const kind = state.state_kind;
+  if (!STATE_KINDS.includes(kind)) {
+    throw new Error(`${where} names the state kind ${JSON.stringify(kind)}; a Luxembourg state is ${STATE_KINDS.join(', ')}`);
+  }
+  return kind;
+}
+
+/**
+ * The French expression a state of another language takes its interval from (`translation_of`, index 9; S7a), or null: a
+ * French state, or an index of schema 8 or 6. A state that names one is the publisher's expression in its own language, and
+ * the reading labels it so (S7c; R18: the publisher's record does not state which language version is authentic).
+ */
+export function readTranslationOf(state, where) {
+  if (!Object.hasOwn(state, 'translation_of') || state.translation_of === null) return null;
+  const value = state.translation_of;
+  if (typeof value !== 'string' || !/^https?:\/\//.test(value)) {
+    throw new Error(`${where} translation_of is ${JSON.stringify(value)}, not the IRI of a French expression`);
+  }
+  return value;
+}
+
+/** The date's role, the entry into force, the kind and the translation of one state, as the pages read them. */
+export function readCatalogueFacts(state, applicabilityDate, where) {
+  return Object.freeze({
+    ...readDateFacts(state, applicabilityDate, where),
+    stateKind: readStateKind(state, where),
+    translationOf: readTranslationOf(state, where),
+  });
+}

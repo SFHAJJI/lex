@@ -192,7 +192,7 @@ function ExportEntries({ model }) {
         {model.items.map((item) => (
           <li key={item.citation}>
             <Say
-              template={COPY.item}
+              template={item.dateRole === 'entry_into_force' ? COPY.itemEntryIntoForce : COPY.item}
               values={{
                 article: <strong>{item.publisherId}</strong>,
                 language: item.language,
@@ -211,7 +211,7 @@ function ExportEntries({ model }) {
           {model.excluded.map((entry) => (
             <li key={`${entry.statePermalink}#${entry.publisherId}`}>
               <Say
-                template={COPY.excluded}
+                template={entry.dateRole === 'entry_into_force' ? COPY.excludedEntryIntoForce : COPY.excluded}
                 values={{
                   article: <strong>{entry.publisherId}</strong>,
                   language: entry.language,

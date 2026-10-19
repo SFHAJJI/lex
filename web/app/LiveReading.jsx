@@ -300,6 +300,32 @@ function Article({ article, state }) {
   );
 }
 
+/**
+ * What a version is and is not, said under its heading (index 9's `state_kind` and `translation_of`; S7c): an expression
+ * the publisher issued in another language than French, beside the French one, of which the publisher's record does not say
+ * which language version is authentic (R18); a consolidated version or a version of a code is documentation without
+ * probative value, the authentic text being the act as published in the Journal officiel (the design's L5 caveat). A
+ * consolidation's act is its work's `/jo`, as the platform names a base act (`base_act_iri`). Nothing on an index of schema
+ * 8 or 6, which names neither.
+ */
+export function VersionCaveats({ state }) {
+  return (
+    <>
+      {state.translationOf ? (
+        <p className="note" data-translation-of={state.translationOf}>
+          <Say template={COPY.translation} values={{ language: state.language, french: <code>{state.translationOf}</code> }} />
+        </p>
+      ) : null}
+      {state.stateKind === 'consolidation' ? (
+        <p className="note" data-caveat="consolidation">
+          <Say template={COPY.consolidationCaveat} values={{ act: <code>{`${state.publisherWorkIri}/jo`}</code> }} />
+        </p>
+      ) : null}
+      {state.stateKind === 'code' ? <p className="note" data-caveat="code">{COPY.codeCaveat}</p> : null}
+    </>
+  );
+}
+
 function StateReading({ state, workKey, paging = null, onNext = null, readable = null }) {
   return (
     <section data-state={state.stateSha256}>
@@ -320,6 +346,7 @@ function StateReading({ state, workKey, paging = null, onNext = null, readable =
       <p>
         <Permalink value={state.permalink} />
       </p>
+      <VersionCaveats state={state} />
       {/* The state's own counts, whichever of its pages are shown. */}
       <p data-counts="">
         <Say

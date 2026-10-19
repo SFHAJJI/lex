@@ -46,7 +46,7 @@ import { articlePermalink, europePermalink, luxembourgPermalink } from './permal
 import { readAnnexesNotServed } from './europe-annexes.mjs';
 import { readAsPublished } from './as-published.mjs';
 import { readVersionPages } from './reading-pages.mjs';
-import { readDateFacts, readInterval } from './date-role.mjs';
+import { readCatalogueFacts, readInterval } from './date-role.mjs';
 
 /** The acknowledgement every EU text served carries (Decision 95). */
 export const EUROPE_TEXT_ACKNOWLEDGEMENT = '© European Union, https://eur-lex.europa.eu';
@@ -352,8 +352,9 @@ function readState(state, index, context) {
 
   return Object.freeze({
     ...partial,
-    // The date's role and the act's entry into force (index 9; null on an index of schema 8 or 6): R21, `date-role.mjs`.
-    ...readDateFacts(state, applicabilityDate, where),
+    // The date's role, the act's entry into force, the state's kind and the French expression a translation takes its interval
+    // from (index 9; null on an index of schema 8 or 6): R21, the caveat and the translation label, `date-role.mjs`.
+    ...readCatalogueFacts(state, applicabilityDate, where),
     // The interval's end on index 9 (`endKnown`), which says whether the state answers today (`holdsToday`).
     ...readInterval(state, where),
     missingArticles: readMissingArticles(state, where),

@@ -20,10 +20,46 @@
 //  - a row's next date is the next later state of its language in scope, whether or not that state
 //    carries the anchor.
 // Nothing is derived here that the answer does not state: no end date, no "in force", no diff text.
+//
+// On lex-v3-luxembourg-index/9 (S7b) each row carries its state's date role (R21: a row dated by its entry into force is
+// said as that), and the answer names, per language, each run of dates no state with held text covers
+// (`continuity_breaks`: a textless state, a hole, an unclear end day, an invalid interval, a language with no expression),
+// each row saying whether one lies before it (`after_break`); this reader holds each row's mark to the breaks it names. An
+// answer of an index of schema 8 or 6 names none of them, and is read as before.
 
 import { isCalendarDate } from './temporal.mjs';
 import { luxembourgPermalink } from './permalinks.mjs';
 import { readDateFacts } from './date-role.mjs';
+
+/** The reasons a continuity break names (the platform's `ContinuityRule`): a text status, or why no state covers a date. */
+export const BREAK_REASONS = Object.freeze([
+  'withheld_rights', 'not_available_pdf', 'not_available_derivation', 'not_available_misfiled', 'not_acquired',
+  'catalogue_hole', 'publisher_end_convention_unclear', 'publisher_interval_invalid', 'no_expression_in_language',
+]);
+
+/** Index 9's continuity breaks, or an empty list on an answer that names none (an index of schema 8 or 6). */
+function readBreaks(answer) {
+  if (!Object.hasOwn(answer, 'continuity_breaks')) return Object.freeze([]);
+  return Object.freeze(requireList(answer.continuity_breaks, 'continuity_breaks').map((entry, index) => {
+    const at = `continuity break ${index + 1}`;
+    const from = requireDate(requireOwn(entry, 'from', at), `${at} from`);
+    const to = requireOwn(entry, 'to', at);
+    if (to !== null && requireDate(to, `${at} to`) <= from) throw new Error(`${at} runs from ${from} to ${to}`);
+    const reasons = requireList(requireOwn(entry, 'reasons', at), `${at} reasons`);
+    if (reasons.length === 0) throw new Error(`${at} names no reason`);
+    for (const reason of reasons) {
+      if (!BREAK_REASONS.includes(reason)) throw new Error(`${at} names the reason ${JSON.stringify(reason)}; a break is ${BREAK_REASONS.join(', ')}`);
+    }
+    return Object.freeze({
+      language: requireText(requireOwn(entry, 'language', at), `${at} language`),
+      from,
+      to,
+      reasons: Object.freeze([...reasons]),
+      namedStates: Object.freeze(requireList(requireOwn(entry, 'named_states', at), `${at} named_states`)
+        .map((name, position) => requireText(name, `${at} named_states[${position}]`))),
+    });
+  }));
+}
 
 const DIGEST = /^[0-9a-f]{64}$/;
 const STATE_PERMALINK = /^\/lu-legilux\/([^/]+)\/(\d{4}-\d{2}-\d{2})--([0-9a-f]{64})\/([a-z]{3})$/;
@@ -169,6 +205,7 @@ export function readArticleHistory(answer) {
       stableCoordinate: coordinate,
       articles: Object.freeze(articles),
       wordingChanged: requireBoolean(requireOwn(row, 'wording_changed', at), `${at} wording_changed`),
+      afterBreak: Object.hasOwn(row, 'after_break') ? requireBoolean(row.after_break, `${at} after_break`) : false,
     };
   });
   if (rows.length === 0) {
@@ -233,6 +270,16 @@ export function readArticleHistory(answer) {
     && [...derived].every(([key, value]) => stated.get(key) === (value instanceof Set ? value.size : value));
   if (!same(statedRuns, runs)) throw new Error('wording_runs are not the first row and every change of each language');
   if (!same(statedDistinct, distinct)) throw new Error('distinct_wordings are not the distinct wordings of each language');
+  // A row says a break lies before it exactly when one of its language begins on or after the row before it and before it.
+  const breaks = readBreaks(answer);
+  for (const [index, row] of rows.entries()) {
+    const previous = rows.slice(0, index).reverse().find((other) => other.language === row.language) ?? null;
+    const expected = previous !== null && breaks.some((gap) => gap.language === row.language
+      && gap.from >= previous.applicabilityDate && gap.from < row.applicabilityDate);
+    if (row.afterBreak !== expected) {
+      throw new Error(`the row of ${row.applicabilityDate} in ${row.language} says after_break is ${row.afterBreak}, and the breaks it names say ${expected}`);
+    }
+  }
   const historyBegins = requireDate(requireOwn(answer, 'history_begins', where), 'history_begins');
   if (historyBegins !== rows[0].applicabilityDate) {
     throw new Error(`history_begins is ${historyBegins}, and the lineage's first row is from ${rows[0].applicabilityDate}`);
@@ -247,6 +294,7 @@ export function readArticleHistory(answer) {
     historyBegins,
     rows: Object.freeze(rows.map((row) => Object.freeze(row))),
     absent: Object.freeze(absent),
+    breaks,
     wordingRuns: Object.freeze(Object.fromEntries(statedRuns)),
     distinctWordings: Object.freeze(Object.fromEntries(statedDistinct)),
     wordingRule: requireText(requireOwn(answer, 'wording_rule', where), 'wording_rule'),
