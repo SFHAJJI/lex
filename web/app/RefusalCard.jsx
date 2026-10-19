@@ -66,7 +66,10 @@ function AbsenceEvidence({ absence, copy }) {
 
 /** One offered state, in the card's words: its date, its hash as code, its publication and standing. */
 function Candidate({ candidate, copy }) {
-  const published = candidate.publicationDate === null ? copy.publicationNotStated : fillText(copy.published, { date: candidate.publicationDate });
+  // An act as published is "published" as an act, in a language that agrees the word (the French review of S7b and S7c).
+  const published = candidate.publicationDate === null
+    ? copy.publicationNotStated
+    : fillText(candidate.datedByEntryIntoForce ? copy.publishedAct : copy.published, { date: candidate.publicationDate });
   // An act dated by its entry into force is offered as that, never as applicable from it (R21; index 9's candidate roles).
   const template = candidate.datedByEntryIntoForce
     ? (candidate.withdrawalStated ? copy.candidateEntryIntoForce : copy.candidateEntryIntoForceWithdrawalNotStated)

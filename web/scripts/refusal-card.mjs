@@ -889,6 +889,8 @@ const TEXT_NOT_HELD = Object.freeze({
 const TEXTLESS = "The version that covers this date, {version}, is in the publisher's catalogue, and this site holds none of its text: {why}. No other version is shown in its place.";
 const TEXTLESS_NAMED = "This version, {version}, is in the publisher's catalogue, and this site holds none of its text: {why}.";
 const PUBLISHED = 'published {date}';
+/** The same said of an act as published (a language may agree it with "act" where it agrees the other with "version"). */
+const PUBLISHED_ACT = 'published {date}';
 const PUBLICATION_NOT_STATED = 'publication date not stated by the platform';
 
 /**
@@ -930,6 +932,7 @@ export const REFUSAL_CARD_COPY = Object.freeze({
   europeNotes: EUROPE_NOTE,
   // Index 9 (S7a's refusals, worded in S7c): an act offered as dated by its entry into force, why no version covers the date,
   // the base act's end-of-force facts after a closed end, a version named by its kind and role, and why its text is not held.
+  publishedAct: PUBLISHED_ACT,
   candidateEntryIntoForce: CANDIDATE_ENTRY_INTO_FORCE,
   candidateEntryIntoForceWithdrawalNotStated: CANDIDATE_ENTRY_INTO_FORCE_WITHDRAWAL_NOT_STATED,
   reasons: REASONS,

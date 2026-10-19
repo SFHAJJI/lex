@@ -200,7 +200,7 @@ const EN = Object.freeze({
     chainHeading: "The publisher's catalogue between versions",
     textlessHeading: "Versions whose text this site does not hold",
     textlessRow: "{version}: {why}.",
-    gap: "From {from} to {to}, the publisher's catalogue lists no version: a gap this site does not fill.",
+    gap: "From {from}, the end the publisher's catalogue gives for one version, to {to}, when the next begins, the catalogue lists no version: a gap this site does not fill.",
     overlap: "From {from} to {to}, two versions in the publisher's catalogue are both applicable (publisher).",
     sameDate: "On {date}, the publisher's catalogue lists {count} versions.",
     unclearEndDay: "{date} is the end the publisher's catalogue gives for one version, the day before the next begins; whether that day belongs to it is unclear, and this site gives it to neither.",
@@ -254,7 +254,7 @@ const EN = Object.freeze({
     // S7c: an expression in another language than French that the publisher issued (index 9's translation_of; R18), and what a
     // consolidated version or a code's version is and is not (the design's L5 caveat; spec 33 §3), with the act it consolidates.
     translation: "This text is the publisher's {language} expression of the act, beside its French expression {french}. The publisher's record does not state which language version is authentic.",
-    consolidationCaveat: "A consolidated version is documentation without probative value: the authentic text is the act as published in the Journal officiel (Mémorial A), {act}.",
+    consolidationCaveat: "A consolidated version is documentation without probative value. Only the texts published in the Journal officiel (Mémorial A) are authentic: the act as published, {act}, and the acts that amended it, whose list Lex does not yet hold.",
     codeCaveat: "A version of a code is documentation without probative value: the authentic texts are the acts published in the Journal officiel (Mémorial A) that it brings together.",
     // Content /3 (S3b): the publisher's deleted wording, struck through, said to a screen reader at its start and end; the
     // sentence under an article that holds some; a note whose reference the publisher wrote without a marker.
@@ -356,7 +356,7 @@ const EN = Object.freeze({
     // Index 9's continuity breaks (S7b): the runs of dates no version whose text this site holds covers, each with why, the
     // mark on a row after one, and what an unchanged wording across one does not say.
     breaksHeading: "Dates no version with held text covers",
-    breakTo: "In {language}, from {from} to {to}: {reasons}.",
+    breakTo: "In {language}, from {from} to the day before {to}: {reasons}.",
     breakOpen: "In {language}, from {from}, with no later version whose text this site holds: {reasons}.",
     breakReasons: Object.freeze({
       withheld_rights: "a version whose rights did not admit its text",

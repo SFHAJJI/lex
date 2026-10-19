@@ -92,8 +92,9 @@ function StatesSpan({ view }) {
       ? <Say template={countedEntry(COPY.states, count)} values={{ count, from, to }} />
       : <Say template={countedEntry(COPY.statesIn, count)} values={{ count, language, from, to }} />;
   }
-  // Every state an act as published dated by its entry into force: one per language, all on its one date.
-  if (datedByEntryIntoForce(latest)) {
+  // Every state an act as published dated by its entry into force: one per language, all on its one date (so one state in a
+  // language asked, which the uncounted form says; the French review of S7b and S7c, point 4).
+  if (datedByEntryIntoForce(latest) && (language === null || count === 1)) {
     return language === null
       ? <Say template={countedEntry(COPY.statesEntryIntoForce, count)} values={{ count, from }} />
       : <Say template={COPY.statesInEntryIntoForce} values={{ count, language, from }} />;
@@ -129,9 +130,11 @@ function CatalogueChain({ chain }) {
           <ul data-textless={chain.textless.length}>
             {chain.textless.map((row) => {
               const version = fillCard(card.versions[versionNameKey(row.stateKind, row.dateRole)], { date: row.applicabilityDate });
+              // The row is a sentence, so its first letter is a capital (the French review of S7b and S7c, point 2).
+              const said = fillText(COPY.textlessRow, { version, why: card.textNotHeld[row.textStatus] });
               return (
                 <li key={row.stateSha256} data-text-status={row.textStatus}>
-                  {fillText(COPY.textlessRow, { version, why: card.textNotHeld[row.textStatus] })}{' '}
+                  {`${said.charAt(0).toUpperCase()}${said.slice(1)}`}{' '}
                   {row.permalink === null ? <code>{row.stableCoordinate}</code> : <Permalink value={row.permalink} />}
                 </li>
               );

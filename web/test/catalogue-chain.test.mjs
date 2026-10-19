@@ -34,6 +34,7 @@ const FR = LIVE_CHROME.fr;
 const ENTITIES = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#x27;": "'", "&#39;": "'" };
 const decode = (text) => text.replace(/&(?:amp|lt|gt|quot|#x27|#39);/g, (entity) => ENTITIES[entity]);
 const DIGEST_A = "a".repeat(64);
+const capitalised = (text) => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
 const DIGEST_B = "b".repeat(64);
 
 function sample(operation, scenario) {
@@ -243,7 +244,7 @@ test("the dossier lists the catalogue's versions held without text and its gaps,
   const markup = decode(renderToStaticMarkup(h(DossierAnswerView, { outcome })));
   for (const said of [
     EN.dossier.chainHeading,
-    fillText(EN.dossier.textlessRow, { version: fillText(EN.refusalCard.versions.consolidation, { date: "2030-01-01" }), why: EN.refusalCard.textNotHeld.withheld_rights }),
+    capitalised(fillText(EN.dossier.textlessRow, { version: fillText(EN.refusalCard.versions.consolidation, { date: "2030-01-01" }), why: EN.refusalCard.textNotHeld.withheld_rights })),
     fillText(EN.dossier.gap, { from: "2031-01-01", to: "2032-01-01" }),
     fillText(EN.dossier.overlap, { from: "2028-06-01", to: "2028-12-31" }),
     fillText(EN.dossier.sameDate, { date: "2027-01-01", count: 2 }),
