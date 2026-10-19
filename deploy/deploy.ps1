@@ -76,6 +76,7 @@ param(
     [Parameter(ParameterSetName = 'Deploy')] [switch] $Apply,
     [Parameter(ParameterSetName = 'Deploy')] [switch] $BrowserProbe,
     [Parameter(ParameterSetName = 'Deploy')] [switch] $SkipBrowserProbe,
+    [Parameter(ParameterSetName = 'Deploy')] [ValidateSet('kept-out', 'indexed', IgnoreCase = $false)] [string] $SearchEngines = 'kept-out',
 
     [Parameter(Mandatory, ParameterSetName = 'Remove')] [switch] $Remove,
     [Parameter(Mandatory, ParameterSetName = 'Remove')] [string] $Revision,
@@ -206,10 +207,33 @@ finally {
 # 3. The candidate revision, with no traffic while a live revision serves, admitting only the named ranges until the
 # opening. The parameters go in a file, since the ranges are an array; it holds no secret.
 Step "deploy the candidate revision $suffix"
+# A domain already bound to the app (deploy/bind-domain.ps1) is read back and passed on, so a redeployment keeps it: the
+# template would otherwise set the app's custom domains to none. A plan run asks Azure nothing, and says so.
+$customDomains = @()
+if ($Apply) {
+    # A read that fails must stop the deployment, never pass "none" on: the template would unbind the domain (the review
+    # of #988). Only a first deployment, with no app yet, has nothing to read.
+    $bound = az containerapp show -g $ResourceGroup -n $AppName --query "properties.configuration.ingress.customDomains" -o json
+    if ($LASTEXITCODE -ne 0) {
+        if (-not [string]::IsNullOrEmpty($LiveRevision)) {
+            throw "The custom domains bound to $AppName could not be read; nothing is deployed, so none is unbound."
+        }
+        Write-Host "  a first deployment: $AppName holds no custom domain yet"
+    }
+    elseif ($bound) {
+        $customDomains = @($bound | ConvertFrom-Json | Where-Object { $_ } | ForEach-Object {
+                [ordered]@{ name = $_.name; bindingType = $_.bindingType; certificateId = $_.certificateId } })
+    }
+    Write-Host "  custom domains kept: $(if ($customDomains.Count) { ($customDomains | ForEach-Object { $_.name }) -join ', ' } else { 'none' })"
+}
+else {
+    Write-Host "  > the custom domains bound to $AppName are read back and kept (a plan run asks Azure nothing)"
+}
 $values = [ordered]@{
     environmentId = $EnvironmentId; appName = $AppName; image = $image; registryServer = $Registry
     identityResourceId = $IdentityResourceId; revisionSuffix = $suffix; liveRevision = $LiveRevision
-    allowedSourceCidrs = @($AllowedCidr); openToPublic = [bool]$Public
+    allowedSourceCidrs = @($AllowedCidr); openToPublic = [bool]$Public; searchEngines = $SearchEngines
+    customDomains = @($customDomains)
 }
 $document = [ordered]@{
     '$schema' = 'https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#'
@@ -218,7 +242,11 @@ $document = [ordered]@{
 }
 foreach ($name in $values.Keys) { $document.parameters[$name] = @{ value = $values[$name] } }
 $parametersFile = Join-Path ([System.IO.Path]::GetTempPath()) "lex-v3-deploy-$([guid]::NewGuid().ToString('N')).parameters.json"
-$shown = ($values.Keys | ForEach-Object { "$_=$(if ($values[$_] -is [array]) { '[' + ($values[$_] -join ',') + ']' } else { $values[$_] })" }) -join ' '
+$shown = ($values.Keys | ForEach-Object {
+        $value = $values[$_]
+        $text = if ($_ -eq 'customDomains') { '[' + (($value | ForEach-Object { $_.name }) -join ',') + ']' } elseif ($value -is [array]) { '[' + ($value -join ',') + ']' } else { $value }
+        "$_=$text"
+    }) -join ' '
 try {
     $document | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $parametersFile -Encoding utf8NoBOM
     Run "az deployment group what-if -g $ResourceGroup -f deploy/main.bicep -p <parameters: $shown>" {
@@ -227,6 +255,13 @@ try {
     try {
         Run "az deployment group create -g $ResourceGroup -f deploy/main.bicep -p <parameters: $shown>" {
             az deployment group create -g $ResourceGroup -f (Join-Path $checkout 'deploy/main.bicep') -p "@$parametersFile" -o none
+        }
+        if ($Apply -and $customDomains.Count) {
+            # Read back: every domain bound before the deployment is still bound after it.
+            $after = @(az containerapp show -g $ResourceGroup -n $AppName --query "properties.configuration.ingress.customDomains[].name" -o json | ConvertFrom-Json)
+            $lost = @($customDomains | Where-Object { $after -notcontains $_.name } | ForEach-Object { $_.name })
+            if ($lost.Count) { throw "The deployment unbound $($lost -join ', '); run deploy/bind-domain.ps1 -Apply to bind it again." }
+            Write-Host "  custom domains still bound: $($after -join ', ')"
         }
     }
     catch {

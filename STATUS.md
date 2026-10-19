@@ -144,6 +144,20 @@ Only money, legal or public claims, credentials and going live (ruling 7):
   TXT verification record, whose value the driver gives. The driver then binds the name with a managed certificate,
   keeps the private copy's address list (it stays private until the opening), and deletes the Azure zone. O14's other
   half, the payment method, is not decided yet (below).
+  **Changed on 2026-10-18.** The registrar named the "-06" Azure name servers, which held no zone for soufien.lu (V2's
+  old one), so every lookup failed. The owner, who said that day "build everything on azure i can handle more payments
+  if necessary", pointed the registrar at the Azure zone's own servers (ns1-05 to ns4-05). So the zone in rg-lex-v3 now
+  serves soufien.lu, departing from O14's "at the registrar": R117's risk (the name goes down with the subscription, as
+  V2's did) is accepted while the subscription stays funded. law.soufien.lu is bound to the app with a managed
+  certificate (`deploy/bind-domain.ps1`); the site stays private until the opening. Moving the zone to the registrar
+  later stays possible: the two records are the CNAME `law` and the TXT `asuid.law`.
+- The owner's decisions of 2026-10-18 (the owner's words: "yes yes go with what you recommend", "Opening to the public
+  once we finish v3", "build everything on azure i can handle more payments if necessary ill start paying after my
+  credit end", "you have 24 hours max to finish v3"):
+  - the EU authenticity wording for acts published before 1 July 2013, as #975 recommended;
+  - O27, search-engine indexing: yes, from the opening, law pages only for the acts R92's measurement clears;
+  - the opening: when V3 is finished, without waiting for the lawyer's read (O4) or the audits;
+  - money: Azure storage for the custody's second copy and Azure machines for heavy builds, paid after the credits end.
 - The plan's decisions (its section 5: each with its recommended answer, its cost and what stops without it):
   - **Now, by Friday 16 October**: the Azure sign-in; the rest of O14 (R117): a valid payment method kept on the V3
     subscription, a backup one, and billing alerts on two channels, so a failed payment cannot take the site down as

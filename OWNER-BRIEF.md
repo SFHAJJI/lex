@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-18 at 05:47 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-18 at 09:10 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -11,30 +11,25 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 - Landed on 17 October: the new home page; a link opens on the article it cites; readable addresses; one
   citation in three forms for copy, export and links; and the search box opens a law from its exact reference (an
   ELI, a CELEX number, a Mémorial issue, "loi du 10 août 1991", "Article 6 of Regulation (EU) 2016/679").
-- Your private copy runs today's code since 18 October (a signed release, checked over HTTP), at the address the
-  driver gave you, from this PC or your 14 October address. Search results come grouped by act, the words
-  found marked. Kept off until you decide: search engines. Being built: dated Luxembourg versions.
-- Still thin: Luxembourg has 1,730 acts as first published, no codes; EU text covers 511 of 1,170 versions. Done and
-  waiting for disk: the codes (121,000 articles) and quoted or struck-out wording (6,000 more, from 18 October).
+- Your private copy runs today's code since 18 October (a signed release, checked over HTTP), now at law.soufien.lu
+  over HTTPS, still open only to this PC and your 14 October address. Built on 18 October: search results by act, long
+  codes page by page, the reader of dated versions, quoted and struck-out wording, a lighter rebuild.
+- Still thin: Luxembourg has 1,730 acts as first published, no codes; EU text covers 511 of 1,170 versions. The codes
+  (121,000 articles) and about 28,000 more articles wait for the rebuild on an Azure machine.
 
 ## The plan
 
-- You asked for days, not months. A private beta with today's law comes first, then the codes once the disk is
-  solved. Opening it to the public before the lawyer's read and the audits is your decision, not the driver's. The
-  full plan is your private page, and C:\lex-v3\PLAN-2026-10-14.md.
-- Decided by you on 14 October: the DNS lives at your registrar, and the site keeps V2's address, law.soufien.lu.
+- Decided by you on 18 October: build on Azure, paid after the credits end; open to the public once V3 is finished,
+  within 24 hours, without the lawyer's read or the audits; search engines may index it; the EU wording as recommended.
+- The domain's name servers are Azure's since your switch on 18 October, not the registrar's as decided on 14
+  October: the name now depends on the subscription staying paid, as V2's did. Keep the payment method valid.
+- The full plan is your private page, and C:\lex-v3\PLAN-2026-10-14.md.
 
 ## What waits on you
 
-- Now, because the codes wait on it: a second copy of the publisher files before old outputs are cleared. Either a
-  "yes" to an Azure storage copy of those files (under 0.50 EUR a month) or an encrypted external disk. Also say
-  whether hibernation may go off.
-- Azure money: your 175.70 EUR of credits end on 12 November. Then the private copy of the site (about 26 EUR a
-  month) is billed to your payment method, within your 30 EUR budget; a support plan pays for support only.
-- DNS: point soufien.lu's name servers to your registrar's own and add the two records the driver gave you.
-- Two questions in open pull requests: which edition of the EU's Official Journal the site calls authentic for acts
-  published before 1 July 2013; and whether search engines may index the site once it opens.
-- By Wednesday 21 October, one reply to the decision list, each with its recommended answer, including whether a
-  public beta may open before the lawyer and the audits.
-- By Friday 30 October: the Luxembourg licence rulings, the hosting money and the signing keys, the details for the
-  legal pages, and booking the people the checks need: a lawyer, an accessibility auditor and testers.
+- Now: turn on Azure Compute, with the one Cloud Shell line the driver gave you, so the codes can be rebuilt on an
+  Azure machine (about 5 EUR a rebuild).
+- Now: the legal notice's details: the publisher's name, a postal address and a contact email to publish.
+- Before 12 November: your 175.70 EUR of credits end. Then the site (about 26 EUR a month), the storage (under 0.50 EUR
+  a month) and each rebuild are billed to your payment method.
+- Your choice, not done before the opening: a lawyer's read of the legal texts, an accessibility audit, user tests.

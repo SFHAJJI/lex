@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "3334919308441672450"
+      "templateHash": "7690208800319421721"
     }
   },
   "parameters": {
@@ -73,6 +73,24 @@
       "metadata": {
         "description": "True only once the owner has opened the site (deploy.ps1 -Public): ingress then admits everyone."
       }
+    },
+    "searchEngines": {
+      "type": "string",
+      "defaultValue": "kept-out",
+      "allowedValues": [
+        "kept-out",
+        "indexed"
+      ],
+      "metadata": {
+        "description": "Whether search engines may index the site, read by the API at startup as LEX_V3_SEARCH_ENGINES: kept-out (every page noindex, no sitemap) or indexed (the owner's answer to O27 on 2026-10-18; law pages still open only for the works the release's indexing record lists)."
+      }
+    },
+    "customDomains": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "The custom domains bound to the app, as Azure holds them (name, bindingType, certificateId): deploy.ps1 reads them back and passes them on every deployment, so a redeployment keeps the binding. Empty until law.soufien.lu is bound (deploy/bind-domain.ps1)."
+      }
     }
   },
   "variables": {
@@ -120,7 +138,8 @@
             "transport": "http",
             "allowInsecure": false,
             "traffic": "[if(variables('firstDeployment'), createArray(createObject('latestRevision', true(), 'weight', 100, 'label', 'candidate')), createArray(createObject('revisionName', parameters('liveRevision'), 'weight', 100), createObject('latestRevision', true(), 'weight', 0, 'label', 'candidate')))]",
-            "ipSecurityRestrictions": "[if(parameters('openToPublic'), createArray(), if(empty(parameters('allowedSourceCidrs')), variables('admitNoOne'), variables('allowedOnly')))]"
+            "ipSecurityRestrictions": "[if(parameters('openToPublic'), createArray(), if(empty(parameters('allowedSourceCidrs')), variables('admitNoOne'), variables('allowedOnly')))]",
+            "customDomains": "[parameters('customDomains')]"
           },
           "registries": [
             {
@@ -147,6 +166,10 @@
                 {
                   "name": "LEX_V3_TEMP_IS_PRIVATE",
                   "value": "1"
+                },
+                {
+                  "name": "LEX_V3_SEARCH_ENGINES",
+                  "value": "[parameters('searchEngines')]"
                 }
               ],
               "probes": [
