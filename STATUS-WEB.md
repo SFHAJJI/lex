@@ -57,7 +57,14 @@ chooses, to the specification of record's R20 ("the electronic Official Journal 
   wording's text held. Of those 70, 54 say the electronic edition's statement and 16 the dated one (32003L0087 to
   32013R0575; #975's text counted 13 of 63 by another measure). 29 have their original's text held; the other 41 are dated
   by the census's date alone, and 31 of them say the electronic statement only because of it. No act's two dates fall on
-  either side of the day.
+  either side of the day. Through the handler (derive-c mounted read-only in a probe test that was not committed; every
+  dated wording whose text is held, in each language): 538 bundles asked, 472 answered and 66 refused
+  `ambiguous_version` (two different texts on one date, as before); 68 acts answered, 53 with the electronic statement
+  and 15 with the dated one, and no act with both (32005L0029, dated, and 32023R1114 have only ambiguous wordings). Of the
+  answers, 193 say the dated statement (181 of them consolidations of acts dated before the day) and 279 the electronic
+  one; every statement is its basis's. The original-wording path, asked by each answer's first article, answered the
+  same basis for all 58 originals (it serves original legal text only, so the 414 consolidations' articles are unknown
+  to it, as before).
 - **Tests**: `V3CorpusEuropeAuthenticityTests` (new): the owner's two sentences word for word; the day before, the day and
   the day after, June 2013, none held, two dates; the 16 acts; and, over a derived mount whose original is dated
   2013-06-30 or 2013-07-01 (a fixture's date in the GDPR's package) with a consolidation of 2024, the original and the
@@ -65,6 +72,15 @@ chooses, to the specification of record's R20 ("the electronic Official Journal 
   the GDPR's statement, and both paths alike. The envelope census gained an EU act dated 2013-06-26 (a fixture's date),
   which the web's citation tests read; the web tests cover the reader's rules, the reading's lead, the evidence form in
   English and French, and the JSON, CSV and PDF.
+- **Measured** (rebased on `v3/integration` at #988's merge, 0b908870), with no browser started: `dotnet build Lex.V3.slnx
+  -c Release` 0 warnings, 0 errors; `Lex.V3.Tests` 3,321 (3,315 passed, 6 skipped); the `Lex.V3.Ingest.Tests` classes
+  touched (the authenticity, EU time view and branch, EU evidence bundle) with the samples (envelope, answer, refusal
+  payload), the census classes, `PublicRequestRecordingTests`, MCP and the two legacy classes, 136 (133 passed, 3
+  skipped: the recording gate and two live canaries); the envelope census rendered with `V3_RENDER_ENVELOPE_SAMPLES` and
+  verified without it; the legacy schema-8 and schema-6 answers unchanged (LU-only mounts carry no EU statement, and the
+  registry digest did not move), so not recorded again; the web build, and the web suite 1,277 (1,274 passed, 3 skipped;
+  a first run failed the date-format check, which now leaves out the EU statement, and a locale build that lost its
+  temporary folder under load); `eng/verify-v3-tree.ps1` 1,647 tracked paths.
 - **Not in this slice** (next): the Official Journal's publication date read into the EU index, so the cut-off reads it
   (a data-lane slice); the regulation's art. 1(2) and art. 3 checked against its text, and the reviewer's three optional
   points, at a lawyer's read if the owner books one (O4; the opening does not wait for it, the owner's decision of
