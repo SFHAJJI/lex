@@ -132,7 +132,7 @@ test("a readable address keeps the date it was read at: asked at that date, said
   assert.equal(readsAnotherDay(readable, outcome), true);
   assert.equal(
     plain(renderToStaticMarkup(h(NotToday, { outcome, pin: readable }))),
-    `<p data-not-today="${STATE.applicability_date}">This page reads the act on ${STATE.applicability_date}, as this site holds it on that date; today in Luxembourg is 2026-09-18. <a href="/en/lu-legilux/loi-1991-08-10-n3/fra/art_15" data-read-today="">Read this act at today&#x27;s date</a></p>`,
+    `<p data-not-today="${STATE.applicability_date}">This page reads the act on ${STATE.applicability_date}, as this site holds it for that date; today in Luxembourg is 2026-09-18. <a href="/en/lu-legilux/loi-1991-08-10-n3/fra/art_15" data-read-today="">Read this act at today&#x27;s date</a></p>`,
   );
   assert.equal(readsAnotherDay(readingPinOf(`/en${STATE.permalink}/art_15`, READING), outcome), false, "a permalink names its date");
   assert.equal(readsAnotherDay(readable, { ...outcome, context: { ...outcome.context, freshness: { ...outcome.context.freshness, observed_at: "2024-02-01T10:00:00.0000000Z" } } }), false, "read today");

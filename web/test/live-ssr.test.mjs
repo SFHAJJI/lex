@@ -251,7 +251,7 @@ test("a permalink's reading is rendered complete, and the browser renders the sa
   // by its permalink; the canonical still the readable address, the version shown being today's too.
   const another = { envelope: READING, path: readable.path };
   const anotherHtml = renderLiveReadingPage({ initial: another });
-  assert.ok(anotherHtml.replaceAll("<!-- -->", "").includes(`<p data-not-today="${STATE.applicability_date}">This page reads the act on ${STATE.applicability_date}, as this site holds it on that date; today in Luxembourg is 2026-09-18. <a href="/en/lu-legilux/loi-1991-08-10-n3/fra/${cited.publisher_id}" data-read-today="">Read this act at today&#x27;s date</a></p>`), anotherHtml.slice(anotherHtml.indexOf("data-pinned-lead"), anotherHtml.indexOf("data-pinned-lead") + 400));
+  assert.ok(anotherHtml.replaceAll("<!-- -->", "").includes(`<p data-not-today="${STATE.applicability_date}">This page reads the act on ${STATE.applicability_date}, as this site holds it for that date; today in Luxembourg is 2026-09-18. <a href="/en/lu-legilux/loi-1991-08-10-n3/fra/${cited.publisher_id}" data-read-today="">Read this act at today&#x27;s date</a></p>`), anotherHtml.slice(anotherHtml.indexOf("data-pinned-lead"), anotherHtml.indexOf("data-pinned-lead") + 400));
   assert.ok(anotherHtml.indexOf("data-not-today") < anotherHtml.indexOf("data-cited-article"), "said first");
   assert.ok(anotherHtml.includes(`<p data-whole-act=""><a href="/en${STATE.permalink}">`), "the whole act at the version it shows");
   assert.ok(anotherHtml.includes(`<link rel="canonical" href="https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3/fra/${cited.publisher_id}"/>`), "the version shown is today's");
