@@ -56,6 +56,14 @@ public sealed class V3CorpusIntervalMountTests
         // A document whose third article is not admitted: its place is skipped, and the publisher's order is not the ids'.
         h.State(W("loi/2010/03/03/n1/jo"), entryIntoForce: "2010-03-03", expressions: ("fr", Fra))
             .Held(W("loi/2010/03/03/n1/jo"), ["art_2", "art_10", "art_1bis"], inFileDate: "2010-03-03", positions: [1, 2, 4]);
+
+        // Two closed codes (the review of #987, F4): one whose state names its base act by isMemberOf, one that names none.
+        h.Fact(W("code/route"), "rdf:type", "http://data.legilux.public.lu/resource/ontology/jolux#ComplexWork");
+        h.State(W("code/route/20100101"), "2010-01-01", "2015-01-01", memberOf: W("loi/1955/02/14/n1"), expressions: ("fr", Fra))
+            .Held(W("code/route/20100101"), ["art_1"]);
+        h.Fact(W("code/eau"), "rdf:type", "http://data.legilux.public.lu/resource/ontology/jolux#ComplexWork");
+        h.State(W("code/eau/20110101"), "2011-01-01", "2014-01-01", expressions: ("fr", Fra))
+            .Held(W("code/eau/20110101"), ["art_1"]);
         return h;
     }
 
@@ -455,6 +463,174 @@ public sealed class V3CorpusIntervalMountTests
         StringAssert.Contains(opened.Result!.Value.GetRawText(), consolidation.GetProperty("state_sha256").GetString());
     }
 
+    /// <summary>Every row of an in_force_on question across works, read page by page from its continue_after.</summary>
+    private static async Task<(string[] Keys, int Pages)> PagedInForceOnAsync(V3CorpusMount mount, string date, int limit)
+    {
+        var keys = new List<string>();
+        string? after = null;
+        var pages = 0;
+        do
+        {
+            Assert.IsLessThan(50, pages, "the cursor advances");
+            var page = (await AskAsync(mount, "in_force_on", after is null ? new { date, limit } : (object)new { date, limit, after_work_key = after })).Result!.Value;
+            pages++;
+            keys.AddRange(page.GetProperty("states").EnumerateArray().Select(static row => row.GetProperty("work_key").GetString()!));
+            after = page.GetProperty("truncated").GetBoolean() ? page.GetProperty("continue_after").GetString() : null;
+            Assert.AreEqual(page.GetProperty("truncated").GetBoolean(), page.GetProperty("continue_after").ValueKind == JsonValueKind.String);
+        }
+        while (after is not null);
+        return (keys.ToArray(), pages);
+    }
+
+    [TestMethod]
+    public async Task InForceOnAcrossWorksPagesOverWorksNoStateCoversAndNeverEndsAPageShortOfTheWorksAfterIt()
+    {
+        await using var fixture = await IntervalMount.CreateAsync();
+        var mount = fixture.Mount;
+
+        // The review of #987, F1: a work with a state before the date and none covering it gives no row, and the page goes on
+        // reading works until it is filled or none remain, so paging finds every row the unlimited answer holds.
+        foreach (var date in new[] { "2021-07-01", "2016-01-01", "2026-10-18" })
+        {
+            var whole = (await AskAsync(mount, "in_force_on", new { date })).Result!.Value;
+            var expected = whole.GetProperty("states").EnumerateArray().Select(static row => row.GetProperty("work_key").GetString()!).ToArray();
+            Assert.IsFalse(whole.GetProperty("truncated").GetBoolean(), date);
+            foreach (var limit in new[] { 1, 2 })
+            {
+                var (paged, pages) = await PagedInForceOnAsync(mount, date, limit);
+                CollectionAssert.AreEqual(expected, paged, $"{date}, limit {limit}: every row, in order, over {pages} pages");
+            }
+        }
+
+        var later = (await AskAsync(mount, "in_force_on", new { date = "2016-01-01" })).Result!.Value;
+        var works = later.GetProperty("states").EnumerateArray().Select(static row => row.GetProperty("work_key").GetString()).ToArray();
+        CollectionAssert.Contains(works, "loi-2010-03-03-n1", "a work after a closed one is not lost");
+        CollectionAssert.DoesNotContain(works, "loi-2005-01-01-n1");
+
+        // F8: a work with a state before the date and none covering it is not a work with a state on the date.
+        var population = later.GetProperty("population");
+        var covered = population.GetProperty("works_with_a_state_on_date").GetInt64();
+        Assert.AreEqual(works.Distinct().LongCount(), covered, "the covered works are the works the answer gives rows for");
+        Assert.IsGreaterThan(0, population.GetProperty("works_not_covered_on_date").GetInt64(), "the closed works are counted apart");
+
+        // REST and MCP answer the same page.
+        var rest = (await AskAsync(mount, "in_force_on", new { date = "2021-07-01", limit = 1 })).Result!.Value;
+        var bytes = await V3McpJsonRpc.HandleAsync(
+            JsonSerializer.SerializeToUtf8Bytes(new { jsonrpc = "2.0", id = 1, method = "tools/call", @params = new { name = "in_force_on", arguments = new { date = "2021-07-01", limit = 1 } } }),
+            new V3PlatformHost(), mount, static () => At, "mcp_in_force_on_paging", CancellationToken.None);
+        Assert.IsNotNull(bytes);
+        using var mcp = JsonDocument.Parse(bytes);
+        var structured = mcp.RootElement.GetProperty("result").GetProperty("structuredContent").GetProperty("result").GetProperty("value");
+        Assert.AreEqual(rest.GetProperty("states").GetRawText(), structured.GetProperty("states").GetRawText());
+        Assert.AreEqual(rest.GetProperty("continue_after").GetRawText(), structured.GetProperty("continue_after").GetRawText());
+    }
+
+    [TestMethod]
+    public async Task AnEliThatNamesOneVersionOpensItOnlyWhereTheRulesServeItAndElseRefusesWithTheirReason()
+    {
+        await using var fixture = await IntervalMount.CreateAsync();
+        var mount = fixture.Mount;
+
+        // The review of #987, F2: the act as published of 2005, named by its ELI, after the work's last state has closed: the
+        // rules' reason, never the act in its place.
+        var closed = await AskAsync(mount, "search", new { query = W("loi/2005/01/01/n1/jo") + ", au 1er janvier 2016", language = "fra" });
+        var closedPayload = Refused(closed, "no_version_for_date");
+        Assert.AreEqual("after_closed_end", closedPayload.GetProperty("reason").GetString());
+
+        // On a date the 2010 consolidation covers, the act is not the version the date selects: refused, the consolidation named.
+        var later = await AskAsync(mount, "search", new { query = W("loi/2005/01/01/n1/jo") + ", au 1er janvier 2012", language = "fra" });
+        var laterPayload = Refused(later, "no_version_for_date");
+        Assert.AreEqual(V3CorpusMount.ReasonOutsideNamedVersion, laterPayload.GetProperty("reason").GetString());
+        StringAssert.Contains(laterPayload.GetProperty("covering_states").EnumerateArray().Single().GetString(), "/2010-01-01--");
+        StringAssert.Contains(laterPayload.GetProperty("named_states").EnumerateArray().Single().GetString(), "/2005-01-05--");
+        Assert.AreEqual("2005-01-05", laterPayload.GetProperty("nearest_earlier").GetString());
+        Assert.IsTrue(laterPayload.EnumerateObject().All(static member => member.Value.ValueKind is not JsonValueKind.Object), "flat, as a card reads it");
+
+        // On a date the act covers, the act opens.
+        var own = await AskAsync(mount, "search", new { query = W("loi/2005/01/01/n1/jo") + ", au 1er janvier 2008", language = "fra" });
+        Assert.AreEqual(V3Verdicts.Answer, own.Verdict, own.Refusal?.HelpfulPayload.GetRawText());
+    }
+
+    [TestMethod]
+    public async Task ACodesBaseActIsTheOneItsStateNamesAndACodeThatNamesNoneNamesNoBaseAct()
+    {
+        await using var fixture = await IntervalMount.CreateAsync();
+        var mount = fixture.Mount;
+
+        // The review of #987, F4: a code's work is the code, which has no /jo; its base act is the one isMemberOf names.
+        var route = Refused(await AsOfAsync(mount, "code-route", "2016-01-01"), "no_version_for_date");
+        Assert.AreEqual("after_closed_end", route.GetProperty("reason").GetString());
+        Assert.AreEqual("2015-01-01", route.GetProperty("closed_on").GetString());
+        Assert.AreEqual(W("loi/1955/02/14/n1/jo"), route.GetProperty("base_act_iri").GetString());
+
+        var eau = Refused(await AsOfAsync(mount, "code-eau", "2016-01-01"), "no_version_for_date");
+        Assert.AreEqual("after_closed_end", eau.GetProperty("reason").GetString());
+        Assert.AreEqual("2014-01-01", eau.GetProperty("closed_on").GetString());
+        Assert.IsFalse(eau.TryGetProperty("base_act_iri", out _), "no base act is invented for a code that names none");
+        Assert.IsFalse(eau.TryGetProperty("base_act_rule", out _));
+    }
+
+    [TestMethod]
+    public async Task TheRadarFollowsTheIntervalRulesItsSameDatePairIsOneRowAndAHoleOrAnUnclearEndLeavesNoBaseline()
+    {
+        await using var fixture = await IntervalMount.CreateAsync();
+        var mount = fixture.Mount;
+
+        // The review of #987, F6.
+        var changes = (await AskAsync(mount, "changes_in_period", new { date_from = "2018-01-01", date_to = "2024-12-31" })).Result!.Value
+            .GetProperty("changes").EnumerateArray().ToArray();
+        JsonElement[] Of(string work, string date) => changes.Where(row => row.GetProperty("work_key").GetString() == work &&
+            row.GetProperty("state").GetProperty("applicability_date").GetString() == date).ToArray();
+
+        // The act and its same-date consolidation of one wording are one row, the act's.
+        var a883 = Of("loi-2018-09-14-a883", "2018-09-14");
+        Assert.HasCount(1, a883);
+        StringAssert.EndsWith(a883[0].GetProperty("state").GetProperty("expression_iri").GetString(), "/jo/fr");
+
+        // The day before the 2023 consolidation is the unclear end day, and the day before rgd-2007's 2024-01-01 state falls
+        // where an invalid interval would apply: no baseline, never the state before them.
+        Assert.AreEqual("no_held_baseline", Of("loi-1996-11-07-n1", "2023-01-01").Single().GetProperty("reason").GetString());
+        var invalid = Of("rgd-2007-06-07-n2", "2024-01-01").Single();
+        Assert.AreEqual("no_held_baseline", invalid.GetProperty("reason").GetString());
+        Assert.AreEqual(JsonValueKind.Null, invalid.GetProperty("baseline").ValueKind);
+
+        // Where the day before is covered, the baseline is the state the rules serve there.
+        var overlap = Of("rgd-2007-06-07-n2", "2024-06-01").Single();
+        Assert.AreEqual("2024-01-01", overlap.GetProperty("baseline").GetProperty("applicability_date").GetString());
+
+        // The differing same-date pair is ambiguous on its own date, both named.
+        var differ = changes.Where(static row => row.GetProperty("work_key").GetString() == "loi-2021-05-05-n1").ToArray();
+        Assert.IsTrue(differ.Length > 0 && differ.All(static row => row.GetProperty("reason").GetString() == "ambiguous_version" &&
+            row.GetProperty("candidates").GetArrayLength() == 2));
+    }
+
+    [TestMethod]
+    public async Task AnArticlesHistoryCarriesEachStatesCatalogueFactsOnItsRowsAndItsAbsentStates()
+    {
+        await using var fixture = await IntervalMount.CreateAsync();
+        var mount = fixture.Mount;
+
+        // The review of #987 (R21 on the history): a row and an absent state carry the catalogue facts the dossier gives the
+        // same state, so the page says each date with its role.
+        var dossier = (await AskAsync(mount, "dossier", new { identifier = "/lu-legilux/loi-2005-01-01-n1" })).Result!.Value
+            .GetProperty("states").EnumerateArray().ToDictionary(static state => state.GetProperty("state_sha256").GetString()!);
+        var history = (await AskAsync(mount, "article_history", new { identifier = "/lu-legilux/loi-2005-01-01-n1", anchor = "art_2" })).Result!.Value;
+        var row = history.GetProperty("states").EnumerateArray().Single();
+        var absent = history.GetProperty("absent_in_states").EnumerateArray().Single();
+        StringAssert.Contains(row.GetProperty("permalink").GetString(), "/2010-01-01--");
+        StringAssert.Contains(absent.GetProperty("permalink").GetString(), "/2005-01-05--");
+        foreach (var state in new[] { row, absent })
+        {
+            var served = dossier[state.GetProperty("state_sha256").GetString()!];
+            foreach (var key in new[] { "date_role", "entry_into_force", "state_kind", "applicable_to", "boundary", "text_status" })
+            {
+                Assert.AreEqual(served.GetProperty(key).GetRawText(), state.GetProperty(key).GetRawText(), key);
+            }
+        }
+
+        Assert.AreEqual("as_published", absent.GetProperty("state_kind").GetString());
+    }
+
     [TestMethod]
     public async Task TheReadersChainIsTheIndexsOwn()
     {
@@ -463,7 +639,7 @@ public sealed class V3CorpusIntervalMountTests
             Path.Combine(fixture.Directory, V3CorpusMount.IndexFileName),
             await File.ReadAllBytesAsync(Path.Combine(fixture.Directory, V3CorpusMount.CapabilityManifestFileName)),
             CancellationToken.None);
-        foreach (var work in new[] { "code-civil", "loi-1798-11-03-n1", "loi-1996-11-07-n1", "loi-2017-07-20-a674", "loi-2018-09-14-a883", "rgd-2007-06-07-n2", "loi-2005-01-01-n1" })
+        foreach (var work in new[] { "code-civil", "loi-1798-11-03-n1", "loi-1996-11-07-n1", "loi-2017-07-20-a674", "loi-2018-09-14-a883", "rgd-2007-06-07-n2", "loi-2005-01-01-n1", "code-route", "code-eau" })
         {
             var rows = reader.ResolveCatalogueStates(work);
             CollectionAssert.AreEqual(rows.ToArray(), V3CorpusMount.Rechain(rows), $"{work}: the API's chain recomputes the index's ends and boundaries");

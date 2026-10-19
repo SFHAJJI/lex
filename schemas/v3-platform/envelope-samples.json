@@ -8417,6 +8417,8 @@
             "states": [
               {
                 "applicability_date": "2024-02-01",
+                "applicable_to": null,
+                "applicable_to_source": null,
                 "articles": [
                   {
                     "article_identity_sha256": "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
@@ -8427,11 +8429,22 @@
                     "wording_sha256": "fa7df678cc734fd6b4d9565e69bbd3dcbbf6248af798b28e08d131b2917c31a2"
                   }
                 ],
+                "boundary": "derived",
+                "date_role": "applicability_in_file",
+                "entry_into_force": null,
+                "in_file_date": "2024-02-01",
+                "in_file_identity": null,
                 "language": "fra",
                 "next_applicability_date": null,
                 "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
+                "provisional": false,
+                "publication_date": null,
                 "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+                "state_kind": "as_published",
                 "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4",
+                "text_status": "held",
+                "text_status_reason": null,
+                "translation_of": null,
                 "wording_changed": false
               }
             ],
