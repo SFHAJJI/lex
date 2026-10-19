@@ -28,6 +28,15 @@ public sealed class V3CorpusEuropeTimeViewTests
     internal static Task<(string Root, string Mount)> ConsolidatedWorksMountAsync(params EuFirstMountAcquisitionTests.ConsolidatedWorkSpec[] works) =>
         MountOfAsync(store => EuFirstMountAcquisitionTests.AcquireConsolidatedWorksAsync(store, works));
 
+    /// <summary>
+    /// The same, with the original wording's Formex package dated <paramref name="formexDate"/> (yyyyMMdd) in place of the GDPR's
+    /// 20160427, in its bibliography and its title: a fixture's date, which the index then holds as the act's own.
+    /// </summary>
+    internal static Task<(string Root, string Mount)> OriginalDatedMountAsync(string formexDate, params EuFirstMountAcquisitionTests.ConsolidatedWorkSpec[] works) =>
+        MountOfAsync(store => EuFirstMountAcquisitionTests.AcquireConsolidatedWorksAsync(store,
+            EuFirstMountAcquisitionTests.RewrittenPackage(EuFirstMountAcquisitionTests.GdprEnglishPackage(), "ISO=\"20160427\"", $"ISO=\"{formexDate}\""),
+            works));
+
     private static async Task<(string Root, string Mount)> MountOfAsync(
         Func<FileSystemCustodyStore, Task<Lex.V3.Ingest.Europe.EuFirstMountAcquisitionResult>> acquireEurope)
     {
@@ -174,7 +183,10 @@ public sealed class V3CorpusEuropeTimeViewTests
             Assert.IsNull(bundle.Refusal, bundle.Refusal?.Code);
             var value = bundle.Result!.Value;
             Assert.AreEqual("© European Union, https://eur-lex.europa.eu", value.GetProperty("acknowledgement").GetString());
-            StringAssert.Contains(value.GetProperty("authenticity").GetString(), "Regulation (EU) No 216/2013, Article 1(2)");
+            // The consolidation of 2024 is a wording of the act of 2016: the act's own date chooses the statement (O4, 2026-10-18).
+            Assert.AreEqual(V3CorpusMount.EuropeTextAuthenticity[V3CorpusMount.EuropeElectronicEdition], value.GetProperty("authenticity").GetString());
+            Assert.AreEqual(V3CorpusMount.EuropeElectronicEdition, value.GetProperty("authenticity_basis").GetString());
+            CollectionAssert.AreEqual(new[] { "2016-04-27" }, value.GetProperty("authenticity_act_dates").EnumerateArray().Select(static date => date.GetString()).ToArray());
             Assert.IsTrue(value.GetProperty("consolidations_held").GetBoolean());
             var wording = value.GetProperty("wordings").EnumerateArray().Single();
             Assert.AreEqual("consolidated_version", wording.GetProperty("kind").GetString());

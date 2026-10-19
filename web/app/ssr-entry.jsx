@@ -12,13 +12,14 @@ import { renderLiveReadingPage } from './live-reading-page.jsx';
 import { renderLiveHomePage } from './live-home-page.jsx';
 import { LIVE_CONTRACT } from './live-coverage-page.jsx';
 import { homeFacts } from '../scripts/live-home.mjs';
+import { freshnessFacts } from '../scripts/freshness.mjs';
 
 globalThis.lexSsr = Object.freeze({
   render(kind, envelopeJson, path) {
     const initial = { envelope: JSON.parse(envelopeJson), path };
     if (kind === 'reading') return renderLiveReadingPage({ initial });
     if (kind === 'dossier') return renderLiveDossierPage({ initial });
-    if (kind === 'home') return renderLiveHomePage({ facts: homeFacts(initial.envelope, LIVE_CONTRACT) });
+    if (kind === 'home') return renderLiveHomePage({ facts: homeFacts(initial.envelope, LIVE_CONTRACT), freshness: freshnessFacts(initial.envelope) });
     throw new Error(`there is no server-rendered ${kind} page`);
   },
 });

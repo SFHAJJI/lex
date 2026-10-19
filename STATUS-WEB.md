@@ -1,8 +1,437 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-18. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-19. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## Four web slices in one pull request, and the owner's decisions of 19 October (sole driver, 2026-10-19)
+
+The owner's order of 2026-10-19: "big bang" pull requests to finish V3 today, without sacrificing quality. Four finished
+web slices, each reviewed for French, tested alone and rebased on `v3/integration` at 0b908870, are merged with `--no-ff`
+into `writer/web-bigbang`, in this order: today in Luxembourg and the search after "#" (plan 3.4, 3.5), the five legal
+pages (7.1), the EU authenticity statement by the act's date (the owner's decision of 2026-10-18), and freshness and the
+commits (6.1, 6.5). Each slice's own section follows, newest first. Then three decisions the owner made on 2026-10-19
+("do what you recommend", relayed by the coordinator), one commit each.
+- **Conflicts, each resolved by keeping both sides' behaviour; no test dropped:**
+  - `STATUS-WEB.md`: every top section kept, newest first.
+  - `site-paths.json`: the `about` names both the `file` member (the legal pages) and a readable address's `date=` (3.4).
+    Every row of both sides is kept: 158 = 137 + 11 + 10, none twice. The table is written by hand; no script generates it.
+  - `live-chrome-fr.mjs`'s header: the four reviewed-forms paragraphs.
+  - `Document.jsx`: the footer lists the legal pages, then the freshness strip, last. `Document` takes `localePage` and
+    `freshness`; the header keeps `localePage`, and the staleness banner stands under it.
+  - `styles.css`: both rule sets. `live-chrome.test.mjs`: `freshness` and `legal` are both shared sections.
+  - `deploy-probe.mjs`: the candidate's probe takes `promotion` and `opening`; the command line reads `--opening` and
+    `--promotion-check`. `deploy.ps1` runs the candidate's probe with `@openingArgs --promotion-check`, planned and applied:
+    a `-Public` candidate whose legal page still says a placeholder fails (exit 1, deactivated); one whose data is too old
+    stays without promotion (exit 3). `deploy-kit.test.mjs` holds both.
+- **What the combination moved, and the fix:** the envelope census's sample of an EU act dated 2013-06-26 (the EU slice's)
+  gained the freshness header and the commits (rendered from the handler, verified without the switch; nothing else
+  moved). `no-browser-probes.test.mjs` reads the planned probe line with a private copy's empty `--opening`. The legacy
+  answers did not move with the four (the other three slices add no member to a Luxembourg answer). The census holds 86
+  registries. A legal page carries the footer's freshness strip as built (it ships no script and is served as its file).
+- **The journeys** (CI's; none run here): no expectation needed a change. They walk no legal page; the staleness banner
+  stands outside `main`, where the first-screen check looks; the fixture mounts state no completed collection, so they show
+  no banner; the footer's new links and strip come after every control a step reaches.
+- **The owner's decisions of 2026-10-19:**
+  - **O11, the maximum data age: 30 days** (option A; `V3Freshness.MaximumDataAgeDays`, which held the specification's 10
+    as a driver decision). Every answer states it; the pages, the banner and promotion's data-age check read it from the
+    answer, and no form names a figure. Over derive-c (Luxembourg collected 2026-10-12T18:17:04Z, the EU
+    2026-10-05T03:50:08Z), no page shows the banner today and promotion's data-age check allows a release, until the EU
+    half passes 30 days on 2026-11-04 at 03:50 UTC (Luxembourg's on 2026-11-11). Tests: the boundary is 30 days exactly
+    and a second more; the mounted context's EU channel is 37 days old; a bound report 32 days old is stale; the web's
+    population fixture answers on 2026-11-06 (EU 32 days, stale; Luxembourg 24, not). The envelope census rendered again
+    (46 envelopes, `maximum_data_age_days` 10 to 30, nothing else). The 38 legacy schema-8 and schema-6 answers recorded
+    again on Linux at 496eeced (WSL Ubuntu 24.04, .NET SDK 10.0.400, invariant globalization, UTC, the gated recorder): a
+    script checked each body moved by its maximum alone and equals the recording; Windows replays the same bytes.
+  - **E-mails kept 12 months** once their matter is closed (`reportRetentionMonths: "12"`, the driver's recommendation). The
+    privacy notice says "12 months" and "12 mois". The publisher's name, postal address and contact e-mail stay
+    placeholders: only the owner can give them, and the opening refuses the pages until they are filled.
+  - **The accessibility status: non-conformant** until an audit, the French review's recommendation (entry 13 of the
+    addendum of 2026-10-18), in place of R62's "partially conformant". The English and the French are entry 13's, word
+    for word, so no sentence is new; the WCAG 2.2 AA target and "not audited" stay. The review record has the driver's note.
+- **Measured** (no browser was started on this machine; at 9c65c68a, the code of this pull request): `npm run build` in
+  `web`, then a plain `npm test`: 1,313 tests, 1,310 passed, the 3 that start a browser skipped with their reason;
+  `dotnet build Lex.V3.slnx -c Release`, 0 warnings, 0 errors; `Lex.V3.Tests`, whole, 3,327, 3,321 passed, 6 skipped; in
+  `Lex.V3.Ingest.Tests` the classes the four slices and the decisions touch (the Census classes,
+  `PublicRequestRecordingTests`, the answer, envelope and refusal-payload samples, the legacy schema-8 and schema-6
+  classes, freshness, the EU authenticity, time view and branch, evidence bundle and permalink classes, MCP) 123, 120
+  passed, 3 skipped (each by its variable: a real mount's build report, the legacy recorder, a named mount);
+  `eng/verify-v3-tree.ps1` passes (1,663 tracked paths). The EU time view's
+  `EuAsOfAnswersTheWordingOfTheDateAndNeverADateBeforeTheHistory` failed once while three suites ran at once on a shared
+  machine (a fixture acquisition's observation not executed); alone it passed 6 of 6, and every later run passed it.
+- **Waits on the owner:** the publisher's name, postal address and contact e-mail (`web/scripts/legal-publisher.mjs`).
+
+## Freshness on every page and in every answer, and the commits behind it (sole driver, 2026-10-18)
+
+The plan's items 6.1 ("Freshness on every page and in every answer") and 6.5 ("The answers and the footer strip name the
+commits, labelled 'index built from' and 'service running'"), to the specification of record's R87, R69, R107 and R23.
+Facts only from what the mount and the server hold; every count is the answer's (R11).
+- **Every answer** (REST and MCP alike, from the one host): the envelope's `context.freshness` keeps `observed_at` and
+  `upstream_health` and gains `index_built_at` (the mounted Luxembourg log's newest build; null when it records none, an
+  EU index records none), `maximum_data_age_days` (10; 30 since the owner's decision of 2026-10-19, above), `stale`, `channels` and `last_checked_against_publisher`. Each
+  channel, one per publisher whose index is mounted, Luxembourg first, names `newest_completed_observation` (when its
+  newest acquisition completed, its catalog retained, as the mount's `build-report.json` states it for a half acquired
+  across an interruption, `resumption.{half}.catalogedAt`, read down to the second; null when nothing states it),
+  `age_days` (whole days elapsed at the answer), `stale` (past the maximum), `lag_days` (null) and `lag_observations` (0):
+  no index schema holds an observation time (index 8 and 9 require `observed_from` to be null; plan 1.12 has not run) and
+  no refresh has run, so no lag is measured and none is stated. `last_checked_against_publisher` is null until the first
+  monthly re-check (R69). `context.commits` names `index_builder_source_commit` (the report's `indexBuilderSource`, which
+  the mount writer now records from its build's stamp, or a re-derived mount's `derivation.toolSource`; a full commit or
+  null) and `serving_runtime_source_commit` (the commit the SDK stamped in the API assembly's informational version, named
+  by the server's own host: `V3PlatformHost.StampedServingRuntimeSourceCommit`). The build report is held to the mount: an
+  artifact it names that is not the mounted one refuses the mount, and a report naming no corpus states nothing.
+- **Every page** (`Freshness.jsx`, `freshness.mjs`, `freshness-client.jsx`): the footer's last strip says "Index built on
+  {date}.", each channel's "{channel}: last complete collection ended on {date}, {count} full days before the server
+  answered on {today}; lag not yet measured." (or that its completion is not recorded), and "Index built from" and
+  "Service running" with each commit whole, or "(not recorded)". Dates are the server's, in Luxembourg. Past the maximum
+  age a banner under the header names each stale channel ("Some texts may be out of date", its sentences one step away so
+  the home page keeps its box and the sentence under it on a phone's first screen, R47). A page the server renders from an
+  answer (home, reading, dossier; both servers, through the one renderer) says them from that answer; a page as built says
+  the strip's as-built line, and every answer `askV3` reads afterwards redraws strip and banner (outside the hydrated root),
+  with no request of its own. The "last checked against the publisher" line is absent: the reader refuses any re-check, and
+  any stated lag.
+- **Promotion's data-age check** (`deploy-probe.mjs`, `dataAgeFailures`): a channel past the maximum, or one whose
+  completion is not stated, refuses promotion. With `--promotion-check` (which `deploy.ps1` passes) a candidate that
+  answers as its release holds exits 3 then: the kit keeps it, with no traffic, and prints no promotion or rollback
+  command. The rehearsal records it beside its probes (`servedPages.promotion`), never as a failure. The deploy probe's
+  home-page check sets the strip and the banner aside when it holds a rendered page to the page as built; the whole
+  rendering still holds them.
+- **On the population** (derive-c's report read as the server reads it, `ARealMountsBuildReportIsReadAsTheServerReadsIt`):
+  Luxembourg collected 2026-10-12T18:17:04Z, the EU 2026-10-05T03:50:08Z, the index built 2026-10-12T18:17:05Z, and no
+  index commit recorded. So on 2026-10-19 every page says Luxembourg 6 full days, the EU 14, shows the EU banner, says
+  "Index built from (not recorded)", and **promotion refuses any release over derive-c**: its EU data is past the maximum.
+  (With the owner's 30 days of 2026-10-19, above: no banner and no refusal until the EU half passes 30 days, 2026-11-04.)
+  The private copy's live revision is untouched. The ways forward are an EU refresh (publisher traffic, the owner's per-run
+  authorisation) or the owner's own maximum for O11.
+- **French** (Decision 41): 15 forms reviewed by an independent reviewer (Claude, AI reviewer, not the author) in the
+  addendum of 2026-10-19 "freshness and the commits" of `C:\lex-v3\lanes\fr-review\review.md`; 12 changed, all applied,
+  the English with the four blocking ones: the count of whole days was printed between two calendar dates that can be a day
+  further apart, so it is said before the server's answer; the commit labels are terms ("Révision du code ayant construit
+  l'index"), the lag "le décalage entre publication et collecte". The forms are named in `live-chrome-fr.mjs`'s header.
+- **Driver decisions (reversible):**
+  - **Superseded on 2026-10-19** (the owner answered O11: 30 days, above). The declared maximum data age is 10 days, O11's
+    recommended answer, until the owner answers O11
+    (`V3Freshness.MaximumDataAgeDays`; every answer states it, so the pages never print a figure of their own).
+  - A channel's completion is only the catalog time the build report states; a half acquired in one window is "not
+    recorded" rather than dated by the index's build time, which bounds the Luxembourg half and says nothing of an EU half
+    a build reused (derive-c's EU half is 7 days older than its build). Promotion refuses such a mount until the mount
+    writer states each half's completion (next, data lane).
+  - Unstated is refused at promotion, as stale is: a release must show its data's age is within the maximum.
+  - The registry digest does not move: the published envelope schema keeps `context` an object, so the new members are
+    held by `V3EnvelopeJson`'s closed sets and the web reader; describing `context` in the schema (which moves the digest)
+    is next.
+  - R23's other three fields (`corpus_commit`, `manifest_set_id`, `content_digest`) are not added: V3's corpus is
+    content-addressed (`snapshot_sha256` names it) and the plan's item names the two commits; next.
+  - A host made without a commit (tests, censuses) names none; the envelope samples name fixed commits (`e`×40 serving,
+    `f`×40 for a mount the test build wrote) as they name fixed digests.
+  - The staleness alert to the owner (R107) needs monitoring the private copy does not have: next, with R107.
+- **Samples and legacy answers:** the envelope samples re-rendered from the handler (additive members only), then verified
+  without the switch. The 38 recorded schema-8 and schema-6 answers all changed, legitimately and only in `context`:
+  every envelope gains `commits` and the new `freshness` members; no result, refusal or registry digest moved (below).
+- **Measured** (no browser was started on this machine; this branch on v3/integration 0b908870): `npm run build` in `web`,
+  then a plain `npm test`: 1,282 tests, 1,279 passed, the 3 that start a browser skipped with their reason;
+  `dotnet build Lex.V3.slnx -c Release`, 0 warnings, 0 errors; `Lex.V3.Tests` 3,326, 3,320 passed, 6 skipped (the
+  vocabulary registry census and its partition total, which the first run failed on the new registry, re-run in their
+  class: 30 of 30); in `Lex.V3.Ingest.Tests` the classes the slice touches and those named for it (the Census classes,
+  `PublicRequestRecordingTests`, the answer, envelope and refusal-payload samples, the two legacy classes, freshness, MCP,
+  index 9 serving, generation quotes, the offline mount, first mount build, mount build file and EU resume classes, the
+  machine and mounted gates, journey mounts, coverage) 199, 189 passed, 10 skipped (each by its variable); the samples
+  rendered from the handler and verified without the switch; the legacy answers recorded on Linux and replayed on Windows
+  (11 of 11, 1 skipped by its variable); `eng/verify-v3-tree.ps1` passes (1,652 tracked paths).
+- **Next:** each half's completion in the build report whether resumed or not (data lane); the lag, once observation
+  times are carried (1.12) and the refresh runs (Phase 10), with its own reviewed wording; the re-check line (R69) after
+  the first monthly re-check; the staleness alert (R107); the context's published schema; R23's remaining fields.
+
+## The EU authenticity line by the act's date (sole driver, 2026-10-18)
+
+The owner decided PR #975's question on 2026-10-18 (item O4, a legal claim; the owner's words: "yes yes go with what you
+recommend"). Every EU text Lex serves, and every EU citation's evidence form, now ends with the statement the act's date
+chooses, to the specification of record's R20 ("the electronic Official Journal is authentic since 1 July 2013
+(Regulation (EU) No 216/2013), the printed edition before"). STATUS.md records the decision among the owner's items.
+- **The two statements** (`V3CorpusMount.EuropeTextAuthenticity`, the owner's words, by basis):
+  - `electronic_edition`, unchanged: "Only the Official Journal of the European Union published in electronic form is
+    authentic and produces legal effects (Regulation (EU) No 216/2013, Article 1(2)); this text is a reproduction read from
+    the Publications Office's Formex package, not the authentic edition."
+  - `edition_by_publication_date`, new: "For an act published before 1 July 2013, the printed Official Journal of the
+    European Union is authentic; the electronic edition is authentic since that date (Regulation (EU) No 216/2013). This text
+    is a reproduction read from the Publications Office's Formex package, not the authentic edition."
+- **The rule for the cut-off** (`EuropeAuthenticityRule`, served as `authenticity_rule`; a driver decision, reversible):
+  - The EU index holds no Official Journal publication date, so the act's own date chooses.
+  - The dates read (`authenticity_act_dates`, once each, in order) are those of the act the text belongs to, never a
+    consolidation's: the Formex date of its original wording, when that text is held, and the publisher's
+    `cdm:work_date_document` of the act's own work, from the census facts the index holds for every seed act.
+  - `electronic_edition` when a date is held and the earliest is on or after 2013-07-01. An act is published on or after
+    the date it bears, so it was published when only the electronic edition is authentic.
+  - `edition_by_publication_date` otherwise, and when no date is held. Its sentence states which edition is authentic on
+    each side of 1 July 2013 and not on which side the act was published. So it stays true for an act dated in June 2013
+    and published in July. The two acts of 26 June 2013 (CRD IV and the CRR) say it; they were published on 27 June 2013.
+  - A consolidated version says its act's statement: a consolidation of 2024 of an act of 2003 says the dated one.
+- **What the data holds, checked** (derive-c, read-only): the original wording's date is the ACT entry's
+  `BIB.INSTANCE/DATE`, the act's own date (the GDPR's 2016-04-27; it was published on 4 May 2016). The census's
+  `work_date_document` is the act's date too; the two differ for one act (32022L2523, 14 and 15 December 2022), on the same
+  side of the day. The Formex package's `.doc.xml` names the Official Journal issue's date (`PUBLICATION.REF/DATE`,
+  2016-05-04 for the GDPR), but no index reads it: the producer reads only the ACT or CONS.ACT entry. So the act's date is
+  read, as decided; reading the publication date is a data-lane slice (next).
+- **The answer** (`V3CorpusMount.cs`, `V3CorpusMount.EuropeTime.cs`; additive, the request schemas unchanged, so the
+  registry digest did not move): both EU evidence bundles, the time view's and the original wording's, carry
+  `authenticity` (the chosen statement), `authenticity_basis`, `authenticity_act_dates` and `authenticity_rule`. The
+  original-wording path reads the census's dates when a seed act's census holds the work (the same statement on both
+  paths), else the work's own wording dates, and none for a sector-0 CELEX. MCP answers from the same handler; its tool
+  descriptions name no statement, so none changed.
+- **The pages and files**: `readEuropeEvidenceBundle` (`reading-answer.mjs`) holds the statement to its basis
+  (`EUROPE_AUTHENTICITY_SENTENCES`, the platform's words) and the basis to the act's dates, and throws on drift. The
+  reading's lead and the export's JSON, CSV and PDF say the answer's statement. The citation generator's evidence form
+  says it in the cited text's language (`citation.europe.authenticity.electronic_edition` and
+  `.edition_by_publication_date`, in both tables).
+- **French**: both forms were reviewed by an independent reviewer (Claude, AI reviewer, not the author) in the addendum of
+  2026-10-18 on the EU authenticity statement in `C:\lex-v3\lanes\fr-review\review.md`, and are named in
+  `live-chrome-fr.mjs`'s header: 2 forms, none changed. The dated one: "Pour un acte publié avant le 1er juillet 2013,
+  l’édition imprimée du Journal officiel de l’Union européenne fait foi ; l’édition électronique fait foi depuis cette date
+  (règlement (UE) n° 216/2013). Ce texte est une reproduction …". The reviewer's optional points on the owner's English go
+  to a lawyer's read (O4; the owner's choice, not before the opening), unchanged here: the gazette was "of the European
+  Communities" before 1 February 2003 (Regulation (EC) No 1/2003); "is authentic since" could read "has been"; art. 3's
+  exception is in neither sentence.
+- **The population** (derive-c's EU index, read-only with `python -I`, under the rule above): 82 seed acts, 70 with a
+  wording's text held. Of those 70, 54 say the electronic edition's statement and 16 the dated one (32003L0087 to
+  32013R0575; #975's text counted 13 of 63 by another measure). 29 have their original's text held; the other 41 are dated
+  by the census's date alone, and 31 of them say the electronic statement only because of it. No act's two dates fall on
+  either side of the day. Through the handler (derive-c mounted read-only in a probe test that was not committed; every
+  dated wording whose text is held, in each language): 538 bundles asked, 472 answered and 66 refused
+  `ambiguous_version` (two different texts on one date, as before); 68 acts answered, 53 with the electronic statement
+  and 15 with the dated one, and no act with both (32005L0029, dated, and 32023R1114 have only ambiguous wordings). Of the
+  answers, 193 say the dated statement (181 of them consolidations of acts dated before the day) and 279 the electronic
+  one; every statement is its basis's. The original-wording path, asked by each answer's first article, answered the
+  same basis for all 58 originals (it serves original legal text only, so the 414 consolidations' articles are unknown
+  to it, as before).
+- **Tests**: `V3CorpusEuropeAuthenticityTests` (new): the owner's two sentences word for word; the day before, the day and
+  the day after, June 2013, none held, two dates; the 16 acts; and, over a derived mount whose original is dated
+  2013-06-30 or 2013-07-01 (a fixture's date in the GDPR's package) with a consolidation of 2024, the original and the
+  consolidation in the time view and the original by an article identity. The time-view and evidence-bundle tests hold
+  the GDPR's statement, and both paths alike. The envelope census gained an EU act dated 2013-06-26 (a fixture's date),
+  which the web's citation tests read; the web tests cover the reader's rules, the reading's lead, the evidence form in
+  English and French, and the JSON, CSV and PDF.
+- **Measured** (rebased on `v3/integration` at #988's merge, 0b908870), with no browser started: `dotnet build Lex.V3.slnx
+  -c Release` 0 warnings, 0 errors; `Lex.V3.Tests` 3,321 (3,315 passed, 6 skipped); the `Lex.V3.Ingest.Tests` classes
+  touched (the authenticity, EU time view and branch, EU evidence bundle) with the samples (envelope, answer, refusal
+  payload), the census classes, `PublicRequestRecordingTests`, MCP and the two legacy classes, 136 (133 passed, 3
+  skipped: the recording gate and two live canaries); the envelope census rendered with `V3_RENDER_ENVELOPE_SAMPLES` and
+  verified without it; the legacy schema-8 and schema-6 answers unchanged (LU-only mounts carry no EU statement, and the
+  registry digest did not move), so not recorded again; the web build, and the web suite 1,277 (1,274 passed, 3 skipped;
+  a first run failed the date-format check, which now leaves out the EU statement, and a locale build that lost its
+  temporary folder under load); `eng/verify-v3-tree.ps1` 1,647 tracked paths.
+- **Not in this slice** (next): the Official Journal's publication date read into the EU index, so the cut-off reads it
+  (a data-lane slice); the regulation's art. 1(2) and art. 3 checked against its text, and the reviewer's three optional
+  points, at a lawyer's read if the owner books one (O4; the opening does not wait for it, the owner's decision of
+  18 October).
+
+## The five legal pages, in French and English, and an opening that waits for them (sole driver, 2026-10-18)
+
+The plan's item 7.1 ("Five footer pages, in French and English"), to the specification of record's R49, R50, R62, R70, R74
+and R92 and the owner's items O5, O28 and O29, made as small as the opening needs: every statement one the code or the
+deployment supports, every detail only the owner can give a marked placeholder in one data file.
+- **The pages** (`web/app/LegalPage.jsx`, `web/scripts/legal-pages.mjs`; the words in `live-chrome.mjs` and
+  `live-chrome-fr.mjs`, sections `legal`, `legalNotice`, `privacy`, `terms`, `accessibility` and `cookies`): `/{fr,en}/legal-notice.html`
+  (the publisher, its address and contact, director of publication; independence from the State, the Service central de
+  législation and the Publications Office; the host), `privacy.html` (the controller; what a visit sends and that nothing of it
+  is kept; no cookie, tracker or other origin; e-mails, their use and retention; people named in published acts, that a search
+  engine may index an act's page only once the indexing record (R92's check) lists it, and their objection; Microsoft as
+  processor; the rights of arts. 15 to 18 and 21 and the CNPD complaint), `terms.html` (R50's sentence
+  and the authenticity line, word for word; the texts' licences: Legilux CC BY 4.0 for the files the rights rule admits, "©
+  European Union, https://eur-lex.europa.eu" and Commission Decision 2011/833/EU for EU texts; no restriction beyond the texts'
+  own licences; no warranty, within what the law allows; how to cite; how to report an error), `accessibility.html` (WCAG 2.2 AA
+  as the target, not audited, so "partially conformant" (R62); what has been done; what has not been checked; how to report a
+  barrier; the loi du 28 mai 2019, which binds public sector bodies, not Lex) and `cookies.html` (none set, none through
+  another site, how that is checked). Each is built under each interface language with no script, the site's header and
+  footer, its language links pointing at the same page in the other language, hreflang alternates, and the never-indexed
+  robots element (R67: not a law's page; whatever the switch). Every live page's footer now lists the five (`SiteFooter`,
+  `legal.menu`), the page that is one of them marked current.
+- **What the owner fills** (`web/scripts/legal-publisher.mjs`, one value each, between the quotes; filling it publishes it on
+  the site and in this public repository):
+  - `publisherName`, «PUBLISHER_NAME»: the publisher, director of publication and controller (O5 recommends the owner);
+  - `publisherAddress`, «PUBLISHER_ADDRESS»: a postal address on one line;
+  - `contactEmail`, «CONTACT_EMAIL»: one dedicated contact address (O5), the pages' only contact for the publisher, errors,
+    barriers, privacy requests and objections;
+  - `reportRetentionMonths`, «REPORT_RETENTION_MONTHS»: how many months an e-mail is kept once its matter is closed (GDPR art.
+    13(2)(a); R74's "stated short period"; the driver recommends 12; **the owner decided 12 on 2026-10-19**, above).
+  A detail still unfilled is printed as its placeholder, marked `data-legal-placeholder`; one filled in a form the pages cannot
+  print (an e-mail that is none, a retention that is no whole number of months from 1 to 99, a stray space or line break, an
+  unknown field) stops the build (`malformedPublisherFailures`, `build-live.mjs`).
+- **The opening fails closed while a placeholder remains** (`openingFailures`, `deploy-probe.mjs --opening`): `deploy.ps1
+  -Open` reads the app's address and asks each of the ten legal pages before it touches an address rule; any page that does not
+  answer 200 with a page, sets a cookie, says a placeholder or marks one, or cannot be asked, stops the opening and the site
+  stays private. Every `-Public` deployment passes `--opening` to its candidate's probe, so a release with an unfilled detail
+  is never promoted once the site is open. The candidate probe (`servedPageFailures`, also the image rehearsal's) now holds
+  each legal page the release image holds to its own bytes, the page's CSP and no cookie, says beside a private copy's pass
+  that the pages are not ready to publish, and fails a home page or legal page that sets a cookie.
+- **What each statement rests on** (read or measured on 2026-10-18):
+  - no cookie, no browser storage, no other origin: the CSP (`csp.mjs`: every source `'self'` or `'none'`), the journeys
+    (`document.cookie` empty, both storages empty, no request off the page's origin, CI), the release's image probe (142
+    requests on the release of 18 October, no answer setting a cookie, no other origin), the private copy's own answers read
+    through Azure's ingress (`/`, `/fr/`, `/en/coverage.html`, a 404: no `Set-Cookie`), no `localStorage`, `sessionStorage`,
+    `indexedDB` or cookie write in `web/app` or the built client bundles, no sticky-session affinity in `main.bicep`;
+  - nothing kept of a request: `PublicRequestRecordingTests` (planted query text, addresses, agents and headers found in
+    nothing the handler writes, emits or answers but the caller's own answer), the API's cleared logging providers
+    (`Program.cs`), the image probe's privacy record (nothing written once the server first answered);
+  - the hosting: `rg-lex-v3` in France Central (every resource but the DNS zone), the environment `cae-lex-v3` read back with
+    no log destination (`appLogsConfiguration.destination` null), no Application Insights and no OpenTelemetry, and no
+    diagnostic settings on the environment or the app (read-only `az` reads by the driver's identity); Microsoft as processor
+    under its own terms (the contracting entity and its data protection addendum are not named: the owner's account holds them);
+  - no rate limiter is named, because none ships yet (R109 is not built); the referrer: `Referrer-Policy: no-referrer` on every
+    page (`V3WebRoot`); the texts' licences: rights admission policy /1 (two channels agreeing on CC BY 4.0) and Decision 95's
+    acknowledgement (`V3CorpusMount.EuropeTextAcknowledgement`); the PDF not tagged (`export-pdf.mjs`);
+  - the CNPD's name and address and the 2019 law's title, read from cnpd.public.lu and guichet.public.lu (no request to
+    Legilux or EUR-Lex).
+  `web/test/legal-pages.test.mjs` holds the pages to these where code can: R50's sentence on the terms page, the CSP, the
+  referrer header, the cleared logging, the template's absences, the acknowledgement, the law's title marked French.
+- **Both servers** serve the pages as the files they are: the site table (`site-paths.json`) gains ten rows with a `file`
+  member, held by `V3WebRootTests` (the API: each served with a page's headers and noindex) and `legal-pages.test.mjs` (the live
+  server over a real build: 200, noindex, no cookie, the built bytes).
+- **French** (Decision 41): the 97 forms (every string of the six sections) were reviewed by an independent reviewer (Claude,
+  AI reviewer, not the author) in the addendum of 2026-10-18 "the five legal pages" of `C:\lex-v3\lanes\fr-review\review.md`
+  (with the driver's note of 2026-10-19); 14 changed in review, all applied: "l’éditeur de Lex" for the site's publisher,
+  bare "éditeur" staying the law's publishers; "ne doit apparaître" and "ne sont autorisés à" where the draft said "cannot";
+  the EU acknowledgement quoted in English, as the texts carry it (`{eurlexAcknowledgement}`, marked `lang="en"` on the French
+  page); "le texte cité" for a quotation, "citation" for the reference; "Veuillez ne faire figurer"; "fournisseur de
+  messagerie"; no "servir"; no comma before a list's closing "et". Its script's 2,249 checks pass on the forms as shipped.
+  - **For the owner (a public claim; decided on 2026-10-19: non-conformant, above)**: the review recommends declaring the
+    accessibility status "non-conformant" until an
+    audit, as the Luxembourg State's statement generator (accessibilite.public.lu) declares an unaudited public-sector site.
+    The page keeps R62's "partially conformant" (O5's recommended answer; a self-assessment with its known non-conformities
+    listed) until the owner chooses; the other wording is one entry in each table (`accessibility.sections.status.text`).
+  - The lawyer's read (O4) of these pages is the owner's choice and **has not been done**: the owner decided on 2026-10-18 to
+    open without it. The addendum lists what it would cover: what a private publisher must disclose in Luxembourg (the loi du
+    14 août 2000 relative au commerce électronique, the loi du 8 juin 2004 sur la liberté d’expression dans les médias) and
+    whether a director of publication applies; the host named by its legal entity; transfers outside the EEA (art. 13(1)(f));
+    legitimate interest for names in published acts and how an objection is handled; the warranty sentence against consumer
+    law; no consent needed with nothing stored (loi modifiée du 30 mai 2005); whether the European Accessibility Act's
+    transposition reaches the site.
+- **Driver decisions** (reversible):
+  - The fifth page is the cookies page, as this slice's brief asks; the plan's "sources and licences" page (R70, Reg53) is not
+    built here: the terms carry the licences in brief.
+  - The pages are never indexed, whatever the switch (O27 concerns the law's pages); they ask nothing and ship no script.
+  - Addresses keep English file names under both languages (`/fr/privacy.html`), as `/fr/coverage.html` does.
+  - "The publisher of Lex" names the site's publisher everywhere, so it is never read as Legilux or the Publications Office.
+  - Retention is the owner's number, not the driver's (a commitment only the owner can keep).
+  - The privacy notice names no processor the site does not use: no monitor, no fallback host and no rate limiter exist yet. The
+    DNS zone (Azure DNS in `rg-lex-v3` since the owner's switch of 2026-10-18) is Microsoft's, as the host is, and answers
+    resolvers, not readers, so it is not named apart.
+  - Search engines (O27, answered yes on 2026-10-18): the privacy notice says what the code does, that an act's page is opened
+    to them only once the release's indexing record lists the act (`search-engines.mjs`: R92's check; none is listed yet), and
+    no more; when R92's measurement ships, its section on named people names the check.
+- **Not in this slice** (next): the sources and licences page (R70, Reg53); the security contact (`/.well-known/security.txt`,
+  R74) and "Report a problem with this page" (R74, O29); the mailbox's provider in the privacy notice (once the owner names the
+  address); Lex's own data under CC BY 4.0 (O6 (5)); API terms; R92's measurement of acts that name people (O28); the
+  incident and breach runbook (7.4, R108); the lawyer's read (O4, 7.5).
+- **Measured** (no browser was started on this machine; this branch, rebased on `v3/integration` at 0b908870, #988's opening
+  kit): `npm run build` in `web`, then a plain `npm test`: 1,282 tests, 1,279 passed, the 3 that start a browser skipped;
+  `dotnet build Lex.V3.slnx -c Release`, 0 warnings, 0 errors; in `Lex.V3.Tests`, filtered, `V3WebRootTests` and
+  `V3WebRootSearchEnginesTests`, 21 of 21; `deploy.ps1` parses with no error, and `deploy-kit.test.mjs` runs its `-Open` path
+  with a stand-in Azure CLI and node (the check first, at the app's address, under the browser trap; a failed check or an
+  unread address removes no rule); the French review's script, 2,249 checks on the forms as shipped; `eng/verify-v3-tree.ps1`
+  passes. Before the rebase (from 24118293): the same web suite, 1,280 tests, 1,276 passed, 1 failed and fixed
+  (`no-browser-probes.test.mjs` now expects the image probe's note that the stand-in image holds no legal page).
+
+## Today in Luxembourg on every page and in the address, and a search kept after "#" (sole driver, 2026-10-18)
+
+The plan's items 3.4 ("'Today' is the calendar date in Luxembourg. It is always printed, written into the address and the
+trace, and shown beside the index date when the index is older. It uses 0.8's coded rule and the clock-change probe") and
+3.5 ("A search lives in the address after '#', so it can be shared. The words travel in the request body, never in an
+address that a server could log"), to the specification of record's R13 and R109. Branch `writer/today-and-search-address`.
+- **Today, one rule** (`temporal.mjs`: `luxembourgDateOrNull`, `todayInLuxembourg`; the API's `LuxembourgCalendar`, and
+  `V3ApiHandler.LuxembourgTodayAt` for a readable address): read at the instant the server answered when the page shows an
+  answer (`context.freshness.observed_at`), so the page the server rendered and the page hydrated name one date; else this
+  browser's clock once hydrated (`Today.jsx`, `useLuxembourgToday`); never the build's time; a clock outside the rule's years
+  names no date.
+- **Always printed** ("Today in Luxembourg: {date}.", the reviewed `form.today`): beside the date field of the home and
+  search pages (as before), of the reading form (and the export composer, which shares it), and beside the two dates of
+  Compare and of Changes; on its own line under the dossier's count of versions held. The 404 page's box is the home form.
+- **Beside an older index's date**: the home page's coverage line and a search's population ("…, as of the index built on
+  {date}; today in Luxembourg is {today}.", `home.coverageOlder`, `search.searchedOlder`) when the index's build date in
+  Luxembourg is before today (`indexOlderThanToday`); an index built today says its date alone. The footer's build date is
+  6.1's.
+- **Written into the address**: an act's readable address keeps the date it was read at in its query, `?date=yyyy-mm-dd`.
+  - Both servers render a readable address at the date its query keeps (its first `date` parameter, a calendar date; any
+    other value is today), with or without a clock (`V3WebRoot.DateOfQuery`, `permalinks.mjs` `dateOfQuery`), held to the
+    shared table (`site-paths.json`, eleven new rows). A permalink names its date in its path and a dossier none: neither
+    reads one.
+  - The page, once it has read the act at an address with no date, writes that date into its own address
+    (`withDateQuery`, `history.replaceState`: no history entry, no history state), so a link a reader copies keeps it. The
+    language menu's links carry the date and a reading's page (`sameAddressIn`), and the fragment.
+  - A reading of another day than today says so first: "This page reads the act on {date}, as this site holds it for that
+    date; today in Luxembourg is {today}." with the link to the act at today's date (`reading.notToday`, `NotToday`). Its
+    whole act and its pages link to the version shown by its permalink; at an undated readable address they stay the act's
+    own address (`readsAnotherDay`, decided from the answer alone: the date it was asked for against the day it was given
+    on, so the server's render, which reads no query, and the browser's hydration say one thing, and a page asked just
+    before midnight and answered after it is said truly).
+- **The trace**: every request that answers as of today names its date (the home page's search, a readable address's
+  reading), the answer echoes it (`requested_date`, or the reference phase's `today_in_luxembourg`), and its
+  `observed_at` is the instant today is read from. No envelope member was added; the registry digest is unchanged.
+- **The clock-change probe**: the date on both sides of each change, around 25 October 2026 and 28 March 2027, in the API
+  (`AReadableAddressIsAskedAtTodayInLuxembourgOnBothSidesOfEachClockChangeOrAtTheDateItKeeps`), the live server
+  (`live-ssr.test.mjs`, its clock moved across both changes) and on the pages (`today.test.mjs`: the dossier, the reading's
+  form, the search's population and the home page's coverage line, at every instant of the shared table around a change);
+  the deploy probe's own (0.8) is unchanged.
+- **A search after "#"** (`search-address.mjs`): `#q={phrase}&lang={language}[&work={identifier}][&date={yyyy-mm-dd}]`,
+  each value as `encodeURIComponent` writes it.
+  - Written when the reader asks a search (the address replaced, never pushed); read once the page has hydrated, and on
+    `hashchange`, and asked as the reader would; the words still go to the API in the request's body alone. The lane is not
+    written (the site asks the strict lane) and neither is a later page's cursor (a link opens the first page).
+  - A fragment with no `=` is a position (the skip link's `#main`): nothing is asked or said. A fragment written as a search
+    that the form will not send (a key it does not know, a key twice, a value that does not decode, an empty value, no
+    phrase, a language not offered, a date that is no calendar date, a work named on the home page, a phrase past the
+    platform's ceilings, a fragment past 8,192 characters) is refused whole: nothing is asked and the page says "The search
+    in this page's address could not be read, so nothing was searched." (`search.addressUnread`), repeating none of it.
+  - A search read from the address that opens an act (an exact reference) shows the act's link and does not go there by
+    itself, so the browser's Back never loops through it; a reader's own submit still goes there.
+  - The search page's introduction now says where the phrase goes and where the page keeps it (`search.intro`).
+- **No words in any request address**: `request-addresses.test.mjs` scans the import closure of every page's browser entry
+  for every way to send a request or change an address (fetch, XMLHttpRequest, sendBeacon, EventSource, WebSocket, an
+  image's address, a dynamic import, a navigation, the history, the page's own address, a form's own submit) and pins each
+  of the six it finds, line for line, with why it carries no word; every live screen asked with words asks exactly
+  `POST /api/v3/{operation}`, no query, no fragment, the words in the body; and no page's form has an action or a method, no
+  control a name. The 404 page's box keeps nothing in its address (`data-address="none"`). `PublicRequestRecordingTests` is
+  unchanged and passes.
+- **The journeys** (CI's lane): a page ends at its own address with what it writes there (`endAddressesOf`: a search after
+  "#", built from the very request the step must send; a readable address with `?date=`, on either of a run's two days), the
+  language menu is held to that address, and a new fixture-mount run opens the search page at a kept search and must ask it
+  once and stay there (`KEPT_SEARCH_STEP`).
+- **French** (Decision 41): 5 forms (`search.intro`, changed; `search.searchedOlder`, `search.addressUnread`, `home.coverageOlder` and
+  `reading.notToday`, new) were reviewed by an independent reviewer (Claude, AI reviewer, not the author) in the addendum of
+  2026-10-19 "today beside the dates, and a search kept in the address" of `C:\lex-v3\lanes\fr-review\review.md`; 2
+  changed in review, the English with them, both applied: the phrase is never in "the request's address" (the draft's "an
+  address a server could record" was false of a shared link, which mail and chat servers can record) and the part after
+  "#" is what the browser never sends (the clause had attached to the page's address); a reading of another day "porte
+  sur" the act, true above a refusal too, as this site holds it "for that date" ("pour cette date"). Today inside a
+  sentence is "au Luxembourg, nous sommes aujourd’hui le {today}"; the reviewed `form.today` is confirmed in its four new
+  places. 154 checks by script; the forms are named in the header comment of `live-chrome-fr.mjs`.
+- **Driver decisions** (reversible):
+  - The date goes into a readable address's query, not its fragment: R64 keeps "#" for a position inside an article, and a
+    server must render the dated reading (R67) and cannot read a fragment. A date is digits and dashes, no word (R109).
+  - The dated address stays a readable address, never a permalink: it names no digest, so it says the act this site holds
+    for its date (a version recorded later for that date is the one it then shows); the permalink still pins one version.
+    Its canonical is the readable address with no date while the version shown is today's, else that version's permalink,
+    so the release's switch never opens a superseded version (`readingAddressShown`).
+  - The page writes the date into the address bar by replacing the address; the server never redirects an undated readable
+    address (it stays the canonical page the sitemap lists, plan 3.6).
+  - The date fields of the reading form, Compare and Changes stay empty, as before, with today said beside them: a field
+    filled for the reader would be a date they did not choose (and the journeys type into those fields).
+  - The dossier says today on its own line; it marks no version "applicable today" (an act held only as published may have
+    been amended since: its readable address says so already).
+  - "Today" is the one relative word a screen says, bound to its date: the accessibility test's date rule admits it only
+    followed by the date ("Today in Luxembourg: ", "today in Luxembourg is ", and the French).
+  - The 404 page's box keeps no search in its address: the page stands at an address this site has no page for.
+  - A fragment with no language takes the form's first (French); the reader's link stays usable when written by hand.
+- **Not in this slice** (next): the reading form's own readings at `reading.html`, the dossier, Compare, Changes and the
+  provision history keeping their state in the address; the skip link writes `#main` over a kept search when pressed (it
+  could move the focus without writing the fragment); a journey of a readable address opened with `?date=` (the canonical and
+  focus checks need the query taught to them); `?date=` on a dossier's address.
+- **Measured** (no browser was started on this machine): rebased on `v3/integration` at 0b908870 (#988): `npm run build`
+  in `web`, then a plain `npm test`: 119 files, 1,292 tests, 1,289 passed, the 3 that start a browser skipped with their
+  reason; `dotnet build Lex.V3.slnx -c Release`, 0 warnings, 0 errors; in `Lex.V3.Tests` the classes the slice touches and
+  those named for it (`V3WebRootTests`, `LuxembourgCalendarTests`, the Census classes, the handler's), 47 of 47; in
+  `Lex.V3.Ingest.Tests` the Census classes, `PublicRequestRecordingTests`, the answer, envelope and refusal-payload samples
+  and `V3EuropePermalinkTests`, 60, 57 passed, 3 skipped (each by its variable: a live canary, a named mount); the censuses
+  unchanged (no answer or envelope moved); `eng/verify-v3-tree.ps1` passes (1,652 tracked paths). The journeys are CI's.
 
 ## The opening kit: law.soufien.lu bound, search engines by deployment, the owner's decisions of 18 October (sole driver, 2026-10-18)
 
@@ -5223,10 +5652,11 @@ The plan's item 3.3, what is left after the generator (done on 2026-10-17, above
 3. A copy button beside each form (a script-only control, so the journeys walk its focus and keyboard first), and the
    treaties' usual forms ("Article 6 TUE", "article 267 TFUE").
 4. An EU act's title, author and Official Journal reference, and a Euratom or CFSP act's domain, when an index holds them.
-5. The EU authenticity line's date (review of #975, F2; the owner's item O4): R20's dated clause ("the electronic Official
-   Journal is authentic since 1 July 2013 (Regulation (EU) No 216/2013), the printed edition before") in place of the
-   platform's undated sentence, for the 13 of the 63 citable EU acts published before 1 July 2013, checked against the
-   regulation's art. 1(2) and art. 3(3) as amended, in the wording the owner gives; then its French, reviewed.
+5. Done on 2026-10-18 (above, "The EU authenticity line by the act's date"), in the owner's words of that day: the EU
+   authenticity line's date (review of #975, F2; the owner's item O4), R20's dated clause in place of the platform's
+   undated sentence for an act dated before 1 July 2013, and its French, reviewed. Left: the Official Journal's own
+   publication date read into the EU index, and the regulation's art. 1(2) and 3(3) checked against its text (the
+   lawyer's read, O4, which the opening does not wait for).
 6. The data lane's note on Luxembourg dates (review of #975), as the data lane's finding and the slice "search results by
    act" (above) state it: on `derive-c` every state's date is the publisher file's own `dateApplicability` (inventory /3's
    coordinate), equal to the catalogue's `dateEntryInForce` for 1,725 of the 1,730 states (the five that differ are listed

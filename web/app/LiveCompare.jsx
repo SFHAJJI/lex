@@ -23,6 +23,8 @@ import { RefusalCard } from './RefusalCard.jsx';
 import { COMPARE_LANGUAGES, LIVE_COMPARE_IDLE, createCompareSession } from '../scripts/live-compare.mjs';
 import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
 import { AsPublished, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
+import { todayAt } from '../scripts/initial-answer.mjs';
+import { TodayHint, useLuxembourgToday } from './Today.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -220,10 +222,14 @@ export function CompareAnswerView({ outcome, onRetry }) {
   );
 }
 
+/** The id of the line that says today beside the two dates (`TodayHint`). */
+const COMPARE_TODAY_HINT = 'compare-today';
+
 /**
  * The live screen: a form, and the state of the last comparison asked. A comparison is asked when
  * the reader submits, never while rendering; the session cancels the one in flight when another is
- * asked, and unmounting cancels whatever is left.
+ * asked, and unmounting cancels whatever is left. Today in Luxembourg is said beside the two dates: the day the last
+ * answer was given on, else this browser's clock once hydrated (R13).
  */
 export function LiveCompare({ contract, fetchImpl }) {
   const [identifier, setIdentifier] = useState('');
@@ -235,6 +241,7 @@ export function LiveCompare({ contract, fetchImpl }) {
   if (session.current === null) {
     session.current = createCompareSession({ contract, fetchImpl, onOutcome: setOutcome });
   }
+  const today = useLuxembourgToday(todayAt(outcome.context?.freshness?.observed_at));
 
   useEffect(() => () => session.current.cancel(), []);
 
@@ -253,12 +260,14 @@ export function LiveCompare({ contract, fetchImpl }) {
         </label>{' '}
         <label>
           {FORM.from}{' '}
-          <input type="text" inputMode="numeric" placeholder={FORM.datePlaceholder} value={dateFrom} autoComplete="off" onChange={(event) => setDateFrom(event.target.value)} />
+          <input type="text" inputMode="numeric" placeholder={FORM.datePlaceholder} value={dateFrom} autoComplete="off" aria-describedby={today === null ? undefined : COMPARE_TODAY_HINT} onChange={(event) => setDateFrom(event.target.value)} />
         </label>{' '}
         <label>
           {FORM.to}{' '}
-          <input type="text" inputMode="numeric" placeholder={FORM.datePlaceholder} value={dateTo} autoComplete="off" onChange={(event) => setDateTo(event.target.value)} />
+          <input type="text" inputMode="numeric" placeholder={FORM.datePlaceholder} value={dateTo} autoComplete="off" aria-describedby={today === null ? undefined : COMPARE_TODAY_HINT} onChange={(event) => setDateTo(event.target.value)} />
         </label>{' '}
+        {/* Today in Luxembourg, beside the two dates (R13; the plan's item 3.4). */}
+        <TodayHint id={COMPARE_TODAY_HINT} today={today} />
         <label>
           {FORM.language}{' '}
           <select value={language} onChange={(event) => setLanguage(event.target.value)}>

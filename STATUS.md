@@ -1,6 +1,6 @@
 # Lex V3 status
 
-Updated 2026-10-17 by the driver. This file holds the heads, the owner's open items and the pointers to the two
+Updated 2026-10-19 by the driver. This file holds the heads, the owner's open items and the pointers to the two
 lane files (the standing order of 2026-10-01 13:50 UTC: STATUS.md was edited by nearly every pull request and was
 the most frequent conflict). Each lane writes its progress in its own file, in the pull request that makes it:
 
@@ -154,10 +154,17 @@ Only money, legal or public claims, credentials and going live (ruling 7):
 - The owner's decisions of 2026-10-18 (the owner's words: "yes yes go with what you recommend", "Opening to the public
   once we finish v3", "build everything on azure i can handle more payments if necessary ill start paying after my
   credit end", "you have 24 hours max to finish v3"):
-  - the EU authenticity wording for acts published before 1 July 2013, as #975 recommended;
+  - the EU authenticity wording for acts published before 1 July 2013, as #975 recommended (the act's own date
+    chooses, since the EU index holds no Official Journal publication date: STATUS-WEB.md, "The EU authenticity line
+    by the act's date");
   - O27, search-engine indexing: yes, from the opening, law pages only for the acts R92's measurement clears;
   - the opening: when V3 is finished, without waiting for the lawyer's read (O4) or the audits;
   - money: Azure storage for the custody's second copy and Azure machines for heavy builds, paid after the credits end.
+- The owner's decisions of 2026-10-19 (the owner's words: "do what you recommend", relayed by the coordinator; one
+  commit each in `writer/web-bigbang`, STATUS-WEB.md): O11, the maximum data age, 30 days (option A); e-mails to the
+  contact address kept 12 months once their matter is closed; the accessibility statement declares Lex non-conformant
+  until an audit, not partially conformant. The publisher's name, postal address and contact e-mail are still the
+  owner's to give (`web/scripts/legal-publisher.mjs`): the site cannot open without them.
 - The plan's decisions (its section 5: each with its recommended answer, its cost and what stops without it):
   - **Now, by Friday 16 October**: the Azure sign-in; the rest of O14 (R117): a valid payment method kept on the V3
     subscription, a backup one, and billing alerts on two channels, so a failed payment cannot take the site down as

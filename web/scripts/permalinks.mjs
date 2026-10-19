@@ -38,6 +38,16 @@
 //
 // This module is data and pure functions only: the live pages' bundles, the live server and the tests share it, and the
 // API holds the same patterns and the same choice (V3WebRoot), held to these by a test.
+//
+// A readable address keeps the date it was read at in its query, `?date=yyyy-mm-dd` (the plan's item 3.4; R13: today is
+// "written into the URL"): its page writes it there once it has read the act, so a link a reader copies opens the act as
+// this site holds it for that date, and both servers render that address at that date (`dateOfQuery`). It stays a readable
+// address, never a permalink: it names no digest, so it pins no version, and it says the act this site holds for its date
+// (a version recorded later for that date is the one it then shows); the permalink still cites one version for good. Its
+// canonical link is the readable address with no date when the version shown is today's, else that version's permalink
+// (`readingAddressShown`). A date is digits and dashes: no address this site builds carries a word in its query (R109).
+
+import { isCalendarDate } from './temporal.mjs';
 
 /**
  * A Luxembourg work key as the API takes it (`IsWorkKey`): lower-case letters, digits, hyphen and underscore, here starting
@@ -242,13 +252,55 @@ export function pageOfQuery(search) {
 }
 
 /**
+ * The date a readable address names in its query (`?date=yyyy-mm-dd`, its first `date` parameter; the plan's item 3.4, R13:
+ * today is written into the address, so a link keeps the date it was read at): a calendar date, else null (the address
+ * then reads today). Anything else in the query is ignored. A permalink names its date in its path, so this is read at a
+ * readable address only. `V3WebRoot.DateOfQuery` reads it the same way.
+ */
+export function dateOfQuery(search) {
+  if (typeof search !== 'string' || search.length < 2 || search[0] !== '?') return null;
+  for (const part of search.slice(1).split('&')) {
+    const equals = part.indexOf('=');
+    const name = equals < 0 ? part : part.slice(0, equals);
+    if (name !== 'date') continue;
+    const value = equals < 0 ? '' : part.slice(equals + 1);
+    return isCalendarDate(value) ? value : null;
+  }
+  return null;
+}
+
+/**
+ * A query with the date a reading was read at written into it (`date=yyyy-mm-dd`, last), every `date` parameter it held
+ * taken out first and every other part kept as it was: what a readable address's page writes into its own address once it
+ * has read the act (R13). A date and digits only, never a word.
+ */
+export function withDateQuery(search, date) {
+  if (!isCalendarDate(date)) throw new Error(`${JSON.stringify(date)} is not a calendar date`);
+  const parts = typeof search === 'string' && search.length > 1 && search[0] === '?'
+    ? search.slice(1).split('&').filter((part) => part !== '' && (part.indexOf('=') < 0 ? part : part.slice(0, part.indexOf('='))) !== 'date')
+    : [];
+  return `?${[...parts, `date=${date}`].join('&')}`;
+}
+
+/**
+ * The address of one page of a reading at an address that keeps a date (`base`, a readable address with no article): `?page=N`
+ * after the first, and the date it was read at, so a page link keeps the version the page shows. With no date, the page alone.
+ */
+export function readingPageAddress(base, number, date = null) {
+  const page = Number.isInteger(number) && number > 1 ? `page=${number}` : null;
+  const parts = [page, isCalendarDate(date) ? `date=${date}` : null].filter((part) => part !== null);
+  return parts.length === 0 ? base : `${base}?${parts.join('&')}`;
+}
+
+/**
  * What the server renders a law's address under an interface language from (R67): the page (`reading`, `dossier`), the
  * operation and the parameters the page itself would ask (`readingRequestFor`), so the page the server renders and the page
  * a reader asks show one answer. A reading is read one page at a time (the plan's item 3.7): the address's article asks the
  * page that holds it, and with no article, the query's `page=N` (`search`, with its `?`) asks that page. A permalink's reading asks by the permalink itself (R64: the version it pins, or why
  * not), with the date and the text's language it names; a readable address's reading asks by the work (a Luxembourg
- * coordinate or an EU CELEX), `today` (Luxembourg's date, R13, which the server's clock gives) and the text's language it
- * names, and with no `today` it is not rendered (the page as built asks for itself); a dossier asks by the work. An
+ * coordinate or an EU CELEX), the date its query names (`date=yyyy-mm-dd`, the plan's item 3.4) or else `today`
+ * (Luxembourg's date, R13, which the server's clock gives), and the text's language it names, and with neither it is not
+ * rendered (the page as built asks for itself); a dossier asks by the work. An
  * interface language's home page (`/en/`, `/en/index.html`) is rendered from `coverage`, asked with no parameters, as the
  * page as built asks it once loaded (`live-home.mjs`). Null for any other path.
  */
@@ -260,14 +312,15 @@ export function sitePageFor(pathname, { today = null, search = '' } = {}) {
   if (named.kind === 'work') {
     return Object.freeze({ language: named.locale, kind: 'dossier', operation: 'dossier', parameters: Object.freeze({ identifier: named.identifier }) });
   }
-  const parameters = readingRequestFor(named, today, pageOfQuery(search));
+  const parameters = readingRequestFor(named, dateOfQuery(search) ?? today, pageOfQuery(search));
   if (parameters === null) return null;
   return Object.freeze({ language: named.locale, kind: 'reading', operation: 'evidence_bundle', parameters });
 }
 
 /**
  * The request a reading at a law's address sends (`parseSitePath`'s answer): at a permalink, the permalink with no article,
- * its date and its language; at a readable address, the work, `today` and the language, or null with no `today`. Null for
+ * its date and its language; at a readable address, the work, `today` (the date its query names, else today in Luxembourg)
+ * and the language, or null with no `today`. Null for
  * a work's address. The page asked (the plan's item 3.7): the article the address names (`article`, decoded; a segment that
  * does not decode names none), so the page that holds the cited article is served; else `page` (2 or more), the page the
  * address's query names; else neither, the first page.
@@ -330,6 +383,20 @@ export function movedFor(pathname, search) {
 export function sameDocumentIn(language, pathname) {
   const match = /^\/(?:en|fr)(\/.*)$/.exec(pathname ?? '');
   return match === null ? `/${language}/` : `/${language}${match[1]}`;
+}
+
+/**
+ * Where the language menu leads once a page has loaded (`client.jsx`, and again whenever the page writes its own address):
+ * the same page in `language` (`sameDocumentIn`), with what the site's own address keeps of its query, read and written
+ * again so nothing else in the query is carried: at a reading's address, the page it names (`?page=N`) and, at a readable
+ * address, the date it keeps (`?date=`, the plan's item 3.4); and the fragment as it is: a position inside an article, or the
+ * search a search page keeps there (R109), which no server receives.
+ */
+export function sameAddressIn(language, { pathname = '', search = '', hash = '' } = {}) {
+  const named = parseSitePath(pathname);
+  const page = named?.kind === 'state' || named?.kind === 'current' ? pageOfQuery(search) : null;
+  const date = named?.kind === 'current' ? dateOfQuery(search) : null;
+  return `${readingPageAddress(sameDocumentIn(language, pathname), page, date)}${hash ?? ''}`;
 }
 
 /**

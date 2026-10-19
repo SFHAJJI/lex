@@ -13,6 +13,9 @@ namespace Lex.V3.Ingest.Tests;
 /// sends them: each request's exact body and trace identity, answered at one fixed observation time by the real handler.
 /// The answers were recorded at the integration head #980 was based on (5a659831), then again at b1b41312 (search results by
 /// act, on 8e6d3d27, whose two schema-8 search answers gained additive members and a ranking sentence for the new order),
+/// then at 34d493d0 (freshness and the commits, plan 6.1 and 6.5, on 0b908870: every envelope's context gained `commits`
+/// and the freshness header's new members, and nothing else moved), then at 496eeced (the owner's maximum data age of 30
+/// days, O11, 2026-10-19: every answer's `maximum_data_age_days`, 10 to 30, and nothing else),
 /// over the committed schema-8 mount (written at 3b7913ec) and the schema-6 one, by this same code, on Linux as the release
 /// image runs (globalization-invariant, UTC), with <c>V3CorpusLegacySchema8MountTests.TheAnswersAreRecordedWhereTheRecordingAsks</c>,
 /// and every system is held to them (a rooted path reads alike everywhere since #983); a later change that moves one byte

@@ -27,8 +27,17 @@
 // sent); and what the search does not cover, as the answer lists it.
 //
 // The form's controls carry no `name`: a submit the browser performs itself (before the bundle has
-// hydrated the page, or without it) then sends nothing, so the phrase never reaches the address bar,
-// the history or a referrer. Only the hydrated screen sends it, in a request body.
+// hydrated the page, or without it) then sends nothing, so the phrase never reaches a query string, the
+// history or a referrer. Only the hydrated screen sends it, in a request body.
+//
+// The search lives in the page's address after "#" (the plan's item 3.5; R109), so it can be shared: once the reader asks
+// a search, the screen writes it into the fragment (`searchFragment`: the phrase, its language, the work named and the
+// date), replacing the address, never adding to the history; once hydrated, it reads the fragment the page was opened at
+// (and any the reader writes later) and asks that search, as the reader would (`readSearchFragment`). The fragment never
+// reaches a server, and the words still go to the API in the request's body alone. A fragment written as a search that the
+// form will not send is said so, repeating nothing of it, and nothing is asked. A search read from the address that opens
+// an act (an exact reference) shows the link and does not go there by itself, so the browser's Back never loops through
+// it. The 404 page's box keeps nothing in its address (`addressed`): it stands at an address this site has no page for.
 //
 // The screen has two forms of one form (`variant`). The home page's (R47, R52) is the one box, with its
 // placeholder, a date field that starts at today, the calendar date in Luxembourg (R13), and the
@@ -56,10 +65,14 @@ import {
   actGroups,
   builtOnOf,
   createSearchSession,
+  indexOlderThanToday,
   languageName,
   longDate,
-  todayInLuxembourg,
 } from '../scripts/live-search.mjs';
+import { readSearchFragment, searchFragment } from '../scripts/search-address.mjs';
+import { todayAt } from '../scripts/initial-answer.mjs';
+import { replacePageAddress } from './page-address.mjs';
+import { TodayHint, useLuxembourgToday } from './Today.jsx';
 import { OFFICIAL_SEARCH_PAGES } from '../scripts/live-failure.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillCounted, fillText, liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { articlePermalink, permalinkHref } from '../scripts/permalinks.mjs';
@@ -314,10 +327,11 @@ function Found({ view }) {
 
 /**
  * What a Luxembourg search's lanes matched against (R11): its acts, versions and articles of searchable text, every count
- * the answer's, as of the index built on its build's date in Luxembourg; and, when there are any, the versions the rights
- * rule kept out and the acts a date could not place.
+ * the answer's, as of the index built on its build's date in Luxembourg, and today beside it when the index is older (R13:
+ * "When the index is older, both dates are shown"; `today`, the date in Luxembourg the answer was given on); and, when
+ * there are any, the versions the rights rule kept out and the acts a date could not place.
  */
-function Searched({ view }) {
+function Searched({ view, today = null }) {
   const { searched } = view;
   const home = liveChrome().home;
   const counts = {
@@ -327,10 +341,13 @@ function Searched({ view }) {
     language: languageName(view.language),
   };
   const builtOn = builtOnOf(searched.builtAt);
+  const older = indexOlderThanToday(builtOn, today);
   return (
     <>
-      <p data-searched={searched.works} data-built-on={builtOn ?? ''}>
-        {builtOn === null ? fillText(COPY.searchedUndated, counts) : fillText(COPY.searched, { ...counts, date: builtOn })}
+      <p data-searched={searched.works} data-built-on={builtOn ?? ''} data-today={older ? today : undefined}>
+        {builtOn === null
+          ? fillText(COPY.searchedUndated, counts)
+          : older ? fillText(COPY.searchedOlder, { ...counts, date: builtOn, today }) : fillText(COPY.searched, { ...counts, date: builtOn })}
       </p>
       {searched.withheldByRights > 0 ? <p data-withheld={searched.withheldByRights}>{fillCounted(COPY.withheld, searched.withheldByRights)}</p> : null}
       {searched.severalOnDate > 0 ? <p data-several-on-date={searched.severalOnDate}>{fillCounted(COPY.severalOnDate, searched.severalOnDate, { date: view.date })}</p> : null}
@@ -343,7 +360,7 @@ function Searched({ view }) {
  * matching ran, and what that means, when the answer counted no relaxed lane; the publishers' own search pages, links only;
  * and the absence note.
  */
-function NoHitCard({ view }) {
+function NoHitCard({ view, today = null }) {
   const europe = view.publisher === 'eu-eurlex';
   const resolution = view.workResolution.outcome;
   const reference = view.reference === 'not_run_identifier_given'
@@ -372,7 +389,7 @@ function NoHitCard({ view }) {
         {view.population.relaxedHits === null ? null : <li data-search-run="every-word">{COPY.runTextWords}</li>}
       </ul>
       {view.population.relaxedHits === null ? <p data-exact-only="">{COPY.exactOnly}</p> : null}
-      {europe ? null : <Searched view={view} />}
+      {europe ? null : <Searched view={view} today={today} />}
       <div className="official-search" data-official-search="">
         <p>{COPY.officialSearch}</p>
         <ul>
@@ -389,8 +406,11 @@ function NoHitCard({ view }) {
   );
 }
 
-/** One search view, laid out: the act a title names on top, what was found and searched, the passages by act, or the no-hit card. */
-export function SearchResultsView({ view, onNextPage }) {
+/**
+ * One search view, laid out: the act a title names on top, what was found and searched, the passages by act, or the no-hit
+ * card. `today` is the date in Luxembourg the answer was given on (its `context.freshness.observed_at`), or null.
+ */
+export function SearchResultsView({ view, onNextPage, today = null }) {
   const europe = view.publisher === 'eu-eurlex';
   // With no passage, the no-hit card says that no titles are held among what ran; it is not said twice.
   const resolutionOnTop = view.hits.length === 0 && view.workResolution.outcome === 'no_titles_held' ? null : view.workResolution;
@@ -399,12 +419,12 @@ export function SearchResultsView({ view, onNextPage }) {
       {resolutionOnTop === null ? null : <SearchWorkResolution resolution={resolutionOnTop} />}
       <Found view={view} />
       {/* What was searched: above the passages, or inside the no-hit card, which says it among what ran. */}
-      {europe || view.hits.length === 0 ? null : <Searched view={view} />}
+      {europe || view.hits.length === 0 ? null : <Searched view={view} today={today} />}
       <SearchedOn view={view} />
       {view.referenceReason === 'title_not_held' && view.hits.length > 0 ? <p data-searched-as-words="title_not_held">{COPY.titleNotHeld}</p> : null}
       {europe ? <EuropeWording view={view} /> : <AmbiguousWorks works={view.ambiguousWorks} date={view.date} />}
       {view.hits.length === 0 ? (
-        view.searchableTextHeld ? <NoHitCard view={view} /> : (
+        view.searchableTextHeld ? <NoHitCard view={view} today={today} /> : (
           <>
             <p data-no-hit="">
               <Say template={COPY.noText} values={{ language: view.language, languages: view.searchableLanguages.join(', ') }} />
@@ -573,7 +593,7 @@ export function SearchAnswerView({ outcome, onNextPage, onRetry }) {
   if (outcome.state === 'success') {
     return (
       <section data-answer-state="success">
-        <SearchResultsView view={outcome.view} onNextPage={onNextPage} />
+        <SearchResultsView view={outcome.view} onNextPage={onNextPage} today={todayAt(outcome.context?.freshness?.observed_at)} />
       </section>
     );
   }
@@ -620,6 +640,9 @@ export function SearchAnswerView({ outcome, onNextPage, onRetry }) {
 /** The two forms of the search form: the home page's one box, and the search page's with a work identifier. */
 export const SEARCH_VARIANTS = Object.freeze(['home', 'search']);
 
+/** The state a fragment written as a search this form will not send is said in; nothing is asked. */
+export const ADDRESS_UNREAD = 'address_unread';
+
 /**
  * The id of the line that says today beside the date field: a page holds one search form, and an id React mints
  * (`useId`) is minted from the tree's root, which the server's render and the browser's hydration of the screen's root do
@@ -637,18 +660,22 @@ const TODAY_HINT = 'search-today';
  * the date starts empty). `today` is today's date in Luxembourg as the server said it when it rendered
  * the page (the home page's facts), or null: then this browser's clock says it, once hydrated, by the
  * same coded rule (`todayInLuxembourg`), and a home page's date field takes it unless the reader has
- * already written in the field. What the field holds when the reader submits is what is sent.
+ * already written in the field, or the address holds a search. What the field holds when the reader submits is what is
+ * sent, and what is written into the address. `addressed` is false for a form that keeps nothing in its address (the 404
+ * page's).
  */
-export function LiveSearch({ contract, fetchImpl, variant = 'search', today = null }) {
+export function LiveSearch({ contract, fetchImpl, variant = 'search', today = null, addressed = true }) {
   if (!SEARCH_VARIANTS.includes(variant)) throw new Error(`the search form is the home page's or the search page's, not ${JSON.stringify(variant)}`);
   const home = variant === 'home';
   const [query, setQuery] = useState('');
   const [language, setLanguage] = useState(SEARCH_LANGUAGES[0].code);
   const [identifier, setIdentifier] = useState('');
-  const [knownToday, setKnownToday] = useState(today);
+  const knownToday = useLuxembourgToday(today);
   const [date, setDate] = useState(home && today !== null ? today : '');
   const dateWritten = useRef(false);
   const [outcome, setOutcome] = useState(IDLE);
+  // Whether the search in flight was the reader's own submit: only then does a reference that opens its act go there.
+  const submitted = useRef(false);
   const session = useRef(null);
   if (session.current === null) {
     session.current = createSearchSession({ contract, fetchImpl, onOutcome: setOutcome });
@@ -657,28 +684,46 @@ export function LiveSearch({ contract, fetchImpl, variant = 'search', today = nu
   useEffect(() => () => session.current.cancel(), []);
 
   // A reference the platform holds opens its act: the screen goes to the address, under this page's language, once the
-  // answer says what was read (the line stays in the page this one leaves behind).
+  // answer says what was read (the line stays in the page this one leaves behind), when the reader asked it here.
   useEffect(() => {
-    if (outcome.state === 'opens') window.location.assign(outcome.href);
+    if (outcome.state === 'opens' && submitted.current) window.location.assign(outcome.href);
   }, [outcome]);
 
   // Today, from this browser's clock, when no server said it: after hydration, so the page the server rendered is the
   // page hydrated, and never the build's time.
   useEffect(() => {
-    if (knownToday !== null) return;
-    const now = todayInLuxembourg();
-    if (now === null) return;
-    setKnownToday(now);
-    if (home && !dateWritten.current) setDate((current) => (current === '' ? now : current));
+    if (home && knownToday !== null && !dateWritten.current) setDate((current) => (current === '' ? knownToday : current));
+  }, [knownToday]);
+
+  // The search the address holds (R109), once hydrated, and whenever the reader writes another into it: the form takes it
+  // and asks it. A position after "#" is no search, and changes nothing.
+  useEffect(() => {
+    if (!addressed) return undefined;
+    const fromAddress = () => {
+      const read = readSearchFragment(window.location.hash, { work: !home });
+      if (read.state === 'none') return;
+      session.current.cancel();
+      submitted.current = false;
+      if (read.state === 'refused') {
+        setOutcome({ state: ADDRESS_UNREAD, sentence: COPY.addressUnread });
+        return;
+      }
+      const { request } = read;
+      dateWritten.current = true;
+      setQuery(request.query);
+      setLanguage(request.language);
+      setIdentifier(request.identifier);
+      setDate(request.date);
+      session.current.ask(request);
+    };
+    fromAddress();
+    window.addEventListener('hashchange', fromAddress);
+    return () => window.removeEventListener('hashchange', fromAddress);
   }, []);
 
   // Today, said beside the date field: under it on the search page; on the home page, whose date and language share a
   // row, under the two.
-  const todayHint = knownToday === null ? null : (
-    <p id={TODAY_HINT} className="field-hint" data-today={knownToday}>
-      {fillText(FORM.today, { date: knownToday })}
-    </p>
-  );
+  const todayHint = <TodayHint id={TODAY_HINT} today={knownToday} />;
 
   return (
     <div className={home ? 'search-home' : undefined}>
@@ -686,7 +731,20 @@ export function LiveSearch({ contract, fetchImpl, variant = 'search', today = nu
         role="search"
         onSubmit={(event) => {
           event.preventDefault();
-          session.current.ask({ query, language, identifier: home ? '' : identifier, date });
+          const request = { query, language, identifier: home ? '' : identifier, date };
+          submitted.current = true;
+          // The search, into the page's own address after "#", when the form would send it; the words go to the API in the
+          // request's body alone.
+          if (addressed) {
+            let fragment = null;
+            try {
+              fragment = searchFragment(request, { work: !home });
+            } catch {
+              fragment = null;
+            }
+            if (fragment !== null) replacePageAddress(window, { hash: fragment });
+          }
+          session.current.ask(request);
         }}
       >
         <label>

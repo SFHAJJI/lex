@@ -305,13 +305,19 @@ test("a page past the version's last is refused with its pages: a sentence, its 
 });
 
 test("at an act's readable address a page's links go to that address's pages, not to the permalink's (the review of #978)", () => {
-  const html = renderLiveReadingPage({ initial: { envelope: SECOND, path: "/en/lu-legilux/loi-1991-08-10-n3/fra" } }).replaceAll("<!-- -->", "");
+  // Read today: the answer given on the day it was asked for, as a readable address with no date of its own asks it.
+  const today = structuredClone(SECOND);
+  today.context.freshness.observed_at = today.context.freshness.observed_at.replace(/^\d{4}-\d{2}-\d{2}/, today.result.value.requested_date);
+  const html = renderLiveReadingPage({ initial: { envelope: today, path: "/en/lu-legilux/loi-1991-08-10-n3/fra" } }).replaceAll("<!-- -->", "");
   const permalink = SECOND.result.value.states[0].permalink;
   assert.ok(html.includes('<a rel="prev" href="/en/lu-legilux/loi-1991-08-10-n3/fra" data-previous-page="1">Previous articles</a>'), "the page before: the act's address");
   assert.ok(!html.includes(`href="/en${permalink}?page=`), "no page link at the permalink");
-  // At a permalink, the permalink's pages, as before.
-  const pinned = renderLiveReadingPage({ initial: { envelope: SECOND, path: `/en${permalink}` } }).replaceAll("<!-- -->", "");
-  assert.ok(pinned.includes(`<a rel="prev" href="/en${permalink}" data-previous-page="1">Previous articles</a>`));
+  // At a permalink, the permalink's pages, as before; and at a readable address read on another day (one that keeps a date,
+  // the plan's item 3.4), the version's own pages, by its permalink, since the act's address shows today's version.
+  for (const path of [`/en${permalink}`, "/en/lu-legilux/loi-1991-08-10-n3/fra"]) {
+    const pinned = renderLiveReadingPage({ initial: { envelope: SECOND, path } }).replaceAll("<!-- -->", "");
+    assert.ok(pinned.includes(`<a rel="prev" href="/en${permalink}" data-previous-page="1">Previous articles</a>`), path);
+  }
 });
 
 test("a page asked in place for another version, stopped by the next one asked, goes back to its link (the review of #978)", () => {

@@ -1,6 +1,6 @@
 {
   "schema": "lex-v3-envelope-samples/1",
-  "note": "Whole REST envelopes the real handler sent, each verified by V3EnvelopeJson.ParseAndVerify before it was recorded, and the reviewed registry\u0027s contract a reader needs to verify one. The fixture\u0027s per-run corpus and index digests are replaced by aaaaaaaa... and bbbbbbbb... (same shape, every occurrence), and every object_ref_sha256 (the corpus\u0027s per-run reference to the object holding a source\u0027s bytes) by cccccccc...; in the two envelopes from a mount derived from custody (the EU time view whose next wording\u0027s text is not held in English, and verify at its first provision), every body_receipt_sha256 (that custody\u0027s per-run receipt) by dddddddd...; nothing else is edited. THE PRODUCER IS REAL AND THE MOUNT IS A FIXTURE.",
+  "note": "Whole REST envelopes the real handler sent, each verified by V3EnvelopeJson.ParseAndVerify before it was recorded, and the reviewed registry\u0027s contract a reader needs to verify one. The fixture\u0027s per-run corpus and index digests are replaced by aaaaaaaa... and bbbbbbbb... (same shape, every occurrence), and every object_ref_sha256 (the corpus\u0027s per-run reference to the object holding a source\u0027s bytes) by cccccccc...; in the envelopes from the two mounts derived from custody (the EU time view whose next wording\u0027s text is not held in English, and verify at its first provision; the EU act dated before 1 July 2013), every body_receipt_sha256 (that custody\u0027s per-run receipt) by dddddddd...; nothing else is edited. THE PRODUCER IS REAL AND THE MOUNT IS A FIXTURE.",
   "contract": {
     "envelope_schema": "lex-v3-envelope/1",
     "version": "v3",
@@ -370,8 +370,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -597,8 +615,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -690,8 +726,17 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "unreachable"
           },
           "jurisdiction": "lu",
@@ -729,8 +774,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -771,8 +834,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -1126,8 +1207,17 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "unreachable"
           },
           "jurisdiction": "lu",
@@ -1165,8 +1255,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -1475,8 +1583,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -1592,8 +1718,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "eu-eurlex",
+                "stale": null
+              }
+            ],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -1776,8 +1920,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "eu-eurlex",
+                "stale": null
+              }
+            ],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -1818,8 +1980,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "eu-eurlex",
+                "stale": null
+              }
+            ],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -1984,8 +2164,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "eu-eurlex",
+                "stale": null
+              }
+            ],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -2112,8 +2310,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "eu-eurlex",
+                "stale": null
+              }
+            ],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -2161,8 +2377,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -2296,8 +2530,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -2345,8 +2597,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -2387,8 +2657,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -2426,8 +2714,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "eu-eurlex",
+                "stale": null
+              }
+            ],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -2554,8 +2860,17 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "unreachable"
           },
           "jurisdiction": "lu",
@@ -2593,8 +2908,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -3681,8 +4014,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -3727,8 +4078,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -3776,8 +4145,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -3818,8 +4205,17 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "unreachable"
           },
           "jurisdiction": "lu",
@@ -3857,8 +4253,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -4945,8 +5359,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -4991,8 +5423,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -5039,8 +5489,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -6490,8 +6958,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -6840,8 +7326,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -6892,8 +7396,34 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": "ffffffffffffffffffffffffffffffffffffffff",
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              },
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "eu-eurlex",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2027-01-15T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -6918,6 +7448,11 @@
           "value": {
             "acknowledgement": "\u00A9 European Union, https://eur-lex.europa.eu",
             "authenticity": "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) No 216/2013, Article 1(2)); this text is a reproduction read from the Publications Office\u0027s Formex package, not the authentic edition.",
+            "authenticity_act_dates": [
+              "2016-04-27"
+            ],
+            "authenticity_basis": "electronic_edition",
+            "authenticity_rule": "the sentence is chosen by the act\u0027s own date, since this index holds no Official Journal publication date: authenticity_act_dates lists, once each and in order, the dates this index holds of the act the text belongs to (for a consolidated version, the act it consolidates): the date the publisher\u0027s Formex package gives the act\u0027s original wording, when that text is held, and the publisher\u0027s work_date_document of the act\u0027s own work, when the EU census of the act is held; a consolidated text outside a held census lists none, its own date being a consolidation\u0027s; the basis is electronic_edition when a date is listed and the earliest is on or after 2013-07-01, since an act is published on or after the date it bears, so in an Official Journal whose electronic edition alone is authentic (Regulation (EU) No 216/2013, which applies from 1 July 2013), and edition_by_publication_date otherwise, whose sentence states which edition is authentic on either side of 1 July 2013 and not on which side the act was published, so it also holds for an act dated before that day and published on or after it (one adopted in June 2013 may have been published in July); Lex\u0027s reproduction is never the authentic edition",
             "available_languages": [
               "eng",
               "fra"
@@ -7797,8 +8332,34 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": "ffffffffffffffffffffffffffffffffffffffff",
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              },
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "eu-eurlex",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2027-01-15T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -7843,14 +8404,305 @@
       }
     },
     {
+      "operation": "evidence_bundle",
+      "scenario": "an EU act dated before 1 July 2013 (a fixture\u0027s date, 2013-06-26, in the GDPR\u0027s package), the page of its last article: an answer with the dated authenticity sentence",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "commits": {
+            "index_builder_source_commit": "ffffffffffffffffffffffffffffffffffffffff",
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
+          "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              },
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "eu-eurlex",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2027-01-15T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "eu",
+          "provisional": false,
+          "publisher": "eu-eurlex",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "success",
+          "timeline_semantics": "official_consolidation_state"
+        },
+        "object_type": "envelope",
+        "operation_id": "evidence_bundle",
+        "refusal": null,
+        "registry_schema": "lex-v3-operation-registry/1",
+        "registry_sha256": "80dc8e29242223f0f4c6dc09b87861b50cbb994c668a99dd4ee2432d7fa48470",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": {
+          "object_type": "evidence_bundle",
+          "schema": "lex-v3-evidence_bundle-result/1",
+          "value": {
+            "acknowledgement": "\u00A9 European Union, https://eur-lex.europa.eu",
+            "authenticity": "For an act published before 1 July 2013, the printed Official Journal of the European Union is authentic; the electronic edition is authentic since that date (Regulation (EU) No 216/2013). This text is a reproduction read from the Publications Office\u0027s Formex package, not the authentic edition.",
+            "authenticity_act_dates": [
+              "2013-06-26"
+            ],
+            "authenticity_basis": "edition_by_publication_date",
+            "authenticity_rule": "the sentence is chosen by the act\u0027s own date, since this index holds no Official Journal publication date: authenticity_act_dates lists, once each and in order, the dates this index holds of the act the text belongs to (for a consolidated version, the act it consolidates): the date the publisher\u0027s Formex package gives the act\u0027s original wording, when that text is held, and the publisher\u0027s work_date_document of the act\u0027s own work, when the EU census of the act is held; a consolidated text outside a held census lists none, its own date being a consolidation\u0027s; the basis is electronic_edition when a date is listed and the earliest is on or after 2013-07-01, since an act is published on or after the date it bears, so in an Official Journal whose electronic edition alone is authentic (Regulation (EU) No 216/2013, which applies from 1 July 2013), and edition_by_publication_date otherwise, whose sentence states which edition is authentic on either side of 1 July 2013 and not on which side the act was published, so it also holds for an act dated before that day and published on or after it (one adopted in June 2013 may have been published in July); Lex\u0027s reproduction is never the authentic edition",
+            "available_languages": [
+              "eng",
+              "fra"
+            ],
+            "celex": "32016R0679",
+            "consolidations_held": true,
+            "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date_rule": "per language, the wording a date answers is the latest dated wording at or before it, and it holds until the next dated wording (next_date), or with no next date until a version the publisher has not yet consolidated, which is not held; when several discovered works share that date, the answer is served only if every text the corpus holds for that date in that language is the same (the publisher\u0027s work whose CELEX names that version represents them when its text is held), and two different held texts are refused ambiguous_version; a version with no usable publisher date is disclosed, and refused as ambiguous only when the corpus holds a text of it that differs from the answer",
+            "date_semantics": "an EU wording date is the date of a wording of the act: for the original wording, the date the publisher\u0027s Formex package gives the act; for a consolidated version, the publisher\u0027s consolidation date (cdm:act_consolidated_date) of that version; it is not an entry-into-force, application or publication date, and an EU date is never merged with a Luxembourg applicability date",
+            "digest_rule": "the SHA-256, under the domain lex-v3-eu-wording/1, of the seed act\u0027s CELEX (the act a consolidated version consolidates; for the original wording, its work\u0027s own CELEX, which is the same), the publisher\u0027s work and expression IRIs of the wording, the language, the wording date (the original\u0027s Formex date or the publisher\u0027s consolidation date) and every article identity of the expression in the publisher\u0027s article order, each field written as a 4-byte big-endian length and its UTF-8 bytes; each article identity is itself the SHA-256 of that article\u0027s text and tokens, so the digest pins the whole held wording, computed here from the EU index, which stores no wording digest",
+            "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "not_held": [
+              {
+                "item": "publisher_signature",
+                "reason": "no signature or attestation of the publisher is held; the digests are this index\u0027s own reading of the retained package"
+              },
+              {
+                "item": "unconsolidated_amendments",
+                "reason": "an amendment the publisher has not yet consolidated is not held: the latest consolidated wording answers every later date, as dated"
+              },
+              {
+                "item": "force_dates",
+                "reason": "no entry-into-force, application or end-of-validity date is held; a wording date is none of them"
+              },
+              {
+                "item": "observation_time",
+                "reason": "when the publisher served the retained package is not held, so no observation time is stated"
+              },
+              {
+                "item": "markup_and_notes",
+                "reason": "the Formex markup, notes and tables are not served as structure; the text is the article\u0027s searchable text, in publisher order"
+              },
+              {
+                "item": "annexes",
+                "reason": "no annex text is held: annexes are not indexed as articles, so no annex is searched, quoted or exported; annexes_not_served lists the annexes the corpus classified against the publisher PDF on the members an expression was read from, with the official source to read them, and an empty list says only that the corpus classified none there, not that the act has none"
+              }
+            ],
+            "page_rule": "a wording is read in pages: its provisions, quoted or held without text, are taken in the order of the publisher\u0027s provision ids (the order the wording digest reads them in), and each page holds at most 50 of them and at most 98,304 bytes of quoted text (UTF-8), a provision whose text alone passes that bound being a page of its own; pages count from 1 and the cut depends on the wording alone; with neither page nor article asked the first page is served, article serves the page that holds that provision id (anchor_not_in_version when a served wording does not hold it, and for a page past a served wording\u0027s last, naming page=N, the first and last pages, requested_page, pages and the wording\u0027s language), and contents true adds every provision\u0027s position, publisher id, identity, heading and page, with no text; articles and articles_without_text are the page\u0027s, and page counts the wording\u0027s",
+            "publisher": "eu-eurlex",
+            "publisher_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+            "requested_article": "099",
+            "requested_date": "2013-06-26",
+            "requested_identifier": "32016R0679",
+            "requested_language": "eng",
+            "requested_page": null,
+            "rights_rule": "rights are enforced when the bundle is composed, before any text is read: every corpus member the served expression\u0027s articles come from must have been acquired, which an EU build reaches only after retaining the Decision 95 rights receipt (Commission Decision 2011/833/EU, fetched on the Publications Office route, never from eur-lex.europa.eu); under any other outcome the bundle refuses text_withheld and names the official identity, the official link and the retained body digest; every text served carries the acknowledgement and the authenticity statement Decision 95 requires",
+            "scope": "the evidence a reader needs to quote the wording of an EU act that answers the requested date under the selection rule: for each served language, the wording dated at or before the requested date that holds until its next_date, with the works that share its date and the versions with no usable date disclosed beside it; its hash-pinned permalink and stable coordinate, the corpus members its articles belong to with their retained body digests, and every article of the page served (page_rule; page, pages and, when asked, contents say the wording\u0027s pages and articles) with its position, its publisher id and heading, its text (the text the index searches), the digest of that text (text_sha256), the digest of the corpus member\u0027s retained publisher body (body_sha256: the manifestation the corpus holds for the expression, such as its XHTML or PDF), the digest of the Formex package the text was read from (package_sha256) and of the package entry (source_entry_sha256), its official source and an article permalink (the wording permalink and the publisher\u0027s provision id as a last segment, which verify accepts); an article whose text is empty is named under articles_without_text and is not served as a quote; the annexes the corpus classified on those members are listed under annexes_not_served, each served as text not available with the official source to read it, and never quoted; next_date is the date of the next dated wording, whose text may or may not be held, and next_text_held says whether it is, in that language; given as the identifier, a wording\u0027s hash-pinned permalink (/eu-eurlex/{celex}/{date}--{wording sha256}/{language}, R64; with its own date, and the language it names if one is asked) answers the wording it pins; a digest no wording of that date carries in that language is pinned_digest_mismatch naming the wording the date answers with, never another wording in its place",
+            "served_languages": [
+              "eng"
+            ],
+            "wordings": [
+              {
+                "annexes_not_served": [],
+                "articles": [
+                  {
+                    "article_identity_sha256": "9caab819a1f5c7ad277f2b3c71f4b98aeea75275f22062d39d5071d49a4f6d5c",
+                    "article_permalink": "/eu-eurlex/32016R0679/2013-06-26--529c8cd54fed26d3c644f551e9d986515e2a4270fb3bdf5c6e377c75345ebcb0/eng/095",
+                    "body_sha256": "962539af03738bf552319ff4ce42d69e5f95a576307c4dfed7bf87e81b646b9d",
+                    "heading": "Article 95",
+                    "language": "eng",
+                    "official_source": "https://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0001.01",
+                    "package_entry": "L_2016119EN.01000101.xml",
+                    "package_sha256": "7ac5d154ce86b2f3bac7092c98dec909fe6c2c0f1500376f19d27d42214b8680",
+                    "position": 95,
+                    "provision_coordinate": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0001#lex-provision=095",
+                    "publisher_id": "095",
+                    "source_entry_sha256": "4632b7a87fdc06c1591059948635c1cce5e017b6ec018e0494eae3e69c8d1a8a",
+                    "text": "Article 95 Relationship with Directive 2002/58/EC This Regulation shall not impose additional obligations on natural or legal persons in relation to processing in connection with the provision of publicly available electronic communications services in public communication networks in the Union in relation to matters for which they are subject to specific obligations with the same objective set out in Directive 2002/58/EC.",
+                    "text_byte_length": 426,
+                    "text_sha256": "97c2655a047c7ad88bc63c916944ca623cda799fae27e2115f2ad7817fbce455"
+                  },
+                  {
+                    "article_identity_sha256": "58de614dfa4fe5eb38f2a6c3cf920e27f9c1c8253d0d78afdb7bd10f72751319",
+                    "article_permalink": "/eu-eurlex/32016R0679/2013-06-26--529c8cd54fed26d3c644f551e9d986515e2a4270fb3bdf5c6e377c75345ebcb0/eng/096",
+                    "body_sha256": "962539af03738bf552319ff4ce42d69e5f95a576307c4dfed7bf87e81b646b9d",
+                    "heading": "Article 96",
+                    "language": "eng",
+                    "official_source": "https://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0001.01",
+                    "package_entry": "L_2016119EN.01000101.xml",
+                    "package_sha256": "7ac5d154ce86b2f3bac7092c98dec909fe6c2c0f1500376f19d27d42214b8680",
+                    "position": 96,
+                    "provision_coordinate": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0001#lex-provision=096",
+                    "publisher_id": "096",
+                    "source_entry_sha256": "4632b7a87fdc06c1591059948635c1cce5e017b6ec018e0494eae3e69c8d1a8a",
+                    "text": "Article 96 Relationship with previously concluded Agreements International agreements involving the transfer of personal data to third countries or international organisations which were concluded by Member States prior to 24 May 2016, and which comply with Union law as applicable prior to that date, shall remain in force until amended, replaced or revoked.",
+                    "text_byte_length": 359,
+                    "text_sha256": "bb1fcb56c32dd27dc5f34465e7487135f681fabf0c360926e6f85e7edeaa5d30"
+                  },
+                  {
+                    "article_identity_sha256": "c8c7b6563471603540b9f7e5beefa87904474737036509c80d8796ccd9abd2c4",
+                    "article_permalink": "/eu-eurlex/32016R0679/2013-06-26--529c8cd54fed26d3c644f551e9d986515e2a4270fb3bdf5c6e377c75345ebcb0/eng/097",
+                    "body_sha256": "962539af03738bf552319ff4ce42d69e5f95a576307c4dfed7bf87e81b646b9d",
+                    "heading": "Article 97",
+                    "language": "eng",
+                    "official_source": "https://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0001.01",
+                    "package_entry": "L_2016119EN.01000101.xml",
+                    "package_sha256": "7ac5d154ce86b2f3bac7092c98dec909fe6c2c0f1500376f19d27d42214b8680",
+                    "position": 97,
+                    "provision_coordinate": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0001#lex-provision=097",
+                    "publisher_id": "097",
+                    "source_entry_sha256": "4632b7a87fdc06c1591059948635c1cce5e017b6ec018e0494eae3e69c8d1a8a",
+                    "text": "Article 97 Commission reports 1. By 25 May 2020 and every four years thereafter, the Commission shall submit a report on the evaluation and review of this Regulation to the European Parliament and to the Council. The reports shall be made public. 2. In the context of the evaluations and reviews referred to in paragraph 1, the Commission shall examine, in particular, the application and functioning of: (a) Chapter V on the transfer of personal data to third countries or international organisations with particular regard to decisions adopted pursuant to Article 45(3) of this Regulation and decisions adopted on the basis of Article 25(6) of Directive 95/46/EC; (b) Chapter VII on cooperation and consistency. 3. For the purpose of paragraph 1, the Commission may request information from Member States and supervisory authorities. 4. In carrying out the evaluations and reviews referred to in paragraphs 1 and 2, the Commission shall take into account the positions and findings of the European Parliament, of the Council, and of other relevant bodies or sources. 5. The Commission shall, if necessary, submit appropriate proposals to amend this Regulation, in particular taking into account of developments in information technology and in the light of the state of progress in the information society.",
+                    "text_byte_length": 1308,
+                    "text_sha256": "35f3bfbad752bd95e5e2cde5f95f3521ed816568ffb890d40cc724bd1d271cb6"
+                  },
+                  {
+                    "article_identity_sha256": "3d041fa787aa2c20e6867c8df2ffbb0c3d76c43041ab5bf9a53d03806a61568b",
+                    "article_permalink": "/eu-eurlex/32016R0679/2013-06-26--529c8cd54fed26d3c644f551e9d986515e2a4270fb3bdf5c6e377c75345ebcb0/eng/098",
+                    "body_sha256": "962539af03738bf552319ff4ce42d69e5f95a576307c4dfed7bf87e81b646b9d",
+                    "heading": "Article 98",
+                    "language": "eng",
+                    "official_source": "https://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0001.01",
+                    "package_entry": "L_2016119EN.01000101.xml",
+                    "package_sha256": "7ac5d154ce86b2f3bac7092c98dec909fe6c2c0f1500376f19d27d42214b8680",
+                    "position": 98,
+                    "provision_coordinate": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0001#lex-provision=098",
+                    "publisher_id": "098",
+                    "source_entry_sha256": "4632b7a87fdc06c1591059948635c1cce5e017b6ec018e0494eae3e69c8d1a8a",
+                    "text": "Article 98 Review of other Union legal acts on data protection The Commission shall, if appropriate, submit legislative proposals with a view to amending other Union legal acts on the protection of personal data, in order to ensure uniform and consistent protection of natural persons with regard to processing. This shall in particular concern the rules relating to the protection of natural persons with regard to processing by Union institutions, bodies, offices and agencies and on the free movement of such data.",
+                    "text_byte_length": 517,
+                    "text_sha256": "d681409f47ca99e8cfbbc9d1c90b278fd045e76b7d288d1b0d2fa2ced5a8fbb2"
+                  },
+                  {
+                    "article_identity_sha256": "edc460dcd7463db284483beea2b6b8bb72908b5bc3af90c5ae856fa3f6839a14",
+                    "article_permalink": "/eu-eurlex/32016R0679/2013-06-26--529c8cd54fed26d3c644f551e9d986515e2a4270fb3bdf5c6e377c75345ebcb0/eng/099",
+                    "body_sha256": "962539af03738bf552319ff4ce42d69e5f95a576307c4dfed7bf87e81b646b9d",
+                    "heading": "Article 99",
+                    "language": "eng",
+                    "official_source": "https://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0001.01",
+                    "package_entry": "L_2016119EN.01000101.xml",
+                    "package_sha256": "7ac5d154ce86b2f3bac7092c98dec909fe6c2c0f1500376f19d27d42214b8680",
+                    "position": 99,
+                    "provision_coordinate": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0001#lex-provision=099",
+                    "publisher_id": "099",
+                    "source_entry_sha256": "4632b7a87fdc06c1591059948635c1cce5e017b6ec018e0494eae3e69c8d1a8a",
+                    "text": "Article 99 Entry into force and application 1. This Regulation shall enter into force on the twentieth day following that of its publication in the Official Journal of the European Union. 2. It shall apply from 25 May 2018.",
+                    "text_byte_length": 223,
+                    "text_sha256": "3e257e7b4b9ceacae62c1fc9dbef526f683c913f885292e38a40ae7692b47fcd"
+                  }
+                ],
+                "articles_without_text": [],
+                "basis": "single_work",
+                "celex": "32016R0679",
+                "contents": null,
+                "kind": "original_wording",
+                "language": "eng",
+                "next_date": "2024-01-01",
+                "next_text_held": true,
+                "page": {
+                  "articles_in_version": 99,
+                  "first_position": 95,
+                  "last_position": 99,
+                  "number": 3,
+                  "pages": 3,
+                  "quoted_in_version": 99,
+                  "without_text_in_version": 0
+                },
+                "pages": [
+                  {
+                    "articles": 44,
+                    "first_heading": "Article 1",
+                    "first_publisher_id": "001",
+                    "last_heading": "Article 44",
+                    "last_publisher_id": "044",
+                    "number": 1
+                  },
+                  {
+                    "articles": 50,
+                    "first_heading": "Article 45",
+                    "first_publisher_id": "045",
+                    "last_heading": "Article 94",
+                    "last_publisher_id": "094",
+                    "number": 2
+                  },
+                  {
+                    "articles": 5,
+                    "first_heading": "Article 95",
+                    "first_publisher_id": "095",
+                    "last_heading": "Article 99",
+                    "last_publisher_id": "099",
+                    "number": 3
+                  }
+                ],
+                "permalink": "/eu-eurlex/32016R0679/2013-06-26--529c8cd54fed26d3c644f551e9d986515e2a4270fb3bdf5c6e377c75345ebcb0/eng",
+                "publisher_expression_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1.0001",
+                "publisher_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+                "same_date_works": [],
+                "sources": [
+                  {
+                    "body_byte_length": 806864,
+                    "body_receipt_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                    "body_sha256": "962539af03738bf552319ff4ce42d69e5f95a576307c4dfed7bf87e81b646b9d",
+                    "object_ref_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                    "outcome": "acquired"
+                  }
+                ],
+                "stable_coordinate": "/eu-eurlex/32016R0679/eng/2013-06-26",
+                "unplaced_versions": [],
+                "wording_date": "2013-06-26",
+                "wording_sha256": "529c8cd54fed26d3c644f551e9d986515e2a4270fb3bdf5c6e377c75345ebcb0"
+              }
+            ]
+          }
+        },
+        "schema": "lex-v3-envelope/1",
+        "verdict": "answer",
+        "version": "v3"
+      }
+    },
+    {
       "operation": "verify",
       "scenario": "an article\u0027s permalink: digest_matches, with the article\u0027s text digest",
       "http_status": 200,
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -7956,8 +8808,34 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": "ffffffffffffffffffffffffffffffffffffffff",
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              },
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "eu-eurlex",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2027-01-15T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -8040,8 +8918,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -8125,8 +9021,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -8176,8 +9090,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -8225,8 +9157,17 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "unreachable"
           },
           "jurisdiction": "lu",
@@ -8264,8 +9205,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -8981,8 +9940,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -9028,8 +10005,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -9077,8 +10072,17 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "unreachable"
           },
           "jurisdiction": "lu",
@@ -9116,8 +10120,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -9213,8 +10235,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -9282,8 +10322,17 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "unreachable"
           },
           "jurisdiction": "lu",

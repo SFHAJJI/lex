@@ -217,7 +217,10 @@ test("--no-browser probes the image over HTTP, every probe that needs no browser
     // The deployment probe's checks, V2's routes, the server's answers and the card, all on one start of the image.
     assert.deepEqual(report.servedPages.failures, []);
     assert.match(report.servedPages.notes[0], /^the revision's clock read /);
-    assert.deepEqual(report.servedPages.notes.slice(1), ["an accented title: not checked, the revision's index holds no titles"]);
+    assert.deepEqual(report.servedPages.notes.slice(1, 2), ["an accented title: not checked, the revision's index holds no titles"]);
+    // This stand-in image holds no legal page (the plan's item 7.1): said beside the pass, never failed, until the opening.
+    assert.match(report.servedPages.notes[2], /^the legal pages are not ready to publish, so the site may not open \(deploy\.ps1 -Open and -Public refuse it\): the release holds no \/fr\/legal-notice\.html;/);
+    assert.equal(report.servedPages.notes.length, 3);
     assert.deepEqual(report.v2Routes, { routesAsked: V2_ROUTES.length, routeFailures: [] });
     assert.deepEqual(report.server, { failures: [] });
     assert.deepEqual({ ...report.cardRoute, sha256: undefined }, { route: CARD_ROUTE, status: 200, contentType: "application/json", sha256: undefined, isTheReleaseCard: true, failures: [] });
@@ -482,10 +485,11 @@ test("deploy.ps1 walks no page unless -BrowserProbe asks: a plan run reads the r
       assert.match(run.stdout, /\(no browser probe: only the HTTP probes would run, under the browser trap, and no page of the candidate would be walked in a browser/);
     }
     // Asked for, on a machine where a browser may run: planned with --browser and without the trap (a plan run starts no
-    // browser: the probe is only shown).
+    // browser: the probe is only shown). A private copy's plan names no --opening (only a -Public deployment's does), so the
+    // place it would take between the two is left empty.
     const walking = await plan("-BrowserProbe");
     assert.equal(walking.code, 0, walking.stdout + walking.stderr);
-    assert.match(probeLine(walking.stdout), /> node web\/scripts\/deploy-probe\.mjs --origin .* --browser\s*$/);
+    assert.match(probeLine(walking.stdout), /> node web\/scripts\/deploy-probe\.mjs --origin .* --browser\s+--promotion-check\s*$/);
     assert.ok(!walking.stderr.includes(armed) && !walking.stdout.includes("no browser probe"));
     // Both at once say opposite things, and nothing is read or planned.
     const both = await plan("-BrowserProbe", "-SkipBrowserProbe");

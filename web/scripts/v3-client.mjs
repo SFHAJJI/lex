@@ -14,6 +14,7 @@
 // itself until the promise settles.
 
 import { readV3Envelope } from "./v3-envelope.mjs";
+import { announceAnswer } from "./freshness.mjs";
 
 /** The operations the API serves; a request for any other is refused here, before it is sent. */
 export const SERVED_OPERATIONS = Object.freeze([
@@ -120,7 +121,9 @@ export async function askV3(operation, parameters, options) {
   if (parsed.invalid) return { state: "invalid_envelope", reason: "the answer is not JSON" };
 
   const read = readV3Envelope(parsed.value, contract, { operation, objectType });
-  return read.ok
-    ? { state: read.state, envelope: read.envelope }
-    : { state: "invalid_envelope", reason: read.reason };
+  if (!read.ok) return { state: "invalid_envelope", reason: read.reason };
+  // Every answer says how current the law is and which commits stand behind it (R87, R23): the page's footer strip and its
+  // staleness banner follow the latest one (`freshness.mjs`, `client.jsx`).
+  announceAnswer(read.envelope);
+  return { state: read.state, envelope: read.envelope };
 }

@@ -5,6 +5,7 @@
 // and `client-live-dossier-entry.jsx` hydrates the same tree; a dossier is asked only when the reader
 // submits.
 
+import { freshnessFacts } from '../scripts/freshness.mjs';
 import { Document } from './Document.jsx';
 import { liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { LiveDossier } from './LiveDossier.jsx';
@@ -60,6 +61,7 @@ export function renderLiveDossierPage({ initial = null } = {}) {
       lawPath={initial === null ? null : lawPathOf(initial.path)}
       indexing={searchEngines.indexing}
       structuredData={searchEngines.structuredData}
+      freshness={initial === null ? null : freshnessFacts(initial.envelope)}
     >
       <p className="eyebrow">{copy.eyebrow}</p>
       <h1>{copy.heading}</h1>
