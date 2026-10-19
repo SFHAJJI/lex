@@ -35,6 +35,8 @@ const envelopeOf = (operation, scenarioStart) => {
 };
 const LU = envelopeOf("evidence_bundle", "the work on its state's date");
 const EU = envelopeOf("evidence_bundle", "an EU wording's permalink whose next wording's text is not held");
+// An EU act dated before 1 July 2013 (a fixture's date): the dated authenticity statement (the owner's decision of 2026-10-18, O4).
+const EU_DATED = envelopeOf("evidence_bundle", "an EU act dated before 1 July 2013");
 const LU_VERIFIED = envelopeOf("verify", "an article's permalink");
 const ANSWERS = JSON.parse(await readFile(new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
 const EU_VERIFIED = envelopeOf("verify", "an EU provision's permalink");
@@ -282,11 +284,46 @@ test("an EU act is cited as EUR-Lex numbers it, at its wording's date when anoth
   const original = readEuropeEvidenceBundle(europeBundle());
   const sample = citationForms({ view: original, version: original.wordings[0], article: original.wordings[0].articles[1], observedAt: "2026-10-17T10:00:00Z" });
   assert.equal(sample.conventional, "Article 2 of Regulation (EU) 2016/679, as at 27 April 2016", "its heading is the article's title, so its id's number names it");
-  assert.equal(EU.result.value.authenticity, EN.citation.europe.authenticity, "the table holds the platform's statement word for word");
+  assert.equal(EU.result.value.authenticity, EN.citation.europe.authenticity.electronic_edition, "the table holds the platform's statement word for word");
+  assert.equal(EU.result.value.authenticity_basis, "electronic_edition", "an act dated 27 April 2016: the electronic edition alone");
+});
+
+test("an EU act dated before 1 July 2013 ends its evidence form with the dated statement, in English and in French (O4)", () => {
+  // The census's act, its package dated 2013-06-26 (a fixture's date, June 2013's): the platform chose the dated statement by
+  // the act's own date, since the index holds no Official Journal publication date, and the table holds it word for word.
+  const value = EU_DATED.result.value;
+  assert.equal(value.authenticity_basis, "edition_by_publication_date");
+  assert.deepEqual(value.authenticity_act_dates, ["2013-06-26"]);
+  assert.equal(value.authenticity, EN.citation.europe.authenticity.edition_by_publication_date, "the table holds the platform's dated statement word for word");
+  const view = readEuropeEvidenceBundle(value);
+  assert.equal(view.authenticity, value.authenticity);
+  assert.equal(view.authenticityBasis, "edition_by_publication_date");
+  const [wording] = view.wordings;
+  const article = wording.articles.at(-1);
+  const forms = citationForms({ view, version: wording, article, observedAt: EU_DATED.context.freshness.observed_at });
+  assert.equal(forms.evidenceLines.at(-1), EN.citation.europe.authenticity.edition_by_publication_date);
+  assert.ok(!forms.evidence.includes(EN.citation.europe.authenticity.electronic_edition), "never the undated statement");
+  assert.ok(forms.evidenceLines.includes("Wording: the original wording of 2013-06-26"));
+  // The same act's text in French is cited in French, with the dated statement's French.
+  const french = europeConsolidation({ authenticity: value.authenticity });
+  const inFrench = citationForms({ view: french.view, version: french.wording, article: french.article, observedAt: "2026-10-17T10:00:00Z" });
+  assert.equal(inFrench.evidenceLines.at(-1), FR.citation.europe.authenticity.edition_by_publication_date);
+  assert.ok(inFrench.evidenceLines.at(-1).startsWith("Pour un acte publié avant le 1er juillet 2013, "));
+  // Exported, the evidence form keeps the dated statement in the JSON, the CSV and the PDF.
+  const model = composeEuropeExport({
+    view, observedAt: OBSERVED, registrySha256: "3".repeat(64),
+    pinned: [{ wordingSha256: wording.wordingSha256, publisherId: article.publisherId }],
+  });
+  assert.equal(model.authenticity, EN.citation.europe.authenticity.edition_by_publication_date, "the export's statement");
+  assert.equal(model.items[0].authenticity, model.authenticity, "and each item's");
+  assert.equal(model.items[0].citations.evidence.split("\n").at(-1), EN.citation.europe.authenticity.edition_by_publication_date, "the item's evidence form ends with it");
+  assert.equal(JSON.parse(exportJson(model)).items[0].citation_forms.evidence, model.items[0].citations.evidence, "the JSON keeps the form");
+  assert.ok(exportCsv(model).includes(EN.citation.europe.authenticity.edition_by_publication_date));
+  assert.equal(pdfRefusal(model), null, "the dated statement's characters are the standard fonts'");
 });
 
 /** An EU reading view of one consolidated wording, as the reader builds it, in `language`. */
-function europeConsolidation({ language = "fra", next = null, celex = "32016R0679", authenticity = EN.citation.europe.authenticity, heading = "Article 33" } = {}) {
+function europeConsolidation({ language = "fra", next = null, celex = "32016R0679", authenticity = EN.citation.europe.authenticity.electronic_edition, heading = "Article 33" } = {}) {
   const permalink = `/eu-eurlex/${celex}/2024-01-01--${"c".repeat(64)}/${language}`;
   return {
     view: { publisher: "eu-eurlex", celex, authenticity },
@@ -306,7 +343,7 @@ test("an EU consolidation in French is cited in French, with its own CELEX and t
     `Publication${NB}: la référence au Journal officiel n’est pas détenue par cet index.`,
     `Empreinte du texte (SHA-256)${NB}: ${"b".repeat(64)}`,
     "Consulté sur Lex le 2026-10-17 (date au Luxembourg).",
-    FR.citation.europe.authenticity,
+    FR.citation.europe.authenticity.electronic_edition,
   ]);
   const later = europeConsolidation({ next: "2025-06-01" });
   assert.equal(citationForms({ view: later.view, version: later.wording, article: later.article, observedAt: "2026-10-17T10:00:00Z" }).conventional,

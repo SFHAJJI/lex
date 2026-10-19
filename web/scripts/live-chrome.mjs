@@ -622,9 +622,13 @@ const EN = Object.freeze({
       suffixed: "{year}/{number}/{domain}",
       plain: "{year}/{number}",
       version: "{citation}, as at {date}",
-      // The platform's authenticity statement for EU text (`V3CorpusMount.EuropeTextAuthenticity`), word for word: the
-      // generator says it in the cited text's language only when the answer says exactly this.
-      authenticity: "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) No 216/2013, Article 1(2)); this text is a reproduction read from the Publications Office's Formex package, not the authentic edition.",
+      // The platform's authenticity statements for EU text (`V3CorpusMount.EuropeTextAuthenticity`), word for word, one for
+      // each basis the act's own date chooses (the owner's decision of 2026-10-18, O4): the generator says the cited text's
+      // language's only when the answer says exactly one of these.
+      authenticity: Object.freeze({
+        electronic_edition: "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) No 216/2013, Article 1(2)); this text is a reproduction read from the Publications Office's Formex package, not the authentic edition.",
+        edition_by_publication_date: "For an act published before 1 July 2013, the printed Official Journal of the European Union is authentic; the electronic edition is authentic since that date (Regulation (EU) No 216/2013). This text is a reproduction read from the Publications Office's Formex package, not the authentic edition.",
+      }),
     }),
     evidence: Object.freeze({
       permalink: "Permalink: {permalink}",

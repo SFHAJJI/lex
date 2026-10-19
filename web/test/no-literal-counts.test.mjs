@@ -54,9 +54,10 @@ const NUMBERS_ALLOWED = Object.freeze({
   "common.asPublished.authenticity.electronic_journal_officiel": ["1", "2017", "23", "2016", "5"],
   "common.asPublished.authenticity.printed_memorial": ["1", "2017"],
   "form.articleIdPlaceholder": ["15"],
-  // The citation generator's words (`citation.mjs`): the EU's authenticity statement cites its regulation and article, and
-  // the evidence form names its digest's algorithm.
-  "citation.europe.authenticity": ["216", "2013", "1", "2"],
+  // The citation generator's words (`citation.mjs`): the EU's authenticity statements cite their regulation (and its article,
+  // or the day from which the electronic edition alone is authentic), and the evidence form names its digest's algorithm.
+  "citation.europe.authenticity.electronic_edition": ["216", "2013", "1", "2"],
+  "citation.europe.authenticity.edition_by_publication_date": ["1", "2013", "216", "2013"],
   "citation.evidence.textSha256": ["256"],
   "citation.evidence.noText": ["256"],
 });

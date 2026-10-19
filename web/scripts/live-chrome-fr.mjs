@@ -141,6 +141,14 @@
 // the English changed with each). The forms that review gave for its points 4, 6 and 7 (`search.titleMatching`,
 // `search.actPassages` with its full stop, `search.officialSites.eurlex` naming the advanced search) ship as it gave them,
 // with the English it named. `search.namesWork`, `search.severalWorks`, `search.candidate` and `search.hit` were removed.
+// The EU authenticity statement chosen by the act's date (the owner's decision of 2026-10-18 on PR #975's question, O4):
+// `citation.europe.authenticity`, one string approved in the addendum of 2026-10-17 on the citation generator, is now two
+// entries keyed by the platform's basis, `citation.europe.authenticity.electronic_edition` (that string, unchanged) and
+// `citation.europe.authenticity.edition_by_publication_date` (new: "Pour un acte publié avant le 1er juillet 2013, l’édition
+// imprimée du Journal officiel de l’Union européenne fait foi …", and "depuis cette date" for the electronic one); both
+// were reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the same delegation in the addendum
+// of 2026-10-18 on the EU authenticity statement (2 forms, none changed; the reviewer's optional points on the owner's
+// English go to the lawyer's read, O4).
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -790,7 +798,10 @@ export const LIVE_CHROME_FR = Object.freeze({
       suffixed: '{year}/{number}/{domain}',
       plain: '{year}/{number}',
       version: '{citation}, au {date}',
-      authenticity: 'Seul le Journal officiel de l’Union européenne publié sous forme électronique fait foi et produit des effets juridiques (règlement (UE) n° 216/2013, article 1er, paragraphe 2) ; ce texte est une reproduction lue dans le paquet Formex de l’Office des publications, et non l’édition qui fait foi.',
+      authenticity: Object.freeze({
+        electronic_edition: 'Seul le Journal officiel de l’Union européenne publié sous forme électronique fait foi et produit des effets juridiques (règlement (UE) n° 216/2013, article 1er, paragraphe 2) ; ce texte est une reproduction lue dans le paquet Formex de l’Office des publications, et non l’édition qui fait foi.',
+        edition_by_publication_date: 'Pour un acte publié avant le 1er juillet 2013, l’édition imprimée du Journal officiel de l’Union européenne fait foi ; l’édition électronique fait foi depuis cette date (règlement (UE) n° 216/2013). Ce texte est une reproduction lue dans le paquet Formex de l’Office des publications, et non l’édition qui fait foi.',
+      }),
     }),
     evidence: Object.freeze({
       permalink: 'Permalien : {permalink}',
