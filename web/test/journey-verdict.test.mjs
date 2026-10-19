@@ -952,11 +952,14 @@ test("a page ends at its own address with what it writes there: a search after #
   assert.deepEqual(endAddressesOf(NOT_FOUND_STEP, ["2026-10-18"]), ["/en/no-such-page"]);
   assert.deepEqual(endAddressesOf(KEPT_SEARCH_STEP, ["2026-10-18"]), [`/en/search.html${phrase}`]);
   // An act's readable address ends with the date it read the act at; one that keeps a date keeps it; a permalink names its own.
-  assert.deepEqual(endAddressesOf(JOURNEY_STEPS.current, ["2026-10-18"]), [`${JOURNEY_STEPS.current.path}?date=2026-10-18`]);
+  // The readable address step asks the date it was made on (`journeyStepsFor`'s `today`), the date its page writes back.
+  assert.deepEqual(endAddressesOf(JOURNEY_STEPS.current, ["2026-10-18"]), [`${JOURNEY_STEPS.current.path}?date=${JOURNEY_STEPS.current.body.parameters.date}`]);
+  const madeOn = journeyStepsFor({ identifier: "/lu-legilux/x", date: "2024-02-01", anchor: "art_1", today: "2026-10-25" }).current;
+  assert.deepEqual(endAddressesOf(madeOn, ["2026-10-24"]), ["/en/lu-legilux/x/fra/art_1?date=2026-10-25"]);
   const kept = { ...JOURNEY_STEPS.current, path: `${JOURNEY_STEPS.current.path}?date=2024-02-01`, body: { ...JOURNEY_STEPS.current.body, parameters: { ...JOURNEY_STEPS.current.body.parameters, date: "2024-02-01" } } };
   assert.deepEqual(endAddressesOf(kept, ["2026-10-18"]), [kept.path]);
   const paged = { ...JOURNEY_STEPS.current, path: "/en/lu-legilux/loi-1991-08-10-n3/fra?page=2" };
-  assert.deepEqual(endAddressesOf(paged, ["2026-10-18"]), ["/en/lu-legilux/loi-1991-08-10-n3/fra?page=2&date=2026-10-18"]);
+  assert.deepEqual(endAddressesOf(paged, ["2026-10-18"]), [`/en/lu-legilux/loi-1991-08-10-n3/fra?page=2&date=${JOURNEY_STEPS.current.body.parameters.date}`]);
   for (const step of [JOURNEY_STEPS.permalink, JOURNEY_STEPS.dossier, JOURNEY_STEPS.reading, JOURNEY_STEPS.coverage]) {
     assert.deepEqual(endAddressesOf(step, ["2026-10-18"]), [step.path], step.path);
   }
