@@ -12,8 +12,10 @@ public sealed class V3EnvelopeJsonTests
 {
     private const string Digest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     private const string RegistryDigest = "80dc8e29242223f0f4c6dc09b87861b50cbb994c668a99dd4ee2432d7fa48470";
-    private const string ExpectedSuccess = """{"context":{"freshness":{"observed_at":"2026-09-17T00:00:00.0000000Z","upstream_health":"current"},"jurisdiction":"lu","provisional":false,"publisher":"lu-legilux","snapshot":{"snapshot_id":"snapshot","snapshot_sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},"status":"success","timeline_semantics":"publisher_applicability"},"object_type":"envelope","operation_id":"resolve","refusal":null,"registry_schema":"lex-v3-operation-registry/1","registry_sha256":"80dc8e29242223f0f4c6dc09b87861b50cbb994c668a99dd4ee2432d7fa48470","request_ref":"req","result":{"object_type":"work_resolution","schema":"lex-v3-resolve-result/1","value":{"work_id":"lu-legilux:arr\u00EAt\u00E9 \u0026 co"}},"schema":"lex-v3-envelope/1","verdict":"answer","version":"v3"}""" + "\n";
-    private const string ExpectedRefusal = """{"context":{"freshness":{"observed_at":"2026-09-17T00:00:00.0000000Z","upstream_health":"current"},"jurisdiction":"lu","provisional":false,"publisher":"lu-legilux","snapshot":{"snapshot_id":"snapshot","snapshot_sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},"status":"refusal","timeline_semantics":"publisher_applicability"},"object_type":"envelope","operation_id":"resolve","refusal":{"code":"no_corpus_mounted","helpful_payload":{"required_corpus":"lu"},"schema":"lex-v3-refusal/1"},"registry_schema":"lex-v3-operation-registry/1","registry_sha256":"80dc8e29242223f0f4c6dc09b87861b50cbb994c668a99dd4ee2432d7fa48470","request_ref":"req","result":null,"schema":"lex-v3-envelope/1","verdict":"refuse","version":"v3"}""" + "\n";
+    private const string BuilderCommit = "1111111111111111111111111111111111111111";
+    private const string ServingCommit = "2222222222222222222222222222222222222222";
+    private const string ExpectedSuccess = """{"context":{"commits":{"index_builder_source_commit":"1111111111111111111111111111111111111111","serving_runtime_source_commit":"2222222222222222222222222222222222222222"},"freshness":{"channels":[{"age_days":6,"lag_days":null,"lag_observations":0,"newest_completed_observation":"2026-09-10T08:00:00Z","publisher":"lu-legilux","stale":false},{"age_days":16,"lag_days":null,"lag_observations":0,"newest_completed_observation":"2026-09-01T00:00:00Z","publisher":"eu-eurlex","stale":true}],"index_built_at":"2026-09-10T08:00:01Z","last_checked_against_publisher":null,"maximum_data_age_days":10,"observed_at":"2026-09-17T00:00:00.0000000Z","stale":true,"upstream_health":"current"},"jurisdiction":"lu","provisional":false,"publisher":"lu-legilux","snapshot":{"snapshot_id":"snapshot","snapshot_sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},"status":"success","timeline_semantics":"publisher_applicability"},"object_type":"envelope","operation_id":"resolve","refusal":null,"registry_schema":"lex-v3-operation-registry/1","registry_sha256":"80dc8e29242223f0f4c6dc09b87861b50cbb994c668a99dd4ee2432d7fa48470","request_ref":"req","result":{"object_type":"work_resolution","schema":"lex-v3-resolve-result/1","value":{"work_id":"lu-legilux:arr\u00EAt\u00E9 \u0026 co"}},"schema":"lex-v3-envelope/1","verdict":"answer","version":"v3"}""" + "\n";
+    private const string ExpectedRefusal = """{"context":{"commits":{"index_builder_source_commit":null,"serving_runtime_source_commit":null},"freshness":{"channels":[],"index_built_at":null,"last_checked_against_publisher":null,"maximum_data_age_days":10,"observed_at":"2026-09-17T00:00:00.0000000Z","stale":false,"upstream_health":"current"},"jurisdiction":"lu","provisional":false,"publisher":"lu-legilux","snapshot":{"snapshot_id":"snapshot","snapshot_sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},"status":"refusal","timeline_semantics":"publisher_applicability"},"object_type":"envelope","operation_id":"resolve","refusal":{"code":"no_corpus_mounted","helpful_payload":{"required_corpus":"lu"},"schema":"lex-v3-refusal/1"},"registry_schema":"lex-v3-operation-registry/1","registry_sha256":"80dc8e29242223f0f4c6dc09b87861b50cbb994c668a99dd4ee2432d7fa48470","request_ref":"req","result":null,"schema":"lex-v3-envelope/1","verdict":"refuse","version":"v3"}""" + "\n";
     private readonly V3OperationRegistry _registry = V3OperationRegistry.Reviewed;
 
     [TestMethod]
@@ -90,8 +92,116 @@ public sealed class V3EnvelopeJsonTests
     {
         using var result = JsonDocument.Parse("{\"work_id\":\"lu-legilux:arrêté & co\"}");
         return new V3EnvelopeBuilder(_registry).Success(
-            "req", "resolve", Context(), V3Verdicts.Answer,
+            "req", "resolve", MountedContext(), V3Verdicts.Answer,
             "lex-v3-resolve-result/1", "work_resolution", result.RootElement);
+    }
+
+    /// <summary>
+    /// A context with the whole freshness header (R87) and both commits (R23): a Luxembourg channel 6 days old at the answer
+    /// and an EU one 16 days old, past the maximum, so the answer is stale.
+    /// </summary>
+    private static V3EnvelopeContext MountedContext() => new(
+        PublisherId.LuLegilux,
+        "success",
+        TimelineSemantics.PublisherApplicability,
+        new V3SnapshotReference("snapshot", Digest),
+        "lu",
+        false,
+        new V3Freshness(
+            DateTimeOffset.Parse("2026-09-17T00:00:00Z"),
+            "current",
+            DateTimeOffset.Parse("2026-09-10T08:00:01Z"),
+            [
+                new V3FreshnessChannel(PublisherId.LuLegilux, DateTimeOffset.Parse("2026-09-10T08:00:00Z")),
+                new V3FreshnessChannel(PublisherId.EuEurLex, DateTimeOffset.Parse("2026-09-01T00:00:00Z")),
+            ]),
+        new V3Commits(BuilderCommit, ServingCommit));
+
+    [TestMethod]
+    public void TheFreshnessHeaderCountsEachChannelsAgeAndStalenessAtTheAnswer()
+    {
+        var freshness = MountedContext().Freshness;
+        Assert.AreEqual(6, freshness.AgeDays(freshness.Channels[0]));
+        Assert.AreEqual(false, freshness.IsStale(freshness.Channels[0]));
+        Assert.AreEqual(16, freshness.AgeDays(freshness.Channels[1]));
+        Assert.AreEqual(true, freshness.IsStale(freshness.Channels[1]));
+        Assert.IsTrue(freshness.Stale);
+
+        // Exactly the maximum is not past it; one second more is (R87: "past 10 days").
+        var completed = DateTimeOffset.Parse("2026-09-07T00:00:00Z");
+        var atMaximum = new V3Freshness(completed.AddDays(10), "stale", null, [new V3FreshnessChannel(PublisherId.EuEurLex, completed)]);
+        Assert.AreEqual(10, atMaximum.AgeDays(atMaximum.Channels[0]));
+        Assert.IsFalse(atMaximum.Stale);
+        var past = new V3Freshness(completed.AddDays(10).AddSeconds(1), "stale", null, [new V3FreshnessChannel(PublisherId.EuEurLex, completed)]);
+        Assert.IsTrue(past.Stale);
+
+        // A channel whose completion nothing states has no age and is never said to be fresh or stale.
+        var unstated = new V3Freshness(completed, "stale", null, [new V3FreshnessChannel(PublisherId.LuLegilux, null)]);
+        Assert.IsNull(unstated.AgeDays(unstated.Channels[0]));
+        Assert.IsNull(unstated.IsStale(unstated.Channels[0]));
+        Assert.IsFalse(unstated.Stale);
+        Assert.AreEqual(0, unstated.Channels[0].LagObservations);
+
+        // A completion after the answer's instant is age 0.
+        var ahead = new V3Freshness(completed, "stale", null, [new V3FreshnessChannel(PublisherId.LuLegilux, completed.AddHours(2))]);
+        Assert.AreEqual(0, ahead.AgeDays(ahead.Channels[0]));
+    }
+
+    [TestMethod]
+    public void TheFreshnessAndCommitsHoldTheirShapes()
+    {
+        var observed = DateTimeOffset.Parse("2026-09-17T00:00:00Z");
+        // Each channel once, Luxembourg first.
+        Assert.ThrowsExactly<ArgumentException>(() => new V3Freshness(observed, "stale", null,
+            [new V3FreshnessChannel(PublisherId.EuEurLex, null), new V3FreshnessChannel(PublisherId.LuLegilux, null)]));
+        Assert.ThrowsExactly<ArgumentException>(() => new V3Freshness(observed, "stale", null,
+            [new V3FreshnessChannel(PublisherId.LuLegilux, null), new V3FreshnessChannel(PublisherId.LuLegilux, null)]));
+        // Instants in whole seconds, as a build's time is written.
+        Assert.ThrowsExactly<ArgumentException>(() => new V3FreshnessChannel(PublisherId.LuLegilux, observed.AddMilliseconds(5)));
+        Assert.ThrowsExactly<ArgumentException>(() => new V3Freshness(observed, "stale", observed.AddMilliseconds(5), []));
+        // A commit is a full lowercase commit, or nothing.
+        Assert.ThrowsExactly<ArgumentException>(() => new V3Commits("abc1234", null));
+        Assert.ThrowsExactly<ArgumentException>(() => new V3Commits(null, new string('A', 40)));
+        Assert.IsNull(V3Commits.None.IndexBuilderSourceCommit);
+        Assert.IsTrue(V3Commits.IsCommit(BuilderCommit));
+        Assert.IsFalse(V3Commits.IsCommit("unversioned"));
+    }
+
+    [TestMethod]
+    public void TheServingRuntimeCommitIsTheAnsweringServersOwn()
+    {
+        var context = MountedContext().WithServingRuntimeSourceCommit(null);
+        Assert.AreEqual(BuilderCommit, context.Commits.IndexBuilderSourceCommit);
+        Assert.IsNull(context.Commits.ServingRuntimeSourceCommit);
+        var stamped = context.WithServingRuntimeSourceCommit(ServingCommit);
+        Assert.AreEqual(ServingCommit, stamped.Commits.ServingRuntimeSourceCommit);
+        Assert.AreEqual(BuilderCommit, stamped.Commits.IndexBuilderSourceCommit);
+        Assert.AreSame(stamped, stamped.WithServingRuntimeSourceCommit(ServingCommit));
+    }
+
+    [TestMethod]
+    public void TheReaderRejectsAFreshnessOrCommitsItDidNotWrite()
+    {
+        var canonical = Encoding.UTF8.GetString(V3EnvelopeJson.ProjectRest(Success(), _registry));
+        // A stale flag, an age, a lag range or a re-check the platform did not compute is not the canonical form.
+        foreach (var (from, to) in new[]
+                 {
+                     ("\"stale\":true,\"upstream_health\"", "\"stale\":false,\"upstream_health\""),
+                     ("\"age_days\":16", "\"age_days\":15"),
+                     ("\"lag_days\":null,\"lag_observations\":0,\"newest_completed_observation\":\"2026-09-01", "\"lag_days\":{\"max\":2,\"min\":1},\"lag_observations\":0,\"newest_completed_observation\":\"2026-09-01"),
+                     ("\"last_checked_against_publisher\":null", "\"last_checked_against_publisher\":\"2026-09-16\""),
+                 })
+        {
+            Assert.IsTrue(canonical.Contains(from, StringComparison.Ordinal), from);
+            Assert.ThrowsExactly<JsonException>(() => V3EnvelopeJson.ParseAndVerify(Encoding.UTF8.GetBytes(canonical.Replace(from, to, StringComparison.Ordinal)), _registry), to);
+        }
+
+        // A short commit is not a commit.
+        Assert.ThrowsExactly<JsonException>(() => V3EnvelopeJson.ParseAndVerify(
+            Encoding.UTF8.GetBytes(canonical.Replace(BuilderCommit, BuilderCommit[..12], StringComparison.Ordinal)), _registry));
+        // The commits and the freshness are closed member sets.
+        Assert.ThrowsExactly<JsonException>(() => V3EnvelopeJson.ParseAndVerify(
+            Encoding.UTF8.GetBytes(canonical.Replace("\"commits\":{", "\"commits\":{\"corpus_commit\":null,", StringComparison.Ordinal)), _registry));
     }
 
     private V3Envelope Refusal()

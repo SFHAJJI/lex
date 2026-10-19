@@ -15,9 +15,67 @@ public sealed record V3SnapshotReference
     public string SnapshotSha256 { get; }
 }
 
+/// <summary>
+/// One publisher channel's freshness as the mounted law states it (the specification of record's R87; the plan's item 6.1):
+/// the publisher whose machine channel was observed, when the newest acquisition of it that the mount holds completed (its
+/// catalog retained, as the mount's build report states it; null when nothing beside the mount states it), and how many
+/// observation times stand behind a measured lag range: none until observation times are carried into the records (the
+/// plan's item 1.12) and the scheduled refresh has run, so no range is measured, and none is ever stated in its place.
+/// </summary>
+public sealed record V3FreshnessChannel
+{
+    public V3FreshnessChannel(PublisherId publisher, DateTimeOffset? newestCompletedObservation)
+    {
+        if (publisher is not (PublisherId.LuLegilux or PublisherId.EuEurLex))
+        {
+            throw new ArgumentOutOfRangeException(nameof(publisher));
+        }
+
+        if (newestCompletedObservation is { } completed && (completed == default || completed.UtcTicks % TimeSpan.TicksPerSecond != 0))
+        {
+            throw new ArgumentException("A completed observation is a real instant in whole seconds.", nameof(newestCompletedObservation));
+        }
+
+        Publisher = publisher;
+        NewestCompletedObservation = newestCompletedObservation?.ToUniversalTime();
+    }
+
+    public PublisherId Publisher { get; }
+
+    public DateTimeOffset? NewestCompletedObservation { get; }
+
+    /// <summary>
+    /// How many observation times stand behind the channel's lag range: none, since no index schema holds one (index 8 and 9
+    /// require <c>observed_from</c> to be null, and the EU index has no such column), so no lag range is ever stated.
+    /// </summary>
+    public int LagObservations => 0;
+}
+
 public sealed record V3Freshness
 {
+    /// <summary>
+    /// The declared maximum data age, in days (R87): past it a channel's data is stale, every page shows the staleness banner,
+    /// and promotion refuses the release. The specification of record's recommended answer to O11, which the owner has not
+    /// given yet: a reversible driver decision (STATUS-WEB.md).
+    /// </summary>
+    public const int MaximumDataAgeDays = 10;
+
+    private static readonly TimeSpan MaximumDataAge = TimeSpan.FromDays(MaximumDataAgeDays);
+
     public V3Freshness(DateTimeOffset observedAt, string upstreamHealth)
+        : this(observedAt, upstreamHealth, null, [])
+    {
+    }
+
+    /// <param name="observedAt">The instant the server answered.</param>
+    /// <param name="upstreamHealth">What the server knows of the publishers' health.</param>
+    /// <param name="indexBuiltAt">The mounted index's build time (its log's newest build), in whole seconds, or null when it records none.</param>
+    /// <param name="channels">Each publisher channel the mount holds an index for, Luxembourg first, each once.</param>
+    public V3Freshness(
+        DateTimeOffset observedAt,
+        string upstreamHealth,
+        DateTimeOffset? indexBuiltAt,
+        IReadOnlyList<V3FreshnessChannel> channels)
     {
         if (observedAt == default)
         {
@@ -29,13 +87,96 @@ public sealed record V3Freshness
             throw new ArgumentException("Unknown upstream health.", nameof(upstreamHealth));
         }
 
+        if (indexBuiltAt is { } built && (built == default || built.UtcTicks % TimeSpan.TicksPerSecond != 0))
+        {
+            throw new ArgumentException("A build time is a real instant in whole seconds.", nameof(indexBuiltAt));
+        }
+
+        ArgumentNullException.ThrowIfNull(channels);
+        if (channels.Any(static channel => channel is null) ||
+            !channels.Select(static channel => channel.Publisher).SequenceEqual(
+                channels.Select(static channel => channel.Publisher).Distinct().Order()))
+        {
+            throw new ArgumentException("Each publisher channel is named once, Luxembourg first.", nameof(channels));
+        }
+
         ObservedAt = observedAt.ToUniversalTime();
         UpstreamHealth = upstreamHealth;
+        IndexBuiltAt = indexBuiltAt?.ToUniversalTime();
+        Channels = Array.AsReadOnly(channels.ToArray());
     }
 
     public DateTimeOffset ObservedAt { get; }
 
     public string UpstreamHealth { get; }
+
+    public DateTimeOffset? IndexBuiltAt { get; }
+
+    public IReadOnlyList<V3FreshnessChannel> Channels { get; }
+
+    /// <summary>
+    /// The channel's data age at the answer, in whole days elapsed (a completion after the answer's instant is age 0); null
+    /// when no completion is stated.
+    /// </summary>
+    public int? AgeDays(V3FreshnessChannel channel)
+    {
+        ArgumentNullException.ThrowIfNull(channel);
+        return channel.NewestCompletedObservation is { } completed
+            ? (int)Math.Max(0, Math.Floor((ObservedAt - completed).TotalDays))
+            : null;
+    }
+
+    /// <summary>Whether the channel's data is past the maximum age at the answer; null when no completion is stated.</summary>
+    public bool? IsStale(V3FreshnessChannel channel)
+    {
+        ArgumentNullException.ThrowIfNull(channel);
+        return channel.NewestCompletedObservation is { } completed ? ObservedAt - completed > MaximumDataAge : null;
+    }
+
+    /// <summary>Whether any channel's data is past the maximum age at the answer: what puts the staleness banner on a page.</summary>
+    public bool Stale => Channels.Any(channel => IsStale(channel) == true);
+}
+
+/// <summary>
+/// The commits an answer names (the specification of record's R23; the plan's item 6.5), labelled "index built from" and
+/// "service running": the source commit of the code that built the mounted index, as the mount's build report states it, and
+/// the source commit the serving runtime was built from, as its build stamped it; each a full lowercase commit, or null when
+/// nothing states it.
+/// </summary>
+public sealed record V3Commits
+{
+    public static V3Commits None { get; } = new(null, null);
+
+    public V3Commits(string? indexBuilderSourceCommit, string? servingRuntimeSourceCommit)
+    {
+        IndexBuilderSourceCommit = RequireCommit(indexBuilderSourceCommit, nameof(indexBuilderSourceCommit));
+        ServingRuntimeSourceCommit = RequireCommit(servingRuntimeSourceCommit, nameof(servingRuntimeSourceCommit));
+    }
+
+    public string? IndexBuilderSourceCommit { get; }
+
+    public string? ServingRuntimeSourceCommit { get; }
+
+    /// <summary>Whether <paramref name="value"/> is a full source commit: 40 lowercase hexadecimal digits.</summary>
+    public static bool IsCommit(string? value) =>
+        value is { Length: 40 } && value.All(static character => character is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
+
+    /// <summary>
+    /// The source commit an assembly's build stamped: what follows the last <c>+</c> of its informational version (the SDK
+    /// writes the commit it built from there), when that is a full commit; else null.
+    /// </summary>
+    public static string? StampedIn(System.Reflection.Assembly assembly)
+    {
+        ArgumentNullException.ThrowIfNull(assembly);
+        var version = System.Reflection.CustomAttributeExtensions
+            .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(assembly)?.InformationalVersion;
+        var plus = version?.LastIndexOf('+') ?? -1;
+        var commit = plus < 0 ? null : version![(plus + 1)..];
+        return IsCommit(commit) ? commit : null;
+    }
+
+    private static string? RequireCommit(string? value, string parameterName) =>
+        value is null || IsCommit(value) ? value : throw new ArgumentException("A source commit is 40 lowercase hexadecimal digits.", parameterName);
 }
 
 public sealed record V3EnvelopeContext
@@ -47,7 +188,8 @@ public sealed record V3EnvelopeContext
         V3SnapshotReference snapshot,
         string jurisdiction,
         bool provisional,
-        V3Freshness freshness)
+        V3Freshness freshness,
+        V3Commits? commits = null)
     {
         var expected = publisher switch
         {
@@ -77,6 +219,7 @@ public sealed record V3EnvelopeContext
         Jurisdiction = jurisdiction;
         Provisional = provisional;
         Freshness = freshness ?? throw new ArgumentNullException(nameof(freshness));
+        Commits = commits ?? V3Commits.None;
     }
 
     public PublisherId Publisher { get; }
@@ -92,6 +235,19 @@ public sealed record V3EnvelopeContext
     public bool Provisional { get; }
 
     public V3Freshness Freshness { get; }
+
+    public V3Commits Commits { get; }
+
+    /// <summary>
+    /// This context as the server answering it states it: the commit its serving runtime was built from replaces whatever the
+    /// context named (the mount that built the context knows the index's commit, never the server's).
+    /// </summary>
+    public V3EnvelopeContext WithServingRuntimeSourceCommit(string? commit) =>
+        string.Equals(Commits.ServingRuntimeSourceCommit, commit, StringComparison.Ordinal)
+            ? this
+            : new V3EnvelopeContext(
+                Publisher, Status, TimelineSemantics, Snapshot, Jurisdiction, Provisional, Freshness,
+                new V3Commits(Commits.IndexBuilderSourceCommit, commit));
 }
 
 public static class V3Verdicts

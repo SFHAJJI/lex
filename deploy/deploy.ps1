@@ -323,7 +323,8 @@ if ($Apply) {
 Step "probe the candidate"
 if (-not $Apply) {
     Write-Host "  > wait until $AppName--$suffix is provisioned, active, running and healthy"
-    Write-Host "  > node $(($nodeTrap + @('web/scripts/deploy-probe.mjs')) -join ' ') --origin https://<$AppName--$suffix's own address> --release $releasePath --public-key $keyPath $($signerProbe -join ' ') $($browserArgs -join ' ') $($openingArgs -join ' ')"
+    Write-Host "  > node $(($nodeTrap + @('web/scripts/deploy-probe.mjs')) -join ' ') --origin https://<$AppName--$suffix's own address> --release $releasePath --public-key $keyPath $($signerProbe -join ' ') $($browserArgs -join ' ') $($openingArgs -join ' ') --promotion-check"
+    Write-Host "  (exit 3: the candidate answers as its release holds and promotion refuses its data's age; no promotion command would be printed)"
     if (-not $BrowserProbe) { Write-Host "  (no browser probe: only the HTTP probes would run, under the browser trap, and no page of the candidate would be walked in a browser; -BrowserProbe walks them, where a browser may run)" }
     Write-Host "== planned only: run again with -Apply to deploy (the owner's decision)"
     exit 0
@@ -359,8 +360,12 @@ while ($true) {
 }
 $origin = "https://$($state.fqdn)"
 if (-not $BrowserProbe) { Write-Host "  no browser probe (no -BrowserProbe): only the HTTP probes run, under the browser trap, and no page of the candidate is walked in a browser" }
-& node @nodeTrap (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --origin $origin --release $releasePath --public-key $keyPath @signerProbe @browserArgs @openingArgs
-if ($LASTEXITCODE -ne 0) {
+& node @nodeTrap (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --origin $origin --release $releasePath --public-key $keyPath @signerProbe @browserArgs @openingArgs --promotion-check
+# Exit 3: the candidate answers as its release holds, and promotion refuses its data's age (R87; O11's maximum, which every
+# answer states): a publisher channel's newest completed collection is past it, or not stated. The candidate stays, with no
+# traffic, and no promotion command is printed.
+$dataAgeRefused = $LASTEXITCODE -eq 3
+if ($LASTEXITCODE -ne 0 -and -not $dataAgeRefused) {
     # 6. The removal step: the candidate never carried traffic (or only the allowed addresses'), and is deactivated.
     Step "the probe failed: deactivate the candidate $candidate"
     az containerapp revision deactivate -g $ResourceGroup -n $AppName --revision $candidate
@@ -369,7 +374,11 @@ if ($LASTEXITCODE -ne 0) {
 
 Step "the candidate $candidate answers as the release holds"
 Write-Host "  Promotion is the owner's decision and is not run here."
-if ([string]::IsNullOrEmpty($LiveRevision)) {
+if ($dataAgeRefused) {
+    Write-Host "  Promotion refuses this release's data: the probe above says which publisher's data is past the maximum data age, or"
+    Write-Host "  states no completed collection. No promotion command is printed; a release with newer data is the way forward."
+}
+elseif ([string]::IsNullOrEmpty($LiveRevision)) {
     Write-Host "  A first deployment already routes to the candidate."
 }
 else {
@@ -381,7 +390,7 @@ if (-not $Public) {
     Write-Host "  The site stays private: ingress admits only $($AllowedCidr -join ', '). The opening, the owner's, on the opening day:"
     Write-Host "  > pwsh -File deploy/deploy.ps1 -Subscription $Subscription -ResourceGroup $ResourceGroup -AppName $AppName -Open"
 }
-if (-not [string]::IsNullOrEmpty($LiveRevision)) {
+if (-not [string]::IsNullOrEmpty($LiveRevision) -and -not $dataAgeRefused) {
     # Rollback and forward again are traffic moves, the owner's like promotion: printed, never run.
     # Each active revision runs a billed replica (1 vCPU, 2 GiB: about 23 EUR a month idle), so the budget of about 30 a
     # month holds one: after a promotion the previous revision is deactivated, kept but stopped (the review of #950).

@@ -54,7 +54,8 @@ internal sealed class V3ApiHandler
         V3CorpusMount? corpusMount = null,
         V3WebRoot? webRoot = null)
     {
-        var api = new V3ApiHandler(syntheticState, new V3PlatformHost(), utcNow, corpusMount, webRoot);
+        // The server's own answers name the commit its build stamped (R23, "service running").
+        var api = new V3ApiHandler(syntheticState, new V3PlatformHost(V3PlatformHost.StampedServingRuntimeSourceCommit), utcNow, corpusMount, webRoot);
         return context => api.HandleAsync(context, context.RequestAborted);
     }
 
@@ -365,7 +366,8 @@ internal sealed class V3ApiHandler
             parameters.ToDictionary(static pair => pair.Key, static pair => (object)pair.Value, StringComparer.Ordinal));
         try
         {
-            return new V3PlatformHost().AnswerRest(page.RequestUtf8, RequestReference("startup"), operationId, ExecuteFor(corpusMount, utcNow, operationId), CancellationToken.None);
+            return new V3PlatformHost(V3PlatformHost.StampedServingRuntimeSourceCommit)
+                .AnswerRest(page.RequestUtf8, RequestReference("startup"), operationId, ExecuteFor(corpusMount, utcNow, operationId), CancellationToken.None);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

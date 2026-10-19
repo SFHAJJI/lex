@@ -370,8 +370,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -597,8 +615,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -690,8 +726,17 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "unreachable"
           },
           "jurisdiction": "lu",
@@ -729,8 +774,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -771,8 +834,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -1126,8 +1207,17 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "unreachable"
           },
           "jurisdiction": "lu",
@@ -1165,8 +1255,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -1475,8 +1583,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -1592,8 +1718,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "eu-eurlex",
+                "stale": null
+              }
+            ],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -1776,8 +1920,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "eu-eurlex",
+                "stale": null
+              }
+            ],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -1818,8 +1980,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "eu-eurlex",
+                "stale": null
+              }
+            ],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -1984,8 +2164,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "eu-eurlex",
+                "stale": null
+              }
+            ],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -2112,8 +2310,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "eu-eurlex",
+                "stale": null
+              }
+            ],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -2161,8 +2377,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -2296,8 +2530,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -2345,8 +2597,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -2387,8 +2657,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -2426,8 +2714,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "eu-eurlex",
+                "stale": null
+              }
+            ],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -2554,8 +2860,17 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "unreachable"
           },
           "jurisdiction": "lu",
@@ -2593,8 +2908,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -3681,8 +4014,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -3727,8 +4078,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -3776,8 +4145,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -3818,8 +4205,17 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "unreachable"
           },
           "jurisdiction": "lu",
@@ -3857,8 +4253,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -4945,8 +5359,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -4991,8 +5423,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -5039,8 +5489,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -6490,8 +6958,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -6840,8 +7326,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -6892,8 +7396,34 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": "ffffffffffffffffffffffffffffffffffffffff",
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              },
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "eu-eurlex",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2027-01-15T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -7802,8 +8332,34 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": "ffffffffffffffffffffffffffffffffffffffff",
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              },
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "eu-eurlex",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2027-01-15T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -8101,8 +8657,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -8208,8 +8782,34 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": "ffffffffffffffffffffffffffffffffffffffff",
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              },
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "eu-eurlex",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2027-01-15T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "eu",
@@ -8292,8 +8892,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -8377,8 +8995,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -8428,8 +9064,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -8477,8 +9131,17 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "unreachable"
           },
           "jurisdiction": "lu",
@@ -8516,8 +9179,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -9233,8 +9914,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -9280,8 +9979,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -9329,8 +10046,17 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "unreachable"
           },
           "jurisdiction": "lu",
@@ -9368,8 +10094,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -9465,8 +10209,26 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "stale"
           },
           "jurisdiction": "lu",
@@ -9534,8 +10296,17 @@
       "content_type": "application/json;charset=utf-8",
       "envelope": {
         "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
           "freshness": {
+            "channels": [],
+            "index_built_at": null,
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 10,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
             "upstream_health": "unreachable"
           },
           "jurisdiction": "lu",

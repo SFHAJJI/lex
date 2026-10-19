@@ -485,6 +485,34 @@ const EN = Object.freeze({
     authenticity: "Consolidated texts have no legal effect: the authentic texts are those published in the Journal officiel du Grand-Duché de Luxembourg (Mémorial A) and in the Official Journal of the European Union.",
     sources: "The texts come from Legilux and from the Publications Office of the European Union, as this site holds them; every quote names its official source.",
   }),
+  // How current the law this site holds is, and the commits behind an answer (the specification of record's R87 and R23;
+  // the plan's items 6.1 and 6.5; `freshness.mjs`, `Freshness.jsx`): the strip in every page's footer and the staleness
+  // banner under its header, each said from the server's answer and nothing else. Every date is the server's, in
+  // Luxembourg; every count is the answer's (R11). Until the refresh has run, each channel says "lag not yet measured", and
+  // the publisher re-check's line is absent (R69).
+  freshness: Object.freeze({
+    heading: "How current this is",
+    asBuilt: "Each answer from the server says when its index was built, when each publisher's texts were last collected and which code built and serves it; this page shows it once it has an answer.",
+    built: "Index built on {date}.",
+    builtUndated: "The index records no build date.",
+    channels: Object.freeze({
+      "lu-legilux": "Luxembourg law, from Legilux",
+      "eu-eurlex": "EU law, from the Publications Office of the European Union",
+    }),
+    collected: Object.freeze({
+      one: "{channel}: last complete collection ended on {date}, {count} full day before the server answered on {today}; lag not yet measured.",
+      other: "{channel}: last complete collection ended on {date}, {count} full days before the server answered on {today}; lag not yet measured.",
+    }),
+    collectedUnstated: "{channel}: when its last complete collection ended is not recorded with this index; lag not yet measured.",
+    indexCommit: "Index built from",
+    serviceCommit: "Service running",
+    commitUnstated: "(not recorded)",
+    staleHeading: "Some texts may be out of date",
+    stale: Object.freeze({
+      one: "{channel}: its last complete collection ended on {date}, more than {count} day before the server answered on {today}. The publisher may have published changes since; check its official site.",
+      other: "{channel}: its last complete collection ended on {date}, more than {count} days before the server answered on {today}. The publisher may have published changes since; check its official site.",
+    }),
+  }),
   // The home page (the specification of record's R47 and R52; UX spec section 2, Screen 1: Home and search): the one box
   // first, what Lex is and is not, a coverage line whose every count is the coverage answer's (R11), and links to the
   // site's served pages. A count is said with its noun by the language's plural rule.

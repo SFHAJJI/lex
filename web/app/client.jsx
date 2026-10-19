@@ -22,6 +22,7 @@ import { parseSitePath } from '../scripts/permalinks.mjs';
 import { writeLanguageLinks } from './page-address.mjs';
 import { addressBeforeAnswer } from '../scripts/initial-answer.mjs';
 import { writeLawPageLinks } from './head-links.mjs';
+import { followAnswers } from './freshness-client.jsx';
 
 /**
  * Attach behaviour to server-rendered markup, and say so.
@@ -56,6 +57,10 @@ export function attach(container, element) {
   if (parseSitePath(window.location.pathname)?.locale && document.head.querySelector('link[rel="canonical"]') === null) {
     writeLawPageLinks(document, addressBeforeAnswer(window.location.pathname));
   }
+
+  // The footer's strip and the staleness banner follow every answer the page receives (R87, R23): both stand outside the
+  // hydrated root, so React's hydration reads neither.
+  followAnswers(document);
 
   hydrateRoot(container, <Hydrated state={state}>{element}</Hydrated>, {
     // React recovers from a hydration mismatch by re-rendering the subtree, quietly. A page whose

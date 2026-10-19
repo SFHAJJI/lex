@@ -7,6 +7,7 @@
 
 export { Document, SyntheticBanner, SYNTHETIC_MARKER, SiteFooter, SiteHeader, LIVE_MARKER } from './Document.jsx';
 export { renderDocument } from './render-document.mjs';
+export { FRESHNESS_STRIP_ID, FreshnessStrip, FreshnessStripSlot, STALENESS_BANNER_ID, StalenessBanner, StalenessBannerSlot } from './Freshness.jsx';
 export { RefusalCard, Mark } from './RefusalCard.jsx';
 export { Dossier } from './Dossier.jsx';
 export { CSP_DIRECTIVES, FORBIDDEN_SOURCES, cspValue } from '../scripts/csp.mjs';

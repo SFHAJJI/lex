@@ -37,6 +37,14 @@ public sealed class V3EnvelopeSamplesTests
     private static readonly string FixedObjectRefDigest = new('c', 64);
     private static readonly string FixedReceiptDigest = new('d', 64);
 
+    // The commit the samples' server names as running (R23): the server names its own build's, which moves with every commit, so
+    // the samples name a fixed one of the same shape, as they name fixed digests.
+    private static readonly string FixedServingCommit = new('e', 40);
+
+    // The commit a mount written by this build names as its index's (R23, "index built from"): the build's own, which moves
+    // with every commit, so it is replaced by a fixed one of the same shape wherever a derived mount's answer names it.
+    private static readonly string FixedBuilderCommit = new('f', 40);
+
     [TestMethod]
     public async Task TheEnvelopeSamplesAreWhatTheHandlerSendsBesideTheReviewedContract()
     {
@@ -253,7 +261,7 @@ public sealed class V3EnvelopeSamplesTests
         context.Request.ContentLength = bytes.Length;
         context.Features.Get<IHttpRequestFeature>()!.RawTarget = "/api/v3/" + operation;
         context.Response.Body = new MemoryStream();
-        var handler = new V3ApiHandler(SyntheticApiState.Unavailable, new V3PlatformHost(), static () => ObservedAt, mount);
+        var handler = new V3ApiHandler(SyntheticApiState.Unavailable, new V3PlatformHost(FixedServingCommit), static () => ObservedAt, mount);
         await handler.HandleAsync(context, CancellationToken.None);
         Assert.AreEqual(StatusCodes.Status200OK, context.Response.StatusCode, $"{operation} / {scenario}");
         var sent = ((MemoryStream)context.Response.Body).ToArray();
@@ -262,7 +270,8 @@ public sealed class V3EnvelopeSamplesTests
         var text = Encoding.UTF8.GetString(sent)
             .Replace(corpusSha256, FixedCorpusDigest, StringComparison.Ordinal)
             .Replace(indexSha256, FixedIndexDigest, StringComparison.Ordinal)
-            .Replace("corpus-" + corpusSha256[..16], "corpus-" + FixedCorpusDigest[..16], StringComparison.Ordinal);
+            .Replace("corpus-" + corpusSha256[..16], "corpus-" + FixedCorpusDigest[..16], StringComparison.Ordinal)
+            .Replace($"\"{AcquisitionJournal.CurrentSource()}\"", $"\"{FixedBuilderCommit}\"", StringComparison.Ordinal);
         return new JsonObject
         {
             ["operation"] = operation,

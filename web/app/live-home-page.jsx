@@ -25,9 +25,9 @@ export function liveHomeTree(facts = null) {
  * The home page: as built (`facts` null), or as the server renders it from its coverage answer, with the facts it shows
  * in a data block beside the root for the browser to hydrate from. Only a home page rendered from a coverage answer that
  * counts the mounted law is one the release's switch may open (R67): as built, or with no corpus mounted (review of #976,
- * F2), it is never indexed.
+ * F2), it is never indexed. `freshness` is what the coverage answer says of the law's freshness and commits (R87, R23).
  */
-export function renderLiveHomePage({ facts = null } = {}) {
+export function renderLiveHomePage({ facts = null, freshness = null } = {}) {
   const copy = liveChrome().home;
   return renderHydratableDocument(
     <Document
@@ -37,6 +37,7 @@ export function renderLiveHomePage({ facts = null } = {}) {
       density={skinFor('ask').density}
       banner="live"
       indexing={facts?.coverage?.state === 'counted' ? 'switch' : 'never'}
+      freshness={freshness}
     >
       <p className="eyebrow">{copy.eyebrow}</p>
       <h1>{copy.heading}</h1>

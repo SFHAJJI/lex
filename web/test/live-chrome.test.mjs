@@ -64,7 +64,7 @@ const escaped = (text) => text.replaceAll("&", "&amp;").replaceAll("'", "&#x27;"
 
 test("every live page renders its chrome from the table", () => {
   const copy = liveChrome("en");
-  assert.deepEqual(Object.keys(copy).filter((key) => !["form", "common", "shell", "site", "card", "refusalCard", "coverageAnswer", "failure", "citation", "legal"].includes(key)).sort(), Object.keys(PAGES).sort(), "one entry per live page, the forms, the page shell, the site around it, the evaluation and refusal cards, the coverage answer, the failure panel, what the screens share, the citation generator's words, and what the legal pages share");
+  assert.deepEqual(Object.keys(copy).filter((key) => !["form", "common", "shell", "site", "freshness", "card", "refusalCard", "coverageAnswer", "failure", "citation", "legal"].includes(key)).sort(), Object.keys(PAGES).sort(), "one entry per live page, the forms, the page shell, the site around it and its freshness strip, the evaluation and refusal cards, the coverage answer, the failure panel, what the screens share, the citation generator's words, and what the legal pages share");
   for (const [key, render] of Object.entries(PAGES)) {
     const html = render();
     const entry = copy[key];
@@ -74,6 +74,9 @@ test("every live page renders its chrome from the table", () => {
       assert.ok(html.includes(escaped(text)), `${key}: the site says ${JSON.stringify(text.slice(0, 40))}`);
     }
     assert.ok(!html.includes("development build"), `${key}: no development banner`);
+    // Every page as built carries the freshness strip's as-built line in its footer (R87, R23), and no staleness banner.
+    assert.ok(html.includes(`<p>${escaped(copy.freshness.asBuilt)}</p>`), `${key}: the freshness strip as built`);
+    assert.ok(!html.includes("staleness-banner"), `${key}: no staleness banner as built`);
     assert.ok(html.includes(`<p class="eyebrow">${escaped(entry.eyebrow)}</p>`), `${key}: eyebrow`);
     assert.ok(html.includes(`<h1>${escaped(entry.heading)}</h1>`), `${key}: heading`);
     assert.ok(html.includes(`<p>${escaped(entry.intro)}</p>`), `${key}: introduction`);

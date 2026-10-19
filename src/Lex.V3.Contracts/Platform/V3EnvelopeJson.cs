@@ -159,21 +159,119 @@ public static class V3EnvelopeJson
         },
         ["jurisdiction"] = context.Jurisdiction,
         ["provisional"] = context.Provisional,
-        ["freshness"] = new JsonObject
+        ["freshness"] = FreshnessNode(context.Freshness),
+        ["commits"] = new JsonObject
         {
-            ["observed_at"] = context.Freshness.ObservedAt.UtcDateTime.ToString("O", CultureInfo.InvariantCulture),
-            ["upstream_health"] = context.Freshness.UpstreamHealth,
+            ["index_builder_source_commit"] = context.Commits.IndexBuilderSourceCommit,
+            ["serving_runtime_source_commit"] = context.Commits.ServingRuntimeSourceCommit,
         },
+    };
+
+    /// <summary>The members of an envelope's freshness (R87), in the order this file writes them before sorting.</summary>
+    private static readonly string[] FreshnessMembers =
+    [
+        "observed_at", "upstream_health", "index_built_at", "maximum_data_age_days", "stale", "channels",
+        "last_checked_against_publisher",
+    ];
+
+    private static readonly string[] ChannelMembers =
+        ["publisher", "newest_completed_observation", "age_days", "stale", "lag_days", "lag_observations"];
+
+    /// <summary>
+    /// The freshness header of R87: the answer's instant and the upstream health, as before; the mounted index's build time;
+    /// the declared maximum data age and whether any channel is past it at this answer; each publisher channel's newest
+    /// completed observation, its age at this answer, whether it is past the maximum, its lag range (null: not yet measured)
+    /// and how many observation times stand behind it; and the publisher re-check's line (R69), null until the first monthly
+    /// re-check has run.
+    /// </summary>
+    private static JsonObject FreshnessNode(V3Freshness freshness) => new()
+    {
+        ["observed_at"] = freshness.ObservedAt.UtcDateTime.ToString("O", CultureInfo.InvariantCulture),
+        ["upstream_health"] = freshness.UpstreamHealth,
+        ["index_built_at"] = freshness.IndexBuiltAt is { } built ? Instant(built) : null,
+        ["maximum_data_age_days"] = V3Freshness.MaximumDataAgeDays,
+        ["stale"] = freshness.Stale,
+        ["channels"] = new JsonArray(freshness.Channels.Select(channel => (JsonNode)new JsonObject
+        {
+            ["publisher"] = PublisherName(channel.Publisher),
+            ["newest_completed_observation"] = channel.NewestCompletedObservation is { } completed ? Instant(completed) : null,
+            ["age_days"] = freshness.AgeDays(channel),
+            ["stale"] = freshness.IsStale(channel),
+            ["lag_days"] = null,
+            ["lag_observations"] = channel.LagObservations,
+        }).ToArray()),
+        ["last_checked_against_publisher"] = null,
+    };
+
+    /// <summary>An instant as the platform writes a build's time: UTC, whole seconds, <c>yyyy-MM-ddTHH:mm:ssZ</c>.</summary>
+    private static string Instant(DateTimeOffset value) =>
+        value.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
+
+    private static DateTimeOffset? ReadInstant(JsonElement value, string propertyName)
+    {
+        var member = value.GetProperty(propertyName);
+        if (member.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        if (member.ValueKind != JsonValueKind.String ||
+            !DateTimeOffset.TryParseExact(member.GetString(), "yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var instant))
+        {
+            throw new JsonException($"{propertyName} must be null or a UTC instant in whole seconds.");
+        }
+
+        return instant;
+    }
+
+    private static string? ReadCommit(JsonElement value, string propertyName)
+    {
+        var member = value.GetProperty(propertyName);
+        return member.ValueKind switch
+        {
+            JsonValueKind.Null => null,
+            JsonValueKind.String when V3Commits.IsCommit(member.GetString()) => member.GetString(),
+            _ => throw new JsonException($"{propertyName} must be null or a full source commit."),
+        };
+    }
+
+    private static string PublisherName(PublisherId publisher) => publisher switch
+    {
+        PublisherId.LuLegilux => "lu-legilux",
+        PublisherId.EuEurLex => "eu-eurlex",
+        _ => throw new ArgumentOutOfRangeException(nameof(publisher)),
+    };
+
+    private static PublisherId ReadPublisher(JsonElement value) => String(value, "publisher") switch
+    {
+        "lu-legilux" => PublisherId.LuLegilux,
+        "eu-eurlex" => PublisherId.EuEurLex,
+        _ => throw new JsonException("Unknown publisher."),
     };
 
     private static V3EnvelopeContext ReadContext(JsonElement value)
     {
         RequireObjectMembers(value,
-            "publisher", "status", "timeline_semantics", "snapshot", "jurisdiction", "provisional", "freshness");
+            "publisher", "status", "timeline_semantics", "snapshot", "jurisdiction", "provisional", "freshness", "commits");
         var snapshot = value.GetProperty("snapshot");
         RequireObjectMembers(snapshot, "snapshot_id", "snapshot_sha256");
         var freshness = value.GetProperty("freshness");
-        RequireObjectMembers(freshness, "observed_at", "upstream_health");
+        RequireObjectMembers(freshness, FreshnessMembers);
+        var commits = value.GetProperty("commits");
+        RequireObjectMembers(commits, "index_builder_source_commit", "serving_runtime_source_commit");
+        var channelValues = freshness.GetProperty("channels");
+        if (channelValues.ValueKind != JsonValueKind.Array)
+        {
+            throw new JsonException("The freshness channels are an array.");
+        }
+
+        var channels = new List<V3FreshnessChannel>();
+        foreach (var channel in channelValues.EnumerateArray())
+        {
+            RequireObjectMembers(channel, ChannelMembers);
+            channels.Add(new V3FreshnessChannel(ReadPublisher(channel), ReadInstant(channel, "newest_completed_observation")));
+        }
         var publisher = String(value, "publisher") switch
         {
             "lu-legilux" => PublisherId.LuLegilux,
@@ -203,7 +301,8 @@ public static class V3EnvelopeJson
             new V3SnapshotReference(String(snapshot, "snapshot_id"), String(snapshot, "snapshot_sha256")),
             String(value, "jurisdiction"),
             value.GetProperty("provisional").GetBoolean(),
-            new V3Freshness(observedAt, String(freshness, "upstream_health")));
+            new V3Freshness(observedAt, String(freshness, "upstream_health"), ReadInstant(freshness, "index_built_at"), channels),
+            new V3Commits(ReadCommit(commits, "index_builder_source_commit"), ReadCommit(commits, "serving_runtime_source_commit")));
     }
 
     private static JsonNode Sort(JsonNode node) => node switch

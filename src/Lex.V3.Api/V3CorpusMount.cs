@@ -55,10 +55,15 @@ internal sealed partial class V3CorpusMount : IDisposable
 
     private sealed record GenerationReader(string IndexSha256, long Observation, string BuiltAt, LuxembourgIndexReader Reader);
 
+    // What every answer says of the mounted law's freshness and its index's commit (R87, R23), read once at open
+    // (V3CorpusMount.Freshness.cs).
+    private readonly MountFreshness _freshness;
+
     private V3CorpusMount(
         LuxembourgIndexReader? reader,
         EuropeIndexReader? europeReader,
         LexCorpus6MountView corpus,
+        BuildReportFacts report,
         V3RetentionDecision? generations = null,
         IReadOnlyList<GenerationReader>? generationReaders = null)
     {
@@ -69,6 +74,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         _corpus = corpus ?? throw new ArgumentNullException(nameof(corpus));
         _generations = generations;
         _generationReaders = generationReaders ?? [];
+        _freshness = FreshnessOf(reader, europeReader, report ?? throw new ArgumentNullException(nameof(report)));
     }
 
     /// <summary>
@@ -169,7 +175,10 @@ internal sealed partial class V3CorpusMount : IDisposable
                     .ConfigureAwait(false);
             }
 
-            return new V3CorpusMount(reader, europeReader, corpus, generations, generationReaders);
+            // The build report beside the mount, held to the artifacts just verified: what it says of each channel's newest
+            // completed acquisition and of the commit that built the index (R87, R23); a report naming others refuses the mount.
+            var report = await ReadBuildReportAsync(directory, corpus.ArtifactRef, reader, europeReader, cancellationToken).ConfigureAwait(false);
+            return new V3CorpusMount(reader, europeReader, corpus, report, generations, generationReaders);
         }
         catch
         {
@@ -7425,7 +7434,8 @@ internal sealed partial class V3CorpusMount : IDisposable
                 _corpus.ArtifactRef.Sha256),
             publisher == PublisherId.LuLegilux ? "lu" : "eu",
             false,
-            new V3Freshness(observedAt, "stale"));
+            new V3Freshness(observedAt, "stale", _freshness.IndexBuiltAt, _freshness.Channels),
+            new V3Commits(_freshness.IndexBuilderSourceCommit, null));
 
     private static async Task<ReadOnlyMemory<byte>> ReadCapabilityAsync(
         string path,
