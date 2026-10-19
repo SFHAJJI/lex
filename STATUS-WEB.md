@@ -4,6 +4,112 @@ Updated 2026-10-18. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The five legal pages, in French and English, and an opening that waits for them (sole driver, 2026-10-18)
+
+The plan's item 7.1 ("Five footer pages, in French and English"), to the specification of record's R49, R50, R62, R70, R74
+and R92 and the owner's items O5, O28 and O29, made as small as the opening needs: every statement one the code or the
+deployment supports, every detail only the owner can give a marked placeholder in one data file.
+- **The pages** (`web/app/LegalPage.jsx`, `web/scripts/legal-pages.mjs`; the words in `live-chrome.mjs` and
+  `live-chrome-fr.mjs`, sections `legal`, `legalNotice`, `privacy`, `terms`, `accessibility` and `cookies`): `/{fr,en}/legal-notice.html`
+  (the publisher, its address and contact, director of publication; independence from the State, the Service central de
+  législation and the Publications Office; the host), `privacy.html` (the controller; what a visit sends and that nothing of it
+  is kept; no cookie, tracker or other origin; e-mails, their use and retention; people named in published acts, that a search
+  engine may index an act's page only once the indexing record (R92's check) lists it, and their objection; Microsoft as
+  processor; the rights of arts. 15 to 18 and 21 and the CNPD complaint), `terms.html` (R50's sentence
+  and the authenticity line, word for word; the texts' licences: Legilux CC BY 4.0 for the files the rights rule admits, "©
+  European Union, https://eur-lex.europa.eu" and Commission Decision 2011/833/EU for EU texts; no restriction beyond the texts'
+  own licences; no warranty, within what the law allows; how to cite; how to report an error), `accessibility.html` (WCAG 2.2 AA
+  as the target, not audited, so "partially conformant" (R62); what has been done; what has not been checked; how to report a
+  barrier; the loi du 28 mai 2019, which binds public sector bodies, not Lex) and `cookies.html` (none set, none through
+  another site, how that is checked). Each is built under each interface language with no script, the site's header and
+  footer, its language links pointing at the same page in the other language, hreflang alternates, and the never-indexed
+  robots element (R67: not a law's page; whatever the switch). Every live page's footer now lists the five (`SiteFooter`,
+  `legal.menu`), the page that is one of them marked current.
+- **What the owner fills** (`web/scripts/legal-publisher.mjs`, one value each, between the quotes; filling it publishes it on
+  the site and in this public repository):
+  - `publisherName`, «PUBLISHER_NAME»: the publisher, director of publication and controller (O5 recommends the owner);
+  - `publisherAddress`, «PUBLISHER_ADDRESS»: a postal address on one line;
+  - `contactEmail`, «CONTACT_EMAIL»: one dedicated contact address (O5), the pages' only contact for the publisher, errors,
+    barriers, privacy requests and objections;
+  - `reportRetentionMonths`, «REPORT_RETENTION_MONTHS»: how many months an e-mail is kept once its matter is closed (GDPR art.
+    13(2)(a); R74's "stated short period"; the driver recommends 12).
+  A detail still unfilled is printed as its placeholder, marked `data-legal-placeholder`; one filled in a form the pages cannot
+  print (an e-mail that is none, a retention that is no whole number of months from 1 to 99, a stray space or line break, an
+  unknown field) stops the build (`malformedPublisherFailures`, `build-live.mjs`).
+- **The opening fails closed while a placeholder remains** (`openingFailures`, `deploy-probe.mjs --opening`): `deploy.ps1
+  -Open` reads the app's address and asks each of the ten legal pages before it touches an address rule; any page that does not
+  answer 200 with a page, sets a cookie, says a placeholder or marks one, or cannot be asked, stops the opening and the site
+  stays private. Every `-Public` deployment passes `--opening` to its candidate's probe, so a release with an unfilled detail
+  is never promoted once the site is open. The candidate probe (`servedPageFailures`, also the image rehearsal's) now holds
+  each legal page the release image holds to its own bytes, the page's CSP and no cookie, says beside a private copy's pass
+  that the pages are not ready to publish, and fails a home page or legal page that sets a cookie.
+- **What each statement rests on** (read or measured on 2026-10-18):
+  - no cookie, no browser storage, no other origin: the CSP (`csp.mjs`: every source `'self'` or `'none'`), the journeys
+    (`document.cookie` empty, both storages empty, no request off the page's origin, CI), the release's image probe (142
+    requests on the release of 18 October, no answer setting a cookie, no other origin), the private copy's own answers read
+    through Azure's ingress (`/`, `/fr/`, `/en/coverage.html`, a 404: no `Set-Cookie`), no `localStorage`, `sessionStorage`,
+    `indexedDB` or cookie write in `web/app` or the built client bundles, no sticky-session affinity in `main.bicep`;
+  - nothing kept of a request: `PublicRequestRecordingTests` (planted query text, addresses, agents and headers found in
+    nothing the handler writes, emits or answers but the caller's own answer), the API's cleared logging providers
+    (`Program.cs`), the image probe's privacy record (nothing written once the server first answered);
+  - the hosting: `rg-lex-v3` in France Central (every resource but the DNS zone), the environment `cae-lex-v3` read back with
+    no log destination (`appLogsConfiguration.destination` null), no Application Insights and no OpenTelemetry, and no
+    diagnostic settings on the environment or the app (read-only `az` reads by the driver's identity); Microsoft as processor
+    under its own terms (the contracting entity and its data protection addendum are not named: the owner's account holds them);
+  - no rate limiter is named, because none ships yet (R109 is not built); the referrer: `Referrer-Policy: no-referrer` on every
+    page (`V3WebRoot`); the texts' licences: rights admission policy /1 (two channels agreeing on CC BY 4.0) and Decision 95's
+    acknowledgement (`V3CorpusMount.EuropeTextAcknowledgement`); the PDF not tagged (`export-pdf.mjs`);
+  - the CNPD's name and address and the 2019 law's title, read from cnpd.public.lu and guichet.public.lu (no request to
+    Legilux or EUR-Lex).
+  `web/test/legal-pages.test.mjs` holds the pages to these where code can: R50's sentence on the terms page, the CSP, the
+  referrer header, the cleared logging, the template's absences, the acknowledgement, the law's title marked French.
+- **Both servers** serve the pages as the files they are: the site table (`site-paths.json`) gains ten rows with a `file`
+  member, held by `V3WebRootTests` (the API: each served with a page's headers and noindex) and `legal-pages.test.mjs` (the live
+  server over a real build: 200, noindex, no cookie, the built bytes).
+- **French** (Decision 41): the 97 forms (every string of the six sections) were reviewed by an independent reviewer (Claude,
+  AI reviewer, not the author) in the addendum of 2026-10-18 "the five legal pages" of `C:\lex-v3\lanes\fr-review\review.md`
+  (with the driver's note of 2026-10-19); 14 changed in review, all applied: "l’éditeur de Lex" for the site's publisher,
+  bare "éditeur" staying the law's publishers; "ne doit apparaître" and "ne sont autorisés à" where the draft said "cannot";
+  the EU acknowledgement quoted in English, as the texts carry it (`{eurlexAcknowledgement}`, marked `lang="en"` on the French
+  page); "le texte cité" for a quotation, "citation" for the reference; "Veuillez ne faire figurer"; "fournisseur de
+  messagerie"; no "servir"; no comma before a list's closing "et". Its script's 2,249 checks pass on the forms as shipped.
+  - **For the owner (a public claim)**: the review recommends declaring the accessibility status "non-conformant" until an
+    audit, as the Luxembourg State's statement generator (accessibilite.public.lu) declares an unaudited public-sector site.
+    The page keeps R62's "partially conformant" (O5's recommended answer; a self-assessment with its known non-conformities
+    listed) until the owner chooses; the other wording is one entry in each table (`accessibility.sections.status.text`).
+  - The lawyer's read (O4) of these pages is the owner's choice and **has not been done**: the owner decided on 2026-10-18 to
+    open without it. The addendum lists what it would cover: what a private publisher must disclose in Luxembourg (the loi du
+    14 août 2000 relative au commerce électronique, the loi du 8 juin 2004 sur la liberté d’expression dans les médias) and
+    whether a director of publication applies; the host named by its legal entity; transfers outside the EEA (art. 13(1)(f));
+    legitimate interest for names in published acts and how an objection is handled; the warranty sentence against consumer
+    law; no consent needed with nothing stored (loi modifiée du 30 mai 2005); whether the European Accessibility Act's
+    transposition reaches the site.
+- **Driver decisions** (reversible):
+  - The fifth page is the cookies page, as this slice's brief asks; the plan's "sources and licences" page (R70, Reg53) is not
+    built here: the terms carry the licences in brief.
+  - The pages are never indexed, whatever the switch (O27 concerns the law's pages); they ask nothing and ship no script.
+  - Addresses keep English file names under both languages (`/fr/privacy.html`), as `/fr/coverage.html` does.
+  - "The publisher of Lex" names the site's publisher everywhere, so it is never read as Legilux or the Publications Office.
+  - Retention is the owner's number, not the driver's (a commitment only the owner can keep).
+  - The privacy notice names no processor the site does not use: no monitor, no fallback host and no rate limiter exist yet. The
+    DNS zone (Azure DNS in `rg-lex-v3` since the owner's switch of 2026-10-18) is Microsoft's, as the host is, and answers
+    resolvers, not readers, so it is not named apart.
+  - Search engines (O27, answered yes on 2026-10-18): the privacy notice says what the code does, that an act's page is opened
+    to them only once the release's indexing record lists the act (`search-engines.mjs`: R92's check; none is listed yet), and
+    no more; when R92's measurement ships, its section on named people names the check.
+- **Not in this slice** (next): the sources and licences page (R70, Reg53); the security contact (`/.well-known/security.txt`,
+  R74) and "Report a problem with this page" (R74, O29); the mailbox's provider in the privacy notice (once the owner names the
+  address); Lex's own data under CC BY 4.0 (O6 (5)); API terms; R92's measurement of acts that name people (O28); the
+  incident and breach runbook (7.4, R108); the lawyer's read (O4, 7.5).
+- **Measured** (no browser was started on this machine; this branch, rebased on `v3/integration` at 0b908870, #988's opening
+  kit): `npm run build` in `web`, then a plain `npm test`: 1,282 tests, 1,279 passed, the 3 that start a browser skipped;
+  `dotnet build Lex.V3.slnx -c Release`, 0 warnings, 0 errors; in `Lex.V3.Tests`, filtered, `V3WebRootTests` and
+  `V3WebRootSearchEnginesTests`, 21 of 21; `deploy.ps1` parses with no error, and `deploy-kit.test.mjs` runs its `-Open` path
+  with a stand-in Azure CLI and node (the check first, at the app's address, under the browser trap; a failed check or an
+  unread address removes no rule); the French review's script, 2,249 checks on the forms as shipped; `eng/verify-v3-tree.ps1`
+  passes. Before the rebase (from 24118293): the same web suite, 1,280 tests, 1,276 passed, 1 failed and fixed
+  (`no-browser-probes.test.mjs` now expects the image probe's note that the stand-in image holds no legal page).
+
 ## The opening kit: law.soufien.lu bound, search engines by deployment, the owner's decisions of 18 October (sole driver, 2026-10-18)
 
 The owner decided on 2026-10-18: the EU authenticity wording for acts published before 1 July 2013 and search-engine

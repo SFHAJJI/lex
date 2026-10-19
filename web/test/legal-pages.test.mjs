@@ -19,7 +19,7 @@ import * as app from "../.react-build/app.mjs";
 import { buildLive } from "../scripts/build-live.mjs";
 import { CSP_DIRECTIVES } from "../scripts/csp.mjs";
 import {
-  ACCESSIBILITY_LAW, EURLEX_SITE, LEGAL_PAGES, LEGAL_PAGE_PATHS, LEGAL_TEXTS_UPDATED, PLACEHOLDER, PLACEHOLDER_ATTRIBUTE, PUBLISHER_PLACEHOLDERS,
+  ACCESSIBILITY_LAW, EURLEX_ACKNOWLEDGEMENT, LEGAL_PAGES, LEGAL_PAGE_PATHS, LEGAL_TEXTS_UPDATED, PLACEHOLDER, PLACEHOLDER_ATTRIBUTE, PUBLISHER_PLACEHOLDERS,
   builtLegalPageFailures, isUnfilled, malformedPublisherFailures, openingFailures, placeholdersIn, publisherFailures,
 } from "../scripts/legal-pages.mjs";
 import { LEGAL_PUBLISHER } from "../scripts/legal-publisher.mjs";
@@ -107,6 +107,11 @@ test("the five legal pages are built under each interface language, with the sit
         assert.ok(isUnfilled(value) ? html.includes(PUBLISHER_PLACEHOLDERS[field]) : html.includes(escaped(field === "reportRetentionMonths" ? `${value} mois` : value)), `fr ${key}: ${field}`);
       }
     }
+
+    // The EU texts' acknowledgement, quoted as they carry it, in English: marked English on the French page (WCAG 3.1.2).
+    const frenchTerms = await readFile(join(destination, "fr", "terms.html"), "utf8");
+    assert.ok(frenchTerms.includes(`« <span lang="en">${EURLEX_ACKNOWLEDGEMENT}</span> »`), "fr/terms.html: the acknowledgement marked English");
+    assert.ok(!(await readFile(join(destination, "en", "terms.html"), "utf8")).includes('<span lang="en">'), "en/terms.html: nothing to mark");
 
     // The French pages say the French table's words and none of the English table's own legal words.
     const english = new Map(entriesOf(LIVE_CHROME.en));
@@ -248,7 +253,8 @@ test("what the legal pages say of the site is what its code and its deployment d
     assert.doesNotMatch(source, /document\.cookie\s*=|localStorage|sessionStorage|indexedDB/, `app/${name}`);
   }
   // The EU acknowledgement the terms quote is the one the platform serves with EU text (Decision 95).
-  assert.ok((await repository("src/Lex.V3.Api/V3CorpusMount.cs")).includes(`EuropeTextAcknowledgement = "© European Union, ${EURLEX_SITE}";`));
+  assert.ok((await repository("src/Lex.V3.Api/V3CorpusMount.cs")).includes(`EuropeTextAcknowledgement = "${EURLEX_ACKNOWLEDGEMENT}";`));
+  assert.ok(said(terms).includes(`carry its acknowledgement, “${EURLEX_ACKNOWLEDGEMENT}”.`), "quoted as the texts carry it");
   // The accessibility law, by its French title, marked French on an English page (WCAG 3.1.2).
   assert.ok(app.renderLiveLegalPage("accessibility").includes(`<span lang="fr">${escaped(ACCESSIBILITY_LAW)}</span>`));
   // "Files exported as PDF are not tagged": the PDF writer says so of itself.

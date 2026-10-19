@@ -29,7 +29,9 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 - Now: turn on Azure Compute, with the one Cloud Shell line the driver gave you, so the codes can be rebuilt on an
   Azure machine (about 5 EUR a rebuild).
-- Now: the legal notice's details: the publisher's name, a postal address and a contact email to publish.
+- Now: four details for the five legal pages (notice, privacy, terms, accessibility, cookies), written in French and
+  English: your name as publisher, a postal address, a contact e-mail and how many months e-mails are kept. They go
+  in one file, web/scripts/legal-publisher.mjs (or tell the driver). The site cannot open until they are filled.
 - Before 12 November: your 175.70 EUR of credits end. Then the site (about 26 EUR a month), the storage (under 0.50 EUR
   a month) and each rebuild are billed to your payment method.
 - Your choice, not done before the opening: a lawyer's read of the legal texts, an accessibility audit, user tests.

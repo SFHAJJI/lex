@@ -141,6 +141,16 @@
 // the English changed with each). The forms that review gave for its points 4, 6 and 7 (`search.titleMatching`,
 // `search.actPassages` with its full stop, `search.officialSites.eurlex` naming the advanced search) ship as it gave them,
 // with the English it named. `search.namesWork`, `search.severalWorks`, `search.candidate` and `search.hit` were removed.
+// The five legal pages (the plan's item 7.1; R49, R50, R62, R70, R74, R92): every form of the sections `legal`,
+// `legalNotice`, `privacy`, `terms`, `accessibility` and `cookies` (97 forms) was reviewed by an independent reviewer
+// (Claude, AI reviewer, not the author) under the same delegation in the addendum of 2026-10-18 "the five legal pages"
+// (14 changed in review: "l’éditeur de Lex" for the site's publisher, never bare "éditeur", which stays the law's
+// publishers; a test's condition and a search engine's permission are "ne doit" and "ne sont autorisés à", never "ne
+// peut"; the EU texts' acknowledgement quoted in English, as they carry it, through `{eurlexAcknowledgement}`; the
+// quotation "le texte cité", the reference "citation"; "Veuillez ne faire figurer"; "fournisseur de messagerie"; no
+// "servir"). Its entry 13 recommended "non conforme" for the accessibility status; the statement keeps R62's "partiellement
+// conforme" with the review's fallback French, and the choice is the owner's (STATUS-WEB.md). The lawyer's read (O4) of
+// these pages is the owner's choice and has not been done.
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -734,13 +744,13 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Mentions légales',
     eyebrow: 'À propos de ce site',
     heading: 'Mentions légales',
-    intro: 'Qui publie Lex, comment joindre son éditeur, et qui l’héberge.',
+    intro: 'Qui publie Lex, comment joindre son éditeur et qui l’héberge.',
     sections: Object.freeze({
       publisher: Object.freeze({
         heading: 'Éditeur',
         who: 'Lex est édité par {publisherName}, {publisherAddress}, qui en assure aussi la direction de la publication.',
         contact: 'Contact : {contactEmail}.',
-        what: 'Lex est édité par une personne privée. Il est gratuit, ne comporte aucune publicité et ne demande aucun compte.',
+        what: 'Lex est édité par une personne privée. Il est gratuit, ne comporte aucune publicité et ne demande la création d’aucun compte.',
       }),
       independence: Object.freeze({
         heading: 'Indépendance',
@@ -765,28 +775,29 @@ export const LIVE_CHROME_FR = Object.freeze({
       reading: Object.freeze({
         heading: 'Lorsque vous consultez le site',
         request: 'Chaque page que vous ouvrez et chaque recherche que vous envoyez est une requête de votre navigateur au serveur de ce site. La requête comporte l’adresse IP de votre appareil, l’adresse de la page et les informations techniques que tout navigateur envoie ; une recherche comporte les mots que vous avez saisis, dans le corps de la requête. Microsoft, qui héberge le site, achemine la requête jusqu’au serveur, et sa réponse jusqu’à vous.',
-        kept: 'Le serveur n’utilise la requête que pour y répondre, et n’en conserve rien une fois qu’il a répondu : il ne tient aucun journal des accès ni aucun relevé de ce qui est lu ou recherché, et l’hébergement est configuré sans stockage de journaux ni service de surveillance qui conserverait les requêtes. Cela est vérifié : le serveur est soumis à des requêtes portant des valeurs repérables (une expression recherchée, une adresse, le nom d’un navigateur), dont aucune ne peut apparaître dans ce qu’il écrit.',
+        kept: 'Le serveur n’utilise la requête que pour y répondre, et n’en conserve rien une fois qu’il a répondu : il ne tient aucun journal des accès ni aucun relevé de ce qui est lu ou recherché, et l’hébergement est configuré sans stockage de journaux ni service de surveillance qui conserverait les requêtes. Cela est vérifié : le serveur est soumis à des requêtes portant des valeurs repérables (une expression recherchée, une adresse, le nom d’un navigateur), dont aucune ne doit apparaître dans ce qu’il écrit.',
         basis: 'La base juridique est l’intérêt légitime de l’éditeur de Lex à proposer le site à ses lecteurs (article 6, paragraphe 1, point f), du règlement général sur la protection des données, règlement (UE) 2016/679).',
       }),
       nothingElse: Object.freeze({
         heading: 'Ni cookie, ni traceur, ni autre site',
         cookies: 'Le site ne dépose aucun cookie et n’écrit rien dans le stockage de votre navigateur (voir la {cookiesPage}). Il ne charge rien depuis un autre site : ni mesure d’audience, ni publicité, ni police de caractères, script ou image provenant d’ailleurs.',
-        links: 'Les liens vers les sites des éditeurs, comme Legilux et EUR-Lex, sont des liens ordinaires. Si vous en suivez un, votre navigateur s’adresse directement à ce site, sous la politique de protection des données de ce site ; Lex demande à votre navigateur de ne pas lui indiquer de quelle page vous venez.',
+        links: 'Les liens vers les sites des éditeurs, comme Legilux et EUR-Lex, sont des liens ordinaires. Si vous en suivez un, votre navigateur s’adresse directement à ce site, selon la politique de protection des données propre à celui-ci ; Lex demande à votre navigateur de ne pas indiquer à ce site de quelle page vous venez.',
       }),
       email: Object.freeze({
         heading: 'Lorsque vous écrivez à l’éditeur de Lex',
-        use: 'Si vous écrivez à {contactEmail}, l’éditeur de Lex reçoit votre adresse électronique, votre message et tout ce que vous y joignez, et ne les utilise que pour vous répondre et, si vous signalez une erreur, pour corriger le site. N’y mettez aucune donnée personnelle dont votre message n’a pas besoin.',
+        use: 'Si vous écrivez à {contactEmail}, l’éditeur de Lex reçoit votre adresse électronique, votre message et tout ce que vous y joignez, et ne les utilise que pour vous répondre et, si vous signalez une erreur, pour corriger le site. Veuillez ne faire figurer dans votre message aucune donnée personnelle dont il n’a pas besoin.',
         basis: 'La base juridique est l’intérêt légitime de l’éditeur de Lex à répondre et à maintenir le site exact (article 6, paragraphe 1, point f), du règlement). Votre message est conservé {retention} après la clôture de la question qu’il soulève, puis supprimé.',
       }),
       named: Object.freeze({
         heading: 'Personnes nommées dans les actes publiés',
         why: 'Certains actes publiés nomment des personnes, par exemple une loi conférant la nationalité. Lex reproduit les textes tels que les journaux officiels les publient, le Journal officiel du Grand-Duché de Luxembourg et le Journal officiel de l’Union européenne, afin que le droit puisse être lu à une date et vérifié auprès de sa source officielle.',
         basis: 'La base juridique est l’intérêt légitime de l’éditeur de Lex et du public à l’accès au droit tel que publié (article 6, paragraphe 1, point f), du règlement).',
+        searchEngines: 'Les moteurs de recherche ne sont autorisés à indexer la page d’un acte qu’une fois qu’une vérification a constaté que l’acte ne nomme aucune personne privée ; la page de tout autre acte leur demande de ne pas l’indexer.',
         objection: 'Si un acte publié vous nomme et que vous vous opposez à ce que son texte soit montré ici, écrivez à {contactEmail}. L’éditeur de Lex examinera votre opposition et y répondra.',
       }),
       processors: Object.freeze({
         heading: 'Qui d’autre traite les données',
-        text: 'Microsoft héberge le site sur son service Microsoft Azure, dans la région France Central, en France, et traite les requêtes pour le compte de l’éditeur de Lex, en qualité de sous-traitant, selon ses propres conditions de protection des données. Un message que vous envoyez est conservé par le fournisseur de la boîte aux lettres de l’éditeur de Lex. L’éditeur de Lex ne vend aucune donnée et n’en communique aucune à d’autres fins.',
+        text: 'Microsoft héberge le site sur son service Microsoft Azure, dans la région France Central, en France, et traite les requêtes pour le compte de l’éditeur de Lex, en qualité de sous-traitant, selon ses propres conditions de protection des données. Un courrier électronique que vous envoyez est conservé par le fournisseur de messagerie de l’éditeur de Lex. L’éditeur de Lex ne vend aucune donnée et n’en communique aucune à d’autres fins.',
       }),
       rights: Object.freeze({
         heading: 'Vos droits',
@@ -804,12 +815,12 @@ export const LIVE_CHROME_FR = Object.freeze({
       what: Object.freeze({
         heading: 'Ce qu’est Lex',
         notAdvice: '{notAdvice}',
-        service: 'C’est un service d’information gratuit : il montre les textes qu’il détient, aux dates auxquelles il les détient, et le dit lorsqu’il ne détient ni le texte ni la date. {authenticity}',
+        service: 'C’est un service d’information gratuit : il montre les textes qu’il détient, aux dates auxquelles il les détient, et le dit lorsqu’il ne détient pas de texte ou pas de date. {authenticity}',
       }),
       texts: Object.freeze({
         heading: 'Les textes et leurs licences',
         luxembourg: 'Les textes luxembourgeois proviennent de Legilux, publié par le Service central de législation. Lex ne montre le texte d’un fichier que lorsque les propres données de Legilux sur ce fichier lui attribuent la licence Creative Commons Attribution 4.0 International (CC BY 4.0) ; pour tout autre fichier, il montre le lien officiel et non le texte.',
-        europe: 'Les textes de l’UE proviennent de l’Office des publications de l’Union européenne et portent sa mention de la source, « © Union européenne, {eurlexSite} ». Ils sont réutilisés comme la politique de réutilisation de l’Union européenne le permet (décision 2011/833/UE de la Commission relative à la réutilisation des documents de la Commission).',
+        europe: 'Les textes de l’UE proviennent de l’Office des publications de l’Union européenne et portent, en anglais, sa mention de la source, « {eurlexAcknowledgement} ». Ils sont réutilisés comme la politique de réutilisation de l’Union européenne le permet (décision 2011/833/UE de la Commission relative à la réutilisation des documents de la Commission).',
         reuse: 'Lex extrait et normalise les textes qu’il montre, et chaque article cité indique sa source officielle. Ni Legilux ni l’Office des publications n’approuvent Lex. Les présentes conditions n’ajoutent aucune restriction à la réutilisation des textes que leurs propres licences permettent.',
       }),
       warranty: Object.freeze({
@@ -818,11 +829,11 @@ export const LIVE_CHROME_FR = Object.freeze({
       }),
       citing: Object.freeze({
         heading: 'Comment citer',
-        text: 'Citez le texte officiel, par sa référence officielle. Lex donne de chaque article qu’il cite une citation et un permalien vers le texte montré, afin que chacun puisse vérifier la citation auprès de sa source officielle.',
+        text: 'Citez le texte officiel, par sa référence officielle. Lex donne, pour chaque article qu’il cite, une citation et un permalien vers le texte montré, afin que chacun puisse vérifier le texte cité auprès de sa source officielle.',
       }),
       errors: Object.freeze({
         heading: 'Signaler une erreur',
-        text: 'Si un texte de Lex diffère de sa source officielle, ou si une page dit quelque chose d’inexact, écrivez à {contactEmail} en indiquant l’adresse de la page. N’y mettez aucune donnée personnelle dont le signalement n’a pas besoin.',
+        text: 'Si un texte que Lex montre diffère de sa source officielle, ou si une page dit quelque chose d’inexact, écrivez à {contactEmail} en indiquant l’adresse de la page. Veuillez ne faire figurer dans votre signalement aucune donnée personnelle dont il n’a pas besoin.',
       }),
     }),
   }),
@@ -830,11 +841,11 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Déclaration d’accessibilité',
     eyebrow: 'À propos de ce site',
     heading: 'Déclaration d’accessibilité',
-    intro: 'Le degré d’accessibilité de Lex, ce qui a été fait, ce qui n’a pas encore été vérifié, et comment signaler un obstacle.',
+    intro: 'Le degré d’accessibilité de Lex, ce qui a été fait, ce qui n’a pas encore été vérifié et comment signaler un obstacle.',
     sections: Object.freeze({
       status: Object.freeze({
         heading: 'État de conformité',
-        text: 'Lex est conçu pour respecter les règles pour l’accessibilité des contenus Web (WCAG) 2.2 au niveau AA. Il n’a pas encore été audité et ne prétend donc pas les respecter : tant qu’un audit du site en service n’a pas été concluant, il est partiellement conforme.',
+        text: 'Lex est conçu pour respecter les Règles pour l’accessibilité des contenus Web (WCAG) 2.2 au niveau AA. Il n’a pas encore été audité et ne prétend donc pas les respecter : tant qu’un audit du site en service n’a pas été concluant, il est partiellement conforme.',
       }),
       done: Object.freeze({
         heading: 'Ce qui a été fait',
@@ -883,7 +894,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       }),
       checked: Object.freeze({
         heading: 'Comment cela est vérifié',
-        text: 'Des tests automatisés échouent si une page du site dépose un cookie, écrit dans le stockage du navigateur ou demande quoi que ce soit à un autre site, et chaque mise en production est vérifiée, avant de servir des lecteurs : aucune de ses réponses ne doit déposer de cookie.',
+        text: 'Des tests automatisés échouent si une page du site dépose un cookie, écrit dans le stockage du navigateur ou demande quoi que ce soit à un autre site, et, avant chaque mise en production, il est vérifié qu’aucune réponse du nouveau déploiement ne dépose de cookie.',
       }),
     }),
   }),

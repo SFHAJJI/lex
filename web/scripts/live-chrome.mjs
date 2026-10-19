@@ -538,7 +538,7 @@ const EN = Object.freeze({
   // `contactEmail`, `retention`, from `legal-publisher.mjs`, each its placeholder until the owner fills it), the footer's
   // statements (`notAdvice`, `authenticity`: R50's sentence and the authenticity line, said once, word for word), a link to
   // another legal page (`termsPage`, `cookiesPage`, in the words of `legal.inline`), the CNPD's site (`cnpdSite`), the EU
-  // acknowledgement's address (`eurlexSite`) and Luxembourg's accessibility law by its French title (`accessibilityLaw`).
+  // texts' acknowledgement as they carry it, in English (`eurlexAcknowledgement`) and Luxembourg's accessibility law by its French title (`accessibilityLaw`).
   // Every statement is one the code or the deployment supports (STATUS-WEB.md, the section of 2026-10-18 on the legal pages).
   legal: Object.freeze({
     menu: "Legal information",
@@ -607,6 +607,7 @@ const EN = Object.freeze({
         heading: "People named in published acts",
         why: "Some published acts name people, for example a law granting nationality. Lex reproduces texts as the official journals publish them, the Journal officiel du Grand-Duché de Luxembourg and the Official Journal of the European Union, so that the law can be read at a date and checked against its official source.",
         basis: "The legal basis is the legitimate interest of the publisher of Lex and of the public in access to the law as published (Article 6(1)(f) of the Regulation).",
+        searchEngines: "Search engines may index the page of an act only once a check has found that the act names no private person; the page of any other act asks them not to.",
         objection: "If a published act names you and you object to its text being shown here, write to {contactEmail}. The publisher of Lex will examine your objection and answer it.",
       }),
       processors: Object.freeze({
@@ -634,7 +635,7 @@ const EN = Object.freeze({
       texts: Object.freeze({
         heading: "The texts and their licences",
         luxembourg: "The Luxembourg texts come from Legilux, published by the Service central de législation. Lex shows the text of a file only when Legilux's own records of that file give it the Creative Commons Attribution 4.0 International licence (CC BY 4.0); for any other file it shows the official link and not the text.",
-        europe: "The EU texts come from the Publications Office of the European Union and carry its acknowledgement, “© European Union, {eurlexSite}”. They are reused as the European Union's reuse policy allows (Commission Decision 2011/833/EU on the reuse of Commission documents).",
+        europe: "The EU texts come from the Publications Office of the European Union and carry its acknowledgement, “{eurlexAcknowledgement}”. They are reused as the European Union's reuse policy allows (Commission Decision 2011/833/EU on the reuse of Commission documents).",
         reuse: "Lex extracts and normalises the texts it shows, and every article it quotes names its official source. Neither Legilux nor the Publications Office endorses Lex. These terms add no restriction to any reuse of the texts that their own licences allow.",
       }),
       warranty: Object.freeze({

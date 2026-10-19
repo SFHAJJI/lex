@@ -63,6 +63,12 @@ export const CNPD_SITE = Object.freeze({ href: "https://cnpd.public.lu/", text: 
 export const EURLEX_SITE = "https://eur-lex.europa.eu";
 
 /**
+ * The acknowledgement EU texts carry on this site, as the platform serves it with them (`EuropeTextAcknowledgement`), in
+ * English on either interface: the terms quote it as it is shown, marked English on a French page (the French review).
+ */
+export const EURLEX_ACKNOWLEDGEMENT = `© European Union, ${EURLEX_SITE}`;
+
+/**
  * Luxembourg's accessibility law, as the accessibility statement cites it: its French title, which the page marks French
  * (`lang="fr"`) on an English page. Read from Guichet.lu's accessibility page on 2026-10-18; never from Legilux.
  */

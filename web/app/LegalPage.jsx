@@ -8,14 +8,14 @@
 // site does not open with it. A page asks nothing, ships no script and is never indexed (`indexing` stays `never`).
 
 import { Document } from './Document.jsx';
-import { Say } from './LiveAnswer.jsx';
+import { Say, inEnglish } from './LiveAnswer.jsx';
 import { fillCounted, liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { renderDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
 import { longDate } from '../scripts/live-search.mjs';
 import { LEGAL_PUBLISHER } from '../scripts/legal-publisher.mjs';
 import {
-  ACCESSIBILITY_LAW, CNPD_SITE, EURLEX_SITE, LEGAL_PAGES, LEGAL_TEXTS_UPDATED, PLACEHOLDER_ATTRIBUTE, PUBLISHER_PLACEHOLDERS, isUnfilled, legalPage,
+  ACCESSIBILITY_LAW, CNPD_SITE, EURLEX_ACKNOWLEDGEMENT, LEGAL_PAGES, LEGAL_TEXTS_UPDATED, PLACEHOLDER_ATTRIBUTE, PUBLISHER_PLACEHOLDERS, isUnfilled, legalPage,
 } from '../scripts/legal-pages.mjs';
 
 /** An unfilled detail: its placeholder, marked, whatever the data file holds in its place (an empty value included). */
@@ -27,7 +27,7 @@ function Unfilled({ field }) {
 /**
  * Every value a legal page's sentences may name (`live-chrome.mjs`, the comment above `legal`), for the page's language:
  * the publisher's details, the footer's two statements, the links to the other legal pages and to the CNPD, the EU
- * acknowledgement's address and the accessibility law's French title.
+ * texts' acknowledgement (in English, marked so on a French page) and the accessibility law's French title.
  */
 export function legalValues(publisher = LEGAL_PUBLISHER) {
   const copy = liveChrome();
@@ -43,7 +43,7 @@ export function legalValues(publisher = LEGAL_PUBLISHER) {
     termsPage: pageLink('terms'),
     cookiesPage: pageLink('cookies'),
     cnpdSite: <a href={CNPD_SITE.href} rel="external">{CNPD_SITE.text}</a>,
-    eurlexSite: EURLEX_SITE,
+    eurlexAcknowledgement: inEnglish(EURLEX_ACKNOWLEDGEMENT),
     accessibilityLaw: <span lang="fr">{ACCESSIBILITY_LAW}</span>,
   };
 }
