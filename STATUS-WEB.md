@@ -4,6 +4,132 @@ Updated 2026-10-19. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The legal pages name no person and give no contact: the owner's decision of 19 October (sole driver, 2026-10-19)
+
+**The owner's legal decision of 2026-10-19, made, and recorded as the owner's** (STATUS.md, the owner's decisions of
+2026-10-19). The owner's words that day: "i dont want to mention nobody name etc etc including me"; "the user is there to
+have temporal feature over lux and eu laws thats it"; "why r we mentioning emails andadress". So the site names no person
+and publishes no postal address, no e-mail address and no contact channel of any kind. It **departs from the
+specification of record's R49** (the legal notice's editor, address, e-mail and director of publication; the privacy
+notice's controller and contact, its legal bases, the retention of e-mailed reports, the requests a reader could make of
+the publisher, the CNPD's postal address, and the objection contact for people named in acts) **and from O5's recommended answer** (the owner as editor and
+controller, with a dedicated contact address; a security contact). With them go R62's contact in the accessibility
+statement, R74's "Report a problem with this page" and its security contact (`/.well-known/security.txt`, never built),
+and R92's objection contact; R92's other duty, keeping acts that name people away from search engines, stands, and the
+privacy notice says it. One slice on `writer/legal-no-person`, stacked on `writer/web-bigbang` (#989).
+- **What was removed:** `web/scripts/legal-publisher.mjs` (the publisher's name, postal address and contact e-mail, each
+  still a placeholder, and `reportRetentionMonths`, the 12 months decided earlier that day) and everything that read it:
+  the placeholders and their mark (`PUBLISHER_PLACEHOLDERS`, `data-legal-placeholder`), the build's refusal of a detail
+  filled wrong (`malformedPublisherFailures` in `build-live.mjs`), the readiness checks (`publisherFailures`,
+  `isUnfilled`, `placeholdersIn`) and `legal.months`. From the pages: the legal notice's
+  publisher, contact and director of publication; the privacy notice's controller, its three legal bases, the e-mail
+  section and its retention, the processors paragraph (the mailbox provider), the requests to the publisher (arts. 15 to
+  18 and 21), the CNPD's postal address, and the objection; the terms' "Reporting an error"; the accessibility statement's "Reporting a
+  barrier" and "published by a private person". With no contact, no e-mail is received or kept, so the 12 months apply to
+  nothing (superseded, above).
+- **What each page says now** (`live-chrome.mjs`, `live-chrome-fr.mjs`; "Last updated: 19 October 2026"):
+  - **legal notice:** what Lex is (an independent, non-commercial tool for reading Luxembourg and EU law over time: a text
+    as it stood on the date you choose, and how it changed; free, no advertising, no account) and R50's sentence; no
+    official status (not a service of the State, the Service central de législation or the Publications Office, none of
+    which endorses it) and the authenticity line, then "where a text on Lex differs from its official publication, the
+    official publication prevails"; the sources and licences (Legilux under CC BY 4.0, for the files whose own records
+    give it, the official link otherwise; the EU texts with their acknowledgement "© European Union,
+    https://eur-lex.europa.eu" and Decision 2011/833/EU; "extracts and normalises", each quote naming its source: the
+    licences' duties, kept word for word from the reviewed terms); the hosting (Microsoft Azure, France Central, in
+    France; no street address);
+  - **privacy notice:** what a request carries (the device's IP address, the page's address, the browser's technical
+    details), a search's words in the request's body and never in the request's address, a search kept in a link in the
+    part after "#", which the browser never sends; the host carries each request and handles the connection data under
+    its own terms; the server keeps nothing of a request (no access log, no record of what is read or searched, no log
+    store or monitoring in the hosting; tested with marked values); no accounts, so nothing about a reader to show,
+    correct or erase; no cookie, browser storage, tracker or other site, and links ask the browser to send no referrer;
+    people named in published acts and the search-engine rule; and, under "Your rights", one sentence: the reader may
+    lodge a complaint with the CNPD, its site linked (https://cnpd.public.lu/), no postal address (a driver decision, below);
+  - **terms of use:** R50's sentence and the service with the authenticity line; anyone may read, search, cite and export
+    the texts, free and with no account; each text keeps its source's licence (CC BY 4.0, the EU's reuse policy), the
+    legal notice saying where the texts come from and the acknowledgement each carries, and the terms add no restriction;
+    no warranty ("It does not guarantee", no publisher named); how to cite;
+  - **accessibility statement:** the WCAG 2.2 AA target and "non-conformant" until an audit, entry 13's English and
+    French unchanged (9c65c68a); what has been done and what has not been checked; the 2019 law binds public sector
+    bodies and "Lex is not published by a public sector body"; how the statement was prepared; no feedback contact;
+  - **cookies:** unchanged (none set, none through another site, how that is checked).
+- **What the privacy notice rests on** (read in the code on 2026-10-19; no Azure resource touched, so the hosting's
+  read-back is the one of 2026-10-18, above): nothing personal is kept by the code or the deploy kit.
+  - No cookie or storage: the CSP (`csp.mjs`, every source `'self'` or `'none'`), no `document.cookie` write, storage or
+    `indexedDB` in `web/app` (`legal-pages.test.mjs`), no sticky sessions in `deploy/main.bicep`, and the deployment
+    probe and the image rehearsal fail on any `Set-Cookie` (`deploy-probe.mjs`, `image-rehearsal.mjs`).
+  - Nothing kept of a request: the API clears its logging providers (`Program.cs`, `ClearProviders`) and writes to its
+    error output only at startup (a refused mount or web root); `PublicRequestRecordingTests` plants query text, the
+    connection's address, the agent, forwarding headers, a cookie, a bearer token and a referrer and finds none in the
+    output, the emitted events, metrics and traces, the response or the files written; the image rehearsal's privacy
+    record finds nothing on the output and no file on `/tmp` once the server first answered. The only files the API
+    writes are its verified index copies in its private `/tmp` at startup (`V3StaleIndexCopies`).
+  - The hosting: `main.bicep` and the deploy scripts configure no Log Analytics, Application Insights or diagnostic
+    setting; the environment `cae-lex-v3` was read back on 2026-10-18 with no log destination. The ingress sees the
+    caller's address before the server does (`PublicRequestRecordingTests` claims nothing of it), hence "handles the
+    connection data this needs under its own terms".
+  - A search's words: `askV3` (`v3-client.mjs`) posts to `/api/v3/{operation}` with the parameters in the body,
+    `credentials: "omit"` and `referrerPolicy: "no-referrer"`; a search kept in a link is the fragment
+    (`search-address.mjs`). No account exists: the API reads no credential (the bearer token above is never read).
+- **The opening's check** (`openingFailures`, `builtLegalPageFailures`; driver decision, reversible): **kept, and turned
+  into a check of the owner's decision** rather than removed. `deploy-probe.mjs --opening` (`deploy.ps1 -Open`, and every
+  `-Public` deployment's candidate) still fails closed on a page it cannot read, a page that is not 200 with a page, or a
+  cookie, and now refuses a page whose bytes show an e-mail address, a `mailto:` or `tel:` link, a placeholder in the
+  «LIKE_THIS» form or a Luxembourg postcode (`SHOWN_NOWHERE`, `legal-pages.mjs`). Why: the opening is the moment the
+  decision becomes public, and the check reads what the public would read, so a regression (a contact put back, a stale
+  page or release) is caught on the served bytes, at no cost; removing it would leave the opening a cookie check only. It
+  checks marks, not words: a word list at the opening would refuse a harmless sentence; the words (a contact, writing to
+  someone, a postal address, a request or objection, the persons R49 named) are pinned at build time, in both languages,
+  by `legal-pages.test.mjs`. A person's name cannot be recognised by a pattern; the pages hold no value that is not the
+  table's, and the tests hold every placeholder a legal sentence may name to seven values, none of them a person's.
+- **The rest of the site:** no other page gave a contact; the footer lists the five pages and nothing else. The asked
+  words ("@", "contact", "e-mail", "email", "courriel", "adresse", "address", "écrire", "write to") were searched in
+  `web/app`, `web/scripts`, `web/src` and the API's served texts (`src/Lex.V3.Api`, `src/Lex.V3.Contracts`): no e-mail
+  address or mail link anywhere; "contact" and "e-mail" only in comments and in the check's own messages; "address" and
+  "adresse" only for a web address, the IP address and the verb "s’adresse". The API serves no legal text of its own, so
+  no answer or census sample moved.
+- **French** (Decision 41): the 22 forms added, changed or moved were reviewed by an independent reviewer (Claude, AI
+  reviewer, not the author) in the addendum of 2026-10-19 "the legal pages without a person or a contact" of
+  `C:\lex-v3\lanes\fr-review\review.md`: 7 changed in review, 15 approved, all applied byte for byte, with the two English
+  changes it recommended (entry 9, blocking: the part after "#" is what the browser never sends, never "the address";
+  entry 12: the terms announce how to cite the texts, not Lex). New rows: "au fil du temps" (never "dans le temps"), "tel
+  qu’il se présentait à la date de votre choix", "un texte que Lex montre" (never "sur Lex" or "de Lex"), "est libre de"
+  for the terms' permission (an EU text has no export), "ne propose ni compte ni inscription". The reviewer's script ran
+  6,301 checks on the 84 forms of the six sections (both tables' keys, placeholders and numbers in order, typography,
+  the refused words, `NO_CONTACT_WORDS` and `SHOWN_NOWHERE`): all pass. Its section for the lawyer's read (O4) lists
+  what the rewrite leaves out (a controller, legal bases, the rights and the CNPD route, an objection route, a feedback
+  route for accessibility), as the owner's decision and not the reviewer's to revisit; the read has not been done. The
+  CNPD route came back since, as one sentence (below).
+- **Driver decisions** (reversible):
+  - **The CNPD complaint line is kept**, one sentence in each language, under "Your rights" ("Vos droits"): "You may lodge
+    a complaint with the Commission nationale pour la protection des données (CNPD), cnpd.public.lu.", the site a link
+    (`CNPD_SITE`, https://cnpd.public.lu/) and no postal address. The right to complain to the supervisory authority (GDPR
+    art. 77) is the reader's, not a contact of Lex's: the owner objected to Lex's own name, address and e-mail, not to
+    naming the regulator. The first draft of this slice had removed the line with the requests; the coordinator reversed
+    that, and this record follows. It is the reviewed line of 2026-10-18 (its entry 54) without the address and without
+    "also" (the requests it followed are gone), so it was reviewed again, by one independent reviewer (Claude, AI reviewer, not the author), in the
+    addendum of 2026-10-19 "the CNPD complaint line kept" of the French record: 2 forms, both approved, no English change
+    (its script's 8,280 checks on the 86 forms of the six sections pass; its note for the lawyer's read adds which
+    authority is competent under art. 77(1), and that the complaint is the page's one recourse). The opening's check passes over it
+    (an https link: no e-mail address, no `mailto:` or `tel:`, no postcode), and `legal-pages.test.mjs` and
+    `deploy-probe.test.mjs` hold it: one sentence, the link once, "CNPD" once, no "Belvaux", "Boulevard du Jazz",
+    postcode or "4370", and no other legal page naming the regulator.
+  - The legal bases go with the controller they named; the licences stand in full on the legal notice and in brief in
+    the terms, which point to it.
+- **Measured** (no browser was started on this machine, no publisher was asked and no Azure resource touched; on
+  the code of this pull request, the CNPD line included): `npm run build` in `web`, then a plain `npm test`: 1,314 tests,
+  1,311 passed, the 3 that start a browser skipped with their reason (the legal-pages, deploy-probe, deploy-kit and
+  chrome tests alone: 55 of 55); `dotnet build Lex.V3.slnx -c Release --no-incremental`, 0
+  warnings, 0 errors; `Lex.V3.Tests`, whole, 3,327, 3,321 passed, 6 skipped; in `Lex.V3.Ingest.Tests` the Census classes,
+  `PublicRequestRecordingTests` and the answer, envelope and refusal-payload samples, 32, 31 passed, 1 skipped (the EU
+  predicate census, by its variable: publisher traffic); no sample was rendered again, since no served answer changed;
+  `deploy.ps1` parses with no error, and `deploy-kit.test.mjs` runs its `-Open` path with the check's new wording; the
+  live pages built and searched: no e-mail address, mail link, placeholder, postcode, "contact", "e-mail", "courriel",
+  "write to" or "postal" in any served page ("@" only in the evaluation card's "nDCG@10" and "recall@10", "écri" only in
+  "n’écrit rien" and "ce qu’il écrit"); `eng/verify-v3-tree.ps1` passes (1,662 tracked paths: the data file removed). A
+  whole `Lex.V3.Ingest.Tests` run was started for good measure and stopped unfinished after about 20 minutes, because it
+  held the build's files; the classes above ran in its place, as the brief asks.
+
 ## Four web slices in one pull request, and the owner's decisions of 19 October (sole driver, 2026-10-19)
 
 The owner's order of 2026-10-19: "big bang" pull requests to finish V3 today, without sacrificing quality. Four finished
@@ -43,9 +169,11 @@ commits (6.1, 6.5). Each slice's own section follows, newest first. Then three d
     (46 envelopes, `maximum_data_age_days` 10 to 30, nothing else). The 38 legacy schema-8 and schema-6 answers recorded
     again on Linux at 496eeced (WSL Ubuntu 24.04, .NET SDK 10.0.400, invariant globalization, UTC, the gated recorder): a
     script checked each body moved by its maximum alone and equals the recording; Windows replays the same bytes.
-  - **E-mails kept 12 months** once their matter is closed (`reportRetentionMonths: "12"`, the driver's recommendation). The
-    privacy notice says "12 months" and "12 mois". The publisher's name, postal address and contact e-mail stay
-    placeholders: only the owner can give them, and the opening refuses the pages until they are filled.
+  - **Superseded the same day** by the owner's decision that the site names no person and gives no contact (the section
+    above), so no e-mail is received or kept. **E-mails kept 12 months** once their matter is closed
+    (`reportRetentionMonths: "12"`, the driver's recommendation). The privacy notice said "12 months" and "12 mois". The
+    publisher's name, postal address and contact e-mail stayed placeholders, and the opening refused the pages until they
+    were filled.
   - **The accessibility status: non-conformant** until an audit, the French review's recommendation (entry 13 of the
     addendum of 2026-10-18), in place of R62's "partially conformant". The English and the French are entry 13's, word
     for word, so no sentence is new; the WCAG 2.2 AA target and "not audited" stay. The review record has the driver's note.
@@ -59,7 +187,9 @@ commits (6.1, 6.5). Each slice's own section follows, newest first. Then three d
   `eng/verify-v3-tree.ps1` passes (1,663 tracked paths). The EU time view's
   `EuAsOfAnswersTheWordingOfTheDateAndNeverADateBeforeTheHistory` failed once while three suites ran at once on a shared
   machine (a fixture acquisition's observation not executed); alone it passed 6 of 6, and every later run passed it.
-- **Waits on the owner:** the publisher's name, postal address and contact e-mail (`web/scripts/legal-publisher.mjs`).
+- **Waits on the owner:** nothing for the legal pages since the owner's decision of 2026-10-19 (the section above: no
+  person, no contact; `web/scripts/legal-publisher.mjs` removed). Until then: the publisher's name, postal address and
+  contact e-mail.
 
 ## Freshness on every page and in every answer, and the commits behind it (sole driver, 2026-10-18)
 
@@ -245,7 +375,8 @@ deployment supports, every detail only the owner can give a marked placeholder i
   footer, its language links pointing at the same page in the other language, hreflang alternates, and the never-indexed
   robots element (R67: not a law's page; whatever the switch). Every live page's footer now lists the five (`SiteFooter`,
   `legal.menu`), the page that is one of them marked current.
-- **What the owner fills** (`web/scripts/legal-publisher.mjs`, one value each, between the quotes; filling it publishes it on
+- **Superseded on 2026-10-19** (the owner's decision, above: the site names no person and gives no contact; the data file
+  and its placeholders are removed). **What the owner fills** (`web/scripts/legal-publisher.mjs`, one value each, between the quotes; filling it publishes it on
   the site and in this public repository):
   - `publisherName`, «PUBLISHER_NAME»: the publisher, director of publication and controller (O5 recommends the owner);
   - `publisherAddress`, «PUBLISHER_ADDRESS»: a postal address on one line;
@@ -256,7 +387,8 @@ deployment supports, every detail only the owner can give a marked placeholder i
   A detail still unfilled is printed as its placeholder, marked `data-legal-placeholder`; one filled in a form the pages cannot
   print (an e-mail that is none, a retention that is no whole number of months from 1 to 99, a stray space or line break, an
   unknown field) stops the build (`malformedPublisherFailures`, `build-live.mjs`).
-- **The opening fails closed while a placeholder remains** (`openingFailures`, `deploy-probe.mjs --opening`): `deploy.ps1
+- **Changed on 2026-10-19** (above: the check now refuses a page showing an e-mail address, a mail or telephone link, a
+  placeholder or a postcode). **The opening fails closed while a placeholder remains** (`openingFailures`, `deploy-probe.mjs --opening`): `deploy.ps1
   -Open` reads the app's address and asks each of the ten legal pages before it touches an address rule; any page that does not
   answer 200 with a page, sets a cookie, says a placeholder or marks one, or cannot be asked, stops the opening and the site
   stays private. Every `-Public` deployment passes `--opening` to its candidate's probe, so a release with an unfilled detail

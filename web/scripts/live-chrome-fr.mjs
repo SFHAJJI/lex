@@ -162,6 +162,23 @@
 // owner chose it on 2026-10-19 (STATUS-WEB.md), so the statement ships entry 13's recommended English and French word for
 // word, in place of R62's "partiellement conforme". The lawyer's read (O4) of these pages is the owner's choice and has
 // not been done.
+// The legal pages without a person or a contact (the owner's decision of 2026-10-19: no person, no postal address, no
+// e-mail address, no contact): the forms added, changed or moved in the five pages, `legalNotice.intro`,
+// `legalNotice.sections.what` (`heading`, `text`, `notAdvice`), `legalNotice.sections.status` (`heading`, `text`,
+// `prevails`), `legalNotice.sections.sources` (`heading`, `luxembourg`, `europe`, `changes`), `privacy.intro`,
+// `privacy.sections.reading.request`, `.host` and `.nothingHeld`, `terms.intro`, `terms.sections.use` (`heading`, `text`),
+// `terms.sections.texts.licences`, `terms.sections.warranty.text`, `accessibility.intro` and
+// `accessibility.sections.law.text` (22 forms), were reviewed by an independent reviewer (Claude, AI reviewer, not the
+// author) under the same delegation in the addendum of 2026-10-19 "the legal pages without a person or a contact" (7
+// changed in review, the English with two of them: Lex is read "au fil du temps", never "dans le temps"; a text "que Lex
+// montre", never "sur Lex" or "de Lex"; the reader "est libre de" use the texts, a permission, never "peut"; the part
+// after "#" is the only antecedent of what the browser never sends; "Lex ne propose ni compte ni inscription"; the terms
+// announce how to cite the texts, not Lex).
+// The reader's right to complain to the CNPD, kept on the privacy notice as a driver decision of 2026-10-19 (one sentence, the
+// regulator's site linked, no postal address): `privacy.sections.rights.heading` and `privacy.sections.rights.complaint`,
+// entries 52 and 54 of 2026-10-18 less "aussi" and the address, were reviewed by an independent reviewer (Claude, AI
+// reviewer, not the author) under the same delegation in the addendum of 2026-10-19 "the CNPD complaint line kept" (2
+// forms, both approved).
 // The EU authenticity statement chosen by the act's date (the owner's decision of 2026-10-18 on PR #975's question, O4):
 // `citation.europe.authenticity`, one string approved in the addendum of 2026-10-17 on the citation generator, is now two
 // entries keyed by the platform's basis, `citation.europe.authenticity.electronic_edition` (that string, unchanged) and
@@ -786,10 +803,6 @@ export const LIVE_CHROME_FR = Object.freeze({
   legal: Object.freeze({
     menu: 'Informations légales',
     updated: 'Dernière mise à jour : {date}.',
-    months: Object.freeze({
-      one: '{count} mois',
-      other: '{count} mois',
-    }),
     inline: Object.freeze({
       legalNotice: 'mentions légales',
       privacy: 'page sur la protection des données',
@@ -802,17 +815,23 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Mentions légales',
     eyebrow: 'À propos de ce site',
     heading: 'Mentions légales',
-    intro: 'Qui publie Lex, comment joindre son éditeur et qui l’héberge.',
+    intro: 'Ce qu’est Lex, d’où viennent ses textes et sous quelles licences, et qui l’héberge.',
     sections: Object.freeze({
-      publisher: Object.freeze({
-        heading: 'Éditeur',
-        who: 'Lex est édité par {publisherName}, {publisherAddress}, qui en assure aussi la direction de la publication.',
-        contact: 'Contact : {contactEmail}.',
-        what: 'Lex est édité par une personne privée. Il est gratuit, ne comporte aucune publicité et ne demande la création d’aucun compte.',
+      what: Object.freeze({
+        heading: 'Ce qu’est Lex',
+        text: 'Lex est un outil indépendant et non commercial pour lire le droit luxembourgeois et le droit de l’UE au fil du temps : il montre un texte tel qu’il se présentait à la date de votre choix, et comment il a changé. Il est gratuit, ne comporte aucune publicité et ne demande la création d’aucun compte.',
+        notAdvice: '{notAdvice}',
       }),
-      independence: Object.freeze({
-        heading: 'Indépendance',
-        text: 'Lex n’est un service ni de l’État luxembourgeois, ni du Service central de législation, qui publie Legilux, ni de l’Office des publications de l’Union européenne, et aucun d’eux ne l’approuve. Il reproduit des textes qu’ils publient, dans la mesure où leurs licences le permettent : voir les {termsPage}.',
+      status: Object.freeze({
+        heading: 'Aucun statut officiel',
+        text: 'Lex n’a aucun statut officiel. Il n’est un service ni de l’État luxembourgeois, ni du Service central de législation, qui publie Legilux, ni de l’Office des publications de l’Union européenne, et aucun d’eux ne l’approuve.',
+        prevails: '{authenticity} Lorsqu’un texte que Lex montre diffère de sa publication officielle, c’est la publication officielle qui prévaut.',
+      }),
+      sources: Object.freeze({
+        heading: 'Sources et licences',
+        luxembourg: 'Les textes luxembourgeois proviennent de Legilux, publié par le Service central de législation. Lex ne montre le texte d’un fichier que lorsque les propres données de Legilux sur ce fichier lui attribuent la licence Creative Commons Attribution 4.0 International (CC BY 4.0) ; pour tout autre fichier, il montre le lien officiel et non le texte.',
+        europe: 'Les textes de l’UE proviennent de l’Office des publications de l’Union européenne et portent, en anglais, sa mention de la source, « {eurlexAcknowledgement} ». Ils sont réutilisés comme la politique de réutilisation de l’Union européenne le permet (décision 2011/833/UE de la Commission relative à la réutilisation des documents de la Commission).',
+        changes: 'Lex extrait et normalise les textes qu’il montre, et chaque article cité indique sa source officielle.',
       }),
       hosting: Object.freeze({
         heading: 'Hébergement',
@@ -824,43 +843,28 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Protection des données',
     eyebrow: 'À propos de ce site',
     heading: 'Protection des données',
-    intro: 'Les données personnelles que Lex traite lorsque vous le consultez, lorsque vous écrivez à son éditeur et lorsqu’un acte publié vous nomme, et les droits dont vous disposez.',
+    intro: 'Ce qu’il advient de vos données lorsque vous consultez Lex : il ne vous en demande aucune, ne dépose aucun cookie et ne conserve rien qui vous concerne.',
     sections: Object.freeze({
-      controller: Object.freeze({
-        heading: 'Responsable du traitement',
-        text: 'Le responsable du traitement est l’éditeur de Lex, {publisherName}, {publisherAddress}. Pour toute question sur vos données, ou pour exercer l’un des droits décrits ci-dessous, écrivez à {contactEmail}.',
-      }),
       reading: Object.freeze({
         heading: 'Lorsque vous consultez le site',
-        request: 'Chaque page que vous ouvrez et chaque recherche que vous envoyez est une requête de votre navigateur au serveur de ce site. La requête comporte l’adresse IP de votre appareil, l’adresse de la page et les informations techniques que tout navigateur envoie ; une recherche comporte les mots que vous avez saisis, dans le corps de la requête. Microsoft, qui héberge le site, achemine la requête jusqu’au serveur, et sa réponse jusqu’à vous.',
+        request: 'Chaque page que vous ouvrez et chaque recherche que vous envoyez est une requête de votre navigateur au serveur de ce site. La requête comporte l’adresse IP de votre appareil, l’adresse de la page et les informations techniques que tout navigateur envoie. Les mots d’une recherche sont envoyés dans le corps de la requête, jamais dans l’adresse de la requête ; un lien qui conserve une recherche la contient après « # », dans une partie que votre navigateur n’envoie jamais.',
+        host: 'Microsoft, qui héberge le site, achemine chaque requête jusqu’au serveur et sa réponse jusqu’à vous, et traite à cette fin les données de connexion nécessaires, selon ses propres conditions.',
         kept: 'Le serveur n’utilise la requête que pour y répondre, et n’en conserve rien une fois qu’il a répondu : il ne tient aucun journal des accès ni aucun relevé de ce qui est lu ou recherché, et l’hébergement est configuré sans stockage de journaux ni service de surveillance qui conserverait les requêtes. Cela est vérifié : le serveur est soumis à des requêtes portant des valeurs repérables (une expression recherchée, une adresse, le nom d’un navigateur), dont aucune ne doit apparaître dans ce qu’il écrit.',
-        basis: 'La base juridique est l’intérêt légitime de l’éditeur de Lex à proposer le site à ses lecteurs (article 6, paragraphe 1, point f), du règlement général sur la protection des données, règlement (UE) 2016/679).',
+        nothingHeld: 'Lex ne propose ni compte ni inscription : il ne sait donc jamais qui vous êtes. Comme il ne conserve rien d’une visite, il ne détient rien vous concernant qu’il pourrait montrer, rectifier ou effacer.',
       }),
       nothingElse: Object.freeze({
         heading: 'Ni cookie, ni traceur, ni autre site',
         cookies: 'Le site ne dépose aucun cookie et n’écrit rien dans le stockage de votre navigateur (voir la {cookiesPage}). Il ne charge rien depuis un autre site : ni mesure d’audience, ni publicité, ni police de caractères, script ou image provenant d’ailleurs.',
         links: 'Les liens vers les sites des éditeurs, comme Legilux et EUR-Lex, sont des liens ordinaires. Si vous en suivez un, votre navigateur s’adresse directement à ce site, selon la politique de protection des données propre à celui-ci ; Lex demande à votre navigateur de ne pas indiquer à ce site de quelle page vous venez.',
       }),
-      email: Object.freeze({
-        heading: 'Lorsque vous écrivez à l’éditeur de Lex',
-        use: 'Si vous écrivez à {contactEmail}, l’éditeur de Lex reçoit votre adresse électronique, votre message et tout ce que vous y joignez, et ne les utilise que pour vous répondre et, si vous signalez une erreur, pour corriger le site. Veuillez ne faire figurer dans votre message aucune donnée personnelle dont il n’a pas besoin.',
-        basis: 'La base juridique est l’intérêt légitime de l’éditeur de Lex à répondre et à maintenir le site exact (article 6, paragraphe 1, point f), du règlement). Votre message est conservé {retention} après la clôture de la question qu’il soulève, puis supprimé.',
-      }),
       named: Object.freeze({
         heading: 'Personnes nommées dans les actes publiés',
         why: 'Certains actes publiés nomment des personnes, par exemple une loi conférant la nationalité. Lex reproduit les textes tels que les journaux officiels les publient, le Journal officiel du Grand-Duché de Luxembourg et le Journal officiel de l’Union européenne, afin que le droit puisse être lu à une date et vérifié auprès de sa source officielle.',
-        basis: 'La base juridique est l’intérêt légitime de l’éditeur de Lex et du public à l’accès au droit tel que publié (article 6, paragraphe 1, point f), du règlement).',
         searchEngines: 'Les moteurs de recherche ne sont autorisés à indexer la page d’un acte qu’une fois qu’une vérification a constaté que l’acte ne nomme aucune personne privée ; la page de tout autre acte leur demande de ne pas l’indexer.',
-        objection: 'Si un acte publié vous nomme et que vous vous opposez à ce que son texte soit montré ici, écrivez à {contactEmail}. L’éditeur de Lex examinera votre opposition et y répondra.',
-      }),
-      processors: Object.freeze({
-        heading: 'Qui d’autre traite les données',
-        text: 'Microsoft héberge le site sur son service Microsoft Azure, dans la région France Central, en France, et traite les requêtes pour le compte de l’éditeur de Lex, en qualité de sous-traitant, selon ses propres conditions de protection des données. Un courrier électronique que vous envoyez est conservé par le fournisseur de messagerie de l’éditeur de Lex. L’éditeur de Lex ne vend aucune donnée et n’en communique aucune à d’autres fins.',
       }),
       rights: Object.freeze({
         heading: 'Vos droits',
-        ask: 'Vous pouvez demander à l’éditeur de Lex l’accès à vos données personnelles, leur rectification ou leur effacement et la limitation de leur traitement, et vous pouvez vous opposer à leur traitement (articles 15 à 18 et 21 du règlement). Écrivez à {contactEmail}. Comme le site ne conserve aucun relevé des visites, il ne détient rien d’une visite qu’il pourrait montrer ou effacer.',
-        complaint: 'Vous pouvez aussi introduire une réclamation auprès de la Commission nationale pour la protection des données (CNPD), 15, Boulevard du Jazz, L-4370 Belvaux, {cnpdSite}.',
+        complaint: 'Vous pouvez introduire une réclamation auprès de la Commission nationale pour la protection des données (CNPD), {cnpdSite}.',
       }),
     }),
   }),
@@ -868,30 +872,28 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Conditions d’utilisation',
     eyebrow: 'À propos de ce site',
     heading: 'Conditions d’utilisation',
-    intro: 'Ce qu’est Lex, d’où viennent ses textes et à quelles conditions, ce qu’il ne promet pas, et comment signaler une erreur.',
+    intro: 'Comment Lex peut être utilisé, sous quelles licences ses textes sont montrés, ce qu’il ne promet pas et comment citer les textes.',
     sections: Object.freeze({
       what: Object.freeze({
         heading: 'Ce qu’est Lex',
         notAdvice: '{notAdvice}',
         service: 'C’est un service d’information gratuit : il montre les textes qu’il détient, aux dates auxquelles il les détient, et le dit lorsqu’il ne détient pas de texte ou pas de date. {authenticity}',
       }),
+      use: Object.freeze({
+        heading: 'Utilisation de Lex',
+        text: 'Chacun est libre de lire les textes que Lex montre, d’y faire des recherches, de les citer et de les exporter, gratuitement et sans compte.',
+      }),
       texts: Object.freeze({
         heading: 'Les textes et leurs licences',
-        luxembourg: 'Les textes luxembourgeois proviennent de Legilux, publié par le Service central de législation. Lex ne montre le texte d’un fichier que lorsque les propres données de Legilux sur ce fichier lui attribuent la licence Creative Commons Attribution 4.0 International (CC BY 4.0) ; pour tout autre fichier, il montre le lien officiel et non le texte.',
-        europe: 'Les textes de l’UE proviennent de l’Office des publications de l’Union européenne et portent, en anglais, sa mention de la source, « {eurlexAcknowledgement} ». Ils sont réutilisés comme la politique de réutilisation de l’Union européenne le permet (décision 2011/833/UE de la Commission relative à la réutilisation des documents de la Commission).',
-        reuse: 'Lex extrait et normalise les textes qu’il montre, et chaque article cité indique sa source officielle. Ni Legilux ni l’Office des publications n’approuvent Lex. Les présentes conditions n’ajoutent aucune restriction à la réutilisation des textes que leurs propres licences permettent.',
+        licences: 'Chaque texte conserve la licence de sa source : la licence Creative Commons Attribution 4.0 International (CC BY 4.0) pour les textes luxembourgeois que Lex montre, et la politique de réutilisation de l’Union européenne (décision 2011/833/UE de la Commission) pour les textes de l’UE. Les {legalNoticePage} indiquent d’où viennent les textes et la mention de la source que chacun porte. Les présentes conditions n’ajoutent aucune restriction à la réutilisation des textes que leurs propres licences permettent.',
       }),
       warranty: Object.freeze({
         heading: 'Absence de garantie',
-        text: 'Lex est proposé tel quel. L’éditeur de Lex ne garantit pas que les textes soient complets, à jour ou exempts d’erreurs, ni que le site soit toujours accessible. Vérifiez le texte officiel avant de vous y fier. Rien dans les présentes conditions n’exclut ni ne limite une responsabilité que la loi ne permet pas d’exclure ou de limiter.',
+        text: 'Lex est proposé tel quel. Il ne garantit pas que les textes soient complets, à jour ou exempts d’erreurs, ni que le site soit toujours accessible. Vérifiez le texte officiel avant de vous y fier. Rien dans les présentes conditions n’exclut ni ne limite une responsabilité que la loi ne permet pas d’exclure ou de limiter.',
       }),
       citing: Object.freeze({
         heading: 'Comment citer',
         text: 'Citez le texte officiel, par sa référence officielle. Lex donne, pour chaque article qu’il cite, une citation et un permalien vers le texte montré, afin que chacun puisse vérifier le texte cité auprès de sa source officielle.',
-      }),
-      errors: Object.freeze({
-        heading: 'Signaler une erreur',
-        text: 'Si un texte que Lex montre diffère de sa source officielle, ou si une page dit quelque chose d’inexact, écrivez à {contactEmail} en indiquant l’adresse de la page. Veuillez ne faire figurer dans votre signalement aucune donnée personnelle dont il n’a pas besoin.',
       }),
     }),
   }),
@@ -899,7 +901,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Déclaration d’accessibilité',
     eyebrow: 'À propos de ce site',
     heading: 'Déclaration d’accessibilité',
-    intro: 'Le degré d’accessibilité de Lex, ce qui a été fait, ce qui n’a pas encore été vérifié et comment signaler un obstacle.',
+    intro: 'Le degré d’accessibilité de Lex, ce qui a été fait et ce qui n’a pas encore été vérifié.',
     sections: Object.freeze({
       status: Object.freeze({
         heading: 'État de conformité',
@@ -926,13 +928,9 @@ export const LIVE_CHROME_FR = Object.freeze({
           pdf: 'Les fichiers exportés en PDF ne sont pas balisés, de sorte qu’un lecteur d’écran ne peut pas en suivre la structure ; l’export JSON contient le même texte.',
         }),
       }),
-      report: Object.freeze({
-        heading: 'Signaler un obstacle',
-        text: 'Si quelque chose sur Lex vous fait obstacle, ou si vous avez besoin d’un texte sous une autre forme, écrivez à {contactEmail} en indiquant l’adresse de la page et ce qui vous a fait obstacle.',
-      }),
       law: Object.freeze({
         heading: 'La loi',
-        text: 'Au Luxembourg, la {accessibilityLaw} fixe les règles d’accessibilité des organismes du secteur public. Lex est édité par une personne privée, et non par un organisme du secteur public, et publie cette déclaration de sa propre initiative.',
+        text: 'Au Luxembourg, la {accessibilityLaw} fixe les règles d’accessibilité des organismes du secteur public. Lex n’est pas édité par un organisme du secteur public et publie cette déclaration de sa propre initiative.',
       }),
       prepared: Object.freeze({
         heading: 'Établissement de cette déclaration',

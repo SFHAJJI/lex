@@ -22,11 +22,11 @@
 //   finds its work as it does without them (`accentedTitleFailures`; the image carries no language library);
 // - V2 absent: every route V2 served answers 404, except where V3 serves the same path from its own pages;
 // - the legal pages (the plan's item 7.1; `legal-pages.mjs`): each of the ten the release image holds answers 200 with the
-//   image's own bytes, the page's CSP and no cookie; while one still says a placeholder (a detail the owner has not filled
-//   in `legal-publisher.mjs`), the probe says so beside its result, and with `--opening` (every `-Public` deployment) it
-//   fails, as it does when the image holds none of them. `--opening` with no `--release` is the opening's own check
-//   (`deploy.ps1 -Open`): the site's served legal pages, each 200, without a cookie and saying no placeholder, or the site
-//   is not opened (`openingFailures`);
+//   image's own bytes, the page's CSP and no cookie; while one shows what the owner's decision of 2026-10-19 keeps off the
+//   site (an e-mail address, a mail or telephone link, a placeholder a template left, a postcode: `SHOWN_NOWHERE`), the
+//   probe says so beside its result, and with `--opening` (every `-Public` deployment) it fails, as it does when the image
+//   holds none of them. `--opening` with no `--release` is the opening's own check (`deploy.ps1 -Open`): the site's served
+//   legal pages, each 200, without a cookie and showing none of those, or the site is not opened (`openingFailures`);
 // - no cookie: neither the home page nor a legal page sets one (the cookies page says no page does);
 // - the browser probes (`--browser`): the journey's real-mount steps through a browser against the revision, each
 //   page held to what the API answers its request, its hydration, console, paint and security headers, and every
@@ -291,8 +291,8 @@ export async function servedPageFailures(origin, { web, card, corpusSha256, note
 /**
  * The legal pages a revision serves (the plan's item 7.1), as failures: each of the ten the release image holds
  * (`LEGAL_PAGE_PATHS`), asked of the revision, must answer 200 with the image's own bytes, the page's CSP (`policy`) and no
- * cookie. What the pages still lack before the opening (an image holding none of them, a placeholder still said) is said in
- * `notes`, and with `opening` it fails: every `-Public` deployment holds its candidate to it.
+ * cookie. What keeps the pages from the opening (an image holding none of them, a page showing anything of `SHOWN_NOWHERE`)
+ * is said in `notes`, and with `opening` it fails: every `-Public` deployment holds its candidate to it.
  */
 export async function legalPageFailures(origin, web, { policy = `${cspValue()}; frame-ancestors 'none'`, notes = [], opening = false } = {}) {
   const failures = [];
@@ -563,7 +563,7 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
     const failures = await openingFailures(origin.replace(/\/+$/, ""));
     for (const failure of failures) console.error(`- ${failure}`);
     console.log(failures.length === 0
-      ? `the legal pages at ${origin} are ready to publish: each of the ${LEGAL_PAGE_PATHS.length} answers, sets no cookie and says no placeholder`
+      ? `the legal pages at ${origin} are ready to publish: each of the ${LEGAL_PAGE_PATHS.length} answers, sets no cookie and shows no e-mail address, mail or telephone link, placeholder or postcode`
       : `${failures.length} reason(s) the site may not open`);
     process.exit(failures.length === 0 ? 0 : 1);
   }
