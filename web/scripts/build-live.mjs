@@ -15,7 +15,11 @@
 // send it to a language. German and Luxembourgish are `locale-de.html` and `locale-lb.html`, at the root,
 // which say they are not reviewed. Each interface language's 404 page is `not-found/{language}.html` (the search
 // screen under the page's own words, script `client-live-search.js`) and its maintenance page
-// `maintenance/{language}.html` (no script); neither server serves either at that address (`not-found.mjs`).
+// `maintenance/{language}.html` (no script); neither server serves either at that address (`not-found.mjs`). The five legal
+// pages every footer links (the plan's item 7.1; `legal-pages.mjs`) stand under each language too, `legal-notice.html`,
+// `privacy.html`, `terms.html`, `accessibility.html` and `cookies.html`, with no script; the build refuses the publisher's
+// details when one is filled in a form the pages cannot print (`malformedPublisherFailures`), and builds an unfilled one as
+// its placeholder, which only the opening refuses.
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -24,6 +28,8 @@ import { tokenCss } from "./design-tokens.mjs";
 import { CHROME_LOCALES } from "./localization.mjs";
 import { REVIEWED_CHROME_LOCALES } from "./locale-unavailable.mjs";
 import { MAINTENANCE_DIRECTORY, NOT_FOUND_DIRECTORY } from "./not-found.mjs";
+import { LEGAL_PAGES, malformedPublisherFailures } from "./legal-pages.mjs";
+import { LEGAL_PUBLISHER } from "./legal-publisher.mjs";
 
 const source = new URL("../src/", import.meta.url);
 export const LIVE_DESTINATION = new URL("../dist-live/", import.meta.url);
@@ -46,7 +52,7 @@ const PAGES = Object.freeze([
  * `/fr/`: the specification of record's R61; the root sends a reader to one of them), each page and the
  * script that hydrates it compiled for that language.
  */
-async function buildPages(destination, { card, locale, buildTag = "" }) {
+async function buildPages(destination, { card, locale, buildTag = "", publisher }) {
   const { bundle, bundleClient } = await import("./react-build.mjs");
   const english = locale === "en";
   const options = english ? {} : { define: { __LEX_CHROME_LOCALE__: JSON.stringify(locale) } };
@@ -65,6 +71,9 @@ async function buildPages(destination, { card, locale, buildTag = "" }) {
   const { bundleServerRenderer } = await import("./react-build.mjs");
   await mkdir(new URL("ssr/", destination), { recursive: true });
   await cp(await bundleServerRenderer("app/ssr-entry.jsx", `ssr-entry${suffix}.js`, options), new URL(`ssr/${locale}.js`, destination));
+  // The five legal pages, each a static page of this language, with no script.
+  const legal = await import(pathToFileURL(await bundle("app/LegalPage.jsx", `LegalPage${suffix}.mjs`, options)).href);
+  for (const { key, file } of LEGAL_PAGES) await writeFile(new URL(file, out), legal.renderLiveLegalPage(key, { publisher }), "utf8");
   // This language's 404 page, which both servers answer a page request nothing claims with (R60; `not-found.mjs`), and its
   // maintenance page, for the deploy kit: each under a directory of its own at the root, which neither server serves.
   const notFound = await import(pathToFileURL(await bundle("app/live-not-found-page.jsx", `live-not-found-page${suffix}.mjs`, options)).href);
@@ -77,9 +86,12 @@ async function buildPages(destination, { card, locale, buildTag = "" }) {
 
 /**
  * Builds the live pages into `destination`. `card` is the evaluation card the Trust and Coverage page carries: the
- * platform's rendered card when none is given, the release card when a release build hands one (ruling 2).
+ * platform's rendered card when none is given, the release card when a release build hands one (ruling 2). `publisher` is
+ * the publisher's details the legal pages print, the data file's (`legal-publisher.mjs`) unless a test hands others.
  */
-export async function buildLive(destination = LIVE_DESTINATION, { card, buildTag = "" } = {}) {
+export async function buildLive(destination = LIVE_DESTINATION, { card, buildTag = "", publisher = LEGAL_PUBLISHER } = {}) {
+  const malformed = malformedPublisherFailures(publisher);
+  if (malformed.length > 0) throw new Error(`the publisher's details in web/scripts/legal-publisher.mjs cannot be printed: ${malformed.join("; ")}`);
   await rm(destination, { force: true, recursive: true });
   await mkdir(destination, { recursive: true });
   for (const asset of ["styles.css", "favicon.svg", "fonts"]) {
@@ -93,7 +105,7 @@ ${tokenCss()}`, "utf8");
   // Its own outputs in the intermediate directory, never `app.mjs` and never a reset of the
   // directory: the tests import `app.mjs` from there in parallel processes, and rewriting it under
   // them (as this build first did) fails whichever test file loads it mid-write.
-  await buildPages(destination, { card, locale: "en", buildTag });
+  await buildPages(destination, { card, locale: "en", buildTag, publisher });
   // The card as JSON at its stable route, for machines (36 s6): the same card the page renders.
   const { CARD_ROUTE } = await import("./evaluation-card.mjs");
   const platformCard = JSON.parse(await readFile(new URL("../../schemas/v3-platform/evaluation-card.json", import.meta.url), "utf8"));
@@ -102,7 +114,7 @@ ${tokenCss()}`, "utf8");
   // Every other reviewed interface language, under its own path, its bundles compiled for it
   // (Decision 41): French, reviewed by Claude (AI reviewer) under the owner's delegation of
   // 2026-10-02, at `/fr/`.
-  for (const locale of REVIEWED_CHROME_LOCALES.filter((code) => code !== "en")) await buildPages(destination, { card, locale, buildTag });
+  for (const locale of REVIEWED_CHROME_LOCALES.filter((code) => code !== "en")) await buildPages(destination, { card, locale, buildTag, publisher });
   // One static page per chrome locale without reviewed copy: localization_unavailable, in English and
   // labelled English, with no script (Decision 41; the launch contract's DE and LB line).
   // Tagged as every other intermediate bundle is: an untagged name was one file every concurrent build rewrote, and a test

@@ -18,8 +18,9 @@ import { redirectFor } from "../scripts/permalinks.mjs";
 import { ROBOTS_KEPT_OUT } from "../scripts/search-engines.mjs";
 import {
   NOT_FOUND_PROBE, REMOTE_PRIVACY_NOTE, accentedTitleFailures, browserFailures, clockFailures, deployedReleaseFailures, homePageFailures,
-  liveFilesOf, luxembourgTodayNote, remoteRevision, renderedHomePage, revisionFailures,
+  legalPageFailures, liveFilesOf, luxembourgTodayNote, remoteRevision, renderedHomePage, revisionFailures,
 } from "../scripts/deploy-probe.mjs";
+import { LEGAL_PAGE_PATHS, openingFailures } from "../scripts/legal-pages.mjs";
 import { rehearsalKey, signRehearsal } from "../scripts/image-rehearsal.mjs";
 import { writeLayout, writeTar } from "../scripts/image-reproducible.mjs";
 import { ASSETS, imageSignatureAsset, publishRelease, releaseVersion } from "../scripts/release-assets.mjs";
@@ -100,7 +101,7 @@ async function revision(change = {}) {
   const answer = {
     page: PAGE, card: CARD, corpus: CORPUS, headers: HEADERS, refusal: null, extra: new Map(), root: { status: 302, location: "/fr/", vary: "Accept-Language" },
     ready: { status: 204, cache: "no-store" }, observedAt: () => observedAt(Date.now()), folds: true, titlesHeld: true,
-    notFound: { status: 404, body: NOT_FOUND_PAGE }, ...change,
+    notFound: { status: 404, body: NOT_FOUND_PAGE }, legal: new Map(), ...change,
   };
   const server = createServer((request, response) => {
     const path = request.url.split("?")[0];
@@ -142,6 +143,11 @@ async function revision(change = {}) {
       // The release's 404 page, as both servers answer an address nothing claims (R60).
       response.writeHead(answer.notFound.status, { "content-type": "text/html; charset=utf-8", ...answer.headers });
       response.end(answer.notFound.body);
+    } else if (request.method === "GET" && answer.legal.has(path)) {
+      // A legal page (the plan's item 7.1): its bytes, with the page's headers and any the case adds (a cookie).
+      const { status = 200, body, headers = {} } = answer.legal.get(path);
+      response.writeHead(status, { "content-type": "text/html; charset=utf-8", ...answer.headers, ...headers });
+      response.end(body);
     } else if (answer.extra.has(`${request.method} ${path}`)) {
       response.writeHead(200, { "content-type": "text/plain" });
       response.end(answer.extra.get(`${request.method} ${path}`));
@@ -274,9 +280,11 @@ test("beside its pass, the probe says the revision's date in Luxembourg and the 
   try {
     const notes = [];
     assert.deepEqual(await revisionFailures(served.origin, { web: WEB, card: CARD, corpusSha256: CORPUS, notes }), []);
-    assert.equal(notes.length, 2, JSON.stringify(notes));
+    assert.equal(notes.length, 3, JSON.stringify(notes));
     assert.match(notes[0], /^the revision's clock read \S+: \d{4}-\d{2}-\d{2} in Luxembourg, UTC\+0[12]:00, /);
     assert.equal(notes[1], `an accented title: "${TITLE}" (${WORK}), asked as published, in capitals and decomposed`);
+    // This stand-in's release holds no legal page: said, not failed, until the opening (the plan's item 7.1).
+    assert.match(notes[2], /^the legal pages are not ready to publish, so the site may not open \(deploy\.ps1 -Open and -Public refuse it\): the release holds no \/fr\/legal-notice\.html; /);
   } finally {
     await served.close();
   }
@@ -441,4 +449,111 @@ test("the browser probes run the journey's real-mount steps against the revision
   const server = remoteRevision("https://candidate.example");
   assert.deepEqual([server.output(), await server.fileWatch.stop(), await server.changedFiles()], ["", [], []]);
   assert.match(REMOTE_PRIVACY_NOTE, /privacy is not observed here/);
+});
+
+// The legal pages (the plan's item 7.1; `legal-pages.mjs`): a release's ten, each with what it says, filled or not.
+const legalPage = (path, filled) => Buffer.from(`<!doctype html><title>${path}</title><p>${filled ? "Lex is published by A. Publisher." : 'Lex is published by <span data-legal-placeholder="PUBLISHER_NAME">«PUBLISHER_NAME»</span>.'}</p>\n`);
+const legalWeb = (filled) => LEGAL_PAGE_PATHS.map((path) => [path.slice(1), legalPage(path, filled)]);
+const servedLegal = (web, change = () => ({})) => new Map(web.map(([file, body]) => [`/${file}`, { body, ...change(`/${file}`) }]));
+
+test("a revision serves the release's own legal pages; one still saying a placeholder is said beside the pass, and fails a -Public deployment's probe", async () => {
+  for (const filled of [true, false]) {
+    const web = [...WEB, ...legalWeb(filled)];
+    const served = await revision({ legal: servedLegal(legalWeb(filled)) });
+    try {
+      const notes = [];
+      assert.deepEqual(await revisionFailures(served.origin, { web, card: CARD, corpusSha256: CORPUS, notes }), [], `filled ${filled}: the private copy's probe passes`);
+      const said = notes.filter((note) => note.startsWith("the legal pages are not ready to publish"));
+      assert.equal(said.length, filled ? 0 : 1, `filled ${filled}: ${JSON.stringify(notes)}`);
+      if (!filled) assert.match(said[0], /\/fr\/cookies\.html still says «PUBLISHER_NAME»/, "each page's placeholder is named");
+      const opening = await revisionFailures(served.origin, { web, card: CARD, corpusSha256: CORPUS, opening: true });
+      assert.equal(opening.length, filled ? 0 : LEGAL_PAGE_PATHS.length, `filled ${filled}, opening: ${JSON.stringify(opening)}`);
+      assert.ok(opening.every((failure) => /^the legal pages are not ready to publish, so the site may not open: \/(?:en|fr)\/[a-z-]+\.html still says «PUBLISHER_NAME»/.test(failure)), JSON.stringify(opening));
+    } finally {
+      await served.close();
+    }
+  }
+  // A release that holds no legal page at all (one built before them) may be deployed privately, never publicly.
+  const bare = await revision();
+  try {
+    assert.deepEqual(await revisionFailures(bare.origin, { web: WEB, card: CARD, corpusSha256: CORPUS }), []);
+    const opening = await revisionFailures(bare.origin, { web: WEB, card: CARD, corpusSha256: CORPUS, opening: true });
+    assert.deepEqual(opening, LEGAL_PAGE_PATHS.map((path) => `the legal pages are not ready to publish, so the site may not open: the release holds no ${path}`));
+  } finally {
+    await bare.close();
+  }
+});
+
+test("a legal page served with other bytes, without the page's CSP or with a cookie fails, and so does a home page with a cookie", async () => {
+  const web = [...WEB, ...legalWeb(true)];
+  const cases = [
+    ["another page at the address", { legal: servedLegal(legalWeb(true), (path) => (path === "/en/privacy.html" ? { body: Buffer.from("<!doctype html><p>V2's privacy page</p>") } : {})) }, /^GET \/en\/privacy\.html answered 200 with a body that is not the release image's own legal page/],
+    ["no legal page served", { legal: new Map() }, /^GET \/en\/legal-notice\.html answered 404, not the legal page$/],
+    ["a page without the page's CSP", { legal: servedLegal(legalWeb(true), (path) => (path === "/fr/terms.html" ? { headers: { "content-security-policy": "default-src *" } } : {})) }, /^GET \/fr\/terms\.html carries the CSP default-src \*/],
+    ["a page that sets a cookie", { legal: servedLegal(legalWeb(true), (path) => (path === "/fr/cookies.html" ? { headers: { "set-cookie": "affinity=1" } } : {})) }, /^GET \/fr\/cookies\.html sets a cookie/],
+    ["a home page that sets a cookie", { legal: servedLegal(legalWeb(true)), headers: { ...HEADERS, "set-cookie": "affinity=1" } }, /^GET \/fr\/ sets a cookie/],
+  ];
+  for (const [what, change, expected] of cases) {
+    const served = await revision(change);
+    try {
+      const failures = await revisionFailures(served.origin, { web, card: CARD, corpusSha256: CORPUS });
+      assert.ok(failures.some((failure) => expected.test(failure)), `${what}: ${JSON.stringify(failures)}`);
+    } finally {
+      await served.close();
+    }
+  }
+  // Held alone, as the probe holds them.
+  const served = await revision({ legal: servedLegal(legalWeb(true)) });
+  try {
+    assert.deepEqual(await legalPageFailures(served.origin, legalWeb(true), { opening: true }), []);
+  } finally {
+    await served.close();
+  }
+});
+
+test("the opening's check fails closed: a placeholder, a page that does not answer as a page, a cookie, or a site it cannot reach", async () => {
+  const filled = await revision({ legal: servedLegal(legalWeb(true)) });
+  try {
+    assert.deepEqual(await openingFailures(filled.origin), [], "ten pages, filled, served as pages without a cookie: the site may open");
+  } finally {
+    await filled.close();
+  }
+  const cases = [
+    ["a placeholder", { legal: servedLegal(legalWeb(false)) }, /still says «PUBLISHER_NAME»/, LEGAL_PAGE_PATHS.length],
+    ["a detail marked unfilled, its token cut", { legal: servedLegal(legalWeb(true), (path) => (path === "/fr/privacy.html" ? { body: Buffer.from('<p><span data-legal-placeholder="CONTACT_EMAIL"></span></p>') } : {})) }, /^\/fr\/privacy\.html still says a detail marked data-legal-placeholder/, 1],
+    ["a page missing", { legal: servedLegal(legalWeb(true), (path) => (path === "/en/terms.html" ? { status: 404 } : {})) }, /^\/en\/terms\.html answered 404 text\/html; charset=utf-8, not 200 with a page$/, 1],
+    ["a cookie", { legal: servedLegal(legalWeb(true), (path) => (path === "/en/accessibility.html" ? { headers: { "set-cookie": "affinity=1" } } : {})) }, /^\/en\/accessibility\.html sets a cookie/, 1],
+  ];
+  for (const [what, change, expected, count] of cases) {
+    const served = await revision(change);
+    try {
+      const failures = await openingFailures(served.origin);
+      assert.equal(failures.length, count, `${what}: ${JSON.stringify(failures)}`);
+      assert.ok(failures.every((failure) => expected.test(failure)), `${what}: ${JSON.stringify(failures)}`);
+    } finally {
+      await served.close();
+    }
+  }
+  // Nothing listens there: every page is a failure, so a site whose pages cannot be read is never opened.
+  const unreachable = await openingFailures("http://127.0.0.1:9");
+  assert.equal(unreachable.length, LEGAL_PAGE_PATHS.length);
+  assert.ok(unreachable.every((failure) => / could not be asked \(.+\), so the site is not opened$/.test(failure)), JSON.stringify(unreachable));
+});
+
+test("the probe's command line runs the opening's check alone with --opening and no release, and fails while a page says a placeholder", async () => {
+  const run = (args) => new Promise((resolve) => {
+    execFile(process.execPath, [fileURLToPath(new URL("../scripts/deploy-probe.mjs", import.meta.url)), ...args], { timeout: 60_000 }, (error, stdout, stderr) => {
+      resolve({ code: error?.code ?? 0, stdout, stderr });
+    });
+  });
+  for (const [filled, code] of [[true, 0], [false, 1]]) {
+    const served = await revision({ legal: servedLegal(legalWeb(filled)) });
+    try {
+      const result = await run(["--opening", "--origin", served.origin]);
+      assert.equal(result.code, code, `filled ${filled}: ${result.stdout}${result.stderr}`);
+      assert.match(result.stdout, filled ? /are ready to publish: each of the 10 answers, sets no cookie and says no placeholder/ : /^10 reason\(s\) the site may not open$/m);
+    } finally {
+      await served.close();
+    }
+  }
 });

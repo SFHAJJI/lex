@@ -21,6 +21,7 @@ import { CHROME_LOCALE, fillText, liveChrome, livePath } from '../scripts/live-c
 import { INTERFACE_LANGUAGES, lawPageLinks } from '../scripts/permalinks.mjs';
 import { jsonInScript } from '../scripts/initial-answer.mjs';
 import { CANONICAL_HOST } from '../scripts/routes.mjs';
+import { LEGAL_PAGES } from '../scripts/legal-pages.mjs';
 
 /** The marker that says, in the DOM, that nothing on this page is law. */
 export const SYNTHETIC_MARKER = 'lex-v3-synthetic-preview';
@@ -76,6 +77,8 @@ const ALTERNATE_PAGES = Object.freeze({
   'live-radar': 'radar.html',
   'live-export': 'export.html',
   'live-coverage': 'coverage.html',
+  // The five legal pages (the plan's item 7.1), each the same page in each language.
+  ...Object.fromEntries(LEGAL_PAGES.map((page) => [page.state, page.file])),
 });
 
 /**
@@ -119,7 +122,7 @@ export function alternateLinks(state, lawPath = null) {
  * build's banner carried, which says what a live page is (it asks the server it came from) and is how the
  * pages and their tests tell a live page from a preview.
  */
-export function SiteHeader({ state, locale }) {
+export function SiteHeader({ state, locale, localePage = null }) {
   const site = liveChrome().site;
   return (
     <header className="site-header" data-live={LIVE_MARKER}>
@@ -140,19 +143,21 @@ export function SiteHeader({ state, locale }) {
           ))}
         </ul>
       </nav>
-      <LocaleNav current={locale} />
+      <LocaleNav current={locale} page={localePage} />
     </header>
   );
 }
 
 /**
  * The footer every live page carries: what Lex is not (the specification of record's R50, word for word, which replaced
- * "Documentation, not legal advice."), which texts are authentic, and where the texts come from, then what it holds. The
+ * "Documentation, not legal advice."), which texts are authentic, and where the texts come from, then what it holds, and
+ * the five legal pages (the plan's item 7.1: "linked from every footer"), the page that is one of them marked current. The
  * development build's banner said "not a release and not legal advice"; the first half was the build's and went with it,
  * the second is the product's and is said here.
  */
-export function SiteFooter() {
-  const site = liveChrome().site;
+export function SiteFooter({ state = null }) {
+  const copy = liveChrome();
+  const site = copy.site;
   return (
     <footer className="site-footer">
       <p data-not-advice="">{site.notAdvice}</p>
@@ -161,6 +166,15 @@ export function SiteFooter() {
       <p>
         <a href={livePath('coverage.html')}>{site.coverage}</a>
       </p>
+      <nav aria-label={copy.legal.menu} className="legal-nav" data-legal-nav="">
+        <ul>
+          {LEGAL_PAGES.map((page) => (
+            <li key={page.key}>
+              <a href={livePath(page.file)} aria-current={page.state === state ? 'page' : undefined}>{copy[page.key].title}</a>
+            </li>
+          ))}
+        </ul>
+      </nav>
     </footer>
   );
 }
@@ -198,6 +212,10 @@ export function Document({
   indexing = 'never',
   // A law's page's schema.org Legislation markup (`structured-data.mjs`), written as JSON-LD in the head, or null.
   structuredData = null,
+  // The page's file under each interface language, for a page that ships no script to point its language links at itself
+  // in the other language (the legal pages), or null: the links then lead to each language's home page as built, and the
+  // page's script points them at the same page once it has loaded (`client.jsx`).
+  localePage = null,
   children,
 }) {
   // Each axis names itself. Both guards used to raise the same sentence, so a test feeding an
@@ -270,9 +288,9 @@ export function Document({
       <body>
         {/* A live page sits in the site (its header, with the interface languages, an unreviewed one answering
             localization_unavailable, and its footer); a preview page under the synthetic banner. */}
-        {banner === 'live' ? <SiteHeader state={state} locale={locale} /> : <SyntheticBanner />}
+        {banner === 'live' ? <SiteHeader state={state} locale={locale} localePage={localePage} /> : <SyntheticBanner />}
         <main id="main">{children}</main>
-        {banner === 'live' ? <SiteFooter /> : null}
+        {banner === 'live' ? <SiteFooter state={state} /> : null}
       </body>
     </html>
   );

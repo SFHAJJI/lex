@@ -46,10 +46,15 @@ Promotion (moving traffic to the candidate) is printed for the owner and never r
 
 -Remove deactivates one revision of the app and exits: the removal step on its own.
 
--Open is the owner's opening, on the opening day and never otherwise: it removes every address rule, reads back that
-ingress admits everyone, and only then says the site is open; if it cannot list the rules, or the read-back still finds
-one, it stops and says so. From then on every deployment says -Public. (The plan's item 0.5: the first version
-restricted ingress on a first deployment only, so a second deployment would have opened the private copy to everyone.)
+-Open is the owner's opening, on the opening day and never otherwise: it first asks the site's ten legal pages
+(`web/scripts/deploy-probe.mjs --opening`, the plan's item 7.1) and stops, removing nothing, unless each answers, sets no
+cookie and says no placeholder (a publisher's detail the owner fills in `web/scripts/legal-publisher.mjs`); the check fails
+closed, so pages it cannot read keep the site private. Then it removes every address rule, reads back that ingress admits
+everyone, and only then says the site is open; if it cannot list the rules, or the read-back still finds one, it stops and
+says so. From then on every deployment says -Public, and a -Public deployment's probe holds the candidate's legal pages to
+the same rule (`--opening`), so a release with an unfilled detail is never promoted to the open site. (The plan's item 0.5:
+the first version restricted ingress on a first deployment only, so a second deployment would have opened the private copy
+to everyone.)
 
 .EXAMPLE
 pwsh -File deploy/deploy.ps1 -Subscription <id> -ResourceGroup rg-lex-v3 -EnvironmentId <managed environment id> `
@@ -91,6 +96,15 @@ $AllowedCidr = Get-AllowedCidrs $AllowedCidr
 
 function Step([string] $what) { Write-Host "== $what" }
 
+# Without -BrowserProbe the probes run with the browser trap loaded first, so nothing they run can find or start a browser;
+# the opening's check of the legal pages runs under it too. The trap's file URL by the constructor, never a cast: on Linux a
+# cast reads `/home/...` as a relative URI, whose AbsoluteUri throws, and PowerShell turns a getter's throw into $null, so
+# `--import` took the script's path instead (CI on #979). An empty URL stops the deployment here.
+$trapPath = [System.IO.Path]::GetFullPath((Join-Path $checkout 'web/scripts/browser-trap.mjs'))
+$trapUrl = if ($IsWindows) { [System.Uri]::new($trapPath).AbsoluteUri } else { [System.Uri]::new("file://$trapPath").AbsoluteUri }
+if (-not $trapUrl -or -not $trapUrl.StartsWith('file:///')) { throw "The browser trap's file URL could not be formed ($trapUrl); nothing is deployed." }
+$nodeTrap = if ($BrowserProbe) { @() } else { @('--import', $trapUrl) }
+
 function Run([string] $display, [scriptblock] $command) {
     # Every command is shown before it runs; without -Apply it is only shown. No command line carries a secret.
     Write-Host "  > $display"
@@ -113,6 +127,14 @@ if ($Open) {
     # The owner's opening: every address rule removed, so ingress admits everyone. Never part of a deployment.
     Step "open: $AppName admits everyone"
     Run "az account set --subscription $Subscription" { az account set --subscription $Subscription }
+    # The legal pages first (the plan's item 7.1): the site opens only once each of the ten it serves answers, sets no cookie
+    # and says no placeholder. The check fails closed: an address that cannot be read, or pages that cannot be, keep it private.
+    Step "check the legal pages $AppName serves before it admits everyone"
+    $fqdn = az containerapp show -g $ResourceGroup -n $AppName --query "properties.configuration.ingress.fqdn" -o tsv
+    if ($LASTEXITCODE -ne 0 -or "$fqdn" -notmatch '^[a-z0-9.-]+$') { throw "The address of $AppName could not be read, so its legal pages could not be checked; nothing was removed, and the site stays private." }
+    Write-Host "  > node web/scripts/deploy-probe.mjs --opening --origin https://$fqdn"
+    & node @nodeTrap (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --opening --origin "https://$fqdn"
+    if ($LASTEXITCODE -ne 0) { throw "The legal pages $AppName serves are not ready to publish (above); nothing was removed, and the site stays private. The owner fills web/scripts/legal-publisher.mjs, and a release built from it is deployed, before the opening." }
     $listed = az containerapp ingress access-restriction list -g $ResourceGroup -n $AppName --query "[].name" -o tsv
     if ($LASTEXITCODE -ne 0) { throw "The address rules of $AppName could not be listed; nothing was removed, and the site stays private." }
     foreach ($rule in @($listed) | Where-Object { $_ }) {
@@ -151,14 +173,8 @@ $signerProbe = if ([string]::IsNullOrWhiteSpace($SignerIdentity)) { @() } else {
 if ($BrowserProbe -and $SkipBrowserProbe) { throw "-BrowserProbe asks for the browser probes and -SkipBrowserProbe skips them: name one." }
 # `$browserArgs`, not `$browserProbe`: PowerShell's names ignore case, and that would be the -BrowserProbe switch itself.
 $browserArgs = if ($BrowserProbe) { @('--browser') } else { @() }
-# Without them the probes run with the browser trap loaded first, so nothing they run can find or start a browser.
-# The trap's file URL by the constructor, never a cast: on Linux a cast reads `/home/...` as a relative URI, whose
-# AbsoluteUri throws, and PowerShell turns a getter's throw into $null, so `--import` took the script's path instead (CI
-# on #979). An empty URL stops the deployment here.
-$trapPath = [System.IO.Path]::GetFullPath((Join-Path $checkout 'web/scripts/browser-trap.mjs'))
-$trapUrl = if ($IsWindows) { [System.Uri]::new($trapPath).AbsoluteUri } else { [System.Uri]::new("file://$trapPath").AbsoluteUri }
-if (-not $trapUrl -or -not $trapUrl.StartsWith('file:///')) { throw "The browser trap's file URL could not be formed ($trapUrl); nothing is deployed." }
-$nodeTrap = if ($BrowserProbe) { @() } else { @('--import', $trapUrl) }
+# Once the site is open (-Public), the candidate's legal pages are held to the opening's rule: none may say a placeholder.
+$openingArgs = if ($Public) { @('--opening') } else { @() }
 
 # 1. The release, read back under the signing identity's key, before anything touches Azure.
 Step "verify the release under the signing identity's public key"
@@ -307,7 +323,7 @@ if ($Apply) {
 Step "probe the candidate"
 if (-not $Apply) {
     Write-Host "  > wait until $AppName--$suffix is provisioned, active, running and healthy"
-    Write-Host "  > node $(($nodeTrap + @('web/scripts/deploy-probe.mjs')) -join ' ') --origin https://<$AppName--$suffix's own address> --release $releasePath --public-key $keyPath $($signerProbe -join ' ') $($browserArgs -join ' ')"
+    Write-Host "  > node $(($nodeTrap + @('web/scripts/deploy-probe.mjs')) -join ' ') --origin https://<$AppName--$suffix's own address> --release $releasePath --public-key $keyPath $($signerProbe -join ' ') $($browserArgs -join ' ') $($openingArgs -join ' ')"
     if (-not $BrowserProbe) { Write-Host "  (no browser probe: only the HTTP probes would run, under the browser trap, and no page of the candidate would be walked in a browser; -BrowserProbe walks them, where a browser may run)" }
     Write-Host "== planned only: run again with -Apply to deploy (the owner's decision)"
     exit 0
@@ -343,7 +359,7 @@ while ($true) {
 }
 $origin = "https://$($state.fqdn)"
 if (-not $BrowserProbe) { Write-Host "  no browser probe (no -BrowserProbe): only the HTTP probes run, under the browser trap, and no page of the candidate is walked in a browser" }
-& node @nodeTrap (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --origin $origin --release $releasePath --public-key $keyPath @signerProbe @browserArgs
+& node @nodeTrap (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --origin $origin --release $releasePath --public-key $keyPath @signerProbe @browserArgs @openingArgs
 if ($LASTEXITCODE -ne 0) {
     # 6. The removal step: the candidate never carried traffic (or only the allowed addresses'), and is deactivated.
     Step "the probe failed: deactivate the candidate $candidate"

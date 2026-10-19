@@ -232,11 +232,22 @@ public sealed class V3WebRootTests
             File.WriteAllText(Path.Combine(directory, page), $"<!doctype html><p>{page}</p>");
         }
 
+        // The pages the table names as files (the five legal pages, in both languages), as the build writes them.
+        using (var files = SiteTable())
+        {
+            foreach (var row in files.RootElement.GetProperty("paths").EnumerateArray().Where(static row => row.TryGetProperty("file", out _)))
+            {
+                var file = row.GetProperty("file").GetString()!;
+                File.WriteAllText(Path.Combine(directory, file), $"<!doctype html><p>{file}</p>");
+            }
+        }
+
         try
         {
             var root = V3WebRoot.Open(directory)!;
             using var table = SiteTable();
             var rows = table.RootElement.GetProperty("paths").EnumerateArray().ToArray();
+            Assert.AreEqual(10, rows.Count(static row => row.TryGetProperty("file", out _)), "the five legal pages, in both languages");
             Assert.IsGreaterThan(70, rows.Length, "the table web/scripts/permalinks.mjs is held to");
             Assert.IsGreaterThanOrEqualTo(3, rows.Count(row => row.GetProperty("moved").ValueKind != JsonValueKind.Null), "the shape before R64, moved");
             foreach (var row in rows)
@@ -273,6 +284,16 @@ public sealed class V3WebRootTests
                     Assert.AreEqual(moved, context.Response.Headers.Location.ToString(), path);
                     Assert.AreEqual(0, context.Response.Headers.Vary.Count, path);
                     Assert.AreEqual("", Body(context), path);
+                    AssertPageHeaders(root, context, path);
+                }
+                else if (row.TryGetProperty("file", out var file))
+                {
+                    // A page the build writes, served as the file it is, at its own path, with a page's headers.
+                    Assert.AreEqual("/" + file.GetString(), path, "a file row names its own path");
+                    Assert.IsTrue(served, path);
+                    Assert.AreEqual(StatusCodes.Status200OK, context.Response.StatusCode, path);
+                    Assert.AreEqual("text/html; charset=utf-8", context.Response.ContentType, path);
+                    Assert.AreEqual($"<!doctype html><p>{file.GetString()}</p>", Body(context), path);
                     AssertPageHeaders(root, context, path);
                 }
                 else if (row.TryGetProperty("searchEngines", out var searchEngines))

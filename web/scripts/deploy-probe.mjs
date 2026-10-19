@@ -21,6 +21,13 @@
 // - an accented title (plan 0.8): a title the revision holds, asked for with its accents, in capitals and decomposed,
 //   finds its work as it does without them (`accentedTitleFailures`; the image carries no language library);
 // - V2 absent: every route V2 served answers 404, except where V3 serves the same path from its own pages;
+// - the legal pages (the plan's item 7.1; `legal-pages.mjs`): each of the ten the release image holds answers 200 with the
+//   image's own bytes, the page's CSP and no cookie; while one still says a placeholder (a detail the owner has not filled
+//   in `legal-publisher.mjs`), the probe says so beside its result, and with `--opening` (every `-Public` deployment) it
+//   fails, as it does when the image holds none of them. `--opening` with no `--release` is the opening's own check
+//   (`deploy.ps1 -Open`): the site's served legal pages, each 200, without a cookie and saying no placeholder, or the site
+//   is not opened (`openingFailures`);
+// - no cookie: neither the home page nor a legal page sets one (the cookies page says no page does);
 // - the browser probes (`--browser`): the journey's real-mount steps through a browser against the revision, each
 //   page held to what the API answers its request, its hydration, console, paint and security headers, and every
 //   citation verified. Privacy cannot be observed on a remote revision (its process and files are not ours to watch),
@@ -44,6 +51,7 @@ import { ASSETS, RELEASE_MANIFEST, releaseFailures } from "./release-assets.mjs"
 import { readLargeFile } from "./large-bytes.mjs";
 import { HOME_FACTS_ID, readHomeFactsValue } from "./live-home.mjs";
 import { KEPT_OUT_META, NEVER_INDEXED_META } from "./search-engines.mjs";
+import { LEGAL_PAGE_PATHS, builtLegalPageFailures, openingFailures } from "./legal-pages.mjs";
 import { luxembourgDate, luxembourgOffset, luxembourgSummerTimeEnds, luxembourgSummerTimeStarts } from "./temporal.mjs";
 
 const LIVE_PREFIX = "app/v3-web/";
@@ -179,7 +187,7 @@ export async function revisionFailures(origin, options) {
  * the card at its stable route, coverage from the release's corpus, the clock and an accented title. Every one is an HTTP
  * request; none needs a browser.
  */
-export async function servedPageFailures(origin, { web, card, corpusSha256, notes = [], now = Date.now, ask = askOperation }) {
+export async function servedPageFailures(origin, { web, card, corpusSha256, notes = [], now = Date.now, ask = askOperation, opening = false }) {
   const failures = [];
   const served = servedPaths(web);
   if (!served.has("/fr/")) return ["the release image holds no live page at /fr/, so the revision has nothing to be held to"];
@@ -201,6 +209,7 @@ export async function servedPageFailures(origin, { web, card, corpusSha256, note
   if (!/^max-age=\d+/.test(header("strict-transport-security") ?? "")) failures.push("GET /fr/ carries no HSTS");
   if (header("referrer-policy") !== "no-referrer") failures.push(`GET /fr/ carries Referrer-Policy ${header("referrer-policy")}, not no-referrer`);
   if (header("x-content-type-options") !== "nosniff") failures.push("GET /fr/ carries no nosniff");
+  if (header("set-cookie") !== null) failures.push("GET /fr/ sets a cookie, which the cookies page says no page does");
 
   // An address nothing claims is the release's own 404 page, in the language its path names, with a page's headers (R60).
   const notFound = new Map(web).get("not-found/fr.html");
@@ -257,6 +266,35 @@ export async function servedPageFailures(origin, { web, card, corpusSha256, note
   // The home page (R67): the release's own, as built or as its renderer renders this revision's coverage answer.
   if (page.status === 200) {
     failures.push(...homePageFailures(body, served.get("/fr/"), { renderer: new Map(web).get("ssr/fr.js") ?? null, coverage: envelope }));
+  }
+  failures.push(...await legalPageFailures(origin, web, { policy, notes, opening }));
+  return failures;
+}
+
+/**
+ * The legal pages a revision serves (the plan's item 7.1), as failures: each of the ten the release image holds
+ * (`LEGAL_PAGE_PATHS`), asked of the revision, must answer 200 with the image's own bytes, the page's CSP (`policy`) and no
+ * cookie. What the pages still lack before the opening (an image holding none of them, a placeholder still said) is said in
+ * `notes`, and with `opening` it fails: every `-Public` deployment holds its candidate to it.
+ */
+export async function legalPageFailures(origin, web, { policy = `${cspValue()}; frame-ancestors 'none'`, notes = [], opening = false } = {}) {
+  const failures = [];
+  const files = new Map(web);
+  const held = LEGAL_PAGE_PATHS.filter((path) => files.has(path.slice(1)));
+  for (const path of held) {
+    const answer = await fetch(`${origin}${path}`, { redirect: "manual" });
+    const bytes = Buffer.from(await answer.arrayBuffer());
+    if (answer.status !== 200 || !bytes.equals(files.get(path.slice(1)))) {
+      failures.push(`GET ${path} answered ${answer.status}${answer.status === 200 ? " with a body that is not the release image's own legal page" : ""}, not the legal page`);
+      continue;
+    }
+    if (answer.headers.get("content-security-policy") !== policy) failures.push(`GET ${path} carries the CSP ${answer.headers.get("content-security-policy")}, not ${policy}`);
+    if (answer.headers.get("set-cookie") !== null) failures.push(`GET ${path} sets a cookie, which the cookies page says no page does`);
+  }
+  const unready = builtLegalPageFailures(web);
+  if (unready.length > 0) {
+    if (opening) failures.push(...unready.map((failure) => `the legal pages are not ready to publish, so the site may not open: ${failure}`));
+    else notes.push(`the legal pages are not ready to publish, so the site may not open (deploy.ps1 -Open and -Public refuse it): ${unready.join("; ")}`);
   }
   return failures;
 }
@@ -449,7 +487,7 @@ export async function browserFailures(origin, releaseDirectory, { browser, runs 
  * identity's key (`publicKeyPem`), and as signed by the release signer `identity` when one is named, then the revision
  * held to what the release holds. Failures, empty when both hold; what the probe says but does not hold goes to `notes`.
  */
-export async function deployedReleaseFailures(origin, releaseDirectory, { publicKeyPem, identity = null, notes = [] }) {
+export async function deployedReleaseFailures(origin, releaseDirectory, { publicKeyPem, identity = null, notes = [], opening = false }) {
   const release = await releaseFailures(releaseDirectory, { publicKeyPem, identity });
   if (release.length > 0) return release.map((failure) => `the release does not read back: ${failure}`);
   const manifest = JSON.parse(await readFile(join(releaseDirectory, RELEASE_MANIFEST), "utf8"));
@@ -458,6 +496,7 @@ export async function deployedReleaseFailures(origin, releaseDirectory, { public
     card: await readFile(join(releaseDirectory, ASSETS.card)),
     corpusSha256: manifest.corpus.sha256,
     notes,
+    opening,
   });
 }
 
@@ -472,8 +511,19 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
   const publicKey = value("--public-key");
   const identity = value("--signer");
   const withBrowser = argv.includes("--browser");
+  const opening = argv.includes("--opening");
+  // The opening's own check (deploy.ps1 -Open): the site's served legal pages, and nothing else; it fails closed.
+  if (opening && release === null && publicKey === null && origin !== null && /^https?:\/\//.test(origin) && !withBrowser) {
+    const failures = await openingFailures(origin.replace(/\/+$/, ""));
+    for (const failure of failures) console.error(`- ${failure}`);
+    console.log(failures.length === 0
+      ? `the legal pages at ${origin} are ready to publish: each of the ${LEGAL_PAGE_PATHS.length} answers, sets no cookie and says no placeholder`
+      : `${failures.length} reason(s) the site may not open`);
+    process.exit(failures.length === 0 ? 0 : 1);
+  }
   if (release === null || publicKey === null || (origin !== null && !/^https?:\/\//.test(origin)) || (argv.includes("--signer") && !identity)) {
-    console.error("usage: node scripts/deploy-probe.mjs --release <release directory> --public-key <signing identity's public key, PEM> [--signer <the release signer's identity>] [--origin <the candidate revision's URL> [--browser]]");
+    console.error("usage: node scripts/deploy-probe.mjs --release <release directory> --public-key <signing identity's public key, PEM> [--signer <the release signer's identity>] [--origin <the candidate revision's URL> [--browser] [--opening]]");
+    console.error("       node scripts/deploy-probe.mjs --opening --origin <the site's URL>: the opening's check of the served legal pages alone");
     console.error("       with --signer, the release must be signed by that release signer, never a rehearsal");
     console.error("       without --origin, only the release is read back (deploy.ps1 does this before it touches Azure)");
     process.exit(2);
@@ -489,7 +539,7 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
   }
   const target = origin.replace(/\/+$/, "");
   const notes = [];
-  const failures = await deployedReleaseFailures(target, release, { publicKeyPem, identity, notes });
+  const failures = await deployedReleaseFailures(target, release, { publicKeyPem, identity, notes, opening });
   for (const note of notes) console.log(note);
   if (failures.length === 0 && withBrowser) {
     failures.push(...await browserFailures(target, release, { browser: await findBrowser() }));
