@@ -39,8 +39,6 @@ public sealed class V3CorpusEuropeForceDatesMountTests
             var envelope = await EnvelopeAsync(mount, "/api/v3/" + operation, operation, parameters);
             Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict, $"{operation}: {envelope.Refusal?.Code}");
             var body = envelope.Result!.Value;
-            var names = body.EnumerateObject().Select(static member => member.Name).ToList();
-            Assert.AreEqual(names.IndexOf("not_held") - 1, names.IndexOf("force_dates"), $"{operation}: force_dates stands before not_held");
             var forceDates = body.GetProperty("force_dates");
             Assert.AreEqual(fixture.PublisherWorkId, forceDates.GetProperty("publisher_work_id").GetString(), "the dates are the act's original work's");
             Assert.AreEqual(Celex, forceDates.GetProperty("seed_celex").GetString());

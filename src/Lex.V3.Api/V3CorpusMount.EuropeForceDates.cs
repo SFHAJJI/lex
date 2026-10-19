@@ -106,8 +106,8 @@ internal sealed partial class V3CorpusMount
     }
 
     /// <summary>
-    /// An EU answer with its act's force dates: when the EU index holds them, <c>force_dates</c> is added before <c>not_held</c>,
-    /// and the not-held row <c>force_dates</c> says what of them is still not held (<see cref="EuropeForceDatesNotHeldWhenHeld"/>);
+    /// An EU answer with its act's force dates: when the EU index holds them, <c>force_dates</c> is added (the envelope writes
+    /// its members in its own canonical order), and the not-held row <c>force_dates</c> says what of them is still not held (<see cref="EuropeForceDatesNotHeldWhenHeld"/>);
     /// otherwise the answer is returned as it was, byte for byte.
     /// </summary>
     private JsonElement WithEuropeForceDates(JsonElement answer, string? seed)
