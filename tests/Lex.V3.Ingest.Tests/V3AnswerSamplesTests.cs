@@ -352,8 +352,9 @@ public sealed class V3AnswerSamplesTests
 
         // An EU mount for EU `search` in one work, so the search screen's EU reader sees what an EU answer carries: the
         // one held English wording of the GDPR, pinned, and each hit's hash-pinned provision permalink. The phrase has
-        // two strict hits and one relaxed hit in that wording, so one small answer holds both lanes.
-        var europe = await EuropeMountedFixture.CreateAsync();
+        // two strict hits and one relaxed hit in that wording, so one small answer holds both lanes. Its EU index /6 holds the
+        // GDPR's three dated statements as run 16 holds them, so the EU dossier says the act's dates by role (the plan's item 2.1).
+        var europe = await EuropeMountedFixture.CreateAsync(withForceDates: true);
         await using var cleanupEurope = europe;
         using var europeMount = await V3CorpusMount.OpenAsync(europe.Directory, CancellationToken.None);
         Assert.IsNotNull(europeMount);

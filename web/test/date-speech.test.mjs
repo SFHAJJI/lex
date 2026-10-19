@@ -93,6 +93,13 @@ const EUROPE_ENTRIES = new Set([
   "citation.europe.numberedNoDomain", "citation.europe.yearFirst", "citation.europe.suffixed", "citation.europe.plain",
   "citation.europe.version", "citation.europe.authenticity", "citation.evidence.originalWording",
   "citation.evidence.consolidatedWording", "citation.evidence.officialJournalNotHeld",
+  // The EU act's dates as the publisher records them (the plan's item 2.1; `europe-force-dates.mjs`): EU pages only.
+  "common.europeForceDates.heading", "common.europeForceDates.roles.entry_into_force", "common.europeForceDates.roles.application",
+  "common.europeForceDates.roles.end_of_validity", "common.europeForceDates.roles.deadline", "common.europeForceDates.roles.signature",
+  "common.europeForceDates.roles.not_pinned", "common.europeForceDates.notPinnedNoCode", "common.europeForceDates.openEnd",
+  "common.europeForceDates.qualifier", "common.europeForceDates.roleNames.entry_into_force", "common.europeForceDates.roleNames.application",
+  "common.europeForceDates.roleNames.end_of_validity", "common.europeForceDates.roleNames.deadline", "common.europeForceDates.notHeld",
+  "common.europeForceDates.conflict", "common.europeForceDates.notWording",
 ]);
 
 /**

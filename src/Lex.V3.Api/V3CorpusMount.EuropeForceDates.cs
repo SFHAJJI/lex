@@ -17,8 +17,8 @@ internal sealed partial class V3CorpusMount
     internal const string EuropeForceDatesScope =
         "the act's dates as the publisher records them in its dated statements (reified owl:Axiom statements on a CDM date property of " +
         "the act's Cellar work, acquired by the EU census and read from custody by the build): each date with its role, the value exactly " +
-        "as served, the publisher's code and note word for word, the date property it sits on and the statement and delivered batch it was " +
-        "read from; they are the act's, said beside its wordings, never a wording's date, never a consolidated version's own date, and " +
+        "as served, the publisher's code and note word for word, the date property it sits on and the publisher's statement it was read " +
+        "from (the EU index also holds the delivered batch it came in); they are the act's, said beside its wordings, never a wording's date, never a consolidated version's own date, and " +
         "never used to choose a wording";
 
     internal const string EuropeForceDateRoleRule =
@@ -46,8 +46,8 @@ internal sealed partial class V3CorpusMount
         "site chooses none";
 
     internal const string EuropeForceDatesNotHeldWhenHeld =
-        "the act's own dates are said under force_dates, as the publisher's dated statements on the act give them; a wording date is none " +
-        "of them, and a date the publisher records without a dated statement is not held";
+        "the act's own dates are said under force_dates, as the publisher's dated statements on the act give them; none of them is used " +
+        "to choose a wording, each wording carries its own date, and a date the publisher records without a dated statement is not held";
 
     private static readonly Regex EuropeNoteCarrier = new(@"\{([^{}|]+)\|[^{}]*\}", RegexOptions.CultureInvariant);
 
@@ -91,7 +91,6 @@ internal sealed partial class V3CorpusMount
                 publisher_note_codes = EuropeNoteCodes(row.PublisherComment),
                 date_property = row.SourcePredicateIri,
                 statement = row.AxiomIri,
-                source_observation = row.SourceObservationId,
                 date_identity_sha256 = row.DateIdentitySha256,
             }).ToArray(),
             roles_not_held = EuropeForceDateRoles.Named.Where(role => rows.All(row => row.Role != role)).ToArray(),
