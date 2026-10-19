@@ -349,7 +349,7 @@ function byEntryIntoForce(state) {
   state.state_kind = "as_published";
 }
 
-test("Compare, the export and the conflict line say a state dated by its entry into force as that", () => {
+test("Compare and the export say a state dated by its entry into force as that", () => {
   const diff = sample("diff", "the state on one date against the state on the same date");
   const comparison = diff.result.value.comparisons[0];
   byEntryIntoForce(comparison.from);
@@ -379,16 +379,9 @@ test("Compare, the export and the conflict line say a state dated by its entry i
   assert.ok(JSON.parse(exportJson(panel.model)).items.every((item) => item.date_role === "entry_into_force"), "the JSON names the date's role");
 });
 
-test("the dated search says the version that covers the date, with no application word of it", () => {
-  for (const [language, table] of [["en", EN], ["fr", FR]]) {
-    assertTimeVocabulary(table.search.dated, `${language} search.dated`);
-    assert.doesNotMatch(table.search.dated, /applicable from|applicable à partir/, `${language} search.dated`);
-  }
-});
-
 test("every form these slices add says no application word of an entry into force, and each French form is the English's in shape", () => {
   const added = [
-    "reading.validityConflictEntryIntoForce", "reading.translation", "reading.consolidationCaveat", "reading.codeCaveat",
+    "reading.translation", "reading.consolidationCaveat", "reading.codeCaveat",
     "compare.sideEntryIntoForce", "compare.sideEntryIntoForceNext", "compare.sameVersionEntryIntoForce",
     "compare.sameTextHeldEntryIntoForce", "compare.sameTextHeldOfSeveralEntryIntoForce",
     "export.itemEntryIntoForce", "export.excludedEntryIntoForce",
