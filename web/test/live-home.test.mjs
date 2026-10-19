@@ -230,10 +230,12 @@ test("a dated search says what this site holds was searched, in Luxembourg law, 
   const html = searchedAt("2026-10-16");
   const dated = EN.search.dated.replace("{date}", "2026-10-16");
   assert.ok(html.includes(`data-searched-on="2026-10-16">${escaped(dated)}</p>`), html);
-  assert.equal(EN.search.dated, "Only Luxembourg acts were searched. For each, the latest version this site holds that is applicable from {date} or an earlier date (publisher) was searched, and an act with no such version was not. An act held only as published is searched as published, and may have been amended since.");
-  assert.equal(liveChrome("fr").search.dated, "Seuls des actes luxembourgeois ont été interrogés. Pour chacun, la dernière version que ce site détient qui est applicable à partir du {date} ou d’une date antérieure (éditeur) a été interrogée, et un acte sans une telle version ne l’a pas été. Un acte détenu uniquement tel que publié est interrogé tel que publié, et peut avoir été modifié depuis.");
-  // The latest held version on or before the date (SelectAtDate), which for an act held only as published is that act as
-  // published: never "the version that applies", which on a population of acts held as first published claims too much.
+  // Index 9's rule (the review of #987, F5; reviewed French of 2026-10-19): the version whose publisher dates cover the date,
+  // and an act whose version on the date this site holds no text of is not searched.
+  assert.equal(EN.search.dated, "Only Luxembourg acts were searched. For each, the version whose publisher dates cover {date} was searched; an act with no such version, or for which this site does not hold that version's text, was not. An act held only as published is searched as published, and may have been amended since.");
+  assert.equal(liveChrome("fr").search.dated, "Seuls des actes luxembourgeois ont été interrogés. Pour chacun, la version dont les dates de l’éditeur couvrent le {date} a été interrogée ; un acte sans une telle version, ou pour lequel ce site ne détient pas le texte de cette version, ne l’a pas été. Un acte détenu uniquement tel que publié est interrogé tel que publié, et peut avoir été modifié depuis.");
+  // The version the interval rules select (SelectAt), which for an act held only as published is that act as published:
+  // never "the version that applies", which on a population of acts held as first published claims too much.
   assert.doesNotMatch(dated, /\bthat applies\b|\bapplying on\b|\bin force\b/);
   for (const language of ["en", "fr"]) {
     for (const entry of ["dated", "undated", "noHitLuxembourg", "searchScope"]) assertTimeVocabulary(liveChrome(language).search[entry], `${language} search.${entry}`);

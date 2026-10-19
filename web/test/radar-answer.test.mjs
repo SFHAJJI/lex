@@ -56,7 +56,7 @@ test("a window holding both states reads: the later one compared with its baseli
   assert.deepEqual(later.counts, { unchanged: 47, changed: 1, added: 1, removed: 1 });
   assert.deepEqual(later.diff, { identifier: `/lu-legilux/${later.workKey}`, dateFrom: later.baseline.applicabilityDate, dateTo: later.state.applicabilityDate, language: "fra" });
   assert.equal(view.population.versionsInWindow, 2);
-  assert.deepEqual(RADAR_REASONS, ["first_held_state", "ambiguous_version", "ambiguous_baseline", "profiles_differ"]);
+  assert.deepEqual(RADAR_REASONS, ["first_held_state", "ambiguous_version", "ambiguous_baseline", "profiles_differ", "no_held_baseline"]);
 });
 
 test("each rule the radar states about itself is refused when broken, with that rule's reason", async () => {

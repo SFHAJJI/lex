@@ -71,8 +71,10 @@ export function readInterval(state, where) {
  */
 export function holdsToday(state, today) {
   if (!(state.applicabilityDate <= today)) return false;
-  if (state.endKnown === true) return state.applicableTo === null || state.applicableTo > today;
-  return state.nextApplicabilityDate === null || state.nextApplicabilityDate > today;
+  // A later held state on or before today replaces it on every index; on index 9 its interval's end bounds it too (no later
+  // than that state's start on a consistent answer).
+  if (state.nextApplicabilityDate !== null && state.nextApplicabilityDate !== undefined && !(state.nextApplicabilityDate > today)) return false;
+  return state.endKnown !== true || state.applicableTo === null || state.applicableTo > today;
 }
 
 /** Whether a state's date is an entry into force, which no page says as "applicable from" (R21). */
