@@ -55,10 +55,10 @@ public sealed record V3Freshness
 {
     /// <summary>
     /// The declared maximum data age, in days (R87): past it a channel's data is stale, every page shows the staleness banner,
-    /// and promotion refuses the release. The specification of record's recommended answer to O11, which the owner has not
-    /// given yet: a reversible driver decision (STATUS-WEB.md).
+    /// and promotion refuses the release. The owner's answer to O11 of 2026-10-19 (option A, a limit of 30 days; the driver
+    /// had held the specification's recommended 10 until then; STATUS-WEB.md).
     /// </summary>
-    public const int MaximumDataAgeDays = 10;
+    public const int MaximumDataAgeDays = 30;
 
     private static readonly TimeSpan MaximumDataAge = TimeSpan.FromDays(MaximumDataAgeDays);
 

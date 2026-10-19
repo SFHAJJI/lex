@@ -132,10 +132,10 @@ public sealed class V3FreshnessMountTests
     [TestMethod]
     public async Task ABoundReportDatesTheChannelAndNamesTheIndexBuilderInEveryAnswer()
     {
-        // Twelve days and a second before the answer: past the maximum. Read down to the whole second.
+        // Thirty-two days and a second before the answer: past the maximum of 30 days. Read down to the whole second.
         var directory = await Schema8MountAsync(Report(
             CorpusSha256, V3CorpusLegacySchema8MountTests.IndexFileSha256,
-            luxembourgCatalogedAt: "2026-10-03T06:59:59.9876543+00:00", indexBuilderSource: BuilderCommit));
+            luxembourgCatalogedAt: "2026-09-13T06:59:59.9876543+00:00", indexBuilderSource: BuilderCommit));
         try
         {
             using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None);
@@ -150,10 +150,11 @@ public sealed class V3FreshnessMountTests
                 var context = await ContextOfAsync(mount, operation, parameters, ServingCommit);
                 var freshness = context.GetProperty("freshness");
                 var channel = freshness.GetProperty("channels").EnumerateArray().Single();
-                Assert.AreEqual("2026-10-03T06:59:59Z", channel.GetProperty("newest_completed_observation").GetString(), operation);
-                Assert.AreEqual(12, channel.GetProperty("age_days").GetInt32());
+                Assert.AreEqual("2026-09-13T06:59:59Z", channel.GetProperty("newest_completed_observation").GetString(), operation);
+                Assert.AreEqual(32, channel.GetProperty("age_days").GetInt32());
                 Assert.IsTrue(channel.GetProperty("stale").GetBoolean());
-                Assert.IsTrue(freshness.GetProperty("stale").GetBoolean(), "past 10 days, the answer is stale");
+                Assert.IsTrue(freshness.GetProperty("stale").GetBoolean(), "past 30 days, the answer is stale");
+                Assert.AreEqual(30, freshness.GetProperty("maximum_data_age_days").GetInt32(), "the owner's answer to O11");
                 Assert.AreEqual(BuilderCommit, context.GetProperty("commits").GetProperty("index_builder_source_commit").GetString());
                 Assert.AreEqual(ServingCommit, context.GetProperty("commits").GetProperty("serving_runtime_source_commit").GetString());
             }

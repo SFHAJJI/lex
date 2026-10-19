@@ -14,8 +14,8 @@ public sealed class V3EnvelopeJsonTests
     private const string RegistryDigest = "80dc8e29242223f0f4c6dc09b87861b50cbb994c668a99dd4ee2432d7fa48470";
     private const string BuilderCommit = "1111111111111111111111111111111111111111";
     private const string ServingCommit = "2222222222222222222222222222222222222222";
-    private const string ExpectedSuccess = """{"context":{"commits":{"index_builder_source_commit":"1111111111111111111111111111111111111111","serving_runtime_source_commit":"2222222222222222222222222222222222222222"},"freshness":{"channels":[{"age_days":6,"lag_days":null,"lag_observations":0,"newest_completed_observation":"2026-09-10T08:00:00Z","publisher":"lu-legilux","stale":false},{"age_days":16,"lag_days":null,"lag_observations":0,"newest_completed_observation":"2026-09-01T00:00:00Z","publisher":"eu-eurlex","stale":true}],"index_built_at":"2026-09-10T08:00:01Z","last_checked_against_publisher":null,"maximum_data_age_days":10,"observed_at":"2026-09-17T00:00:00.0000000Z","stale":true,"upstream_health":"current"},"jurisdiction":"lu","provisional":false,"publisher":"lu-legilux","snapshot":{"snapshot_id":"snapshot","snapshot_sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},"status":"success","timeline_semantics":"publisher_applicability"},"object_type":"envelope","operation_id":"resolve","refusal":null,"registry_schema":"lex-v3-operation-registry/1","registry_sha256":"80dc8e29242223f0f4c6dc09b87861b50cbb994c668a99dd4ee2432d7fa48470","request_ref":"req","result":{"object_type":"work_resolution","schema":"lex-v3-resolve-result/1","value":{"work_id":"lu-legilux:arr\u00EAt\u00E9 \u0026 co"}},"schema":"lex-v3-envelope/1","verdict":"answer","version":"v3"}""" + "\n";
-    private const string ExpectedRefusal = """{"context":{"commits":{"index_builder_source_commit":null,"serving_runtime_source_commit":null},"freshness":{"channels":[],"index_built_at":null,"last_checked_against_publisher":null,"maximum_data_age_days":10,"observed_at":"2026-09-17T00:00:00.0000000Z","stale":false,"upstream_health":"current"},"jurisdiction":"lu","provisional":false,"publisher":"lu-legilux","snapshot":{"snapshot_id":"snapshot","snapshot_sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},"status":"refusal","timeline_semantics":"publisher_applicability"},"object_type":"envelope","operation_id":"resolve","refusal":{"code":"no_corpus_mounted","helpful_payload":{"required_corpus":"lu"},"schema":"lex-v3-refusal/1"},"registry_schema":"lex-v3-operation-registry/1","registry_sha256":"80dc8e29242223f0f4c6dc09b87861b50cbb994c668a99dd4ee2432d7fa48470","request_ref":"req","result":null,"schema":"lex-v3-envelope/1","verdict":"refuse","version":"v3"}""" + "\n";
+    private const string ExpectedSuccess = """{"context":{"commits":{"index_builder_source_commit":"1111111111111111111111111111111111111111","serving_runtime_source_commit":"2222222222222222222222222222222222222222"},"freshness":{"channels":[{"age_days":6,"lag_days":null,"lag_observations":0,"newest_completed_observation":"2026-09-10T08:00:00Z","publisher":"lu-legilux","stale":false},{"age_days":37,"lag_days":null,"lag_observations":0,"newest_completed_observation":"2026-08-11T00:00:00Z","publisher":"eu-eurlex","stale":true}],"index_built_at":"2026-09-10T08:00:01Z","last_checked_against_publisher":null,"maximum_data_age_days":30,"observed_at":"2026-09-17T00:00:00.0000000Z","stale":true,"upstream_health":"current"},"jurisdiction":"lu","provisional":false,"publisher":"lu-legilux","snapshot":{"snapshot_id":"snapshot","snapshot_sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},"status":"success","timeline_semantics":"publisher_applicability"},"object_type":"envelope","operation_id":"resolve","refusal":null,"registry_schema":"lex-v3-operation-registry/1","registry_sha256":"80dc8e29242223f0f4c6dc09b87861b50cbb994c668a99dd4ee2432d7fa48470","request_ref":"req","result":{"object_type":"work_resolution","schema":"lex-v3-resolve-result/1","value":{"work_id":"lu-legilux:arr\u00EAt\u00E9 \u0026 co"}},"schema":"lex-v3-envelope/1","verdict":"answer","version":"v3"}""" + "\n";
+    private const string ExpectedRefusal = """{"context":{"commits":{"index_builder_source_commit":null,"serving_runtime_source_commit":null},"freshness":{"channels":[],"index_built_at":null,"last_checked_against_publisher":null,"maximum_data_age_days":30,"observed_at":"2026-09-17T00:00:00.0000000Z","stale":false,"upstream_health":"current"},"jurisdiction":"lu","provisional":false,"publisher":"lu-legilux","snapshot":{"snapshot_id":"snapshot","snapshot_sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},"status":"refusal","timeline_semantics":"publisher_applicability"},"object_type":"envelope","operation_id":"resolve","refusal":{"code":"no_corpus_mounted","helpful_payload":{"required_corpus":"lu"},"schema":"lex-v3-refusal/1"},"registry_schema":"lex-v3-operation-registry/1","registry_sha256":"80dc8e29242223f0f4c6dc09b87861b50cbb994c668a99dd4ee2432d7fa48470","request_ref":"req","result":null,"schema":"lex-v3-envelope/1","verdict":"refuse","version":"v3"}""" + "\n";
     private readonly V3OperationRegistry _registry = V3OperationRegistry.Reviewed;
 
     [TestMethod]
@@ -98,7 +98,7 @@ public sealed class V3EnvelopeJsonTests
 
     /// <summary>
     /// A context with the whole freshness header (R87) and both commits (R23): a Luxembourg channel 6 days old at the answer
-    /// and an EU one 16 days old, past the maximum, so the answer is stale.
+    /// and an EU one 37 days old, past the maximum of 30, so the answer is stale.
     /// </summary>
     private static V3EnvelopeContext MountedContext() => new(
         PublisherId.LuLegilux,
@@ -113,7 +113,7 @@ public sealed class V3EnvelopeJsonTests
             DateTimeOffset.Parse("2026-09-10T08:00:01Z"),
             [
                 new V3FreshnessChannel(PublisherId.LuLegilux, DateTimeOffset.Parse("2026-09-10T08:00:00Z")),
-                new V3FreshnessChannel(PublisherId.EuEurLex, DateTimeOffset.Parse("2026-09-01T00:00:00Z")),
+                new V3FreshnessChannel(PublisherId.EuEurLex, DateTimeOffset.Parse("2026-08-11T00:00:00Z")),
             ]),
         new V3Commits(BuilderCommit, ServingCommit));
 
@@ -123,17 +123,21 @@ public sealed class V3EnvelopeJsonTests
         var freshness = MountedContext().Freshness;
         Assert.AreEqual(6, freshness.AgeDays(freshness.Channels[0]));
         Assert.AreEqual(false, freshness.IsStale(freshness.Channels[0]));
-        Assert.AreEqual(16, freshness.AgeDays(freshness.Channels[1]));
+        Assert.AreEqual(37, freshness.AgeDays(freshness.Channels[1]));
         Assert.AreEqual(true, freshness.IsStale(freshness.Channels[1]));
         Assert.IsTrue(freshness.Stale);
 
-        // Exactly the maximum is not past it; one second more is (R87: "past 10 days").
+        // The maximum is the owner's answer to O11 of 2026-10-19, 30 days (option A): exactly the maximum is not past it; one
+        // second more is (R87: past the maximum).
         var completed = DateTimeOffset.Parse("2026-09-07T00:00:00Z");
-        var atMaximum = new V3Freshness(completed.AddDays(10), "stale", null, [new V3FreshnessChannel(PublisherId.EuEurLex, completed)]);
-        Assert.AreEqual(10, atMaximum.AgeDays(atMaximum.Channels[0]));
+        var atMaximum = new V3Freshness(completed.AddDays(30), "stale", null, [new V3FreshnessChannel(PublisherId.EuEurLex, completed)]);
+        Assert.AreEqual(30, atMaximum.AgeDays(atMaximum.Channels[0]));
         Assert.IsFalse(atMaximum.Stale);
-        var past = new V3Freshness(completed.AddDays(10).AddSeconds(1), "stale", null, [new V3FreshnessChannel(PublisherId.EuEurLex, completed)]);
+        var past = new V3Freshness(completed.AddDays(30).AddSeconds(1), "stale", null, [new V3FreshnessChannel(PublisherId.EuEurLex, completed)]);
         Assert.IsTrue(past.Stale);
+        // The 10 days held before the owner's answer are no longer stale.
+        var tenDays = new V3Freshness(completed.AddDays(10).AddSeconds(1), "stale", null, [new V3FreshnessChannel(PublisherId.EuEurLex, completed)]);
+        Assert.IsFalse(tenDays.Stale);
 
         // A channel whose completion nothing states has no age and is never said to be fresh or stale.
         var unstated = new V3Freshness(completed, "stale", null, [new V3FreshnessChannel(PublisherId.LuLegilux, null)]);
@@ -187,8 +191,8 @@ public sealed class V3EnvelopeJsonTests
         foreach (var (from, to) in new[]
                  {
                      ("\"stale\":true,\"upstream_health\"", "\"stale\":false,\"upstream_health\""),
-                     ("\"age_days\":16", "\"age_days\":15"),
-                     ("\"lag_days\":null,\"lag_observations\":0,\"newest_completed_observation\":\"2026-09-01", "\"lag_days\":{\"max\":2,\"min\":1},\"lag_observations\":0,\"newest_completed_observation\":\"2026-09-01"),
+                     ("\"age_days\":37", "\"age_days\":36"),
+                     ("\"lag_days\":null,\"lag_observations\":0,\"newest_completed_observation\":\"2026-08-11", "\"lag_days\":{\"max\":2,\"min\":1},\"lag_observations\":0,\"newest_completed_observation\":\"2026-08-11"),
                      ("\"last_checked_against_publisher\":null", "\"last_checked_against_publisher\":\"2026-09-16\""),
                  })
         {

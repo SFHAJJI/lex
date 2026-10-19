@@ -387,7 +387,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -632,7 +632,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -734,7 +734,7 @@
             "channels": [],
             "index_built_at": null,
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "unreachable"
@@ -791,7 +791,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -851,7 +851,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -1215,7 +1215,7 @@
             "channels": [],
             "index_built_at": null,
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "unreachable"
@@ -1272,7 +1272,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -1600,7 +1600,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -1735,7 +1735,7 @@
             ],
             "index_built_at": null,
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -1937,7 +1937,7 @@
             ],
             "index_built_at": null,
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -1997,7 +1997,7 @@
             ],
             "index_built_at": null,
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -2181,7 +2181,7 @@
             ],
             "index_built_at": null,
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -2327,7 +2327,7 @@
             ],
             "index_built_at": null,
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -2394,7 +2394,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -2547,7 +2547,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -2614,7 +2614,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -2674,7 +2674,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -2731,7 +2731,7 @@
             ],
             "index_built_at": null,
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -2868,7 +2868,7 @@
             "channels": [],
             "index_built_at": null,
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "unreachable"
@@ -2925,7 +2925,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -4031,7 +4031,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -4095,7 +4095,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -4162,7 +4162,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -4213,7 +4213,7 @@
             "channels": [],
             "index_built_at": null,
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "unreachable"
@@ -4270,7 +4270,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -5376,7 +5376,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -5440,7 +5440,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -5506,7 +5506,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -6975,7 +6975,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -7343,7 +7343,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -7421,7 +7421,7 @@
             ],
             "index_built_at": "2027-01-15T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -8357,7 +8357,7 @@
             ],
             "index_built_at": "2027-01-15T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -8435,7 +8435,7 @@
             ],
             "index_built_at": "2027-01-15T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -8700,7 +8700,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -8833,7 +8833,7 @@
             ],
             "index_built_at": "2027-01-15T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -8935,7 +8935,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -9038,7 +9038,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -9107,7 +9107,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -9165,7 +9165,7 @@
             "channels": [],
             "index_built_at": null,
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "unreachable"
@@ -9222,7 +9222,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -9957,7 +9957,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -10022,7 +10022,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -10080,7 +10080,7 @@
             "channels": [],
             "index_built_at": null,
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "unreachable"
@@ -10137,7 +10137,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -10252,7 +10252,7 @@
             ],
             "index_built_at": "2026-10-01T08:00:00Z",
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "stale"
@@ -10330,7 +10330,7 @@
             "channels": [],
             "index_built_at": null,
             "last_checked_against_publisher": null,
-            "maximum_data_age_days": 10,
+            "maximum_data_age_days": 30,
             "observed_at": "2026-09-18T07:00:00.0000000Z",
             "stale": false,
             "upstream_health": "unreachable"

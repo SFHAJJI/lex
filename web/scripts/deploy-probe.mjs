@@ -318,7 +318,7 @@ export async function legalPageFailures(origin, web, { policy = `${cspValue()}; 
 
 /**
  * Why promotion refuses the data a revision serves, from its answer's freshness header (the specification of record's R87;
- * O11's recommended maximum, which the answer states): a publisher channel whose newest completed collection is past the
+ * O11's maximum, 30 days by the owner's answer of 2026-10-19, which the answer states): a publisher channel whose newest completed collection is past the
  * maximum data age at the answer, or one whose completion the mount does not state, so that its age cannot be shown to be
  * within it; an answer with no channel, or no header, states no data age at all. Each failure names the channel and what the
  * answer says. Empty when every channel is within the maximum. Not a probe failure: a revision with old data still answers

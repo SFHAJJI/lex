@@ -31,19 +31,20 @@ const FR = liveChrome("fr").freshness;
 const escaped = (text) => text.replaceAll("&", "&amp;").replaceAll("'", "&#x27;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
 
 /**
- * The coverage answer as the population's mount would state it on 2026-10-18: Luxembourg collected on 2026-10-12 (5 whole
- * days before the answer), the EU on 2026-10-05 (13 days, past the 10-day maximum), with both commits.
+ * The coverage answer as the population's mount would state it on 2026-11-06: Luxembourg collected on 2026-10-12 (24 whole
+ * days before the answer), the EU on 2026-10-05 (32 days, past the 30-day maximum, the owner's answer to O11 of
+ * 2026-10-19), with both commits.
  */
 function stale() {
   const envelope = structuredClone(COVERAGE);
   envelope.context.freshness = {
     ...envelope.context.freshness,
-    observed_at: "2026-10-18T09:00:00.0000000Z",
+    observed_at: "2026-11-06T09:00:00.0000000Z",
     index_built_at: "2026-10-12T18:17:05Z",
     stale: true,
     channels: [
-      { publisher: "lu-legilux", newest_completed_observation: "2026-10-12T18:17:04Z", age_days: 5, stale: false, lag_days: null, lag_observations: 0 },
-      { publisher: "eu-eurlex", newest_completed_observation: "2026-10-05T03:50:08Z", age_days: 13, stale: true, lag_days: null, lag_observations: 0 },
+      { publisher: "lu-legilux", newest_completed_observation: "2026-10-12T18:17:04Z", age_days: 24, stale: false, lag_days: null, lag_observations: 0 },
+      { publisher: "eu-eurlex", newest_completed_observation: "2026-10-05T03:50:08Z", age_days: 32, stale: true, lag_days: null, lag_observations: 0 },
     ],
   };
   envelope.context.commits = { index_builder_source_commit: "1".repeat(40), serving_runtime_source_commit: "2".repeat(40) };
@@ -89,13 +90,13 @@ test("every census envelope carries the freshness header and the commits, and th
 test("a page reads the answer's facts and computes none of its own", () => {
   const facts = freshnessFacts(stale());
   assert.deepEqual(JSON.parse(JSON.stringify(facts)), {
-    today: "2026-10-18",
+    today: "2026-11-06",
     builtOn: "2026-10-12",
-    maximumAgeDays: 10,
+    maximumAgeDays: 30,
     stale: true,
     channels: [
-      { publisher: "lu-legilux", completedOn: "2026-10-12", ageDays: 5, stale: false },
-      { publisher: "eu-eurlex", completedOn: "2026-10-05", ageDays: 13, stale: true },
+      { publisher: "lu-legilux", completedOn: "2026-10-12", ageDays: 24, stale: false },
+      { publisher: "eu-eurlex", completedOn: "2026-10-05", ageDays: 32, stale: true },
     ],
     lagMeasured: false,
     indexCommit: "1".repeat(40),
@@ -136,8 +137,8 @@ test("the strip says the build date, each channel's last complete collection and
   const html = renderToStaticMarkup(h(FreshnessStrip, { facts: freshnessFacts(stale()) }));
   assert.ok(html.startsWith(`<section class="freshness-strip" aria-label="${EN.heading}" data-freshness="answered" data-stale="true">`), html);
   assert.ok(html.includes("Index built on 2026-10-12."), html);
-  assert.ok(html.includes(escaped("Luxembourg law, from Legilux: last complete collection ended on 2026-10-12, 5 full days before the server answered on 2026-10-18; lag not yet measured.")), html);
-  assert.ok(html.includes(escaped("EU law, from the Publications Office of the European Union: last complete collection ended on 2026-10-05, 13 full days before the server answered on 2026-10-18; lag not yet measured.")), html);
+  assert.ok(html.includes(escaped("Luxembourg law, from Legilux: last complete collection ended on 2026-10-12, 24 full days before the server answered on 2026-11-06; lag not yet measured.")), html);
+  assert.ok(html.includes(escaped("EU law, from the Publications Office of the European Union: last complete collection ended on 2026-10-05, 32 full days before the server answered on 2026-11-06; lag not yet measured.")), html);
   assert.ok(html.includes(`<dt>${EN.indexCommit}</dt><dd><code class="commit">${"1".repeat(40)}</code></dd>`), html);
   assert.ok(html.includes(`<dt>${EN.serviceCommit}</dt><dd><code class="commit">${"2".repeat(40)}</code></dd>`), html);
   assert.ok(!html.includes("<section", 1), "the strip holds no section inside it (the deploy probe sets it aside by its end)");
@@ -162,7 +163,7 @@ test("the strip says the build date, each channel's last complete collection and
 test("the banner names each channel past the maximum, by the answer's maximum, and nothing when none is", () => {
   const html = renderToStaticMarkup(h(StalenessBanner, { facts: freshnessFacts(stale()) }));
   assert.ok(html.startsWith(`<aside class="staleness-banner" role="note" aria-label="${EN.staleHeading}" data-stale-channels="eu-eurlex"><details><summary><strong>${EN.staleHeading}</strong></summary>`), html);
-  assert.ok(html.includes(escaped("EU law, from the Publications Office of the European Union: its last complete collection ended on 2026-10-05, more than 10 days before the server answered on 2026-10-18.")), html);
+  assert.ok(html.includes(escaped("EU law, from the Publications Office of the European Union: its last complete collection ended on 2026-10-05, more than 30 days before the server answered on 2026-11-06.")), html);
   assert.ok(!html.includes("Legilux"), "a channel within the maximum is not named");
   assert.equal(renderToStaticMarkup(h(StalenessBanner, { facts: freshnessFacts(COVERAGE) })), "", "no completion stated: nothing is said to be stale");
   assert.equal(renderToStaticMarkup(h(StalenessBanner, {})), "");
@@ -184,7 +185,7 @@ test("the French says each count by the language's plural rule, and no form says
       assert.ok(said.includes(String(count)), said);
       assertTimeVocabulary(said, `${language} collected ${count}`);
     }
-    assertTimeVocabulary(fillCounted(copy.stale, 10, { channel: copy.channels["lu-legilux"], date: "2026-10-05", today: "2026-10-18" }, language), `${language} stale`);
+    assertTimeVocabulary(fillCounted(copy.stale, 30, { channel: copy.channels["lu-legilux"], date: "2026-10-05", today: "2026-10-18" }, language), `${language} stale`);
     assert.deepEqual(Object.keys(copy.channels), ["lu-legilux", "eu-eurlex"], language);
   }
 });
@@ -216,13 +217,13 @@ test("a page the server renders from an answer carries its strip, and its banner
 
 test("promotion refuses data past the maximum age or with no completion stated, and says which channel", () => {
   assert.deepEqual(dataAgeFailures(stale()), [
-    "eu-eurlex: its newest completed collection ended at 2026-10-05T03:50:08Z, 13 days before the answer, past the maximum data age of 10 days",
+    "eu-eurlex: its newest completed collection ended at 2026-10-05T03:50:08Z, 32 days before the answer, past the maximum data age of 30 days",
   ]);
   const fresh = stale();
-  fresh.context.freshness.channels[1] = { ...fresh.context.freshness.channels[1], newest_completed_observation: "2026-10-12T18:17:04Z", age_days: 5, stale: false };
+  fresh.context.freshness.channels[1] = { ...fresh.context.freshness.channels[1], newest_completed_observation: "2026-10-12T18:17:04Z", age_days: 24, stale: false };
   fresh.context.freshness.stale = false;
   assert.deepEqual(dataAgeFailures(fresh), []);
-  assert.deepEqual(dataAgeFailures(COVERAGE), ["lu-legilux: the mount states no completed collection, so its data's age is not known to be within 10 days"]);
+  assert.deepEqual(dataAgeFailures(COVERAGE), ["lu-legilux: the mount states no completed collection, so its data's age is not known to be within 30 days"]);
   assert.deepEqual(dataAgeFailures(census.envelopes.find((entry) => entry.envelope.refusal?.code === "no_corpus_mounted").envelope),
     ["the answer names no publisher channel, so the data's age is not known"]);
   assert.deepEqual(dataAgeFailures({ context: {} }), ["the answer carries no freshness header, so the data's age is not known"]);
