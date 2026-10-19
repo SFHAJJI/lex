@@ -1,24 +1,32 @@
-// The five legal pages every footer links (the plan's item 7.1; the specification of record's R49, R50, R62, R70, R74 and
-// R92; the owner's items O5, O28 and O29): the legal notice, the privacy notice, the terms of use, the accessibility
-// statement and the cookies page, in each interface language, under its path (`/en/legal-notice.html`, `/fr/…`).
+// The five legal pages every footer links (the plan's item 7.1; the specification of record's R49, R50, R62 and R70, from
+// which the owner's decision of 2026-10-19 departs, below): the legal notice, the privacy notice, the terms of use, the
+// accessibility statement and the cookies page, in each interface language, under its path (`/en/legal-notice.html`,
+// `/fr/…`).
 //
 // Their words are the chrome table's (`live-chrome.mjs`, one section per page and `legal` for what they share), so the
-// French is the reviewed table's (Decision 41). What only the owner can supply, the publisher's name, address and contact
-// and how long an e-mail is kept, comes from one data file (`legal-publisher.mjs`), each value a placeholder, «LIKE_THIS»,
-// until it is filled. A page that still says one is not ready to publish, and the site cannot open while any does: the
-// opening's check (`openingFailures`, run by `deploy-probe.mjs --opening` from `deploy/deploy.ps1 -Open` and before every
-// `-Public` deployment's promotion) asks each served legal page and fails closed on a placeholder, a page it cannot read,
-// or a cookie.
+// French is the reviewed table's (Decision 41). The owner decided on 2026-10-19 that the site names no person and publishes
+// no postal address, no e-mail address and no contact channel of any kind ("i dont want to mention nobody name etc etc
+// including me"; "the user is there to have temporal feature over lux and eu laws thats it"; "why r we mentioning emails
+// andadress"), departing from R49 (an editor, an address, an e-mail, a controller and its contact, an objection contact)
+// and from O5's recommended answer. So the pages say what Lex is, where its texts come from and on what licences, who hosts
+// it, what it keeps of a reader (nothing), how accessible it is and that it sets no cookie, and nothing else: there is no
+// detail for anyone to fill in, and nothing waits for one.
+//
+// The opening's check (`openingFailures`, run by `deploy-probe.mjs --opening` from `deploy/deploy.ps1 -Open`) and every
+// `-Public` deployment's probe of its candidate (`builtLegalPageFailures`) keep that decision on the served site: each
+// legal page must answer, set no cookie and show nothing of `SHOWN_NOWHERE` (an e-mail address, a mail or telephone link, a
+// placeholder a template left, a Luxembourg postcode). The check fails closed: a page it cannot read keeps the site private.
 //
 // Every statement the pages make is one the code or the deployment supports (STATUS-WEB.md lists each with its evidence):
 // no cookie and nothing written to the browser's storage (the journeys, the release's image probe, the deployment probe),
-// nothing kept of a request (`PublicRequestRecordingTests`, the image probe's privacy record), nothing asked of another
-// origin (the CSP, `csp.mjs`), the host and its region (`deploy/main.bicep`, the environment as read back), the texts'
-// licences (the rights admission policy /1, Decision 95). The pages ask nothing, carry no script and are never indexed.
+// nothing kept of a request (`PublicRequestRecordingTests`, the image probe's privacy record, the API's cleared logging),
+// nothing asked of another origin (the CSP, `csp.mjs`), a search's words in a request's body and never in its address
+// (`v3-client.mjs`, `search-address.mjs`), the host and its region (`deploy/main.bicep`, the environment as read back), the
+// texts' licences (the rights admission policy /1, Decision 95). The pages ask nothing, carry no script and are never
+// indexed.
 //
 // This module is data and pure functions only.
 
-import { LEGAL_PUBLISHER } from "./legal-publisher.mjs";
 import { INTERFACE_LANGUAGES } from "./permalinks.mjs";
 
 /** The five pages: each one's chrome section, its file under each interface language, and its state. */
@@ -37,34 +45,15 @@ export const legalPage = (key) => LEGAL_PAGES.find((page) => page.key === key);
 export const LEGAL_PAGE_PATHS = Object.freeze(INTERFACE_LANGUAGES.flatMap((language) => LEGAL_PAGES.map((page) => `/${language}/${page.file}`)));
 
 /** The date the five texts were last changed, which each page prints ("Last updated"): changed with any of their words. */
-export const LEGAL_TEXTS_UPDATED = "2026-10-18";
-
-/**
- * The placeholders the data file holds until the owner fills it, by field: each is what the field's value is while it is
- * unfilled, and what a page prints in its place.
- */
-export const PUBLISHER_PLACEHOLDERS = Object.freeze({
-  publisherName: "«PUBLISHER_NAME»",
-  publisherAddress: "«PUBLISHER_ADDRESS»",
-  contactEmail: "«CONTACT_EMAIL»",
-  reportRetentionMonths: "«REPORT_RETENTION_MONTHS»",
-});
-
-/** A placeholder as the data file writes one, wherever it stands in a page. */
-export const PLACEHOLDER = /«[A-Z][A-Z0-9_]*»/g;
-
-/** The attribute a page marks an unfilled detail with, so a check finds it even where its token was cut. */
-export const PLACEHOLDER_ATTRIBUTE = "data-legal-placeholder";
-
-/** The place that hears complaints about personal data in Luxembourg, which the privacy notice names, as a link. */
-export const CNPD_SITE = Object.freeze({ href: "https://cnpd.public.lu/", text: "cnpd.public.lu" });
+export const LEGAL_TEXTS_UPDATED = "2026-10-19";
 
 /** The EU texts' acknowledgement's address (Decision 95; `V3CorpusMount.EuropeTextAcknowledgement`), printed, not linked. */
 export const EURLEX_SITE = "https://eur-lex.europa.eu";
 
 /**
  * The acknowledgement EU texts carry on this site, as the platform serves it with them (`EuropeTextAcknowledgement`), in
- * English on either interface: the terms quote it as it is shown, marked English on a French page (the French review).
+ * English on either interface: the legal notice quotes it as it is shown, marked English on a French page (the French
+ * review).
  */
 export const EURLEX_ACKNOWLEDGEMENT = `© European Union, ${EURLEX_SITE}`;
 
@@ -74,63 +63,34 @@ export const EURLEX_ACKNOWLEDGEMENT = `© European Union, ${EURLEX_SITE}`;
  */
 export const ACCESSIBILITY_LAW = "loi du 28 mai 2019 relative à l’accessibilité des sites internet et des applications mobiles des organismes du secteur public";
 
-const EMAIL = /^[^\s@<>"«»]+@[^\s@<>"«»]+\.[^\s@<>"«».]+$/;
-const MONTHS = /^[1-9][0-9]?$/;
-
-/** Whether a detail is still unfilled: its placeholder, or any text that still carries one's marks. */
-export function isUnfilled(value) {
-  return typeof value !== "string" || value.trim() === "" || value.includes("«") || value.includes("»");
-}
-
 /**
- * Why the publisher's details are not ready to publish, as failures (empty when they are): each field still its
- * placeholder (or empty), an e-mail address that is not one, a retention that is not a whole number of months from 1 to 99,
- * a field the pages do not know, and a field missing.
+ * What no legal page may show, by the owner's decision of 2026-10-19 (no person, no postal address, no e-mail address, no
+ * contact channel): each with what it is. Each is a mark only a person's details or a contact leave in a page's bytes, so
+ * the check reads the served bytes as they are, markup and all, and needs no judgement of words; the words themselves
+ * (a contact, an address to write to) are held at build time, in both languages (`legal-pages.test.mjs`).
  */
-export function publisherFailures(publisher = LEGAL_PUBLISHER) {
-  const unfilled = Object.entries(PUBLISHER_PLACEHOLDERS).filter(([field]) => isUnfilled(publisher?.[field]))
-    .map(([field, placeholder]) => `${field} is not filled in (it still says ${placeholder}, or nothing): the owner fills it in web/scripts/legal-publisher.mjs`);
-  return [...unfilled, ...malformedPublisherFailures(publisher)];
+export const SHOWN_NOWHERE = Object.freeze([
+  Object.freeze({ what: "an e-mail address", pattern: /[^\s@<>"'()]+@[^\s@<>"'()]+\.[A-Za-z]{2,}/ }),
+  Object.freeze({ what: "a mail or telephone link", pattern: /\b(?:mailto|tel):/i }),
+  Object.freeze({ what: "a placeholder a template left («LIKE_THIS»)", pattern: /«[A-Z][A-Z0-9_]*»/ }),
+  Object.freeze({ what: "a Luxembourg postcode, as a postal address writes it", pattern: /\bL-\d{4}\b/ }),
+]);
+
+/** What one legal page's text shows of `SHOWN_NOWHERE`, as the kinds it shows, each once, in that list's order. */
+export function shownOnPage(text) {
+  return SHOWN_NOWHERE.filter(({ pattern }) => pattern.test(String(text))).map(({ what }) => what);
 }
 
-/**
- * The failures of `publisherFailures` but the fields still unfilled: a detail filled in a form the pages cannot print, or a
- * field they do not know. The build refuses these (`build-live.mjs`), so a release never carries a detail filled wrong; an
- * unfilled one is built as its placeholder, and only the opening refuses it.
- */
-export function malformedPublisherFailures(publisher = LEGAL_PUBLISHER) {
-  const failures = [];
-  if (publisher === null || typeof publisher !== "object") return ["the publisher's details are not an object of fields"];
-  for (const field of Object.keys(publisher)) {
-    if (!Object.hasOwn(PUBLISHER_PLACEHOLDERS, field)) failures.push(`${field} is no detail the legal pages print`);
-  }
-  for (const field of Object.keys(PUBLISHER_PLACEHOLDERS)) {
-    const value = publisher[field];
-    if (isUnfilled(value)) continue;
-    if (value !== value.trim() || /\s{2}|[\n\r\t]/.test(value)) failures.push(`${field} ${JSON.stringify(value)} has a space at an end, or a line break, tab or double space`);
-    else if (field === "contactEmail" && !EMAIL.test(value)) failures.push(`contactEmail ${JSON.stringify(value)} is not an e-mail address`);
-    else if (field === "reportRetentionMonths" && !MONTHS.test(value)) failures.push(`reportRetentionMonths ${JSON.stringify(value)} is not a whole number of months, from 1 to 99`);
-  }
-  return failures;
-}
-
-/** The placeholders a page's text still holds, each once, in the order they first stand, and whether any detail is marked unfilled. */
-export function placeholdersIn(text) {
-  const found = [...new Set(String(text).match(PLACEHOLDER) ?? [])];
-  return Object.freeze({ tokens: Object.freeze(found), marked: String(text).includes(PLACEHOLDER_ATTRIBUTE) });
-}
-
-/** Why one legal page's bytes are not ready to publish (empty when they are): a placeholder it still says, or marks. */
+/** Why one legal page's bytes are not ready to publish (empty when they are): what it shows that the decision keeps off the site. */
 export function legalPageTextFailures(path, text) {
-  const { tokens, marked } = placeholdersIn(text);
-  if (tokens.length === 0 && !marked) return [];
-  const said = tokens.length > 0 ? tokens.join(", ") : `a detail marked ${PLACEHOLDER_ATTRIBUTE}`;
-  return [`${path} still says ${said}: the owner fills web/scripts/legal-publisher.mjs, and a release built from it is deployed, before the site opens`];
+  const shown = shownOnPage(text);
+  return shown.length === 0 ? [] : [`${path} shows ${shown.join(", ")}, which the owner's decision of 2026-10-19 keeps off the site (no person, no postal address, no e-mail address, no contact)`];
 }
 
 /**
  * Why the legal pages a release image holds are not ready to publish (empty when they are): `files` the image's live
- * files as `[path, bytes]` (`deploy-probe.mjs`, `liveFilesOf`). Each of the ten pages must be there, and say no placeholder.
+ * files as `[path, bytes]` (`deploy-probe.mjs`, `liveFilesOf`). Each of the ten pages must be there, and show nothing of
+ * `SHOWN_NOWHERE`.
  */
 export function builtLegalPageFailures(files) {
   const held = new Map(files);
@@ -142,8 +102,9 @@ export function builtLegalPageFailures(files) {
 
 /**
  * The opening's check, asked of the site at `origin` before it admits everyone: each of the ten legal pages must answer
- * 200 with a page, set no cookie, and say no placeholder. It fails closed: a page it cannot ask, or that answers anything
- * else, is a failure, so a site whose pages cannot be read is not opened. `ask` is how a page is asked (`fetch` by default).
+ * 200 with a page, set no cookie, and show nothing of `SHOWN_NOWHERE`. It fails closed: a page it cannot ask, or that
+ * answers anything else, is a failure, so a site whose pages cannot be read is not opened. `ask` is how a page is asked
+ * (`fetch` by default).
  */
 export async function openingFailures(origin, { ask = fetch } = {}) {
   const failures = [];

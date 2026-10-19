@@ -569,21 +569,18 @@ const EN = Object.freeze({
     heading: "Lex is being updated",
     intro: "This site is being updated and cannot answer for the moment. This page is not an answer about the law. Try again shortly.",
   }),
-  // The five legal pages every footer links (the plan's item 7.1; R49, R50, R62, R70, R74, R92; `legal-pages.mjs`), and what
-  // they share (`legal`). Each page's `sections` are its parts in order: a part's `heading`, then its paragraphs, a `list`
-  // being one list of items. A paragraph's placeholders are the publisher's details (`publisherName`, `publisherAddress`,
-  // `contactEmail`, `retention`, from `legal-publisher.mjs`, each its placeholder until the owner fills it), the footer's
-  // statements (`notAdvice`, `authenticity`: R50's sentence and the authenticity line, said once, word for word), a link to
-  // another legal page (`termsPage`, `cookiesPage`, in the words of `legal.inline`), the CNPD's site (`cnpdSite`), the EU
-  // texts' acknowledgement as they carry it, in English (`eurlexAcknowledgement`) and Luxembourg's accessibility law by its French title (`accessibilityLaw`).
-  // Every statement is one the code or the deployment supports (STATUS-WEB.md, the section of 2026-10-18 on the legal pages).
+  // The five legal pages every footer links (the plan's item 7.1; R49, R50, R62, R70; `legal-pages.mjs`), and what they
+  // share (`legal`). Each page's `sections` are its parts in order: a part's `heading`, then its paragraphs, a `list` being
+  // one list of items. A paragraph's placeholders are the footer's statements (`notAdvice`, `authenticity`: R50's sentence
+  // and the authenticity line, said once, word for word), a link to another legal page (`legalNoticePage`, `cookiesPage`,
+  // in the words of `legal.inline`), the EU texts' acknowledgement as they carry it, in English (`eurlexAcknowledgement`)
+  // and Luxembourg's accessibility law by its French title (`accessibilityLaw`). By the owner's decision of 2026-10-19 the
+  // pages name no person and give no postal address, no e-mail address and no contact of any kind, departing from R49 and
+  // O5. Every statement is one the code or the deployment supports (STATUS-WEB.md, the sections of 2026-10-18 and
+  // 2026-10-19 on the legal pages).
   legal: Object.freeze({
     menu: "Legal information",
     updated: "Last updated: {date}.",
-    months: Object.freeze({
-      one: "{count} month",
-      other: "{count} months",
-    }),
     inline: Object.freeze({
       legalNotice: "legal notice",
       privacy: "privacy notice",
@@ -596,17 +593,23 @@ const EN = Object.freeze({
     title: "Legal notice",
     eyebrow: "About this site",
     heading: "Legal notice",
-    intro: "Who publishes Lex, how to reach its publisher, and who hosts it.",
+    intro: "What Lex is, where its texts come from and under which licences, and who hosts it.",
     sections: Object.freeze({
-      publisher: Object.freeze({
-        heading: "Publisher",
-        who: "Lex is published by {publisherName}, {publisherAddress}, who is also its director of publication.",
-        contact: "Contact: {contactEmail}.",
-        what: "Lex is published by a private person. It is free, carries no advertising and asks for no account.",
+      what: Object.freeze({
+        heading: "What Lex is",
+        text: "Lex is an independent, non-commercial tool for reading Luxembourg and EU law over time: it shows a text as it stood on the date you choose, and how it changed. It is free, carries no advertising and asks for no account.",
+        notAdvice: "{notAdvice}",
       }),
-      independence: Object.freeze({
-        heading: "Independence",
-        text: "Lex is not a service of the Luxembourg State, of the Service central de législation, which publishes Legilux, or of the Publications Office of the European Union, and none of them endorses it. It reproduces texts they publish, as their licences allow: see the {termsPage}.",
+      status: Object.freeze({
+        heading: "No official status",
+        text: "Lex has no official status. It is not a service of the Luxembourg State, of the Service central de législation, which publishes Legilux, or of the Publications Office of the European Union, and none of them endorses it.",
+        prevails: "{authenticity} Where a text on Lex differs from its official publication, the official publication prevails.",
+      }),
+      sources: Object.freeze({
+        heading: "Sources and licences",
+        luxembourg: "The Luxembourg texts come from Legilux, published by the Service central de législation. Lex shows the text of a file only when Legilux's own records of that file give it the Creative Commons Attribution 4.0 International licence (CC BY 4.0); for any other file it shows the official link and not the text.",
+        europe: "The EU texts come from the Publications Office of the European Union and carry its acknowledgement, “{eurlexAcknowledgement}”. They are reused as the European Union's reuse policy allows (Commission Decision 2011/833/EU on the reuse of Commission documents).",
+        changes: "Lex extracts and normalises the texts it shows, and every article it quotes names its official source.",
       }),
       hosting: Object.freeze({
         heading: "Hosting",
@@ -618,43 +621,24 @@ const EN = Object.freeze({
     title: "Privacy notice",
     eyebrow: "About this site",
     heading: "Privacy notice",
-    intro: "The personal data Lex handles when you read it, when you write to its publisher and when a published act names you, and the rights you have.",
+    intro: "What happens to your data when you read Lex: it asks you for none, sets no cookie and keeps nothing about you.",
     sections: Object.freeze({
-      controller: Object.freeze({
-        heading: "Who is responsible",
-        text: "The controller is the publisher of Lex, {publisherName}, {publisherAddress}. For any question about your data, or to exercise one of the rights described below, write to {contactEmail}.",
-      }),
       reading: Object.freeze({
         heading: "When you read the site",
-        request: "Each page you open and each search you send is a request from your browser to this site's server. The request carries your device's IP address, the address of the page and the technical details every browser sends; a search carries the words you typed, in the body of the request. Microsoft, which hosts the site, carries the request to the server and its answer back to you.",
+        request: "Each page you open and each search you send is a request from your browser to this site's server. The request carries your device's IP address, the address of the page and the technical details every browser sends. A search's words travel in the body of the request, never in its address; a link that keeps a search holds it after the “#”, a part of the address your browser never sends.",
+        host: "Microsoft, which hosts the site, carries each request to the server and its answer back to you, and handles the connection data this needs under its own terms.",
         kept: "The server uses the request only to answer it, and keeps nothing of it once it has answered: it writes no access log and no record of what is read or searched, and the hosting is set up with no log store and no monitoring service that would keep requests. This is tested: the server is run with requests carrying marked values (a search phrase, an address, a browser's name), and none of them may appear in anything it writes.",
-        basis: "The legal basis is the legitimate interest of the publisher of Lex in offering the site to its readers (Article 6(1)(f) of the General Data Protection Regulation, Regulation (EU) 2016/679).",
+        nothingHeld: "Lex has no accounts and no sign-up, so it never knows who you are. Since it keeps nothing about a visit, it holds nothing about you that it could show, correct or erase.",
       }),
       nothingElse: Object.freeze({
         heading: "No cookies, no trackers, no other sites",
         cookies: "The site sets no cookie and writes nothing to your browser's storage (see the {cookiesPage}). It loads nothing from another site: no audience measurement, no advertising, and no fonts, scripts or images from elsewhere.",
         links: "Links to the publishers' sites, such as Legilux and EUR-Lex, are ordinary links. If you follow one, your browser asks that site directly, under that site's own privacy notice; Lex asks your browser not to tell it which page you came from.",
       }),
-      email: Object.freeze({
-        heading: "When you write to the publisher of Lex",
-        use: "If you write to {contactEmail}, the publisher of Lex receives your e-mail address, your message and anything you include, and uses them only to answer you and, when you report an error, to correct the site. Please include no personal details your message does not need.",
-        basis: "The legal basis is the legitimate interest of the publisher of Lex in answering and in keeping the site correct (Article 6(1)(f) of the Regulation). Your message is kept for {retention} after the matter it raises is closed, and then deleted.",
-      }),
       named: Object.freeze({
         heading: "People named in published acts",
         why: "Some published acts name people, for example a law granting nationality. Lex reproduces texts as the official journals publish them, the Journal officiel du Grand-Duché de Luxembourg and the Official Journal of the European Union, so that the law can be read at a date and checked against its official source.",
-        basis: "The legal basis is the legitimate interest of the publisher of Lex and of the public in access to the law as published (Article 6(1)(f) of the Regulation).",
         searchEngines: "Search engines may index the page of an act only once a check has found that the act names no private person; the page of any other act asks them not to.",
-        objection: "If a published act names you and you object to its text being shown here, write to {contactEmail}. The publisher of Lex will examine your objection and answer it.",
-      }),
-      processors: Object.freeze({
-        heading: "Who else handles the data",
-        text: "Microsoft hosts the site on its Microsoft Azure service, in the France Central region, in France, and handles the requests on behalf of the publisher of Lex, as a processor under its own data protection terms. An e-mail you send is held by the provider of the mailbox of the publisher of Lex. The publisher of Lex sells no data and shares none for any other purpose.",
-      }),
-      rights: Object.freeze({
-        heading: "Your rights",
-        ask: "You may ask the publisher of Lex for access to your personal data, for its rectification or erasure and for the restriction of its processing, and you may object to its processing (Articles 15 to 18 and 21 of the Regulation). Write to {contactEmail}. Since the site keeps no record of visits, it holds nothing about a visit that it could show or erase.",
-        complaint: "You may also lodge a complaint with the Commission nationale pour la protection des données (CNPD), 15, Boulevard du Jazz, L-4370 Belvaux, {cnpdSite}.",
       }),
     }),
   }),
@@ -662,30 +646,28 @@ const EN = Object.freeze({
     title: "Terms of use",
     eyebrow: "About this site",
     heading: "Terms of use",
-    intro: "What Lex is, where its texts come from and on what terms, what it does not promise, and how to report an error.",
+    intro: "How Lex may be used, under which licences its texts are shown, what it does not promise and how to cite it.",
     sections: Object.freeze({
       what: Object.freeze({
         heading: "What Lex is",
         notAdvice: "{notAdvice}",
         service: "It is an information service, free of charge: it shows the texts it holds, at the dates it holds them, and says so when it holds no text or no date. {authenticity}",
       }),
+      use: Object.freeze({
+        heading: "Using Lex",
+        text: "Anyone may read, search, cite and export the texts on Lex, free of charge and with no account.",
+      }),
       texts: Object.freeze({
         heading: "The texts and their licences",
-        luxembourg: "The Luxembourg texts come from Legilux, published by the Service central de législation. Lex shows the text of a file only when Legilux's own records of that file give it the Creative Commons Attribution 4.0 International licence (CC BY 4.0); for any other file it shows the official link and not the text.",
-        europe: "The EU texts come from the Publications Office of the European Union and carry its acknowledgement, “{eurlexAcknowledgement}”. They are reused as the European Union's reuse policy allows (Commission Decision 2011/833/EU on the reuse of Commission documents).",
-        reuse: "Lex extracts and normalises the texts it shows, and every article it quotes names its official source. Neither Legilux nor the Publications Office endorses Lex. These terms add no restriction to any reuse of the texts that their own licences allow.",
+        licences: "Each text keeps the licence of its source: the Creative Commons Attribution 4.0 International licence (CC BY 4.0) for the Luxembourg texts Lex shows, and the European Union's reuse policy (Commission Decision 2011/833/EU) for the EU texts. The {legalNoticePage} says where the texts come from and the acknowledgement each carries. These terms add no restriction to any reuse of the texts that their own licences allow.",
       }),
       warranty: Object.freeze({
         heading: "No warranty",
-        text: "Lex is offered as it is. The publisher of Lex does not guarantee that the texts are complete, up to date or free of errors, nor that the site is always available. Check the official text before you rely on it. Nothing in these terms excludes or limits a liability that the law does not allow to be excluded or limited.",
+        text: "Lex is offered as it is. It does not guarantee that the texts are complete, up to date or free of errors, nor that the site is always available. Check the official text before you rely on it. Nothing in these terms excludes or limits a liability that the law does not allow to be excluded or limited.",
       }),
       citing: Object.freeze({
         heading: "How to cite",
         text: "Cite the official text, by its official reference. Lex gives each article it quotes a citation and a permalink to the text shown, so that anyone can check the quotation against its official source.",
-      }),
-      errors: Object.freeze({
-        heading: "Reporting an error",
-        text: "If a text on Lex differs from its official source, or a page says something wrong, write to {contactEmail} with the address of the page. Please include no personal details the report does not need.",
       }),
     }),
   }),
@@ -693,7 +675,7 @@ const EN = Object.freeze({
     title: "Accessibility statement",
     eyebrow: "About this site",
     heading: "Accessibility statement",
-    intro: "How accessible Lex is, what has been done, what has not been checked yet, and how to report a barrier.",
+    intro: "How accessible Lex is, what has been done and what has not been checked yet.",
     sections: Object.freeze({
       status: Object.freeze({
         heading: "Conformance status",
@@ -720,13 +702,9 @@ const EN = Object.freeze({
           pdf: "Files exported as PDF are not tagged, so a screen reader cannot follow their structure; the JSON export carries the same text.",
         }),
       }),
-      report: Object.freeze({
-        heading: "Reporting a barrier",
-        text: "If something on Lex is in your way, or you need a text in another form, write to {contactEmail} with the address of the page and what got in your way.",
-      }),
       law: Object.freeze({
         heading: "The law",
-        text: "In Luxembourg, the {accessibilityLaw} sets the accessibility rules for public sector bodies. Lex is published by a private person, not by a public sector body, and gives this statement of its own accord.",
+        text: "In Luxembourg, the {accessibilityLaw} sets the accessibility rules for public sector bodies. Lex is not published by a public sector body, and gives this statement of its own accord.",
       }),
       prepared: Object.freeze({
         heading: "This statement",

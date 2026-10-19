@@ -451,24 +451,27 @@ test("the browser probes run the journey's real-mount steps against the revision
   assert.match(REMOTE_PRIVACY_NOTE, /privacy is not observed here/);
 });
 
-// The legal pages (the plan's item 7.1; `legal-pages.mjs`): a release's ten, each with what it says, filled or not.
-const legalPage = (path, filled) => Buffer.from(`<!doctype html><title>${path}</title><p>${filled ? "Lex is published by A. Publisher." : 'Lex is published by <span data-legal-placeholder="PUBLISHER_NAME">«PUBLISHER_NAME»</span>.'}</p>\n`);
-const legalWeb = (filled) => LEGAL_PAGE_PATHS.map((path) => [path.slice(1), legalPage(path, filled)]);
+// The legal pages (the plan's item 7.1; `legal-pages.mjs`): a release's ten, each with what it says. A clean page names no
+// person and gives no contact (the owner's decision of 2026-10-19); the other gives an e-mail address in a mail link, as the
+// pages did before that decision.
+const OFF_THE_SITE = /shows an e-mail address, a mail or telephone link, which the owner's decision of 2026-10-19 keeps off the site/;
+const legalPage = (path, clean) => Buffer.from(`<!doctype html><title>${path}</title><p>${clean ? "Lex is an independent, non-commercial tool." : 'Contact: <a href="mailto:someone@example.invalid">someone@example.invalid</a>.'}</p>\n`);
+const legalWeb = (clean) => LEGAL_PAGE_PATHS.map((path) => [path.slice(1), legalPage(path, clean)]);
 const servedLegal = (web, change = () => ({})) => new Map(web.map(([file, body]) => [`/${file}`, { body, ...change(`/${file}`) }]));
 
-test("a revision serves the release's own legal pages; one still saying a placeholder is said beside the pass, and fails a -Public deployment's probe", async () => {
-  for (const filled of [true, false]) {
-    const web = [...WEB, ...legalWeb(filled)];
-    const served = await revision({ legal: servedLegal(legalWeb(filled)) });
+test("a revision serves the release's own legal pages; one showing a contact is said beside the pass, and fails a -Public deployment's probe", async () => {
+  for (const clean of [true, false]) {
+    const web = [...WEB, ...legalWeb(clean)];
+    const served = await revision({ legal: servedLegal(legalWeb(clean)) });
     try {
       const notes = [];
-      assert.deepEqual(await revisionFailures(served.origin, { web, card: CARD, corpusSha256: CORPUS, notes }), [], `filled ${filled}: the private copy's probe passes`);
+      assert.deepEqual(await revisionFailures(served.origin, { web, card: CARD, corpusSha256: CORPUS, notes }), [], `clean ${clean}: the private copy's probe passes`);
       const said = notes.filter((note) => note.startsWith("the legal pages are not ready to publish"));
-      assert.equal(said.length, filled ? 0 : 1, `filled ${filled}: ${JSON.stringify(notes)}`);
-      if (!filled) assert.match(said[0], /\/fr\/cookies\.html still says «PUBLISHER_NAME»/, "each page's placeholder is named");
+      assert.equal(said.length, clean ? 0 : 1, `clean ${clean}: ${JSON.stringify(notes)}`);
+      if (!clean) assert.match(said[0], /\/fr\/cookies\.html shows an e-mail address, a mail or telephone link/, "each page is named");
       const opening = await revisionFailures(served.origin, { web, card: CARD, corpusSha256: CORPUS, opening: true });
-      assert.equal(opening.length, filled ? 0 : LEGAL_PAGE_PATHS.length, `filled ${filled}, opening: ${JSON.stringify(opening)}`);
-      assert.ok(opening.every((failure) => /^the legal pages are not ready to publish, so the site may not open: \/(?:en|fr)\/[a-z-]+\.html still says «PUBLISHER_NAME»/.test(failure)), JSON.stringify(opening));
+      assert.equal(opening.length, clean ? 0 : LEGAL_PAGE_PATHS.length, `clean ${clean}, opening: ${JSON.stringify(opening)}`);
+      assert.ok(opening.every((failure) => /^the legal pages are not ready to publish, so the site may not open: \/(?:en|fr)\/[a-z-]+\.html shows /.test(failure) && OFF_THE_SITE.test(failure)), JSON.stringify(opening));
     } finally {
       await served.close();
     }
@@ -511,16 +514,20 @@ test("a legal page served with other bytes, without the page's CSP or with a coo
   }
 });
 
-test("the opening's check fails closed: a placeholder, a page that does not answer as a page, a cookie, or a site it cannot reach", async () => {
-  const filled = await revision({ legal: servedLegal(legalWeb(true)) });
+test("the opening's check fails closed: a page showing a contact or a placeholder, a page that does not answer as a page, a cookie, or a site it cannot reach", async () => {
+  const clean = await revision({ legal: servedLegal(legalWeb(true)) });
   try {
-    assert.deepEqual(await openingFailures(filled.origin), [], "ten pages, filled, served as pages without a cookie: the site may open");
+    assert.deepEqual(await openingFailures(clean.origin), [], "ten pages that name no person and give no contact, served as pages without a cookie: the site may open");
   } finally {
-    await filled.close();
+    await clean.close();
   }
+  const page = (path, body) => (one) => (one === path ? { body: Buffer.from(body) } : {});
   const cases = [
-    ["a placeholder", { legal: servedLegal(legalWeb(false)) }, /still says «PUBLISHER_NAME»/, LEGAL_PAGE_PATHS.length],
-    ["a detail marked unfilled, its token cut", { legal: servedLegal(legalWeb(true), (path) => (path === "/fr/privacy.html" ? { body: Buffer.from('<p><span data-legal-placeholder="CONTACT_EMAIL"></span></p>') } : {})) }, /^\/fr\/privacy\.html still says a detail marked data-legal-placeholder/, 1],
+    ["an e-mail address in a mail link, on every page", { legal: servedLegal(legalWeb(false)) }, OFF_THE_SITE, LEGAL_PAGE_PATHS.length],
+    ["an e-mail address alone", { legal: servedLegal(legalWeb(true), page("/fr/privacy.html", "<p>Écrivez à someone@example.invalid.</p>")) }, /^\/fr\/privacy\.html shows an e-mail address, which/, 1],
+    ["a telephone link", { legal: servedLegal(legalWeb(true), page("/en/legal-notice.html", '<p><a href="tel:+352000000">Call</a></p>')) }, /^\/en\/legal-notice\.html shows a mail or telephone link, which/, 1],
+    ["a placeholder a template left", { legal: servedLegal(legalWeb(true), page("/fr/legal-notice.html", "<p>Lex est édité par «PUBLISHER_NAME».</p>")) }, /^\/fr\/legal-notice\.html shows a placeholder a template left \(«LIKE_THIS»\), which/, 1],
+    ["a postal address", { legal: servedLegal(legalWeb(true), page("/en/privacy.html", "<p>1, rue de l’Exemple, L-0000 Exempleville</p>")) }, /^\/en\/privacy\.html shows a Luxembourg postcode, as a postal address writes it, which/, 1],
     ["a page missing", { legal: servedLegal(legalWeb(true), (path) => (path === "/en/terms.html" ? { status: 404 } : {})) }, /^\/en\/terms\.html answered 404 text\/html; charset=utf-8, not 200 with a page$/, 1],
     ["a cookie", { legal: servedLegal(legalWeb(true), (path) => (path === "/en/accessibility.html" ? { headers: { "set-cookie": "affinity=1" } } : {})) }, /^\/en\/accessibility\.html sets a cookie/, 1],
   ];
@@ -540,20 +547,31 @@ test("the opening's check fails closed: a placeholder, a page that does not answ
   assert.ok(unreachable.every((failure) => / could not be asked \(.+\), so the site is not opened$/.test(failure)), JSON.stringify(unreachable));
 });
 
-test("the probe's command line runs the opening's check alone with --opening and no release, and fails while a page says a placeholder", async () => {
+test("the probe's command line runs the opening's check alone with --opening and no release: it passes over clean pages, and fails on a contact, a cookie or a site it cannot read", async () => {
   const run = (args) => new Promise((resolve) => {
     execFile(process.execPath, [fileURLToPath(new URL("../scripts/deploy-probe.mjs", import.meta.url)), ...args], { timeout: 60_000 }, (error, stdout, stderr) => {
       resolve({ code: error?.code ?? 0, stdout, stderr });
     });
   });
-  for (const [filled, code] of [[true, 0], [false, 1]]) {
-    const served = await revision({ legal: servedLegal(legalWeb(filled)) });
+  for (const [clean, code] of [[true, 0], [false, 1]]) {
+    const served = await revision({ legal: servedLegal(legalWeb(clean)) });
     try {
       const result = await run(["--opening", "--origin", served.origin]);
-      assert.equal(result.code, code, `filled ${filled}: ${result.stdout}${result.stderr}`);
-      assert.match(result.stdout, filled ? /are ready to publish: each of the 10 answers, sets no cookie and says no placeholder/ : /^10 reason\(s\) the site may not open$/m);
+      assert.equal(result.code, code, `clean ${clean}: ${result.stdout}${result.stderr}`);
+      assert.match(result.stdout, clean ? /are ready to publish: each of the 10 answers, sets no cookie and shows no e-mail address, mail or telephone link, placeholder or postcode/ : /^10 reason\(s\) the site may not open$/m);
     } finally {
       await served.close();
     }
   }
+  const cookie = await revision({ legal: servedLegal(legalWeb(true), (path) => (path === "/fr/terms.html" ? { headers: { "set-cookie": "affinity=1" } } : {})) });
+  try {
+    const result = await run(["--opening", "--origin", cookie.origin]);
+    assert.equal(result.code, 1, `a cookie: ${result.stdout}${result.stderr}`);
+    assert.match(result.stderr, /^- \/fr\/terms\.html sets a cookie/m);
+  } finally {
+    await cookie.close();
+  }
+  const unread = await run(["--opening", "--origin", "http://127.0.0.1:9"]);
+  assert.equal(unread.code, 1, `a site it cannot read: ${unread.stdout}${unread.stderr}`);
+  assert.match(unread.stdout, /^10 reason\(s\) the site may not open$/m);
 });
