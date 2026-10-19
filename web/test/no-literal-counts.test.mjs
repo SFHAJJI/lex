@@ -122,11 +122,16 @@ test("no live page, as built or rendered from the census answers, says a pack fi
   }
 });
 
-test("the home page's coverage line says the counts the coverage answer serves, and no other number than its build's date", () => {
+/** An answer given long after any build the census records: its index is older than today, so today is said beside it. */
+const LATER = "2026-12-01T10:00:00.0000000Z";
+
+test("the home page's coverage line says the counts the coverage answer serves, and no other number than its build's date and today's", () => {
   const base = census.envelopes.find((entry) => entry.operation === "coverage" && entry.envelope.result !== null).envelope;
-  // Counts no table holds, and the pack's own figures served as counts: a served figure is shown, as served.
-  for (const [works, states, articles] of [[7919, 7927, 7933], [1402, 24579, 23370], [0, 0, 0]]) {
+  // Counts no table holds, and the pack's own figures served as counts: a served figure is shown, as served; and the same
+  // answered once the index is older than today (R13; the plan's item 3.4), when today's date is said beside the build's.
+  for (const [works, states, articles, later] of [[7919, 7927, 7933], [1402, 24579, 23370], [0, 0, 0], [7919, 7927, 7933, true], [1402, 24579, 23370, true]]) {
     const envelope = structuredClone(base);
+    if (later) envelope.context.freshness.observed_at = LATER;
     const value = envelope.result.value;
     value.totals = { ...value.totals, works, states, articles };
     value.languages = value.languages.map((row) => ({ ...row, works, states, articles, articles_with_searchable_text: Math.min(row.articles_with_searchable_text, articles), searchable_text_held: Math.min(row.articles_with_searchable_text, articles) > 0 }));
@@ -136,15 +141,17 @@ test("the home page's coverage line says the counts the coverage answer serves, 
     const html = renderLiveHomePage({ facts });
     const line = /data-coverage-line="counted"[^>]*>([^<]+)</.exec(html)?.[1];
     assert.ok(line !== undefined, "the line");
-    assert.deepEqual(line.match(/\d+(?:-\d+)*/g), [String(works), String(states), String(articles), facts.coverage.builtOn], line);
+    assert.deepEqual(line.match(/\d+(?:-\d+)*/g), [String(works), String(states), String(articles), facts.coverage.builtOn, ...(later ? ["2026-12-01"] : [])], line);
   }
 });
 
-test("a search's population line says the counts the search answer serves, and no other number than its index's build date (the plan's item 4.3)", () => {
+test("a search's population line says the counts the search answer serves, and no other number than its index's build date and today's (the plan's items 4.3 and 3.4)", () => {
   const base = census.envelopes.find((entry) => entry.operation === "search" && entry.scenario.startsWith("the phrase as the site asks it")).envelope;
-  // Counts no table holds, the pack's own figures served as counts, and none: a served figure is shown, as served.
-  for (const [works, states, articles] of [[7919, 7927, 7933], [1402, 24579, 23370], [0, 0, 0]]) {
+  // Counts no table holds, the pack's own figures served as counts, and none: a served figure is shown, as served; and the
+  // same answered once the index is older than today, when today's date is said beside the build's (R13).
+  for (const [works, states, articles, later] of [[7919, 7927, 7933], [1402, 24579, 23370], [0, 0, 0], [7919, 7927, 7933, true], [0, 0, 0, true]]) {
     const envelope = structuredClone(base);
+    if (later) envelope.context.freshness.observed_at = LATER;
     const value = envelope.result.value;
     const hits = value.hits.length;
     value.searched = { ...value.searched, works: Math.max(works, 1), states: Math.max(states, 1), articles_with_searchable_text: Math.max(articles, hits) };
@@ -154,6 +161,6 @@ test("a search's population line says the counts the search answer serves, and n
     const line = /<p data-searched="\d+"[^>]*>([^<]+)</.exec(html)?.[1];
     assert.ok(line !== undefined, "the line");
     const served = value.searched;
-    assert.deepEqual(line.match(/\d+(?:-\d+)*/g), [String(served.works), String(served.states), String(served.articles_with_searchable_text), builtOnOf(served.index_built_at)], line);
+    assert.deepEqual(line.match(/\d+(?:-\d+)*/g), [String(served.works), String(served.states), String(served.articles_with_searchable_text), builtOnOf(served.index_built_at), ...(later ? ["2026-12-01"] : [])], line);
   }
 });

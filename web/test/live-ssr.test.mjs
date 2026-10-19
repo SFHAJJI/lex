@@ -38,6 +38,12 @@ const STATE = READING.result.value.states[0];
 // permalink whose digest is not the one held at its date gets, with the current link.
 const PINNED = envelopeOf("evidence_bundle", "a state's permalink at its own date");
 const MISMATCH = envelopeOf("evidence_bundle", "a state's permalink whose digest is not the one held at its date");
+/** An answer as given on `date` (at the same time of day, in the morning in Luxembourg): a readable address asked today. */
+const answeredOn = (envelope, date) => {
+  const answered = structuredClone(envelope);
+  answered.context.freshness.observed_at = answered.context.freshness.observed_at.replace(/^\d{4}-\d{2}-\d{2}/, date);
+  return answered;
+};
 
 /**
  * The built server renderer of each interface language (`ssr/{language}.js`), as both servers run it, built once for this
@@ -229,14 +235,33 @@ test("a permalink's reading is rendered complete, and the browser renders the sa
   assert.equal(rootOf(refusedHtml, LIVE_READING_ROOT), renderToString(liveReadingTree({ envelope: MISMATCH, path: refusedPath })));
 
   // An act's readable address (R67): the reading at today's date (the answer's own), the cited article first, and its
-  // readable address as canonical.
-  const readable = { envelope: READING, path: `/en/lu-legilux/loi-1991-08-10-n3/fra/${cited.publisher_id}` };
+  // readable address as canonical; today said beside the form's date (R13), the answer's day: asked on the day it was answered.
+  const readable = { envelope: answeredOn(READING, READING.result.value.requested_date), path: `/en/lu-legilux/loi-1991-08-10-n3/fra/${cited.publisher_id}` };
   const readableHtml = renderLiveReadingPage({ initial: readable });
   assert.ok(readableHtml.includes(`data-cited-article="${cited.publisher_id}"`), "the cited article first at a readable address too");
   assert.ok(readableHtml.includes(`<p data-whole-act=""><a href="/en/lu-legilux/loi-1991-08-10-n3/fra">`), "the whole act at its readable address");
   assert.ok(readableHtml.includes(`<link rel="canonical" href="https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3/fra/${cited.publisher_id}"/>`));
   assert.ok(readableHtml.includes(`value="${STATE.applicability_date}"`), "the form names the date the answer was asked for");
+  assert.ok(readableHtml.includes(`<p id="reading-today" class="field-hint" data-today="${STATE.applicability_date}">Today in Luxembourg: ${STATE.applicability_date}.</p>`), "today beside the date field, the answer's day");
+  assert.ok(!readableHtml.includes("data-not-today"), "read today: nothing to say of another day");
   assert.equal(rootOf(readableHtml, LIVE_READING_ROOT), renderToString(liveReadingTree(readable)), "hydration changes nothing");
+
+  // The same address read on another day than the one the answer was given on (an address that keeps a date, `?date=`, the
+  // plan's item 3.4): the date read and today, first, with the act at today's date; the whole act at the version it shows,
+  // by its permalink; the canonical still the readable address, the version shown being today's too.
+  const another = { envelope: READING, path: readable.path };
+  const anotherHtml = renderLiveReadingPage({ initial: another });
+  assert.ok(anotherHtml.replaceAll("<!-- -->", "").includes(`<p data-not-today="${STATE.applicability_date}">This page reads the act on ${STATE.applicability_date}, as this site holds it for that date; today in Luxembourg is 2026-09-18. <a href="/en/lu-legilux/loi-1991-08-10-n3/fra/${cited.publisher_id}" data-read-today="">Read this act at today&#x27;s date</a></p>`), anotherHtml.slice(anotherHtml.indexOf("data-pinned-lead"), anotherHtml.indexOf("data-pinned-lead") + 400));
+  assert.ok(anotherHtml.indexOf("data-not-today") < anotherHtml.indexOf("data-cited-article"), "said first");
+  assert.ok(anotherHtml.includes(`<p data-whole-act=""><a href="/en${STATE.permalink}">`), "the whole act at the version it shows");
+  assert.ok(anotherHtml.includes(`<link rel="canonical" href="https://law.soufien.lu/en/lu-legilux/loi-1991-08-10-n3/fra/${cited.publisher_id}"/>`), "the version shown is today's");
+  assert.equal(rootOf(anotherHtml, LIVE_READING_ROOT), renderToString(liveReadingTree(another)), "hydration changes nothing");
+  // A version that is not today's: its permalink is the page's canonical address, which the release's switch never opens.
+  const superseded = structuredClone(READING);
+  superseded.result.value.states[0].next_applicability_date = "2025-03-07";
+  const supersededHtml = renderLiveReadingPage({ initial: { envelope: superseded, path: readable.path } });
+  assert.ok(supersededHtml.includes(`<link rel="canonical" href="https://law.soufien.lu/en${STATE.permalink}/${cited.publisher_id}"/>`), "the version's own permalink, its article's");
+  assert.ok(supersededHtml.replaceAll("<!-- -->", "").includes(`<p data-changed-since="">A newer version is applicable from 2025-03-07 (publisher). <a href="/en/lu-legilux/loi-1991-08-10-n3/fra/${cited.publisher_id}">Read this act at today&#x27;s date</a></p>`));
 
   const stale = { envelope: READING, path: `/en${STATE.permalink.replace(/--[0-9a-f]{64}\//, `--${"0".repeat(64)}/`)}` };
   const staleHtml = renderLiveReadingPage({ initial: stale });
@@ -359,7 +384,8 @@ test("the live server renders a law's address from the API's answer, refuses to 
       const value = JSON.parse(envelope);
       return '<!doctype html><p>' + kind + ' ' + (value.refusal ? value.refusal.code : 'answer') + ' ' + path + '</p>';
     } };`);
-    const live = createLiveServer({ root, apiOrigin: `http://127.0.0.1:${api.address().port}`, now: () => "2026-10-15T23:30:00Z" });
+    let clock = "2026-10-15T23:30:00Z";
+    const live = createLiveServer({ root, apiOrigin: `http://127.0.0.1:${api.address().port}`, now: () => clock });
     const origin = await new Promise((resolve) => live.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${live.address().port}`)));
     try {
       const permalink = `/en/lu-legilux/loi-1991-08-10-n3/2024-02-01--${"a".repeat(64)}/fra/art_15`;
@@ -381,6 +407,27 @@ test("the live server renders a law's address from the API's answer, refuses to 
       const readable = "/en/lu-legilux/loi-1991-08-10-n3/fra/art_15";
       assert.equal((await fetch(`${origin}${readable}`)).status, 200);
       assert.deepEqual(JSON.parse(asked.at(-1).body), { operation_id: "evidence_bundle", parameters: { identifier: "/lu-legilux/loi-1991-08-10-n3", date: "2026-10-16", language: "fra", article: "art_15" } });
+      // On both sides of each clock change (the plan's item 3.4): the day turns at midnight in Luxembourg, 22:00 UTC in
+      // summer time and 23:00 UTC in winter time; summer time ends on 25 October 2026 and starts on 28 March 2027. An address
+      // that keeps a date is asked at it, whatever the clock says.
+      for (const [instant, date] of [
+        ["2026-10-24T21:59:59Z", "2026-10-24"], ["2026-10-24T22:00:00Z", "2026-10-25"], ["2026-10-25T22:59:59Z", "2026-10-25"],
+        ["2026-10-25T23:00:00Z", "2026-10-26"], ["2027-03-27T22:59:59Z", "2027-03-27"], ["2027-03-27T23:00:00Z", "2027-03-28"],
+        ["2027-03-28T21:59:59Z", "2027-03-28"], ["2027-03-28T22:00:00Z", "2027-03-29"],
+      ]) {
+        clock = instant;
+        assert.equal((await fetch(`${origin}${readable}`)).status, 200);
+        assert.equal(JSON.parse(asked.at(-1).body).parameters.date, date, `${instant}: today in Luxembourg`);
+        assert.equal((await fetch(`${origin}${readable}?date=2024-02-01`)).status, 200);
+        assert.equal(JSON.parse(asked.at(-1).body).parameters.date, "2024-02-01", `${instant}: the date the address keeps`);
+      }
+      clock = "1970-01-01T00:00:00Z";
+      const asks = asked.length;
+      assert.equal(await (await fetch(`${origin}${readable}`)).text(), "<!doctype html><p>the reading page as built</p>", "a clock outside the rule's range: the page as built, which asks for itself");
+      assert.equal(asked.length, asks, "and the server asks nothing");
+      assert.equal((await fetch(`${origin}${readable}?date=2024-02-01`)).status, 200);
+      assert.equal(JSON.parse(asked.at(-1).body).parameters.date, "2024-02-01", "a date kept needs no clock");
+      clock = "2026-10-15T23:30:00Z";
 
       // R64: the EU shape before it has moved for good, its interface language and query kept; the Luxembourg shape before it
       // names no language, so it is answered as any address the server does not hold.

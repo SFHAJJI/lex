@@ -18,7 +18,8 @@
 
 import { useEffect } from 'react';
 import { hydrateRoot } from 'react-dom/client';
-import { parseSitePath, sameDocumentIn } from '../scripts/permalinks.mjs';
+import { parseSitePath } from '../scripts/permalinks.mjs';
+import { writeLanguageLinks } from './page-address.mjs';
 import { addressBeforeAnswer } from '../scripts/initial-answer.mjs';
 import { writeLawPageLinks } from './head-links.mjs';
 
@@ -42,11 +43,11 @@ export function attach(container, element) {
   // the same value.
   const state = { mismatched: false };
 
-  // The interface languages lead to this same page in each, its article included (R61): the build wrote their home pages,
-  // which a reader without scripts follows. The links stand outside the hydrated root, so React reads none of this.
-  for (const link of document.querySelectorAll('[data-locale-nav] a[data-same-document]')) {
-    link.setAttribute('href', `${sameDocumentIn(link.dataset.sameDocument, window.location.pathname)}${window.location.hash}`);
-  }
+  // The interface languages lead to this same page in each, its article included (R61), with the date a readable address
+  // keeps, the page a reading names and the fragment (`sameAddressIn`): the build wrote their home pages, which a reader
+  // without scripts follows. The links stand outside the hydrated root, so React reads none of this; a page that writes its
+  // own address writes them again (`page-address.mjs`).
+  writeLanguageLinks(document, window.location);
 
   // A law's page as built (served when the server could not render it) names no canonical link: it names an address the
   // platform mints, with no interface language (R64, R67), never the request's own (`addressBeforeAnswer`): a reading's

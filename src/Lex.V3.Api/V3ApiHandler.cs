@@ -64,13 +64,16 @@ internal sealed class V3ApiHandler
     /// Today in Luxembourg by this server's clock (R13, <see cref="LuxembourgCalendar"/>), as <c>yyyy-MM-dd</c>; null for a
     /// clock outside the range the rule is held for, when a readable address's page is served as built.
     /// </summary>
-    private string? LuxembourgToday()
-    {
-        var now = _utcNow();
-        return now >= LuxembourgCalendar.ValidFrom && now < LuxembourgCalendar.ValidUntil
+    private string? LuxembourgToday() => LuxembourgTodayAt(_utcNow());
+
+    /// <summary>
+    /// Today in Luxembourg at <paramref name="now"/> (R13, <see cref="LuxembourgCalendar"/>), as <c>yyyy-MM-dd</c>, the date a
+    /// readable address with no date of its own is rendered at; null outside the range the rule is held for.
+    /// </summary>
+    internal static string? LuxembourgTodayAt(DateTimeOffset now) =>
+        now >= LuxembourgCalendar.ValidFrom && now < LuxembourgCalendar.ValidUntil
             ? LuxembourgCalendar.DateAt(now).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
             : null;
-    }
 
     /// <summary>Shared with <see cref="V3McpJsonRpc"/> so the MCP transport refuses a call with no corpus mounted the same way REST does.</summary>
     internal static V3EnvelopeContext UnmountedLuxembourgContext(Func<DateTimeOffset> utcNow) =>

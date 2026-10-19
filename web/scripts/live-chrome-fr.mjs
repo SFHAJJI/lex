@@ -141,6 +141,16 @@
 // the English changed with each). The forms that review gave for its points 4, 6 and 7 (`search.titleMatching`,
 // `search.actPassages` with its full stop, `search.officialSites.eurlex` naming the advanced search) ship as it gave them,
 // with the English it named. `search.namesWork`, `search.severalWorks`, `search.candidate` and `search.hit` were removed.
+// Today beside the dates and a search kept in the address (the plan's items 3.4 and 3.5; R13, R109): the search page's
+// introduction (`search.intro`, its last sentence: where the phrase goes and where the page keeps it), today beside an older
+// index's date (`search.searchedOlder`, `home.coverageOlder`), a fragment the form will not send (`search.addressUnread`) and
+// a readable address read on another day than today (`reading.notToday`), with the reviewed `form.today` in its new places
+// (the reading form and the export composer, Compare, Changes, the dossier), were reviewed by an independent reviewer
+// (Claude, AI reviewer, not the author) under the same delegation in the addendum of 2026-10-19 on today and the search's
+// address (5 forms, 2 changed in review, the English with them: the phrase is never in "the request's address", not "an
+// address a server could record", which a shared link is; the part after "#" is what the browser never sends, never the
+// page's address; a reading of another day "porte sur" the act, true over a refusal too, as this site holds it "pour cette
+// date"). "au Luxembourg, nous sommes aujourd’hui le {today}" is the table's form of today inside a sentence.
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -164,7 +174,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Recherche',
     eyebrow: 'Recherche',
     heading: 'Rechercher dans le texte détenu',
-    intro: 'Trouve les actes dont l’intitulé correspond à l’expression et, dans le texte que ce serveur détient et qu’il est autorisé à interroger, les articles qui la contiennent exactement telle que saisie : un texte que ses droits ne permettent pas de communiquer n’entre pas dans la recherche. L’expression est envoyée à ce serveur dans la requête et nulle part ailleurs, et cette page ne conserve rien.',
+    intro: 'Trouve les actes dont l’intitulé correspond à l’expression et, dans le texte que ce serveur détient et qu’il est autorisé à interroger, les articles qui la contiennent exactement telle que saisie : un texte que ses droits ne permettent pas de communiquer n’entre pas dans la recherche. L’expression est envoyée à ce serveur dans le corps de la requête, jamais dans l’adresse de la requête ; cette page ne conserve la recherche que dans sa propre adresse, après « # », dans une partie que le navigateur n’envoie jamais, de sorte qu’un lien vers cette adresse partage la recherche.',
     idle: 'Saisissez une expression pour rechercher dans le texte des articles que ce serveur détient et qu’il est autorisé à interroger.',
     population: Object.freeze({
       one: '« {query} » en {language} : {strict} avec l’expression exacte, {relaxed} avec chacun des mots, dans {works} acte.',
@@ -219,6 +229,8 @@ export const LIVE_CHROME_FR = Object.freeze({
     }),
     searched: 'Recherche effectuée dans {acts} du droit luxembourgeois en {language}, en {versions} comptant {articles} au texte interrogeable, d’après l’index construit le {date}.',
     searchedUndated: 'Recherche effectuée dans {acts} du droit luxembourgeois en {language}, en {versions} comptant {articles} au texte interrogeable ; l’index que ce site détient ne consigne aucune date de construction.',
+    searchedOlder: 'Recherche effectuée dans {acts} du droit luxembourgeois en {language}, en {versions} comptant {articles} au texte interrogeable, d’après l’index construit le {date} ; au Luxembourg, nous sommes aujourd’hui le {today}.',
+    addressUnread: 'La recherche contenue dans l’adresse de cette page n’a pas pu être lue ; aucune recherche n’a donc été effectuée.',
     withheld: Object.freeze({
       one: '{count} version dont les droits ne permettent pas de communiquer le texte n’a pas été interrogée.',
       other: '{count} versions dont les droits ne permettent pas de communiquer le texte n’ont pas été interrogées.',
@@ -294,6 +306,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     europeNewerWording: 'Un libellé ultérieur de cet acte est détenu : le libellé du {date}.',
     europeLaterWordingNotHeld: 'Les données de l’éditeur nomment, pour cet acte, un libellé ultérieur du {date}, dont ce site ne détient pas le texte dans cette langue.',
     openToday: 'Lire cet acte à la date du jour',
+    notToday: 'Cette page porte sur l’acte à la date du {date}, tel que ce site le détient pour cette date ; au Luxembourg, nous sommes aujourd’hui le {today}.',
     title: 'Lecture',
     eyebrow: 'Lecture',
     heading: 'Le texte à une date',
@@ -679,6 +692,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     aboutHeading: 'Ce qu’est Lex et ce qu’il n’est pas',
     coverage: 'Ce site détient {acts} du droit luxembourgeois, en {versions} comptant {articles}, d’après l’index construit le {date}.',
     coverageUndated: 'Ce site détient {acts} du droit luxembourgeois, en {versions} comptant {articles} ; l’index qu’il détient ne consigne aucune date de construction.',
+    coverageOlder: 'Ce site détient {acts} du droit luxembourgeois, en {versions} comptant {articles}, d’après l’index construit le {date} ; au Luxembourg, nous sommes aujourd’hui le {today}.',
     acts: Object.freeze({
       one: '{count} acte',
       other: '{count} actes',

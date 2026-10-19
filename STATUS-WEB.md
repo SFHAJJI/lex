@@ -4,6 +4,108 @@ Updated 2026-10-18. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Today in Luxembourg on every page and in the address, and a search kept after "#" (sole driver, 2026-10-18)
+
+The plan's items 3.4 ("'Today' is the calendar date in Luxembourg. It is always printed, written into the address and the
+trace, and shown beside the index date when the index is older. It uses 0.8's coded rule and the clock-change probe") and
+3.5 ("A search lives in the address after '#', so it can be shared. The words travel in the request body, never in an
+address that a server could log"), to the specification of record's R13 and R109. Branch `writer/today-and-search-address`.
+- **Today, one rule** (`temporal.mjs`: `luxembourgDateOrNull`, `todayInLuxembourg`; the API's `LuxembourgCalendar`, and
+  `V3ApiHandler.LuxembourgTodayAt` for a readable address): read at the instant the server answered when the page shows an
+  answer (`context.freshness.observed_at`), so the page the server rendered and the page hydrated name one date; else this
+  browser's clock once hydrated (`Today.jsx`, `useLuxembourgToday`); never the build's time; a clock outside the rule's years
+  names no date.
+- **Always printed** ("Today in Luxembourg: {date}.", the reviewed `form.today`): beside the date field of the home and
+  search pages (as before), of the reading form (and the export composer, which shares it), and beside the two dates of
+  Compare and of Changes; on its own line under the dossier's count of versions held. The 404 page's box is the home form.
+- **Beside an older index's date**: the home page's coverage line and a search's population ("…, as of the index built on
+  {date}; today in Luxembourg is {today}.", `home.coverageOlder`, `search.searchedOlder`) when the index's build date in
+  Luxembourg is before today (`indexOlderThanToday`); an index built today says its date alone. The footer's build date is
+  6.1's.
+- **Written into the address**: an act's readable address keeps the date it was read at in its query, `?date=yyyy-mm-dd`.
+  - Both servers render a readable address at the date its query keeps (its first `date` parameter, a calendar date; any
+    other value is today), with or without a clock (`V3WebRoot.DateOfQuery`, `permalinks.mjs` `dateOfQuery`), held to the
+    shared table (`site-paths.json`, eleven new rows). A permalink names its date in its path and a dossier none: neither
+    reads one.
+  - The page, once it has read the act at an address with no date, writes that date into its own address
+    (`withDateQuery`, `history.replaceState`: no history entry, no history state), so a link a reader copies keeps it. The
+    language menu's links carry the date and a reading's page (`sameAddressIn`), and the fragment.
+  - A reading of another day than today says so first: "This page reads the act on {date}, as this site holds it for that
+    date; today in Luxembourg is {today}." with the link to the act at today's date (`reading.notToday`, `NotToday`). Its
+    whole act and its pages link to the version shown by its permalink; at an undated readable address they stay the act's
+    own address (`readsAnotherDay`, decided from the answer alone: the date it was asked for against the day it was given
+    on, so the server's render, which reads no query, and the browser's hydration say one thing, and a page asked just
+    before midnight and answered after it is said truly).
+- **The trace**: every request that answers as of today names its date (the home page's search, a readable address's
+  reading), the answer echoes it (`requested_date`, or the reference phase's `today_in_luxembourg`), and its
+  `observed_at` is the instant today is read from. No envelope member was added; the registry digest is unchanged.
+- **The clock-change probe**: the date on both sides of each change, around 25 October 2026 and 28 March 2027, in the API
+  (`AReadableAddressIsAskedAtTodayInLuxembourgOnBothSidesOfEachClockChangeOrAtTheDateItKeeps`), the live server
+  (`live-ssr.test.mjs`, its clock moved across both changes) and on the pages (`today.test.mjs`: the dossier, the reading's
+  form, the search's population and the home page's coverage line, at every instant of the shared table around a change);
+  the deploy probe's own (0.8) is unchanged.
+- **A search after "#"** (`search-address.mjs`): `#q={phrase}&lang={language}[&work={identifier}][&date={yyyy-mm-dd}]`,
+  each value as `encodeURIComponent` writes it.
+  - Written when the reader asks a search (the address replaced, never pushed); read once the page has hydrated, and on
+    `hashchange`, and asked as the reader would; the words still go to the API in the request's body alone. The lane is not
+    written (the site asks the strict lane) and neither is a later page's cursor (a link opens the first page).
+  - A fragment with no `=` is a position (the skip link's `#main`): nothing is asked or said. A fragment written as a search
+    that the form will not send (a key it does not know, a key twice, a value that does not decode, an empty value, no
+    phrase, a language not offered, a date that is no calendar date, a work named on the home page, a phrase past the
+    platform's ceilings, a fragment past 8,192 characters) is refused whole: nothing is asked and the page says "The search
+    in this page's address could not be read, so nothing was searched." (`search.addressUnread`), repeating none of it.
+  - A search read from the address that opens an act (an exact reference) shows the act's link and does not go there by
+    itself, so the browser's Back never loops through it; a reader's own submit still goes there.
+  - The search page's introduction now says where the phrase goes and where the page keeps it (`search.intro`).
+- **No words in any request address**: `request-addresses.test.mjs` scans the import closure of every page's browser entry
+  for every way to send a request or change an address (fetch, XMLHttpRequest, sendBeacon, EventSource, WebSocket, an
+  image's address, a dynamic import, a navigation, the history, the page's own address, a form's own submit) and pins each
+  of the six it finds, line for line, with why it carries no word; every live screen asked with words asks exactly
+  `POST /api/v3/{operation}`, no query, no fragment, the words in the body; and no page's form has an action or a method, no
+  control a name. The 404 page's box keeps nothing in its address (`data-address="none"`). `PublicRequestRecordingTests` is
+  unchanged and passes.
+- **The journeys** (CI's lane): a page ends at its own address with what it writes there (`endAddressesOf`: a search after
+  "#", built from the very request the step must send; a readable address with `?date=`, on either of a run's two days), the
+  language menu is held to that address, and a new fixture-mount run opens the search page at a kept search and must ask it
+  once and stay there (`KEPT_SEARCH_STEP`).
+- **French** (Decision 41): 5 forms (`search.intro`, changed; `search.searchedOlder`, `search.addressUnread`, `home.coverageOlder` and
+  `reading.notToday`, new) were reviewed by an independent reviewer (Claude, AI reviewer, not the author) in the addendum of
+  2026-10-19 "today beside the dates, and a search kept in the address" of `C:\lex-v3\lanes\fr-review\review.md`; 2
+  changed in review, the English with them, both applied: the phrase is never in "the request's address" (the draft's "an
+  address a server could record" was false of a shared link, which mail and chat servers can record) and the part after
+  "#" is what the browser never sends (the clause had attached to the page's address); a reading of another day "porte
+  sur" the act, true above a refusal too, as this site holds it "for that date" ("pour cette date"). Today inside a
+  sentence is "au Luxembourg, nous sommes aujourd’hui le {today}"; the reviewed `form.today` is confirmed in its four new
+  places. 154 checks by script; the forms are named in the header comment of `live-chrome-fr.mjs`.
+- **Driver decisions** (reversible):
+  - The date goes into a readable address's query, not its fragment: R64 keeps "#" for a position inside an article, and a
+    server must render the dated reading (R67) and cannot read a fragment. A date is digits and dashes, no word (R109).
+  - The dated address stays a readable address, never a permalink: it names no digest, so it says the act this site holds
+    for its date (a version recorded later for that date is the one it then shows); the permalink still pins one version.
+    Its canonical is the readable address with no date while the version shown is today's, else that version's permalink,
+    so the release's switch never opens a superseded version (`readingAddressShown`).
+  - The page writes the date into the address bar by replacing the address; the server never redirects an undated readable
+    address (it stays the canonical page the sitemap lists, plan 3.6).
+  - The date fields of the reading form, Compare and Changes stay empty, as before, with today said beside them: a field
+    filled for the reader would be a date they did not choose (and the journeys type into those fields).
+  - The dossier says today on its own line; it marks no version "applicable today" (an act held only as published may have
+    been amended since: its readable address says so already).
+  - "Today" is the one relative word a screen says, bound to its date: the accessibility test's date rule admits it only
+    followed by the date ("Today in Luxembourg: ", "today in Luxembourg is ", and the French).
+  - The 404 page's box keeps no search in its address: the page stands at an address this site has no page for.
+  - A fragment with no language takes the form's first (French); the reader's link stays usable when written by hand.
+- **Not in this slice** (next): the reading form's own readings at `reading.html`, the dossier, Compare, Changes and the
+  provision history keeping their state in the address; the skip link writes `#main` over a kept search when pressed (it
+  could move the focus without writing the fragment); a journey of a readable address opened with `?date=` (the canonical and
+  focus checks need the query taught to them); `?date=` on a dossier's address.
+- **Measured** (no browser was started on this machine): rebased on `v3/integration` at 0b908870 (#988): `npm run build`
+  in `web`, then a plain `npm test`: 119 files, 1,292 tests, 1,289 passed, the 3 that start a browser skipped with their
+  reason; `dotnet build Lex.V3.slnx -c Release`, 0 warnings, 0 errors; in `Lex.V3.Tests` the classes the slice touches and
+  those named for it (`V3WebRootTests`, `LuxembourgCalendarTests`, the Census classes, the handler's), 47 of 47; in
+  `Lex.V3.Ingest.Tests` the Census classes, `PublicRequestRecordingTests`, the answer, envelope and refusal-payload samples
+  and `V3EuropePermalinkTests`, 60, 57 passed, 3 skipped (each by its variable: a live canary, a named mount); the censuses
+  unchanged (no answer or envelope moved); `eng/verify-v3-tree.ps1` passes (1,652 tracked paths). The journeys are CI's.
+
 ## The opening kit: law.soufien.lu bound, search engines by deployment, the owner's decisions of 18 October (sole driver, 2026-10-18)
 
 The owner decided on 2026-10-18: the EU authenticity wording for acts published before 1 July 2013 and search-engine

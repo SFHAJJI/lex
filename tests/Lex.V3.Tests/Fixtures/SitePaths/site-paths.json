@@ -1,5 +1,5 @@
 {
-  "about": "The site's addresses, held to one table by web/test/permalinks.test.mjs (web/scripts/permalinks.mjs) and tests/Lex.V3.Tests/V3WebRootTests.cs (V3WebRoot). `page`: the page a law's address under an interface language is served; `redirect`: where a path with no interface language is sent, for a reader whose browser names no language (French, R61); `moved`: where a permalink of the shape before R64 (an EU wording's /eu-eurlex/{celex}/{lng}/{date}--{sha256}) has moved for good, whatever the reader's language, and where a consolidated version's readable address (/eu-eurlex/0{act}-{yyyymmdd}/{lng}[/{provision}]) has moved, to its act's (/eu-eurlex/3{act}/{lng}[/{provision}]; review of #972); none of them: the path is left to the files and the API's routing, as a Luxembourg state's permalink before R64 (/lu-legilux/{work}/{date}--{sha256}, which names no language) is. `languages`: the interface language each Accept-Language starts a reader in. `render`: for a served page, what the server renders it from (R67): its language, the page, and the operation and parameters the page itself would ask: at a permalink, the permalink itself with no article (R64: the version it pins, or pinned_digest_mismatch with the current link), its date and its language; at an act's readable address (/lu-legilux/{work}/{lng}[/{article}], /eu-eurlex/{celex}/{lng}[/{provision}], R67: the current version), the work, `today` (the date in Luxembourg the table is held at, R13) and the language. A readable address's article is never a calendar date, with or without a digest: /eu-eurlex/{celex}/{lng}/{date} is an EU stable coordinate and /eu-eurlex/{celex}/{lng}/{date}--{sha256} the EU shape before R64; an interface language's home page (`/fr/`, `/en/`, and each one's `index.html`) is the file the directory holds, rendered from `coverage` with no parameters (the home page's facts, R11 and R13). `canonical`, on the rows of the work and state the evidence_bundle sample answers (schemas/v3-platform/envelope-samples.json, \"the work on its state's date\"): the canonical link that page names rendered from that answer, by the web's server renderer of the path's interface language, which both servers run (review of #967: an address the platform mints, never the request's own; web/test/live-ssr.test.mjs), under that interface language (the plan's item 3.6: a page that answers itself, never an address that redirects); at a readable address, the readable address of the article when the version shown holds it, else the act's; at a permalink whose version is the one its act's readable address shows today (the sample's state, applicable from 2024-02-01 with no later state, answered on 2026-09-18), that readable address (R67: \"identical version pages point their canonical link there\"). An article segment that is `.` or `..` once decoded (`%2E`, `.%2e`) is no article. `search`, where a row has one: the query the address is asked with (the plan's item 3.7: a reading's `page=N` asks that page, and an address that names an article asks the page that holds it, `article`, the segment decoded); a row with none is asked with no query.",
+  "about": "The site's addresses, held to one table by web/test/permalinks.test.mjs (web/scripts/permalinks.mjs) and tests/Lex.V3.Tests/V3WebRootTests.cs (V3WebRoot). `page`: the page a law's address under an interface language is served; `redirect`: where a path with no interface language is sent, for a reader whose browser names no language (French, R61); `moved`: where a permalink of the shape before R64 (an EU wording's /eu-eurlex/{celex}/{lng}/{date}--{sha256}) has moved for good, whatever the reader's language, and where a consolidated version's readable address (/eu-eurlex/0{act}-{yyyymmdd}/{lng}[/{provision}]) has moved, to its act's (/eu-eurlex/3{act}/{lng}[/{provision}]; review of #972); none of them: the path is left to the files and the API's routing, as a Luxembourg state's permalink before R64 (/lu-legilux/{work}/{date}--{sha256}, which names no language) is. `languages`: the interface language each Accept-Language starts a reader in. `render`: for a served page, what the server renders it from (R67): its language, the page, and the operation and parameters the page itself would ask: at a permalink, the permalink itself with no article (R64: the version it pins, or pinned_digest_mismatch with the current link), its date and its language; at an act's readable address (/lu-legilux/{work}/{lng}[/{article}], /eu-eurlex/{celex}/{lng}[/{provision}], R67: the current version), the work, `today` (the date in Luxembourg the table is held at, R13) and the language. A readable address's article is never a calendar date, with or without a digest: /eu-eurlex/{celex}/{lng}/{date} is an EU stable coordinate and /eu-eurlex/{celex}/{lng}/{date}--{sha256} the EU shape before R64; an interface language's home page (`/fr/`, `/en/`, and each one's `index.html`) is the file the directory holds, rendered from `coverage` with no parameters (the home page's facts, R11 and R13). `canonical`, on the rows of the work and state the evidence_bundle sample answers (schemas/v3-platform/envelope-samples.json, \"the work on its state's date\"): the canonical link that page names rendered from that answer, by the web's server renderer of the path's interface language, which both servers run (review of #967: an address the platform mints, never the request's own; web/test/live-ssr.test.mjs), under that interface language (the plan's item 3.6: a page that answers itself, never an address that redirects); at a readable address, the readable address of the article when the version shown holds it, else the act's; at a permalink whose version is the one its act's readable address shows today (the sample's state, applicable from 2024-02-01 with no later state, answered on 2026-09-18), that readable address (R67: \"identical version pages point their canonical link there\"). An article segment that is `.` or `..` once decoded (`%2E`, `.%2e`) is no article. `search`, where a row has one: the query the address is asked with (the plan's item 3.7: a reading's `page=N` asks that page, and an address that names an article asks the page that holds it, `article`, the segment decoded); a row with none is asked with no query. A readable address's query may keep the date it was read at (the plan's item 3.4, R13: `date=yyyy-mm-dd`, its first `date` parameter, a calendar date), which it is then asked at in place of `today`; any other value is no date, and a permalink or a work's address reads none.",
   "today": "2026-10-15",
   "paths": [
     {
@@ -1425,6 +1425,193 @@
     {
       "path": "/en/lu-legilux/loi-2017-03-14-a439",
       "search": "?page=2",
+      "page": "en/dossier.html",
+      "redirect": null,
+      "moved": null,
+      "render": {
+        "language": "en",
+        "kind": "dossier",
+        "operation": "dossier",
+        "parameters": {
+          "identifier": "/lu-legilux/loi-2017-03-14-a439"
+        }
+      }
+    },
+    {
+      "path": "/fr/lu-legilux/loi-2017-03-14-a439/fra",
+      "search": "?date=2024-01-01",
+      "page": "fr/reading.html",
+      "redirect": null,
+      "moved": null,
+      "render": {
+        "language": "fr",
+        "kind": "reading",
+        "operation": "evidence_bundle",
+        "parameters": {
+          "identifier": "/lu-legilux/loi-2017-03-14-a439",
+          "date": "2024-01-01",
+          "language": "fra"
+        }
+      }
+    },
+    {
+      "path": "/en/lu-legilux/loi-2017-03-14-a439/fra",
+      "search": "?page=2&date=2024-01-01",
+      "page": "en/reading.html",
+      "redirect": null,
+      "moved": null,
+      "render": {
+        "language": "en",
+        "kind": "reading",
+        "operation": "evidence_bundle",
+        "parameters": {
+          "identifier": "/lu-legilux/loi-2017-03-14-a439",
+          "date": "2024-01-01",
+          "language": "fra",
+          "page": 2
+        }
+      }
+    },
+    {
+      "path": "/en/eu-eurlex/32016R0679/eng/art_5",
+      "search": "?date=2020-05-01&page=3",
+      "page": "en/reading.html",
+      "redirect": null,
+      "moved": null,
+      "render": {
+        "language": "en",
+        "kind": "reading",
+        "operation": "evidence_bundle",
+        "parameters": {
+          "identifier": "32016R0679",
+          "date": "2020-05-01",
+          "language": "eng",
+          "article": "art_5"
+        }
+      }
+    },
+    {
+      "path": "/en/lu-legilux/loi-2017-03-14-a439/fra",
+      "search": "?date=2024-01-01&date=2025-01-01",
+      "page": "en/reading.html",
+      "redirect": null,
+      "moved": null,
+      "render": {
+        "language": "en",
+        "kind": "reading",
+        "operation": "evidence_bundle",
+        "parameters": {
+          "identifier": "/lu-legilux/loi-2017-03-14-a439",
+          "date": "2024-01-01",
+          "language": "fra"
+        }
+      }
+    },
+    {
+      "path": "/en/lu-legilux/loi-2017-03-14-a439/fra",
+      "search": "?date=2024-02-30&date=2024-01-01",
+      "page": "en/reading.html",
+      "redirect": null,
+      "moved": null,
+      "render": {
+        "language": "en",
+        "kind": "reading",
+        "operation": "evidence_bundle",
+        "parameters": {
+          "identifier": "/lu-legilux/loi-2017-03-14-a439",
+          "date": "2026-10-15",
+          "language": "fra"
+        }
+      }
+    },
+    {
+      "path": "/en/lu-legilux/loi-2017-03-14-a439/fra",
+      "search": "?date=2024-1-01",
+      "page": "en/reading.html",
+      "redirect": null,
+      "moved": null,
+      "render": {
+        "language": "en",
+        "kind": "reading",
+        "operation": "evidence_bundle",
+        "parameters": {
+          "identifier": "/lu-legilux/loi-2017-03-14-a439",
+          "date": "2026-10-15",
+          "language": "fra"
+        }
+      }
+    },
+    {
+      "path": "/en/lu-legilux/loi-2017-03-14-a439/fra",
+      "search": "?date=",
+      "page": "en/reading.html",
+      "redirect": null,
+      "moved": null,
+      "render": {
+        "language": "en",
+        "kind": "reading",
+        "operation": "evidence_bundle",
+        "parameters": {
+          "identifier": "/lu-legilux/loi-2017-03-14-a439",
+          "date": "2026-10-15",
+          "language": "fra"
+        }
+      }
+    },
+    {
+      "path": "/en/lu-legilux/loi-2017-03-14-a439/fra",
+      "search": "?Date=2024-01-01",
+      "page": "en/reading.html",
+      "redirect": null,
+      "moved": null,
+      "render": {
+        "language": "en",
+        "kind": "reading",
+        "operation": "evidence_bundle",
+        "parameters": {
+          "identifier": "/lu-legilux/loi-2017-03-14-a439",
+          "date": "2026-10-15",
+          "language": "fra"
+        }
+      }
+    },
+    {
+      "path": "/en/lu-legilux/loi-2017-03-14-a439/fra",
+      "search": "?date=0000-01-01",
+      "page": "en/reading.html",
+      "redirect": null,
+      "moved": null,
+      "render": {
+        "language": "en",
+        "kind": "reading",
+        "operation": "evidence_bundle",
+        "parameters": {
+          "identifier": "/lu-legilux/loi-2017-03-14-a439",
+          "date": "2026-10-15",
+          "language": "fra"
+        }
+      }
+    },
+    {
+      "path": "/en/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
+      "search": "?date=2020-01-01",
+      "page": "en/reading.html",
+      "redirect": null,
+      "moved": null,
+      "render": {
+        "language": "en",
+        "kind": "reading",
+        "operation": "evidence_bundle",
+        "parameters": {
+          "identifier": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
+          "date": "2024-02-01",
+          "language": "fra"
+        }
+      }
+    },
+    {
+      "path": "/en/lu-legilux/loi-2017-03-14-a439",
+      "search": "?date=2020-01-01",
       "page": "en/dossier.html",
       "redirect": null,
       "moved": null,

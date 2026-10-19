@@ -15,6 +15,9 @@
 // applicability date or a state; the answer's `date_semantics` says what the date is, shown as sent),
 // its article count and the permalink that pins that wording. The consolidated wordings the EU time
 // view serves are read on the reading screen.
+//
+// Today, the calendar date in Luxembourg on the day the server answered (R13; the plan's item 3.4), is said under the
+// count of the versions held, so a reader holds each version's dates against today, never against a day assumed.
 
 import { useEffect, useRef, useState } from 'react';
 
@@ -25,6 +28,8 @@ import { quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
 import { parseSitePath } from '../scripts/permalinks.mjs';
 import { answerHandedWith } from '../scripts/v3-client.mjs';
+import { todayAt } from '../scripts/initial-answer.mjs';
+import { TodayLine } from './Today.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -74,8 +79,11 @@ export function DossierTitles({ titles }) {
   );
 }
 
-/** One dossier view, laid out: the work, its titles, its held states and what it does not hold. */
-export function DossierView({ view }) {
+/**
+ * One dossier view, laid out: the work, its titles, its held states, today (`today`, the date in Luxembourg the answer was
+ * given on, or null) and what it does not hold.
+ */
+export function DossierView({ view, today = null }) {
   return (
     <>
       <h2>{view.workKey}</h2>
@@ -91,6 +99,7 @@ export function DossierView({ view }) {
           <Say template={countedEntry(COPY.statesIn, view.stateCount)} values={{ count: view.stateCount, language: view.language, from: view.historyBegins, to: view.latestApplicabilityDate }} />
         )}
       </p>
+      <TodayLine today={today} />
       <TableRegion labelledBy="dossier-states">
       <table>
         <thead>
@@ -131,8 +140,11 @@ export function DossierView({ view }) {
   );
 }
 
-/** One EU dossier view, laid out: the work, its expressions with the original wording of each, pinned, and what it does not hold. */
-export function EuropeDossierView({ view }) {
+/**
+ * One EU dossier view, laid out: the work, its expressions with the original wording of each, pinned, today (`today`, as
+ * for a Luxembourg work) and what it does not hold.
+ */
+export function EuropeDossierView({ view, today = null }) {
   return (
     <>
       <h2>{view.celex}</h2>
@@ -142,6 +154,7 @@ export function EuropeDossierView({ view }) {
       <p data-expressions={view.expressionCount} id="dossier-expressions">
         <Say template={countedEntry(COPY.euExpressions, view.expressionCount)} values={{ count: view.expressionCount }} />
       </p>
+      <TodayLine today={today} />
       <TableRegion labelledBy="dossier-expressions">
       <table>
         <thead>
@@ -186,7 +199,9 @@ export function DossierAnswerView({ outcome, onRetry }) {
   if (outcome.state === 'success') {
     return (
       <section data-answer-state="success">
-        {outcome.view.publisher === 'eu-eurlex' ? <EuropeDossierView view={outcome.view} /> : <DossierView view={outcome.view} />}
+        {outcome.view.publisher === 'eu-eurlex'
+          ? <EuropeDossierView view={outcome.view} today={todayAt(outcome.context?.freshness?.observed_at)} />
+          : <DossierView view={outcome.view} today={todayAt(outcome.context?.freshness?.observed_at)} />}
       </section>
     );
   }

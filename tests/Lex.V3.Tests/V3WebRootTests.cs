@@ -367,6 +367,44 @@ public sealed class V3WebRootTests
     }
 
     [TestMethod]
+    public void AReadableAddressIsAskedAtTodayInLuxembourgOnBothSidesOfEachClockChangeOrAtTheDateItKeeps()
+    {
+        // The plan's item 3.4 (R13): the server's today is the calendar date in Luxembourg by the coded rule, so a readable
+        // address with no date of its own is asked at it, the day turning at midnight in Luxembourg on either side of a
+        // change: 22:00 UTC in summer time, 23:00 UTC in winter time. Summer time ends at 01:00 UTC on 25 October 2026 and
+        // starts at 01:00 UTC on 28 March 2027 (the shared table holds the rule itself, LuxembourgCalendarTests).
+        const string readable = "/en/lu-legilux/loi-1991-08-10-n3/fra";
+        foreach (var (instant, date) in new[]
+        {
+            ("2026-10-24T21:59:59.9999999Z", "2026-10-24"),
+            ("2026-10-24T22:00:00Z", "2026-10-25"),
+            ("2026-10-25T00:59:59Z", "2026-10-25"),
+            ("2026-10-25T01:00:00Z", "2026-10-25"),
+            ("2026-10-25T22:59:59Z", "2026-10-25"),
+            ("2026-10-25T23:00:00Z", "2026-10-26"),
+            ("2027-03-27T22:59:59Z", "2027-03-27"),
+            ("2027-03-27T23:00:00Z", "2027-03-28"),
+            ("2027-03-28T00:59:59Z", "2027-03-28"),
+            ("2027-03-28T01:00:00Z", "2027-03-28"),
+            ("2027-03-28T21:59:59Z", "2027-03-28"),
+            ("2027-03-28T22:00:00Z", "2027-03-29"),
+        })
+        {
+            var now = DateTimeOffset.Parse(instant, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal);
+            var today = V3ApiHandler.LuxembourgTodayAt(now);
+            Assert.AreEqual(date, today, instant);
+            Assert.AreEqual(date, V3WebRoot.SitePageFor(readable, today)!.Parameters["date"], $"{instant}: asked at today");
+            // The date the address keeps is asked whatever the clock says (a link keeps the date it was read at).
+            Assert.AreEqual("2024-02-01", V3WebRoot.SitePageFor(readable, today, "?date=2024-02-01")!.Parameters["date"], $"{instant}: the date it keeps");
+        }
+
+        Assert.IsNull(V3ApiHandler.LuxembourgTodayAt(Lex.V3.Contracts.Platform.LuxembourgCalendar.ValidUntil), "outside the rule's range, no date");
+        Assert.IsNull(V3WebRoot.SitePageFor(readable, null), "no clock and no date kept: the page as built, which asks for itself");
+        Assert.AreEqual("2024-02-01", V3WebRoot.SitePageFor(readable, null, "?date=2024-02-01")!.Parameters["date"], "a date kept needs no clock");
+        Assert.IsNull(V3WebRoot.SitePageFor(readable, null, "?date=2024-02-30"), "a date that is no calendar date is none");
+    }
+
+    [TestMethod]
     public async Task ALawsAddressIsRenderedFromTheAnswerAndServedAsBuiltWithoutOne()
     {
         var directory = NewWebDirectory();
