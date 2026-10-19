@@ -4,6 +4,105 @@ Updated 2026-10-19. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The catalogue between versions, a date said with its role everywhere, the cards' own reasons, the caveat and the translation label (sole driver, 2026-10-19)
+
+Slices S7b and S7c of the Luxembourg data design (STATUS-DATA.md, the section of the same day), with what S7a (#987) left
+them: the web of index 9's catalogue chain and continuity breaks, R21 on every page that still said an entry into force with
+application words, the refusal cards' own sentences, the consolidation and code caveat (L5), the translation label (R18).
+On an index of schema 8 or 6 every page says what it said before, except the coverage page's note, whose new words are true
+of every index.
+- **R21, the rest of S7a's list** (an entry into force is never said as an application):
+  - Compare (`LiveCompare.jsx`, `compare-answer.mjs`): a side dated by its entry into force is "the act as published, dated by
+    its entry into force on X (publisher)" (`compare.sideEntryIntoForce`, `…Next`); one state on both dates is said so
+    (`compare.sameVersionEntryIntoForce`, `sameTextHeldEntryIntoForce`, `sameTextHeldOfSeveralEntryIntoForce`), and the
+    reader holds the platform's note by role (`SAME_STATE_ENTRY_INTO_FORCE_SENTENCE`, `sameTextHeldNote`'s role).
+  - History (`LiveHistory.jsx`, `history-answer.mjs`): a row dated by its entry into force answers the "Applies from" column
+    as the dossier does (the reviewed `dossier.entryIntoForceDate` and its note, reused).
+  - The export (`LiveExport.jsx`, `export-build.mjs`, `export-pdf.mjs`): `export.itemEntryIntoForce` and
+    `excludedEntryIntoForce`; the PDF's heading, conflict line and exclusion line; the JSON names `date_role` on index 9.
+  - One state heading by role (`StateHeadingWords`) for the reading, the export's pins and the cited article's source: the
+    last two still said "the state applying from" of every state, which the per-role speech test found.
+  - `reading.validityConflict` and `search.dated` are S7a's repair's (its F5), as the coordinator moved them there; until this
+    branch is rebased on it, the per-role speech test finds the reading's conflict line, as it should.
+  - The dossier's span (`dossier.statesEntryIntoForce`, `statesFromEntryIntoForce`, `statesInEntryIntoForce`,
+    `statesInFromEntryIntoForce`): a first state dated by its entry into force is said as that.
+  - The refusal card's candidate (`refusalCard.candidateEntryIntoForce`, `…WithdrawalNotStated`), from the platform's new
+    `candidate_date_roles`.
+- **The timeline speech test, per date role** (`date-speech.test.mjs`, the launch contract's evidence): every census
+  Luxembourg answer said again with its first state dated by its entry into force (as index 9 dates an act as published),
+  through search, dossier, reading, export (composed with every article pinned), history and compare, in English and in
+  French: no application word stands right before that date; a borrowed heading and five application phrasings are caught,
+  four right ones are not.
+- **The refusal cards' own sentences** (`refusal-card.mjs`'s `reasonView`, both renderers, the page's copy): why no version
+  covers the date for each of S7a's six reasons (`refusalCard.reasons.*`: the catalogue as read no later than its build, a
+  hole's span "this site does not fill", a closed end "which says nothing of whether the law ends" with the base act's
+  end-of-force date when the publisher's record gives one, an unclear end day given to neither, an invalid interval whose
+  own link still opens it, no expression in the language asked); the textless version covering the date named by its kind
+  and role and why its text is not held (`refusalCard.textless`, `textlessNamed`, `versions.*`, `textNotHeld.*`). A reason or
+  a text status outside the platform's closed set is refused, so a new one is worded before it is shown.
+- **The reading's caveat and label** (`VersionCaveats`): a consolidated version "is documentation without probative value.
+  Only the texts published in the Journal officiel (Mémorial A) are authentic: the act as published, {act}, and the acts that
+  amended it, whose list Lex does not yet hold." (R20's words; {act} its work's `/jo`, as the platform names a base act); a
+  code's version "documentation without probative value: the authentic texts are the acts published in the Journal officiel
+  (Mémorial A) that it brings together"; an expression in another language than French "the publisher's {language}
+  expression of the act, beside its French expression {french}. The publisher's record does not state which language version
+  is authentic." (R18; never "only the French text is authentic").
+- **The dossier: the catalogue between versions** (`CatalogueChain`, `dossier-answer.mjs`'s `readCatalogueChain`): the versions
+  the catalogue lists whose text this site does not hold, named as the card names them, each with its permalink (which
+  refuses for its text) or its coordinate; each gap, overlap, same-date group, unclear end day and invalid interval in
+  words with the answer's dates; and that a gap in the catalogue is not one in the law. A held state listed without text is
+  drift, and refused.
+- **The history's breaks** (`Breaks`): each run of dates no version with held text covers, in its language, with why
+  (`history.breakReasons.*`), each row after one marked (`history.afterBreak`), and that an unchanged wording across one says
+  nothing of it; the reader holds each row's mark to the breaks it names.
+- **Coverage** (the row S4 left): the page's note says the history's build times are when each acquiring build read its
+  acquisition (`COUNTS_PROVENANCE_NOTE`, `coverageAnswer.countsProvenance`), and the preview carries index 9's row.
+- **The L5 sentences** (design §5; ruling 4's pattern: the drafts ship and the owner revises them in person): the
+  consolidation and code caveat (`reading.consolidationCaveat`, in R20's words, `reading.codeCaveat`), the translation label with R18's
+  sentence (`reading.translation`), and the refusal wordings for a catalogue hole, an unclear end day and an invalid interval
+  (`refusalCard.reasons.catalogue_hole`, `.publisher_end_convention_unclear`, `.publisher_interval_invalid`), English beside
+  French by `node web/scripts/refusal-sentences.mjs`. The other L5 sentences are not this slice's (the single-channel
+  disclosure and the attribution line wait for the owner's L1 and L2; the coverage counts of withheld files; the struck
+  wording shipped with S3b).
+- **French** (Decision 41): 59 forms reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the
+  owner's delegation in the addendum of 2026-10-19 "the catalogue's chain, continuity breaks, dates by role elsewhere, index
+  9's refusal sentences and the version caveats" of `C:\lex-v3\lanes\fr-review\review.md`; 10 changed in review, 49 approved,
+  and one form its point 1 asked for (`refusalCard.publishedAct`, "publié le" of an act's candidate) reviewed with them.
+  Changed: "ce site n’a pas acquis cette version" (it follows a version named "l’acte tel que publié"); "fait foi", never
+  "authentique", and "un outil de documentation" in both caveats; a gap and a break named by their ends' roles, the break's
+  end exclusive ("to the day before {to}", "à la veille du"), the English changed with these two; "les textes" after a
+  plural; "un vide juridique"; an apposition's comma in two spans; "de l’acte, publiée par l’éditeur". Its points 2 and 4
+  are done (the textless row starts with a capital; the uncounted one-state span only for one state). The forms are named in
+  the header comment of `live-chrome-fr.mjs`. Its point 5 (`history.carried`, `carriedIn` and `absentRow` can carry an entry
+  into force as "from {from}") goes to S7a's repair with `search.dated` and `reading.validityConflict`.
+- **Tests.** `web/test/catalogue-chain.test.mjs` (new, 9): the card's six reasons and its textless versions in both renderers
+  and in French, an unknown reason and status refused, an ambiguity's act by its role and a misaligned role list refused; the
+  dossier's chain and its span by role, and drift refused; the history's breaks, its column by role and a row's mark held;
+  the reading's caveat for a consolidation and a code and its translation label; Compare, the export (lines and JSON) by role;
+  every added form held to the time-word guard. `date-speech.test.mjs` (+2): the per-role speech test and its control.
+  Updated: `coverage.test.mjs`, `refusal-catalog.mjs`'s worked example. `npm run build` 30 state pages; `npm test` 1,291
+  tests, 1,286 passed, 2 failed, 3 skipped (the browser tests): the two failures are the per-role speech test and its
+  control, which find the reading's validity-conflict line ("its state applies from" an entry into force), S7a's F5; they
+  pass once this branch is rebased on it.
+- **Driver decisions (reversible).**
+  - **The web's timeline is the dossier's**: the design's `Timeline.jsx` (holes hatched, overlaps stacked) is the pre-V3
+    preview, served nowhere; the live dossier says the catalogue's chain in words, under the states table, which needs no
+    client chart and reads the same to a screen reader.
+  - **The textless version is named with the refusal card's words** (`refusalCard.versions`, `textNotHeld`) on the card and in
+    the dossier, so a version is said one way wherever it is.
+  - **The History table reuses the dossier's reviewed cell and note** for a row dated by its entry into force (same column).
+  - **The caveat's act is the consolidation's work's `/jo`**, as the platform names a base act (`base_act_iri`); a code's
+    caveat names no act (a code brings several together).
+  - **The consolidation caveat ships in R20's words** ("Only the texts published in the Journal officiel (Mémorial A) are
+    authentic: the act as published, {act}, and the acts that amended it, whose list Lex does not yet hold"), the specification
+    of record's, which rules where the design's L5 draft ("the authentic text is the act in the Journal officiel") says less:
+    the act as published lacks every amendment the consolidation carries (the French review's blocking point). The owner
+    revises it with the other L5 sentences; for the lawyer's read (O4), older codes such as the Code civil were not first
+    published in the Mémorial A.
+- **Left.** The coverage page's state range (`coverageAnswer.stateRange`, "the first and last applicability dates") may begin
+  at an entry into force on index 9; the platform names no role for an aggregate's end (STATUS-DATA.md). The radar's row
+  ("from {date}") names no role and says no application word.
+
 ## Index /9 served: a date said with its role, a missing article said in place, the cards read the new refusals (sole driver, 2026-10-18)
 
 Slice S7a of the Luxembourg data design (STATUS-DATA.md, the section of the same day): the reader's interval rules over

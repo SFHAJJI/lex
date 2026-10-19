@@ -2,6 +2,70 @@
 
 Updated 2026-10-19.
 
+## The catalogue's chain where a history is read, the dates by role, and the refusals in the site's own words (sole driver, 2026-10-19)
+
+- **What.** Slices S7b and S7c of the Luxembourg data design (`C:\lex-v3\LU-DATA-DESIGN-2026-10-14-v2.md` §3.2, §3.4 and the
+  S7b and S7c rows), with what S7a (#987) left them. On lex-v3-luxembourg-index/9 only; on an index 8 or 6 every answer is
+  the one the code before sent, byte for byte (`base-answers.json`, schema 8 and 6, replayed unchanged: no row re-recorded).
+  Stacked on S7a (#987); it is combined with the EU force-dates slice into one data pull request.
+- **The platform** (`V3CorpusMount.Continuity.cs`, new; `V3CorpusMount.cs`, `.Intervals.cs`, `.AsPublished.cs`):
+  - `timeline` and `dossier` name the catalogue's chain as the publisher left it (`CatalogueChainRule`): `textless_states`
+    (each catalogue state in the language scope whose text the index does not hold, as the refusals name them, never served
+    in another's place), `transitions` (the index's `intervals` rows with both states' dates), `gaps` (holes), `overlaps`,
+    `same_date` groups, `unclear_end_days` (a suspected inclusive end's day) and `invalid_intervals` (an end on or before the
+    start). The dossier's not-held list replaces `coverage_gaps` ("no gap between states is listed") with
+    `catalogue_completeness` (a state the catalogue did not list is not here; a gap in the catalogue is not one in the law).
+  - `article_history` rows carry their state's catalogue facts (the date's role among them) and `after_break`; the answer
+    names `continuity_breaks` per language (`ContinuityRule`): each run of dates from the language's first held state on that
+    no state with held text covers by the interval rules as_of applies (a textless state by its text status, a hole, an
+    unclear end day, an invalid interval, no expression in the language), from its first date to the date held text covers
+    again (null when none does), with the states each reason names. The interval rules' answer is constant between the dates
+    a state of the chain starts or ends, so each such date is asked once. A date after a closed end is the end of the
+    catalogue's states, not a break; an overlap or an ambiguity holds text, so it is no break. `anchor_rule` states the limit
+    the design names: an id the publisher minted with a date suffix (`art_2_20211219`) is another id.
+  - R21 in the platform's own sentences: `diff`'s same-state note of an act dated by its entry into force says "the act as
+    published, dated by its entry into force on X (publisher)" (`SameVersionNote`, `AsPublishedSameTextNote`), never
+    "applicable from X"; `ambiguous_version` names `candidate_date_roles` beside the other candidate lists.
+  - `events` (S7c's "events page for textless rows"; the site has no events page, so it is the answer's): a state the
+    catalogue names no expression of has no permalink (it made `/lu-legilux/{work}/{date}--{digest}/` before), and
+    `permalink_rule` says a textless state's permalink is refused for its text, naming it.
+  - `coverage` (the row S4 left, "history gives when each build ran"): on index 9 the build-time row says a build's time is
+    when its acquiring build read its acquisition, which a derivation from custody keeps, and that `events`' `log.derived_at`
+    is when the mounted index was derived (`CoverageBuildTimeRowNine`); index 8 and 6 keep their rows.
+- **Driver decisions (reversible):**
+  - **The timeline's chain is served as lists beside the states, not as states**: `states` stays the held states (every
+    reader holds a state to its articles), and `textless_states` names the others as the refusals name them.
+  - **The transitions are the French chain's** (index 9's `intervals`), served with any language asked: a translation takes
+    its French state's interval, so the French chain's gaps are its gaps.
+  - **A continuity break is a run of dates, not a list of states**: the history is a walk of held states, so what breaks it
+    is a stretch of dates no held text covers, with the reasons and states that stretch holds. An overlap of one wording and
+    an ambiguity hold text, so neither breaks it; `wording_changed` keeps comparing two held states across a break, and
+    `after_break` says one lies between.
+  - **The dossier's not-held row `coverage_gaps` becomes `catalogue_completeness`** on index 9: the gaps are listed now, and
+    what the answer cannot say is what the catalogue did not list.
+  - **The events answer, not a web page, is "the events page"**: the site has no events page; a state naming no
+    expression gets a null permalink rather than a malformed one.
+- **Tests.** `V3CorpusContinuityMountTests` (new, 5): the handler on the verified mount of S7a's multi-body fixture: the
+  timeline's textless states and every transition kind (a code's run of misfiled, PDF and not-acquired states; a hole after a
+  withheld consolidation; an overlap and two invalid intervals; an unclear end day; a same-date pair), the dossier's chain
+  member for member the timeline's; an article's continuity breaks (after an act's withheld consolidation, a hole and a state
+  not acquired; an unclear end day between two held rows; an invalid interval; a code's textless run; a closed end, no break)
+  and each row's `after_break`; `diff`'s note of an act dated by its entry into force, held only as published and with a later
+  consolidation held, and an applicability state's note unchanged; an event naming no expression and a withheld state's
+  event permalink; coverage's build-time row. Updated: the dossier's property list and not-held list, the as_of and diff
+  ambiguity property lists. The answer, envelope and refusal samples re-rendered from the handler and verified without the
+  switches.
+- **Measured** (Windows, no browser, no publisher traffic, no custody read): `dotnet build Lex.V3.slnx -c Release` 0 warnings,
+  0 errors; Lex.V3.Tests 3,323 (3,317 passed, 0 failed, 6 skipped); Lex.V3.Ingest.Tests filtered (the continuity class,
+  interval, timeline, article history, diff, dossier, as_of, events, events chain, coverage, index-9 serving, replay
+  guarantees, the three sample censuses, every census class, legacy schema 8 and 6, request recording, temporary storage,
+  as_observed, in_force_on, provenance, evidence bundle, search, search results, catalogue states): 313 (309 passed, 1 failed,
+  3 skipped), the failure coverage's pinned build-time row, fixed, and its class rerun with the continuity class, 27 of 27;
+  `eng/verify-v3-tree.ps1` 1,647 tracked paths. The whole Ingest project was not run here (CI runs it).
+- **Not done here, and where it goes.** Coverage's per-language state range names no date role: on index 9 its first date may
+  be an act's entry into force, which `coverageAnswer.stateRange` calls an applicability date (the platform names no role for
+  an aggregate's end; a later slice serves one). F3 (Release 2) and S8 (gates and journeys over D1) as before.
+
 ## The reader's interval rules over index /9: a date's state, its refusals, the row facts, document order, the undated fold (sole driver, 2026-10-18)
 
 - **What.** Slice S7a of the Luxembourg data design (`C:\lex-v3\LU-DATA-DESIGN-2026-10-14-v2.md` §3.2, §3.3, §3.4 and the S7a
