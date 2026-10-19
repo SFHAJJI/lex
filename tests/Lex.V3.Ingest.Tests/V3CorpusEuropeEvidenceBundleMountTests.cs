@@ -49,7 +49,11 @@ public sealed class V3CorpusEuropeEvidenceBundleMountTests
         Assert.AreEqual("evidence_bundle", envelope.Result!.ObjectType);
         var bundle = envelope.Result.Value;
         Assert.AreEqual("© European Union, https://eur-lex.europa.eu", bundle.GetProperty("acknowledgement").GetString());
-        StringAssert.Contains(bundle.GetProperty("authenticity").GetString(), "Regulation (EU) No 216/2013, Article 1(2)");
+        // An act dated 27 April 2016: only the electronic edition is authentic (the owner's decision of 2026-10-18, O4).
+        Assert.AreEqual(V3CorpusMount.EuropeTextAuthenticity[V3CorpusMount.EuropeElectronicEdition], bundle.GetProperty("authenticity").GetString());
+        Assert.AreEqual(V3CorpusMount.EuropeElectronicEdition, bundle.GetProperty("authenticity_basis").GetString());
+        CollectionAssert.AreEqual(new[] { wordingDate }, bundle.GetProperty("authenticity_act_dates").EnumerateArray().Select(static date => date.GetString()).ToArray());
+        Assert.AreEqual(V3CorpusMount.EuropeAuthenticityRule, bundle.GetProperty("authenticity_rule").GetString());
         Assert.IsFalse(bundle.GetProperty("consolidations_held").GetBoolean());
 
         var wording = bundle.GetProperty("wordings").EnumerateArray().Single();
@@ -73,6 +77,11 @@ public sealed class V3CorpusEuropeEvidenceBundleMountTests
         Assert.AreEqual(V3CorpusMount.EuropeEvidenceBundleScope, original.GetProperty("scope").GetString(), "an article identity reaches the original-wording path");
         var originalWording = original.GetProperty("wordings").EnumerateArray().Single();
         Assert.AreEqual(permalink, originalWording.GetProperty("permalink").GetString(), "the same wording on either path");
+        foreach (var member in new[] { "authenticity", "authenticity_basis", "authenticity_act_dates", "authenticity_rule" })
+        {
+            Assert.AreEqual(bundle.GetProperty(member).GetRawText(), original.GetProperty(member).GetRawText(), $"the same {member} on either path");
+        }
+
         Assert.AreEqual(0, originalWording.GetProperty("annexes_not_served").GetArrayLength());
         Assert.AreEqual(V3CorpusMount.EuropeAnnexesNotHeldReason, original.GetProperty("not_held").EnumerateArray()
             .Single(static row => row.GetProperty("item").GetString() == "annexes").GetProperty("reason").GetString());

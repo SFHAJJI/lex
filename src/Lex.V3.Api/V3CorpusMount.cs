@@ -5980,9 +5980,84 @@ internal sealed partial class V3CorpusMount : IDisposable
 
     internal const string EuropeTextAcknowledgement = "© European Union, https://eur-lex.europa.eu";
 
-    internal const string EuropeTextAuthenticity =
-        "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) " +
-        "No 216/2013, Article 1(2)); this text is a reproduction read from the Publications Office's Formex package, not the authentic edition.";
+    /// <summary>
+    /// The first day on which only the electronic edition of the Official Journal is authentic: Regulation (EU) No 216/2013
+    /// applies from it (the specification of record's R20).
+    /// </summary>
+    internal const string EuropeElectronicEditionFrom = "2013-07-01";
+
+    /// <summary>The basis of the electronic edition's sentence: the act is dated on or after <see cref="EuropeElectronicEditionFrom"/>.</summary>
+    internal const string EuropeElectronicEdition = "electronic_edition";
+
+    /// <summary>The basis of the dated sentence: the act is dated before <see cref="EuropeElectronicEditionFrom"/>, or no date of it is held.</summary>
+    internal const string EuropeEditionByPublicationDate = "edition_by_publication_date";
+
+    /// <summary>
+    /// The authenticity statement every EU text served carries (Decision 95), for each basis, in the owner's words (the owner's
+    /// decision of 2026-10-18 on PR #975's question, item O4: R20 dates the electronic edition's authenticity from 1 July 2013).
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<string, string> EuropeTextAuthenticity = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [EuropeElectronicEdition] =
+            "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) " +
+            "No 216/2013, Article 1(2)); this text is a reproduction read from the Publications Office's Formex package, not the authentic edition.",
+        [EuropeEditionByPublicationDate] =
+            "For an act published before 1 July 2013, the printed Official Journal of the European Union is authentic; the electronic edition is " +
+            "authentic since that date (Regulation (EU) No 216/2013). This text is a reproduction read from the Publications Office's Formex " +
+            "package, not the authentic edition.",
+    };
+
+    internal const string EuropeAuthenticityRule =
+        "the sentence is chosen by the act's own date, since this index holds no Official Journal publication date: authenticity_act_dates lists, " +
+        "once each and in order, the dates this index holds of the act the text belongs to (for a consolidated version, the act it consolidates): " +
+        "the date the publisher's Formex package gives the act's original wording, when that text is held, and the publisher's work_date_document " +
+        "of the act's own work, when the EU census of the act is held; a consolidated text outside a held census lists none, its own date being " +
+        "a consolidation's; the basis is electronic_edition when a date is listed and the earliest is on or after 2013-07-01, since an act is " +
+        "published on or after the date it bears, so in an Official Journal whose electronic edition alone is authentic (Regulation (EU) " +
+        "No 216/2013, which applies from 1 July 2013), and edition_by_publication_date otherwise, whose sentence states which edition is " +
+        "authentic on either side of 1 July 2013 and not on which side the act was published, so it also holds for an act dated before that " +
+        "day and published on or after it (one adopted in June 2013 may have been published in July); Lex's reproduction is never the " +
+        "authentic edition";
+
+    /// <summary>
+    /// The authenticity statement of an EU text, read from the dates the index holds of its act (<see cref="EuropeAuthenticityRule"/>):
+    /// the dates once each and in order, the basis the earliest chooses, and that basis's sentence. A date that is not one civil date
+    /// is a damaged index and throws.
+    /// </summary>
+    internal static (string Basis, string Sentence, IReadOnlyList<string> ActDates) EuropeAuthenticityOf(IEnumerable<string> actDates)
+    {
+        ArgumentNullException.ThrowIfNull(actDates);
+        var dates = actDates.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        foreach (var date in dates)
+        {
+            if (!DateOnly.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+            {
+                throw new InvalidDataException($"An EU act's date, {date}, is not one civil date.");
+            }
+        }
+
+        var basis = dates.Length > 0 && string.CompareOrdinal(dates[0], EuropeElectronicEditionFrom) >= 0
+            ? EuropeElectronicEdition
+            : EuropeEditionByPublicationDate;
+        return (basis, EuropeTextAuthenticity[basis], dates);
+    }
+
+    /// <summary>
+    /// The dates the EU index holds of the act an EU work belongs to, for its authenticity statement: the act's own dates in the
+    /// time view (<see cref="EuropeSeedTimeline.ActDates"/>) when the census of a seed act holds the work; otherwise the dates of
+    /// the work's own held wordings (<paramref name="wordingDates"/>), unless its CELEX is a consolidated text's (sector 0), whose
+    /// own date is a consolidation's and not the act's, so none is listed.
+    /// </summary>
+    private IReadOnlyList<string> EuropeActDatesOf(string publisherWorkId, string celex, IEnumerable<string> wordingDates)
+    {
+        var seeds = EuropeSeedsOf(publisherWorkId);
+        if (seeds.Count > 0)
+        {
+            return seeds.SelectMany(seed => EuropeTimelineOf(seed).ActDates).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        }
+
+        return celex.StartsWith('0') ? Array.Empty<string>() : wordingDates.ToArray();
+    }
 
     internal static readonly string[][] EuropeEvidenceBundleNotHeld =
     [
@@ -6199,6 +6274,9 @@ internal sealed partial class V3CorpusMount : IDisposable
             };
         }).ToArray();
 
+        // The act's own dates choose the authenticity statement: the work's held wordings, in every language, are its original's.
+        var authenticity = EuropeAuthenticityOf(EuropeActDatesOf(works[0], selected[0].Celex,
+            expressions.SelectMany(static expression => expression.WordingDates)));
         using var result = JsonSerializer.SerializeToDocument(new
         {
             scope = EuropeEvidenceBundleScope,
@@ -6215,7 +6293,10 @@ internal sealed partial class V3CorpusMount : IDisposable
             page_rule = EuropeReadingPageRule,
             wordings = bundles,
             acknowledgement = EuropeTextAcknowledgement,
-            authenticity = EuropeTextAuthenticity,
+            authenticity = authenticity.Sentence,
+            authenticity_basis = authenticity.Basis,
+            authenticity_act_dates = authenticity.ActDates,
+            authenticity_rule = EuropeAuthenticityRule,
             rights_rule = EuropeEvidenceBundleRightsRule,
             date_rule = EuropeEvidenceBundleDateRule,
             date_semantics = EuropeWordingDateSemantics,
