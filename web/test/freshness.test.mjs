@@ -136,8 +136,8 @@ test("the strip says the build date, each channel's last complete collection and
   const html = renderToStaticMarkup(h(FreshnessStrip, { facts: freshnessFacts(stale()) }));
   assert.ok(html.startsWith(`<section class="freshness-strip" aria-label="${EN.heading}" data-freshness="answered" data-stale="true">`), html);
   assert.ok(html.includes("Index built on 2026-10-12."), html);
-  assert.ok(html.includes(escaped("Luxembourg law, from Legilux: last complete collection ended on 2026-10-12, 5 days before 2026-10-18; lag not yet measured.")), html);
-  assert.ok(html.includes(escaped("EU law, from the Publications Office of the European Union: last complete collection ended on 2026-10-05, 13 days before 2026-10-18; lag not yet measured.")), html);
+  assert.ok(html.includes(escaped("Luxembourg law, from Legilux: last complete collection ended on 2026-10-12, 5 full days before the server answered on 2026-10-18; lag not yet measured.")), html);
+  assert.ok(html.includes(escaped("EU law, from the Publications Office of the European Union: last complete collection ended on 2026-10-05, 13 full days before the server answered on 2026-10-18; lag not yet measured.")), html);
   assert.ok(html.includes(`<dt>${EN.indexCommit}</dt><dd><code class="commit">${"1".repeat(40)}</code></dd>`), html);
   assert.ok(html.includes(`<dt>${EN.serviceCommit}</dt><dd><code class="commit">${"2".repeat(40)}</code></dd>`), html);
   assert.ok(!html.includes("<section", 1), "the strip holds no section inside it (the deploy probe sets it aside by its end)");
@@ -148,6 +148,7 @@ test("the strip says the build date, each channel's last complete collection and
   const census = renderToStaticMarkup(h(FreshnessStrip, { facts: freshnessFacts(COVERAGE) }));
   assert.ok(census.includes(escaped("Luxembourg law, from Legilux: when its last complete collection ended is not recorded with this index; lag not yet measured.")), census);
   assert.ok(census.includes(`<dt>${EN.indexCommit}</dt><dd>${EN.commitUnstated}</dd>`), census);
+  assert.equal(EN.commitUnstated, "(not recorded)");
   assert.ok(!census.includes("data-stale=\"true\""));
   const asBuilt = renderToStaticMarkup(h(FreshnessStrip, {}));
   assert.equal(asBuilt, `<section class="freshness-strip" aria-label="${EN.heading}" data-freshness="as-built"><p>${escaped(EN.asBuilt)}</p></section>`);
@@ -161,7 +162,7 @@ test("the strip says the build date, each channel's last complete collection and
 test("the banner names each channel past the maximum, by the answer's maximum, and nothing when none is", () => {
   const html = renderToStaticMarkup(h(StalenessBanner, { facts: freshnessFacts(stale()) }));
   assert.ok(html.startsWith(`<aside class="staleness-banner" role="note" aria-label="${EN.staleHeading}" data-stale-channels="eu-eurlex"><details><summary><strong>${EN.staleHeading}</strong></summary>`), html);
-  assert.ok(html.includes(escaped("EU law, from the Publications Office of the European Union: its last complete collection ended on 2026-10-05, more than 10 days before 2026-10-18.")), html);
+  assert.ok(html.includes(escaped("EU law, from the Publications Office of the European Union: its last complete collection ended on 2026-10-05, more than 10 days before the server answered on 2026-10-18.")), html);
   assert.ok(!html.includes("Legilux"), "a channel within the maximum is not named");
   assert.equal(renderToStaticMarkup(h(StalenessBanner, { facts: freshnessFacts(COVERAGE) })), "", "no completion stated: nothing is said to be stale");
   assert.equal(renderToStaticMarkup(h(StalenessBanner, {})), "");
@@ -169,7 +170,7 @@ test("the banner names each channel past the maximum, by the answer's maximum, a
   // The maximum is the answer's, never a figure in the copy (R11).
   const longer = stale();
   longer.context.freshness.maximum_data_age_days = 12;
-  assert.ok(renderToStaticMarkup(h(StalenessBanner, { facts: freshnessFacts(longer) })).includes("more than 12 days before"));
+  assert.ok(renderToStaticMarkup(h(StalenessBanner, { facts: freshnessFacts(longer) })).includes("more than 12 days before the server answered"));
 });
 
 test("the French says each count by the language's plural rule, and no form says a date word of either publisher", () => {

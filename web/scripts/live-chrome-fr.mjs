@@ -141,6 +141,18 @@
 // the English changed with each). The forms that review gave for its points 4, 6 and 7 (`search.titleMatching`,
 // `search.actPassages` with its full stop, `search.officialSites.eurlex` naming the advanced search) ship as it gave them,
 // with the English it named. `search.namesWork`, `search.severalWorks`, `search.candidate` and `search.hit` were removed.
+// Freshness and the commits (the plan's items 6.1 and 6.5; R87, R23, R69): the footer strip's region label and as-built
+// line (`freshness.heading`, `freshness.asBuilt`), the index's build date (`freshness.built`, `freshness.builtUndated`),
+// the two publisher channels (`freshness.channels.lu-legilux`, `freshness.channels.eu-eurlex`), each channel's last
+// complete collection with its lag (`freshness.collected`, `one` and `other`, and `freshness.collectedUnstated`), the two
+// commit labels and their unstated value (`freshness.indexCommit`, `freshness.serviceCommit`, `freshness.commitUnstated`),
+// and the staleness banner (`freshness.staleHeading`, `freshness.stale`, `one` and `other`), 15 forms, were reviewed by an
+// independent reviewer (Claude, AI reviewer, not the author) under the same delegation in the addendum of 2026-10-19 on
+// freshness and the commits (12 changed in review: the count is whole days elapsed up to the server's answer, so it is said
+// "jours entiers avant la réponse donnée par le serveur le {today}", never "avant le {today}", which the printed dates could
+// contradict by one; the lag is "le décalage entre publication et collecte", never "délai"; a commit is a "révision du
+// code", never "commit" or "version"; a channel's texts are "provenant de" their publisher; the region is "Mise à jour des
+// données"; the English changed with the count and the banner, and says "(not recorded)").
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -672,26 +684,26 @@ export const LIVE_CHROME_FR = Object.freeze({
     sources: 'Les textes proviennent de Legilux et de l’Office des publications de l’Union européenne, tels que ce site les détient ; chaque article cité indique sa source officielle.',
   }),
   freshness: Object.freeze({
-    heading: 'Actualité des données',
-    asBuilt: 'Chaque réponse du serveur indique quand son index a été construit, quand les textes de chaque éditeur ont été collectés pour la dernière fois et quel code l’a construit et le sert ; cette page l’affiche dès qu’elle a une réponse.',
+    heading: 'Mise à jour des données',
+    asBuilt: 'Chaque réponse du serveur indique quand l’index a été construit, quand les textes de chaque éditeur ont été collectés pour la dernière fois, ainsi que le code qui a construit l’index et celui qui le sert ; cette page affiche ces indications dès qu’elle a reçu une réponse.',
     built: 'Index construit le {date}.',
     builtUndated: 'L’index ne consigne aucune date de construction.',
     channels: Object.freeze({
-      'lu-legilux': 'Droit luxembourgeois, depuis Legilux',
-      'eu-eurlex': 'Droit de l’UE, depuis l’Office des publications de l’Union européenne',
+      'lu-legilux': 'Droit luxembourgeois, provenant de Legilux',
+      'eu-eurlex': 'Droit de l’UE, provenant de l’Office des publications de l’Union européenne',
     }),
     collected: Object.freeze({
-      one: '{channel} : la dernière collecte complète s’est achevée le {date}, {count} jour avant le {today} ; délai pas encore mesuré.',
-      other: '{channel} : la dernière collecte complète s’est achevée le {date}, {count} jours avant le {today} ; délai pas encore mesuré.',
+      one: '{channel} : la dernière collecte complète s’est achevée le {date}, {count} jour entier avant la réponse donnée par le serveur le {today} ; le décalage entre publication et collecte n’est pas encore mesuré.',
+      other: '{channel} : la dernière collecte complète s’est achevée le {date}, {count} jours entiers avant la réponse donnée par le serveur le {today} ; le décalage entre publication et collecte n’est pas encore mesuré.',
     }),
-    collectedUnstated: '{channel} : la date à laquelle sa dernière collecte complète s’est achevée n’est pas consignée avec cet index ; délai pas encore mesuré.',
-    indexCommit: 'Index construit à partir de',
-    serviceCommit: 'Service en fonctionnement',
-    commitUnstated: 'non consigné',
+    collectedUnstated: '{channel} : la date à laquelle sa dernière collecte complète s’est achevée n’est pas consignée avec cet index ; le décalage entre publication et collecte n’est pas encore mesuré.',
+    indexCommit: 'Révision du code ayant construit l’index',
+    serviceCommit: 'Révision du code du service en fonctionnement',
+    commitUnstated: 'non consignée',
     staleHeading: 'Certains textes peuvent ne pas être à jour',
     stale: Object.freeze({
-      one: '{channel} : sa dernière collecte complète s’est achevée le {date}, plus de {count} jour avant le {today}. L’éditeur a pu publier des modifications depuis ; consultez son site officiel.',
-      other: '{channel} : sa dernière collecte complète s’est achevée le {date}, plus de {count} jours avant le {today}. L’éditeur a pu publier des modifications depuis ; consultez son site officiel.',
+      one: '{channel} : sa dernière collecte complète s’est achevée le {date}, plus de {count} jour avant la réponse donnée par le serveur le {today}. L’éditeur peut avoir publié des modifications depuis ; consultez son site officiel.',
+      other: '{channel} : sa dernière collecte complète s’est achevée le {date}, plus de {count} jours avant la réponse donnée par le serveur le {today}. L’éditeur peut avoir publié des modifications depuis ; consultez son site officiel.',
     }),
   }),
   home: Object.freeze({

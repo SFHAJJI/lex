@@ -493,17 +493,17 @@ const EN = Object.freeze({
       "eu-eurlex": "EU law, from the Publications Office of the European Union",
     }),
     collected: Object.freeze({
-      one: "{channel}: last complete collection ended on {date}, {count} day before {today}; lag not yet measured.",
-      other: "{channel}: last complete collection ended on {date}, {count} days before {today}; lag not yet measured.",
+      one: "{channel}: last complete collection ended on {date}, {count} full day before the server answered on {today}; lag not yet measured.",
+      other: "{channel}: last complete collection ended on {date}, {count} full days before the server answered on {today}; lag not yet measured.",
     }),
     collectedUnstated: "{channel}: when its last complete collection ended is not recorded with this index; lag not yet measured.",
     indexCommit: "Index built from",
     serviceCommit: "Service running",
-    commitUnstated: "not recorded",
+    commitUnstated: "(not recorded)",
     staleHeading: "Some texts may be out of date",
     stale: Object.freeze({
-      one: "{channel}: its last complete collection ended on {date}, more than {count} day before {today}. The publisher may have published changes since; check its official site.",
-      other: "{channel}: its last complete collection ended on {date}, more than {count} days before {today}. The publisher may have published changes since; check its official site.",
+      one: "{channel}: its last complete collection ended on {date}, more than {count} day before the server answered on {today}. The publisher may have published changes since; check its official site.",
+      other: "{channel}: its last complete collection ended on {date}, more than {count} days before the server answered on {today}. The publisher may have published changes since; check its official site.",
     }),
   }),
   // The home page (the specification of record's R47 and R52; UX spec section 2, Screen 1: Home and search): the one box
