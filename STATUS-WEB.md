@@ -4,6 +4,72 @@ Updated 2026-10-18. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The EU authenticity line by the act's date (sole driver, 2026-10-18)
+
+The owner decided PR #975's question on 2026-10-18 (item O4, a legal claim; the owner's words: "yes yes go with what you
+recommend"). Every EU text Lex serves, and every EU citation's evidence form, now ends with the statement the act's date
+chooses, to the specification of record's R20 ("the electronic Official Journal is authentic since 1 July 2013
+(Regulation (EU) No 216/2013), the printed edition before"). STATUS.md records the decision among the owner's items.
+- **The two statements** (`V3CorpusMount.EuropeTextAuthenticity`, the owner's words, by basis):
+  - `electronic_edition`, unchanged: "Only the Official Journal of the European Union published in electronic form is
+    authentic and produces legal effects (Regulation (EU) No 216/2013, Article 1(2)); this text is a reproduction read from
+    the Publications Office's Formex package, not the authentic edition."
+  - `edition_by_publication_date`, new: "For an act published before 1 July 2013, the printed Official Journal of the
+    European Union is authentic; the electronic edition is authentic since that date (Regulation (EU) No 216/2013). This text
+    is a reproduction read from the Publications Office's Formex package, not the authentic edition."
+- **The rule for the cut-off** (`EuropeAuthenticityRule`, served as `authenticity_rule`; a driver decision, reversible):
+  - The EU index holds no Official Journal publication date, so the act's own date chooses.
+  - The dates read (`authenticity_act_dates`, once each, in order) are those of the act the text belongs to, never a
+    consolidation's: the Formex date of its original wording, when that text is held, and the publisher's
+    `cdm:work_date_document` of the act's own work, from the census facts the index holds for every seed act.
+  - `electronic_edition` when a date is held and the earliest is on or after 2013-07-01. An act is published on or after
+    the date it bears, so it was published when only the electronic edition is authentic.
+  - `edition_by_publication_date` otherwise, and when no date is held. Its sentence states which edition is authentic on
+    each side of 1 July 2013 and not on which side the act was published. So it stays true for an act dated in June 2013
+    and published in July. The two acts of 26 June 2013 (CRD IV and the CRR) say it; they were published on 27 June 2013.
+  - A consolidated version says its act's statement: a consolidation of 2024 of an act of 2003 says the dated one.
+- **What the data holds, checked** (derive-c, read-only): the original wording's date is the ACT entry's
+  `BIB.INSTANCE/DATE`, the act's own date (the GDPR's 2016-04-27; it was published on 4 May 2016). The census's
+  `work_date_document` is the act's date too; the two differ for one act (32022L2523, 14 and 15 December 2022), on the same
+  side of the day. The Formex package's `.doc.xml` names the Official Journal issue's date (`PUBLICATION.REF/DATE`,
+  2016-05-04 for the GDPR), but no index reads it: the producer reads only the ACT or CONS.ACT entry. So the act's date is
+  read, as decided; reading the publication date is a data-lane slice (next).
+- **The answer** (`V3CorpusMount.cs`, `V3CorpusMount.EuropeTime.cs`; additive, the request schemas unchanged, so the
+  registry digest did not move): both EU evidence bundles, the time view's and the original wording's, carry
+  `authenticity` (the chosen statement), `authenticity_basis`, `authenticity_act_dates` and `authenticity_rule`. The
+  original-wording path reads the census's dates when a seed act's census holds the work (the same statement on both
+  paths), else the work's own wording dates, and none for a sector-0 CELEX. MCP answers from the same handler; its tool
+  descriptions name no statement, so none changed.
+- **The pages and files**: `readEuropeEvidenceBundle` (`reading-answer.mjs`) holds the statement to its basis
+  (`EUROPE_AUTHENTICITY_SENTENCES`, the platform's words) and the basis to the act's dates, and throws on drift. The
+  reading's lead and the export's JSON, CSV and PDF say the answer's statement. The citation generator's evidence form
+  says it in the cited text's language (`citation.europe.authenticity.electronic_edition` and
+  `.edition_by_publication_date`, in both tables).
+- **French**: both forms were reviewed by an independent reviewer (Claude, AI reviewer, not the author) in the addendum of
+  2026-10-18 on the EU authenticity statement in `C:\lex-v3\lanes\fr-review\review.md`, and are named in
+  `live-chrome-fr.mjs`'s header: 2 forms, none changed. The dated one: "Pour un acte publié avant le 1er juillet 2013,
+  l’édition imprimée du Journal officiel de l’Union européenne fait foi ; l’édition électronique fait foi depuis cette date
+  (règlement (UE) n° 216/2013). Ce texte est une reproduction …". The reviewer's optional points on the owner's English go
+  to a lawyer's read (O4; the owner's choice, not before the opening), unchanged here: the gazette was "of the European
+  Communities" before 1 February 2003 (Regulation (EC) No 1/2003); "is authentic since" could read "has been"; art. 3's
+  exception is in neither sentence.
+- **The population** (derive-c's EU index, read-only with `python -I`, under the rule above): 82 seed acts, 70 with a
+  wording's text held. Of those 70, 54 say the electronic edition's statement and 16 the dated one (32003L0087 to
+  32013R0575; #975's text counted 13 of 63 by another measure). 29 have their original's text held; the other 41 are dated
+  by the census's date alone, and 31 of them say the electronic statement only because of it. No act's two dates fall on
+  either side of the day.
+- **Tests**: `V3CorpusEuropeAuthenticityTests` (new): the owner's two sentences word for word; the day before, the day and
+  the day after, June 2013, none held, two dates; the 16 acts; and, over a derived mount whose original is dated
+  2013-06-30 or 2013-07-01 (a fixture's date in the GDPR's package) with a consolidation of 2024, the original and the
+  consolidation in the time view and the original by an article identity. The time-view and evidence-bundle tests hold
+  the GDPR's statement, and both paths alike. The envelope census gained an EU act dated 2013-06-26 (a fixture's date),
+  which the web's citation tests read; the web tests cover the reader's rules, the reading's lead, the evidence form in
+  English and French, and the JSON, CSV and PDF.
+- **Not in this slice** (next): the Official Journal's publication date read into the EU index, so the cut-off reads it
+  (a data-lane slice); the regulation's art. 1(2) and art. 3 checked against its text, and the reviewer's three optional
+  points, at a lawyer's read if the owner books one (O4; the opening does not wait for it, the owner's decision of
+  18 October).
+
 ## The opening kit: law.soufien.lu bound, search engines by deployment, the owner's decisions of 18 October (sole driver, 2026-10-18)
 
 The owner decided on 2026-10-18: the EU authenticity wording for acts published before 1 July 2013 and search-engine
@@ -5223,10 +5289,11 @@ The plan's item 3.3, what is left after the generator (done on 2026-10-17, above
 3. A copy button beside each form (a script-only control, so the journeys walk its focus and keyboard first), and the
    treaties' usual forms ("Article 6 TUE", "article 267 TFUE").
 4. An EU act's title, author and Official Journal reference, and a Euratom or CFSP act's domain, when an index holds them.
-5. The EU authenticity line's date (review of #975, F2; the owner's item O4): R20's dated clause ("the electronic Official
-   Journal is authentic since 1 July 2013 (Regulation (EU) No 216/2013), the printed edition before") in place of the
-   platform's undated sentence, for the 13 of the 63 citable EU acts published before 1 July 2013, checked against the
-   regulation's art. 1(2) and art. 3(3) as amended, in the wording the owner gives; then its French, reviewed.
+5. Done on 2026-10-18 (above, "The EU authenticity line by the act's date"), in the owner's words of that day: the EU
+   authenticity line's date (review of #975, F2; the owner's item O4), R20's dated clause in place of the platform's
+   undated sentence for an act dated before 1 July 2013, and its French, reviewed. Left: the Official Journal's own
+   publication date read into the EU index, and the regulation's art. 1(2) and 3(3) checked against its text (the
+   lawyer's read, O4, which the opening does not wait for).
 6. The data lane's note on Luxembourg dates (review of #975), as the data lane's finding and the slice "search results by
    act" (above) state it: on `derive-c` every state's date is the publisher file's own `dateApplicability` (inventory /3's
    coordinate), equal to the catalogue's `dateEntryInForce` for 1,725 of the 1,730 states (the five that differ are listed
