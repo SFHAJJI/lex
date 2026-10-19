@@ -1,6 +1,6 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-18.
+Updated 2026-10-19.
 
 ## The reader's interval rules over index /9: a date's state, its refusals, the row facts, document order, the undated fold (sole driver, 2026-10-18)
 
@@ -123,6 +123,40 @@ Updated 2026-10-18.
   census, samples, privacy, search, reading pages, citation, MCP, dossier, references, pinned, status_on, changes, article
   history, verify, relations, resolve, journey mounts, gates, content /3 and the interval class): 624 (612 passed, 0 failed,
   12 skipped); `npm test` on 24118293 (#985): 1,280 (1,277 passed, 0 failed, 3 skipped); `eng/verify-v3-tree.ps1` 1,644 tracked paths.
+- **Review and repair (#987, 2026-10-19).** One review by the other model family (Decision 95); eight findings, each
+  reproduced and fixed, with its test in `V3CorpusIntervalMountTests` (now 17) unless said:
+  - **F1 (high), in_force_on across works.** It read limit + 1 work keys as if each gave a row; on index 9 a work with a
+    state before the date and none covering it gives none, so a page ended short and `continue_after` skipped works. Keys are
+    now read on, a batch at a time, until the page is filled or none remain. Test: every row of the unlimited answer, in
+    order, paged at limits 1 and 2 on three dates; REST and MCP give the same page.
+  - **F2 (high), an ELI that names one version.** A narrowed scope served a state the date's interval does not hold. CoverAt
+    now runs over the whole work; a member opens only if it is the covering state or one of its same-text states, else the
+    rules' refusal, or `no_version_for_date` with the new reason `outside_named_version` (the covering and the named states
+    listed, flat). Test: the 2005 act named after its work closed, on a date the 2010 consolidation covers, and on its own.
+  - **F4 (medium), a code's base act.** `base_act_iri` was the code's work + "/jo", which does not exist. A code's base act
+    is now the one its state's `isMemberOf` names, else none is named (`closed_on` stays). Test: two closed codes, one naming
+    its base act and one not.
+  - **F6 (low), changes_in_period by the rules.** A state served under a same-text sibling is that sibling's row; a date is
+    ambiguous only where the rules find several wordings; the baseline is the state the rules serve the day before, and a
+    textless or uncovered day after the history began gives the new reason `no_held_baseline` (no baseline, no candidates).
+    Test: the same-date pair one row, the unclear end day and the invalid interval without a baseline, an overlap's baseline,
+    the differing pair ambiguous.
+  - **F8 (low), the in_force_on population.** `works_with_a_state_on_date` counted works in a hole or after a closed end;
+    it now counts covered works only, and `works_not_covered_on_date` counts the others (index 9 only). Test: with F1's.
+  - **The history's facts (the coordinator's addition, from the S7b/S7c French review).** On index 9 `article_history`'s
+    rows and absent states carry their catalogue facts, so the History page says each date with its role (STATUS-WEB.md).
+    Test: a row and an absent state of the 2005 act carry the dossier's facts for the same states.
+  - F3, F5 and F7 are the web's (STATUS-WEB.md).
+  - **Driver decisions (reversible):** `outside_named_version` and `no_held_baseline` are new reason codes rather than
+    reusing `catalogue_hole` or `first_held_state`, which would say something false of the case; `works_not_covered_on_date`
+    is a new member rather than a changed meaning of `works_beginning_later`, which keeps its index 8 meaning; a code naming
+    no base act names none rather than its own work.
+  - **Measured after the repair** (rebased on 0b908870): `dotnet build Lex.V3.slnx -c Release` 0 warnings, 0 errors; the
+    filtered set (interval, in_force_on, references, search, changes, provenance, census, samples, privacy, legacy schema 6
+    and 8, article history, index-9 serving, as_of, dossier, pinned, replay): 260 (257 passed, 0 failed, 3 skipped); Lex.V3.Tests 3,323 (3,317 passed, 0 failed, 6 skipped; the construction census pins the new door RefuseOutsideScope); the answer
+    and envelope samples re-rendered (the history's rows gain their facts) and verified without the switches; `npm test`
+    1,288 (1,285 passed, 0 failed, 3 skipped); `eng/verify-v3-tree.ps1` 1,650 tracked paths. The whole Ingest project was not
+    rerun (other lanes' heavy jobs share the machine).
 - **Not done here, and where it goes.** S7b: the timeline's gaps, overlaps and same-date groups, `article_history` across
   textless states and holes, and the speech roles (the Compare card's same-version note, `reading.validityConflict`, the
   exports' and the PDF's "applying from", the History table's column, `search.dated` and the dossier's state span still say a

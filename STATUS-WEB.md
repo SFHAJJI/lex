@@ -1,6 +1,6 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-18. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-19. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
@@ -55,8 +55,36 @@ date. The server now serves a built mount of index 9.
 - **Driver decisions (reversible).** The dossier's cell answers its column ("no date stated") rather than renaming the
   column, which is right for every other row. The provenance page's labels are English, as the rest of that page's are. The
   refusal payloads are flat rather than the card gaining structured members (STATUS-DATA.md).
-- **Left to S7b and S7c** (the French review's point 4): the Compare card's same-version note and sides, `reading.validityConflict`,
-  the exports' item lines and the PDF's "applying from", the History table's column, `search.dated`, and the dossier's state
+- **Review and repair (#987, 2026-10-19).** The web's findings, each with its test in `web/test/date-role.test.mjs` (now 14):
+  - **F3 (medium), today.** `luxembourgCurrent` (`citation.mjs`) and `answersToday` (`initial-answer.mjs`) took a state
+    as today's by its next held state alone, so a state after a closed end, or followed only by textless states, was
+    today's. `date-role.mjs` reads `applicable_to` (`readInterval`), and `holdsToday` asks both bounds: no later held state
+    on or before today, and on index 9 an end after today or none. Test: a closed state is not today's, an open one is, an
+    index 8 state is read as before; the citation's usual form of a closed state carries its version.
+  - **F5 (medium), R21 on default pages.** `reading.validityConflict` said "its state applies from" an entry into force: a
+    state so dated now gets `reading.validityConflictEntryIntoForce` on the reading, the pinned reading and the PDF (whose
+    "applying from" lines say "dated by its entry into force on" too). `search.dated` says index 9's rule. Test: the census
+    bundle's 49 conflicting articles rendered with the role; the repair's forms held to the guard in both languages.
+  - **F6's reason.** `radar-answer.mjs` reads `no_held_baseline` (no baseline, no candidates); `radar.reason.no_held_baseline`
+    says it. Test: the census radar row rendered with it, and refused if it names candidates.
+  - **F7 (low), the provenance heading.** Test: `stateHeading` follows the role in both renderers.
+  - **The History page (the coordinator's addition, from the S7b/S7c French review).** `history.carried`, `carriedIn` and
+    `absentRow` said an entry into force as "from {from}". `history-answer.mjs` reads the role on rows and absent states;
+    `LiveHistory.jsx` says the lineage's first row (whose date is `history_begins`) and an absent state so dated with
+    `history.carriedEntryIntoForce`, `carriedInEntryIntoForce` and `absentRowEntryIntoForce`. Test: the census history
+    rendered with the role on its row and an absent state, and as before without it. The table's date column stays S7b's.
+  - **French** (Decision 41): six forms, reviewed by the same reviewer in the addendum of 2026-10-19 "S7a's repair round (the
+    review of #987)" of `C:\lex-v3\lanes\fr-review\review.md`: the three of F5 and F6 changed in review (the English with
+    them: "son" tied to the act; "les dates de l’éditeur" and "ne détient pas le texte"; "pas de version de référence", since
+    an earlier held version may exist), the three of the History approved (5 strings; the reviewer's optional English "the
+    first being" taken). Named in the header comment of `live-chrome-fr.mjs`. The reviewer's point that `search.severalOnDate`
+    reads broader than what it counts on index 9 is left until index 9 serves such a case (not reached on derive-c).
+  - Pinned anew: `live-home.test.mjs` (the dated search's sentence), `radar-answer.test.mjs` (the reasons).
+  - `npm run build` and `npm test`: 1,288 tests, 1,285 passed, 0 failed, 3 skipped (the browser tests, which run only with
+    `LEX_BROWSER_TESTS=1`).
+- **Left to S7b and S7c** (the French review's point 4; the repair took `reading.validityConflict`, `search.dated`, the PDF's
+  "applying from" and the History's summary and absent rows): the Compare card's same-version note and sides,
+  the exports' item lines, the History table's column, and the dossier's state
   span, which still say a state dated by its entry into force with application words; the refusal cards' own sentences for
   the new reasons; the translation label on the reading.
 
