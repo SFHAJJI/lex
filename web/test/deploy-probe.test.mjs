@@ -452,10 +452,11 @@ test("the browser probes run the journey's real-mount steps against the revision
 });
 
 // The legal pages (the plan's item 7.1; `legal-pages.mjs`): a release's ten, each with what it says. A clean page names no
-// person and gives no contact (the owner's decision of 2026-10-19); the other gives an e-mail address in a mail link, as the
-// pages did before that decision.
+// person and gives no contact (the owner's decision of 2026-10-19), and may link the regulator a reader may complain to, as
+// the privacy notice does; the other gives an e-mail address in a mail link, as the pages did before that decision.
 const OFF_THE_SITE = /shows an e-mail address, a mail or telephone link, which the owner's decision of 2026-10-19 keeps off the site/;
-const legalPage = (path, clean) => Buffer.from(`<!doctype html><title>${path}</title><p>${clean ? "Lex is an independent, non-commercial tool." : 'Contact: <a href="mailto:someone@example.invalid">someone@example.invalid</a>.'}</p>\n`);
+const CLEAN = 'Lex is an independent, non-commercial tool. You may lodge a complaint with the Commission nationale pour la protection des données (CNPD), <a href="https://cnpd.public.lu/" rel="external">cnpd.public.lu</a>.';
+const legalPage = (path, clean) => Buffer.from(`<!doctype html><title>${path}</title><p>${clean ? CLEAN : 'Contact: <a href="mailto:someone@example.invalid">someone@example.invalid</a>.'}</p>\n`);
 const legalWeb = (clean) => LEGAL_PAGE_PATHS.map((path) => [path.slice(1), legalPage(path, clean)]);
 const servedLegal = (web, change = () => ({})) => new Map(web.map(([file, body]) => [`/${file}`, { body, ...change(`/${file}`) }]));
 
@@ -517,7 +518,7 @@ test("a legal page served with other bytes, without the page's CSP or with a coo
 test("the opening's check fails closed: a page showing a contact or a placeholder, a page that does not answer as a page, a cookie, or a site it cannot reach", async () => {
   const clean = await revision({ legal: servedLegal(legalWeb(true)) });
   try {
-    assert.deepEqual(await openingFailures(clean.origin), [], "ten pages that name no person and give no contact, served as pages without a cookie: the site may open");
+    assert.deepEqual(await openingFailures(clean.origin), [], "ten pages that name no person and give no contact, each linking the regulator a reader may complain to, served as pages without a cookie: the site may open");
   } finally {
     await clean.close();
   }

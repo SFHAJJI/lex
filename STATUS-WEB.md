@@ -11,8 +11,8 @@ updates this file, not STATUS.md.
 have temporal feature over lux and eu laws thats it"; "why r we mentioning emails andadress". So the site names no person
 and publishes no postal address, no e-mail address and no contact channel of any kind. It **departs from the
 specification of record's R49** (the legal notice's editor, address, e-mail and director of publication; the privacy
-notice's controller and contact, its legal bases, the retention of e-mailed reports, the rights and the CNPD complaint
-route, and the objection contact for people named in acts) **and from O5's recommended answer** (the owner as editor and
+notice's controller and contact, its legal bases, the retention of e-mailed reports, the requests a reader could make of
+the publisher, the CNPD's postal address, and the objection contact for people named in acts) **and from O5's recommended answer** (the owner as editor and
 controller, with a dedicated contact address; a security contact). With them go R62's contact in the accessibility
 statement, R74's "Report a problem with this page" and its security contact (`/.well-known/security.txt`, never built),
 and R92's objection contact; R92's other duty, keeping acts that name people away from search engines, stands, and the
@@ -21,10 +21,10 @@ privacy notice says it. One slice on `writer/legal-no-person`, stacked on `write
   still a placeholder, and `reportRetentionMonths`, the 12 months decided earlier that day) and everything that read it:
   the placeholders and their mark (`PUBLISHER_PLACEHOLDERS`, `data-legal-placeholder`), the build's refusal of a detail
   filled wrong (`malformedPublisherFailures` in `build-live.mjs`), the readiness checks (`publisherFailures`,
-  `isUnfilled`, `placeholdersIn`), the CNPD link (`CNPD_SITE`) and `legal.months`. From the pages: the legal notice's
+  `isUnfilled`, `placeholdersIn`) and `legal.months`. From the pages: the legal notice's
   publisher, contact and director of publication; the privacy notice's controller, its three legal bases, the e-mail
-  section and its retention, the processors paragraph (the mailbox provider), the rights and the CNPD complaint with its
-  postal address, and the objection; the terms' "Reporting an error"; the accessibility statement's "Reporting a
+  section and its retention, the processors paragraph (the mailbox provider), the requests to the publisher (arts. 15 to
+  18 and 21), the CNPD's postal address, and the objection; the terms' "Reporting an error"; the accessibility statement's "Reporting a
   barrier" and "published by a private person". With no contact, no e-mail is received or kept, so the 12 months apply to
   nothing (superseded, above).
 - **What each page says now** (`live-chrome.mjs`, `live-chrome-fr.mjs`; "Last updated: 19 October 2026"):
@@ -43,7 +43,8 @@ privacy notice says it. One slice on `writer/legal-no-person`, stacked on `write
     its own terms; the server keeps nothing of a request (no access log, no record of what is read or searched, no log
     store or monitoring in the hosting; tested with marked values); no accounts, so nothing about a reader to show,
     correct or erase; no cookie, browser storage, tracker or other site, and links ask the browser to send no referrer;
-    people named in published acts and the search-engine rule;
+    people named in published acts and the search-engine rule; and, under "Your rights", one sentence: the reader may
+    lodge a complaint with the CNPD, its site linked (https://cnpd.public.lu/), no postal address (a driver decision, below);
   - **terms of use:** R50's sentence and the service with the authenticity line; anyone may read, search, cite and export
     the texts, free and with no account; each text keeps its source's licence (CC BY 4.0, the EU's reuse policy), the
     legal notice saying where the texts come from and the acknowledgement each carries, and the terms add no restriction;
@@ -80,7 +81,7 @@ privacy notice says it. One slice on `writer/legal-no-person`, stacked on `write
   checks marks, not words: a word list at the opening would refuse a harmless sentence; the words (a contact, writing to
   someone, a postal address, a request or objection, the persons R49 named) are pinned at build time, in both languages,
   by `legal-pages.test.mjs`. A person's name cannot be recognised by a pattern; the pages hold no value that is not the
-  table's, and the tests hold every placeholder a legal sentence may name to six values, none of them a person's.
+  table's, and the tests hold every placeholder a legal sentence may name to seven values, none of them a person's.
 - **The rest of the site:** no other page gave a contact; the footer lists the five pages and nothing else. The asked
   words ("@", "contact", "e-mail", "email", "courriel", "adresse", "address", "écrire", "write to") were searched in
   `web/app`, `web/scripts`, `web/src` and the API's served texts (`src/Lex.V3.Api`, `src/Lex.V3.Contracts`): no e-mail
@@ -97,14 +98,28 @@ privacy notice says it. One slice on `writer/legal-no-person`, stacked on `write
   6,301 checks on the 84 forms of the six sections (both tables' keys, placeholders and numbers in order, typography,
   the refused words, `NO_CONTACT_WORDS` and `SHOWN_NOWHERE`): all pass. Its section for the lawyer's read (O4) lists
   what the rewrite leaves out (a controller, legal bases, the rights and the CNPD route, an objection route, a feedback
-  route for accessibility), as the owner's decision and not the reviewer's to revisit; the read has not been done.
-- **Driver decisions** (reversible): the CNPD complaint line is removed with the rights, as the owner's "no contact
-  channel of any kind" and "say only what is processed and kept" read together (it can come back as one line, its
-  postal address left out); the legal bases go with the controller they named; the licences stand in full on the legal
-  notice and in brief in the terms, which point to it.
-- **Measured** (no browser was started on this machine, no publisher was asked and no Azure resource touched; at
-  83aa0328, the code of this pull request): `npm run build` in `web`, then a plain `npm test`: 1,313 tests, 1,310 passed,
-  the 3 that start a browser skipped with their reason; `dotnet build Lex.V3.slnx -c Release --no-incremental`, 0
+  route for accessibility), as the owner's decision and not the reviewer's to revisit; the read has not been done. The
+  CNPD route came back since, as one sentence (below).
+- **Driver decisions** (reversible):
+  - **The CNPD complaint line is kept**, one sentence in each language, under "Your rights" ("Vos droits"): "You may lodge
+    a complaint with the Commission nationale pour la protection des données (CNPD), cnpd.public.lu.", the site a link
+    (`CNPD_SITE`, https://cnpd.public.lu/) and no postal address. The right to complain to the supervisory authority (GDPR
+    art. 77) is the reader's, not a contact of Lex's: the owner objected to Lex's own name, address and e-mail, not to
+    naming the regulator. The first draft of this slice had removed the line with the requests; the coordinator reversed
+    that, and this record follows. It is the reviewed line of 2026-10-18 (its entry 54) without the address and without
+    "also" (the requests it followed are gone), so it was reviewed again, by one independent reviewer (Claude, AI reviewer, not the author), in the
+    addendum of 2026-10-19 "the CNPD complaint line kept" of the French record: 2 forms, both approved, no English change
+    (its script's 8,280 checks on the 86 forms of the six sections pass; its note for the lawyer's read adds which
+    authority is competent under art. 77(1), and that the complaint is the page's one recourse). The opening's check passes over it
+    (an https link: no e-mail address, no `mailto:` or `tel:`, no postcode), and `legal-pages.test.mjs` and
+    `deploy-probe.test.mjs` hold it: one sentence, the link once, "CNPD" once, no "Belvaux", "Boulevard du Jazz",
+    postcode or "4370", and no other legal page naming the regulator.
+  - The legal bases go with the controller they named; the licences stand in full on the legal notice and in brief in
+    the terms, which point to it.
+- **Measured** (no browser was started on this machine, no publisher was asked and no Azure resource touched; on
+  the code of this pull request, the CNPD line included): `npm run build` in `web`, then a plain `npm test`: 1,314 tests,
+  1,311 passed, the 3 that start a browser skipped with their reason (the legal-pages, deploy-probe, deploy-kit and
+  chrome tests alone: 55 of 55); `dotnet build Lex.V3.slnx -c Release --no-incremental`, 0
   warnings, 0 errors; `Lex.V3.Tests`, whole, 3,327, 3,321 passed, 6 skipped; in `Lex.V3.Ingest.Tests` the Census classes,
   `PublicRequestRecordingTests` and the answer, envelope and refusal-payload samples, 32, 31 passed, 1 skipped (the EU
   predicate census, by its variable: publisher traffic); no sample was rendered again, since no served answer changed;

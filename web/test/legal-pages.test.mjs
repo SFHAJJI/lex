@@ -5,7 +5,8 @@
 // Held here: each page is built under each interface language, with the site around it, its own words from the chrome
 // table, no script and never indexed, its language links to the same page; every live page's footer links all five; by the
 // owner's decision of 2026-10-19 no page, in either language, names a person or gives a postal address, an e-mail address
-// or a contact of any kind, and no page says a placeholder; the opening's check passes over the built pages as both
+// or a contact of any kind, and no page says a placeholder; the privacy notice keeps the reader's right to complain to the
+// CNPD, one sentence, its site linked and no postal address; the opening's check passes over the built pages as both
 // servers serve them; and what the pages say of the site is what its code does.
 
 import assert from "node:assert/strict";
@@ -19,7 +20,7 @@ import * as app from "../.react-build/app.mjs";
 import { buildLive } from "../scripts/build-live.mjs";
 import { CSP_DIRECTIVES } from "../scripts/csp.mjs";
 import {
-  ACCESSIBILITY_LAW, EURLEX_ACKNOWLEDGEMENT, LEGAL_PAGES, LEGAL_PAGE_PATHS, LEGAL_TEXTS_UPDATED, SHOWN_NOWHERE,
+  ACCESSIBILITY_LAW, CNPD_SITE, EURLEX_ACKNOWLEDGEMENT, LEGAL_PAGES, LEGAL_PAGE_PATHS, LEGAL_TEXTS_UPDATED, SHOWN_NOWHERE,
   builtLegalPageFailures, legalPageTextFailures, openingFailures, shownOnPage,
 } from "../scripts/legal-pages.mjs";
 import { LIVE_CHROME, entriesOf, liveChrome } from "../scripts/live-chrome.mjs";
@@ -186,13 +187,15 @@ test("no legal page, in either language, names a person or gives an address, an 
       assert.deepEqual(shownOnPage(text), [], `${language} ${path}: ${text}`);
       // A sentence names only the values the pages fill, none of them a person's detail.
       for (const [, name] of text.matchAll(/\{([A-Za-z]+)\}/g)) {
-        assert.ok(["date", "notAdvice", "authenticity", "legalNoticePage", "cookiesPage", "eurlexAcknowledgement", "accessibilityLaw"].includes(name), `${language} ${path} names {${name}}`);
+        assert.ok(["date", "notAdvice", "authenticity", "legalNoticePage", "cookiesPage", "cnpdSite", "eurlexAcknowledgement", "accessibilityLaw"].includes(name), `${language} ${path} names {${name}}`);
       }
     }
     // No part of any page is a way to reach anyone: no report, no rights request, no objection, no controller, no publisher.
-    for (const [page, parts] of [["legalNotice", ["publisher", "independence"]], ["privacy", ["controller", "email", "processors", "rights"]], ["terms", ["errors"]], ["accessibility", ["report"]]]) {
+    for (const [page, parts] of [["legalNotice", ["publisher", "independence"]], ["privacy", ["controller", "email", "processors"]], ["terms", ["errors"]], ["accessibility", ["report"]]]) {
       for (const part of parts) assert.ok(!Object.hasOwn(table[page].sections, part), `${language} ${page}.${part} is gone`);
     }
+    // The privacy notice's rights are the one complaint line, to the regulator: no request to Lex, no objection.
+    assert.deepEqual(Object.keys(table.privacy.sections.rights), ["heading", "complaint"], `${language}: the rights are the complaint line alone`);
     assert.ok(!Object.hasOwn(table.legal, "months"), `${language}: no retention to say, since nothing is kept`);
   }
   // Rendered from each language's table, as each page's bundle renders it: nothing of the decision's on any page.
@@ -224,9 +227,37 @@ test("the check the opening runs finds each mark of a person's details or a cont
   }
   assert.equal(SHOWN_NOWHERE.length, 4);
   // What the pages say that only looks like one: a quotation in French marks, an article's number, a licence's version, a
-  // regulation's number, the "#" of a search kept in a link.
-  for (const html of ["<p>« © European Union, https://eur-lex.europa.eu »</p>", "<p>WCAG 2.2, CC BY 4.0, 2011/833/EU, « # »</p>"]) {
+  // regulation's number, the "#" of a search kept in a link, the link to the regulator a reader may complain to.
+  for (const html of ["<p>« © European Union, https://eur-lex.europa.eu »</p>", "<p>WCAG 2.2, CC BY 4.0, 2011/833/EU, « # »</p>", `<a href="${CNPD_SITE.href}" rel="external">${CNPD_SITE.text}</a>`]) {
     assert.deepEqual(shownOnPage(html), [], html);
+  }
+});
+
+test("the privacy notice keeps the reader's right to complain to the CNPD, in one sentence, its site linked and no postal address (a driver decision of 2026-10-19)", async () => {
+  const destination = await mkdtemp(join(tmpdir(), "lex-live-legal-cnpd-"));
+  try {
+    await buildLive(pathToFileURL(`${destination}/`), { buildTag: "legal-cnpd" });
+    for (const [language, sentence] of [
+      ["en", "You may lodge a complaint with the Commission nationale pour la protection des données (CNPD), cnpd.public.lu."],
+      ["fr", "Vous pouvez introduire une réclamation auprès de la Commission nationale pour la protection des données (CNPD), cnpd.public.lu."],
+    ]) {
+      const html = await readFile(join(destination, language, "privacy.html"), "utf8");
+      assert.ok(said(html).includes(sentence), `${language}: the complaint line, one sentence`);
+      assert.equal(html.match(/<a href="https:\/\/cnpd\.public\.lu\/" rel="external">cnpd\.public\.lu<\/a>/g)?.length, 1, `${language}: the regulator's site, linked once`);
+      assert.equal(said(html).match(/CNPD/g)?.length, 1, `${language}: the regulator named once`);
+      // Its postal address, which the 2026-10-18 page gave, is said nowhere, and the opening's check finds nothing.
+      for (const absent of [/Belvaux/, /Boulevard du Jazz/, /\bL-\d{4}\b/, /\b4370\b/]) assert.doesNotMatch(html, absent, `${language}: ${absent}`);
+      assert.deepEqual(legalPageTextFailures(`/${language}/privacy.html`, html), [], `${language}: the opening's check passes`);
+      assert.deepEqual(contactWordsIn(said(html)), [], `${language}: no word for a contact`);
+    }
+    // No other legal page names the regulator.
+    for (const language of ["en", "fr"]) {
+      for (const page of LEGAL_PAGES.filter((one) => one.key !== "privacy")) {
+        assert.doesNotMatch(await readFile(join(destination, language, page.file), "utf8"), /cnpd/i, `${language}/${page.file}`);
+      }
+    }
+  } finally {
+    await rm(destination, { recursive: true, force: true });
   }
 });
 

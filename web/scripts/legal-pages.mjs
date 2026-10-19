@@ -10,7 +10,9 @@
 // andadress"), departing from R49 (an editor, an address, an e-mail, a controller and its contact, an objection contact)
 // and from O5's recommended answer. So the pages say what Lex is, where its texts come from and on what licences, who hosts
 // it, what it keeps of a reader (nothing), how accessible it is and that it sets no cookie, and nothing else: there is no
-// detail for anyone to fill in, and nothing waits for one.
+// detail for anyone to fill in, and nothing waits for one. The privacy notice keeps the reader's right to complain to the
+// CNPD, the regulator, named with a link to its site and no postal address (`CNPD_SITE`; the driver's decision of
+// 2026-10-19): a right of the reader's, not a contact of Lex's.
 //
 // The opening's check (`openingFailures`, run by `deploy-probe.mjs --opening` from `deploy/deploy.ps1 -Open`) and every
 // `-Public` deployment's probe of its candidate (`builtLegalPageFailures`) keep that decision on the served site: each
@@ -46,6 +48,12 @@ export const LEGAL_PAGE_PATHS = Object.freeze(INTERFACE_LANGUAGES.flatMap((langu
 
 /** The date the five texts were last changed, which each page prints ("Last updated"): changed with any of their words. */
 export const LEGAL_TEXTS_UPDATED = "2026-10-19";
+
+/**
+ * The supervisory authority a reader may complain to (GDPR art. 77), which the privacy notice names, as a link to its site
+ * and with no postal address: the reader's right, not a contact of Lex's (the driver's decision of 2026-10-19).
+ */
+export const CNPD_SITE = Object.freeze({ href: "https://cnpd.public.lu/", text: "cnpd.public.lu" });
 
 /** The EU texts' acknowledgement's address (Decision 95; `V3CorpusMount.EuropeTextAcknowledgement`), printed, not linked. */
 export const EURLEX_SITE = "https://eur-lex.europa.eu";

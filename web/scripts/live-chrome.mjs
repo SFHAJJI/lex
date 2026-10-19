@@ -573,10 +573,11 @@ const EN = Object.freeze({
   // share (`legal`). Each page's `sections` are its parts in order: a part's `heading`, then its paragraphs, a `list` being
   // one list of items. A paragraph's placeholders are the footer's statements (`notAdvice`, `authenticity`: R50's sentence
   // and the authenticity line, said once, word for word), a link to another legal page (`legalNoticePage`, `cookiesPage`,
-  // in the words of `legal.inline`), the EU texts' acknowledgement as they carry it, in English (`eurlexAcknowledgement`)
-  // and Luxembourg's accessibility law by its French title (`accessibilityLaw`). By the owner's decision of 2026-10-19 the
-  // pages name no person and give no postal address, no e-mail address and no contact of any kind, departing from R49 and
-  // O5. Every statement is one the code or the deployment supports (STATUS-WEB.md, the sections of 2026-10-18 and
+  // in the words of `legal.inline`), the EU texts' acknowledgement as they carry it, in English (`eurlexAcknowledgement`),
+  // Luxembourg's accessibility law by its French title (`accessibilityLaw`) and the CNPD's site, a link (`cnpdSite`). By the
+  // owner's decision of 2026-10-19 the pages name no person and give no postal address, no e-mail address and no contact
+  // of any kind, departing from R49 and O5; the reader's right to complain to the CNPD stays, its site linked and its
+  // address left out (the driver's decision of 2026-10-19). Every statement is one the code or the deployment supports (STATUS-WEB.md, the sections of 2026-10-18 and
   // 2026-10-19 on the legal pages).
   legal: Object.freeze({
     menu: "Legal information",
@@ -639,6 +640,12 @@ const EN = Object.freeze({
         heading: "People named in published acts",
         why: "Some published acts name people, for example a law granting nationality. Lex reproduces texts as the official journals publish them, the Journal officiel du Grand-Duché de Luxembourg and the Official Journal of the European Union, so that the law can be read at a date and checked against its official source.",
         searchEngines: "Search engines may index the page of an act only once a check has found that the act names no private person; the page of any other act asks them not to.",
+      }),
+      // The reader's right to complain to the supervisory authority (GDPR art. 77): the regulator, named with a link to its
+      // site and no postal address, not a contact of Lex's (the driver's decision of 2026-10-19, STATUS-WEB.md).
+      rights: Object.freeze({
+        heading: "Your rights",
+        complaint: "You may lodge a complaint with the Commission nationale pour la protection des données (CNPD), {cnpdSite}.",
       }),
     }),
   }),
