@@ -19,7 +19,7 @@ public sealed class EuropeIndexBuilderTests
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             EuropeIndexBuilder.BuildFixedInputDeterminismEvidence()));
-        Assert.AreEqual("cb2b04fc0c50aaaaaacedd1261d38829bea8ce54667676a96552090baa7a9f7e", digest);
+        Assert.AreEqual("480538860a56da3ca28970f826554cf6cdd203203a7f24d7fa98bd0c4dde9eac", digest);
     }
 
     [TestMethod]
@@ -218,7 +218,7 @@ public sealed class EuropeIndexBuilderTests
                     ReadRows<EuropeIndexBuilder.CorrigendumLineRow>(connection, "ReadLines"),
                     ReadRows<EuropeIndexBuilder.CorrigendumGapRow>(connection, "ReadGaps"), articles,
                     ReadRows<EuropeIndexBuilder.ArticleSourceRow>(connection, "ReadArticleSources"));
-                EuropeIndexBuilder.Execute(connection, "DROP TABLE states; DROP TABLE article_digests; PRAGMA user_version=3;");
+                EuropeIndexBuilder.Execute(connection, "DROP TABLE force_dates; DROP TABLE states; DROP TABLE article_digests; PRAGMA user_version=3;");
                 EuropeIndexBuilder.Execute(connection, "PRAGMA writable_schema=ON; UPDATE sqlite_schema SET sql=replace(sql,'publisher_work_celex TEXT COLLATE BINARY,','publisher_work_celex TEXT COLLATE BINARY NOT NULL,') WHERE name='articles'; PRAGMA writable_schema=OFF;");
                 using var command = connection.CreateCommand();
                 command.CommandText = "UPDATE stamp SET schema_identity='lex-v3-europe-index/3',logical_rows_sha256=$logical";
@@ -259,7 +259,7 @@ public sealed class EuropeIndexBuilderTests
                     ReadRows<EuropeIndexBuilder.CorrigendumGapRow>(connection, "ReadGaps"), articles,
                     ReadRows<EuropeIndexBuilder.ArticleSourceRow>(connection, "ReadArticleSources"),
                     ReadRows<EuropeIndexBuilder.ArticleDigestRow>(connection, "ReadArticleDigests"));
-                EuropeIndexBuilder.Execute(connection, "DROP TABLE states; PRAGMA user_version=4;");
+                EuropeIndexBuilder.Execute(connection, "DROP TABLE force_dates; DROP TABLE states; PRAGMA user_version=4;");
                 EuropeIndexBuilder.Execute(connection, "PRAGMA writable_schema=ON; UPDATE sqlite_schema SET sql=replace(sql,'publisher_work_celex TEXT COLLATE BINARY,','publisher_work_celex TEXT COLLATE BINARY NOT NULL,') WHERE name='articles'; PRAGMA writable_schema=OFF;");
                 using var command = connection.CreateCommand();
                 command.CommandText = "UPDATE stamp SET schema_identity='lex-v3-europe-index/4',logical_rows_sha256=$logical";
@@ -275,6 +275,143 @@ public sealed class EuropeIndexBuilderTests
             Assert.IsFalse(reader.HasStates);
             Assert.ThrowsExactly<InvalidOperationException>(() => reader.ReadStates("32016R0679"));
             Assert.AreEqual(1, reader.ArticleCount);
+        }
+        finally { EuropeIndexBuilder.DeleteDatabase(path); }
+    }
+
+    [TestMethod]
+    public void Schema5RemainsReadableWithoutInventingForceDates()
+    {
+        var bytes = EuropeIndexBuilder.BuildFixedInputDeterminismEvidence();
+        var path = Path.Combine(Path.GetTempPath(), $"lex-v3-schema5-test-{Guid.NewGuid():N}.sqlite");
+        try
+        {
+            File.WriteAllBytes(path, bytes);
+            EuropeIndexBuilder.ArticleRow[] articles;
+            using (var connection = EuropeIndexBuilder.Open(path, SqliteOpenMode.ReadWrite))
+            {
+                articles = ReadRows<EuropeIndexBuilder.ArticleRow>(connection, "ReadArticles");
+                var logical = EuropeIndexBuilder.HashLogicalRows(
+                    ReadRows<EuropeIndexBuilder.MemberRow>(connection, "ReadMembers"),
+                    ReadRows<EuropeIndexBuilder.CorrigendumLineRow>(connection, "ReadLines"),
+                    ReadRows<EuropeIndexBuilder.CorrigendumGapRow>(connection, "ReadGaps"), articles,
+                    ReadRows<EuropeIndexBuilder.ArticleSourceRow>(connection, "ReadArticleSources"),
+                    ReadRows<EuropeIndexBuilder.ArticleDigestRow>(connection, "ReadArticleDigests"),
+                    ReadRows<EuropeIndexState>(connection, "ReadStates"));
+                EuropeIndexBuilder.Execute(connection, "DROP TABLE force_dates; PRAGMA user_version=5;");
+                using var command = connection.CreateCommand();
+                command.CommandText = "UPDATE stamp SET schema_identity='lex-v3-europe-index/5',logical_rows_sha256=$logical";
+                command.Parameters.AddWithValue("$logical", logical);
+                command.ExecuteNonQuery();
+            }
+            bytes = File.ReadAllBytes(path);
+            var sha = Convert.ToHexStringLower(SHA256.HashData(bytes));
+            var corpusSha = new string('a', 64);
+            using var reader = EuropeIndexReader.OpenAndVerify(new(LexCorpus6Builder.ResourceIdOf(sha), sha), bytes,
+                new(LexCorpus6Builder.ResourceIdOf(corpusSha), corpusSha), EuropeIndexBuilder.MeasureCapabilities(sha, articles));
+            Assert.IsTrue(reader.HasStates);
+            Assert.IsFalse(reader.HasForceDates, "an index /5 holds no force date, and none is invented");
+            Assert.ThrowsExactly<InvalidOperationException>(() => reader.ReadForceDates("https://example.invalid/work"));
+            Assert.AreEqual(1, reader.ArticleCount);
+        }
+        finally { EuropeIndexBuilder.DeleteDatabase(path); }
+    }
+
+    [TestMethod]
+    public async Task TheActsDatedStatementsAreIndexedAsItsForceDatesByRoleAndReopenedFromTheirOwnStatement()
+    {
+        var envelope = await RetainedGdprEnvelopeAsync(withForceDates: true);
+        var built = EuropeIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        var again = EuropeIndexBuilder.TryBuild(envelope, out _, out _)!;
+        CollectionAssert.AreEqual(built.IndexBytes.ToArray(), again.IndexBytes.ToArray(), "the force dates build deterministically");
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out _, out _)!;
+        using var reader = EuropeIndexReader.OpenAndVerify(built.IndexRef, built.IndexBytes.Span, corpus.ArtifactRef, built.CapabilityManifest);
+        Assert.IsTrue(reader.HasForceDates);
+        var root = EuAxiomWiringHarness.SeedRoot("32016R0679");
+        var rows = reader.ReadForceDates(root);
+        CollectionAssert.AreEqual(new[] { "entry_into_force", "application", "deadline" }, rows.Select(static row => row.Role).ToArray());
+        CollectionAssert.AreEqual(new[] { "2016-05-24", "2018-05-25", "2020-05-25" }, rows.Select(static row => row.DateValue).ToArray());
+        CollectionAssert.AreEqual(new[] { "EV", "MA", null }, rows.Select(static row => row.QualifierCode).ToArray());
+        CollectionAssert.AreEqual(new[] { "entry_into_force", "application_date", "role_not_stated_by_publisher" },
+            rows.Select(static row => row.FactRole).ToArray(), "the accepted contract's own reading is kept beside the role");
+        CollectionAssert.AreEqual(new[] { "Entry into force", "Application", null }, rows.Select(static row => row.QualifierLabel).ToArray());
+        Assert.AreEqual(EuForceDatesFixture.Gdpr()[2].Note, rows[2].PublisherComment, "the deadline's qualifier is the publisher's note, word for word");
+        Assert.IsTrue(rows.All(static row => !row.OpenEnded && row.DatatypeIri == EuForceDatesFixture.XsdDate && row.PublisherWorkIri == row.PublisherWorkIri));
+        var decoded = envelope.BodyComposition.Envelope.Europe.DateAxioms;
+        Assert.HasCount(3, decoded);
+        CollectionAssert.AreEquivalent(decoded.Select(static binding => binding.Fact.SourceObservationId).ToArray(),
+            rows.Select(static row => row.SourceObservationId).ToArray(), "each date names the delivered batch it was read from");
+        Assert.IsEmpty(reader.ReadForceDates("http://publications.europa.eu/resource/cellar/not-a-census-work"));
+
+        // An act whose statements family A answered absent: the table holds none of its dates, and says so by holding none.
+        var absent = await RetainedGdprEnvelopeAsync();
+        var plain = EuropeIndexBuilder.TryBuild(absent, out _, out _)!;
+        using var plainReader = EuropeIndexReader.OpenAndVerify(plain.IndexRef, plain.IndexBytes.Span,
+            LexCorpus6Builder.TryBuild(absent, out _, out _)!.ArtifactRef, plain.CapabilityManifest);
+        Assert.IsTrue(plainReader.HasForceDates);
+        Assert.IsEmpty(plainReader.ReadForceDates(root));
+    }
+
+    [TestMethod]
+    [DataRow("UPDATE force_dates SET role='application' WHERE role='entry_into_force'")]
+    [DataRow("UPDATE force_dates SET date_value='2016-05-25' WHERE role='entry_into_force'")]
+    [DataRow("UPDATE force_dates SET publisher_comment=NULL WHERE role='deadline'")]
+    [DataRow("UPDATE force_dates SET qualifier_code='MA' WHERE role='entry_into_force'")]
+    [DataRow("UPDATE force_dates SET open_ended=1 WHERE role='deadline'")]
+    [DataRow("DELETE FROM force_dates WHERE role='deadline'")]
+    [DataRow("DROP TABLE force_dates")]
+    [DataRow("PRAGMA user_version=5")]
+    [DataRow("UPDATE stamp SET schema_identity='lex-v3-europe-index/5'")]
+    public async Task ReaderRejectsAChangedMissingOrRelabelledForceDate(string sql)
+    {
+        var envelope = await RetainedGdprEnvelopeAsync(withForceDates: true);
+        var built = EuropeIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        AssertHostileDatabaseRefused(built, LexCorpus6Builder.TryBuild(envelope, out _, out _)!.ArtifactRef, sql);
+    }
+
+    [TestMethod]
+    [DataRow("UPDATE force_dates SET role='application' WHERE role='entry_into_force'")]
+    [DataRow("UPDATE force_dates SET date_value='2016-05-25' WHERE role='entry_into_force'")]
+    [DataRow("UPDATE force_dates SET qualifier_code=NULL,role='not_pinned',fact_role='role_not_stated_by_publisher' WHERE role='application'")]
+    [DataRow("UPDATE force_dates SET publisher_work_iri='http://publications.europa.eu/resource/cellar/00000000-0000-0000-0000-000000000000' WHERE role='deadline'")]
+    public async Task LogicalRestampingCannotHideAForceDateItsStatementDoesNotSay(string sql)
+    {
+        var envelope = await RetainedGdprEnvelopeAsync(withForceDates: true);
+        var built = EuropeIndexBuilder.TryBuild(envelope, out var refusal, out var detail);
+        Assert.IsNotNull(built, $"{refusal}: {detail}");
+        var corpus = LexCorpus6Builder.TryBuild(envelope, out _, out _)!;
+        var path = Path.Combine(Path.GetTempPath(), $"lex-v3-force-restamp-{Guid.NewGuid():N}.sqlite");
+        try
+        {
+            File.WriteAllBytes(path, built.IndexBytes.ToArray());
+            using (var connection = EuropeIndexBuilder.Open(path, SqliteOpenMode.ReadWrite))
+            {
+                EuropeIndexBuilder.Execute(connection, sql);
+                var logical = EuropeIndexBuilder.HashLogicalRows(
+                    ReadRows<EuropeIndexBuilder.MemberRow>(connection, "ReadMembers"),
+                    ReadRows<EuropeIndexBuilder.CorrigendumLineRow>(connection, "ReadLines"),
+                    ReadRows<EuropeIndexBuilder.CorrigendumGapRow>(connection, "ReadGaps"),
+                    ReadRows<EuropeIndexBuilder.ArticleRow>(connection, "ReadArticles"),
+                    ReadRows<EuropeIndexBuilder.ArticleSourceRow>(connection, "ReadArticleSources"),
+                    ReadRows<EuropeIndexBuilder.ArticleDigestRow>(connection, "ReadArticleDigests"),
+                    ReadRows<EuropeIndexState>(connection, "ReadStates"),
+                    ReadRows<EuropeIndexForceDate>(connection, "ReadForceDateRows"));
+                using var command = connection.CreateCommand();
+                command.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical";
+                command.Parameters.AddWithValue("$logical", logical);
+                command.ExecuteNonQuery();
+            }
+            var bytes = File.ReadAllBytes(path);
+            var sha = Convert.ToHexStringLower(SHA256.HashData(bytes));
+            Assert.IsTrue(V3IndexCapabilityManifest.TryCreate(PublisherId.EuEurLex, sha,
+                built.CapabilityManifest.Cells.Select(cell => new V3IndexCapabilityCell(cell.Publisher, sha,
+                    cell.Operation, cell.Column, cell.Field, cell.Language, cell.PeriodFrom, cell.PeriodTo,
+                    cell.Population)).ToArray(), out var manifest, out _));
+            var exception = Assert.ThrowsExactly<InvalidDataException>(() => EuropeIndexReader.OpenAndVerify(
+                new(LexCorpus6Builder.ResourceIdOf(sha), sha), bytes, corpus.ArtifactRef, manifest!));
+            StringAssert.Contains(exception.Message, "force-date");
         }
         finally { EuropeIndexBuilder.DeleteDatabase(path); }
     }
@@ -567,7 +704,8 @@ public sealed class EuropeIndexBuilderTests
     internal static async Task<Stage3DerivationProfileEnvelope> RetainedGdprEnvelopeAsync(
         bool reopenRetainedBytes = true,
         bool acquireFrenchExpression = false,
-        bool mismatchedFrenchPackage = false)
+        bool mismatchedFrenchPackage = false,
+        bool withForceDates = false)
     {
         var bytes = await File.ReadAllBytesAsync(Path.Combine(
             AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "gdpr-fmx4-200-body.bin"));
@@ -577,8 +715,11 @@ public sealed class EuropeIndexBuilderTests
             "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001";
         const string frenchExpressionIri =
             "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0002";
+        // With force dates, family A delivers the GDPR's three dated statements as run 16 holds them (EuForceDatesFixture).
         var run = await EuAxiomWiringHarness.RunAsync(
-            static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root),
+            root => withForceDates
+                ? EuForceDatesFixture.Script(root, EuForceDatesFixture.Gdpr())
+                : EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root),
             seedCelex: "32016R0679",
             expressionIri: expressionIri,
             additionalExpressionIri: acquireFrenchExpression ? frenchExpressionIri : null,

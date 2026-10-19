@@ -191,6 +191,13 @@
 // Luxembourg article from state to state) is a "libellé", never a "rédaction" or a "formulation", and an EU date is never
 // "applicable"; held is "détenu", never "disponible"; a build is a "déploiement"; legal advice is "consultation
 // juridique"; the publisher's record is "les données de l’éditeur" (never "registre", which is the operations registry).
+// An EU act's force dates (the plan's item 2.1; R79's E1, R21): the seventeen forms of `common.europeForceDates` (the
+// heading, the six roles, `notPinnedNoCode`, `openEnd`, `qualifier`, the four role names, `notHeld`, `conflict` and
+// `notWording`) were reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the same delegation
+// in the addendum of 2026-10-19 on EU force dates (17 forms, 11 changed in review, the English too in 5: the heading says
+// what this site holds, never "the act's dates", which the wording headings use for the Formex date; MA is "mise en
+// application"; an end of validity is said "totale ou partielle", since 20 of run 16's 24 are partial; the qualifier is
+// "la mention de l’éditeur", in parentheses after its date; and `notWording` says that no date above chooses a wording).
 // Typography: a no-break space (U+00A0) stands before : ; ! ? % and » and after «, and the apostrophe is ’.
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
@@ -867,6 +874,29 @@ export const LIVE_CHROME_FR = Object.freeze({
     europeAnnexes: Object.freeze({
       one: '{count} annexe du libellé en {language} n’est pas communiquée sous forme de texte et n’est jamais interrogée, citée ni exportée : {reason}. Source officielle {source}.',
       other: '{count} annexes du libellé en {language} ne sont pas communiquées sous forme de texte et ne sont jamais interrogées, citées ni exportées : {reason}. Source officielle {source}.',
+    }),
+    europeForceDates: Object.freeze({
+      heading: 'Les dates de l’éditeur que ce site détient pour cet acte',
+      roles: Object.freeze({
+        entry_into_force: 'Entrée en vigueur : {date}',
+        application: 'Mise en application : {date}',
+        end_of_validity: 'Fin de validité, totale ou partielle : {date}',
+        deadline: 'Date limite : {date}',
+        signature: 'Signature : {date}',
+        not_pinned: 'Une date portant le code {code} de l’éditeur, à laquelle ce site n’attribue aucun rôle : {date}',
+      }),
+      notPinnedNoCode: 'Une date sans code de l’éditeur, à laquelle ce site n’attribue aucun rôle : {date}',
+      openEnd: 'Fin de validité : aucune date (l’éditeur enregistre {date}, sa marque d’une fin ouverte)',
+      qualifier: '(mention de l’éditeur, mot pour mot : {qualifier})',
+      roleNames: Object.freeze({
+        entry_into_force: 'entrée en vigueur',
+        application: 'mise en application',
+        end_of_validity: 'fin de validité',
+        deadline: 'date limite',
+      }),
+      notHeld: 'Dates non détenues pour cet acte : {roles}. Les déclarations datées de l’éditeur que ce site détient pour cet acte n’indiquent aucune date de ce type, ce qui ne dit rien de l’existence d’une telle date.',
+      conflict: 'L’éditeur enregistre plus d’une date d’entrée en vigueur pour cet acte ({dates}) : chacune est indiquée, et ce site n’en choisit aucune.',
+      notWording: 'Aucune des dates ci-dessus ne sert à choisir un libellé : chaque libellé ci-dessous porte sa propre date.',
     }),
     asPublished: Object.freeze({
       label: 'tel que publié ; peut avoir été modifié depuis ; aucun texte consolidé détenu',

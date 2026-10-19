@@ -639,6 +639,32 @@ const EN = Object.freeze({
       one: "{count} annex of the {language} wording is not served as text, and is never searched, quoted or exported: {reason}. Official source {source}.",
       other: "{count} annexes of the {language} wording are not served as text, and are never searched, quoted or exported: {reason}. Official source {source}.",
     }),
+    // The EU act's dates as the publisher records them in its dated statements (the plan's item 2.1; R79's E1, R21: each date a
+    // value of its own, said with its role; `europe-force-dates.mjs`), where the act is read or its dossier shown: the act's
+    // dates, never a wording's. A qualifier is the publisher's note in its own codes, said word for word and never translated.
+    europeForceDates: Object.freeze({
+      heading: "The publisher's dates this site holds for this act",
+      roles: Object.freeze({
+        entry_into_force: "Entry into force: {date}",
+        application: "Application: {date}",
+        end_of_validity: "End of validity, in whole or in part: {date}",
+        deadline: "Deadline: {date}",
+        signature: "Signature: {date}",
+        not_pinned: "A date with the publisher's code {code}, to which this site gives no role: {date}",
+      }),
+      notPinnedNoCode: "A date with no code from the publisher, to which this site gives no role: {date}",
+      openEnd: "End of validity: no date (the publisher records {date}, its mark of an open end)",
+      qualifier: "(the publisher's qualifier, word for word: {qualifier})",
+      roleNames: Object.freeze({
+        entry_into_force: "entry into force",
+        application: "application",
+        end_of_validity: "end of validity",
+        deadline: "deadline",
+      }),
+      notHeld: "Not held for this act: {roles}. The publisher's dated statements this site holds for it give no such date, which says nothing of whether the act has one.",
+      conflict: "The publisher records more than one entry into force for this act ({dates}): each is shown, and this site chooses none.",
+      notWording: "None of the dates above is used to choose a wording: each wording below carries its own date.",
+    }),
     // A Luxembourg act held only as first published (the plan's item 0.6, `as-published.mjs`): its label, what this site
     // holds of later versions, and the authenticity sentence of its case, with the act as published in {act}. The label
     // and the authenticity sentences are drafts pending the lawyer's read (the owner's item O4).

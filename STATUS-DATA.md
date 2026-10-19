@@ -2,6 +2,97 @@
 
 Updated 2026-10-19.
 
+## EU force dates: the EU index /6 holds each act's dates by role, from custody (sole driver, 2026-10-19)
+
+- **What.** The plan's item 2.1 (R79's E1, R21; branch `data/eu-force-dates`). The EU index gains schema 6
+  (`lex-v3-europe-index/6`): a `force_dates` table holds each act's dates as the publisher records them in its dated
+  statements, each with its role and its source. Release 2 carries it; derive-c's index /5 is read exactly as before.
+  - **Where the facts live in custody.** The acquisition already holds them: family A of the object facts (the
+    reified `owl:Axiom` statements on a CDM date property of each census work: `resource_legal_date_entry-into-force`,
+    `_deadline`, `_end-of-validity`, `_signature`). Every property of each statement is retained (annotated source,
+    property and target, the type-of-date code `ann:type_of_date` and the note `ann:comment_on_date`, both literals in
+    the publisher's `{CODE|IRI}` form). The derive reopens them from custody with the query run
+    (`EuQueryExecutionAdapter.ReopenAsync`), and the accepted E1 contract decodes them (`EuReifiedAxiomDecode`,
+    `EuDateAxiomBinding`) onto `EuQueryExecutionResult.DateAxioms`. No build read them until now; no acquisition is
+    added.
+  - **The build** (`EuropeIndexForceDates.cs`, called by `TryWriteFile`): one row per statement, keyed by a digest of
+    its work, statement IRI and properties, so a statement two seeds' closures both delivered is one row. The role is
+    read from the property and the publisher's code alone: EV `entry_into_force`, MA `application`; the end-of-validity,
+    deadline and signature properties their own role; any other code on the entry-into-force property, or none,
+    `not_pinned` (the code kept). Each row keeps the value, datatype and open end (9999-12-31), the code and the note
+    exactly as served, the label the accepted table pins (Lex's, never the publisher's), the contract's own role, every
+    property in delivery order, and the delivered batch it was read from. A statement on a work outside the census, or
+    one identity with two values, refuses the build.
+  - **The reader** checks schema 6 against its exact DDL, reopens every row through the accepted contract against its
+    own statement (role, value, code, note, open end, contract role, identity, census work) and includes the rows in
+    the logical-row hash. Schema 5 keeps its own DDL, stamp and hash, and its answers do not move.
+- **Measured over EU run 16's custody** (`EuForceDatesRun16Probe`, opt-in, read-only, never a CI test; the catalog
+  `767ceba4…`, the query checkpoint `37a649de…`, derive-c's states read-only):
+  - **Statements.** 24 family-A batches restored, 3,394 rows verified, 417 statements decoded, 417 rows: 79
+    `entry_into_force` (EV), 79 `application` (MA), 24 `end_of_validity`, 221 `deadline`, 9 `signature`, 5 `not_pinned`
+    (MA/PART). The contract reads 226 as role not stated: the 221 deadlines, which carry no type-of-date code (their
+    qualifier is the note: AU+TARD in 19, AU+TOT in 1, B-19.12 in 51, the rest V ART …), and the 5 MA/PART. 61 statements
+    carry a property the contract does not model (such as `build_info`), kept verbatim. Every value is an `xsd:date`.
+  - **Acts.** Every date is on one of the 82 seed roots (1,170 census works; no consolidated version carries a dated
+    statement). Acts with each role: entry into force 78, application 36, end of validity 12, deadline 61, signature 9,
+    not pinned 3. Directives (40): 40, 3, 6, 31, 2, 0. Regulations (36): 34, 33, 5, 30, 1, 3; 85 of the 221 deadlines are
+    on directives. No entry into force is held for 12016E/TXT, 12016M/TXT (no date of the four roles at all),
+    32007R0864 (Rome II: MA and MA/PART only) and 32014R0651.
+  - **Conflicts.** None: no act has two entry-into-force dates. Six acts carry two statements of one role and date
+    (12016P/TXT's entry into force 2009-12-01; five deadlines), each said. 23 acts have several application dates
+    (staggered) and three several ends of validity (32003R0001, 32005L0029, 32018R1999, five each): 20 of the 24 ends of
+    validity are partial by their note (FIN/VAL/PART), and one is the open end (12012E/TXT, 9999-12-31).
+  - 9.8 s, peak working set 201 MiB; the custody's 93,457 files are the same before and after, derive-c's index untouched.
+- **The schema-5 answers.** `V3CorpusEuropeSchema5MountTests` commits a schema-5 EU mount written by the code at
+  24118293 (the retained GDPR envelope with its synthetic French package: no publisher text) with its fifteen answers
+  recorded there (coverage, resolve, dossier twice, timeline, as_of three times, evidence_bundle twice, search twice,
+  verify, in_force_on, status_on). This branch answers every one byte for byte.
+- **Driver decisions (reversible).**
+  - The deadline property is the publisher's deadline whatever its code: run 16's 221 deadlines carry no type-of-date
+    code, so the accepted contract reads each as role not stated. The index keeps that reading (`fact_role`) beside the
+    role; the qualifier is the note, said word for word in its codes. Never "transposition" (R79).
+  - A code the accepted table does not pin (MA/PART, 5 in run 16) is `not_pinned`, said with its code and given no role
+    (the decision of 2026-10-01: no invented label).
+  - The note's codes are never translated: `publisher_note_codes` is the note with each `{CODE|IRI}` carrier written as
+    its code, nothing else changed.
+  - Two dates of one role are both said, none chosen; only two entry-into-force dates are a conflict (several
+    application or end-of-validity dates are staggered or partial, as their notes say).
+  - A role with no date is "not held", never "none": a date the publisher records without a dated statement is not
+    acquired.
+  - The dates are the act's original work's (all of run 16's are on the 82 seed roots); a consolidated version's
+    wording date is none of them, and no wording is selected by them.
+  - The index /5 answers stay byte for byte: the member and the not-held row change only over an index /6.
+  - The answers name each date's statement (the publisher's IRI) and its identity digest, not the delivered batch it came
+    in: that coordinate is minted per acquisition, so it stays in the index, and two derives of one custody answer alike.
+- **The answers** (the web lane's file has the pages): over an index /6, EU `dossier`, `timeline`, `as_of` and
+  `evidence_bundle` carry `force_dates` (each date with its role, the publisher's code, its note and the note in its
+  codes, the date property and the statement; the named roles not held; a conflict list; the rules), and the not-held row
+  `force_dates` says what of them is still not held. `in_force_on` and `status_on`'s manifest rows say what index /6
+  holds; both stay refused for EU acts.
+- **Tests.** `EuropeIndexBuilderTests` (the pin of the fixed index bytes moves with schema 6; schema 3, 4 and 5 stay
+  readable without inventing what they lack; the GDPR's three statements indexed by role and reopened; nine hostile
+  changes and four logical restamps refused), `EuropeIndexForceDatesTests` (each role from its property and code, one
+  statement delivered twice is one row, two statements of one date are two, a work outside the census refused, a stored
+  row its statement does not say refused), `V3CorpusEuropeForceDatesMountTests` (the four answers, the act with no
+  statement, the note's codes), `V3CorpusEuropeSchema5MountTests` (above). The EU restamp helpers of
+  `V3CorpusResolveMountTests` hash the force dates; the census pins `EuropeForceDateRoles` and the index's new constants.
+  The fixture `EuForceDatesFixture` writes family A's rows in run 16's shape, with the GDPR's three dates, codes and
+  notes as run 16 holds them (publisher metadata, no text).
+- **Measured** (this branch, rebased on `v3/integration` at 0b908870), with no browser started:
+  - `dotnet build Lex.V3.slnx -c Release --no-incremental`: 0 warnings, 0 errors.
+  - `Lex.V3.Tests`: 3,321 (3,315 passed, 6 skipped).
+  - `Lex.V3.Ingest.Tests`, the classes of the EU index, the EU time view, dossier, search, reference, evidence bundles and
+    capabilities, the censuses, the samples and the evaluation card, privacy (public request recording, serving temporary
+    storage), the legacy schema-8 and schema-6 mounts, the EU schema-5 mount, mount build files, the offline mount, the
+    machine gates, the annex control case, EU permalinks, generation quotes, first-mount reuse, the consolidated first
+    mount, the reified-axiom wiring and the journey mounts: 202 (192 passed, 10 skipped, all opt-in).
+  - The web build; the web suite, 1,279 (1,275 passed, 3 skipped, 1 failed: `image-run.test.mjs`'s mount test spawns
+    `awk`, which this PC's PATH lacks; it passes where awk is, as in CI).
+  - `eng/verify-v3-tree.ps1`: 1,659 tracked paths.
+- **Not done here.** A derive of the population with this build (the re-derivation runs later, on an Azure machine,
+  and Release 2 carries it). R79's dossier sentences ("In force since …", "Not yet in force") are not said: R21 and the
+  guard refuse them, and a status sentence needs its own reviewed form.
+
 ## The catalogue's chain where a history is read, the dates by role, and the refusals in the site's own words (sole driver, 2026-10-19)
 
 - **What.** Slices S7b and S7c of the Luxembourg data design (`C:\lex-v3\LU-DATA-DESIGN-2026-10-14-v2.md` §3.2, §3.4 and the

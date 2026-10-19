@@ -20,7 +20,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { DOSSIER_LANGUAGES, LIVE_DOSSIER_IDLE, createDossierSession, dossierOutcome } from '../scripts/live-dossier.mjs';
-import { AsPublished, EuropeAnnexes, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, TableRegion, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
+import { AsPublished, EuropeAnnexes, EuropeForceDates, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, TableRegion, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { parseSitePath } from '../scripts/permalinks.mjs';
@@ -245,6 +245,7 @@ export function EuropeDossierView({ view }) {
       {view.expressions.map((expression) => (
         <EuropeAnnexes key={expression.expressionIri} rows={expression.annexesNotServed} language={expression.language} />
       ))}
+      <EuropeForceDates forceDates={view.forceDates ?? null} />
       <p data-date-semantics="" lang={ENGLISH_LANG}>{asSentence(view.dateSemantics)}</p>
       <h3>{COPY.notHeldHeading}</h3>
       <ul data-not-held={view.notHeld.length}>

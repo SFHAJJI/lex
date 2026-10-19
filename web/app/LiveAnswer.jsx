@@ -85,6 +85,66 @@ export function EuropeAnnexes({ rows, language }) {
 }
 
 /**
+ * The language tag of a publisher's codes (`zxx`, no linguistic content): an fd_335 code and a note in its codes are never
+ * translated and are no interface language, so a screen reader is not told they are the page's French or English.
+ */
+const PUBLISHER_CODES = 'zxx';
+
+/**
+ * The EU act's dates as the publisher records them (`scripts/europe-force-dates.mjs`; the plan's item 2.1, R79's E1, R21),
+ * said where the act is read or its dossier shown: each date a value of its own, with its role in the page's language, the
+ * publisher's qualifier word for word in its own codes (set as code, never translated), the roles not held, and both dates
+ * where the publisher records two entries into force. Nothing for an answer over an EU index that holds no force date
+ * (`forceDates` null). `notWording` adds the line that a wording's date is none of them (the reading page, whose wordings
+ * follow).
+ */
+export function EuropeForceDates({ forceDates, notWording = false }) {
+  if (forceDates === null) return null;
+  const common = liveChrome().common;
+  const copy = common.europeForceDates;
+  return (
+    <section data-force-dates={forceDates.dates.length}>
+      <h3>{copy.heading}</h3>
+      {forceDates.dates.length === 0 ? null : (
+        <ul>
+          {forceDates.dates.map((row) => {
+            // A date the site gives no role is said with the publisher's code, as code; every other with its role.
+            const coded = row.role === 'not_pinned' && row.code !== null;
+            // The publisher's open end of validity is said as no date; run 16 holds none on another role.
+            const template = row.openEnded && row.role === 'end_of_validity'
+              ? copy.openEnd
+              : row.role === 'not_pinned' && row.code === null ? copy.notPinnedNoCode : copy.roles[row.role];
+            return (
+              <li key={row.identity} data-force-date-role={row.role}>
+                <Say template={template} values={coded ? { date: row.date, code: <code lang={PUBLISHER_CODES}>{row.code}</code> } : { date: row.date }} />
+                {row.codes === null ? null : (
+                  <>
+                    {' '}
+                    <Say template={copy.qualifier} values={{ qualifier: <code lang={PUBLISHER_CODES}>{row.codes}</code> }} />
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {forceDates.conflicts.map((conflict) => (
+        <p key={conflict.role} data-force-date-conflict={conflict.role}>
+          <Say template={copy.conflict} values={{ dates: conflict.dates.join(common.listSeparator) }} />
+        </p>
+      ))}
+      {forceDates.rolesNotHeld.length === 0 ? null : (
+        <p data-force-dates-not-held={forceDates.rolesNotHeld.join(' ')}>
+          <Say template={copy.notHeld} values={{ roles: forceDates.rolesNotHeld.map((role) => copy.roleNames[role]).join(common.listSeparator) }} />
+        </p>
+      )}
+      {/* Said only under dates the page shows (the French review of 2026-10-19): over none, "the dates above" names nothing. */}
+      {notWording && forceDates.dates.length > 0 ? <p data-force-dates-not-wording="">{copy.notWording}</p> : null}
+    </section>
+  );
+}
+
+/**
  * A Luxembourg act held only as first published (`scripts/as-published.mjs`; the plan's item 0.6), said in the page's
  * language wherever the act is read or listed: the label, what this site holds of later versions (the consolidated
  * versions the publisher's record names, each with its publisher dates, and its end-of-force date, each printed as the

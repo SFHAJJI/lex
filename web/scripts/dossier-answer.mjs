@@ -28,6 +28,7 @@ import { europePermalink, luxembourgPermalink } from './permalinks.mjs';
 import { readAnnexesNotServed } from './europe-annexes.mjs';
 import { readAsPublished } from './as-published.mjs';
 import { readCatalogueFacts, readDateFacts } from './date-role.mjs';
+import { readEuropeForceDates } from './europe-force-dates.mjs';
 
 /** The text statuses a version of the catalogue held without text names (index 9's `text_status`, S7a). */
 export const TEXTLESS_STATUSES = Object.freeze([
@@ -427,6 +428,8 @@ export function readEuropeDossier(answer) {
     digestRule: requireText(requireOwn(answer, 'digest_rule', where), 'digest_rule'),
     dateSemantics: requireText(requireOwn(answer, 'date_semantics', where), 'date_semantics'),
     consolidationsHeld: requireBoolean(requireOwn(answer, 'consolidations_held', where), 'consolidations_held'),
+    // The act's dates as the publisher records them, over an EU index /6; null over an older one (`europe-force-dates.mjs`).
+    forceDates: readEuropeForceDates(answer, where),
     notHeld: readNotHeld(requireOwn(answer, 'not_held', where)),
     scope: requireText(requireOwn(answer, 'scope', where), 'scope'),
     corpusSha256: requireDigest(requireOwn(answer, 'corpus_sha256', where), 'corpus_sha256'),

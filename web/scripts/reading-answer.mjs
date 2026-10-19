@@ -44,6 +44,7 @@
 import { isCalendarDate } from './temporal.mjs';
 import { articlePermalink, europePermalink, luxembourgPermalink } from './permalinks.mjs';
 import { readAnnexesNotServed } from './europe-annexes.mjs';
+import { readEuropeForceDates } from './europe-force-dates.mjs';
 import { readAsPublished } from './as-published.mjs';
 import { readVersionPages } from './reading-pages.mjs';
 import { readCatalogueFacts, readInterval } from './date-role.mjs';
@@ -699,6 +700,8 @@ export function readEuropeEvidenceBundle(answer) {
     acknowledgement,
     authenticity: requireText(requireOwn(answer, 'authenticity', where), 'authenticity'),
     consolidationsHeld,
+    // The act's dates as the publisher records them, over an EU index /6; null over an older one (`europe-force-dates.mjs`).
+    forceDates: readEuropeForceDates(answer, where),
     wordings: Object.freeze(wordings),
     rightsRule: requireText(requireOwn(answer, 'rights_rule', where), 'rights_rule'),
     dateRule: requireText(requireOwn(answer, 'date_rule', where), 'date_rule'),

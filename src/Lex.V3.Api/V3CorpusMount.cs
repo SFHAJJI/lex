@@ -6198,7 +6198,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt, PublisherId.EuEurLex),
-            new V3PlatformOperationResult(request, "work_record", result.RootElement));
+            new V3PlatformOperationResult(request, "work_record", WithEuropeForceDates(result.RootElement, dossierSeed)));
     }
 
     internal const string EuropeEvidenceBundleScope =

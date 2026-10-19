@@ -4647,6 +4647,57 @@
             ]
           }
         ],
+        "force_dates": {
+          "conflict_rule": "conflicts names the entry into force when the publisher\u0027s statements give it more than one date; every date is said, and this site chooses none",
+          "conflicts": [],
+          "dates": [
+            {
+              "datatype": "http://www.w3.org/2001/XMLSchema#date",
+              "date": "2016-05-24",
+              "date_identity_sha256": "bc2e556955121a54264e31d25c830d95d24413ee8cafa957c4e1977c03d58442",
+              "date_property": "http://publications.europa.eu/ontology/cdm#resource_legal_date_entry-into-force",
+              "open_ended": false,
+              "publisher_code": "EV",
+              "publisher_note": "{DATPUB|http://publications.europa.eu/resource/authority/fd_335/DATPUB} \u002B20 {V|http://publications.europa.eu/resource/authority/fd_335/V} {ART|http://publications.europa.eu/resource/authority/fd_335/ART} 99",
+              "publisher_note_codes": "DATPUB \u002B20 V ART 99",
+              "role": "entry_into_force",
+              "statement": "http://publications.europa.eu/.well-known/genid/lex-force-dates/gdpr-ev"
+            },
+            {
+              "datatype": "http://www.w3.org/2001/XMLSchema#date",
+              "date": "2018-05-25",
+              "date_identity_sha256": "4861f92c78e90fa3a0815c4f0d8c48be575544f5058188fba1e60a7e61e03672",
+              "date_property": "http://publications.europa.eu/ontology/cdm#resource_legal_date_entry-into-force",
+              "open_ended": false,
+              "publisher_code": "MA",
+              "publisher_note": "{V|http://publications.europa.eu/resource/authority/fd_335/V} {ART|http://publications.europa.eu/resource/authority/fd_335/ART} 99",
+              "publisher_note_codes": "V ART 99",
+              "role": "application",
+              "statement": "http://publications.europa.eu/.well-known/genid/lex-force-dates/gdpr-ma"
+            },
+            {
+              "datatype": "http://www.w3.org/2001/XMLSchema#date",
+              "date": "2020-05-25",
+              "date_identity_sha256": "80fbfb8a66e19a32fb6382c494d0ac1e917c4b6da722bf881815a1b3132eab12",
+              "date_property": "http://publications.europa.eu/ontology/cdm#resource_legal_date_deadline",
+              "open_ended": false,
+              "publisher_code": null,
+              "publisher_note": "{AU\u002BTARD|http://publications.europa.eu/resource/authority/fd_335/AU%2BTARD} {V|http://publications.europa.eu/resource/authority/fd_335/V} {ART|http://publications.europa.eu/resource/authority/fd_335/ART} 97",
+              "publisher_note_codes": "AU\u002BTARD V ART 97",
+              "role": "deadline",
+              "statement": "http://publications.europa.eu/.well-known/genid/lex-force-dates/gdpr-deadline"
+            }
+          ],
+          "not_held_rule": "roles_not_held names the roles of entry into force, application, end of validity and deadline for which no date is held: the publisher\u0027s dated statements acquired for the act carry none of that role, and a date the publisher records without a dated statement is not acquired, so a role not held is no statement that the act has no such date",
+          "note_rule": "publisher_code is the publisher\u0027s type-of-date code (ann:type_of_date) exactly as served, or null when the statement carries none; publisher_note is the publisher\u0027s comment on the date (ann:comment_on_date) exactly as served, or null when there is none; publisher_note_codes is the same note with each of its {CODE|IRI} carriers written as its code and nothing else changed; this site translates no code; open_ended is true only for the publisher\u0027s open end (9999-12-31 at xsd:date), which is no date",
+          "publisher_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+          "role_rule": "entry_into_force is a date on the publisher\u0027s entry-into-force property (cdm:resource_legal_date_entry-into-force) with its type-of-date code EV, and application one on that property with the code MA: two values of their own, never one; end_of_validity is a date on the end-of-validity property (cdm:resource_legal_date_end-of-validity), whose note may say it ends part of the act only; deadline is a date on the deadline property (cdm:resource_legal_date_deadline), whatever its note says, and never called a transposition deadline; signature is a date on the signature property; not_pinned is a date on the entry-into-force property whose code this site\u0027s table does not pin (such as MA/PART) or that carries none, said with its code and given no role; two dates of one role are both said, and none is chosen",
+          "roles_not_held": [
+            "end_of_validity"
+          ],
+          "scope": "the act\u0027s dates as the publisher records them in its dated statements (reified owl:Axiom statements on a CDM date property of the act\u0027s Cellar work, acquired by the EU census and read from custody by the build): each date with its role, the value exactly as served, the publisher\u0027s code and note word for word, the date property it sits on and the publisher\u0027s statement it was read from (the EU index also holds the delivered batch it came in); they are the act\u0027s, said beside its wordings, never a wording\u0027s date, never a consolidated version\u0027s own date, and never used to choose a wording",
+          "seed_celex": "32016R0679"
+        },
         "index_sha256": "\u003Cvaries-per-run\u003E",
         "not_held": [
           {
@@ -4659,7 +4710,7 @@
           },
           {
             "item": "force_dates",
-            "reason": "no entry-into-force, application or end-of-validity date is held; the wording date is none of them"
+            "reason": "the act\u0027s own dates are said under force_dates, as the publisher\u0027s dated statements on the act give them; none of them is used to choose a wording, each wording carries its own date, and a date the publisher records without a dated statement is not held"
           },
           {
             "item": "document_type",
