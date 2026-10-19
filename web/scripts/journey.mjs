@@ -17,7 +17,8 @@
 // end in the API's answer, every EU citation pinned and verified. In every run, what the
 // browser did is measured, not assumed: exactly one request to the API (`POST /api/v3/{operation}`,
 // no query string, no referrer, no cookie), every other request a same-origin asset, the page still
-// at its own address with no history entry added and no history state written, no cookie set,
+// at its own address (a search page with its search after "#", R109, and an act's readable address with the date it
+// read the act at in its query, R13: `endAddressesOf`) with no history entry added and no history state written, no cookie set,
 // nothing written to storage, nothing logged to the console and no uncaught exception or unhandled
 // rejection, the page's CSP the reviewed one, and hydration clean. (The history and cookie checks
 // came from the review of #773: a page that pushed the phrase into the history and a cookie passed.)
@@ -95,7 +96,8 @@ import { cspValue } from "./csp.mjs";
 import { EXPORT_WATERMARK } from "./export-build.mjs";
 import { EUROPE_TEXT_ACKNOWLEDGEMENT } from "./reading-answer.mjs";
 import { TMP_MARGIN_MEBIBYTES, tmpMebibytesFor } from "./image-run.mjs";
-import { INTERFACE_LANGUAGES, anchorText, articlePermalink, currentAddress, escapeSegment, parseSitePath, sameDocumentIn } from "./permalinks.mjs";
+import { INTERFACE_LANGUAGES, anchorText, articlePermalink, currentAddress, dateOfQuery, escapeSegment, parseSitePath, sameAddressIn, withDateQuery } from "./permalinks.mjs";
+import { searchFragment } from "./search-address.mjs";
 import { INDEXED, X_ROBOTS_TAG } from "./search-engines.mjs";
 import { CANONICAL_HOST } from "./routes.mjs";
 import { luxembourgDate } from "./temporal.mjs";
@@ -134,6 +136,29 @@ export function bodyOn(body, today) {
   const named = Object.values(body.parameters).includes(TODAY_IN_LUXEMBOURG);
   if (!named) return body;
   return { ...body, parameters: Object.fromEntries(Object.entries(body.parameters).map(([key, value]) => [key, value === TODAY_IN_LUXEMBOURG ? today : value])) };
+}
+
+/**
+ * Where a step's page must end, for each of the run's todays (`bodyOn`): its own path, and what the page writes into its own
+ * address once it has asked (the plan's items 3.4 and 3.5). A search typed into a page that keeps its search in its address
+ * (the home and search pages; not the 404 page's box, `notFound`) ends with that search after "#" (`searchFragment`, R109),
+ * built from the very request the step must send; an act's readable address ends with the date it read the act at
+ * (`?date=`, R13), unless its address keeps one already. Any other step ends where it began.
+ */
+export function endAddressesOf(step, todays) {
+  const [path, hash = null] = step.path.split("#");
+  const [pathname, query = null] = path.split("?");
+  return [...new Set(todays.map((today) => {
+    const parameters = bodyOn(step.body ?? null, today)?.parameters ?? {};
+    if (step.operation === "search" && step.typed !== undefined && step.notFound !== true && hash === null) {
+      return `${path}${searchFragment({ query: parameters.query, language: parameters.language, identifier: parameters.identifier ?? "", date: parameters.date ?? "" })}`;
+    }
+    if (parseSitePath(pathname)?.kind === "current" && typeof parameters.date === "string") {
+      const search = query === null ? "" : `?${query}`;
+      return `${dateOfQuery(search) === null ? `${pathname}${withDateQuery(search, parameters.date)}` : path}${hash === null ? "" : `#${hash}`}`;
+    }
+    return step.path;
+  }))];
 }
 
 /** What a page says of itself beside the law it shows, as the English pages say it (R50). */
@@ -520,8 +545,9 @@ export function journeyVerdict(observed, expected) {
   for (const text of expected.texts ?? []) {
     if (!observed.text.includes(text)) failures.push(`the page does not show "${text}"`);
   }
-  if (observed.location !== undefined && observed.location !== `${expected.origin}${step.path}`) {
-    failures.push(`the page ended at ${observed.location}, not at ${expected.origin}${step.path}`);
+  const ends = endAddressesOf(step, todaysOf(observed));
+  if (observed.location !== undefined && !ends.some((end) => observed.location === `${expected.origin}${end}`)) {
+    failures.push(`the page ended at ${observed.location}, not at ${ends.map((end) => `${expected.origin}${end}`).join(" or ")}`);
   }
   if (observed.history !== undefined) {
     if (observed.history.atEnd !== observed.history.atLoad) {
@@ -717,11 +743,12 @@ export function journeyVerdict(observed, expected) {
   }
   if (observed.console.length > 0) failures.push(`the page logged ${observed.console.length} console message(s): ${observed.console.join(" | ")}`);
   // Once the page has loaded, its language menu leads to this same page in each interface language, the article named
-  // after # included (R61; review of #958: nothing held the rewrite).
+  // after # included (R61; review of #958: nothing held the rewrite), as the page's address stands at the end: the search it
+  // keeps after "#" and the date a readable address keeps (`sameAddressIn`; the plan's items 3.4 and 3.5).
   if (observed.languageLinks !== undefined) {
     const here = new URL(observed.location);
     for (const language of INTERFACE_LANGUAGES) {
-      const expectedHref = `${sameDocumentIn(language, here.pathname)}${here.hash}`;
+      const expectedHref = sameAddressIn(language, { pathname: here.pathname, search: here.search, hash: here.hash });
       const href = observed.languageLinks?.[language] ?? null;
       if (href !== expectedHref) failures.push(`the language menu's ${language} link leads to ${href ?? "nothing"}, not ${expectedHref}`);
     }
@@ -1708,6 +1735,24 @@ export const NOT_FOUND_SAID = "There is no page at this address";
 export const RETRIED_SEARCH_STEP = Object.freeze({ ...JOURNEY_STEPS.search, retry: true });
 
 /**
+ * The search page opened at an address that keeps a search after "#" (R109; the plan's item 3.5), as a reader opens a link
+ * someone shared: nothing typed, the page reads its fragment once hydrated and asks that search, the phrase in the request's
+ * body alone, and stays at that address.
+ */
+export const KEPT_SEARCH_STEP = Object.freeze({
+  path: `/en/search.html${searchFragment({ query: SEARCH_PHRASE, language: "fra" })}`,
+  cites: true,
+  operation: "search",
+  body: JOURNEY_STEPS.search.body,
+});
+
+/** The runs of the site's own addresses on the fixture mount (the plan's item 3.5): a search kept in the address. */
+export function addressExpectations() {
+  const searchTexts = [SEARCH_FOUND_SAID, SEARCH_SEARCHED_SAID, SEARCH_VERSION_SAID, "art_15", "The first hits in the stated order, not the best hits."];
+  return [["a search kept in the address", { step: KEPT_SEARCH_STEP, state: "success", texts: searchTexts }]];
+}
+
+/**
  * The runs of R60's pages on the fixture mount, as `[name, expected, mounted]` (`mounted`: with the fixture mount, else
  * with none): the 404 page searched, which answers as the home page does; the 404 page with no mount, whose search shows
  * the failure panel; and the search with no mount, its failure panel's retry pressed once.
@@ -2207,6 +2252,10 @@ async function main(argv) {
     // The 404 page and a failure's retry (R60).
     for (const [name, expected, mounted] of failurePageExpectations()) {
       results.push([name, await run(apiOutput, mounted ? mount : null, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
+    }
+    // A search kept in the page's address, opened as a shared link (R109; the plan's item 3.5).
+    for (const [name, expected] of addressExpectations()) {
+      results.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
     }
     // The specification's journeys the eight steps do not walk (J1's refusal, J2, J5).
     for (const [name, expected] of specificationJourneyExpectations()) {
