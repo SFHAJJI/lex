@@ -376,7 +376,8 @@ public sealed record LuxembourgIndexStateArticle(
     string? ApplicabilityDate,
     string Text,
     string TokensJson,
-    string ObjectRefSha256);
+    string ObjectRefSha256,
+    int? DocumentPosition = null);
 
 public sealed record LuxembourgIndexInboundCitation(
     string ArticleIdentitySha256,
@@ -517,7 +518,9 @@ public sealed record LuxembourgIndexObservedState(
     string ExpressionIri,
     string Language,
     string StateSha256,
-    IReadOnlyList<string> SourceBodySha256);
+    IReadOnlyList<string> SourceBodySha256,
+    string? TextStatus = null,
+    string? PublisherEnd = null);
 
 /// <summary>
 /// One observation of the index's event log: the build that observed (its corpus), the index whose log it carried
@@ -4242,7 +4245,8 @@ public sealed class LuxembourgIndexReader : IDisposable
 
     /// <summary>
     /// Every article one state binds, with its publisher-minted id and wording digest, ordered by
-    /// publisher id then identity, in one query.
+    /// publisher id then identity, in one query; on index 9 each with its place in its publisher document
+    /// (<c>document_position</c>), in that order (<see cref="LuxembourgIndexQueries.StateArticlesNine"/>).
     /// </summary>
     public IReadOnlyList<LuxembourgIndexStateArticle> ResolveStateArticles(string stateSha256)
     {
@@ -4250,7 +4254,15 @@ public sealed class LuxembourgIndexReader : IDisposable
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
-            command.CommandText = LuxembourgIndexQueries.StateArticles;
+            if (_version == 9)
+            {
+                command.CommandText = LuxembourgIndexQueries.StateArticlesNine;
+            }
+            else
+            {
+                command.CommandText = LuxembourgIndexQueries.StateArticles;
+            }
+
             command.Parameters.AddWithValue("$digest", stateSha256);
             using var reader = command.ExecuteReader();
             var values = new List<LuxembourgIndexStateArticle>();
@@ -4261,10 +4273,44 @@ public sealed class LuxembourgIndexReader : IDisposable
                     reader.GetString(0), reader.GetString(1), WordingSha256(tokensJson),
                     reader.IsDBNull(3) ? null : reader.GetString(3),
                     reader.IsDBNull(4) ? null : reader.GetString(4),
-                    reader.GetString(5), tokensJson, reader.GetString(6)));
+                    reader.GetString(5), tokensJson, reader.GetString(6),
+                    _version == 9 ? reader.GetInt32(7) : null));
             }
             return Array.AsReadOnly(values.ToArray());
         }
+    }
+
+    /// <summary>
+    /// Each article's wording digest (<see cref="WordingSha256"/>), by article identity, for the identities asked, read by
+    /// primary key, as <see cref="ResolveArticleSearchableTexts"/> reads their texts; an identity the index does not hold is absent.
+    /// The undated search's fold reads it (S7a): hits of one work and publisher id with one wording are one.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ResolveArticleWordings(IReadOnlyList<string> articleIdentities)
+    {
+        ArgumentNullException.ThrowIfNull(articleIdentities);
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (articleIdentities.Count == 0)
+        {
+            return values;
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT article_identity_sha256, tokens_json
+                FROM articles
+                WHERE article_identity_sha256 IN (SELECT value FROM json_each($identities))
+                """;
+            command.Parameters.AddWithValue("$identities", JsonSerializer.Serialize(articleIdentities.Distinct(StringComparer.Ordinal).ToArray()));
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                values[reader.GetString(0)] = WordingSha256(reader.GetString(1));
+            }
+        }
+
+        return values;
     }
 
     /// <summary>The distinct publisher-minted article ids of one state, in ordinal order.</summary>
@@ -4797,7 +4843,15 @@ public sealed class LuxembourgIndexReader : IDisposable
     /// once held stays held (absence is not a withdrawal). Ordered by language, date and expression
     /// (<see cref="LuxembourgIndexQueries.WorkEventsUpTo"/>).
     /// </summary>
-    public IReadOnlyList<LuxembourgIndexObservedState> ResolveObservedStates(string workKey, long lastSeq)
+    public IReadOnlyList<LuxembourgIndexObservedState> ResolveObservedStates(string workKey, long lastSeq) =>
+        ResolveObservedStates(workKey, lastSeq, includeTextless: false);
+
+    /// <summary>
+    /// <see cref="ResolveObservedStates(string, long)"/>, and on index 9 with <paramref name="includeTextless"/> every state row
+    /// the log sighted, held or textless, each with the text status and the end the publisher states as its last event logged
+    /// them (log /3), so the interval rules select over the snapshot as they do over the mounted rows (S7a).
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexObservedState> ResolveObservedStates(string workKey, long lastSeq, bool includeTextless)
     {
         ArgumentException.ThrowIfNullOrEmpty(workKey);
         if (lastSeq < 0) throw new ArgumentOutOfRangeException(nameof(lastSeq));
@@ -4821,12 +4875,13 @@ public sealed class LuxembourgIndexReader : IDisposable
                     reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5)));
             }
 
-            // Until the interval rules land (S7a), as_observed reads the held states of the log, as before index 9.
+            // The held states of the log, as before index 9, unless every row is asked for (the interval rules, S7a).
             return Array.AsReadOnly(LuxembourgIndexBuilder.FoldLog(events, LogSchema).Values
-                .Where(static held => held.TextStatus is null || string.Equals(held.TextStatus, LuxembourgIndexBuilder.TextHeld, StringComparison.Ordinal))
-                .Select(static held => new LuxembourgIndexObservedState(
+                .Where(held => includeTextless || held.TextStatus is null || string.Equals(held.TextStatus, LuxembourgIndexBuilder.TextHeld, StringComparison.Ordinal))
+                .Select(held => new LuxembourgIndexObservedState(
                     held.WorkKey, held.ApplicabilityDate, held.ExpressionIri, held.Language, held.StateSha256,
-                    Array.AsReadOnly(held.SourceBodies.ToArray())))
+                    Array.AsReadOnly(held.SourceBodies.ToArray()),
+                    includeTextless ? held.TextStatus : null, includeTextless ? held.PublisherEnd : null))
                 .OrderBy(static held => held.Language, StringComparer.Ordinal)
                 .ThenBy(static held => held.ApplicabilityDate, StringComparer.Ordinal)
                 .ThenBy(static held => held.ExpressionIri, StringComparer.Ordinal)

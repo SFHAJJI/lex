@@ -185,10 +185,12 @@ const NOT_HELD = Object.freeze([
   }),
   Object.freeze({
     item: 'build_time_and_currency',
-    reason: 'history gives when each build ran, an upper bound on when its corpus was observed and '
-      + 'never an observation time, and nothing here says how current these counts are against the '
-      + 'publisher; no build time of the corpus file itself is held; the corpus and index digests name '
-      + 'exactly which artifacts are mounted',
+    // Index 9's row (S7c, the row S4 left): a build's time is its acquisition's, and a derivation's is the log's derived_at.
+    reason: "history gives each build's time, when its acquiring build read once its acquisition had ended: an upper bound "
+      + 'on when its corpus was observed and never an observation time, which an index derived again from custody keeps; '
+      + "events gives log.derived_at, when the mounted index was derived from custody, null when its derivations are the "
+      + "acquiring build's own; nothing here says how current these counts are against the publisher; no build time of the "
+      + 'corpus file itself is held; the corpus and index digests name exactly which artifacts are mounted',
   }),
   Object.freeze({
     item: 'legal_status',

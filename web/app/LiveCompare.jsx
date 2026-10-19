@@ -37,12 +37,17 @@ function asSentence(text) {
 }
 
 function Side({ label, side }) {
+  // A side dated by its entry into force is the act as published, never "the state applying from" that date (R21, S7b).
+  const entryIntoForce = side.dateRole === 'entry_into_force';
+  const template = side.nextApplicabilityDate === null
+    ? (entryIntoForce ? COPY.sideEntryIntoForce : COPY.side)
+    : (entryIntoForce ? COPY.sideEntryIntoForceNext : COPY.sideNext);
   return (
-    <p data-side={label}>
+    <p data-side={label} data-date-role={side.dateRole ?? undefined}>
       {/* The next state's date is said as that state's start, never as this one's end: "until" would
           leave open whether the boundary day is this state's (review of #783). */}
       <Say
-        template={side.nextApplicabilityDate === null ? COPY.side : COPY.sideNext}
+        template={template}
         values={{
           side: label,
           from: side.applicabilityDate,
@@ -109,6 +114,11 @@ function BetweenDates({ between }) {
 
 /** The sentence one state on both dates is said in: one version's clock, or the one text held of an act held only as published. */
 function sameStateTemplate(comparison) {
+  // A state dated by its entry into force is said as that, never as applicable from it (R21, S7b).
+  if (comparison.from.dateRole === 'entry_into_force') {
+    if (comparison.onlyTextHeld === null) return COPY.sameVersionEntryIntoForce;
+    return comparison.onlyTextHeld ? COPY.sameTextHeldEntryIntoForce : COPY.sameTextHeldOfSeveralEntryIntoForce;
+  }
   if (comparison.onlyTextHeld === null) return COPY.sameVersion;
   return comparison.onlyTextHeld ? COPY.sameTextHeld : COPY.sameTextHeldOfSeveral;
 }

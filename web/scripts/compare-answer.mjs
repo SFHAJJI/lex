@@ -28,7 +28,8 @@
 //    wording digests are equal, changed when they are not; the counts are the rows'.
 
 import { isCalendarDate } from './temporal.mjs';
-import { SAME_STATE_SENTENCE } from './publisher-vocabulary.mjs';
+import { SAME_STATE_ENTRY_INTO_FORCE_SENTENCE, SAME_STATE_SENTENCE } from './publisher-vocabulary.mjs';
+import { readCatalogueFacts } from './date-role.mjs';
 import { laterVersionFactsBetween, readAsPublished, sameTextHeldNote } from './as-published.mjs';
 import { luxembourgPermalink } from './permalinks.mjs';
 
@@ -137,6 +138,8 @@ function readSide(side, where, context) {
   return Object.freeze({
     language,
     applicabilityDate,
+    // The date's role and the state's kind (index 9; null on an index of schema 8 or 6): R21, `date-role.mjs`.
+    ...readCatalogueFacts(side, applicabilityDate, where),
     nextApplicabilityDate: next,
     stateSha256,
     stableCoordinate: coordinate,
@@ -272,21 +275,25 @@ function sameStateNoted(comparison, index, asPublished, between) {
   const where = `comparison ${index + 1}`;
   if (!comparison.sameState) return Object.freeze({ ...comparison, onlyTextHeld: null });
   const { note, from, to } = comparison;
+  // A state dated by its entry into force is said as that (R21, S7b), as the platform's note says it.
+  const entryIntoForce = from.dateRole === 'entry_into_force';
   if (asPublished === null) {
-    const said = SAME_STATE_SENTENCE.publisher_applicability(from.applicabilityDate);
+    const said = entryIntoForce
+      ? SAME_STATE_ENTRY_INTO_FORCE_SENTENCE(from.applicabilityDate)
+      : SAME_STATE_SENTENCE.publisher_applicability(from.applicabilityDate);
     if (note !== said) {
       throw new Error(`${where} is the same state on both dates, and says ${JSON.stringify(note)} rather than ${JSON.stringify(said)}`);
     }
     return Object.freeze({ ...comparison, onlyTextHeld: null });
   }
-  const one = sameTextHeldNote(from.applicabilityDate, true, between);
+  const one = sameTextHeldNote(from.applicabilityDate, true, between, entryIntoForce);
   if (note === one) {
     // "The one text held" cannot be said where another state of the language is in sight.
     const next = from.nextApplicabilityDate ?? to.nextApplicabilityDate;
     if (next !== null) throw new Error(`${where} says the one text held, and the language holds another state, from ${next}`);
     return Object.freeze({ ...comparison, onlyTextHeld: true });
   }
-  if (note === sameTextHeldNote(from.applicabilityDate, false, between)) return Object.freeze({ ...comparison, onlyTextHeld: false });
+  if (note === sameTextHeldNote(from.applicabilityDate, false, between, entryIntoForce)) return Object.freeze({ ...comparison, onlyTextHeld: false });
   throw new Error(`${where} is the one state of an act held only as published on both dates, and says ${JSON.stringify(note)} rather than ${JSON.stringify(one)}`);
 }
 

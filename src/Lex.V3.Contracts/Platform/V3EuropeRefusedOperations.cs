@@ -61,9 +61,10 @@ public static class V3EuropeRefusedOperations
         new V3UnservedOperation(
             "in_force_on",
             V3UnservedOperation.RetrievalModeUnavailable,
-            "the entry-into-force and application dates the Publications Office asserts for EU acts, indexed: the census acquires " +
-            "them as reified date axioms and keeps them in custody, and no build indexes them; an EU wording date is never one of " +
-            "them, so the time view cannot answer an applicability question"),
+            "a rule that answers an applicability question from an EU act's dates: the EU index /6 holds the entry-into-force and " +
+            "application dates the Publications Office states for each act in its dated statements (dossier, timeline, as_of and " +
+            "evidence_bundle say them, each with its role, as force_dates), and an EU wording date is never one of them, so no " +
+            "wording is selected by them and the time view does not answer an applicability question"),
         new V3UnservedOperation(
             "manifestation",
             V3UnservedOperation.RetrievalModeUnavailable,
@@ -83,8 +84,8 @@ public static class V3EuropeRefusedOperations
         new V3UnservedOperation(
             "status_on",
             V3UnservedOperation.RetrievalModeUnavailable,
-            "the Publications Office's force assertions about an EU work (in force, entry into force, end of validity), verbatim and " +
-            "indexed: the census acquires them (its in-force fact and reified date axioms) and keeps them in custody, and no build " +
-            "indexes them"),
+            "the Publications Office's force assertions about an EU work (in force, entry into force, end of validity), verbatim, as " +
+            "one status: the EU index /6 holds the act's dates from its dated statements (force_dates in dossier, timeline, as_of and " +
+            "evidence_bundle), the census's in-force fact is kept in custody and not indexed, and no route composes a status"),
     });
 }

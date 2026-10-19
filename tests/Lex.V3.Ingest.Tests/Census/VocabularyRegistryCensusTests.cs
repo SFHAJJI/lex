@@ -71,9 +71,13 @@ public sealed class VocabularyRegistryCensusTests
                     + "DigestDomain, const Schema",
                 "Lex.V3.Ingest.Europe.EuObjectFactsBatchFactory: SetsOverObservedObjects=5, "
                     + "SetsOverPackRootsOnly=1",
-                "Lex.V3.Ingest.Europe.EuropeIndexBuilder: static readonly Ddl, const DigestDdl, "
-                    + "const DigestSchema, const LegacyDdl, const LegacySchema, const Schema, "
-                    + "const SourceDdl, const SourceSchema, const StatesDdl",
+                "Lex.V3.Ingest.Europe.EuropeForceDateRoles: InOrder=6, Named=4, const Application, "
+                    + "const Deadline, const EndOfValidity, const EntryIntoForce, const NotPinned, const Signature",
+                "Lex.V3.Ingest.Europe.EuropeIndexBuilder: const AnnotatedPropertyIri, const AnnotatedSourceIri, "
+                    + "const AnnotatedTargetIri, const CommentOnDateIri, static readonly Ddl, const DigestDdl, "
+                    + "const DigestSchema, const ForceDatesDdl, const LegacyDdl, const LegacySchema, const Schema, "
+                    + "const SourceDdl, const SourceSchema, const StatesDdl, static readonly StatesFullDdl, "
+                    + "const StatesSchema, const TypeOfDateIri",
                 "Lex.V3.Ingest.LexCorpus6Builder: Domain=13, const Schema",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder: StatePredicates=8, const BoundaryDerived, "
                     + "const BoundaryHalfOpen, const BoundaryInclusiveSuspected, const BoundaryInvalid, "
@@ -95,7 +99,7 @@ public sealed class VocabularyRegistryCensusTests
                     + "const ArticleIds, const CatalogueStatesOfWork, const CitationsTo, const EventCount, "
                     + "const EventLog, const EventsAfter, const EventsOfNameAfter, const HeldWorks, "
                     + "const HeldWorksNine, const IntervalsOfWork, const MemberOutcomes, const Observations, "
-                    + "const ObservationsNine, const RevisingEventsAfter, const StateArticles, "
+                    + "const ObservationsNine, const RevisingEventsAfter, const StateArticles, const StateArticlesNine, "
                     + "const StateCitations, const StateColumnsNine, const StateDocumentOutcomes, "
                     + "const StateSources, const StateTextSources, const StatesOfExpressions, const StatesOfExpressionsNine, "
                     + "const SubjectFacts, const SubjectFactsUnder, const WorkEventsUpTo, const WorkRecords, "

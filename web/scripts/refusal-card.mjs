@@ -269,6 +269,31 @@ export const RECOGNISED_KEYS = Object.freeze([
   'recognised_held_version',
 ]);
 
+/**
+ * What a refusal of lex-v3-luxembourg-index/9 adds beside its code's mandated keys (the reader's interval rules, S7a), every
+ * member a scalar or a list of scalars: why no state covers the date and the states that reason names
+ * (`no_version_for_date`); each candidate's kind, interval, boundary and text status, in lists aligned on
+ * `candidate_state_sha256s` (`ambiguous_version`); the state covering the date whose text is not held (`text_withheld`,
+ * `text_not_available`). Optional, since an index of schema 8 or 6 sends none of them; this card shows them as the platform
+ * sends them, and says above them, in its own words, why no version covers the date or which version holds no text here
+ * (`reasonView`, S7c).
+ */
+export const INTERVAL_KEYS = Object.freeze({
+  no_version_for_date: Object.freeze([
+    'language', 'reason', 'reason_rule', 'catalogue_read_no_later_than', 'named_states', 'named_state_sha256s',
+    'hole_from', 'hole_to', 'closed_on', 'base_act_iri', 'base_act_in_force_status', 'base_act_no_longer_in_force', 'base_act_rule',
+    'covering_states', 'covering_state_sha256s',
+  ]),
+  ambiguous_version: Object.freeze([
+    'candidate_state_sha256s', 'candidate_state_kinds', 'candidate_date_roles', 'candidate_applicability_dates', 'candidate_applicable_tos',
+    'candidate_applicable_to_sources', 'candidate_boundaries', 'candidate_text_statuses', 'candidate_states_rule',
+  ]),
+  textless: Object.freeze([
+    'requested_date', 'bound', 'state_sha256', 'applicability_date', 'date_role', 'state_kind', 'applicable_to',
+    'applicable_to_source', 'boundary', 'text_status', 'text_status_reason', 'rule',
+  ]),
+});
+
 export const REQUIRED_PAYLOAD = Object.freeze({
   no_version_for_date: Object.freeze({
     // `requested_date` is OPTIONAL here and required nowhere, which is a smaller answer than the
@@ -280,7 +305,7 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     // make the reader render what the platform sends, not to rewrite the surface's own producers.
     // Named as open work rather than done quietly or left unsaid.
     keys: Object.freeze(['history_begins', 'nearest_earlier', 'nearest_later']),
-    optional: Object.freeze(['requested_date', 'bound', ...RECOGNISED_KEYS]),
+    optional: Object.freeze(['requested_date', 'bound', ...RECOGNISED_KEYS, ...INTERVAL_KEYS.no_version_for_date]),
     basis:
       '33-product-spec: "no_version_for_date carries history_begins, nearest_earlier, ' +
       'nearest_later"',
@@ -325,7 +350,7 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     // producer sends, so it threw on every refusal of this code the platform can make; the work
     // is now read from the candidates themselves, in requireCandidates, which says why.
     keys: Object.freeze(['requested_date', 'candidates']),
-    optional: Object.freeze(['bound', ...RECOGNISED_KEYS]),
+    optional: Object.freeze(['bound', ...RECOGNISED_KEYS, ...INTERVAL_KEYS.ambiguous_version]),
     basis:
       '35-ideal-ux: "listing each candidate as applicable from {date}, hash {8 hex}, ' +
       'published {date} ... there is no default selection"',
@@ -357,7 +382,7 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     // and that is what `evidence_bundle` produces for a state whose articles hold no text. The
     // coordinate, the permalink, the language and the article count travel beside them.
     keys: Object.freeze(['official_identity', 'official_source', 'retained_transport_evidence']),
-    optional: Object.freeze(['articles_held', 'language', 'permalink', 'stable_coordinate', ...RECOGNISED_KEYS]),
+    optional: Object.freeze(['articles_held', 'language', 'permalink', 'stable_coordinate', ...RECOGNISED_KEYS, ...INTERVAL_KEYS.textless]),
     // TWO producers reach this card and they share no key. This surface's own reading view says it
     // for one provision it holds no text for, with that provision's official file and gazette
     // chain (`reading.mjs`), and it is held to exactly that set until it is rebuilt on
@@ -818,7 +843,54 @@ const NULL_SENTENCE = new Map([
 /** How an offered state is described, in the words both renderers use. */
 const CANDIDATE = 'applicable from {validFrom}, hash {hash}, {published}';
 const CANDIDATE_WITHDRAWAL_NOT_STATED = 'applicable from {validFrom}, hash {hash}, {published}, withdrawal not stated by the platform';
+/** An offered act dated by its entry into force (index 9's `candidate_date_roles`; R21): never offered as applicable from it. */
+const CANDIDATE_ENTRY_INTO_FORCE = 'the act as published, dated by its entry into force on {validFrom} (publisher), hash {hash}, {published}';
+const CANDIDATE_ENTRY_INTO_FORCE_WITHDRAWAL_NOT_STATED =
+  'the act as published, dated by its entry into force on {validFrom} (publisher), hash {hash}, {published}, withdrawal not stated by the platform';
+
+/**
+ * Why no version covers the date, in this card's words (lex-v3-luxembourg-index/9's `reason`, S7a; their wording S7c): each
+ * filled with the payload's own values (R11), never a count or a date of its own. The reason codes are the platform's closed
+ * set (`NoVersionReasonRule`); a reason outside it is refused, so a new one is worded before it is shown.
+ */
+const REASONS = Object.freeze({
+  before_history: "The publisher's catalogue, as this site read it no later than {read}, lists no version of this act before {begins}.",
+  catalogue_hole: "The publisher's catalogue, as this site read it no later than {read}, lists no version of this act from {from}, the end its publisher gives for the version before, to {to}, when the next version begins; this site does not fill that gap with another version.",
+  after_closed_end: "The last version in the publisher's catalogue, as this site read it no later than {read}, is applicable to {closed} (publisher), and the catalogue lists no later version: that is where the catalogue's versions end, which says nothing of whether the law ends.",
+  publisher_end_convention_unclear: "The publisher's catalogue gives {date}, the day before the next version begins, as the end of the version before it, so whether that day belongs to that version is unclear; this site gives it to neither.",
+  publisher_interval_invalid: "The publisher's catalogue gives the version that would apply on this date an end on or before its own start, so this site reads no interval for it and serves no version for this date; that version's own link still opens it.",
+  no_expression_in_language: "A French version of this act covers this date, and this site holds no expression of it in {language}.",
+});
+
+/** After a closed end, the base act's own end-of-force facts, verbatim (the platform's `base_act_rule`), when it states one. */
+const BASE_ACT_END_OF_FORCE = "The publisher's record gives {dates} as the act's end-of-force date (dateNoLongerInForce).";
+
+/**
+ * A version of the publisher's catalogue named by its kind and its date's role (index 9's `state_kind` and `date_role`, S7a;
+ * R21: an act dated by its entry into force is said as that). Shared with the dossier's list of versions held without text.
+ */
+const VERSION_NAMED = Object.freeze({
+  as_published: 'the act as published, applicable from {date} (publisher)',
+  as_published_entry_into_force: 'the act as published, dated by its entry into force on {date} (publisher)',
+  consolidation: 'the consolidated version applicable from {date} (publisher)',
+  code: 'the version of the code applicable from {date} (publisher)',
+});
+
+/** Why this site holds no text of a version in the publisher's catalogue (index 9's `text_status`, S7a). */
+const TEXT_NOT_HELD = Object.freeze({
+  withheld_rights: 'its rights did not admit its text',
+  not_available_pdf: "the publisher's file for it is a PDF, which this site does not read",
+  not_available_derivation: "its text could not be read from the publisher's file",
+  not_available_misfiled: "the publisher's file for it is another version's",
+  not_acquired: 'this site did not acquire it',
+});
+
+/** The version a textless refusal names: the one covering the date asked, or the one a permalink names (no date asked). */
+const TEXTLESS = "The version that covers this date, {version}, is in the publisher's catalogue, and this site holds none of its text: {why}. No other version is shown in its place.";
+const TEXTLESS_NAMED = "This version, {version}, is in the publisher's catalogue, and this site holds none of its text: {why}.";
 const PUBLISHED = 'published {date}';
+/** The same said of an act as published (a language may agree it with "act" where it agrees the other with "version"). */
+const PUBLISHED_ACT = 'published {date}';
 const PUBLICATION_NOT_STATED = 'publication date not stated by the platform';
 
 /**
@@ -858,7 +930,73 @@ export const REFUSAL_CARD_COPY = Object.freeze({
   europeCandidateWithdrawalNotStated: EUROPE_CANDIDATE_WITHDRAWAL_NOT_STATED,
   europePublished: PUBLISHED,
   europeNotes: EUROPE_NOTE,
+  // Index 9 (S7a's refusals, worded in S7c): an act offered as dated by its entry into force, why no version covers the date,
+  // the base act's end-of-force facts after a closed end, a version named by its kind and role, and why its text is not held.
+  publishedAct: PUBLISHED_ACT,
+  candidateEntryIntoForce: CANDIDATE_ENTRY_INTO_FORCE,
+  candidateEntryIntoForceWithdrawalNotStated: CANDIDATE_ENTRY_INTO_FORCE_WITHDRAWAL_NOT_STATED,
+  reasons: REASONS,
+  baseActEndOfForce: BASE_ACT_END_OF_FORCE,
+  versions: VERSION_NAMED,
+  textNotHeld: TEXT_NOT_HELD,
+  textless: TEXTLESS,
+  textlessNamed: TEXTLESS_NAMED,
 });
+
+/** The key of `VERSION_NAMED` a version is named by: its kind, and for an act as published its date's role. */
+export function versionNameKey(stateKind, dateRole) {
+  if (!Object.hasOwn(VERSION_NAMED, stateKind) || stateKind === 'as_published_entry_into_force') {
+    throw new Error(`a version of kind ${JSON.stringify(stateKind)} has no name on this card; it names ${Object.keys(VERSION_NAMED).join(', ')}`);
+  }
+  return stateKind === 'as_published' && dateRole === 'entry_into_force' ? 'as_published_entry_into_force' : stateKind;
+}
+
+/** Fills a card template's `{name}` placeholders with the values given, each value as it is. */
+export function fillCard(template, values) {
+  return template.replace(/\{([a-zA-Z]+)\}/g, (whole, name) => (Object.hasOwn(values, name) ? String(values[name]) : whole));
+}
+
+/**
+ * The card's own sentences above an index 9 payload (S7c): why no version covers the date (`no_version_for_date`'s `reason`,
+ * with the base act's end-of-force dates after a closed end), or which version covering it this site holds no text of
+ * (`text_withheld` and `text_not_available` with a `text_status`), each as a copy key and its text filled with the payload's
+ * values. None on any other payload, which keeps the card it had (an index of schema 8 or 6 sends no reason). `copy` is the
+ * page's card copy (English unless a page passes its chrome table's), from which the version's name and the text's absence
+ * are filled first.
+ */
+export function reasonView(code, payload, copy = REFUSAL_CARD_COPY) {
+  if (code === 'no_version_for_date' && Object.hasOwn(payload ?? {}, 'reason')) {
+    const reason = payload.reason;
+    if (!Object.hasOwn(REASONS, reason)) {
+      throw new Error(`no_version_for_date names the reason ${JSON.stringify(reason)}; this card words ${Object.keys(REASONS).join(', ')}`);
+    }
+    const values = {
+      read: payload.catalogue_read_no_later_than,
+      begins: payload.history_begins,
+      from: payload.hole_from,
+      to: payload.hole_to,
+      closed: payload.closed_on,
+      date: payload.requested_date,
+      language: payload.language,
+    };
+    const lines = [{ key: `reasons.${reason}`, text: fillCard(copy.reasons[reason], values) }];
+    const ended = Array.isArray(payload.base_act_no_longer_in_force) ? payload.base_act_no_longer_in_force : [];
+    if (reason === 'after_closed_end' && ended.length > 0) {
+      lines.push({ key: 'baseActEndOfForce', text: fillCard(copy.baseActEndOfForce, { dates: ended.join(', ') }) });
+    }
+    return Object.freeze(lines.map(Object.freeze));
+  }
+  if ((code === 'text_withheld' || code === 'text_not_available') && Object.hasOwn(payload ?? {}, 'text_status')) {
+    const status = payload.text_status;
+    if (!Object.hasOwn(TEXT_NOT_HELD, status)) {
+      throw new Error(`${code} names the text status ${JSON.stringify(status)}; this card words ${Object.keys(TEXT_NOT_HELD).join(', ')}`);
+    }
+    const version = fillCard(copy.versions[versionNameKey(payload.state_kind, payload.date_role)], { date: payload.applicability_date });
+    const template = payload.requested_date === null || payload.requested_date === undefined ? copy.textlessNamed : copy.textless;
+    return Object.freeze([Object.freeze({ key: 'textless', text: fillCard(template, { version, why: copy.textNotHeld[status] }) })]);
+  }
+  return null;
+}
 
 function requirePayload(code, payload) {
   const requirement = REQUIRED_PAYLOAD[code];
@@ -989,12 +1127,15 @@ function requirePayload(code, payload) {
  * platform's own `ambiguous_version` payload (bare links), where this string renderer normalised it;
  * one description for both keeps them saying the same thing.
  */
-export function candidateView(candidate) {
+export function candidateView(candidate, dateRoles = null) {
   const one = normaliseCandidate(candidate);
   return Object.freeze({
     href: one.href,
     validFrom: one.valid_from,
     hashPrefix: one.hash.slice(0, 8),
+    // Index 9 names each candidate's date role (`candidate_date_roles`, aligned on `candidate_state_sha256s`): an act dated by
+    // its entry into force is offered as that (R21).
+    datedByEntryIntoForce: dateRoles?.get(one.hash) === 'entry_into_force',
     // What the producer did not say is said as not said. A blank where a date belongs reads as
     // a missing value in this interface; "not stated by the platform" reads as what it is, and
     // neither of them is a date the publisher never gave us.
@@ -1011,9 +1152,9 @@ export function candidateView(candidate) {
   });
 }
 
-function renderCandidates(candidates) {
+function renderCandidates(candidates, dateRoles = null) {
   const items = candidates
-    .map(candidateView)
+    .map((candidate) => candidateView(candidate, dateRoles))
     .map((candidate) => {
       // The description's own words, with the hash set as code, as the React card sets it.
       const values = {
@@ -1021,7 +1162,9 @@ function renderCandidates(candidates) {
         '{hash}': `<code>${escapeHtml(candidate.hashPrefix)}</code>`,
         '{published}': escapeHtml(candidate.published),
       };
-      const words = candidate.withdrawalStated ? CANDIDATE : CANDIDATE_WITHDRAWAL_NOT_STATED;
+      const words = candidate.datedByEntryIntoForce
+        ? (candidate.withdrawalStated ? CANDIDATE_ENTRY_INTO_FORCE : CANDIDATE_ENTRY_INTO_FORCE_WITHDRAWAL_NOT_STATED)
+        : (candidate.withdrawalStated ? CANDIDATE : CANDIDATE_WITHDRAWAL_NOT_STATED);
       const text = words.split(/(\{[a-zA-Z]+\})/).map((part) => values[part] ?? escapeHtml(part)).join('');
       return `<li class="refusal-candidate"><a href="${escapeHtml(candidate.href)}">${text}</a></li>`;
     })
@@ -1042,6 +1185,17 @@ function renderChips(className, values) {
  * renderers call them. A row dropped in one renderer and kept in the other is a refusal that
  * hands two readers different amounts of help.
  */
+/** The candidates' date roles by digest, when index 9 names them (`candidate_date_roles`); null otherwise. */
+function candidateDateRoles(payload) {
+  const digests = own(payload, 'candidate_state_sha256s');
+  const roles = own(payload, 'candidate_date_roles');
+  if (!Array.isArray(digests) || !Array.isArray(roles)) return null;
+  if (digests.length !== roles.length) {
+    throw new Error(`candidate_date_roles lists ${roles.length} roles for ${digests.length} candidates; the lists are aligned`);
+  }
+  return new Map(digests.map((digest, index) => [digest, roles[index]]));
+}
+
 export function payloadParts(code, payload) {
   const nullable = NULLABLE_KEYS.get(code) ?? new Set();
   // A declared null renders as its sentence rather than being filtered away. Dropping the row
@@ -1058,7 +1212,7 @@ export function payloadParts(code, payload) {
 
   for (const [key, value] of entries) {
     if (code === 'ambiguous_version' && key === 'candidates') {
-      structured.push({ kind: 'candidates', key, values: value });
+      structured.push({ kind: 'candidates', key, values: value, dateRoles: candidateDateRoles(payload) });
     } else if (key === 'nearest_anchors' && Array.isArray(value)) {
       structured.push({ kind: 'chips', key, className: 'refusal-anchors', values: value });
     } else if (value === null) {
@@ -1082,7 +1236,7 @@ function renderPayload(code, payload) {
 
   const structured = parts.structured
     .map((item) => (item.kind === 'candidates'
-      ? renderCandidates(item.values)
+      ? renderCandidates(item.values, item.dateRoles)
       : renderChips(item.className, item.values)))
     .join('');
 
@@ -1204,6 +1358,8 @@ export function validateRefusal({ code, sentence, payload, governingText, handof
     handoffs,
     retryable: RETRYABLE.has(code),
     note: MANDATED_NOTE[code] ?? null,
+    // The card's own sentences for index 9's reasons and textless versions, in English; a page fills them from its copy.
+    reasons: reasonView(code, payload),
   };
 }
 
@@ -1224,6 +1380,7 @@ export function renderRefusalCard({ code, sentence, payload, governingText, hand
   const note = MANDATED_NOTE[code]
     ? `<p class="refusal-note">${escapeHtml(MANDATED_NOTE[code])}</p>`
     : '';
+  const reasons = (card.reasons ?? []).map((line) => `<p class="refusal-reason">${escapeHtml(line.text)}</p>`).join('');
 
   // The quotation carries the expression's own language. Hardcoding `lang="fr"` mislabels
   // every EU expression and every one of the handful of non-French LU renderings, and a
@@ -1255,6 +1412,7 @@ export function renderRefusalCard({ code, sentence, payload, governingText, hand
     `<code class="refusal-code">${escapeHtml(code)}</code>` +
     '</p>' +
     retry +
+    reasons +
     note +
     renderAbsenceEvidence(code, payload) +
     payloadHtml +

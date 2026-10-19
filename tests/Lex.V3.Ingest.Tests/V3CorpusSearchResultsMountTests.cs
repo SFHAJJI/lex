@@ -351,6 +351,12 @@ public sealed class V3CorpusSearchResultsMountTests
         const string twinDate = "2025-03-01";
         var later = await fixture.AddStateAsync(twinDate, "later");
         var twin = await fixture.AddStateAsync(twinDate, "twin");
+        // Each state's wording its own, so an undated search on index 9 folds none of them (S7a's fold names one wording once).
+        foreach (var (expression, mark) in new[] { (later.ExpressionIri, " (later)"), (twin.ExpressionIri, " (twin)") })
+        {
+            await fixture.RewriteArticleTextsAsync(expression, carrying.ToDictionary(
+                static id => id, id => "Art. " + id + ". La " + Phrase + " ne peut exceder trois mois" + mark + ".", StringComparer.Ordinal));
+        }
         var sibling = await fixture.AddStateAsync(fixture.ApplicabilityDate, "fr", workLeaf: "n77");
         await fixture.AddTitleRowsAsync(
             (null, fixture.ExpressionIri, "fra", "title", "Règlement sur la profession d'avocat.", new string('a', 64)),

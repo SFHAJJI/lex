@@ -159,6 +159,10 @@ export function composeExport({ view, pinned, observedAt }) {
         workKey: view.workKey,
         language: state.language,
         appliesFrom: state.applicabilityDate,
+        // A state dated by its entry into force, which the PDF never says as applying from it (R21; the review of #987).
+        datedByEntryIntoForce: state.dateRole === 'entry_into_force',
+        // The date's role (index 9; null on an index of schema 8 or 6): an entry into force is never said as applying (R21).
+        dateRole: state.dateRole ?? null,
         publisherId: article.publisherId,
         citation: article.permalink,
         citations: citationsOf(view, state, article, observedAt),
@@ -181,6 +185,8 @@ export function composeExport({ view, pinned, observedAt }) {
         workKey: view.workKey,
         language: state.language,
         appliesFrom: state.applicabilityDate,
+        datedByEntryIntoForce: state.dateRole === 'entry_into_force',
+        dateRole: state.dateRole ?? null,
         publisherId: entry.publisherId,
         // The article is held in its state, without text, so it is cited as any article of that
         // state is: the state's hash-pinned permalink and the publisher's article id as a last segment (R64).
@@ -325,6 +331,8 @@ export function exportJson(model) {
       work_key: item.workKey,
       language: item.language,
       applies_from: item.appliesFrom,
+      // Index 9 names what that date is (R21): an entry into force is a date of its own, never one the state applies from.
+      ...(item.dateRole === null ? {} : { date_role: item.dateRole }),
       article: item.publisherId,
       citation: item.citation,
       citation_forms: citationsJson(item.citations),
@@ -344,6 +352,7 @@ export function exportJson(model) {
       work_key: entry.workKey,
       language: entry.language,
       applies_from: entry.appliesFrom,
+      ...(entry.dateRole === null ? {} : { date_role: entry.dateRole }),
       article: entry.publisherId,
       citation: entry.citation,
       citation_forms: citationsJson(entry.citations),

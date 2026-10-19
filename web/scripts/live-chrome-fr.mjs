@@ -141,6 +141,49 @@
 // the English changed with each). The forms that review gave for its points 4, 6 and 7 (`search.titleMatching`,
 // `search.actPassages` with its full stop, `search.officialSites.eurlex` naming the advanced search) ship as it gave them,
 // with the English it named. `search.namesWork`, `search.severalWorks`, `search.candidate` and `search.hit` were removed.
+// A Luxembourg state's date said with its role and a missing article said in place (slice S7a; R21): the reading's headings
+// for a state dated by its entry into force (`reading.stateHeadingEntryIntoForce`, `reading.stateHeadingEntryIntoForceNext`),
+// the notice before an article the version lacks (`reading.missingBefore`, `one` and `other`), the dossier's mark and its note
+// (`dossier.entryIntoForceDate`, `dossier.entryIntoForceNote`), the citation generator's two forms
+// (`citation.luxembourg.versionEntryIntoForce`, `citation.evidence.versionEntryIntoForce`), the search page's version line
+// (`search.versionAsPublishedEntryIntoForce`) and the line under a passage an undated search folded (`search.sameWording`,
+// `one` and `other`) were reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the same delegation
+// in the addendum of 2026-10-18 on dates by role and missing articles (11 forms, 6 changed in review: the notice says "À cet
+// endroit", since "ici" is this table's "on this site"; the dossier's cell answers its column with "aucune date indiquée" and
+// gives the entry into force beside it, and the note classifies the value instead of saying when the act applies; a
+// semicolon parts the act as published from its entry into force; the four English forms changed with them). Its optional
+// points 6 and 7 were taken ("exacte"; the versions "interrogées par ce site"). "entrée en vigueur" is the noun of a typed
+// publisher date, never "en vigueur" over an interval: the time-word guard lets the noun through and refuses the rest.
+// In the repair round of that pull request (the review of #987), six forms were reviewed by the same reviewer under the
+// same delegation, in the addendum "S7a's repair round (the review of #987)" of 2026-10-19. Its section "three forms" (3
+// changed in review, the English with them): `reading.validityConflictEntryIntoForce` (an article whose own date differs
+// from a state dated by its entry into force: "sa version est l’acte tel que publié, daté de son entrée en vigueur", so "son"
+// is the act's), `search.dated` (the version whose publisher dates cover the date, "les dates de l’éditeur", and "ce site ne
+// détient pas le texte de cette version") and `radar.reason.no_held_baseline` ("il n’y a donc pas de version de référence",
+// never "rien à quoi la comparer", which an earlier held version makes false). Its section "the history's dates by role" (5
+// strings approved as drafted): `history.carriedEntryIntoForce` and `history.carriedInEntryIntoForce` (the lineage's first row
+// dated by its entry into force, "la première étant l’acte tel que publié, daté de son entrée en vigueur", never "à partir
+// du") and `history.absentRowEntryIntoForce` (an absent state so dated).
+// The catalogue between versions, the continuity breaks, the dates by role elsewhere, index 9's refusal sentences and the
+// version caveats (slices S7b and S7c): the dossier's span by role (`dossier.statesEntryIntoForce`, `one` and `other`,
+// `statesFromEntryIntoForce`, `statesInEntryIntoForce`, `statesInFromEntryIntoForce`) and its chain (`dossier.chainHeading`,
+// `textlessHeading`, `textlessRow`, `gap`, `overlap`, `sameDate`, `unclearEndDay`, `invalidInterval`, `chainNote`); the
+// reading's label and caveats (`reading.translation`, `consolidationCaveat`, `codeCaveat`); the history's breaks
+// (`history.breaksHeading`, `breakTo`, `breakOpen`, the nine `breakReasons`, `afterBreak`, `breaksNote`); Compare by role
+// (`compare.sideEntryIntoForce`, `sideEntryIntoForceNext`, `sameVersionEntryIntoForce`, `sameTextHeldEntryIntoForce`,
+// `sameTextHeldOfSeveralEntryIntoForce`); the export by role (`export.itemEntryIntoForce`, `excludedEntryIntoForce`); the
+// refusal card's (`refusalCard.candidateEntryIntoForce`, `candidateEntryIntoForceWithdrawalNotStated`, the six `reasons`,
+// `baseActEndOfForce`, the four `versions`, the five `textNotHeld`, `textless`, `textlessNamed`); and the coverage page's
+// changed note (`coverageAnswer.countsProvenance`) were reviewed by an independent reviewer (Claude, AI reviewer, not the
+// author) under the same delegation in the addendum of 2026-10-19 on the catalogue's chain and the version caveats (59
+// forms, 10 changed in review: "ce site n’a pas acquis cette version", which suits a version named "l’acte tel que publié";
+// "fait foi", never "authentique", and "un outil de documentation"; a gap and a break named by their ends' roles, the
+// break's end exclusive, "à la veille du", the English changed with these two; "les textes" after a plural; "un vide
+// juridique"; an apposition's comma in the two spans; "de l’acte, publiée par l’éditeur"), with the form its point 1
+// asked for (`refusalCard.publishedAct`, "publié le", an act's candidate), reviewed with them. The consolidation caveat
+// ships in R20's words, which the review offered for the owner (L5): "Seuls font foi les textes publiés au Journal officiel
+// (Mémorial A) : l’acte tel que publié, …, et les actes qui l’ont modifié, dont Lex ne détient pas encore la liste."
+// `search.dated` and `reading.validityConflict` are S7a's repair's, and not this review's.
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -148,6 +191,13 @@
 // Luxembourg article from state to state) is a "libellé", never a "rédaction" or a "formulation", and an EU date is never
 // "applicable"; held is "détenu", never "disponible"; a build is a "déploiement"; legal advice is "consultation
 // juridique"; the publisher's record is "les données de l’éditeur" (never "registre", which is the operations registry).
+// An EU act's force dates (the plan's item 2.1; R79's E1, R21): the seventeen forms of `common.europeForceDates` (the
+// heading, the six roles, `notPinnedNoCode`, `openEnd`, `qualifier`, the four role names, `notHeld`, `conflict` and
+// `notWording`) were reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the same delegation
+// in the addendum of 2026-10-19 on EU force dates (17 forms, 11 changed in review, the English too in 5: the heading says
+// what this site holds, never "the act's dates", which the wording headings use for the Formex date; MA is "mise en
+// application"; an end of validity is said "totale ou partielle", since 20 of run 16's 24 are partial; the qualifier is
+// "la mention de l’éditeur", in parentheses after its date; and `notWording` says that no date above chooses a wording).
 // Typography: a no-break space (U+00A0) stands before : ; ! ? % and » and after «, and the apostrophe is ’.
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
@@ -194,7 +244,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     euHit: '{heading} de {celex}, libellé du {date}',
     notHeldHeading: 'Ce que cette recherche ne couvre pas',
     placeholder: 'Rechercher par intitulé, numéro, ELI ou CELEX, ou par des mots du texte',
-    dated: 'Seuls des actes luxembourgeois ont été interrogés. Pour chacun, la dernière version que ce site détient qui est applicable à partir du {date} ou d’une date antérieure (éditeur) a été interrogée, et un acte sans une telle version ne l’a pas été. Un acte détenu uniquement tel que publié est interrogé tel que publié, et peut avoir été modifié depuis.',
+    dated: 'Seuls des actes luxembourgeois ont été interrogés. Pour chacun, la version dont les dates de l’éditeur couvrent le {date} a été interrogée ; un acte sans une telle version, ou pour lequel ce site ne détient pas le texte de cette version, ne l’a pas été. Un acte détenu uniquement tel que publié est interrogé tel que publié, et peut avoir été modifié depuis.',
     undated: 'Seuls des actes luxembourgeois ont été interrogés, sans date : toutes les versions que ce site détient ont été interrogées, et chaque résultat indique la date de sa version.',
     noHitLuxembourg: 'Aucun article du texte luxembourgeois que ce serveur détient et qu’il est autorisé à interroger ne contient « {query} ».',
     searchScope: 'La recherche par mots porte sur le droit luxembourgeois. Un ELI, un numéro CELEX, une référence au Mémorial, un permalien ou la citation d’un article d’un acte, avec ou sans date, ouvre cet acte, luxembourgeois ou de l’UE, lorsque ce site le détient. Pour interroger un acte de l’UE, désignez-le par son numéro CELEX sur la {link}.',
@@ -234,6 +284,11 @@ export const LIVE_CHROME_FR = Object.freeze({
     }),
     version: 'Version applicable à partir du {date} (éditeur)',
     versionAsPublished: 'L’acte tel que publié, applicable à partir du {date} (éditeur)',
+    versionAsPublishedEntryIntoForce: 'L’acte tel que publié ; entrée en vigueur le {date} (éditeur)',
+    sameWording: Object.freeze({
+      one: 'Le même libellé figure dans {count} autre version interrogée par ce site.',
+      other: 'Le même libellé figure dans {count} autres versions interrogées par ce site.',
+    }),
     searchesRun: 'Ce qui a été recherché',
     runReference: 'Références exactes : l’expression n’est aucune des références que ce site sait lire (un ELI, un numéro CELEX, une référence au Mémorial, un permalien ou une citation).',
     runReferenceNotRun: 'Références exactes : non lues, un acte ayant été désigné.',
@@ -279,6 +334,24 @@ export const LIVE_CHROME_FR = Object.freeze({
       other: '{count} expressions détenues, chacune présentée avec son libellé original.',
     }),
     wordingDate: 'Date du libellé',
+    statesEntryIntoForce: Object.freeze({
+      one: '{count} version, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur).',
+      other: '{count} versions, l’acte tel que publié dans chacune de ses langues, daté de son entrée en vigueur le {from} (éditeur).',
+    }),
+    statesFromEntryIntoForce: '{count} versions : la première, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) ; la plus récente, applicable à partir du {to}.',
+    statesInEntryIntoForce: '{count} version en {language}, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur).',
+    statesInFromEntryIntoForce: '{count} versions en {language} : la première, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) ; la plus récente, applicable à partir du {to}.',
+    chainHeading: 'Le catalogue de l’éditeur entre les versions',
+    textlessHeading: 'Versions dont ce site ne détient pas les textes',
+    textlessRow: '{version} : {why}.',
+    gap: 'Du {from}, fin que le catalogue de l’éditeur indique pour une version, au {to}, début de la suivante, ce catalogue ne recense aucune version : ce site ne comble pas cet intervalle.',
+    overlap: 'Du {from} au {to}, deux versions du catalogue de l’éditeur sont toutes deux applicables (éditeur).',
+    sameDate: 'Pour le {date}, le catalogue de l’éditeur recense {count} versions.',
+    unclearEndDay: 'Le {date} est la fin que le catalogue de l’éditeur indique pour une version, la veille du début de la suivante ; on ne sait pas si ce jour lui appartient, et ce site ne l’attribue à aucune des deux.',
+    invalidInterval: 'La version du {date} a, dans le catalogue de l’éditeur, une fin, le {to}, antérieure ou égale à son propre début : elle ne couvre aucune date ; son propre lien l’ouvre toujours.',
+    chainNote: 'Ce sont les dates du catalogue de l’éditeur telles que ce site les a lues ; un intervalle sans version dans le catalogue n’est pas un vide juridique.',
+    entryIntoForceDate: 'aucune date indiquée (entrée en vigueur : {date})',
+    entryIntoForceNote: 'La mention « aucune date indiquée » signifie que le fichier de l’acte n’indique aucune date d’applicabilité exacte ; la date entre parenthèses est celle de l’entrée en vigueur de l’acte dans les données de l’éditeur, et non une date d’applicabilité.',
   }),
   reading: Object.freeze({
     pinReplaced: 'Ce lien épingle {pinned}, qui n’est pas la version que ce site communique pour cette date ; la version qu’il communique est affichée ci-dessous.',
@@ -303,11 +376,21 @@ export const LIVE_CHROME_FR = Object.freeze({
     rightsIn: 'Texte communiqué sous {rights}. Lu au {date} en {language}.',
     stateHeading: '{work}, {language}, la version applicable à partir du {from}',
     stateHeadingNext: '{work}, {language}, la version applicable à partir du {from} (la version suivante détenue s’applique à partir du {next})',
+    stateHeadingEntryIntoForce: '{work}, {language}, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur)',
+    stateHeadingEntryIntoForceNext: '{work}, {language}, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) (la version suivante détenue s’applique à partir du {next})',
+    missingBefore: Object.freeze({
+      one: 'À cet endroit, le document de l’éditeur comporte un article que ce site ne détient pas dans cette version.',
+      other: 'À cet endroit, le document de l’éditeur comporte {count} articles que ce site ne détient pas dans cette version.',
+    }),
     counts: Object.freeze({
       one: '{count} article cité ; détenus sans texte : {withoutText} ; non admis : {notAdmitted} ; date propre différente de celle de la version : {conflicts}.',
       other: '{count} articles cités ; détenus sans texte : {withoutText} ; non admis : {notAdmitted} ; date propre différente de celle de la version : {conflicts}.',
     }),
     validityConflict: 'La date propre de cet article est le {own} ; sa version s’applique à partir du {state}.',
+    validityConflictEntryIntoForce: 'La date propre de cet article est le {own} ; sa version est l’acte tel que publié, daté de son entrée en vigueur le {state} (éditeur).',
+    translation: 'Ce texte est l’expression en {language} de l’acte, publiée par l’éditeur à côté de son expression française {french}. Les données de l’éditeur n’indiquent pas quelle version linguistique fait foi.',
+    consolidationCaveat: 'Une version consolidée est un outil de documentation sans valeur probante. Seuls font foi les textes publiés au Journal officiel (Mémorial A) : l’acte tel que publié, {act}, et les actes qui l’ont modifié, dont Lex ne détient pas encore la liste.',
+    codeCaveat: 'Une version d’un code est un outil de documentation sans valeur probante : les textes qui font foi sont les actes publiés au Journal officiel (Mémorial A) qu’elle rassemble.',
     deletedWordingStart: 'Texte que l’éditeur marque comme supprimé :',
     deletedWordingEnd: 'Fin du texte marqué comme supprimé.',
     deletedWordingNote: 'Le texte barré est celui que l’éditeur marque comme supprimé dans son texte. Il ne fait pas partie du texte que ce site cite ou interroge.',
@@ -373,6 +456,14 @@ export const LIVE_CHROME_FR = Object.freeze({
       one: 'Présent dans {count} version détenue en {language}, à partir du {from} ;',
       other: 'Présent dans {count} versions détenues en {language}, à partir du {from} ;',
     }),
+    carriedEntryIntoForce: Object.freeze({
+      one: 'Présent dans {count} version détenue, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) ;',
+      other: 'Présent dans {count} versions détenues, la première étant l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) ;',
+    }),
+    carriedInEntryIntoForce: Object.freeze({
+      one: 'Présent dans {count} version détenue en {language}, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) ;',
+      other: 'Présent dans {count} versions détenues en {language}, la première étant l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) ;',
+    }),
     absent: Object.freeze({
       one: '{count} version détenue ne le comporte pas.',
       other: '{count} versions détenues ne le comportent pas.',
@@ -388,6 +479,23 @@ export const LIVE_CHROME_FR = Object.freeze({
     ownDateDiffers: '{date} (diffère de celle de la version)',
     absentHeading: 'Versions détenues qui ne comportent pas {anchor}',
     absentRow: '{language}, à partir du {from} : {permalink}',
+    absentRowEntryIntoForce: '{language}, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) : {permalink}',
+    breaksHeading: 'Dates qu’aucune version dont le texte est détenu ne couvre',
+    breakTo: 'En {language}, du {from} à la veille du {to} : {reasons}.',
+    breakOpen: 'En {language}, à partir du {from}, sans version ultérieure dont ce site détient le texte : {reasons}.',
+    breakReasons: Object.freeze({
+      withheld_rights: 'une version dont les droits n’ont pas permis d’admettre le texte',
+      not_available_pdf: 'une version dont le fichier de l’éditeur est un PDF, que ce site ne lit pas',
+      not_available_derivation: 'une version dont le texte n’a pas pu être lu dans le fichier de l’éditeur',
+      not_available_misfiled: 'une version dont le fichier de l’éditeur est celui d’une autre version',
+      not_acquired: 'une version que ce site n’a pas acquise',
+      catalogue_hole: 'un intervalle sans version dans le catalogue de l’éditeur',
+      publisher_end_convention_unclear: 'un jour que le catalogue de l’éditeur laisse incertain entre deux versions',
+      publisher_interval_invalid: 'une version dont la fin est antérieure ou égale à son début',
+      no_expression_in_language: 'une version sans expression détenue dans cette langue',
+    }),
+    afterBreak: 'après des dates qu’aucune version dont le texte est détenu ne couvre',
+    breaksNote: 'Aucune version dont ce site détient le texte ne couvre ces dates : un libellé inchangé de part et d’autre n’en dit donc rien.',
   }),
   compare: Object.freeze({
     title: 'Comparer',
@@ -401,10 +509,15 @@ export const LIVE_CHROME_FR = Object.freeze({
     sideTo: 'Date d’arrivée',
     side: '{side} : la version applicable à partir du {from} ; articles : {articles} ; date propre différente de celle de la version : {conflicts} ; {permalink}',
     sideNext: '{side} : la version applicable à partir du {from} (la version suivante détenue s’applique à partir du {next}) ; articles : {articles} ; date propre différente de celle de la version : {conflicts} ; {permalink}',
+    sideEntryIntoForce: '{side} : l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) ; articles : {articles} ; date propre différente de celle de la version : {conflicts} ; {permalink}',
+    sideEntryIntoForceNext: '{side} : l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) (la version suivante détenue s’applique à partir du {next}) ; articles : {articles} ; date propre différente de celle de la version : {conflicts} ; {permalink}',
     counts: 'Modifiés : {changed} ; ajoutés : {added} ; supprimés : {removed} ; inchangés : {unchanged}.',
     sameVersion: 'Les deux dates relèvent de la même version, applicable à partir du {from} (éditeur).',
     sameTextHeld: 'Pour les deux dates, le texte retenu est le seul texte détenu, l’acte tel que publié, applicable à partir du {from} (éditeur) ; les versions ultérieures ne sont pas détenues.',
     sameTextHeldOfSeveral: 'Pour les deux dates, le texte retenu est le même texte détenu, l’acte tel que publié, applicable à partir du {from} (éditeur) ; aucune version consolidée n’est détenue.',
+    sameVersionEntryIntoForce: 'Les deux dates relèvent de la même version, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur).',
+    sameTextHeldEntryIntoForce: 'Pour les deux dates, le texte retenu est le seul texte détenu, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) ; les versions ultérieures ne sont pas détenues.',
+    sameTextHeldOfSeveralEntryIntoForce: 'Pour les deux dates, le texte retenu est le même texte détenu, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) ; aucune version consolidée n’est détenue.',
     betweenNamed: Object.freeze({
       one: 'Les données de l’éditeur nomment, pour cet acte, {count} version consolidée dont la date d’applicabilité se situe après le {after} et au plus tard le {onOrBefore} :',
       other: 'Les données de l’éditeur nomment, pour cet acte, {count} versions consolidées dont les dates d’applicabilité se situent après le {after} et au plus tard le {onOrBefore} :',
@@ -447,6 +560,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       ambiguous_version: 'plusieurs versions de l’acte s’appliquent à cette date ; aucune n’est donc comparée',
       ambiguous_baseline: 'plusieurs versions s’appliquent la veille de cette date ; aucune version de référence n’est donc retenue',
       profiles_differ: 'cette version et sa version de référence ont été lues selon des profils de règles différents ; elles ne sont donc pas comparées',
+      no_held_baseline: 'la veille de cette date n’est couverte par aucune version dont ce site détient le texte ; il n’y a donc pas de version de référence',
     }),
     named: '({label} {permalinks})',
     baseline: 'référence',
@@ -474,6 +588,8 @@ export const LIVE_CHROME_FR = Object.freeze({
     snapshot: 'Lu au {date}, à partir de l’instantané observé le {observedAt}. Corpus {corpus}, index {index}, registre {registry}.',
     item: '{article} ({language}, applicable à partir du {from}) : {citation}, empreinte du texte {digest}, source officielle {source}',
     excluded: '{article} ({language}, applicable à partir du {from}) : exclu, {reason}, {citation}',
+    itemEntryIntoForce: '{article} ({language}, l’acte tel que publié ; entrée en vigueur le {from}) : {citation}, empreinte du texte {digest}, source officielle {source}',
+    excludedEntryIntoForce: '{article} ({language}, l’acte tel que publié ; entrée en vigueur le {from}) : exclu, {reason}, {citation}',
     europeRights: 'Texte communiqué avec la mention de la source {acknowledgement}, que porte chaque article exporté, et avec la déclaration ci-dessous sur l’édition qui fait foi.',
     europeItem: '{article} ({language}, libellé du {date}) : {citation}, empreinte du texte {digest}, source officielle {source}',
     europeExcluded: '{article} ({language}, libellé du {date}) : exclu, {reason}, {citation}',
@@ -565,6 +681,33 @@ export const LIVE_CHROME_FR = Object.freeze({
     europeNotes: Object.freeze({
       ambiguous_version: 'L’éditeur ne classe aucun des deux libellés. Il n’y a ni choix par défaut ni choix mémorisé.',
     }),
+    publishedAct: 'publié le {date}',
+    candidateEntryIntoForce: 'l’acte tel que publié, daté de son entrée en vigueur le {validFrom} (éditeur), empreinte {hash}, {published}',
+    candidateEntryIntoForceWithdrawalNotStated: 'l’acte tel que publié, daté de son entrée en vigueur le {validFrom} (éditeur), empreinte {hash}, {published}, retrait non indiqué par la plateforme',
+    reasons: Object.freeze({
+      before_history: 'Le catalogue de l’éditeur, tel que ce site l’a lu au plus tard le {read}, ne recense aucune version de cet acte avant le {begins}.',
+      catalogue_hole: 'Le catalogue de l’éditeur, tel que ce site l’a lu au plus tard le {read}, ne recense aucune version de cet acte du {from}, fin que l’éditeur indique pour la version précédente, au {to}, début de la version suivante ; ce site ne comble pas cet intervalle avec une autre version.',
+      after_closed_end: 'La dernière version du catalogue de l’éditeur, tel que ce site l’a lu au plus tard le {read}, est applicable jusqu’au {closed} (éditeur), et le catalogue ne recense aucune version ultérieure : c’est là que s’arrêtent les versions du catalogue, ce qui ne dit rien de la fin éventuelle de la règle de droit.',
+      publisher_end_convention_unclear: 'Le catalogue de l’éditeur indique le {date}, veille du début de la version suivante, comme fin de la version précédente : on ne sait donc pas si ce jour appartient à cette version, et ce site ne l’attribue à aucune des deux.',
+      publisher_interval_invalid: 'Le catalogue de l’éditeur donne à la version qui s’appliquerait à cette date une fin antérieure ou égale à son propre début : ce site ne lit donc aucun intervalle pour elle et ne communique aucune version pour cette date ; le lien propre de cette version l’ouvre toujours.',
+      no_expression_in_language: 'Une version française de cet acte couvre cette date, et ce site n’en détient aucune expression en {language}.',
+    }),
+    baseActEndOfForce: 'Les données de l’éditeur indiquent le {dates} comme date de fin de vigueur de l’acte (dateNoLongerInForce).',
+    versions: Object.freeze({
+      as_published: 'l’acte tel que publié, applicable à partir du {date} (éditeur)',
+      as_published_entry_into_force: 'l’acte tel que publié, daté de son entrée en vigueur le {date} (éditeur)',
+      consolidation: 'la version consolidée applicable à partir du {date} (éditeur)',
+      code: 'la version du code applicable à partir du {date} (éditeur)',
+    }),
+    textNotHeld: Object.freeze({
+      withheld_rights: 'ses droits n’ont pas permis d’admettre son texte',
+      not_available_pdf: 'le fichier de l’éditeur est un PDF, que ce site ne lit pas',
+      not_available_derivation: 'son texte n’a pas pu être lu dans le fichier de l’éditeur',
+      not_available_misfiled: 'le fichier de l’éditeur qui lui est associé est celui d’une autre version',
+      not_acquired: 'ce site n’a pas acquis cette version',
+    }),
+    textless: 'La version qui couvre cette date, {version}, figure dans le catalogue de l’éditeur, et ce site n’en détient aucun texte : {why}. Aucune autre version n’est présentée à sa place.',
+    textlessNamed: 'Cette version, {version}, figure dans le catalogue de l’éditeur, et ce site n’en détient aucun texte : {why}.',
   }),
   coverageAnswer: Object.freeze({
     headings: Object.freeze({
@@ -635,7 +778,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     }),
     held: Object.freeze({ true: 'oui', false: 'non' }),
     none: 'aucune',
-    countsProvenance: 'Les décomptes du corpus et de l’index ci-dessous proviennent des artefacts désignés plus haut. Rien ici n’indique leur actualité : les dates de construction de la section historique disent quand chaque construction a eu lieu, ce qui borne le moment où son corpus a été observé sans dater aucun décompte. Les empreintes désignent exactement les artefacts comptés, ce qu’une date ne ferait pas. Les dates calendaires des tableaux des langues et des capacités sont celles de l’éditeur, relatives au droit, et non au moment du décompte.',
+    countsProvenance: 'Les décomptes du corpus et de l’index ci-dessous proviennent des artefacts désignés plus haut. Rien ici n’indique leur actualité : les dates de construction de la section historique disent quand la construction qui a acquis chaque corpus a lu son acquisition, ce qui borne le moment où ce corpus a été observé sans dater aucun décompte. Les empreintes désignent exactement les artefacts comptés, ce qu’une date ne ferait pas. Les dates calendaires des tableaux des langues et des capacités sont celles de l’éditeur, relatives au droit, et non au moment du décompte.',
     noLanguageRows: 'Ce montage ne contient aucune version dans aucune langue ; les totaux ci-dessus n’ont donc pas de ventilation par langue.',
     stateRange: 'Ce sont les première et dernière dates d’applicabilité données par l’éditeur, et non un relevé de la date de collecte. L’éditeur date des versions à l’avance, de sorte que la dernière peut se situer dans l’avenir ; ce montage ne détient aucune date du jour à laquelle les comparer et ne fait aucune comparaison de ce genre.',
     noArticleOutcomes: 'Aucun résultat de contenu juridique n’est compté ici ; cette page ne peut donc pas dire ce que le corpus a consigné pour les articles des documents acquis.',
@@ -732,6 +875,29 @@ export const LIVE_CHROME_FR = Object.freeze({
       one: '{count} annexe du libellé en {language} n’est pas communiquée sous forme de texte et n’est jamais interrogée, citée ni exportée : {reason}. Source officielle {source}.',
       other: '{count} annexes du libellé en {language} ne sont pas communiquées sous forme de texte et ne sont jamais interrogées, citées ni exportées : {reason}. Source officielle {source}.',
     }),
+    europeForceDates: Object.freeze({
+      heading: 'Les dates de l’éditeur que ce site détient pour cet acte',
+      roles: Object.freeze({
+        entry_into_force: 'Entrée en vigueur : {date}',
+        application: 'Mise en application : {date}',
+        end_of_validity: 'Fin de validité, totale ou partielle : {date}',
+        deadline: 'Date limite : {date}',
+        signature: 'Signature : {date}',
+        not_pinned: 'Une date portant le code {code} de l’éditeur, à laquelle ce site n’attribue aucun rôle : {date}',
+      }),
+      notPinnedNoCode: 'Une date sans code de l’éditeur, à laquelle ce site n’attribue aucun rôle : {date}',
+      openEnd: 'Fin de validité : aucune date (l’éditeur enregistre {date}, sa marque d’une fin ouverte)',
+      qualifier: '(mention de l’éditeur, mot pour mot : {qualifier})',
+      roleNames: Object.freeze({
+        entry_into_force: 'entrée en vigueur',
+        application: 'mise en application',
+        end_of_validity: 'fin de validité',
+        deadline: 'date limite',
+      }),
+      notHeld: 'Dates non détenues pour cet acte : {roles}. Les déclarations datées de l’éditeur que ce site détient pour cet acte n’indiquent aucune date de ce type, ce qui ne dit rien de l’existence d’une telle date.',
+      conflict: 'L’éditeur enregistre plus d’une date d’entrée en vigueur pour cet acte ({dates}) : chacune est indiquée, et ce site n’en choisit aucune.',
+      notWording: 'Aucune des dates ci-dessus ne sert à choisir un libellé : chaque libellé ci-dessous porte sa propre date.',
+    }),
     asPublished: Object.freeze({
       label: 'tel que publié ; peut avoir été modifié depuis ; aucun texte consolidé détenu',
       laterNotHeld: 'Versions ultérieures : non détenues.',
@@ -775,6 +941,7 @@ export const LIVE_CHROME_FR = Object.freeze({
         amin: 'Arrêté ministériel du {date}',
       }),
       version: '{citation}, dans sa version applicable au {date}',
+      versionEntryIntoForce: '{citation}, dans sa version publiée, entrée en vigueur le {date}',
     }),
     europe: Object.freeze({
       article: 'Article {number}',
@@ -798,6 +965,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       celex: 'CELEX : {celex}',
       title: 'Intitulé (éditeur) : {title}',
       version: 'Version : applicable à partir du {date} (éditeur)',
+      versionEntryIntoForce: 'Version : l’acte tel que publié ; entrée en vigueur le {date} (éditeur)',
       memorial: 'Publication : Mémorial A n° {number} de {year} ({iri})',
       memorialIri: 'Publication : {iri}',
       memorialNotHeld: 'Publication : le numéro du Mémorial A n’est pas détenu par cet index.',

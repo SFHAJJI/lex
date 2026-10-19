@@ -189,13 +189,27 @@ public sealed class V3ReplayGuaranteesTests
         Assert.AreEqual(LengthPrefixedSha256(identities), state.GetProperty("article_identities_sha256").GetString(),
             "article_identities_sha256 is the digest of the identities in sorted order, each preceded by its length");
 
-        // The fixture is an index 9: state digest /2. The row's own facts after the language are read from the mounted
-        // index by this test's own SQL, since the answer does not carry them until S7a: G5 from the answer alone is an
-        // expected gap on index 9 (review of #980, F4), and this fails when S7a serves index 9 with the read still here.
-        Assert.IsFalse(V3CorpusMount.ServesIndexNine,
-            "S7a serves index 9: recompute state digest /2 from the answer alone and drop this read of the mounted index");
+        // The fixture is an index 9: state digest /2, recomputed from the answer alone (G5; S7a serves the row's own facts with
+        // each state, which the review of #980 left as an expected gap): the date's role and the state's kind, then the end the
+        // publisher states (a derived end is not in the digest) to the French expression a translation takes its interval from.
         var stateSha256 = state.GetProperty("state_sha256").GetString()!;
-        var rowFacts = RowFactsOf(fixture.Directory, stateSha256);
+        string Fact(string name) => state.GetProperty(name).ValueKind == JsonValueKind.Null ? "" : state.GetProperty(name).GetString()!;
+        string[] rowFacts =
+        [
+            Fact("date_role"),
+            Fact("state_kind"),
+            state.GetProperty("applicable_to_source").ValueKind == JsonValueKind.String &&
+                state.GetProperty("applicable_to_source").GetString() == "publisher" ? Fact("applicable_to") : "",
+            Fact("publication_date"),
+            Fact("text_status"),
+            Fact("text_status_reason"),
+            Fact("in_file_identity"),
+            Fact("in_file_date"),
+            Fact("entry_into_force"),
+            Fact("translation_of"),
+        ];
+        CollectionAssert.AreEqual(RowFactsOf(fixture.Directory, stateSha256), rowFacts,
+            "the answer carries the row's own facts as the mounted index holds them");
         var profiles = state.GetProperty("rule_profile_sha256s").EnumerateArray().Select(static value => value.GetString()!)
             .Order(StringComparer.Ordinal).ToArray();
         string[] fields =
@@ -234,12 +248,13 @@ public sealed class V3ReplayGuaranteesTests
             "French expression a translation takes its interval from (each the empty string when there is none), then the number of " +
             "rule-profile digests as decimal text and each digest in sorted order, then the number of article identities as decimal text and " +
             "each identity in sorted order;");
-        StringAssert.Contains(provenance, "a caller cannot recompute the digest from it alone",
-            "and it says what G5 lacks on an index 9 until S7a carries the row facts");
+        StringAssert.Contains(provenance, "so a caller recomputes the digest from this answer and the article identities",
+            "and it says the answer carries the row facts G5 needs");
+        Assert.IsFalse(provenance.Contains("cannot recompute", StringComparison.Ordinal), "the expected gap of #980 is closed");
     }
 
     /// <summary>
-    /// The facts state digest /2 takes from an index 9's row beyond those the answer carries, in the derivation's order
+    /// The facts state digest /2 takes from an index 9's row, read from the mounted index to hold the answer's copy to it, in the derivation's order
     /// (the date's role and the state's kind, then the publisher's end to the translation's French expression), each the
     /// empty string when there is none.
     /// </summary>

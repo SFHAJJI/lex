@@ -41,7 +41,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { ArticleNotHeld, PageNotHeld, PinnedLead, citedTitle } from './PinnedReading.jsx';
-import { AsPublished, EuropeAnnexes, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
+import { AsPublished, EuropeAnnexes, EuropeForceDates, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import {
   LIVE_READING_IDLE,
   READING_LANGUAGES,
@@ -53,6 +53,7 @@ import {
 import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { anchorOf, anchorText, permalinkHref } from '../scripts/permalinks.mjs';
 import { addedMark } from '../scripts/quotation-marks.mjs';
+import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
 import { hasNextPage, pagesShown, readNextPage, viewOf, withoutStopped } from '../scripts/reading-pages.mjs';
 import { answerHandedWith } from '../scripts/v3-client.mjs';
 import { readingAddressShown, readingPinOf, todayAt } from '../scripts/initial-answer.mjs';
@@ -91,14 +92,18 @@ export function QuoteEvidence({ article, linked = true }) {
  * state's (`applicabilityDate`, a Luxembourg state's; null for an EU wording) and its notes. Shared with the cited article
  * (`PinnedReading.jsx`), which quotes the same article first.
  */
-export function ArticleText({ article, language, applicabilityDate }) {
+export function ArticleText({ article, language, applicabilityDate, dateRole = null }) {
   return (
     <>
       <ArticleWording article={article} language={language} />
       <DeletedWordingNote article={article} />
       {applicabilityDate !== null && article.validityConflict ? (
         <p data-validity-conflict="">
-          <Say template={COPY.validityConflict} values={{ own: article.validFrom, state: applicabilityDate }} />
+          {/* A state dated by its entry into force is never said as applying from it (R21; the review of #987, F5). */}
+          <Say
+            template={dateRole === 'entry_into_force' ? COPY.validityConflictEntryIntoForce : COPY.validityConflict}
+            values={{ own: article.validFrom, state: applicabilityDate }}
+          />
         </p>
       ) : null}
       {(article.notes ?? []).length > 0 ? (
@@ -269,29 +274,85 @@ export function Pager({ version, paging = null, onNext = null, readable = null }
   );
 }
 
+/**
+ * The places of the publisher's document right before an article that its version holds no article at (index 9's
+ * `missing_articles`, S7a): said where they are, never skipped in silence.
+ */
+function MissingBefore({ article, state }) {
+  const gap = (state.missingArticles ?? []).find((entry) => entry.beforePublisherId === article.publisherId);
+  if (gap === undefined) return null;
+  return (
+    <p className="note" data-missing-articles={gap.count}>
+      {/* The form for one names no count ("an article"), so it is given none (the French review of S7a, point 2). */}
+      <Say template={countedEntry(COPY.missingBefore, gap.count)} values={gap.count === 1 ? {} : { count: gap.count }} />
+    </p>
+  );
+}
+
 function Article({ article, state }) {
   return (
     <li id={`${state.language}-${article.publisherId}`} data-article={article.publisherId} value={isPaged(state) ? article.position : undefined}>
+      <MissingBefore article={article} state={state} />
       <h3>{article.publisherId}</h3>
-      <ArticleText article={article} language={state.language} applicabilityDate={state.applicabilityDate} />
+      <ArticleText article={article} language={state.language} applicabilityDate={state.applicabilityDate} dateRole={state.dateRole ?? null} />
       <QuoteEvidence article={article} />
     </li>
   );
 }
 
+/**
+ * What a version is and is not, said under its heading (index 9's `state_kind` and `translation_of`; S7c): an expression
+ * the publisher issued in another language than French, beside the French one, of which the publisher's record does not say
+ * which language version is authentic (R18); a consolidated version or a version of a code is documentation without
+ * probative value, the authentic text being the act as published in the Journal officiel (the design's L5 caveat). A
+ * consolidation's act is its work's `/jo`, as the platform names a base act (`base_act_iri`). Nothing on an index of schema
+ * 8 or 6, which names neither.
+ */
+export function VersionCaveats({ state }) {
+  return (
+    <>
+      {state.translationOf ? (
+        <p className="note" data-translation-of={state.translationOf}>
+          <Say template={COPY.translation} values={{ language: state.language, french: <code>{state.translationOf}</code> }} />
+        </p>
+      ) : null}
+      {state.stateKind === 'consolidation' ? (
+        <p className="note" data-caveat="consolidation">
+          <Say template={COPY.consolidationCaveat} values={{ act: <code>{`${state.publisherWorkIri}/jo`}</code> }} />
+        </p>
+      ) : null}
+      {state.stateKind === 'code' ? <p className="note" data-caveat="code">{COPY.codeCaveat}</p> : null}
+    </>
+  );
+}
+
+/**
+ * A Luxembourg state's heading, by its date's role: a state dated by its entry into force is never said as applying from it
+ * (R21, `date-role.mjs`). Shared with the export's pins and the cited article's source (S7b: both still said "the state
+ * applying from" of every state, which the per-role speech test found).
+ */
+export function StateHeadingWords({ state, workKey }) {
+  const values = { work: workKey, language: state.language, from: state.applicabilityDate };
+  if (datedByEntryIntoForce(state)) {
+    return state.nextApplicabilityDate === null
+      ? <Say template={COPY.stateHeadingEntryIntoForce} values={values} />
+      : <Say template={COPY.stateHeadingEntryIntoForceNext} values={{ ...values, next: state.nextApplicabilityDate }} />;
+  }
+  return state.nextApplicabilityDate === null
+    ? <Say template={COPY.stateHeading} values={values} />
+    : <Say template={COPY.stateHeadingNext} values={{ ...values, next: state.nextApplicabilityDate }} />;
+}
+
 function StateReading({ state, workKey, paging = null, onNext = null, readable = null }) {
   return (
     <section data-state={state.stateSha256}>
-      <h2>
-        {state.nextApplicabilityDate === null ? (
-          <Say template={COPY.stateHeading} values={{ work: workKey, language: state.language, from: state.applicabilityDate }} />
-        ) : (
-          <Say template={COPY.stateHeadingNext} values={{ work: workKey, language: state.language, from: state.applicabilityDate, next: state.nextApplicabilityDate }} />
-        )}
+      <h2 data-date-role={state.dateRole ?? undefined}>
+        <StateHeadingWords state={state} workKey={workKey} />
       </h2>
       <p>
         <Permalink value={state.permalink} />
       </p>
+      <VersionCaveats state={state} />
       {/* The state's own counts, whichever of its pages are shown. */}
       <p data-counts="">
         <Say
@@ -450,6 +511,8 @@ export function EuropeReadingView({ view, paging = {}, onNext = null, readableFo
     <>
       <p data-acknowledgement="" lang={ENGLISH_LANG}>{view.acknowledgement}</p>
       <p data-authenticity="" lang={ENGLISH_LANG}>{view.authenticity}</p>
+      {/* The act's dates lead the reading, before its wordings, each said with its role: none of them is a wording's date. */}
+      <EuropeForceDates forceDates={view.forceDates ?? null} notWording />
       {view.wordings.map((wording) => (
         <EuropeWordingReading key={wording.wordingSha256} wording={wording} celex={view.celex} paging={paging[wording.wordingSha256] ?? null} onNext={onNext} readable={readableFor?.(wording) ?? null} />
       ))}

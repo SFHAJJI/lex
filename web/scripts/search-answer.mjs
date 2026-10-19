@@ -44,6 +44,7 @@
 import { isCalendarDate } from './temporal.mjs';
 import { articlePermalink, escapeSegment, luxembourgPermalink, parseSitePath } from './permalinks.mjs';
 import { AS_PUBLISHED_LABEL } from './as-published.mjs';
+import { readDateRole } from './date-role.mjs';
 
 const DIGEST = /^[0-9a-f]{64}$/;
 
@@ -272,6 +273,23 @@ function readExtract(value, where, lane, { query, terms }) {
   });
 }
 
+/**
+ * The other states that hold a hit's wording, when an undated search on index 9 folded them into it (the platform's `fold`,
+ * S7a): each one's date, role and permalink; none when the answer names none.
+ */
+function readSameWording(hit, where) {
+  if (!Object.hasOwn(hit, 'same_wording_states')) return Object.freeze([]);
+  return Object.freeze(requireList(hit.same_wording_states, `${where} same_wording_states`).map((state, index) => {
+    const at = `${where} same_wording_states[${index}]`;
+    return Object.freeze({
+      applicabilityDate: requireDate(requireOwn(state, 'applicability_date', at), `${at}.applicability_date`),
+      dateRole: readDateRole(state, at),
+      stateSha256: requireDigest(requireOwn(state, 'state_sha256', at), `${at}.state_sha256`),
+      permalink: requireText(requireOwn(state, 'permalink', at), `${at}.permalink`),
+    });
+  }));
+}
+
 function readHit(hit, index) {
   const where = `hit ${index + 1}`;
   const lane = requireOwn(hit, 'lane', where);
@@ -301,6 +319,9 @@ function readHit(hit, index) {
     lane,
     matchReason: reasons[0],
     workKey,
+    // The state's date role (index 9; null on an index of schema 8 or 6): R21, `date-role.mjs`.
+    dateRole: readDateRole(hit, where),
+    sameWording: readSameWording(hit, where),
     publisherWorkIri: requireText(requireOwn(hit, 'publisher_work_iri', where), `${where} publisher_work_iri`),
     language: requireText(requireOwn(hit, 'language', where), `${where} language`),
     applicabilityDate,

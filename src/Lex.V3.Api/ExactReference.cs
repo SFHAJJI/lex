@@ -151,9 +151,12 @@ internal static class ExactReferenceReader
 {
     private const RegexOptions Options = RegexOptions.CultureInvariant | RegexOptions.IgnoreCase;
 
-    // A date clause at the end: after a comma (with or without a preposition), or after a preposition alone.
+    // A date clause at the end: after a comma (with or without a preposition), or after a preposition alone. The citation
+    // generator's usual form of a version dated by its entry into force ("…, dans sa version publiée, entrée en vigueur le …",
+    // "…, as published, entry into force on …", S7a; R21) asks for that version as the other version phrases do.
     private const string Preposition =
         @"(?:au|le|à\s+la\s+date\s+du|a\s+la\s+date\s+du|en\s+date\s+du|dans\s+sa\s+version\s+(?:du|au|applicable\s+au)|version\s+(?:du|au)|" +
+        @"dans\s+sa\s+version\s+publi(?:é|e)e\s*,\s*entr(?:é|e)e\s+en\s+vigueur\s+le|as\s+published\s*,\s*entry\s+into\s+force\s+on|" +
         @"on|at|as\s+at|as\s+of|as\s+on|in\s+the\s+version\s+of|am|zum|stand)";
 
     private static readonly Regex DateClause = new(

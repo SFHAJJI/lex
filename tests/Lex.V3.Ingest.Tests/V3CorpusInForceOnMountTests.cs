@@ -47,14 +47,15 @@ public sealed class V3CorpusInForceOnMountTests
             "legal status, repeal or commencement",
             body.GetProperty("caveat").GetString());
         // The operation id is the registry's; no served string speaks of legal force, and no status is served.
-        Assert.IsFalse(body.GetRawText().Contains("force", StringComparison.OrdinalIgnoreCase), body.GetRawText());
+        AssertSaysNothingOfForce(body);
         Assert.IsFalse(body.TryGetProperty("status", out _));
         var derivation = body.GetProperty("derivation");
         Assert.AreEqual("versioned works only", derivation.GetProperty("basis").GetString());
-        StringAssert.Contains(derivation.GetProperty("rule").GetString(), "greatest publisher applicability date at or before");
-        StringAssert.Contains(derivation.GetProperty("interval_until").GetString(), "no end date is published or invented");
+        // The fixture is an index 9: the interval rules select (S7a), and the publisher's end of applicability is consulted.
+        Assert.AreEqual(V3CorpusMount.InForceOnRuleNine, derivation.GetProperty("rule").GetString());
+        Assert.AreEqual(V3CorpusMount.InForceOnUntilNine, derivation.GetProperty("interval_until").GetString());
         CollectionAssert.AreEqual(
-            new[] { "repeal", "end of validity", "commencement" },
+            new[] { "repeal", "commencement" },
             derivation.GetProperty("not_consulted").EnumerateArray().Select(static v => v.GetString()).ToArray());
         Assert.AreEqual("lu-legilux", body.GetProperty("publisher").GetString());
         Assert.AreEqual(fixture.CorpusSha256, body.GetProperty("corpus_sha256").GetString());
@@ -68,6 +69,7 @@ public sealed class V3CorpusInForceOnMountTests
         Assert.AreEqual(fixture.StateSha256, row.GetProperty("state").GetProperty("state_sha256").GetString());
         Assert.AreEqual(fixture.ApplicabilityDate, row.GetProperty("interval").GetProperty("from").GetString());
         Assert.AreEqual(laterDate, row.GetProperty("interval").GetProperty("until").GetString());
+        Assert.AreEqual("derived", row.GetProperty("interval").GetProperty("until_source").GetString(), "the next state's start, derived");
         Assert.AreEqual(JsonValueKind.Null, row.GetProperty("reason").ValueKind);
 
         // The row is the state as_of selects for that work, date and language, and its pointer reaches it.
@@ -272,11 +274,12 @@ public sealed class V3CorpusInForceOnMountTests
     {
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
-        var german = await fixture.AddSecondLanguageStateAsync(fixture.ApplicabilityDate);
+        // On index 9 a German text is a translation of a French state and takes its interval (S7a): German twins are two
+        // German expressions of one French state, here the fixture's own.
         var twinDate = Shift(fixture.ApplicabilityDate, 400);
         var asked = Shift(twinDate, 10);
-        var germanLater = await fixture.AddStateAsync(twinDate, "de-later", german.ExpressionIri);
-        var germanTwin = await fixture.AddStateAsync(twinDate, "de-twin", german.ExpressionIri);
+        var germanLater = await fixture.AddTranslationAsync(fixture.ExpressionIri, suffix: "de-later");
+        var germanTwin = await fixture.AddTranslationAsync(fixture.ExpressionIri, suffix: "de-twin");
         var identifier = $"/lu-legilux/{fixture.WorkKey}";
 
         async Task<V3Envelope> AsOfAsync(V3CorpusMount mount, string? language)
@@ -315,10 +318,13 @@ public sealed class V3CorpusInForceOnMountTests
                 candidate.Contains("--" + germanTwin.StateSha256 + "/", StringComparison.Ordinal)));
         }
 
-        // Now French has twins too. With no language asked for, every ambiguous language's candidates
-        // are named, all four in ordinal order, as as_of names them.
+        // Now French has twins too, on a later date, and German has two translations of the first of them (the German
+        // translations of the fixture's state end where it does). With no language asked for, every ambiguous language's
+        // candidates are named, all four in ordinal order, as as_of names them.
         var frenchLater = await fixture.AddStateAsync(twinDate, "later");
         var frenchTwin = await fixture.AddStateAsync(twinDate, "twin");
+        germanLater = await fixture.AddTranslationAsync(frenchLater.ExpressionIri, suffix: "de-later-2");
+        germanTwin = await fixture.AddTranslationAsync(frenchLater.ExpressionIri, suffix: "de-twin-2");
         using (var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None))
         {
             Assert.IsNotNull(mount);
@@ -414,7 +420,10 @@ public sealed class V3CorpusInForceOnMountTests
     /// </summary>
     private static void AssertSaysNothingOfForce(JsonElement payload)
     {
-        var served = payload.GetRawText().Replace("\"r6_in_force_on\"", string.Empty, StringComparison.Ordinal);
+        // On index 9 a state carries the catalogue's entry into force, a typed publisher date said as its own value (R21), never a
+        // status: its field and the date role that names it are set aside too.
+        var served = payload.GetRawText().Replace("\"r6_in_force_on\"", string.Empty, StringComparison.Ordinal)
+            .Replace("\"entry_into_force\"", string.Empty, StringComparison.Ordinal);
         Assert.IsFalse(served.Contains("force", StringComparison.OrdinalIgnoreCase), served);
     }
 

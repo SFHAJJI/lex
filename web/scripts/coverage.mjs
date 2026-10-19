@@ -854,8 +854,8 @@ export function readCoverage(answer) {
  */
 export const COUNTS_PROVENANCE_NOTE =
   'The counts of the corpus and the index below were taken from the artifacts named above. Nothing '
-  + 'here says how current they are: the build times in the history section say when each build ran, '
-  + 'which bounds when its corpus was observed and dates no count. The digests say exactly which '
+  + 'here says how current they are: the build times in the history section say when each acquiring build '
+  + 'read its acquisition, which bounds when its corpus was observed and dates no count. The digests say exactly which '
   + 'artifacts were counted, which a date does not. The calendar dates in the language and capability '
   + 'tables are the publisher’s, about the law, and not about when this was counted.';
 
