@@ -174,6 +174,11 @@
 // montre", never "sur Lex" or "de Lex"; the reader "est libre de" use the texts, a permission, never "peut"; the part
 // after "#" is the only antecedent of what the browser never sends; "Lex ne propose ni compte ni inscription"; the terms
 // announce how to cite the texts, not Lex).
+// The reader's right to complain to the CNPD, kept on the privacy notice as a driver decision of 2026-10-19 (one sentence, the
+// regulator's site linked, no postal address): `privacy.sections.rights.heading` and `privacy.sections.rights.complaint`,
+// entries 52 and 54 of 2026-10-18 less "aussi" and the address, were reviewed by an independent reviewer (Claude, AI
+// reviewer, not the author) under the same delegation in the addendum of 2026-10-19 "the CNPD complaint line kept" (2
+// forms, both approved).
 // The EU authenticity statement chosen by the act's date (the owner's decision of 2026-10-18 on PR #975's question, O4):
 // `citation.europe.authenticity`, one string approved in the addendum of 2026-10-17 on the citation generator, is now two
 // entries keyed by the platform's basis, `citation.europe.authenticity.electronic_edition` (that string, unchanged) and
@@ -856,6 +861,10 @@ export const LIVE_CHROME_FR = Object.freeze({
         heading: 'Personnes nommées dans les actes publiés',
         why: 'Certains actes publiés nomment des personnes, par exemple une loi conférant la nationalité. Lex reproduit les textes tels que les journaux officiels les publient, le Journal officiel du Grand-Duché de Luxembourg et le Journal officiel de l’Union européenne, afin que le droit puisse être lu à une date et vérifié auprès de sa source officielle.',
         searchEngines: 'Les moteurs de recherche ne sont autorisés à indexer la page d’un acte qu’une fois qu’une vérification a constaté que l’acte ne nomme aucune personne privée ; la page de tout autre acte leur demande de ne pas l’indexer.',
+      }),
+      rights: Object.freeze({
+        heading: 'Vos droits',
+        complaint: 'Vous pouvez introduire une réclamation auprès de la Commission nationale pour la protection des données (CNPD), {cnpdSite}.',
       }),
     }),
   }),

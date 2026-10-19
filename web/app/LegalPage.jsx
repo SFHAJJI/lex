@@ -14,12 +14,13 @@ import { liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { renderDocument } from './render-document.mjs';
 import { skinFor } from '../scripts/shells.mjs';
 import { longDate } from '../scripts/live-search.mjs';
-import { ACCESSIBILITY_LAW, EURLEX_ACKNOWLEDGEMENT, LEGAL_PAGES, LEGAL_TEXTS_UPDATED, legalPage } from '../scripts/legal-pages.mjs';
+import { ACCESSIBILITY_LAW, CNPD_SITE, EURLEX_ACKNOWLEDGEMENT, LEGAL_PAGES, LEGAL_TEXTS_UPDATED, legalPage } from '../scripts/legal-pages.mjs';
 
 /**
  * Every value a legal page's sentences may name (`live-chrome.mjs`, the comment above `legal`), for the page's language:
- * the footer's two statements, the links to other legal pages, the EU texts' acknowledgement (in English, marked so on a
- * French page) and the accessibility law's French title.
+ * the footer's two statements, the links to other legal pages, the CNPD's site (the regulator a reader may complain to, a
+ * link and no postal address), the EU texts' acknowledgement (in English, marked so on a French page) and the
+ * accessibility law's French title.
  */
 export function legalValues() {
   const copy = liveChrome();
@@ -29,6 +30,7 @@ export function legalValues() {
     authenticity: copy.site.authenticity,
     legalNoticePage: pageLink('legalNotice'),
     cookiesPage: pageLink('cookies'),
+    cnpdSite: <a href={CNPD_SITE.href} rel="external">{CNPD_SITE.text}</a>,
     eurlexAcknowledgement: inEnglish(EURLEX_ACKNOWLEDGEMENT),
     accessibilityLaw: <span lang="fr">{ACCESSIBILITY_LAW}</span>,
   };
