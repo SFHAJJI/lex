@@ -76,6 +76,7 @@ internal sealed partial class V3CorpusMount
     internal const string ReasonEndConventionUnclear = "publisher_end_convention_unclear";
     internal const string ReasonIntervalInvalid = "publisher_interval_invalid";
     internal const string ReasonNoExpressionInLanguage = "no_expression_in_language";
+    internal const string ReasonOutsideNamedVersion = "outside_named_version";
 
     /// <summary>
     /// The rows of one language's chain: for French, the French rows and the rows that name no expression (the catalogue's
@@ -244,32 +245,78 @@ internal sealed partial class V3CorpusMount
     private (LuxembourgIndexResolvedState[] Selected, string? NextDate) SelectAt(
         IReadOnlyList<LuxembourgIndexResolvedState> ofLanguage, string requestedDate)
     {
-        if (!RulesByInterval || ofLanguage.Count == 0 || !IsWholeLanguage(ofLanguage))
+        if (!RulesByInterval || ofLanguage.Count == 0)
         {
-            // A scope the caller narrowed (an ELI that names one version) is selected within itself, as before index 9: the
-            // version it names is the one asked for.
             return SelectAtDate(ofLanguage, requestedDate);
         }
 
         var cover = CoverAt(CatalogueOf(ofLanguage[0].WorkKey), ofLanguage[0].Language, requestedDate);
+        if (!IsWholeLanguage(ofLanguage))
+        {
+            // A scope the caller narrowed (an ELI that names one version) is selected by the rules over the whole work: one of
+            // its states opens only when the rules serve it on the date, as the covering state or one of its same-text states;
+            // otherwise nothing is selected, and the refusal gives the rules' reason (the review of #987, F2).
+            var served = cover.Kind == CoverServed ? new[] { cover.Row! }.Concat(cover.Others).ToArray() : [];
+            var member = ofLanguage.FirstOrDefault(state => served.Any(row => string.Equals(row.StateSha256, state.StateSha256, StringComparison.Ordinal)));
+            return member is null ? ([], null) : ([member], NextHeldAfter(ofLanguage, member, requestedDate));
+        }
+
         switch (cover.Kind)
         {
             case CoverServed:
-                // The next held state's date after the date asked: a held state that begins between the served one and the date
-                // and does not cover it (an invalid interval inside an overlap) is not "next" of a date already past it.
                 var served = ofLanguage.Single(state => string.Equals(state.StateSha256, cover.Row!.StateSha256, StringComparison.Ordinal));
-                var after = string.CompareOrdinal(requestedDate, served.ApplicabilityDate) > 0 ? requestedDate : served.ApplicabilityDate;
-                return ([served], ofLanguage
-                    .Where(other => string.Equals(other.Language, served.Language, StringComparison.Ordinal) &&
-                                    string.CompareOrdinal(other.ApplicabilityDate, after) > 0)
-                    .Select(static other => other.ApplicabilityDate)
-                    .Order(StringComparer.Ordinal)
-                    .FirstOrDefault());
+                return ([served], NextHeldAfter(ofLanguage, served, requestedDate));
             case CoverAmbiguous:
                 return (cover.Others.Select(StateOfRow).ToArray(), null);
             default:
                 return ([], null);
         }
+    }
+
+    /// <summary>
+    /// The next held state's date after the date asked: a held state that begins between the served one and the date and does
+    /// not cover it (an invalid interval inside an overlap) is not "next" of a date already past it.
+    /// </summary>
+    private static string? NextHeldAfter(IReadOnlyList<LuxembourgIndexResolvedState> ofLanguage, LuxembourgIndexResolvedState served, string requestedDate)
+    {
+        var after = string.CompareOrdinal(requestedDate, served.ApplicabilityDate) > 0 ? requestedDate : served.ApplicabilityDate;
+        return ofLanguage
+            .Where(other => string.Equals(other.Language, served.Language, StringComparison.Ordinal) &&
+                            string.CompareOrdinal(other.ApplicabilityDate, after) > 0)
+            .Select(static other => other.ApplicabilityDate)
+            .Order(StringComparer.Ordinal)
+            .FirstOrDefault();
+    }
+
+    /// <summary>The civil day before a <c>yyyy-MM-dd</c> date.</summary>
+    private static string DayBefore(string date) =>
+        DateOnly.ParseExact(date, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture).AddDays(-1)
+            .ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Whether a state of one work covers the date, in the language asked or any language the work holds (a cheap test of the
+    /// intervals alone, with no wording compared): what in_force_on counts as a work with a state on the date (F8).
+    /// </summary>
+    private bool CoveredOn(string workKey, string? language, string date)
+    {
+        var work = CatalogueOf(workKey);
+        var languages = language is not null
+            ? [language]
+            : work.Rows.Select(static row => row.Language.Length == 0 ? FrenchLanguage : row.Language).Distinct(StringComparer.Ordinal).ToArray();
+        return languages.Any(one => ChainOf(work, one).Any(row => Covers(row, date)));
+    }
+
+    /// <summary>in_force_on's population on index 9, with the works that hold a state before the date and none covering it.</summary>
+    private static object WithWorksNotCovered(object population, long? worksHeldBefore, long worksOnDate)
+    {
+        if (worksHeldBefore is not { } before)
+        {
+            return population;
+        }
+
+        var node = JsonSerializer.SerializeToNode(population)!.AsObject();
+        node["works_not_covered_on_date"] = before - worksOnDate;
+        return node;
     }
 
     /// <summary>
@@ -690,6 +737,72 @@ internal sealed partial class V3CorpusMount
         "stable coordinate for a state the catalogue names no expression of; hole_from and hole_to are a hole's span; after a closed " +
         "end, closed_on is the last state's end, and base_act_rule says what the base act's facts beside it are";
 
+    /// <summary>
+    /// The act as published a closed state's work rests on: an act's or a consolidation's work's own <c>/jo</c>; a code's, the
+    /// base act its catalogue state names by <c>isMemberOf</c> (exactly one), else none, and no base act is named (the review
+    /// of #987, F4: a code's work is the code, which has no <c>/jo</c>).
+    /// </summary>
+    private string? BaseActOf(LuxembourgIndexCatalogueState closed)
+    {
+        if (!string.Equals(closed.StateKind, "code", StringComparison.Ordinal))
+        {
+            return closed.PublisherWorkIri + "/jo";
+        }
+
+        var members = FactsOf(_reader!.ResolveFacts([closed.PublisherLegalResourceIri]),
+                Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.IsMemberOf, closed.PublisherLegalResourceIri)
+            .Select(static fact => fact.value).Distinct(StringComparer.Ordinal).ToArray();
+        return members is [var work] && work.StartsWith("http", StringComparison.Ordinal) ? work.TrimEnd('/') + "/jo" : null;
+    }
+
+    internal const string OutsideScopeRule =
+        "outside_named_version: the identifier names a version (named_states) whose interval does not hold the date, and the " +
+        "publisher's catalogue gives the date to another state (covering_states), which the identifier does not name; nothing is " +
+        "opened in its place";
+
+    /// <summary>
+    /// The refusal for a narrowed scope (an exact reference whose ELI names one version) when the rules serve the date with a
+    /// state outside it: <c>no_version_for_date</c>, reason <c>outside_named_version</c>, the scope's states named, the state
+    /// that covers the date named beside them, the nearest dates the scope holds either side. Flat, as every refusal is.
+    /// </summary>
+    private V3PlatformOperationOutcome RefuseOutsideScope(
+        V3PlatformOperationRequest request,
+        DateTimeOffset observedAt,
+        Cover cover,
+        string language,
+        IReadOnlyList<LuxembourgIndexResolvedState> scope,
+        string requestedDate,
+        string? bound)
+    {
+        var dates = scope.Select(static state => state.ApplicabilityDate).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var covering = new[] { cover.Row! }.Concat(cover.Others).ToArray();
+        var payload = new JsonObject { ["requested_date"] = requestedDate };
+        if (bound is not null)
+        {
+            payload["bound"] = bound;
+        }
+
+        payload["history_begins"] = dates.FirstOrDefault();
+        payload["nearest_earlier"] = dates.LastOrDefault(date => string.CompareOrdinal(date, requestedDate) <= 0);
+        payload["nearest_later"] = dates.FirstOrDefault(date => string.CompareOrdinal(date, requestedDate) > 0);
+        payload["what_would_answer"] = new JsonArray(NoVersionForDateRoutes.Select(static route => (JsonNode)route).ToArray());
+        payload["asserts_absence_of_law"] = false;
+        payload["language"] = language;
+        payload["reason"] = ReasonOutsideNamedVersion;
+        payload["reason_rule"] = OutsideScopeRule;
+        payload["catalogue_read_no_later_than"] = _reader!.ResolveObservations()[^1].BuiltAt;
+        payload["named_states"] = new JsonArray(scope.Select(static state => (JsonNode)StateUrl(state)).ToArray());
+        payload["named_state_sha256s"] = new JsonArray(scope.Select(static state => (JsonNode)state.StateSha256).ToArray());
+        payload["hole_from"] = null;
+        payload["hole_to"] = null;
+        payload["covering_states"] = new JsonArray(covering.Select(static row => (JsonNode)RowAddress(row)).ToArray());
+        payload["covering_state_sha256s"] = new JsonArray(covering.Select(static row => (JsonNode)row.StateSha256).ToArray());
+        using var document = JsonSerializer.SerializeToDocument(payload);
+        return V3PlatformOperationOutcome.Refused(
+            Context("refusal", observedAt),
+            new V3PlatformOperationRefusal(request, "no_version_for_date", document.RootElement));
+    }
+
     internal const string BaseActRule =
         "base_act_iri is the work's act as published; base_act_in_force_status and base_act_no_longer_in_force are the publisher's own " +
         "assertions about it (inForceStatus, dateNoLongerInForce), verbatim and unread, empty when it asserts none: the end of the " +
@@ -711,8 +824,9 @@ internal sealed partial class V3CorpusMount
         string workKey,
         IReadOnlyList<string> languages,
         string requestedDate,
-        string? bound) =>
-        RefuseUncoveredNine(request, observedAt, CatalogueOf(workKey), languages, requestedDate, bound);
+        string? bound,
+        IReadOnlyList<LuxembourgIndexResolvedState>? scope = null) =>
+        RefuseUncoveredNine(request, observedAt, CatalogueOf(workKey), languages, requestedDate, bound, scope);
 
     /// <summary>The same refusal over a given catalogue of one work (<c>as_observed</c> gives a snapshot's).</summary>
     private V3PlatformOperationOutcome RefuseUncoveredNine(
@@ -721,7 +835,8 @@ internal sealed partial class V3CorpusMount
         CatalogueWork work,
         IReadOnlyList<string> languages,
         string requestedDate,
-        string? bound)
+        string? bound,
+        IReadOnlyList<LuxembourgIndexResolvedState>? scope = null)
     {
         var language = languages.Contains(FrenchLanguage, StringComparer.Ordinal) ? FrenchLanguage : languages.Order(StringComparer.Ordinal).First();
         var cover = CoverAt(work, language, requestedDate);
@@ -730,13 +845,17 @@ internal sealed partial class V3CorpusMount
             return RefuseTextless(request, observedAt, cover.Row!, requestedDate, bound);
         }
 
-        if (cover.Kind != CoverNone)
+        if (cover.Kind == CoverAmbiguous)
         {
-            // A caller that refuses a date the interval rules cover (a scope it narrowed itself) gets the refusal of its own
-            // scope, as before index 9: never an answer the rules contradict, and never a failure.
-            return RefuseNoVersionForDate(request, observedAt,
-                work.Rows.Where(row => string.Equals(row.Language, language, StringComparison.Ordinal)).Select(static row => row.ApplicabilityDate).DefaultIfEmpty(requestedDate).ToArray(),
-                requestedDate, bound);
+            return RefuseAmbiguousVersion(request, observedAt, requestedDate,
+                cover.Others.Where(static row => row.Language.Length > 0).Select(RowAddress).Order(StringComparer.Ordinal).ToArray(), bound);
+        }
+
+        if (cover.Kind == CoverServed)
+        {
+            // The rules serve a state the caller's narrowed scope does not hold (an ELI that names another version): the scope's
+            // version does not cover the date, and the state that does is named (the review of #987, F2).
+            return RefuseOutsideScope(request, observedAt, cover, language, scope ?? [], requestedDate, bound);
         }
 
         var payload = new JsonObject { ["requested_date"] = requestedDate };
@@ -768,11 +887,14 @@ internal sealed partial class V3CorpusMount
         payload["hole_to"] = cover.Hole?.To;
         // After a closed end only, the base act's own facts, verbatim (BaseActRule): the end of the catalogue's last state is not
         // the end of the law, and the catalogue may or may not say anything of the base act.
-        if (cover.Reason == ReasonAfterClosedEnd && cover.Row is { } closed)
+        if (cover.Reason == ReasonAfterClosedEnd && cover.Row is { } lastState)
         {
-            var baseAct = closed.PublisherWorkIri + "/jo";
+            payload["closed_on"] = lastState.ApplicableTo;
+        }
+
+        if (cover.Reason == ReasonAfterClosedEnd && cover.Row is { } closed && BaseActOf(closed) is { } baseAct)
+        {
             var facts = _reader.ResolveFacts([baseAct]);
-            payload["closed_on"] = closed.ApplicableTo;
             payload["base_act_iri"] = baseAct;
             payload["base_act_in_force_status"] = new JsonArray(FactsOf(facts, Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.InForceStatus, baseAct)
                 .Select(static fact => (JsonNode)fact.value).ToArray());

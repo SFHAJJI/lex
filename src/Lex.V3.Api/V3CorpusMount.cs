@@ -3209,9 +3209,9 @@ internal sealed partial class V3CorpusMount : IDisposable
         IReadOnlyList<LuxembourgIndexResolvedState> scope,
         string requestedDate,
         string? bound) =>
-        RulesByInterval && scope.Count > 0 && scope.GroupBy(static state => state.Language).All(group => IsWholeLanguage(group.ToArray()))
+        RulesByInterval && scope.Count > 0
             ? RefuseUncoveredNine(request, observedAt, scope[0].WorkKey,
-                scope.Select(static state => state.Language).Distinct(StringComparer.Ordinal).ToArray(), requestedDate, bound)
+                scope.Select(static state => state.Language).Distinct(StringComparer.Ordinal).ToArray(), requestedDate, bound, scope)
             : RefuseNoVersionForDate(request, observedAt, scope.Select(static state => state.ApplicabilityDate).ToArray(), requestedDate, bound);
 
     /// <summary>The same refusal over the publisher dates of the states it is given (<c>as_observed</c> gives a snapshot's).</summary>
@@ -3618,6 +3618,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         long worksHeld;
         long worksInScope;
         long worksOnDate;
+        long? worksHeldBefore = null;
         string? firstHeld;
         string? lastHeld;
         if (identifier is not null)
@@ -3700,15 +3701,57 @@ internal sealed partial class V3CorpusMount : IDisposable
             firstHeld = population.FirstDate;
             lastHeld = population.LastDate;
             worksOnDate = _reader.CountWorksWithStateOnOrBefore(requestedDate, requestedLanguage);
+            if (RulesByInterval)
+            {
+                // On index 9 a work with a state before the date may have none covering it (a hole, a closed end, an unclear
+                // end, an invalid interval): only a covered work has a state on the date; the others are counted apart.
+                worksHeldBefore = worksOnDate;
+                worksOnDate = _reader.ResolveWorkKeysWithStateOnOrBefore(requestedDate, requestedLanguage, null, int.MaxValue)
+                    .LongCount(key => CoveredOn(key, requestedLanguage, requestedDate));
+            }
             // Every work contributes at least one row, so one work more than the limit is enough to
             // know whether anything remains after the last work served.
             workKeys = _reader.ResolveWorkKeysWithStateOnOrBefore(requestedDate, requestedLanguage, afterWorkKey, limit + 1);
         }
 
+        // The work keys read, in order. Before index 9 every work with a state on or before the date gives a row, so one more
+        // key than the limit says whether any remain. On index 9 a work may give none (no state covers the date), so keys are
+        // read on, a batch at a time, until the page is filled or none remain: a page is never cut short of the works after
+        // it, and continue_after is the last work read (the review of #987, F1).
+        IEnumerable<string> WorkKeysToRead()
+        {
+            foreach (var key in workKeys)
+            {
+                yield return key;
+            }
+
+            if (identifier is not null || !RulesByInterval || workKeys.Count <= limit)
+            {
+                yield break;
+            }
+
+            var after = workKeys[^1];
+            while (true)
+            {
+                var batch = _reader!.ResolveWorkKeysWithStateOnOrBefore(requestedDate, requestedLanguage, after, limit + 1);
+                foreach (var key in batch)
+                {
+                    yield return key;
+                }
+
+                if (batch.Count <= limit)
+                {
+                    yield break;
+                }
+
+                after = batch[^1];
+            }
+        }
+
         var rows = new List<object>();
         string? continueAfter = null;
         string? lastServed = null;
-        foreach (var workKey in workKeys)
+        foreach (var workKey in WorkKeysToRead())
         {
             if (!statesByWork.TryGetValue(workKey, out var ofWork))
             {
@@ -3800,7 +3843,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                     interval_until = "the publisher's next dated state in that language, or null; no end date is published or invented",
                     not_consulted = new[] { "repeal", "end of validity", "commencement" },
                 },
-            population = new
+            population = WithWorksNotCovered(new
             {
                 // The population is the scope asked for: the one work when an identifier is given, the
                 // one language when a language is given, the whole mounted index otherwise.
@@ -3811,12 +3854,12 @@ internal sealed partial class V3CorpusMount : IDisposable
                 works_holding_the_language = requestedLanguage is null ? (long?)null : worksInScope,
                 works_without_the_language = requestedLanguage is null ? (long?)null : worksHeld - worksInScope,
                 works_with_a_state_on_date = worksOnDate,
-                works_beginning_later = worksInScope - worksOnDate,
+                works_beginning_later = worksInScope - (worksHeldBefore ?? worksOnDate),
                 first_date_held = firstHeld,
                 last_date_held = lastHeld,
                 languages_held = languagesHeld,
                 date_is_before_everything_held = firstHeld is null || string.CompareOrdinal(requestedDate, firstHeld) < 0,
-            },
+            }, worksHeldBefore, worksOnDate),
             limit,
             truncated = continueAfter is not null,
             continue_after = continueAfter,
@@ -5687,6 +5730,34 @@ internal sealed partial class V3CorpusMount : IDisposable
             object? counts = null;
             object? diff = null;
             string[]? candidates = null;
+            string? ruledReason = null;
+            if (RulesByInterval)
+            {
+                // On index 9 the rows follow the interval rules (the review of #987, F6): a state served under another of the
+                // same wording on its own date is that state's row, not one of its own; its own date is ambiguous only when the
+                // rules find several wordings there; and its baseline is the state the rules serve the day before, which a
+                // state without text, a hole, a closed or unclear end or an invalid interval leaves without one.
+                var work = CatalogueOf(state.WorkKey);
+                var own = CoverAt(work, state.Language, state.ApplicabilityDate);
+                if (own.Kind == CoverServed && !string.Equals(own.Row!.StateSha256, state.StateSha256, StringComparison.Ordinal) &&
+                    own.Others.Any(other => string.Equals(other.StateSha256, state.StateSha256, StringComparison.Ordinal)))
+                {
+                    continue;
+                }
+
+                sameDate = own.Kind == CoverAmbiguous ? own.Others.Where(static row => row.Language.Length > 0).Select(StateOfRow).ToArray() : [state];
+                var before = CoverAt(work, state.Language, DayBefore(state.ApplicabilityDate));
+                baselines = before.Kind == CoverServed
+                    ? ofLanguage.Where(other => string.Equals(other.StateSha256, before.Row!.StateSha256, StringComparison.Ordinal)).ToArray()
+                    : before.Kind == CoverAmbiguous ? before.Others.Where(static row => row.Language.Length > 0).Select(StateOfRow).ToArray()
+                    : [];
+                // No state the rules serve the day before: the first held state of its language when none is held before it,
+                // else a held state whose baseline a hole, an end or a state without text took away.
+                ruledReason = (before.Kind == CoverTextless || before.Kind == CoverNone) && earlier.Length > 0
+                    ? "no_held_baseline"
+                    : null;
+            }
+
             // The row's own date is judged first. A twin on the earliest date held has no baseline
             // either, but "first held state" would hide the fact that decides what the reader may do
             // with the date: as_of and diff refuse it as ambiguous, and the row must predict that.
@@ -5694,6 +5765,10 @@ internal sealed partial class V3CorpusMount : IDisposable
             {
                 reason = "ambiguous_version";
                 candidates = sameDate.Select(StateUrl).Order(StringComparer.Ordinal).ToArray();
+            }
+            else if (ruledReason is not null)
+            {
+                reason = ruledReason;
             }
             else if (baselines.Length == 0)
             {
@@ -6467,13 +6542,15 @@ internal sealed partial class V3CorpusMount : IDisposable
         {
             if (!carried.TryGetValue(state.StateSha256, out var articles))
             {
-                absent.Add(new
+                // On index 9 a state's catalogue facts travel with it, absent or carried, so its date is said with its role
+                // (R21; the review of #987); an index of schema 8 or 6 serves the row unchanged.
+                absent.Add(WithCatalogueFacts(new
                 {
                     language = state.Language,
                     applicability_date = state.ApplicabilityDate,
                     state_sha256 = state.StateSha256,
                     permalink = StateUrl(state),
-                });
+                }, state));
                 continue;
             }
 
@@ -6494,7 +6571,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             previousWording[state.Language] = wording;
             historyBegins ??= state.ApplicabilityDate;
 
-            rows.Add(new
+            rows.Add(WithCatalogueFacts(new
             {
                 language = state.Language,
                 applicability_date = state.ApplicabilityDate,
@@ -6512,7 +6589,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                     wording_sha256 = article.WordingSha256,
                 }).ToArray(),
                 wording_changed = changed,
-            });
+            }, state));
         }
 
         if (rows.Count == 0)
