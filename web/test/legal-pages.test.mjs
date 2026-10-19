@@ -260,3 +260,16 @@ test("what the legal pages say of the site is what its code and its deployment d
   // "Files exported as PDF are not tagged": the PDF writer says so of itself.
   assert.match(await readFile(new URL("../scripts/export-pdf.mjs", import.meta.url), "utf8"), /The PDF is not tagged/);
 });
+
+test("the data file holds the owner's retention of 12 months (2026-10-19), and the three details only the owner can give stay placeholders", () => {
+  assert.equal(LEGAL_PUBLISHER.reportRetentionMonths, "12");
+  for (const field of ["publisherName", "publisherAddress", "contactEmail"]) {
+    assert.equal(LEGAL_PUBLISHER[field], PUBLISHER_PLACEHOLDERS[field], `${field} is the owner's to give, never filled from anything else`);
+  }
+  // The privacy notice says the twelve months in both languages, and still marks the three unfilled details.
+  const english = app.renderLiveLegalPage("privacy");
+  assert.ok(said(english).includes("Your message is kept for 12 months after the matter it raises is closed, and then deleted."), said(english));
+  assert.deepEqual(placeholdersIn(english).tokens, ["«PUBLISHER_NAME»", "«PUBLISHER_ADDRESS»", "«CONTACT_EMAIL»"]);
+  // The opening still refuses the pages, for the three alone.
+  assert.deepEqual(publisherFailures(LEGAL_PUBLISHER).length, 3);
+});

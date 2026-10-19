@@ -18,7 +18,7 @@ export const LEGAL_PUBLISHER = Object.freeze({
   // The one contact address every page gives: for the publisher, for errors in a text, for an accessibility barrier, for a
   // privacy request and for an objection by a person named in an act. A dedicated mailbox (O5).
   contactEmail: "«CONTACT_EMAIL»",
-  // How long an e-mail to that address is kept once the matter it raises is closed, in whole months, as digits (for
-  // example "12"). The privacy notice states it (GDPR art. 13(2)(a); R74: "a stated short period").
-  reportRetentionMonths: "«REPORT_RETENTION_MONTHS»",
+  // How long an e-mail to that address is kept once the matter it raises is closed, in whole months, as digits. The
+  // privacy notice states it (GDPR art. 13(2)(a); R74: "a stated short period"). 12: the owner's decision of 2026-10-19.
+  reportRetentionMonths: "12",
 });
