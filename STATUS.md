@@ -163,8 +163,16 @@ Only money, legal or public claims, credentials and going live (ruling 7):
 - The owner's decisions of 2026-10-19 (the owner's words: "do what you recommend", relayed by the coordinator; one
   commit each in `writer/web-bigbang`, STATUS-WEB.md): O11, the maximum data age, 30 days (option A); e-mails to the
   contact address kept 12 months once their matter is closed; the accessibility statement declares Lex non-conformant
-  until an audit, not partially conformant. The publisher's name, postal address and contact e-mail are still the
-  owner's to give (`web/scripts/legal-publisher.mjs`): the site cannot open without them.
+  until an audit, not partially conformant. The e-mails' 12 months were superseded the same day by the bullet below.
+  - The legal pages: the site names no person and publishes no postal address, no e-mail address and no contact channel
+    of any kind (the owner's words: "i dont want to mention nobody name etc etc including me"; "the user is there to have
+    temporal feature over lux and eu laws thats it"; "why r we mentioning emails andadress"). The owner's legal decision,
+    made; it departs from the specification of record's R49 (an editor, an address, an e-mail, a director of
+    publication, a controller and a contact, an objection contact; and with it R62's and R74's contacts) and from O5's
+    recommended answer (the owner as editor and controller, with a dedicated contact address). With no contact, no
+    e-mail is received or kept. `web/scripts/legal-publisher.mjs` is removed: nothing waits on the owner for the legal
+    pages, and the opening's check now refuses a page that shows an e-mail address, a contact link, a placeholder or a
+    postcode (`writer/legal-no-person`, STATUS-WEB.md).
 - The plan's decisions (its section 5: each with its recommended answer, its cost and what stops without it):
   - **Now, by Friday 16 October**: the Azure sign-in; the rest of O14 (R117): a valid payment method kept on the V3
     subscription, a backup one, and billing alerts on two channels, so a failed payment cannot take the site down as
@@ -185,8 +193,9 @@ Only money, legal or public claims, credentials and going live (ruling 7):
     the audits (going live; recommended: no, a private beta first).
   - **By Friday 30 October**: O6, the Luxembourg licence rulings (recommended: L2, L1 and L1b yes for every file, each
     with a visible per-file disclosure; L3 yes in principle; L4 kept withheld; a letter to the SCL); O7, the population
-    and its yield; O28, personal data; O5, the legal pages; O4, the lawyer's read as a condition of going live; O26, the
-    usability sessions; O13, hosting and money; O16, the signing keys; N3, how outside reviewers reach the private copy.
+    and its yield; O28, personal data; O5, the legal pages (answered on 2026-10-19: no person, no contact, above); O4,
+    the lawyer's read as a condition of going live; O26, the usability sessions; O13, hosting and money; O16, the
+    signing keys; N3, how outside reviewers reach the private copy.
   - **Later**: by 13 November O19, O10, O11, O20 and the attribution wording; by 27 November O12, O21, O27 and O29; by 11
     December O17, N4 and O18; only if needed, N5 (by 1 December) and N6; at the go/no-go on 27 January, O31 and the
     sign-offs.
