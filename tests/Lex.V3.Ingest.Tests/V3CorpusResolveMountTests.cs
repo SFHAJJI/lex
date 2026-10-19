@@ -2248,9 +2248,9 @@ public sealed class V3CorpusResolveMountTests
         public string CorpusSha256 { get; }
         public string IndexSha256 { get; private set; }
 
-        public static async Task<EuropeMountedFixture> CreateAsync(bool acquireFrenchExpression = false) =>
+        public static async Task<EuropeMountedFixture> CreateAsync(bool acquireFrenchExpression = false, bool withForceDates = false) =>
             await FromEnvelopeAsync(await EuropeIndexBuilderTests.RetainedGdprEnvelopeAsync(
-                acquireFrenchExpression: acquireFrenchExpression));
+                acquireFrenchExpression: acquireFrenchExpression, withForceDates: withForceDates));
 
         /// <summary>
         /// The mount of one EU envelope: its corpus and EU index built and written where the API mounts them, named by its one
