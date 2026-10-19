@@ -45,7 +45,7 @@ function wordingKind(row, firstOfLanguage) {
  * language, from its first date to the date a version with held text covers again (or with none later), and why, in the
  * page's words; and that an unchanged wording across one says nothing of it. Nothing on an answer that names none.
  */
-function Breaks({ breaks }) {
+function Breaks({ breaks = [] }) {
   if (breaks.length === 0) return null;
   return (
     <>

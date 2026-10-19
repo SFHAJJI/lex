@@ -134,17 +134,19 @@ export const REFUSAL_EXAMPLES = Object.freeze({
         `/${PUBLISHER}/${WORK}/2004-01-01--${CANDIDATE_A}/fra`,
         `/${PUBLISHER}/${WORK}/2004-01-15--${CANDIDATE_B}/fra`,
       ],
-      // What a mount of lex-v3-luxembourg-index/9 adds (S7a): each candidate's kind, interval, boundary and text status, in
-      // lists aligned on candidate_state_sha256s. Here neither has an end recorded, so both hold every later date.
+      // What a mount of lex-v3-luxembourg-index/9 adds (S7a; the date roles S7b): each candidate's kind, date role, interval,
+      // boundary and text status, in lists aligned on candidate_state_sha256s. Here neither has an end recorded, so both hold
+      // every later date.
       candidate_state_sha256s: [CANDIDATE_A, CANDIDATE_B],
       candidate_state_kinds: ['consolidation', 'consolidation'],
+      candidate_date_roles: ['applicability', 'applicability'],
       candidate_applicability_dates: ['2004-01-01', '2004-01-15'],
       candidate_applicable_tos: [null, null],
       candidate_applicable_to_sources: [null, null],
       candidate_boundaries: ['derived', 'derived'],
       candidate_text_statuses: ['held', 'held'],
       candidate_states_rule: 'on lex-v3-luxembourg-index/9 the candidate_ lists name every state whose interval holds the date, '
-        + 'each in the order of candidate_state_sha256s: its kind, its interval (candidate_applicability_dates to '
+        + "each in the order of candidate_state_sha256s: its kind, its date's role, its interval (candidate_applicability_dates to "
         + "candidate_applicable_tos, and that end's source), its boundary and its text status; they are not one wording held, so "
         + 'none is chosen',
     },
