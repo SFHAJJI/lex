@@ -41,6 +41,10 @@ public sealed class V3EnvelopeSamplesTests
     // the samples name a fixed one of the same shape, as they name fixed digests.
     private static readonly string FixedServingCommit = new('e', 40);
 
+    // The commit a mount written by this build names as its index's (R23, "index built from"): the build's own, which moves
+    // with every commit, so it is replaced by a fixed one of the same shape wherever a derived mount's answer names it.
+    private static readonly string FixedBuilderCommit = new('f', 40);
+
     [TestMethod]
     public async Task TheEnvelopeSamplesAreWhatTheHandlerSendsBesideTheReviewedContract()
     {
@@ -238,7 +242,8 @@ public sealed class V3EnvelopeSamplesTests
         var text = Encoding.UTF8.GetString(sent)
             .Replace(corpusSha256, FixedCorpusDigest, StringComparison.Ordinal)
             .Replace(indexSha256, FixedIndexDigest, StringComparison.Ordinal)
-            .Replace("corpus-" + corpusSha256[..16], "corpus-" + FixedCorpusDigest[..16], StringComparison.Ordinal);
+            .Replace("corpus-" + corpusSha256[..16], "corpus-" + FixedCorpusDigest[..16], StringComparison.Ordinal)
+            .Replace($"\"{AcquisitionJournal.CurrentSource()}\"", $"\"{FixedBuilderCommit}\"", StringComparison.Ordinal);
         return new JsonObject
         {
             ["operation"] = operation,

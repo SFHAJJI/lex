@@ -7397,7 +7397,7 @@
       "envelope": {
         "context": {
           "commits": {
-            "index_builder_source_commit": "24118293a1290d1b9e098db1418f620268756fc3",
+            "index_builder_source_commit": "ffffffffffffffffffffffffffffffffffffffff",
             "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
           },
           "freshness": {
@@ -8328,7 +8328,7 @@
       "envelope": {
         "context": {
           "commits": {
-            "index_builder_source_commit": "24118293a1290d1b9e098db1418f620268756fc3",
+            "index_builder_source_commit": "ffffffffffffffffffffffffffffffffffffffff",
             "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
           },
           "freshness": {
@@ -8531,7 +8531,7 @@
       "envelope": {
         "context": {
           "commits": {
-            "index_builder_source_commit": "24118293a1290d1b9e098db1418f620268756fc3",
+            "index_builder_source_commit": "ffffffffffffffffffffffffffffffffffffffff",
             "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
           },
           "freshness": {

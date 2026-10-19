@@ -249,6 +249,30 @@ public sealed class V3FreshnessMountTests
         Assert.ThrowsExactly<InvalidDataException>(() => V3CorpusMount.ReadBuildReport(report, corpus, luxembourg, null));
     }
 
+    /// <summary>
+    /// A real mount's build report read as the server reads it, held to the digests the report names, which the measure
+    /// checks against the mounted files' own (only when <c>V3_FRESHNESS_MOUNT</c> names a mount directory; the population's
+    /// report is not committed). Prints what every answer over that mount would name.
+    /// </summary>
+    [TestMethod]
+    public void ARealMountsBuildReportIsReadAsTheServerReadsIt()
+    {
+        var directory = Environment.GetEnvironmentVariable("V3_FRESHNESS_MOUNT");
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            Assert.Inconclusive("V3_FRESHNESS_MOUNT names no mount, so no real build report is read.");
+        }
+
+        var bytes = File.ReadAllBytes(Path.Combine(directory, V3CorpusMount.BuildReportFileName));
+        using var report = JsonDocument.Parse(bytes);
+        SourceArtifactRef? Named(string member) =>
+            report.RootElement.TryGetProperty(member, out var named) && named.ValueKind == JsonValueKind.Object
+                ? new SourceArtifactRef(named.GetProperty("resourceId").GetString()!, named.GetProperty("Sha256").GetString()!)
+                : null;
+        var facts = V3CorpusMount.ReadBuildReport(bytes, Named("corpus")!, Named("luxembourgIndex"), Named("europeIndex"));
+        Console.WriteLine($"luxembourg completed at {facts.LuxembourgCompletedAt:O}; europe completed at {facts.EuropeCompletedAt:O}; index built from {facts.IndexBuilderSourceCommit ?? "(not recorded)"}");
+    }
+
     [TestMethod]
     public async Task AnEuMountNamesItsChannelAndAnUnmountedServerNone()
     {

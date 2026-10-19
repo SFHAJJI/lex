@@ -58,19 +58,25 @@ export function FreshnessStrip({ facts = null }) {
   );
 }
 
-/** The banner, for each channel past the maximum age; nothing when none is. */
+/**
+ * The banner, for each channel past the maximum age; nothing when none is. Its heading is one line, and each channel's
+ * sentence one step away (`<details>`, which works without scripts), so the home page keeps its box and the sentence under
+ * it on a phone's first screen (R47) while the warning stands above them; the footer's strip says the same dates in full.
+ */
 export function StalenessBanner({ facts = null }) {
   const stale = staleChannels(facts);
   if (stale.length === 0) return null;
   const copy = liveChrome().freshness;
   return (
     <aside className="staleness-banner" role="note" aria-label={copy.staleHeading} data-stale-channels={stale.map((channel) => channel.publisher).join(' ')}>
-      <p><strong>{copy.staleHeading}</strong></p>
-      {stale.map((channel) => (
-        <p key={channel.publisher} data-channel={channel.publisher}>
-          {fillCounted(copy.stale, facts.maximumAgeDays, { channel: copy.channels[channel.publisher], date: channel.completedOn, today: facts.today })}
-        </p>
-      ))}
+      <details>
+        <summary><strong>{copy.staleHeading}</strong></summary>
+        {stale.map((channel) => (
+          <p key={channel.publisher} data-channel={channel.publisher}>
+            {fillCounted(copy.stale, facts.maximumAgeDays, { channel: copy.channels[channel.publisher], date: channel.completedOn, today: facts.today })}
+          </p>
+        ))}
+      </details>
     </aside>
   );
 }

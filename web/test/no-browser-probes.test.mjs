@@ -485,7 +485,7 @@ test("deploy.ps1 walks no page unless -BrowserProbe asks: a plan run reads the r
     // browser: the probe is only shown).
     const walking = await plan("-BrowserProbe");
     assert.equal(walking.code, 0, walking.stdout + walking.stderr);
-    assert.match(probeLine(walking.stdout), /> node web\/scripts\/deploy-probe\.mjs --origin .* --browser\s*$/);
+    assert.match(probeLine(walking.stdout), /> node web\/scripts\/deploy-probe\.mjs --origin .* --browser --promotion-check\s*$/);
     assert.ok(!walking.stderr.includes(armed) && !walking.stdout.includes("no browser probe"));
     // Both at once say opposite things, and nothing is read or planned.
     const both = await plan("-BrowserProbe", "-SkipBrowserProbe");

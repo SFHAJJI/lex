@@ -524,11 +524,9 @@ blockquote.law {
 }
 
 .staleness-banner {
-  display: grid;
-  gap: 0.35rem;
   max-inline-size: 48rem;
-  margin: 0.75rem auto 0;
-  padding: 0.75rem clamp(1rem, 4vw, 1.25rem);
+  margin: 0.5rem auto 0;
+  padding: 0.4rem clamp(1rem, 4vw, 1.25rem);
   border: 2px solid #8a5a00;
   border-inline-start-width: 0.5rem;
   background: #fff6e0;
@@ -536,7 +534,11 @@ blockquote.law {
 }
 
 .staleness-banner p {
-  margin: 0;
+  margin: 0.35rem 0 0;
+}
+
+.staleness-banner summary {
+  cursor: pointer;
 }
 
 /* The forms of the live screens: each field under its label, full width up to a reading measure, and one
