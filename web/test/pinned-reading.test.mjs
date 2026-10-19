@@ -35,6 +35,12 @@ const STATE = PINNED.result.value.states[0];
 const ARTICLE = STATE.articles[14];
 const lead = (outcome, pin) => renderToStaticMarkup(h(PinnedLead, { outcome, pin })).replaceAll("<!-- -->", "");
 const success = (envelope) => readingOutcome({ state: "success", envelope });
+/** An answer as given on `date`, at the same time of day: a readable address asked at today, the answer's own day. */
+const answeredOn = (envelope, date) => {
+  const answered = structuredClone(envelope);
+  answered.context.freshness.observed_at = answered.context.freshness.observed_at.replace(/^\d{4}-\d{2}-\d{2}/, date);
+  return answered;
+};
 
 test("the census's permalink answer is the state the permalink pins, asked by the permalink itself", () => {
   assert.equal(PINNED.result.value.requested_identifier, STATE.permalink, "the page's own request (R64)");
@@ -103,10 +109,21 @@ test("a version that is not the latest held says so, in its publisher's words, w
   // With no article named, the banner alone comes first, and the act at today's date is the act's readable address.
   const act = lead(success(older), readingPinOf(`/en${STATE.permalink}`, older));
   assert.ok(act.includes('<a href="/en/lu-legilux/loi-1991-08-10-n3/fra">Read this act at today&#x27;s date</a>'), act);
-  // At a readable address, the page is the act today already: the banner names the newer version and links nothing.
-  const current = lead(success(older), readingPinOf("/en/lu-legilux/loi-1991-08-10-n3/fra/art_15", older));
+  // At a readable address read today, the page is the act today already: the banner names the newer version and links
+  // nothing.
+  const olderToday = answeredOn(older, STATE.applicability_date);
+  const current = lead(success(olderToday), readingPinOf("/en/lu-legilux/loi-1991-08-10-n3/fra/art_15", olderToday));
   assert.ok(current.includes("A newer version is applicable from 2025-03-07 (publisher).") && !current.includes("today"), current);
   assert.ok(current.includes('<p data-whole-act=""><a href="/en/lu-legilux/loi-1991-08-10-n3/fra">'), "the whole act at its readable address");
+  // Read on another day than today (an address that keeps a date, the plan's item 3.4): the date read and today first, and
+  // the act at today's date linked from both lines; the whole act at the version shown, by its permalink.
+  const another = lead(success(older), readingPinOf("/en/lu-legilux/loi-1991-08-10-n3/fra/art_15", older));
+  assert.ok(another.startsWith(`<div data-pinned-lead=""><p data-not-today="${STATE.applicability_date}">This page reads the act on ${STATE.applicability_date}, as this site holds it on that date; today in Luxembourg is 2026-09-18. <a href="/en/lu-legilux/loi-1991-08-10-n3/fra/art_15" data-read-today="">Read this act at today&#x27;s date</a></p><p data-changed-since="">A newer version is applicable from 2025-03-07 (publisher). <a href="/en/lu-legilux/loi-1991-08-10-n3/fra/art_15">Read this act at today&#x27;s date</a></p>`), another.slice(0, 500));
+  assert.ok(another.includes(`<p data-whole-act=""><a href="/en${STATE.permalink}">`), "the whole act at the version it shows");
+  // At a readable address of another day with no article and no newer version, the line alone.
+  const alone = lead(success(PINNED), readingPinOf("/en/lu-legilux/loi-1991-08-10-n3/fra", PINNED));
+  assert.ok(alone.startsWith(`<div data-pinned-lead=""><p data-not-today="${STATE.applicability_date}">`) && !alone.includes("data-changed-since"), alone);
+  assert.equal(lead(success(answeredOn(PINNED, STATE.applicability_date)), readingPinOf("/en/lu-legilux/loi-1991-08-10-n3/fra", PINNED)), "", "read today, nothing first");
 
   // An EU wording: its next wording's date, never an applicability date; nothing for the latest wording, or for a wording
   // an index with no states table answers only on its own date.
@@ -168,7 +185,8 @@ test("a readable address names the act its answer names, never the request's, an
   assert.equal(readingAddressShown(outcome.view, asked), `/lu-legilux/loi-1991-08-10-n3/fra/${"art_15"}`, "the article's readable address, of the answer's work");
   assert.equal(readingAddressShown(outcome.view, "/lu-legilux/another-work/fra/no-such-article"), "/lu-legilux/loi-1991-08-10-n3/fra");
   assert.equal(readingAddressShown(null, asked), "/lu-legilux/another-work/fra", "with no answer, the act the address names");
-  const markup = lead(outcome, readingPinOf(`/en${asked}`, PINNED));
+  const today = answeredOn(PINNED, STATE.applicability_date);
+  const markup = lead(success(today), readingPinOf(`/en${asked}`, today));
   assert.ok(markup.includes('<p data-whole-act=""><a href="/en/lu-legilux/loi-1991-08-10-n3/fra">'), "the whole act the answer names");
   const europe = success(europeEnvelope());
   assert.equal(readingAddressShown(europe.view, "/eu-eurlex/32016R0680/eng/001"), "/eu-eurlex/32016R0679/eng/001", "an EU act's CELEX from the answer");

@@ -39,7 +39,7 @@ const EN = Object.freeze({
     heading: "Search the held text",
     // Only exact matching runs (the plan's item 4.5, R90): the relaxed lane is off until its check passes, so the page no
     // longer says it finds "every word of it".
-    intro: "Finds the acts whose title matches the phrase and, in the text this server holds and may search, the articles that contain it exactly as typed: text its rights withhold is not searched. The phrase goes to this server in the request and nowhere else, and this page keeps nothing.",
+    intro: "Finds the acts whose title matches the phrase and, in the text this server holds and may search, the articles that contain it exactly as typed: text its rights withhold is not searched. The phrase goes to this server in the body of the request, never in an address a server could record; this page keeps the search only in its own address, after “#”, which the browser never sends, so a link to the page shares it.",
     idle: "Type a phrase to search the article text this server holds and may search.",
     population: Object.freeze({
       one: "“{query}” in {language}: {strict} with the exact phrase, {relaxed} with every word, in {works} work.",
@@ -113,6 +113,10 @@ const EN = Object.freeze({
     }),
     searched: "Searched: {acts} of Luxembourg law in {language}, in {versions} with {articles} of searchable text, as of the index built on {date}.",
     searchedUndated: "Searched: {acts} of Luxembourg law in {language}, in {versions} with {articles} of searchable text; the index this site holds records no build date.",
+    // An index older than today: both dates (R13; the plan's item 3.4), today the date in Luxembourg the answer was given on.
+    searchedOlder: "Searched: {acts} of Luxembourg law in {language}, in {versions} with {articles} of searchable text, as of the index built on {date}; today in Luxembourg is {today}.",
+    // A fragment written as a search that the form will not send (the plan's item 3.5): nothing of it is repeated.
+    addressUnread: "The search in this page's address could not be read, so nothing was searched.",
     withheld: Object.freeze({
       one: "{count} version whose rights withhold its text was not searched.",
       other: "{count} versions whose rights withhold their text were not searched.",
@@ -195,6 +199,9 @@ const EN = Object.freeze({
     europeNewerWording: "A later wording of this act is held: the wording of {date}.",
     europeLaterWordingNotHeld: "The publisher's record names, for this act, a later wording of {date}, whose text this site does not hold in this language.",
     openToday: "Read this act at today's date",
+    // A readable address that reads the act on another day than today (`?date=`, the plan's item 3.4; R13): the date it
+    // reads, and today beside it, with the link to the act at today's date.
+    notToday: "This page reads the act on {date}, as this site holds it on that date; today in Luxembourg is {today}.",
     title: "Reading",
     eyebrow: "Reading",
     heading: "The text on a date",
@@ -489,6 +496,8 @@ const EN = Object.freeze({
     aboutHeading: "What Lex is and is not",
     coverage: "This site holds {acts} of Luxembourg law, in {versions} with {articles}, as of the index built on {date}.",
     coverageUndated: "This site holds {acts} of Luxembourg law, in {versions} with {articles}; the index it holds records no build date.",
+    // An index older than today: both dates (R13; the plan's item 3.4).
+    coverageOlder: "This site holds {acts} of Luxembourg law, in {versions} with {articles}, as of the index built on {date}; today in Luxembourg is {today}.",
     acts: Object.freeze({
       one: "{count} act",
       other: "{count} acts",

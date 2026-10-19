@@ -86,7 +86,8 @@ test("the 404 page and the maintenance page are built in each language, carry th
       // The 404 page: plainly a missing page, saying it says nothing about the law, with the home page's search.
       assert.match(copy.notFound.intro, language === "en" ? /says nothing about the law/ : /ne dit rien du droit/);
       assert.ok(notFound.includes(`<a href="/${language}/">${escaped(copy.notFound.home)}</a>`), `not-found/${language}: the home page`);
-      assert.ok(notFound.includes('<div id="live-search-root" data-variant="home">'), `not-found/${language}: the search screen, in the home page's form (R47)`);
+      // In the home page's form, keeping nothing in its address: the page stands at an address this site has no page for.
+      assert.ok(notFound.includes('<div id="live-search-root" data-variant="home" data-address="none">'), `not-found/${language}: the search screen, in the home page's form (R47)`);
       assert.ok(!notFound.includes(escaped(copy.form.workIdentifierOptional)), `not-found/${language}: the one box, with no work identifier`);
       assert.ok(notFound.includes(`<form role="search">`) && notFound.replaceAll("<!-- -->", "").includes(`<button type="submit">${escaped(copy.form.submit.search)}</button>`), `not-found/${language}: the search form`);
       assert.ok(notFound.includes(`<p role="status">${escaped(copy.search.idle)}</p>`), `not-found/${language}: the search's idle state`);

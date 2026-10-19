@@ -5,7 +5,8 @@
 // state and `client-live-search-entry.jsx` hydrates the same tree; a search is asked only when the
 // reader submits. The home page is its own page (`live-home-page.jsx`), whose search is the home
 // form of the same screen; the 404 page offers that home form (`live-not-found-page.jsx`). The root
-// names its form (`data-variant`), so the one script hydrates either.
+// names its form (`data-variant`), so the one script hydrates either, and whether the form keeps its search in the page's
+// address (`data-address`: the 404 page's keeps none, since it stands at an address this site has no page for).
 
 import { Document } from './Document.jsx';
 import { liveChrome, livePath } from '../scripts/live-chrome.mjs';
@@ -17,13 +18,13 @@ import { LIVE_CONTRACT } from './live-coverage-page.jsx';
 export const LIVE_SEARCH_ROOT = 'live-search-root';
 
 /** The tree the server renders and the browser hydrates: one and the same, in the form the root names. */
-export function liveSearchTree(variant = 'search') {
-  return <LiveSearch contract={LIVE_CONTRACT} variant={variant} />;
+export function liveSearchTree(variant = 'search', addressed = true) {
+  return <LiveSearch contract={LIVE_CONTRACT} variant={variant} addressed={addressed} />;
 }
 
-/** The search screen's root, naming its form, around its tree. */
-export function LiveSearchRoot({ variant = 'search' }) {
-  return <div id={LIVE_SEARCH_ROOT} data-variant={variant}>{liveSearchTree(variant)}</div>;
+/** The search screen's root, naming its form and whether it keeps its search in the address, around its tree. */
+export function LiveSearchRoot({ variant = 'search', addressed = true }) {
+  return <div id={LIVE_SEARCH_ROOT} data-variant={variant} data-address={addressed ? 'kept' : 'none'}>{liveSearchTree(variant, addressed)}</div>;
 }
 
 /** The search page: the search form with the optional work identifier. */
