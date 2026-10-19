@@ -23,6 +23,7 @@
 
 import { isCalendarDate } from './temporal.mjs';
 import { luxembourgPermalink } from './permalinks.mjs';
+import { readDateFacts } from './date-role.mjs';
 
 const DIGEST = /^[0-9a-f]{64}$/;
 const STATE_PERMALINK = /^\/lu-legilux\/([^/]+)\/(\d{4}-\d{2}-\d{2})--([0-9a-f]{64})\/([a-z]{3})$/;
@@ -162,6 +163,8 @@ export function readArticleHistory(answer) {
     }
     return {
       ...state,
+      // The date's role (index 9; null on an index of schema 8 or 6): R21, `date-role.mjs`.
+      ...readDateFacts(row, state.applicabilityDate, at),
       nextApplicabilityDate: next,
       stableCoordinate: coordinate,
       articles: Object.freeze(articles),
@@ -172,7 +175,11 @@ export function readArticleHistory(answer) {
     throw new Error('a lineage with no state carrying the anchor is refused anchor_not_in_version, not answered');
   }
   const absent = requireList(requireOwn(answer, 'absent_in_states', where), 'absent_in_states')
-    .map((state, index) => Object.freeze(readStateRef(state, `absent state ${index + 1}`, workKey)));
+    .map((state, index) => {
+      const ref = readStateRef(state, `absent state ${index + 1}`, workKey);
+      // An absent state's date is said with its role too (the review of #987).
+      return Object.freeze({ ...ref, ...readDateFacts(state, ref.applicabilityDate, `absent state ${index + 1}`) });
+    });
 
   // The states in scope: the rows and the absent states, each once, in date order (then language).
   const scope = [...rows, ...absent].sort((a, b) => (a.applicabilityDate === b.applicabilityDate

@@ -164,7 +164,7 @@ function CitedArticle({ view, version, pin, cited, observedAt }) {
           <p data-cited-from="">
             <Say template={COPY.citedFrom} values={{ source: <VersionHeading view={view} version={version} /> }} />
           </p>
-          <ArticleText article={cited.quoted} language={version.language} applicabilityDate={europe ? null : version.applicabilityDate} />
+          <ArticleText article={cited.quoted} language={version.language} applicabilityDate={europe ? null : version.applicabilityDate} dateRole={europe ? null : version.dateRole ?? null} />
           <QuoteEvidence article={cited.quoted} />
         </>
       )}

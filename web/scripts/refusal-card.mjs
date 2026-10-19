@@ -281,6 +281,7 @@ export const INTERVAL_KEYS = Object.freeze({
   no_version_for_date: Object.freeze([
     'language', 'reason', 'reason_rule', 'catalogue_read_no_later_than', 'named_states', 'named_state_sha256s',
     'hole_from', 'hole_to', 'closed_on', 'base_act_iri', 'base_act_in_force_status', 'base_act_no_longer_in_force', 'base_act_rule',
+    'covering_states', 'covering_state_sha256s',
   ]),
   ambiguous_version: Object.freeze([
     'candidate_state_sha256s', 'candidate_state_kinds', 'candidate_applicability_dates', 'candidate_applicable_tos',

@@ -55,7 +55,7 @@ import { CHROME_LOCALE, fillText, liveChrome } from './live-chrome.mjs';
 import { articlePermalink } from './permalinks.mjs';
 import { CANONICAL_HOST } from './routes.mjs';
 import { isCalendarDate, luxembourgDate } from './temporal.mjs';
-import { datedByEntryIntoForce } from './date-role.mjs';
+import { datedByEntryIntoForce, holdsToday } from './date-role.mjs';
 
 /** The origin a citation's permalink is printed under: the site's own (`Document.jsx`'s canonical links). */
 export const CITATION_ORIGIN = `https://${CANONICAL_HOST}`;
@@ -216,7 +216,8 @@ function luxembourgConventional(state, articleText, facts, words) {
 /** Whether a Luxembourg state is known to be the one that answers `today` (never one held only as published). */
 function luxembourgCurrent(view, state, today) {
   if (view.asPublished !== null) return false;
-  return state.applicabilityDate <= today && (state.nextApplicabilityDate === null || state.nextApplicabilityDate > today);
+  // On index 9 by the interval's end, so a closed state, or an act followed only by states without text, is not today's.
+  return holdsToday(state, today);
 }
 
 /** Whether an EU wording is known to be the one that answers `today`: in the time view only. */

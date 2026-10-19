@@ -14,13 +14,17 @@ import { build } from "esbuild";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { DossierAnswerView, ReadingAnswerView, SearchAnswerView } from "../.react-build/app.mjs";
+import { DossierAnswerView, HistoryAnswerView, Provenance, RadarAnswerView, ReadingAnswerView, SearchAnswerView } from "../.react-build/app.mjs";
 import { readingOutcome } from "../scripts/live-reading.mjs";
 import { dossierOutcome } from "../scripts/live-dossier.mjs";
 import { searchOutcome } from "../scripts/live-search.mjs";
 import { assertTimeVocabulary } from "../scripts/publisher-vocabulary.mjs";
 import { readEvidenceBundle } from "../scripts/reading-answer.mjs";
-import { readDateFacts, readDateRole } from "../scripts/date-role.mjs";
+import { holdsToday, readDateFacts, readDateRole } from "../scripts/date-role.mjs";
+import { answersToday } from "../scripts/initial-answer.mjs";
+import { radarOutcome } from "../scripts/live-radar.mjs";
+import { historyOutcome } from "../scripts/live-history.mjs";
+import { renderProvenance } from "../scripts/provenance.mjs";
 import { citationForms } from "../scripts/citation.mjs";
 import { LIVE_CHROME, fillText } from "../scripts/live-chrome.mjs";
 
@@ -196,4 +200,142 @@ test("the search page says a version dated by its entry into force as that, and 
   // An answer of an index of schema 8 or 6 names no role, and the page says what it said before.
   const plain = searchOutcome({ state: "success", envelope: structuredClone(entry.envelope) });
   assert.equal(plain.view.hits[0].dateRole ?? null, entry.envelope.result.value.hits[0].date_role ?? null);
+});
+
+test("a state answers today by its interval's end on index 9, so a closed state is never today's (the review of #987, F3)", () => {
+  const today = "2026-10-18";
+  const view = readEvidenceBundle(bundle().result.value);
+  const state = view.states[0];
+  const closed = { ...state, endKnown: true, applicableTo: "2015-01-01", nextApplicabilityDate: null };
+  const open = { ...state, endKnown: true, applicableTo: null, nextApplicabilityDate: null };
+  const later = { ...state, endKnown: true, applicableTo: "2030-01-01", nextApplicabilityDate: null };
+  const legacy = { ...state, endKnown: false, applicableTo: null, nextApplicabilityDate: null };
+  assert.equal(holdsToday(closed, today), false, "closed before today");
+  assert.equal(holdsToday(open, today), true);
+  assert.equal(holdsToday(later, today), true);
+  assert.equal(holdsToday(legacy, today), true, "schema 8 or 6: the next held state bounds it, and there is none");
+  assert.equal(answersToday(view, closed, today), false, "its readable address does not show a closed state");
+  assert.equal(answersToday(view, open, today), true);
+
+  // The usual citation of a closed state names its version's date; today's is the bare usual form.
+  const notPublished = { ...view, asPublished: null };
+  const article = state.articles[0];
+  const current = citationForms({ view: notPublished, version: open, article, observedAt: OBSERVED });
+  const dated = citationForms({ view: notPublished, version: closed, article, observedAt: OBSERVED });
+  assert.equal(typeof current.conventional, "string", "the census state has a usual citation");
+  assert.notEqual(dated.conventional, current.conventional, "a closed state's usual form is dated, today's is not");
+  assert.ok(dated.conventional.startsWith(current.conventional), "the dated form is the usual one with its version");
+});
+
+test("an article's own date beside a state dated by its entry into force is never said as applying (the review of #987, F5)", () => {
+  const envelope = byEntryIntoForce(bundle());
+  const state = envelope.result.value.states[0];
+  const conflicting = state.articles.filter((article) => article.validity_conflict);
+  assert.ok(conflicting.length > 0, "the census bundle holds articles whose own date differs from the state's");
+  const markup = decode(renderToStaticMarkup(h(ReadingAnswerView, { outcome: readingOutcome({ state: "success", envelope }) })));
+  const first = conflicting[0];
+  assert.ok(markup.includes(fillText(EN.reading.validityConflictEntryIntoForce, { own: first.article_valid_from, state: state.applicability_date })));
+  assert.ok(!markup.includes(fillText(EN.reading.validityConflict, { own: first.article_valid_from, state: state.applicability_date })), "never 'its state applies from'");
+});
+
+test("the provenance page heads a state by its date's role, in both renderers (the review of #987, F7)", async () => {
+  const samples = JSON.parse(await readFile(new URL("../schemas/v3-platform/answer-samples.json", web), "utf8"));
+  const row = samples.sampled.find((candidate) => candidate.operation === "provenance");
+  assert.ok(row, "the census holds a provenance answer");
+  let n = 0;
+  const filled = JSON.parse(JSON.stringify(row.answer), (key, value) =>
+    value === "<varies-per-run>" ? (String((n += 1)) + "0123456789abcdef".repeat(4)).slice(0, 64) : value);
+  assert.ok(Object.hasOwn(filled.states[0], "date_role"), "the census answer is index 9's");
+  const date = filled.states[0].applicability_date;
+  const render = (answer) => [decode(renderProvenance(answer)), decode(renderToStaticMarkup(h(Provenance, { answer })))];
+
+  const byForce = structuredClone(filled);
+  Object.assign(byForce.states[0], { date_role: "entry_into_force", entry_into_force: date, in_file_date: null });
+  for (const markup of render(byForce)) {
+    assert.ok(markup.includes(`the act as published, dated by its entry into force on ${date} (publisher)`));
+    assert.ok(!markup.includes(`applicable from ${date}`), "never said as applicable from its entry into force");
+  }
+  for (const markup of render(filled)) {
+    assert.ok(markup.includes(`applicable from ${date}`), "a state dated by its applicability is said so");
+  }
+});
+
+test("the radar says a change it cannot compare for want of a held baseline, in English and in French (the review of #987, F6)", async () => {
+  const entry = census.envelopes.find((candidate) => candidate.operation === "changes_in_period" && candidate.envelope.result?.value?.changes?.length > 0);
+  assert.ok(entry);
+  const envelope = structuredClone(entry.envelope);
+  const row = envelope.result.value.changes[0];
+  Object.assign(row, { reason: "no_held_baseline", baseline: null, wording_changed: null, counts: null, diff: null, candidates: null });
+  const outcome = radarOutcome({ state: "success", envelope });
+  assert.equal(outcome.state, "success", outcome.sentence);
+  const markup = decode(renderToStaticMarkup(h(RadarAnswerView, { outcome })));
+  assert.ok(markup.includes(EN.radar.reason.no_held_baseline), "the reason is said");
+  const broken = structuredClone(envelope);
+  broken.result.value.changes[0].candidates = ["a", "b"];
+  assert.notEqual(radarOutcome({ state: "success", envelope: broken }).state, "success", "a no-baseline row names no candidates");
+});
+
+test("the repair round's three forms say no application word of an entry into force, in either language", () => {
+  for (const [language, table] of [["en", EN], ["fr", FR]]) {
+    for (const [key, form] of Object.entries({
+      "reading.validityConflictEntryIntoForce": table.reading.validityConflictEntryIntoForce,
+      "search.dated": table.search.dated,
+      "radar.reason.no_held_baseline": table.radar.reason.no_held_baseline,
+      "history.carriedEntryIntoForce.one": table.history.carriedEntryIntoForce.one,
+      "history.carriedEntryIntoForce.other": table.history.carriedEntryIntoForce.other,
+      "history.carriedInEntryIntoForce.one": table.history.carriedInEntryIntoForce.one,
+      "history.carriedInEntryIntoForce.other": table.history.carriedInEntryIntoForce.other,
+      "history.absentRowEntryIntoForce": table.history.absentRowEntryIntoForce,
+    })) {
+      assert.equal(typeof form, "string", `${language} ${key}`);
+      assertTimeVocabulary(form, `${language} ${key}`);
+    }
+    assert.doesNotMatch(table.reading.validityConflictEntryIntoForce, /applies from|s’applique/, `${language}: the act dated by its entry into force is not said to apply`);
+    assert.doesNotMatch(table.search.dated, /latest version|dernière version/, `${language}: the dated search's rule is index 9's`);
+  }
+});
+
+test("the provision history says its first row's and an absent state's entry into force as that, never as from it (R21; the review of #987)", () => {
+  const entry = census.envelopes.find((candidate) => candidate.operation === "article_history" && candidate.envelope.result);
+  assert.ok(entry, "the census holds a provision history");
+  const envelope = structuredClone(entry.envelope);
+  const answer = envelope.result.value;
+  const row = answer.states[0];
+  assert.ok(Object.hasOwn(row, "date_role"), "on index 9 the history's rows carry their catalogue facts");
+  const render = (value) => decode(renderToStaticMarkup(h(HistoryAnswerView, { outcome: historyOutcome({ state: "success", envelope: value }) })));
+
+  // As served: the row's date is the file's, said as from it.
+  const asServed = render(envelope);
+  const asked = answer.requested_language;
+  const carried = (table) => (asked === null
+    ? fillText(table.history.carried.one, { count: 1, from: row.applicability_date })
+    : fillText(table.history.carriedIn.one, { count: 1, language: asked, from: row.applicability_date }));
+  assert.ok(asServed.includes(carried(EN)), "a row dated by its file is said as from that date");
+
+  // Dated by its entry into force, with a state that does not carry the article: both said with the role.
+  Object.assign(row, { date_role: "entry_into_force", entry_into_force: row.applicability_date, in_file_date: null });
+  const digest = "a".repeat(64);
+  const earlier = "2020-01-01";
+  answer.absent_in_states = [{
+    language: row.language,
+    applicability_date: earlier,
+    state_sha256: digest,
+    permalink: `/lu-legilux/${answer.work_key}/${earlier}--${digest}/${row.language}`,
+    date_role: "entry_into_force",
+    entry_into_force: earlier,
+  }];
+  const byForce = render(envelope);
+  const said = asked === null
+    ? fillText(EN.history.carriedEntryIntoForce.one, { count: 1, from: row.applicability_date })
+    : fillText(EN.history.carriedInEntryIntoForce.one, { count: 1, language: asked, from: row.applicability_date });
+  assert.ok(byForce.includes(said), "the lineage's first row is said dated by its entry into force");
+  assert.ok(!byForce.includes(carried(EN)), "never as from its entry into force");
+  assert.ok(byForce.includes(fillText(EN.history.absentRowEntryIntoForce, { language: row.language, from: earlier, permalink: "" }).trimEnd()));
+  assert.ok(!byForce.includes(`${row.language}, from ${earlier}:`), "an absent state's entry into force is not said as from it");
+
+  // An index of schema 8 or 6 names no role, and its rows are read as before.
+  for (const state of [...answer.states, ...answer.absent_in_states]) {
+    for (const key of ["date_role", "entry_into_force", "in_file_date"]) delete state[key];
+  }
+  assert.ok(render(envelope).includes(`${row.language}, from ${earlier}:`));
 });

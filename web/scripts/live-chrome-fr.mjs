@@ -154,6 +154,16 @@
 // semicolon parts the act as published from its entry into force; the four English forms changed with them). Its optional
 // points 6 and 7 were taken ("exacte"; the versions "interrogées par ce site"). "entrée en vigueur" is the noun of a typed
 // publisher date, never "en vigueur" over an interval: the time-word guard lets the noun through and refuses the rest.
+// In the repair round of that pull request (the review of #987), six forms were reviewed by the same reviewer under the
+// same delegation, in the addendum "S7a's repair round (the review of #987)" of 2026-10-19. Its section "three forms" (3
+// changed in review, the English with them): `reading.validityConflictEntryIntoForce` (an article whose own date differs
+// from a state dated by its entry into force: "sa version est l’acte tel que publié, daté de son entrée en vigueur", so "son"
+// is the act's), `search.dated` (the version whose publisher dates cover the date, "les dates de l’éditeur", and "ce site ne
+// détient pas le texte de cette version") and `radar.reason.no_held_baseline` ("il n’y a donc pas de version de référence",
+// never "rien à quoi la comparer", which an earlier held version makes false). Its section "the history's dates by role" (5
+// strings approved as drafted): `history.carriedEntryIntoForce` and `history.carriedInEntryIntoForce` (the lineage's first row
+// dated by its entry into force, "la première étant l’acte tel que publié, daté de son entrée en vigueur", never "à partir
+// du") and `history.absentRowEntryIntoForce` (an absent state so dated).
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -207,7 +217,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     euHit: '{heading} de {celex}, libellé du {date}',
     notHeldHeading: 'Ce que cette recherche ne couvre pas',
     placeholder: 'Rechercher par intitulé, numéro, ELI ou CELEX, ou par des mots du texte',
-    dated: 'Seuls des actes luxembourgeois ont été interrogés. Pour chacun, la dernière version que ce site détient qui est applicable à partir du {date} ou d’une date antérieure (éditeur) a été interrogée, et un acte sans une telle version ne l’a pas été. Un acte détenu uniquement tel que publié est interrogé tel que publié, et peut avoir été modifié depuis.',
+    dated: 'Seuls des actes luxembourgeois ont été interrogés. Pour chacun, la version dont les dates de l’éditeur couvrent le {date} a été interrogée ; un acte sans une telle version, ou pour lequel ce site ne détient pas le texte de cette version, ne l’a pas été. Un acte détenu uniquement tel que publié est interrogé tel que publié, et peut avoir été modifié depuis.',
     undated: 'Seuls des actes luxembourgeois ont été interrogés, sans date : toutes les versions que ce site détient ont été interrogées, et chaque résultat indique la date de sa version.',
     noHitLuxembourg: 'Aucun article du texte luxembourgeois que ce serveur détient et qu’il est autorisé à interroger ne contient « {query} ».',
     searchScope: 'La recherche par mots porte sur le droit luxembourgeois. Un ELI, un numéro CELEX, une référence au Mémorial, un permalien ou la citation d’un article d’un acte, avec ou sans date, ouvre cet acte, luxembourgeois ou de l’UE, lorsque ce site le détient. Pour interroger un acte de l’UE, désignez-le par son numéro CELEX sur la {link}.',
@@ -334,6 +344,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       other: '{count} articles cités ; détenus sans texte : {withoutText} ; non admis : {notAdmitted} ; date propre différente de celle de la version : {conflicts}.',
     }),
     validityConflict: 'La date propre de cet article est le {own} ; sa version s’applique à partir du {state}.',
+    validityConflictEntryIntoForce: 'La date propre de cet article est le {own} ; sa version est l’acte tel que publié, daté de son entrée en vigueur le {state} (éditeur).',
     deletedWordingStart: 'Texte que l’éditeur marque comme supprimé :',
     deletedWordingEnd: 'Fin du texte marqué comme supprimé.',
     deletedWordingNote: 'Le texte barré est celui que l’éditeur marque comme supprimé dans son texte. Il ne fait pas partie du texte que ce site cite ou interroge.',
@@ -399,6 +410,14 @@ export const LIVE_CHROME_FR = Object.freeze({
       one: 'Présent dans {count} version détenue en {language}, à partir du {from} ;',
       other: 'Présent dans {count} versions détenues en {language}, à partir du {from} ;',
     }),
+    carriedEntryIntoForce: Object.freeze({
+      one: 'Présent dans {count} version détenue, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) ;',
+      other: 'Présent dans {count} versions détenues, la première étant l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) ;',
+    }),
+    carriedInEntryIntoForce: Object.freeze({
+      one: 'Présent dans {count} version détenue en {language}, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) ;',
+      other: 'Présent dans {count} versions détenues en {language}, la première étant l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) ;',
+    }),
     absent: Object.freeze({
       one: '{count} version détenue ne le comporte pas.',
       other: '{count} versions détenues ne le comportent pas.',
@@ -414,6 +433,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     ownDateDiffers: '{date} (diffère de celle de la version)',
     absentHeading: 'Versions détenues qui ne comportent pas {anchor}',
     absentRow: '{language}, à partir du {from} : {permalink}',
+    absentRowEntryIntoForce: '{language}, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) : {permalink}',
   }),
   compare: Object.freeze({
     title: 'Comparer',
@@ -473,6 +493,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       ambiguous_version: 'plusieurs versions de l’acte s’appliquent à cette date ; aucune n’est donc comparée',
       ambiguous_baseline: 'plusieurs versions s’appliquent la veille de cette date ; aucune version de référence n’est donc retenue',
       profiles_differ: 'cette version et sa version de référence ont été lues selon des profils de règles différents ; elles ne sont donc pas comparées',
+      no_held_baseline: 'la veille de cette date n’est couverte par aucune version dont ce site détient le texte ; il n’y a donc pas de version de référence',
     }),
     named: '({label} {permalinks})',
     baseline: 'référence',

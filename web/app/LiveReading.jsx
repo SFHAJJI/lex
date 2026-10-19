@@ -92,14 +92,18 @@ export function QuoteEvidence({ article, linked = true }) {
  * state's (`applicabilityDate`, a Luxembourg state's; null for an EU wording) and its notes. Shared with the cited article
  * (`PinnedReading.jsx`), which quotes the same article first.
  */
-export function ArticleText({ article, language, applicabilityDate }) {
+export function ArticleText({ article, language, applicabilityDate, dateRole = null }) {
   return (
     <>
       <ArticleWording article={article} language={language} />
       <DeletedWordingNote article={article} />
       {applicabilityDate !== null && article.validityConflict ? (
         <p data-validity-conflict="">
-          <Say template={COPY.validityConflict} values={{ own: article.validFrom, state: applicabilityDate }} />
+          {/* A state dated by its entry into force is never said as applying from it (R21; the review of #987, F5). */}
+          <Say
+            template={dateRole === 'entry_into_force' ? COPY.validityConflictEntryIntoForce : COPY.validityConflict}
+            values={{ own: article.validFrom, state: applicabilityDate }}
+          />
         </p>
       ) : null}
       {(article.notes ?? []).length > 0 ? (
@@ -290,7 +294,7 @@ function Article({ article, state }) {
     <li id={`${state.language}-${article.publisherId}`} data-article={article.publisherId} value={isPaged(state) ? article.position : undefined}>
       <MissingBefore article={article} state={state} />
       <h3>{article.publisherId}</h3>
-      <ArticleText article={article} language={state.language} applicabilityDate={state.applicabilityDate} />
+      <ArticleText article={article} language={state.language} applicabilityDate={state.applicabilityDate} dateRole={state.dateRole ?? null} />
       <QuoteEvidence article={article} />
     </li>
   );

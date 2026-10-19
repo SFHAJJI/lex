@@ -50,5 +50,30 @@ export function readDateFacts(state, applicabilityDate, where) {
   return Object.freeze({ dateRole, entryIntoForce });
 }
 
+/**
+ * The end of a state's interval on index 9 (`applicable_to`: the publisher's end, else the next dated state's start, which
+ * may be a state whose text is not held), with `endKnown` true; on an index of schema 8 or 6, which names none, `endKnown`
+ * false and the next held state's date is the only bound (the review of #987, F3).
+ */
+export function readInterval(state, where) {
+  if (!Object.hasOwn(state, 'applicable_to')) return Object.freeze({ applicableTo: null, endKnown: false });
+  const value = state.applicable_to;
+  if (value !== null && (typeof value !== 'string' || !DATE.test(value))) {
+    throw new Error(`${where} applicable_to is ${JSON.stringify(value)}, not a date or null`);
+  }
+  return Object.freeze({ applicableTo: value, endKnown: true });
+}
+
+/**
+ * Whether a Luxembourg state answers `today`: dated on or before it, and on index 9 its interval's end after it (none when
+ * the publisher states none and no later state is catalogued), else, on an index of schema 8 or 6, no later held state on
+ * or before it. A closed state, or an act followed only by states whose text is not held, does not answer today.
+ */
+export function holdsToday(state, today) {
+  if (!(state.applicabilityDate <= today)) return false;
+  if (state.endKnown === true) return state.applicableTo === null || state.applicableTo > today;
+  return state.nextApplicabilityDate === null || state.nextApplicabilityDate > today;
+}
+
 /** Whether a state's date is an entry into force, which no page says as "applicable from" (R21). */
 export const datedByEntryIntoForce = (state) => state?.dateRole === 'entry_into_force';

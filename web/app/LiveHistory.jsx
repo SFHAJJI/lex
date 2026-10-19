@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RefusalCard } from './RefusalCard.jsx';
 import { HISTORY_LANGUAGES, LIVE_HISTORY_IDLE, createHistorySession } from '../scripts/live-history.mjs';
 import { ENGLISH_LANG, fillCounted, fillText, liveChrome } from '../scripts/live-chrome.mjs';
+import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
 import { FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, TableRegion, refusalCardCopyFor } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
@@ -43,9 +44,12 @@ function wordingKind(row, firstOfLanguage) {
 export function HistoryView({ view }) {
   const seen = new Set();
   const runs = Object.entries(view.wordingRuns);
+  // The lineage begins with its first row, whose date is said with its role: an act dated by its entry into force is never
+  // said as from it (R21; the review of #987).
+  const byForce = datedByEntryIntoForce(view.rows[0]);
   const carried = view.language === null
-    ? fillCounted(COPY.carried, view.rows.length, { from: view.historyBegins })
-    : fillCounted(COPY.carriedIn, view.rows.length, { language: view.language, from: view.historyBegins });
+    ? fillCounted(byForce ? COPY.carriedEntryIntoForce : COPY.carried, view.rows.length, { from: view.historyBegins })
+    : fillCounted(byForce ? COPY.carriedInEntryIntoForce : COPY.carriedIn, view.rows.length, { language: view.language, from: view.historyBegins });
   return (
     <>
       <h2>
@@ -99,7 +103,7 @@ export function HistoryView({ view }) {
           <ul data-absent={view.absent.length}>
             {view.absent.map((state) => (
               <li key={state.stateSha256}>
-                <Say template={COPY.absentRow} values={{ language: state.language, from: state.applicabilityDate, permalink: <Permalink value={state.permalink} /> }} />
+                <Say template={datedByEntryIntoForce(state) ? COPY.absentRowEntryIntoForce : COPY.absentRow} values={{ language: state.language, from: state.applicabilityDate, permalink: <Permalink value={state.permalink} /> }} />
               </li>
             ))}
           </ul>

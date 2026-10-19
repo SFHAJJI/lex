@@ -159,6 +159,8 @@ export function composeExport({ view, pinned, observedAt }) {
         workKey: view.workKey,
         language: state.language,
         appliesFrom: state.applicabilityDate,
+        // A state dated by its entry into force, which the PDF never says as applying from it (R21; the review of #987).
+        datedByEntryIntoForce: state.dateRole === 'entry_into_force',
         publisherId: article.publisherId,
         citation: article.permalink,
         citations: citationsOf(view, state, article, observedAt),
@@ -181,6 +183,7 @@ export function composeExport({ view, pinned, observedAt }) {
         workKey: view.workKey,
         language: state.language,
         appliesFrom: state.applicabilityDate,
+        datedByEntryIntoForce: state.dateRole === 'entry_into_force',
         publisherId: entry.publisherId,
         // The article is held in its state, without text, so it is cited as any article of that
         // state is: the state's hash-pinned permalink and the publisher's article id as a last segment (R64).

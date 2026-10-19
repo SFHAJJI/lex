@@ -29,7 +29,9 @@ import { luxembourgPermalink } from './permalinks.mjs';
 const DIGEST = /^[0-9a-f]{64}$/;
 
 /** Why a row is not compared, in the platform's closed vocabulary. */
-export const RADAR_REASONS = Object.freeze(['first_held_state', 'ambiguous_version', 'ambiguous_baseline', 'profiles_differ']);
+// `no_held_baseline` on index 9: the day before is covered by no state whose text is held (a hole, a closed or unclear end,
+// an invalid interval, a state without text), so the rules leave no baseline (the review of #987, F6).
+export const RADAR_REASONS = Object.freeze(['first_held_state', 'ambiguous_version', 'ambiguous_baseline', 'profiles_differ', 'no_held_baseline']);
 
 function requireOwn(object, key, where) {
   if (object === null || typeof object !== 'object' || !Object.hasOwn(object, key)) {
@@ -192,6 +194,7 @@ function readRow(row, index, window) {
     throw new Error(`${where} is ambiguous on its own date, so its own state is among the candidates`);
   }
   if (reason === 'first_held_state' && baseline !== null) throw new Error(`${where} is the first held state, with no baseline`);
+  if (reason === 'no_held_baseline' && baseline !== null) throw new Error(`${where} has no held baseline, so none is named`);
   if (reason === 'ambiguous_baseline' && baseline !== null) throw new Error(`${where}'s baseline is ambiguous, so none is named`);
   if (reason === 'profiles_differ') {
     if (baseline === null) throw new Error(`${where}'s profiles differ from its baseline, which it names`);

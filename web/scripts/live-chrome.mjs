@@ -76,7 +76,8 @@ const EN = Object.freeze({
     placeholder: "Search by title, number, ELI or CELEX, or words from the text",
     // What a Luxembourg search was asked at (R13: the date is printed), said of what this site holds (R21, R22, R76): the
     // latest held version applicable by the date, which for an act held only as published is that act as published.
-    dated: "Only Luxembourg acts were searched. For each, the latest version this site holds that is applicable from {date} or an earlier date (publisher) was searched, and an act with no such version was not. An act held only as published is searched as published, and may have been amended since.",
+    // What a dated search searched, by the interval rules (the review of #987, F5: the rule before index 9 is no longer the one).
+    dated: "Only Luxembourg acts were searched. For each, the version whose publisher dates cover {date} was searched; an act with no such version, or for which this site does not hold that version's text, was not. An act held only as published is searched as published, and may have been amended since.",
     undated: "Only Luxembourg acts were searched, with no date: every version this site holds was searched, and each result names its version's date.",
     // A search with no work named searches Luxembourg law alone, and its no-hit sentence says so.
     noHitLuxembourg: "No article of the Luxembourg text this server holds and may search contains “{query}”.",
@@ -227,6 +228,8 @@ const EN = Object.freeze({
       other: "{count} articles quoted, {withoutText} held without text, {notAdmitted} not admitted; {conflicts} with their own date differing from the state's.",
     }),
     validityConflict: "This article's own date is {own}; its state applies from {state}.",
+    // The same for a state dated by its entry into force (R21; the review of #987, F5): never said as applying from it.
+    validityConflictEntryIntoForce: "This article's own date is {own}; its state is the act as published, dated by its entry into force on {state} (publisher).",
     // Content /3 (S3b): the publisher's deleted wording, struck through, said to a screen reader at its start and end; the
     // sentence under an article that holds some; a note whose reference the publisher wrote without a marker.
     deletedWordingStart: "Wording the publisher marks deleted:",
@@ -299,6 +302,15 @@ const EN = Object.freeze({
       one: "Carried by {count} held state in {language}, from {from};",
       other: "Carried by {count} held states in {language}, from {from};",
     }),
+    // The lineage's first row dated by its entry into force (R21; the review of #987).
+    carriedEntryIntoForce: Object.freeze({
+      one: "Carried by {count} held state, the act as published, dated by its entry into force on {from} (publisher);",
+      other: "Carried by {count} held states, the first being the act as published, dated by its entry into force on {from} (publisher);",
+    }),
+    carriedInEntryIntoForce: Object.freeze({
+      one: "Carried by {count} held state in {language}, the act as published, dated by its entry into force on {from} (publisher);",
+      other: "Carried by {count} held states in {language}, the first being the act as published, dated by its entry into force on {from} (publisher);",
+    }),
     absent: Object.freeze({
       one: "{count} held state does not carry it.",
       other: "{count} held states do not carry it.",
@@ -314,6 +326,7 @@ const EN = Object.freeze({
     ownDateDiffers: "{date} (differs from the state's)",
     absentHeading: "Held states that do not carry {anchor}",
     absentRow: "{language}, from {from}: {permalink}",
+    absentRowEntryIntoForce: "{language}, the act as published, dated by its entry into force on {from} (publisher): {permalink}",
   }),
   compare: Object.freeze({
     title: "Compare",
@@ -377,6 +390,7 @@ const EN = Object.freeze({
       ambiguous_version: "several states of the work apply on this date, so none is compared",
       ambiguous_baseline: "several states apply on the date before it, so no baseline is chosen",
       profiles_differ: "this state and its baseline were read under different rule profiles, so they are not compared",
+      no_held_baseline: "the day before it is covered by no state whose text this site holds, so there is no baseline",
     }),
     named: "({label} {permalinks})",
     baseline: "baseline",
