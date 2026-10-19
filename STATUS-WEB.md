@@ -1,8 +1,54 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-18. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-19. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## EU force dates on the EU dossier and at the head of an EU reading (sole driver, 2026-10-19)
+
+The web half of the plan's item 2.1 (STATUS-DATA.md, "EU force dates"; R79's E1, R21).
+- **The answers.** Over an EU index /6, `dossier`, `timeline`, `as_of` and `evidence_bundle` of an EU act carry
+  `force_dates` (`V3CorpusMount.EuropeForceDates.cs`): each date with its role (`entry_into_force`, `application`,
+  `end_of_validity`, `deadline`, `signature`, `not_pinned`), the value exactly as served, the publisher's code, its note
+  and the note in its codes (`publisher_note_codes`), the date property and the publisher's statement it was read from;
+  the named roles not held; a conflict list for two entry-into-force dates; and the rules (role, note, not held,
+  conflict). The not-held row `force_dates` then says what of them is still not held, and that none of them chooses a
+  wording. Over an index /5 nothing changes (`V3CorpusEuropeSchema5MountTests`, byte for byte).
+- **The pages.** `europe-force-dates.mjs` reads the member (null when absent) and throws on drift: a role no date takes,
+  EV or MA under the wrong role, codes that are not the note's, an open end that is a date, roles not held that the dates
+  contradict, dates out of order, a conflict the dates do not hold, another act's dates, a date said twice.
+  `EuropeForceDates` (`LiveAnswer.jsx`) says them in the page's language: on the EU dossier after the expressions, and at
+  the head of an EU reading, before its wordings. Each date is said with its role ("Entry into force: {date}"; an end of
+  validity "in whole or in part", since 20 of run 16's 24 are partial; the open end as no date), the qualifier in
+  parentheses after it, the publisher's note in its own codes, as code, marked `lang="zxx"` and never translated; the
+  roles not held are listed; two entries into force are both said; and under at least one date, the reading adds that
+  none of them chooses a wording, each wording carrying its own date.
+- **French** (Decision 41): seventeen forms under `common.europeForceDates`, reviewed by an independent reviewer
+  (Claude, AI reviewer, not the author) under the owner's delegation in the addendum of 2026-10-19 of
+  `C:\lex-v3\lanes\fr-review\review.md` (17 forms, 11 changed in review, the English too in 5: the heading says what this
+  site holds, "Les dates de l’éditeur que ce site détient pour cet acte", never "les dates de l’acte", which the wording
+  headings use for the Formex date; MA is "mise en application"; an end of validity "totale ou partielle"; the qualifier
+  is "la mention de l’éditeur, mot pour mot"; and the reading's last line says no date above chooses a wording).
+  The R21 guard takes S7a's hunk byte for byte (the noun "entrée en vigueur" passes, "en vigueur" as a state stays
+  refused), so the two branches merge without a conflict there. The EUR-Lex French labels are the reviewer's knowledge,
+  not checked against the publisher (no request was made).
+- **Tests.** `europe-force-dates.test.mjs` (reading, twelve drifts, the seventeen entries in both languages against the
+  R21 guard, the census's EU dossier, and a reading led by the dates before its wordings); `date-speech.test.mjs`
+  counts the seventeen entries as EU entries (no Luxembourg date word); `live-chrome.test.mjs` holds the roles and role
+  names to the reader's lists. The answer and envelope censuses' EU mount holds the GDPR's three dated statements as
+  run 16 holds them (entry into force 2016-05-24, application 2018-05-25, deadline 2020-05-25 "AU+TARD V ART 97"); both
+  were re-rendered from the handler and verify without the variables.
+- **Measured** (this branch, rebased on `v3/integration` at 0b908870), with no browser started:
+  - `dotnet build Lex.V3.slnx -c Release --no-incremental`: 0 warnings, 0 errors.
+  - `Lex.V3.Tests`: 3,321 (3,315 passed, 6 skipped).
+  - `Lex.V3.Ingest.Tests`, the classes of the EU index, the EU time view, dossier, search, reference, evidence bundles and
+    capabilities, the censuses, the samples and the evaluation card, privacy (public request recording, serving temporary
+    storage), the legacy schema-8 and schema-6 mounts, the EU schema-5 mount, mount build files, the offline mount, the
+    machine gates, the annex control case, EU permalinks, generation quotes, first-mount reuse, the consolidated first
+    mount, the reified-axiom wiring and the journey mounts: 202 (192 passed, 10 skipped, all opt-in).
+  - The web build; the web suite, 1,279 (1,275 passed, 3 skipped, 1 failed: `image-run.test.mjs`'s mount test spawns
+    `awk`, which this PC's PATH lacks; it passes where awk is, as in CI).
+  - `eng/verify-v3-tree.ps1`: 1,659 tracked paths.
 
 ## The opening kit: law.soufien.lu bound, search engines by deployment, the owner's decisions of 18 October (sole driver, 2026-10-18)
 
