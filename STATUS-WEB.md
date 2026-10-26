@@ -1,8 +1,76 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-19. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-26. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## Review and repair (combined #987): the cards' new reason and coordinate candidates, the closed end's day, dates by role on the radar and in the CSV (sole driver, 2026-10-26)
+
+The web half of the one repair round of the combined data pull request #987 (STATUS-DATA.md, the section of the same day,
+has the platform's half and the review). Each finding was reproduced with the review's probes and is held by a test that
+fails on the reviewed head (f0dcf89c) and passes after: there, 8 of the new or changed web cases fail. Code at 5e311bb8.
+- **1 (medium-high), `outside_named_version` on the card.** F2's reason was not in the card's closed set, so `reasonView`
+  threw and a search with an ELI of a version outside its date showed no card. `reasons.outside_named_version` says it, in
+  English and French, with the payload's date and the catalogue's read time; and the search page's head for that reason
+  says the version named is held and does not cover the date (`LIVE_SEARCH_HELD_ACT_REFUSAL_SENTENCES["lu-legilux"].outside`),
+  where "No state of this work that this index holds applies on that date" was false (the French review's point 1). Tests
+  (`catalogue-chain.test.mjs`, `exact-reference.test.mjs`): the platform's real payload, from the refusal census's new
+  scenario, through the search page in both languages and both renderers, its head and its named and covering states; and
+  among the per-reason loop's payloads.
+- **5 (low), a candidate naming no expression.** The platform names such a state by its stable coordinate (it has no
+  permalink). The card reads a coordinate candidate by the digest, kind and role at its place in index 9's lists, says it
+  with `refusalCard.candidateUnexpressed` ("{version}, hash {hash}: the publisher's catalogue names no expression of it,
+  …"), its version named as the dossier names a version without text, with its coordinate as code in parentheses and no
+  link, in both renderers. A coordinate without the lists, lists of another length, or a reading URL whose digest is not
+  the one at its place is refused, after the choice's own rules (a list offering one state twice is still said to). The
+  dated search's ambiguous works and the radar's candidates take a coordinate too. Test: the card in both renderers and
+  languages (the French after a version named "l’acte tel que publié" too), and the four refusals.
+- **6 (low), the closed end's day.** `reasons.after_closed_end` called the end the publisher gives the last day applicable
+  ("applicable to {closed}", "jusqu’au {closed}"); `closed_on` is the first day the state does not cover. It now says "the
+  version that ends last is applicable until the day before {closed} (publisher), and no version begins on or after
+  {closed}" / "la version dont la fin est la plus tardive est applicable jusqu’à la veille du {closed} (éditeur), et aucune
+  version ne commence le {closed} ni après", as the reviewed `history.breakTo` and the platform's F7 (after a nested
+  version the last to begin is not the last to end). `dossier.overlap`'s exclusive end is said the same way. Test: both
+  languages, the nested fixture's dates, never the old words.
+- **8 (low, R21), the radar's row.** `radar.row` said "from {date}" of an act dated by its entry into force (the reader
+  dropped `date_role`). `radar-answer.mjs` reads the role and entry into force (`readDateFacts`), and the row says
+  `radar.rowEntryIntoForce` ("…, the act as published, dated by its entry into force on {from} (publisher): …"), as
+  History's F5 forms do, its verdict `radar.notComparedAct` ("non comparé" after the act); its ambiguity "covers" the date
+  rather than "applies" on it. `date-speech.test.mjs` says the radar too (seven screens, both languages) and its regex now
+  catches a bare "from {date}" and "à partir du {date}"; it caught the radar's row on f0dcf89c. Test: the radar's row and
+  verdict in both languages, and a schema-8 radar with no role.
+- **3 (medium, R21), the CSV.** It said an entry into force as `applies_from` with no role. A `date_role` column is
+  appended after `segments`, so every column before it keeps its place: `entry_into_force`, `applicability` or
+  `applicability_in_file` on index 9, empty on schema 8 or 6. Test (`date-role.test.mjs`): a bundle dated by its entry into
+  force, the census's own, and the schema-8 mount's recorded bundle; `content3-wording.test.mjs` pins the last two columns.
+- **9 (latent, EU 3).** The EU force dates' reader refused an `xsd:date` with a timezone (2016-05-24Z), which the contract's
+  `PublisherDate` admits. It takes a year, a year and month or a date with `Z` or a signed offset up to 14:00, and the open
+  end in any of them. Test (`europe-force-dates.test.mjs`): three zoned dates read as served, three malformed refused, the
+  zoned open end, and an unpinned code on the end-of-validity and signature properties read with its code.
+- **10, tests that did not test what they claimed.** `date-role.test.mjs` and `catalogue-chain.test.mjs` held "an older
+  index names no role / no chain" to a census answer of index 9 compared with itself; they now read the schema-8 mount's
+  recorded answers (`base-answers.json`, which the platform replays byte for byte): its search, dossier, bundle and radar.
+  `europe-force-dates.test.mjs`'s drift cases each assert their own rule's message, and "the code EV given no role" adds a
+  not-pinned EV row of its own (it had also removed the application, so the reader refused it for other rules, and still
+  did with the EV check taken out, which the new case does not: measured by removing the check).
+- **The worked example** of `no_version_for_date` (`refusal-catalog.mjs`) shows a French version named
+  (`no_expression_in_language`), since the census's richest payload now names states and an example must teach a list's
+  rows.
+- **French** (Decision 41): one independent reviewer (Claude, AI reviewer, not the author) under the owner's delegation, in
+  the addendum of 2026-10-26 of `C:\lex-v3\lanes\fr-review\review.md` ("the closed end's day, an identifier outside its
+  version, a candidate naming no expression and the radar's entry into force"): 4 forms reviewed and 1 added, 3 changed in
+  review (the English too in 1): `after_closed_end` (the version that ends last), `outside_named_version` (an identifier
+  "désigne"), `candidateUnexpressed` ("cette version", never "elle" after "l’acte tel que publié"; "propose"),
+  `rowEntryIntoForce` approved, `notComparedAct` added. Its proposals taken as worded: the search card's head for
+  `outside_named_version`, `dossier.overlap` and `radar.reason.ambiguous_version`; its platform point (the outside refusal's
+  nearest dates) is fixed in the platform's half; its point 5 (the coordinate in parentheses) is taken. The finals are
+  applied, the addendum is appended with the driver's note, and the forms are named in `live-chrome-fr.mjs`.
+- **Measured** (Windows, no browser, no publisher traffic), on 5e311bb8:
+  - `npm run build`: 30 state pages. `npm test`: 1,309 (1,306 passed, 0 failed, 3 skipped).
+  - The journey unit tests (`node --test web/test/journey*.test.mjs`): 62 of 62.
+  - Before the fix: the five changed test files on f0dcf89c's web with the new census sample: 47 (39 passed, 8 failed:
+    each new or changed case); the unmasked EU drift case fails with the not-pinned check removed.
+  - `eng/verify-v3-tree.ps1`: 1,666 tracked paths.
 
 ## EU force dates on the EU dossier and at the head of an EU reading (sole driver, 2026-10-19)
 

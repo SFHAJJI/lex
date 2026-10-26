@@ -1,6 +1,113 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-19.
+Updated 2026-10-26.
+
+## Review and repair (combined #987): the reader's ambiguities, holes and in_force_on, the EU force dates (sole driver, 2026-10-26)
+
+- **What.** The one repair round of the combined data pull request #987 (S7a, S7b, S7c and EU 2.1), after its one review by
+  the other model family (Decision 95). Each finding was reproduced (the review's C# reproductions, added to the interval
+  fixture, and its web and EU probes), fixed, and held by a permanent test that fails on the reviewed head (f0dcf89c) and
+  passes after: on f0dcf89c with the new tests, 7 of the new C# cases fail (the rest of their classes, 22, pass), and the
+  web's 8 new or changed cases fail (STATUS-WEB.md, the same section, which has the web's findings). Code at 76203cea and
+  5e311bb8.
+- **The platform** (`V3CorpusMount.Intervals.cs`, `.Continuity.cs`, `.cs`, `.References.cs`, `.EuropeForceDates.cs`;
+  `LuxembourgIndexReader`; `EuropeIndexForceDates.cs`):
+  - **2 (medium), an ambiguity of states none of which holds text.** It counted as held text, so an article's history
+    showed no break across it and the radar named its states as an ambiguous baseline. `HoldsText` counts an ambiguity as
+    held only when one of its states' text is held; otherwise `continuity_breaks` names the run, with each state's text
+    status as its reasons and the states named, and the next row says `after_break`; the radar's row has
+    `no_held_baseline`. `ContinuityRule` says so. Test: `AnAmbiguityOfStatesNoneOfWhichHoldsTextIsAContinuityBreakAndLeavesTheRadarNoBaseline`
+    (an act held, a withheld and a PDF consolidation of 2010, a held one of 2015; and an ambiguity with held text, no break).
+  - **4 (low-medium), in_force_on across works.** It read its works from the held states on or before the date, so a work
+    whose only such state holds no text (an act whose file is a PDF, before a held consolidation) gave no row, while as_of
+    refused the date for that state's text. On index 9 the works are read from the catalogue's rows, held or textless (in
+    French the rows naming no expression too), of a work holding a state in the scope (`ResolveWorkKeysWithStateOnOrBefore`
+    and `CountWorksWithStateOnOrBefore` take `catalogue: true`; schema 8 and 6 read as before): the work is a row naming
+    the state and why, and is counted covered, as F8 counts it (`works_with_a_state_on_date`, `works_not_covered_on_date`
+    and `works_beginning_later` still add up to the works in scope). Test:
+    `InForceOnAcrossWorksNamesAWorkWhoseOnlyStateOnOrBeforeTheDateHoldsNoTextAndCountsItCovered` (with and without a
+    language, and paged).
+  - **5 (low), an ambiguity with a state naming no expression.** Such a state has no language, so its candidate was a
+    permalink ending in "/", which the candidate lists then skipped, misaligned. Every ambiguity now names it by its stable
+    coordinate (`StateUrl`, as `RowAddress` did; the radar's, the refusal's and as_observed's lists no longer drop it, so a
+    pair never reads as one state), and `CandidateStates` gives each coordinate the row of that date naming no expression;
+    the lists are given only when every candidate has its row, so they are never short. `AmbiguousCandidatesRule` says it.
+    Test: `AnAmbiguityNamesAStateTheCatalogueNamesNoExpressionOfByItsCoordinateWithItsListsAligned` (as_of, the bundle,
+    in_force_on named and across works, the dated search's ambiguous works and the radar). The web card reads it.
+  - **7 (low), a hole's span after a nested state.** `CoverAt` took the end of the state that begins last before the date;
+    a state nested in an earlier one's interval ends first. It now takes the furthest end of the states before the date
+    (the hole's `hole_from`, and a closed end's `closed_on`), and names that state. The dossier's and the timeline's `gaps`
+    and `overlaps` are computed reader-side from the chain's rows the same way (`GapsOf`, `OverlapsOf`): a gap from the
+    furthest end before it to the next start, and an overlap of two states of different dates from the later start to the
+    earlier of their ends; `CatalogueChainRule` says so, and that a transition's span is between its two states alone. Test:
+    `AHoleOrAClosedEndAfterANestedStateBeginsWhereTheLastStateCoveringEnds` (as_of, the dossier and the timeline, the
+    history's break, and the same work with no later state). **The builder's intervals are wrong the same way, not changed
+    here** (data/applicability-dates is changing `LuxembourgIndexBuilder` now): `CompleteIntervals` writes each transition's
+    span from one state's end to the next date's start, pairwise, so a nested state's transition is a "hole" from its own
+    end (2021's 2022 end to 2025, where the 2020 state covers to 2023) and the overlap before it runs to the outer state's
+    end (2021 to 2023, where both cover 2021 only); every state of one date gets a transition of its own, so a same-date
+    pair can give two holes. The reader no longer reads `gaps` or `overlaps` from them; `transitions` still serves them as
+    the index holds them, as each pair's own relation.
+  - **9 (latent, EU 2.1).** EU 1: a code the accepted table does not pin (PE) on the end-of-validity or signature property
+    threw in `ForceDateRoleOf` (the contract types it as no role stated), so one such statement refused the whole EU index;
+    those properties now give their own role, the code kept, as this file's EU 2.1 rule says. EU 2: a `comment_on_date`
+    the publisher delivered as an IRI or a blank node is retained among the statement's properties while the decode reads
+    no note from it, and the build's own read-back refused it; `ValidateForceDateEvidence` now reopens a row whose note is
+    null beside a retained comment, and still refuses a note that is not the retained comment. `EuropeForceDateNoteRule`
+    says a non-literal comment is no note. Tests (`EuropeIndexForceDatesTests`): the two properties with PE (a data row
+    each), and the IRI comment reopened, a changed note refused.
+  - **11 (a note).** `V3CorpusMount.References.cs`'s comment said a version an ELI pins opens at its own date; it is asked
+    there and opens only where the rules serve it, and is refused there when that date is ambiguous or its interval
+    invalid. The comment and this file's S7a bullet ("A scope a caller narrows") are corrected, and S7a's in_force_on driver
+    decision says it is superseded by 4. Test: `AnEliThatNamesOneVersionOpensItOnlyWhereTheRulesServeItAndElseRefusesWithTheirReason`
+    adds the three ELIs (the 2021 act and its consolidation, ambiguous; the 2023 rgd consolidation, invalid) and the 2005
+    act at its own date, opened.
+  - **`outside_named_version`'s dates (found by the French review of this round, its point 2).** `RefuseOutsideScope`
+    gave `history_begins` and the nearest dates over the named version alone, so the card's declared null said "No later
+    state is held" where a later consolidation is, and the nearest earlier date was the act's where the covering state is
+    nearer. They are now the work's, over its chain in the language, as `CoverAt` gives them for every other reason, and
+    `OutsideScopeRule` says so. Test: `AnIdentifierOutsideItsVersionGivesTheWorksFirstAndNearestDatesNotTheVersionsOwn`
+    (an act and two consolidations; the ELI of the act between them) and the ELI test's dates; both fail with the scope's
+    dates put back.
+  - **1, the platform's half.** The refusal census (`V3RefusalPayloadSamplesTests`) gains the scenario the review
+    reproduced: a search whose ELI names the act as published, at a date a later consolidation covers, so the platform's
+    real `outside_named_version` payload is a sample (it is now `no_version_for_date`'s richest; before_history moved to
+    `more_payloads`), and the web's card is held to it.
+  - **10, the platform's half.** `EuropeIndexBuilderTests` compared a force date's work with itself; it now compares each
+    row's work with the work its decoded statement names, and that with the seed's. `V3CorpusIntervalMountTests`' dated
+    search compared a hit's state digest with itself; it now holds every hit of the 2018 act to the act as published's
+    digest from the dossier (found in the same pass).
+- **Served answers.** On index 9 only: the rule texts above (`ContinuityRule`, `CatalogueChainRule`,
+  `AmbiguousCandidatesRule`, `OutsideScopeRule`, the EU note rule over an EU index /6) and the refusal census's new sample;
+  the answer, envelope and refusal-payload samples re-rendered with `V3_RENDER_*` and verified without them. The legacy
+  schema-8 and schema-6 base answers and the EU schema-5 base answers are unchanged (`V3CorpusLegacySchema8MountTests`,
+  `V3CorpusEuropeSchema5MountTests`, byte for byte).
+- **Driver decisions (reversible):**
+  - **A state naming no expression is named by its stable coordinate in every ambiguity**, not filtered out: filtered, an
+    act held beside such a consolidation was a one-candidate ambiguity, which the card refuses, or (on the radar) one
+    state compared as if the rules served it. The coordinate is the address the refusals already give such a state.
+  - **The gaps and overlaps are the reader's, not the index's transitions**, so they agree with as_of's hole and the
+    history's breaks without a builder change; the builder's fix is left to the branch that owns it.
+  - **An overlap is listed for every two states of different dates whose intervals meet**, not only for consecutive
+    dates, with the earlier of the two ends: "the span two states both cover".
+  - **A non-literal `comment_on_date` is no note**, as the accepted decode reads it, rather than its IRI as a note: a
+    blank node's label is no publisher's word. The statement keeps it, and the identity covers it.
+  - **`outside_named_version`'s nearest dates are the work's**, as every reason's, rather than the named version's with a
+    rule saying so: a card reads them as the work's.
+- **Measured** (Windows, no browser, no publisher traffic, no custody read, no Azure), on 5e311bb8:
+  - `dotnet build Lex.V3.slnx -c Release`: 0 warnings, 0 errors.
+  - `Lex.V3.Tests`: 3,323 (3,317 passed, 0 failed, 6 skipped).
+  - `Lex.V3.Ingest.Tests`, the whole project, unfiltered: 3,431 (3,393 passed, 0 failed, 38 skipped: the opt-in probes,
+    env-gated writers and recorders). `V3CorpusIntervalMountTests` 22 of 22; `EuropeIndexForceDatesTests` 6 methods.
+  - The answer, envelope and refusal-payload samples re-rendered with `V3_RENDER_*`, then verified without them; the legacy
+    schema-8 and schema-6 base answers and the EU schema-5 base answers unchanged.
+  - Linux (WSL Ubuntu 24.04, .NET 10.0.400, `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1`, `TZ=UTC`, a fresh checkout of
+    5e311bb8): the envelope, answer and refusal-payload sample classes, the legacy schema-8 and schema-6 mounts, the EU
+    schema-5 mount, the interval, continuity and EU force-date classes: 47 (45 passed, 0 failed, 2 skipped: the env-gated
+    recorders); the build's only warnings are NETSDK1188 (a package's resource locales, under invariant globalization).
+  - Before the fix: f0dcf89c with the new tests, the interval and EU force-date classes and the EU builder's force-date
+    test: 29 (22 passed, 7 failed: each new case); the outside dates' two tests fail with the scope's dates put back.
+  - `eng/verify-v3-tree.ps1`: 1,666 tracked paths. The web's counts are in STATUS-WEB.md.
 
 ## EU force dates: the EU index /6 holds each act's dates by role, from custody (sole driver, 2026-10-19)
 
@@ -258,7 +365,9 @@ Updated 2026-10-19.
   - **Every dated operation, not only the five the design names, selects by the interval rules**, so none answers a date
     another refuses.
   - **`in_force_on` across works lists a textless covering state as a row** (named, with why, no `resolve`), and a work no
-    state covers on the date gives no row; its population counts stay the index's held-state counts.
+    state covers on the date gives no row; its population counts stay the index's held-state counts (superseded in the
+    combined repair of #987: the works are read from the catalogue's rows, so a work whose only state on or before the date
+    holds no text is a row, and counted covered).
   - **The base act's force facts ride on `after_closed_end` only**, verbatim; the in_force_on vocabulary test sets aside the
     typed date `entry_into_force` and nothing else.
   - **Refusal payloads are flat** (scalars and lists of scalars) rather than the nested candidate rows the design sketches:
@@ -267,8 +376,11 @@ Updated 2026-10-19.
     takes its interval, so the tests that held German independent of the French chain hold it as the builder makes it.
   - **The undated fold keeps the latest state's hit**, so a wording is read under the last version that holds it, and counts
     only the versions searched.
-  - **A scope a caller narrows is selected within itself** (an exact reference whose ELI names one version opens that version
-    at its date, as before index 9), and refused within itself: the interval rules select over a work's whole chain only.
+  - **A scope a caller narrows is selected by the rules over the work's whole chain** (corrected in the combined repair of
+    #987: this said an ELI's version opens at its date, as before index 9). An exact reference whose ELI names one version is
+    asked at that version's own date and opens there only where the interval rules serve it: at its own date it is refused
+    when that date is ambiguous (another state of another wording covers it) or its interval is invalid, and on a date
+    another version covers it is refused with `outside_named_version` (F2).
 - **Tests.** `V3CorpusIntervalMountTests` (new, 12): the handler on a verified mount of the multi-body fixture (S6's, with two
   closed ends, a same-date pair that differs, a provisional state and a document that skips a place, bound to the shared
   acquisition's corpus, which holds none of its bodies, so its log names none): the dates of design §3.4 (before the history,
