@@ -16,15 +16,19 @@ With -Apply, in order:
 1. the release is read back under the signing identity's public key (`web/scripts/deploy-probe.mjs`, without
    --origin), and as signed by the release signer -SignerIdentity names, never a rehearsal; nothing is deployed from a
    release that does not verify. -Apply requires -SignerIdentity; a plan run without it may read a rehearsal release;
-2. the release image is copied into the registry out of the release by its manifest digest (`oras cp`); the app is
+2. with -Public, the app's address rules are read before anything in Azure changes, and any rule, or a read that fails,
+   stops the deployment, having changed nothing: a -Public deployment admits everyone (the template empties the rules as it
+   deploys, before the candidate is probed), so it is for the open site only, and the opening is -Open's (the review of
+   #989: on the private copy the rules were removed, and a failed probe deactivated only the candidate). A plan run says so;
+3. the release image is copied into the registry out of the release by its manifest digest (`oras cp`); the app is
    deployed by that digest, never by a tag;
-3. `deploy/main.bicep` is deployed: the image by digest as a new revision with the `candidate` label and no traffic
+4. `deploy/main.bicep` is deployed: the image by digest as a new revision with the `candidate` label and no traffic
    while -LiveRevision keeps 100 per cent. Until the owner opens the site, every deployment is of the private copy:
    ingress admits only the -AllowedCidr ranges (the operator's address first; several, comma-separated; each /24 to
    /32), and the script refuses a deployment that names none; after the opening, every deployment says -Public;
-4. who ingress admits is read back from the app, and must be exactly those ranges (or everyone, with -Public); if it is
+5. who ingress admits is read back from the app, and must be exactly those ranges (or everyone, with -Public); if it is
    not, the ranges are set again and read back once more, and the script stops if they still do not hold;
-5. the zero-traffic probe runs against the candidate's own URL (`web/scripts/deploy-probe.mjs --origin`), over HTTP
+6. the zero-traffic probe runs against the candidate's own URL (`web/scripts/deploy-probe.mjs --origin`), over HTTP
    only, unless -BrowserProbe asks for the browser probes too (`--browser`: the journey's real-mount steps through a
    browser, by pointer; Chrome or Edge must be installed, on a machine where a browser may run). No browser runs by
    default: none may run on the driver's machine (the owner's order of 2026-10-16), and -SkipBrowserProbe, the old way
@@ -41,7 +45,7 @@ With -Apply, in order:
    fixture mounts only, and a release rehearsed with `image-rehearsal.mjs --no-browser` walks none. A browser walk of
    the private candidate from a machine where a browser is allowed (-BrowserProbe there) is the step left before the
    opening (STATUS-WEB.md);
-6. if the probe fails, the candidate revision is deactivated (the removal step) and the script exits non-zero.
+7. if the probe fails, the candidate revision is deactivated (the removal step) and the script exits non-zero.
 Promotion (moving traffic to the candidate) is printed for the owner and never run.
 
 -Remove deactivates one revision of the app and exits: the removal step on its own.
@@ -52,9 +56,10 @@ cookie and says no placeholder (a publisher's detail the owner fills in `web/scr
 closed, so pages it cannot read keep the site private. Then it removes every address rule, reads back that ingress admits
 everyone, and only then says the site is open; if it cannot list the rules, or the read-back still finds one, it stops and
 says so. From then on every deployment says -Public, and a -Public deployment's probe holds the candidate's legal pages to
-the same rule (`--opening`), so a release with an unfilled detail is never promoted to the open site. (The plan's item 0.5:
-the first version restricted ingress on a first deployment only, so a second deployment would have opened the private copy
-to everyone.)
+the same rule (`--opening`, handed to the probe as one argument: the review of #989), so a release with an unfilled detail
+fails its probe, is deactivated and is never offered for promotion. A -Public deployment before the opening is refused
+(step 2). (The plan's item 0.5: the first version restricted ingress on a first deployment only, so a second deployment
+would have opened the private copy to everyone.)
 
 .EXAMPLE
 pwsh -File deploy/deploy.ps1 -Subscription <id> -ResourceGroup rg-lex-v3 -EnvironmentId <managed environment id> `
@@ -103,7 +108,10 @@ function Step([string] $what) { Write-Host "== $what" }
 $trapPath = [System.IO.Path]::GetFullPath((Join-Path $checkout 'web/scripts/browser-trap.mjs'))
 $trapUrl = if ($IsWindows) { [System.Uri]::new($trapPath).AbsoluteUri } else { [System.Uri]::new("file://$trapPath").AbsoluteUri }
 if (-not $trapUrl -or -not $trapUrl.StartsWith('file:///')) { throw "The browser trap's file URL could not be formed ($trapUrl); nothing is deployed." }
-$nodeTrap = if ($BrowserProbe) { @() } else { @('--import', $trapUrl) }
+# Every argument list below is `@(if (...) { ... })`, an array whatever the branch: PowerShell unrolls an array an `if` returns,
+# so `= if (...) { @('--opening') }` was the string '--opening', and splatting a string hands it over one character at a time
+# (`- - o p e n i n g`): the probe never read --opening (the review of #989).
+$nodeTrap = @(if (-not $BrowserProbe) { '--import', $trapUrl })
 
 function Run([string] $display, [scriptblock] $command) {
     # Every command is shown before it runs; without -Apply it is only shown. No command line carries a secret.
@@ -166,15 +174,15 @@ foreach ($cidr in $AllowedCidr) {
 if ($Apply -and [string]::IsNullOrWhiteSpace($SignerIdentity)) {
     throw "-Apply deploys a release signed by the release signer: name its identity with -SignerIdentity. A rehearsal release is for plan runs only."
 }
-$signerProbe = if ([string]::IsNullOrWhiteSpace($SignerIdentity)) { @() } else { @('--signer', $SignerIdentity) }
+$signerProbe = @(if (-not [string]::IsNullOrWhiteSpace($SignerIdentity)) { '--signer', $SignerIdentity })
 # The browser probes are the operator's to ask for (-BrowserProbe), on a machine where a browser may run; none runs by
 # default (the owner's order of 2026-10-16, after headless Chrome runs locked the owner's account; the review of #979: an
 # -Apply that forgot -SkipBrowserProbe started one). -SkipBrowserProbe, the old way to say none, is kept and changes nothing.
 if ($BrowserProbe -and $SkipBrowserProbe) { throw "-BrowserProbe asks for the browser probes and -SkipBrowserProbe skips them: name one." }
 # `$browserArgs`, not `$browserProbe`: PowerShell's names ignore case, and that would be the -BrowserProbe switch itself.
-$browserArgs = if ($BrowserProbe) { @('--browser') } else { @() }
+$browserArgs = @(if ($BrowserProbe) { '--browser' })
 # Once the site is open (-Public), the candidate's legal pages are held to the opening's rule: none may say a placeholder.
-$openingArgs = if ($Public) { @('--opening') } else { @() }
+$openingArgs = @(if ($Public) { '--opening' })
 
 # 1. The release, read back under the signing identity's key, before anything touches Azure.
 Step "verify the release under the signing identity's public key"
@@ -192,13 +200,39 @@ if ($suffix.Length -gt 40) { $suffix = $suffix.Substring($suffix.Length - 40).Tr
 $archive = Join-Path $releasePath 'lex-v3-image.oci.tar'
 Write-Host "  release $($manifest.version): image $digest, corpus $($manifest.corpus.sha256)"
 
-# 2. The image into the registry: read out of the release by its manifest digest, tagged with the release version as a
+# 2. The owner's subscription; and with -Public, that the site is already open. A -Public deployment admits everyone: the
+# template's openToPublic empties the address rules as it deploys, before the candidate is probed, and a failed probe
+# deactivates only the candidate. On the still-private app the rules would be gone and the live revision open to everyone
+# (the review of #989). The opening is -Open's alone, after its check of the legal pages. So the app's rules are read before
+# anything in Azure changes: any rule, or a read that fails, stops the deployment here, having changed nothing.
+Step "use the subscription $Subscription"
+Run "az account set --subscription $Subscription" { az account set --subscription $Subscription }
+if ($Public) {
+    Step "check that $AppName is open: a -Public deployment is for the open site only"
+    if ($Apply) {
+        $restrictions = az containerapp show -g $ResourceGroup -n $AppName --query "properties.configuration.ingress.ipSecurityRestrictions" -o json
+        if ($LASTEXITCODE -ne 0) { throw "Whether $AppName is open could not be read; nothing was deployed. A -Public deployment is for the open site only." }
+        # Any rule at all, whatever it names: "null", "[]" or nothing is the open site's answer.
+        $text = $restrictions -join "`n"
+        try { $rules = @(if (-not [string]::IsNullOrWhiteSpace($text)) { $text | ConvertFrom-Json | Where-Object { $_ } }) }
+        catch { throw "Whether $AppName is open could not be read; nothing was deployed ($($_.Exception.Message))." }
+        if ($rules.Count -gt 0) {
+            $named = ($rules | ForEach-Object { "$($_.name) $($_.ipAddressRange)".Trim() }) -join ', '
+            throw "The site is private: open it with deploy.ps1 -Open first ($($rules.Count) address rule(s): $named). Nothing was deployed: a -Public deployment would remove the address rules before its candidate is probed."
+        }
+        Write-Host "  $AppName admits everyone: the site is open"
+    }
+    else {
+        Write-Host "  > az containerapp show -g $ResourceGroup -n $AppName --query properties.configuration.ingress.ipSecurityRestrictions -o json: any address rule stops a -Public deployment here, before anything in Azure changes (the site is private: open it with deploy.ps1 -Open first)"
+    }
+}
+
+# 3. The image into the registry: read out of the release by its manifest digest, tagged with the release version as a
 # handle, and deployed below by the digest alone. The registry access token (short-lived, from the owner's session)
 # goes on standard input to `oras login`, which keeps it in a registry config in a fresh private directory that only
 # `oras cp` and the digest check read; the directory is removed when the copy ends, whatever happens. The token is never
 # on a command line, never printed, and never left on disk (the custody probe's runbook did the same).
 Step "copy the image into $Registry"
-Run "az account set --subscription $Subscription" { az account set --subscription $Subscription }
 $registryName = $Registry.Split('.')[0]
 $tag = ($manifest.version -replace '[^A-Za-z0-9_.-]', '-')
 $session = Join-Path ([System.IO.Path]::GetTempPath()) "lex-v3-oras-$([guid]::NewGuid().ToString('N'))"
@@ -220,7 +254,7 @@ finally {
     if (Test-Path $session) { Remove-Item -Recurse -Force $session -Confirm:$false }
 }
 
-# 3. The candidate revision, with no traffic while a live revision serves, admitting only the named ranges until the
+# 4. The candidate revision, with no traffic while a live revision serves, admitting only the named ranges until the
 # opening. The parameters go in a file, since the ranges are an array; it holds no secret.
 Step "deploy the candidate revision $suffix"
 # A domain already bound to the app (deploy/bind-domain.ps1) is read back and passed on, so a redeployment keeps it: the
@@ -297,7 +331,7 @@ finally {
     Remove-Item -LiteralPath $parametersFile -ErrorAction SilentlyContinue
 }
 
-# 4. Who ingress admits, read back from the app: exactly the named ranges until the opening, everyone after it.
+# 5. Who ingress admits, read back from the app: exactly the named ranges until the opening, everyone after it.
 function AdmittedFailure {
     $read = az containerapp show -g $ResourceGroup -n $AppName --query "properties.configuration.ingress.ipSecurityRestrictions" -o json
     if ($LASTEXITCODE -ne 0) { return "who ingress admits could not be read back" }
@@ -319,7 +353,7 @@ if ($Apply) {
     if ($Public) { Write-Host "  ingress admits everyone (-Public)" } else { Write-Host "  ingress admits only $($AllowedCidr -join ', ')" }
 }
 
-# 5. The zero-traffic probe against the candidate's own URL.
+# 6. The zero-traffic probe against the candidate's own URL.
 Step "probe the candidate"
 if (-not $Apply) {
     Write-Host "  > wait until $AppName--$suffix is provisioned, active, running and healthy"
@@ -366,7 +400,7 @@ if (-not $BrowserProbe) { Write-Host "  no browser probe (no -BrowserProbe): onl
 # traffic, and no promotion command is printed.
 $dataAgeRefused = $LASTEXITCODE -eq 3
 if ($LASTEXITCODE -ne 0 -and -not $dataAgeRefused) {
-    # 6. The removal step: the candidate never carried traffic (or only the allowed addresses'), and is deactivated.
+    # 7. The removal step: the candidate never carried traffic (or only the allowed addresses'), and is deactivated.
     Step "the probe failed: deactivate the candidate $candidate"
     az containerapp revision deactivate -g $ResourceGroup -n $AppName --revision $candidate
     throw "The candidate failed its probe and was deactivated; no traffic moved."

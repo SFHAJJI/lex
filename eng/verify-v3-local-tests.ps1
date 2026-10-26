@@ -386,12 +386,13 @@ try {
         $receipt.RecompiledProjects = @($mutatedProjects.Keys)
     }
 
-    $testArguments = if ($Mode -eq 'Full') {
-        @('test', '--solution', $solution)
-    }
-    else {
-        @('test', $target, '--filter', $Filter)
-    }
+    # An array whatever the branch: PowerShell unrolls the array an if returns (the review of #989, in deploy.ps1).
+    $testArguments = @(if ($Mode -eq 'Full') {
+            'test', '--solution', $solution
+        }
+        else {
+            'test', $target, '--filter', $Filter
+        })
     $testArguments += @(
         '--configuration', $Configuration,
         '--no-restore', '--no-build',

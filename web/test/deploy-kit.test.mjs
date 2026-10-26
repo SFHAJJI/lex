@@ -4,7 +4,7 @@
 // image pulled with a managed identity and named by digest, one server, and a new revision arriving with no traffic.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -244,6 +244,21 @@ test("the script never logs in, never handles a secret on a command line or on d
   assert.match(script, /if \(\$Apply -or \$Remove -or \$Open\) \{\s*& \$command/);
 });
 
+test("no script of the kit or of eng/ takes an argument list from an if whose branch is an array: PowerShell unrolls it", () => {
+  // `$x = if (...) { @('--opening') } else { @() }` is the string '--opening' (or $null), and `@x` hands a string to a command
+  // one character at a time: deploy.ps1's probe never read --opening (the review of #989). The form is `@(if (...) { ... })`.
+  // deploy-run.test.mjs runs the script whole and reads the probe's arguments; this keeps the form out of every script.
+  const roots = ["../../deploy/", "../../eng/"].map((path) => new URL(path, import.meta.url));
+  const scripts = roots.flatMap((root) => readdirSync(root).filter((name) => name.endsWith(".ps1")).map((name) => [`${fileURLToPath(root)}${name}`, new URL(name, root)]));
+  assert.ok(scripts.length >= 8, `the scripts are read: ${scripts.map(([name]) => name).join(", ")}`);
+  for (const [name, url] of scripts) {
+    // The code alone, comments and help blocks out, read across lines: the branch's array may stand on the next line.
+    const scriptCode = readFileSync(url, "utf8").replace(/<#[\s\S]*?#>/g, "").split(/\r?\n/).filter((line) => !line.trim().startsWith("#")).join("\n");
+    const offenders = [...scriptCode.matchAll(/=[ \t]*if[ \t]*\([^\n]*\)\s*\{\s*@\(/g)].map((match) => match[0]);
+    assert.deepEqual(offenders, [], name);
+  }
+});
+
 test("the script deploys only a release that verifies, and only by the image's digest", () => {
   const deploying = code.slice(code.indexOf("Step \"verify the release"));
   const verify = deploying.indexOf("deploy-probe.mjs') --release");
@@ -257,7 +272,7 @@ test("the script deploys only a release that verifies, and only by the image's d
   assert.match(code, /\[Parameter\(ParameterSetName = 'Deploy'\)\] \[switch\] \$BrowserProbe,/);
   assert.match(code, /\[Parameter\(ParameterSetName = 'Deploy'\)\] \[switch\] \$SkipBrowserProbe,/);
   // Not `$browserProbe`: PowerShell's names are not case-sensitive, so that array would be the -BrowserProbe switch itself.
-  assert.match(code, /\$browserArgs = if \(\$BrowserProbe\) \{ @\('--browser'\) \} else \{ @\(\) \}/);
+  assert.match(code, /\$browserArgs = @\(if \(\$BrowserProbe\) \{ '--browser' \}\)/);
   assert.ok(!/\$browserProbe\b/.test(code), "no variable spelled like the switch");
   assert.match(code, /if \(\$BrowserProbe -and \$SkipBrowserProbe\) \{ throw /);
   assert.equal((code.match(/\$SkipBrowserProbe/g) ?? []).length, 2, "-SkipBrowserProbe is declared and refused beside -BrowserProbe, and decides nothing else");
@@ -265,19 +280,19 @@ test("the script deploys only a release that verifies, and only by the image's d
   // Without -BrowserProbe both probes run with the browser trap loaded first, so nothing they run can find or start one.
   assert.match(code, /\$trapPath = \[System\.IO\.Path\]::GetFullPath\(\(Join-Path \$checkout 'web\/scripts\/browser-trap\.mjs'\)\)/);
   assert.match(code, /if \(-not \$trapUrl -or -not \$trapUrl\.StartsWith\('file:\/\/\/'\)\) \{ throw /, "an empty or non-file trap URL stops the deployment");
-  assert.match(code, /\$nodeTrap = if \(\$BrowserProbe\) \{ @\(\) \} else \{ @\('--import', \$trapUrl\) \}/);
+  assert.match(code, /\$nodeTrap = @\(if \(-not \$BrowserProbe\) \{ '--import', \$trapUrl \}\)/);
   assert.equal((code.match(/& node @nodeTrap \(Join-Path \$checkout 'web\/scripts\/deploy-probe\.mjs'\)/g) ?? []).length, 3, "both probes and the opening's check of the legal pages run under the trap");
   assert.equal((code.match(/Join-Path \$checkout 'web\/scripts\/deploy-probe\.mjs'\)/g) ?? []).length, 3, "and the probe runs nowhere else");
   // Once the site is open, a -Public deployment's probe holds the candidate's legal pages to the opening's rule; and every
   // candidate's probe says whether promotion refuses its data's age (`--promotion-check`, exit 3).
-  assert.match(code, /\$openingArgs = if \(\$Public\) \{ @\('--opening'\) \} else \{ @\(\) \}/);
+  assert.match(code, /\$openingArgs = @\(if \(\$Public\) \{ '--opening' \}\)/);
   assert.match(code, /deploy-probe\.mjs'\) --origin \$origin --release \$releasePath --public-key \$keyPath @signerProbe @browserArgs @openingArgs --promotion-check\n/);
   // A deployment applies only a release the release signer signed: -Apply requires -SignerIdentity, which both read-backs
   // carry, so a rehearsal release is read in a plan run only.
   assert.match(script, /if \(\$Apply -and \[string\]::IsNullOrWhiteSpace\(\$SignerIdentity\)\) \{\s*throw "-Apply deploys a release signed by the release signer/);
   // What both read-backs carry is the signer, and the guard stands before the release is touched (review of #931: an
   // emptied $signerProbe, or the guard moved after the deployment, left every rule above green).
-  assert.match(code, /\$signerProbe = if \(\[string\]::IsNullOrWhiteSpace\(\$SignerIdentity\)\) \{ @\(\) \} else \{ @\('--signer', \$SignerIdentity\) \}/);
+  assert.match(code, /\$signerProbe = @\(if \(-not \[string\]::IsNullOrWhiteSpace\(\$SignerIdentity\)\) \{ '--signer', \$SignerIdentity \}\)/);
   const guard = code.indexOf('throw "-Apply deploys');
   assert.ok(guard > 0 && guard < code.indexOf('Step "verify the release'), "the -Apply guard runs before the release is read back or any Azure command");
   assert.match(code, /deploy-probe\.mjs'\) --release \$releasePath --public-key \$keyPath @signerProbe\n/);

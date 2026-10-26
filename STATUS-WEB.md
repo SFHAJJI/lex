@@ -1,6 +1,6 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-19. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-26. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
@@ -21,9 +21,12 @@ commits (6.1, 6.5). Each slice's own section follows, newest first. Then three d
     `freshness`; the header keeps `localePage`, and the staleness banner stands under it.
   - `styles.css`: both rule sets. `live-chrome.test.mjs`: `freshness` and `legal` are both shared sections.
   - `deploy-probe.mjs`: the candidate's probe takes `promotion` and `opening`; the command line reads `--opening` and
-    `--promotion-check`. `deploy.ps1` runs the candidate's probe with `@openingArgs --promotion-check`, planned and applied:
-    a `-Public` candidate whose legal page still says a placeholder fails (exit 1, deactivated); one whose data is too old
-    stays without promotion (exit 3). `deploy-kit.test.mjs` holds both.
+    `--promotion-check`. `deploy.ps1` runs the candidate's probe with `@openingArgs --promotion-check`, planned and applied.
+    Since the review's repair (below), the probe receives `--opening` as one argument: a `-Public` candidate whose legal page
+    still says a placeholder fails (exit 1, deactivated, no promotion command); one whose data is too old stays without
+    promotion (exit 3). At 9af65085 this was not so: the probe received `--opening` one character at a time and passed
+    such a candidate (F1). `deploy-run.test.mjs` runs the script whole and reads the arguments the probe receives;
+    `deploy-kit.test.mjs` holds the form.
 - **What the combination moved, and the fix:** the envelope census's sample of an EU act dated 2013-06-26 (the EU slice's)
   gained the freshness header and the commits (rendered from the handler, verified without the switch; nothing else
   moved). `no-browser-probes.test.mjs` reads the planned probe line with a private copy's empty `--opening`. The legacy
@@ -59,6 +62,56 @@ commits (6.1, 6.5). Each slice's own section follows, newest first. Then three d
   `eng/verify-v3-tree.ps1` passes (1,663 tracked paths). The EU time view's
   `EuAsOfAnswersTheWordingOfTheDateAndNeverADateBeforeTheHistory` failed once while three suites ran at once on a shared
   machine (a fixture acquisition's observation not executed); alone it passed 6 of 6, and every later run passed it.
+- **Review and repair (#989)**, one round, by the other model family: two findings in `deploy/deploy.ps1`, both taken, and
+  CI's red on Linux, fixed.
+  - **F1 (high): `-Public` never held the candidate's legal pages to the opening's rule.** `$openingArgs = if ($Public) {
+    @('--opening') } else { @() }` is the string `--opening`: PowerShell unrolls the one-element array an `if` returns, and
+    splatting a string hands it to `node` one character at a time (`- - o p e n i n g`). The probe never read `--opening`,
+    so a `-Public` candidate whose legal pages still said a placeholder passed and was offered for promotion.
+    `$browserArgs` had the same form. Fix: every argument list is `@(if (...) { ... })`, an array whatever the branch:
+    `$openingArgs`, `$browserArgs`, and `$nodeTrap` and `$signerProbe` (two elements, so not broken, but the same form).
+    No other script in `deploy/` held the form; `eng/verify-v3-local-tests.ps1`'s `$testArguments` did, across lines,
+    with two or four elements (not broken), and was given the same form. Tests: `deploy-run.test.mjs` (new, 7 tests) runs
+    the real `deploy.ps1` under pwsh with `az`, `oras` and `node` made up as PowerShell functions, and reads the
+    arguments the probe receives: with `-Public`, exactly the token `--opening`, just before `--promotion-check`; with
+    `-BrowserProbe`, `--browser` whole too, without the trap; without `-Public`, no `--opening`; a `-Public` candidate
+    whose probe fails on a placeholder is deactivated and offered for no promotion. Before the fix all 7 failed. And
+    `deploy-kit.test.mjs` refuses the form in every `.ps1` of `deploy/` and `eng/`, read across lines.
+  - **F2 (medium): nothing made `-Open` come before `-Public`.** A `-Public -Apply` on the still-private app deployed with
+    `openToPublic` (main.bicep empties `ipSecurityRestrictions`), which removed the address rules before the candidate
+    was probed; a failed probe deactivated only the candidate, and the live revision stayed open to everyone. Fix: with
+    `-Public`, before anything in Azure changes (after the release is read back, before the image is copied), the app's
+    `properties.configuration.ingress.ipSecurityRestrictions` is read; any rule at all, whatever it names, stops the
+    deployment with "The site is private: open it with deploy.ps1 -Open first" and the rules it found, and a read that
+    fails or is not JSON stops it too, having changed nothing. A plan run says it would check this and asks Azure nothing.
+    Tests (`deploy-run.test.mjs`): with the private copy's rule, two rules (one naming no range), a failed read or a read
+    that is not JSON, no image is copied, no template previewed or deployed and no revision or rule touched; on the open
+    site (`[]`, `null` or nothing) the read comes before the copy and the deployment, which go on; the private copy's
+    deployment asks nothing before it deploys.
+  - **CI red on Linux (dotnet and image-conditions lanes, run 39214367267):** the envelope census's `package_sha256` of
+    the EU act of 2013-06-26 (`7ac5d154...`, recorded on Windows) differed on Linux. `RewrittenPackage` re-zips the GDPR's
+    package with `ZipArchive`, which writes the system into each central-directory header ("version made by": MS-DOS on
+    Windows, Unix elsewhere) and that system's default external attributes. `PortableZip.Normalise` sets each header to
+    what Windows writes (made by MS-DOS, the entry's own zip version kept, no attributes), in the four deterministic
+    rewriters (`RewrittenPackage`, the synthetic French packages of the consolidated fixture and of the acquisition
+    fixture, the main-body test's `RewriteEntry`); the other two zip writers in the tests stamp the time of the run, so
+    no recording can hold their bytes. The deflated bytes are the same on both systems. `PortableZipTests` pins the four
+    packages' digests and normalises a zip given Unix headers to Windows's bytes. Rendered again on Windows with
+    `V3_RENDER_ENVELOPE_SAMPLES`, the census did not move; verified without the switch on Windows and in WSL Ubuntu 24.04
+    (.NET SDK 10.0.400, UTC, with invariant globalization and without).
+  - **Checked, no finding:** the conflict resolutions; the legacy fixture; the 30-day boundary; the probe's exit codes;
+    privacy; the EU authenticity statement.
+  - **Measured** (no browser started, no Azure call: `az`, `oras` and `node` made up in the deploy tests): `npm run build`
+    in `web`, then a plain `npm test`: 1,321 tests, 1,318 passed, the 3 that start a browser skipped with their reason (8
+    new: `deploy-run.test.mjs`'s 7 and the form's rule); `deploy-kit.test.mjs`, `deploy-run.test.mjs` and
+    `no-browser-probes.test.mjs` together 33 of 33; `deploy/validate.ps1` passes; `dotnet build Lex.V3.slnx -c Release`, 0
+    warnings, 0 errors. Windows (Romance Standard Time): `V3EnvelopeSamplesTests` and `PortableZipTests` 4 of 4; the
+    Ingest classes the zip fix touches (the EU acquisition, consolidated, main-body, population, Europe index, annex
+    control, time view, authenticity, machine and mounted gates classes and the three censuses) 291, 289 passed, 2
+    skipped by their variables. WSL Ubuntu 24.04 (.NET SDK 10.0.400, UTC) at 41974eb0: `V3EnvelopeSamplesTests` and
+    `PortableZipTests` 4 of 4 with invariant globalization and 4 of 4 without; the answer, envelope and refusal-payload
+    censuses with the zip tests 10 of 10, invariant; the whole `Lex.V3.Ingest.Tests` with the language library, 3,414,
+    3,377 passed, 37 skipped, none failed. `eng/verify-v3-tree.ps1` passes.
 - **Waits on the owner:** the publisher's name, postal address and contact e-mail (`web/scripts/legal-publisher.mjs`).
 
 ## Freshness on every page and in every answer, and the commits behind it (sole driver, 2026-10-18)
@@ -260,7 +313,9 @@ deployment supports, every detail only the owner can give a marked placeholder i
   -Open` reads the app's address and asks each of the ten legal pages before it touches an address rule; any page that does not
   answer 200 with a page, sets a cookie, says a placeholder or marks one, or cannot be asked, stops the opening and the site
   stays private. Every `-Public` deployment passes `--opening` to its candidate's probe, so a release with an unfilled detail
-  is never promoted once the site is open. The candidate probe (`servedPageFailures`, also the image rehearsal's) now holds
+  fails its probe once the site is open, is deactivated, and is never offered for promotion (true since the repair of #989:
+  before it the probe received `--opening` one character at a time). A `-Public` deployment while the app still has an
+  address rule is refused before anything in Azure changes (#989, F2). The candidate probe (`servedPageFailures`, also the image rehearsal's) now holds
   each legal page the release image holds to its own bytes, the page's CSP and no cookie, says beside a private copy's pass
   that the pages are not ready to publish, and fails a home page or legal page that sets a cookie.
 - **What each statement rests on** (read or measured on 2026-10-18):
