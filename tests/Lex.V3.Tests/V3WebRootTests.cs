@@ -232,11 +232,22 @@ public sealed class V3WebRootTests
             File.WriteAllText(Path.Combine(directory, page), $"<!doctype html><p>{page}</p>");
         }
 
+        // The pages the table names as files (the five legal pages, in both languages), as the build writes them.
+        using (var files = SiteTable())
+        {
+            foreach (var row in files.RootElement.GetProperty("paths").EnumerateArray().Where(static row => row.TryGetProperty("file", out _)))
+            {
+                var file = row.GetProperty("file").GetString()!;
+                File.WriteAllText(Path.Combine(directory, file), $"<!doctype html><p>{file}</p>");
+            }
+        }
+
         try
         {
             var root = V3WebRoot.Open(directory)!;
             using var table = SiteTable();
             var rows = table.RootElement.GetProperty("paths").EnumerateArray().ToArray();
+            Assert.AreEqual(10, rows.Count(static row => row.TryGetProperty("file", out _)), "the five legal pages, in both languages");
             Assert.IsGreaterThan(70, rows.Length, "the table web/scripts/permalinks.mjs is held to");
             Assert.IsGreaterThanOrEqualTo(3, rows.Count(row => row.GetProperty("moved").ValueKind != JsonValueKind.Null), "the shape before R64, moved");
             foreach (var row in rows)
@@ -273,6 +284,16 @@ public sealed class V3WebRootTests
                     Assert.AreEqual(moved, context.Response.Headers.Location.ToString(), path);
                     Assert.AreEqual(0, context.Response.Headers.Vary.Count, path);
                     Assert.AreEqual("", Body(context), path);
+                    AssertPageHeaders(root, context, path);
+                }
+                else if (row.TryGetProperty("file", out var file))
+                {
+                    // A page the build writes, served as the file it is, at its own path, with a page's headers.
+                    Assert.AreEqual("/" + file.GetString(), path, "a file row names its own path");
+                    Assert.IsTrue(served, path);
+                    Assert.AreEqual(StatusCodes.Status200OK, context.Response.StatusCode, path);
+                    Assert.AreEqual("text/html; charset=utf-8", context.Response.ContentType, path);
+                    Assert.AreEqual($"<!doctype html><p>{file.GetString()}</p>", Body(context), path);
                     AssertPageHeaders(root, context, path);
                 }
                 else if (row.TryGetProperty("searchEngines", out var searchEngines))
@@ -364,6 +385,44 @@ public sealed class V3WebRootTests
             using var request = JsonDocument.Parse(page.RequestUtf8);
             Assert.AreEqual(page.OperationId, request.RootElement.GetProperty("operation_id").GetString(), $"{path}: the body the page would send");
         }
+    }
+
+    [TestMethod]
+    public void AReadableAddressIsAskedAtTodayInLuxembourgOnBothSidesOfEachClockChangeOrAtTheDateItKeeps()
+    {
+        // The plan's item 3.4 (R13): the server's today is the calendar date in Luxembourg by the coded rule, so a readable
+        // address with no date of its own is asked at it, the day turning at midnight in Luxembourg on either side of a
+        // change: 22:00 UTC in summer time, 23:00 UTC in winter time. Summer time ends at 01:00 UTC on 25 October 2026 and
+        // starts at 01:00 UTC on 28 March 2027 (the shared table holds the rule itself, LuxembourgCalendarTests).
+        const string readable = "/en/lu-legilux/loi-1991-08-10-n3/fra";
+        foreach (var (instant, date) in new[]
+        {
+            ("2026-10-24T21:59:59.9999999Z", "2026-10-24"),
+            ("2026-10-24T22:00:00Z", "2026-10-25"),
+            ("2026-10-25T00:59:59Z", "2026-10-25"),
+            ("2026-10-25T01:00:00Z", "2026-10-25"),
+            ("2026-10-25T22:59:59Z", "2026-10-25"),
+            ("2026-10-25T23:00:00Z", "2026-10-26"),
+            ("2027-03-27T22:59:59Z", "2027-03-27"),
+            ("2027-03-27T23:00:00Z", "2027-03-28"),
+            ("2027-03-28T00:59:59Z", "2027-03-28"),
+            ("2027-03-28T01:00:00Z", "2027-03-28"),
+            ("2027-03-28T21:59:59Z", "2027-03-28"),
+            ("2027-03-28T22:00:00Z", "2027-03-29"),
+        })
+        {
+            var now = DateTimeOffset.Parse(instant, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal);
+            var today = V3ApiHandler.LuxembourgTodayAt(now);
+            Assert.AreEqual(date, today, instant);
+            Assert.AreEqual(date, V3WebRoot.SitePageFor(readable, today)!.Parameters["date"], $"{instant}: asked at today");
+            // The date the address keeps is asked whatever the clock says (a link keeps the date it was read at).
+            Assert.AreEqual("2024-02-01", V3WebRoot.SitePageFor(readable, today, "?date=2024-02-01")!.Parameters["date"], $"{instant}: the date it keeps");
+        }
+
+        Assert.IsNull(V3ApiHandler.LuxembourgTodayAt(Lex.V3.Contracts.Platform.LuxembourgCalendar.ValidUntil), "outside the rule's range, no date");
+        Assert.IsNull(V3WebRoot.SitePageFor(readable, null), "no clock and no date kept: the page as built, which asks for itself");
+        Assert.AreEqual("2024-02-01", V3WebRoot.SitePageFor(readable, null, "?date=2024-02-01")!.Parameters["date"], "a date kept needs no clock");
+        Assert.IsNull(V3WebRoot.SitePageFor(readable, null, "?date=2024-02-30"), "a date that is no calendar date is none");
     }
 
     [TestMethod]

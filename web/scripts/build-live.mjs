@@ -15,7 +15,10 @@
 // send it to a language. German and Luxembourgish are `locale-de.html` and `locale-lb.html`, at the root,
 // which say they are not reviewed. Each interface language's 404 page is `not-found/{language}.html` (the search
 // screen under the page's own words, script `client-live-search.js`) and its maintenance page
-// `maintenance/{language}.html` (no script); neither server serves either at that address (`not-found.mjs`).
+// `maintenance/{language}.html` (no script); neither server serves either at that address (`not-found.mjs`). The five legal
+// pages every footer links (the plan's item 7.1; `legal-pages.mjs`) stand under each language too, `legal-notice.html`,
+// `privacy.html`, `terms.html`, `accessibility.html` and `cookies.html`, with no script, naming no person and giving no
+// contact (the owner's decision of 2026-10-19).
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -24,6 +27,7 @@ import { tokenCss } from "./design-tokens.mjs";
 import { CHROME_LOCALES } from "./localization.mjs";
 import { REVIEWED_CHROME_LOCALES } from "./locale-unavailable.mjs";
 import { MAINTENANCE_DIRECTORY, NOT_FOUND_DIRECTORY } from "./not-found.mjs";
+import { LEGAL_PAGES } from "./legal-pages.mjs";
 
 const source = new URL("../src/", import.meta.url);
 export const LIVE_DESTINATION = new URL("../dist-live/", import.meta.url);
@@ -65,6 +69,9 @@ async function buildPages(destination, { card, locale, buildTag = "" }) {
   const { bundleServerRenderer } = await import("./react-build.mjs");
   await mkdir(new URL("ssr/", destination), { recursive: true });
   await cp(await bundleServerRenderer("app/ssr-entry.jsx", `ssr-entry${suffix}.js`, options), new URL(`ssr/${locale}.js`, destination));
+  // The five legal pages, each a static page of this language, with no script.
+  const legal = await import(pathToFileURL(await bundle("app/LegalPage.jsx", `LegalPage${suffix}.mjs`, options)).href);
+  for (const { key, file } of LEGAL_PAGES) await writeFile(new URL(file, out), legal.renderLiveLegalPage(key), "utf8");
   // This language's 404 page, which both servers answer a page request nothing claims with (R60; `not-found.mjs`), and its
   // maintenance page, for the deploy kit: each under a directory of its own at the root, which neither server serves.
   const notFound = await import(pathToFileURL(await bundle("app/live-not-found-page.jsx", `live-not-found-page${suffix}.mjs`, options)).href);

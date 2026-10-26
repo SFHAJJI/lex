@@ -42,7 +42,7 @@ import { validateRefusal } from "./refusal-card.mjs";
 import { noCorpusMountedSentence, tableRefusalSentence, unshownRefusal } from "./live-refusals.mjs";
 import { CHROME_LOCALE, englishStatement, fillText, liveChrome, refusalTemplate } from "./live-chrome.mjs";
 import { permalinkHref } from "./permalinks.mjs";
-import { isCalendarDate, luxembourgDate } from "./temporal.mjs";
+import { isCalendarDate, luxembourgDateOrNull, todayInLuxembourg } from "./temporal.mjs";
 
 /**
  * The one lane this page asks for: the phrase exactly as typed. The relaxed lane stays off until its check passes (R90), and
@@ -220,27 +220,25 @@ export function longDate(date, locale = CHROME_LOCALE) {
 /**
  * Today, the calendar date in Luxembourg at `now` (milliseconds, the browser's clock where no server said it), by the
  * coded rule (`luxembourgDate`, the specification of record's R13), never the build's time; null for a clock outside the
- * years the rule holds, which then names no date rather than a wrong one.
+ * years the rule holds, which then names no date rather than a wrong one. The rule's own (`temporal.mjs`), named here too.
  */
-export function todayInLuxembourg(now = Date.now()) {
-  try {
-    return luxembourgDate(new Date(now).toISOString());
-  } catch {
-    return null;
-  }
-}
+export { todayInLuxembourg };
 
 /**
  * The date in Luxembourg of an index's build time (`searched.index_built_at`), as the home page's coverage line dates its
  * index (R11: "as of the index built on {date}"); null for no build time, or one the coded rule does not read.
  */
 export function builtOnOf(instant) {
-  if (typeof instant !== "string") return null;
-  try {
-    return luxembourgDate(instant);
-  } catch {
-    return null;
-  }
+  return luxembourgDateOrNull(instant);
+}
+
+/**
+ * Whether an index built on `builtOn` is older than `today` (both calendar dates, R13): then a line that dates what was
+ * searched by the index says today beside it ("When the index is older, both dates are shown"). False when either is
+ * unknown, so no line claims an age it cannot know.
+ */
+export function indexOlderThanToday(builtOn, today) {
+  return isCalendarDate(builtOn) && isCalendarDate(today) && builtOn < today;
 }
 
 /** A text language's name in the interface's language (French, German, English), or its code for one the table does not name. */

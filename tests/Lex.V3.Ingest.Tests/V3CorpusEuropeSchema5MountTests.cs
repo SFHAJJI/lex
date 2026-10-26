@@ -18,7 +18,9 @@ namespace Lex.V3.Ingest.Tests;
 /// answer over them that the code before index /6 sent. So the head's schema-5 reading (its exact DDL, its states and its
 /// logical rows) is checked against bytes it did not produce, and every answer over schema 5 against the answer the code
 /// without force dates sends, whole envelope for whole envelope: no <c>force_dates</c> member, and the not-held row that says
-/// no force date is held. A later change that moves one of those answers on purpose records them again at its base.
+/// no force date is held. A later change that moves one of those answers on purpose records them again at its base: the
+/// answers were recorded again at v3/integration e504d188 (#989 gives every answer its freshness and commits context), by
+/// that code with this class alone added, on Linux, the files unchanged.
 /// </summary>
 [TestClass]
 public sealed class V3CorpusEuropeSchema5MountTests
@@ -28,6 +30,9 @@ public sealed class V3CorpusEuropeSchema5MountTests
     private const string ManifestFileSha256 = "75e969a05392973e7692d1a44a38ab9d85abf01fb9bc8daf2987627aeeeb317b";
     private const string CorpusFileSha256 = "7665cc484a2808c89313b2a6f7e5ef8cdf2e995dc363090958d63a564648753d";
     private const string Act = "32016R0679";
+
+    // The base the answers were last recorded at: the code without force dates, as the integration branch holds it.
+    private const string RecordedAtCommit = "e504d188";
 
     private static byte[] Fixture(string name) =>
         File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuSchema5Mount", name));
@@ -79,9 +84,9 @@ public sealed class V3CorpusEuropeSchema5MountTests
     }
 
     /// <summary>
-    /// Every recorded request, asked again of the same committed files, answers the same bytes. The answers were recorded on
-    /// Windows at the base; nothing in an EU answer reads the system (paths, culture or clock: the handler answers at one fixed
-    /// observation time), and every system is held to them.
+    /// Every recorded request, asked again of the same committed files, answers the same bytes. The answers were recorded at
+    /// the base (24118293 on Windows, again at e504d188 on Linux); nothing in an EU answer reads the system (paths, culture or
+    /// clock: the handler answers at one fixed observation time), and every system is held to them.
     /// </summary>
     [TestMethod]
     public async Task EveryEuAnswerOverTheSchema5MountIsTheOneTheCodeWithoutForceDatesSends()
@@ -89,7 +94,7 @@ public sealed class V3CorpusEuropeSchema5MountTests
         using var recorded = JsonDocument.Parse(Fixture("base-answers.json"));
         var root = recorded.RootElement;
         Assert.AreEqual("24118293", root.GetProperty("written_at_commit").GetString());
-        Assert.AreEqual("24118293", root.GetProperty("recorded_at_commit").GetString());
+        Assert.AreEqual(RecordedAtCommit, root.GetProperty("recorded_at_commit").GetString());
         Assert.AreEqual(IndexFileSha256, root.GetProperty("index_sha256").GetString());
         var rows = root.GetProperty("answers");
         CollectionAssert.AreEqual(Operations, rows.EnumerateArray().Select(static row => row.GetProperty("operation").GetString()).ToArray());
@@ -139,7 +144,7 @@ public sealed class V3CorpusEuropeSchema5MountTests
             var recorded = new JsonObject
             {
                 ["written_at_commit"] = "24118293",
-                ["recorded_at_commit"] = "24118293",
+                ["recorded_at_commit"] = RecordedAtCommit,
                 ["recorded_under"] = RuntimeInformation.OSDescription,
                 ["index_sha256"] = IndexFileSha256,
                 ["answers"] = await LegacyMountAnswers.RecordAsync(mount, Requests(permalink), "eu5"),

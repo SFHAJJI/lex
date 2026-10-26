@@ -4,7 +4,8 @@
 // It says plainly that there is no page at the address, and that this is about the site's pages and not about the law,
 // then offers the home page's search: the same search screen in its home form (the one box, the date field at today),
 // hydrated by the search page's script (`client-live-search.js`), so a phrase goes to the server in a request body and
-// never into an address, as on the home page. It names no address of
+// never into an address: unlike the home page's, this box keeps no search after "#" either (`addressed`), since the page
+// stands at an address this site has no page for, which a link would only repeat. It names no address of
 // its own (no alternate-language links, no canonical), and its text repeats nothing of the address asked; once loaded,
 // its language menu leads to the same address in the other language.
 //
@@ -35,7 +36,7 @@ export function renderLiveNotFoundPage() {
       <p data-not-found-home="">
         <a href={livePath('index.html')}>{copy.home}</a>
       </p>
-      <LiveSearchRoot variant="home" />
+      <LiveSearchRoot variant="home" addressed={false} />
       <script src={livePath('client-live-search.js')} defer />
     </Document>,
   );

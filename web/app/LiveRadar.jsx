@@ -18,6 +18,8 @@ import { LIVE_RADAR_IDLE, RADAR_LANGUAGES, createRadarSession } from '../scripts
 import { ENGLISH_LANG, fillCounted, liveChrome } from '../scripts/live-chrome.mjs';
 import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
 import { FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, refusalCardCopyFor } from './LiveAnswer.jsx';
+import { todayAt } from '../scripts/initial-answer.mjs';
+import { TodayHint, useLuxembourgToday } from './Today.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -151,10 +153,14 @@ export function RadarAnswerView({ outcome, onRetry }) {
   );
 }
 
+/** The id of the line that says today beside the window's two dates (`TodayHint`). */
+const RADAR_TODAY_HINT = 'radar-today';
+
 /**
  * The live screen: a form, and the state of the last radar asked. A radar is asked when the reader
  * submits, never while rendering; the session cancels the one in flight when another is asked, and
- * unmounting cancels whatever is left.
+ * unmounting cancels whatever is left. Today in Luxembourg is said beside the window's dates: the day the last answer was
+ * given on, else this browser's clock once hydrated (R13).
  */
 export function LiveRadar({ contract, fetchImpl }) {
   const [dateFrom, setDateFrom] = useState('');
@@ -166,6 +172,7 @@ export function LiveRadar({ contract, fetchImpl }) {
   if (session.current === null) {
     session.current = createRadarSession({ contract, fetchImpl, onOutcome: setOutcome });
   }
+  const today = useLuxembourgToday(todayAt(outcome.context?.freshness?.observed_at));
 
   useEffect(() => () => session.current.cancel(), []);
 
@@ -180,12 +187,14 @@ export function LiveRadar({ contract, fetchImpl }) {
       >
         <label>
           {FORM.from}{' '}
-          <input type="text" inputMode="numeric" placeholder={FORM.datePlaceholder} value={dateFrom} autoComplete="off" onChange={(event) => setDateFrom(event.target.value)} />
+          <input type="text" inputMode="numeric" placeholder={FORM.datePlaceholder} value={dateFrom} autoComplete="off" aria-describedby={today === null ? undefined : RADAR_TODAY_HINT} onChange={(event) => setDateFrom(event.target.value)} />
         </label>{' '}
         <label>
           {FORM.to}{' '}
-          <input type="text" inputMode="numeric" placeholder={FORM.datePlaceholder} value={dateTo} autoComplete="off" onChange={(event) => setDateTo(event.target.value)} />
+          <input type="text" inputMode="numeric" placeholder={FORM.datePlaceholder} value={dateTo} autoComplete="off" aria-describedby={today === null ? undefined : RADAR_TODAY_HINT} onChange={(event) => setDateTo(event.target.value)} />
         </label>{' '}
+        {/* Today in Luxembourg, beside the two dates (R13; the plan's item 3.4). */}
+        <TodayHint id={RADAR_TODAY_HINT} today={today} />
         <label>
           {FORM.workIdentifierOptional}{' '}
           <input type="text" value={identifier} autoComplete="off" spellCheck={false} onChange={(event) => setIdentifier(event.target.value)} />

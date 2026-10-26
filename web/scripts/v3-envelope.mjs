@@ -24,10 +24,15 @@ const ROOT_MEMBERS = [
   "request_ref", "result", "schema", "verdict", "version",
 ];
 const CONTEXT_MEMBERS = [
-  "freshness", "jurisdiction", "provisional", "publisher", "snapshot", "status", "timeline_semantics",
+  "commits", "freshness", "jurisdiction", "provisional", "publisher", "snapshot", "status", "timeline_semantics",
 ];
 const SNAPSHOT_MEMBERS = ["snapshot_id", "snapshot_sha256"];
-const FRESHNESS_MEMBERS = ["observed_at", "upstream_health"];
+// The freshness header (R87) and the commits (R23), as `V3EnvelopeJson.FreshnessNode` writes them.
+const FRESHNESS_MEMBERS = [
+  "channels", "index_built_at", "last_checked_against_publisher", "maximum_data_age_days", "observed_at", "stale", "upstream_health",
+];
+const CHANNEL_MEMBERS = ["age_days", "lag_days", "lag_observations", "newest_completed_observation", "publisher", "stale"];
+const COMMITS_MEMBERS = ["index_builder_source_commit", "serving_runtime_source_commit"];
 const RESULT_MEMBERS = ["object_type", "schema", "value"];
 const REFUSAL_MEMBERS = ["code", "helpful_payload", "schema"];
 
@@ -45,6 +50,10 @@ const REQUEST_REF = /^[a-z0-9_-]{1,128}$/;
 const IDENTIFIER = /^[\x20-\x7e]{1,256}$/;
 // The platform writes `DateTimeOffset.ToString("O")` of a UTC instant: seven fractional digits and Z.
 const OBSERVED_AT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.\d{7}Z$/;
+// A build's time and a channel's completion, as the platform writes them: UTC, whole seconds.
+const BUILD_INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z$/;
+// `V3Commits.IsCommit`: a full lowercase source commit.
+const COMMIT = /^[0-9a-f]{40}$/;
 // `JsonDocumentOptions.MaxDepth` in `ParseAndVerify`.
 const MAX_DEPTH = 32;
 
@@ -77,10 +86,10 @@ function depthOf(value) {
   return 1 + deepest;
 }
 
-/** A real calendar instant in the platform's form, never `DateTimeOffset`'s default. */
-function isObservedAt(value) {
+/** A real calendar instant in the platform's form (`pattern`), never `DateTimeOffset`'s default. */
+function isObservedAt(value, pattern = OBSERVED_AT) {
   if (typeof value !== "string") return false;
-  const match = OBSERVED_AT.exec(value);
+  const match = pattern.exec(value);
   if (!match) return false;
   const [, year, month, day, hour, minute, second] = match.map(Number);
   if (year < 1) return false;
@@ -91,6 +100,59 @@ function isObservedAt(value) {
   instant.setUTCHours(hour, minute, second, 0);
   return instant.getUTCFullYear() === year && instant.getUTCMonth() === month - 1 && instant.getUTCDate() === day &&
     instant.getUTCHours() === hour && instant.getUTCMinutes() === minute && instant.getUTCSeconds() === second;
+}
+
+const isWholeCount = (value) => Number.isInteger(value) && value >= 0;
+const isBuildInstantOrNull = (value) => value === null || isObservedAt(value, BUILD_INSTANT);
+
+/**
+ * Why an envelope's freshness header (R87) is not the platform's, or null: the build time and each channel's completion
+ * are null or whole-second UTC instants, each publisher is a channel once (Luxembourg first), an age and a channel's stale
+ * flag are null exactly when no completion is stated, no lag range is stated (none is measured yet, and no observation
+ * stands behind one), and no publisher re-check is named (none has run, R69). The page states these values; it never
+ * computes an age of its own.
+ */
+function freshnessProblem(freshness) {
+  if (!isBuildInstantOrNull(freshness.index_built_at)) return "index_built_at is not null or a build's UTC instant";
+  if (!isWholeCount(freshness.maximum_data_age_days) || freshness.maximum_data_age_days === 0) {
+    return "maximum_data_age_days is not a whole number of days";
+  }
+  if (typeof freshness.stale !== "boolean") return "the freshness's stale is not a boolean";
+  if (freshness.last_checked_against_publisher !== null) return "a publisher re-check is named, and none has run";
+  if (!Array.isArray(freshness.channels)) return "the freshness channels are not a list";
+  const order = Object.keys(PUBLISHERS);
+  let last = -1;
+  for (const channel of freshness.channels) {
+    const problem = exactMembers(channel, CHANNEL_MEMBERS, "a freshness channel");
+    if (problem) return problem;
+    const position = order.indexOf(channel.publisher);
+    if (position < 0) return "a freshness channel names an unknown publisher";
+    if (position <= last) return "each publisher is a freshness channel once, Luxembourg first";
+    last = position;
+    if (!isBuildInstantOrNull(channel.newest_completed_observation)) {
+      return "a channel's newest completed observation is not null or a UTC instant";
+    }
+    const stated = channel.newest_completed_observation !== null;
+    if (stated ? !isWholeCount(channel.age_days) : channel.age_days !== null) return "a channel's age does not match its completion";
+    if (stated ? typeof channel.stale !== "boolean" : channel.stale !== null) return "a channel's stale does not match its completion";
+    if (channel.lag_days !== null || channel.lag_observations !== 0) return "a lag is stated, and none is measured";
+  }
+  if (freshness.stale !== freshness.channels.some((channel) => channel.stale === true)) {
+    return "the freshness's stale does not match its channels";
+  }
+  return null;
+}
+
+/** Why an envelope's commits (R23) are not the platform's, or null: each null or a full lowercase source commit. */
+function commitsProblem(commits) {
+  const problem = exactMembers(commits, COMMITS_MEMBERS, "the commits");
+  if (problem) return problem;
+  for (const name of COMMITS_MEMBERS) {
+    if (commits[name] !== null && !(typeof commits[name] === "string" && COMMIT.test(commits[name]))) {
+      return `${name} is not null or a full source commit`;
+    }
+  }
+  return null;
 }
 
 /**
@@ -153,6 +215,8 @@ export function readV3Envelope(value, contract, expected = {}) {
     return fail("observed_at is not a real instant in the platform's UTC form");
   }
   if (!UPSTREAM_HEALTH.includes(context.freshness.upstream_health)) return fail("unknown upstream health");
+  problem = freshnessProblem(context.freshness) ?? commitsProblem(context.commits);
+  if (problem) return fail(problem);
 
   if (!Array.isArray(contract.verdicts) || !contract.verdicts.includes(value.verdict)) return fail("unknown verdict");
   const hasResult = value.result !== null;

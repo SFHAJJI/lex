@@ -304,7 +304,7 @@ public sealed class EuFormexMainBodyLegalContentProducerTests
                 destination.Write(entry.FullName == target ? rewrite(bytes.ToArray()) : bytes.ToArray());
             }
         }
-        return output.ToArray();
+        return PortableZip.Normalise(output.ToArray());
     }
 
     private static async Task<EuFormexMainBodyLegalContentOutcome> Produce(byte[] bytes, string language = "EN", bool requireAdmitted = true)

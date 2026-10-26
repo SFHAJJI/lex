@@ -29,6 +29,12 @@
 //
 // Between the form and the reading, the sentence that says what Lex is not (the specification of record's R50).
 //
+// Today, the calendar date in Luxembourg (R13; the plan's item 3.4), is said beside the form's date field, the server's when
+// the page shows an answer, else this browser's clock (`Today.jsx`). At an act's readable address the page writes the date
+// it read the act at into its own address (`?date=`, replacing the address, never adding to the history), so a link a
+// reader copies keeps that date; a reading of another day than today says so above the reading (`PinnedLead`), and its
+// pages and its whole act link to the version it shows, by its permalink.
+//
 // A version is read one page at a time (the plan's item 3.7; R73): the API answers a page of at most 50 articles and 96 KiB
 // of text, and a version of more than one page says which pages it shows, lists its pages under "Contents" (each page by
 // its first and last article, a link to that page's address, `?page=N` on the version's permalink, or on the act's readable
@@ -51,13 +57,15 @@ import {
   readingOutcome,
 } from '../scripts/live-reading.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
-import { anchorOf, anchorText, permalinkHref } from '../scripts/permalinks.mjs';
+import { anchorOf, anchorText, dateOfQuery, permalinkHref, withDateQuery } from '../scripts/permalinks.mjs';
 import { addedMark } from '../scripts/quotation-marks.mjs';
 import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
 import { hasNextPage, pagesShown, readNextPage, viewOf, withoutStopped } from '../scripts/reading-pages.mjs';
 import { answerHandedWith } from '../scripts/v3-client.mjs';
-import { readingAddressShown, readingPinOf, todayAt } from '../scripts/initial-answer.mjs';
+import { readingAddressShown, readingPinOf, readsAnotherDay, todayAt } from '../scripts/initial-answer.mjs';
 import { writeLawPageLinks } from './head-links.mjs';
+import { replacePageAddress } from './page-address.mjs';
+import { TodayHint, useLuxembourgToday } from './Today.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -568,10 +576,13 @@ export function ReadingAnswerView({ outcome, onRetry, paging = {}, onNext = null
  * The reading form: a work identifier, a date and a language, handed to `onAsk` on submit. Shared
  * with the export composer, which asks the same reading.
  */
-export function ReadingForm({ onAsk, submitLabel = FORM.submit.reading, initial = null }) {
+export function ReadingForm({ onAsk, submitLabel = FORM.submit.reading, initial = null, today = null }) {
   const [identifier, setIdentifier] = useState(initial?.identifier ?? '');
   const [date, setDate] = useState(initial?.date ?? '');
   const [language, setLanguage] = useState(initial?.language ?? '');
+  // Today in Luxembourg beside the date field (R13): `today`, the server's when the page shows its answer, else this
+  // browser's clock once hydrated.
+  const shownToday = useLuxembourgToday(today);
   return (
     <form
       role="search"
@@ -598,9 +609,11 @@ export function ReadingForm({ onAsk, submitLabel = FORM.submit.reading, initial 
           placeholder={FORM.datePlaceholder}
           value={date}
           autoComplete="off"
+          aria-describedby={shownToday === null ? undefined : READING_TODAY_HINT}
           onChange={(event) => setDate(event.target.value)}
         />
       </label>{' '}
+      <TodayHint id={READING_TODAY_HINT} today={shownToday} />
       <label>
         {FORM.language}{' '}
         <select value={language} onChange={(event) => setLanguage(event.target.value)}>
@@ -616,6 +629,9 @@ export function ReadingForm({ onAsk, submitLabel = FORM.submit.reading, initial 
     </form>
   );
 }
+
+/** The id of the line that says today beside the reading form's date field (`TodayHint`): a page holds one such form. */
+const READING_TODAY_HINT = 'reading-today';
 
 /**
  * The live screen: a form, and the state of the last reading asked. A reading is asked when the
@@ -700,6 +716,14 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
     target.focus({ preventScroll: true });
   }, [pinned, pin, outcome]);
 
+  // At an act's readable address, once the act is read: the date it was read at, into the page's own address (`?date=`;
+  // R13, the plan's item 3.4), so a link a reader copies keeps it. An address that keeps a date already is left as it is.
+  useEffect(() => {
+    if (!pinned || pin?.kind !== 'current' || (outcome.state !== 'success' && outcome.state !== 'refusal')) return;
+    if (dateOfQuery(window.location.search) !== null) return;
+    replacePageAddress(window, { search: withDateQuery(window.location.search, pin.request.date) });
+  }, [pinned, pin, outcome]);
+
   // The next page added in place, once it is shown: its first article is brought into view and given the focus.
   const focus = more.base === outcome ? more.focus : null;
   useEffect(() => {
@@ -758,11 +782,12 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
   };
   const replaced = pinned && pin.kind === 'state' && outcome.state === 'success' && !readingHolds(outcome.view, pin.permalink);
   const shown = more.base === outcome && more.view !== null ? { ...outcome, view: more.view } : outcome;
-  // At an act's readable address, a page's links go to that address's pages (`?page=N`), not to the permalink's.
-  const readableFor = pinned && pin.kind === 'current' ? (version) => (version.language === pin.language ? pin.act : null) : null;
+  // At an act's readable address, a page's links go to that address's pages (`?page=N`), not to the permalink's; at one that
+  // keeps another date than today, to the permalink's, the version it shows (today's address shows another).
+  const readableFor = pinned && pin.kind === 'current' && !readsAnotherDay(pin, outcome) ? (version) => (version.language === pin.language ? pin.act : null) : null;
   return (
     <div>
-      <ReadingForm key={pin === null ? 'blank' : pin.address} initial={pin?.form ?? null} onAsk={ask} />
+      <ReadingForm key={pin === null ? 'blank' : pin.address} initial={pin?.form ?? null} onAsk={ask} today={todayAt(outcome.context?.freshness?.observed_at)} />
       {/* What Lex is not, above the text it shows (the specification of record's R50: Reading says it). */}
       <p className="not-advice" data-not-advice="">{liveChrome().site.notAdvice}</p>
       <LiveAnswer>

@@ -141,3 +141,25 @@ export function luxembourgDate(instant) {
   const milliseconds = luxembourgMilliseconds(instant);
   return new Date(milliseconds + luxembourgOffsetHours(milliseconds) * 3_600_000).toISOString().slice(0, 10);
 }
+
+/**
+ * The calendar date in Luxembourg at a UTC instant, or null when there is none to give: no instant, an instant this rule
+ * does not read, or one outside the years it is held for. A page then names no date rather than a wrong one (R13).
+ */
+export function luxembourgDateOrNull(instant) {
+  if (typeof instant !== 'string') return null;
+  try {
+    return luxembourgDate(instant);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Today, the calendar date in Luxembourg at `now` (milliseconds; this browser's clock where no server said it), by the
+ * coded rule above, never the build's time; null for a clock outside the years the rule holds.
+ */
+export function todayInLuxembourg(now = Date.now()) {
+  const instant = new Date(now);
+  return Number.isNaN(instant.getTime()) ? null : luxembourgDateOrNull(instant.toISOString());
+}

@@ -452,8 +452,9 @@ internal sealed partial class V3WebRoot
     /// <c>web/scripts/permalinks.mjs</c> says it (a test holds the two to one table): the page, the operation and the request
     /// the page itself would send. A permalink's reading asks by the permalink itself (R64: the version it pins, or why not),
     /// with the date and the text's language it names; a readable address's reading asks by the work (a Luxembourg coordinate
-    /// or an EU CELEX), <paramref name="today"/> (Luxembourg's date, R13) and the text's language it names, and with no
-    /// <paramref name="today"/> is not rendered; a dossier asks by the work. An interface language's home page
+    /// or an EU CELEX), the date its query keeps (<c>?date=yyyy-mm-dd</c>, <see cref="DateOfQuery"/>; the plan's item 3.4) or else
+    /// <paramref name="today"/> (Luxembourg's date, R13), and the text's language it names, and with neither is not rendered;
+    /// a dossier asks by the work. An interface language's home page
     /// (<c>/en/</c>, <c>/en/index.html</c>) is rendered from <c>coverage</c>, asked with no parameters, as the page as built
     /// asks it once loaded: its coverage line and today's date in Luxembourg (R11, R13; <c>web/scripts/live-home.mjs</c>).
     /// Null for any other path.
@@ -497,7 +498,8 @@ internal sealed partial class V3WebRoot
 
         if (match.Groups["current"].Success)
         {
-            if (today is null)
+            // The date the address keeps (?date=, the plan's item 3.4: a link keeps the date it was read at), else today.
+            if ((DateOfQuery(query) ?? today) is not { } date)
             {
                 return null;
             }
@@ -505,7 +507,7 @@ internal sealed partial class V3WebRoot
             return new V3SitePage(language, "reading", "evidence_bundle", Paged(new Dictionary<string, object>(StringComparer.Ordinal)
             {
                 ["identifier"] = work,
-                ["date"] = today,
+                ["date"] = date,
                 ["language"] = match.Groups["currentLng"].Value,
             }, path, query));
         }
@@ -616,6 +618,40 @@ internal sealed partial class V3WebRoot
     }
 
     private static readonly Regex PageNumber = new("^[1-9][0-9]{0,5}\\z", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+
+    /// <summary>
+    /// The date a readable address keeps in its query (<c>?date=yyyy-mm-dd</c>, its first <c>date</c> parameter; the plan's
+    /// item 3.4, R13: today is written into the address, so a link keeps the date it was read at): a calendar date, else none
+    /// (the address then reads today). As <c>dateOfQuery</c> in <c>web/scripts/permalinks.mjs</c>. A date names no digest, so
+    /// the address stays a readable one, never a permalink.
+    /// </summary>
+    private static string? DateOfQuery(string? query)
+    {
+        if (query is null || query.Length < 2 || query[0] != '?')
+        {
+            return null;
+        }
+
+        foreach (var part in query[1..].Split('&'))
+        {
+            var equals = part.IndexOf('=', StringComparison.Ordinal);
+            var name = equals < 0 ? part : part[..equals];
+            if (!string.Equals(name, "date", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var value = equals < 0 ? string.Empty : part[(equals + 1)..];
+            return CalendarDate.IsMatch(value) &&
+                   DateOnly.TryParseExact(value, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _)
+                ? value
+                : null;
+        }
+
+        return null;
+    }
+
+    private static readonly Regex CalendarDate = new("^[0-9]{4}-[0-9]{2}-[0-9]{2}\\z", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
 
     /// <summary>Whether an envelope is the refusal of a work the API does not know: its page is a 404, as an absent page is.</summary>
     private static bool AnswersUnknownWork(byte[] envelope)

@@ -42,7 +42,8 @@
 //     reference, which no index holds, "not held"), the publication date when the index holds one, the text's SHA-256 (the
 //     provision's text_sha256, R64), the date Lex was consulted (the answer's own date in Luxembourg; the index holds no
 //     time the publisher served the bytes), an act held only as published's label, and the authenticity sentence: the
-//     as-published sentence of its case, the site's sentence for consolidated text, or the EU's statement (R19, R20).
+//     as-published sentence of its case, the site's sentence for consolidated text, or the EU's statement its act's own date
+//     chose, the electronic edition's or the dated one (R19, R20; the owner's decision of 2026-10-18, O4).
 //
 // `verify` resolves every form it emits: the permalink forms by the permalink, as a path or under the site's origin, and the
 // evidence form by its two hashes, the version's in the permalink and the text's (`article_text_sha256`, `evidenceVerdict`).
@@ -298,8 +299,11 @@ export function citationForms({ view, version, article, observedAt }) {
   lines.push(textSha256 === null ? evidence.noText : fillText(evidence.textSha256, { digest: textSha256 }));
   lines.push(fillText(evidence.consulted, { date: today }));
   if (europe) {
-    // The platform's statement, said in the text's language when it is the statement this table holds, else as served.
-    lines.push(view.authenticity === liveChrome('en').citation.europe.authenticity ? words.europe.authenticity : view.authenticity);
+    // The platform's statement, the one the act's own date chose (the owner's decision of 2026-10-18, O4), said in the text's
+    // language when it is one of the two statements this table holds word for word, else as served.
+    const statements = liveChrome('en').citation.europe.authenticity;
+    const basis = Object.keys(statements).find((key) => statements[key] === view.authenticity);
+    lines.push(basis === undefined ? view.authenticity : words.europe.authenticity[basis]);
   } else if (view.asPublished !== null) {
     lines.push(asSentence(table.common.asPublished.label));
     lines.push(fillText(table.common.asPublished.authenticity[view.asPublished.authenticity.basis], { act: view.asPublished.journalOfficielIri }));

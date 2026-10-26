@@ -392,6 +392,9 @@ public static class V3CorpusMountWriter
             europeCapabilityManifest = Reference(build.EuropeIndex.CapabilityManifestRef),
             corpusMembers = build.Corpus.VerifiedSet.Set.Members.Count,
             builtTwiceAndEqual = true,
+            // The source commit of the code that built these indexes and wrote this mount (R23's "index built from"), as its
+            // build stamped it (AcquisitionJournal.CurrentSource); the server names it in every answer when it is a full commit.
+            indexBuilderSource = AcquisitionJournal.CurrentSource(),
             files = written,
             generations = generations.Select(static kept => new { indexSha256 = kept.IndexSha256, observation = kept.Observation, builtAt = kept.BuiltAt, reasons = kept.Reasons }).ToArray(),
         };

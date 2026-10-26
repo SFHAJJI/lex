@@ -1,8 +1,11 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Platform;
+using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Ingest;
 using Lex.V3.Ingest.Europe;
 
@@ -103,11 +106,17 @@ internal sealed partial class V3CorpusMount
         IReadOnlyList<EuropeDatedWording> Dated,
         IReadOnlyList<(EuropeIndexState State, EuropeWordingCandidate? Held)> Unplaced);
 
+    /// <summary>
+    /// One seed act's wordings by language, and <see cref="ActDates"/>: the dates the index holds of the act itself, which choose
+    /// the authenticity statement of every wording of it (<see cref="EuropeAuthenticityRule"/>): the Formex dates of its original
+    /// wording's held text and the publisher's work_date_document of its own work, once each and in order.
+    /// </summary>
     private sealed record EuropeSeedTimeline(
         string SeedCelex,
         string? RootWorkIri,
         IReadOnlyList<string> Languages,
-        IReadOnlyDictionary<string, EuropeLanguageTimeline> ByLanguage);
+        IReadOnlyDictionary<string, EuropeLanguageTimeline> ByLanguage,
+        IReadOnlyList<string> ActDates);
 
     private readonly object _europeTimeGate = new();
     private IReadOnlyList<EuropeIndexState>? _europeStates;
@@ -247,6 +256,7 @@ internal sealed partial class V3CorpusMount
         // The original act's date is the Formex date of its held wording, the same in every language; held in no language, or
         // with more than one date, the original wording is not placed.
         string? originalDate = null;
+        var actDates = new List<string>();
         if (root is not null)
         {
             var rootDates = expressions
@@ -255,6 +265,12 @@ internal sealed partial class V3CorpusMount
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
             originalDate = rootDates.Length == 1 ? rootDates[0] : null;
+
+            // The dates of the act itself, for its authenticity statement: every Formex date of its original's held text (an
+            // unplaced original's too), and the publisher's document date of its own work, which the census holds whether or not
+            // the original's text is held.
+            actDates.AddRange(rootDates);
+            actDates.AddRange(EuropeWorkDocumentDates(root));
         }
 
         var languages = expressions.Select(static expression => expression.Language)
@@ -330,13 +346,45 @@ internal sealed partial class V3CorpusMount
             byLanguage[language] = new EuropeLanguageTimeline(language, entries, unplaced);
         }
 
-        var timeline = new EuropeSeedTimeline(seed, root?.PublisherWorkIri, languages, byLanguage);
+        var timeline = new EuropeSeedTimeline(seed, root?.PublisherWorkIri, languages, byLanguage,
+            actDates.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray());
         lock (_europeTimeGate)
         {
             _europeTimelines[seed] = timeline;
         }
 
         return timeline;
+    }
+
+    /// <summary>
+    /// The publisher's <c>cdm:work_date_document</c> of a discovered work, as the census facts the index retained for it say it:
+    /// each value that is one civil date (an <c>xsd:date</c> literal with no language), verbatim. The index validated those facts
+    /// when it was mounted, so an observation of another shape is not a date of the work and is not read.
+    /// </summary>
+    private static IReadOnlyList<string> EuropeWorkDocumentDates(EuropeIndexState state)
+    {
+        var predicate = EuObjectFactsDiscoveryPlan.CdmIri(EuCdmPredicate.WorkDateDocument);
+        using var facts = JsonDocument.Parse(state.FactsJson);
+        var dates = new List<string>();
+        foreach (var observation in facts.RootElement.GetProperty("Observations").EnumerateArray())
+        {
+            if (!string.Equals(observation.GetProperty("PredicateIri").GetString(), predicate, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var value = observation.GetProperty("Value");
+            if (value.GetProperty("Kind").GetInt32() == (int)RepeatedEnumerationRdfTermKind.Literal &&
+                value.GetProperty("Language").ValueKind == JsonValueKind.Null &&
+                string.Equals(value.GetProperty("Datatype").GetString(), "http://www.w3.org/2001/XMLSchema#date", StringComparison.Ordinal) &&
+                value.GetProperty("Value").GetString() is { } date &&
+                DateOnly.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+            {
+                dates.Add(date);
+            }
+        }
+
+        return dates;
     }
 
     /// <summary>The pin of a held wording on its date: its digest under <see cref="EuropeWordingDigestRule"/> and its permalink.</summary>
@@ -989,6 +1037,8 @@ internal sealed partial class V3CorpusMount
             };
         }).ToArray();
 
+        // Every wording served is of the seed act, whose own dates choose the authenticity statement, never a consolidation's.
+        var authenticity = EuropeAuthenticityOf(timeline.ActDates);
         using var result = JsonSerializer.SerializeToDocument(new
         {
             scope = EuropeTimeEvidenceBundleScope,
@@ -1005,7 +1055,10 @@ internal sealed partial class V3CorpusMount
             page_rule = EuropeReadingPageRule,
             wordings = bundles,
             acknowledgement = EuropeTextAcknowledgement,
-            authenticity = EuropeTextAuthenticity,
+            authenticity = authenticity.Sentence,
+            authenticity_basis = authenticity.Basis,
+            authenticity_act_dates = authenticity.ActDates,
+            authenticity_rule = EuropeAuthenticityRule,
             rights_rule = EuropeEvidenceBundleRightsRule,
             date_rule = EuropeSelectionRule,
             date_semantics = EuropeStateDateSemantics,

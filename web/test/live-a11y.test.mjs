@@ -71,24 +71,35 @@ async function renders() {
 const MONTH_NAMES = "January|February|March|April|May|June|July|August|September|October|November|December|janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre";
 const MONTHS = new RegExp(`\\b\\d{1,2}(?:er)?\\s+(?:${MONTH_NAMES})\\b|\\b(?:${MONTH_NAMES})\\s+\\d{1,4}\\b`, "i");
 const RELATIVE = /\b(today|yesterday|tomorrow|\d+\s+(?:days?|weeks?|months?|years?)\s+ago|last (?:week|month|year)|next (?:week|month|year)|aujourd’hui|hier|demain)\b/i;
+// R13 (the plan's item 3.4): "today" is printed, always with the calendar date in Luxembourg it is ("Today in Luxembourg:
+// 2026-10-18.", "today in Luxembourg is 2026-10-18"), and only so: the one relative word a screen says, bound to the explicit
+// date it names. The rule above holds the rest of the text.
+const TODAY_WITH_ITS_DATE = /\b(?:Today in Luxembourg: |today in Luxembourg is |Aujourd’hui au Luxembourg : |nous sommes aujourd’hui le )(?=\d{4}-\d{2}-\d{2}\b)/gi;
+const withoutTodayAndItsDate = (text) => text.replace(TODAY_WITH_ITS_DATE, "");
 const NUMERIC_NOT_ISO = /\b\d{1,2}[./]\d{1,2}[./]\d{2,4}\b/;
 const ISO = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
 
 /**
  * A render without the publisher's own words: its quotations (an article quoted whole, and a search result's extract, the
  * plan's item 4.3) and whatever is marked in its statute language. Those are the law's text, whose dates are the law's to
- * write; the rule is about the dates the interface states.
+ * write; the rule is about the dates the interface states. The EU authenticity statement is left out too: it states the
+ * law's rule in the owner's words (the owner's decision of 2026-10-18, O4), and "before 1 July 2013" is the day Regulation
+ * (EU) No 216/2013 applies from, not a date the interface states.
  */
 const withoutQuotations = (markup) => markup
   .replace(/<blockquote[\s\S]*?<\/blockquote>/g, "")
   .replace(/<q(?:\s[^>]*)?>[\s\S]*?<\/q>/g, "")
-  .replace(/<span lang="[^"]*">[\s\S]*?<\/span>/g, "");
+  .replace(/<span lang="[^"]*">[\s\S]*?<\/span>/g, "")
+  .replace(/<p data-authenticity=""[^>]*>[\s\S]*?<\/p>/g, "");
 
 test("every date a live screen shows is an explicit calendar date, never relative and never a local format", async () => {
   const texts = [...(await renders()).map((one) => [`${one.name}: ${one.scenario}`, textOf(withoutQuotations(one.markup))]),
     ...Object.entries(PAGES).map(([name, render]) => [`${name} page`, textOf(withoutQuotations(render()))])];
+  assert.equal(withoutTodayAndItsDate("Today in Luxembourg: 2026-10-18."), "2026-10-18.");
+  assert.match(withoutTodayAndItsDate("Today in Luxembourg."), RELATIVE, "today with no date is still relative");
+  assert.match(withoutTodayAndItsDate("today in Luxembourg is the 18th"), RELATIVE);
   for (const [label, text] of texts) {
-    assert.doesNotMatch(text, RELATIVE, `${label} says a date relative to now`);
+    assert.doesNotMatch(withoutTodayAndItsDate(text), RELATIVE, `${label} says a date relative to now`);
     assert.doesNotMatch(text, MONTHS, `${label} names a month rather than writing the date`);
     assert.doesNotMatch(text, NUMERIC_NOT_ISO, `${label} writes a date in a local numeric format`);
     for (const [date, year, month, day] of text.matchAll(ISO)) {

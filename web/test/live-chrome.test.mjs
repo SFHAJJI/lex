@@ -22,6 +22,11 @@ import {
   renderLiveRadarPage,
   renderLiveReadingPage,
   renderLiveSearchPage,
+  renderLiveLegalNoticePage,
+  renderLivePrivacyPage,
+  renderLiveTermsPage,
+  renderLiveAccessibilityPage,
+  renderLiveCookiesPage,
 } from "../.react-build/app.mjs";
 import { LIVE_CHROME, REFUSAL_TRANSLATIONS, countedEntry, entriesOf, fillCounted, fillParts, fillText, liveChrome } from "../scripts/live-chrome.mjs";
 import { REVIEWED_CHROME_LOCALES } from "../scripts/locale-unavailable.mjs";
@@ -43,14 +48,23 @@ const PAGES = {
   // The 404 page and the maintenance page (R60) carry the site's header and footer like every page.
   notFound: renderLiveNotFoundPage,
   maintenance: renderLiveMaintenancePage,
+  // The five legal pages every footer links (the plan's item 7.1).
+  legalNotice: renderLiveLegalNoticePage,
+  privacy: renderLivePrivacyPage,
+  terms: renderLiveTermsPage,
+  accessibility: renderLiveAccessibilityPage,
+  cookies: renderLiveCookiesPage,
 };
+
+/** The legal pages, which ask nothing and carry no form. */
+const LEGAL = new Set(["legalNotice", "privacy", "terms", "accessibility", "cookies"]);
 
 // React escapes an apostrophe in text; the table holds the text itself.
 const escaped = (text) => text.replaceAll("&", "&amp;").replaceAll("'", "&#x27;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
 
 test("every live page renders its chrome from the table", () => {
   const copy = liveChrome("en");
-  assert.deepEqual(Object.keys(copy).filter((key) => !["form", "common", "shell", "site", "card", "refusalCard", "coverageAnswer", "failure", "citation"].includes(key)).sort(), Object.keys(PAGES).sort(), "one entry per live page, the forms, the page shell, the site around it, the evaluation and refusal cards, the coverage answer, the failure panel, what the screens share, and the citation generator's words");
+  assert.deepEqual(Object.keys(copy).filter((key) => !["form", "common", "shell", "site", "freshness", "card", "refusalCard", "coverageAnswer", "failure", "citation", "legal"].includes(key)).sort(), Object.keys(PAGES).sort(), "one entry per live page, the forms, the page shell, the site around it and its freshness strip, the evaluation and refusal cards, the coverage answer, the failure panel, what the screens share, the citation generator's words, and what the legal pages share");
   for (const [key, render] of Object.entries(PAGES)) {
     const html = render();
     const entry = copy[key];
@@ -60,6 +74,13 @@ test("every live page renders its chrome from the table", () => {
       assert.ok(html.includes(escaped(text)), `${key}: the site says ${JSON.stringify(text.slice(0, 40))}`);
     }
     assert.ok(!html.includes("development build"), `${key}: no development banner`);
+    // Every page as built carries the freshness strip in its footer (R87, R23), and no staleness banner: the as-built line on
+    // a page that asks the server, and on one that never does (the maintenance page and the legal pages) that it carries no
+    // answer, never the as-built line's "once it has an answer" (the review of #990).
+    const quiet = key === "maintenance" || LEGAL.has(key);
+    assert.ok(html.includes(`<p>${escaped(quiet ? copy.freshness.noAnswer : copy.freshness.asBuilt)}</p>`), `${key}: the freshness strip as built`);
+    assert.ok(!html.includes(escaped(quiet ? copy.freshness.asBuilt : copy.freshness.noAnswer)), `${key}: only that strip`);
+    assert.ok(!html.includes("staleness-banner"), `${key}: no staleness banner as built`);
     assert.ok(html.includes(`<p class="eyebrow">${escaped(entry.eyebrow)}</p>`), `${key}: eyebrow`);
     assert.ok(html.includes(`<h1>${escaped(entry.heading)}</h1>`), `${key}: heading`);
     assert.ok(html.includes(`<p>${escaped(entry.intro)}</p>`), `${key}: introduction`);
@@ -69,8 +90,8 @@ test("every live page renders its chrome from the table", () => {
 test("every form's labels and button come from the table", () => {
   const { form } = liveChrome("en");
   for (const [key, render] of Object.entries(PAGES)) {
-    // Trust and Coverage asks with no form, and the maintenance page asks nothing.
-    if (key === "coverage" || key === "maintenance") continue;
+    // Trust and Coverage asks with no form, and the maintenance page and the legal pages ask nothing.
+    if (key === "coverage" || key === "maintenance" || LEGAL.has(key)) continue;
     // The home page is the search screen under the site's introduction, and the 404 page offers it: its form is search's.
     const formKey = key === "home" || key === "notFound" ? "search" : key;
     // A page rendered for hydration marks text boundaries with empty comments; they are not text.

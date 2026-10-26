@@ -42,8 +42,8 @@ test("the tree the browser hydrates is the tree the server rendered (review of #
 
 test("the search page's server render is the tree the browser hydrates", () => {
   const html = renderLiveSearchPage();
-  const open = '<div id="live-search-root" data-variant="search">';
-  assert.ok(html.includes(open), "the root names its form, which the search script hydrates");
+  const open = '<div id="live-search-root" data-variant="search" data-address="kept">';
+  assert.ok(html.includes(open), "the root names its form, which the search script hydrates, and that it keeps its search in the address");
   const root = html.slice(html.indexOf(open) + open.length);
   assert.ok(root.startsWith(renderToString(liveSearchTree("search"))), "a hydration that changed the markup would re-render silently");
   assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), "the search page is a live page, under the live banner");

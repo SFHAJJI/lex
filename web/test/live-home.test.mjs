@@ -137,7 +137,16 @@ test("the coverage line says only what the coverage answer counts, as of its ind
   });
   const otherFacts = homeFacts(other, LIVE_CONTRACT);
   assert.deepEqual(otherFacts.coverage, { state: "counted", works: 1730, states: 1731, articles: 52617, builtOn: "2026-10-14" }, "22:40 UTC on 13 October is the 14th in Luxembourg");
-  assert.ok(mainOf(renderLiveHomePage({ facts: otherFacts })).includes("This site holds 1730 acts of Luxembourg law, in 1731 versions with 52617 articles, as of the index built on 2026-10-14."));
+  // The index is older than today, so both dates are shown (R13; the plan's item 3.4).
+  assert.equal(otherFacts.today, "2026-10-15");
+  assert.ok(mainOf(renderLiveHomePage({ facts: otherFacts })).includes("This site holds 1730 acts of Luxembourg law, in 1731 versions with 52617 articles, as of the index built on 2026-10-14; today in Luxembourg is 2026-10-15."));
+  // An index built today says its date alone; one built on the day before today in Luxembourg, both, either side of midnight.
+  assert.ok(mainOf(renderLiveHomePage({ facts: { ...otherFacts, today: "2026-10-14" } })).includes("as of the index built on 2026-10-14.</p>"));
+  for (const [observedAt, today] of [["2026-10-14T21:59:59.0000000Z", null], ["2026-10-14T22:00:00.0000000Z", "2026-10-15"]]) {
+    const facts = homeFacts(coverageAt(observedAt, () => structuredClone(other.result.value)), LIVE_CONTRACT);
+    const said = mainOf(renderLiveHomePage({ facts }));
+    assert.ok(today === null ? said.includes("as of the index built on 2026-10-14.</p>") : said.includes(`as of the index built on 2026-10-14; today in Luxembourg is ${today}.`), `${observedAt}: ${facts.today}`);
+  }
 
   // A log that records no build: the counts, and no date.
   const undated = homeFacts(coverageAt("2026-10-15T10:00:00.0000000Z", (value) => ({

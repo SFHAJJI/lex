@@ -506,6 +506,25 @@ public sealed class V3PlatformHostTests
             V3OperationRegistry.Reviewed);
         Assert.AreEqual(observedAt, laterEnvelope.Context.Freshness.ObservedAt);
         Assert.AreEqual("unreachable", laterEnvelope.Context.Freshness.UpstreamHealth);
+
+        // The server's own answers name the commit its build stamped (R23, "service running"), and a refusal with no corpus
+        // mounted names no index and no channel; a test build in a checkout is stamped, as the image's is.
+        Assert.AreEqual(V3PlatformHost.StampedServingRuntimeSourceCommit, envelope.Context.Commits.ServingRuntimeSourceCommit);
+        Assert.IsTrue(V3Commits.IsCommit(V3PlatformHost.StampedServingRuntimeSourceCommit), "the API assembly carries the commit it was built from");
+        Assert.IsNull(envelope.Context.Commits.IndexBuilderSourceCommit);
+        Assert.AreEqual(0, envelope.Context.Freshness.Channels.Count);
+        Assert.IsNull(envelope.Context.Freshness.IndexBuiltAt);
+    }
+
+    [TestMethod]
+    public void TheStampedCommitIsWhatFollowsThePlusOfTheInformationalVersion()
+    {
+        var stamped = typeof(V3PlatformHost).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .Cast<System.Reflection.AssemblyInformationalVersionAttribute>().Single().InformationalVersion;
+        Assert.AreEqual(stamped[(stamped.LastIndexOf('+') + 1)..], V3PlatformHost.StampedServingRuntimeSourceCommit);
+        // A host made without a commit names none, so a census rendered from a test's handler holds from commit to commit.
+        Assert.IsNull(new V3PlatformHost().ServingRuntimeSourceCommit);
     }
 
     [TestMethod]

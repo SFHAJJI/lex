@@ -54,7 +54,8 @@ internal sealed class V3ApiHandler
         V3CorpusMount? corpusMount = null,
         V3WebRoot? webRoot = null)
     {
-        var api = new V3ApiHandler(syntheticState, new V3PlatformHost(), utcNow, corpusMount, webRoot);
+        // The server's own answers name the commit its build stamped (R23, "service running").
+        var api = new V3ApiHandler(syntheticState, new V3PlatformHost(V3PlatformHost.StampedServingRuntimeSourceCommit), utcNow, corpusMount, webRoot);
         return context => api.HandleAsync(context, context.RequestAborted);
     }
 
@@ -64,13 +65,16 @@ internal sealed class V3ApiHandler
     /// Today in Luxembourg by this server's clock (R13, <see cref="LuxembourgCalendar"/>), as <c>yyyy-MM-dd</c>; null for a
     /// clock outside the range the rule is held for, when a readable address's page is served as built.
     /// </summary>
-    private string? LuxembourgToday()
-    {
-        var now = _utcNow();
-        return now >= LuxembourgCalendar.ValidFrom && now < LuxembourgCalendar.ValidUntil
+    private string? LuxembourgToday() => LuxembourgTodayAt(_utcNow());
+
+    /// <summary>
+    /// Today in Luxembourg at <paramref name="now"/> (R13, <see cref="LuxembourgCalendar"/>), as <c>yyyy-MM-dd</c>, the date a
+    /// readable address with no date of its own is rendered at; null outside the range the rule is held for.
+    /// </summary>
+    internal static string? LuxembourgTodayAt(DateTimeOffset now) =>
+        now >= LuxembourgCalendar.ValidFrom && now < LuxembourgCalendar.ValidUntil
             ? LuxembourgCalendar.DateAt(now).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
             : null;
-    }
 
     /// <summary>Shared with <see cref="V3McpJsonRpc"/> so the MCP transport refuses a call with no corpus mounted the same way REST does.</summary>
     internal static V3EnvelopeContext UnmountedLuxembourgContext(Func<DateTimeOffset> utcNow) =>
@@ -362,7 +366,8 @@ internal sealed class V3ApiHandler
             parameters.ToDictionary(static pair => pair.Key, static pair => (object)pair.Value, StringComparer.Ordinal));
         try
         {
-            return new V3PlatformHost().AnswerRest(page.RequestUtf8, RequestReference("startup"), operationId, ExecuteFor(corpusMount, utcNow, operationId), CancellationToken.None);
+            return new V3PlatformHost(V3PlatformHost.StampedServingRuntimeSourceCommit)
+                .AnswerRest(page.RequestUtf8, RequestReference("startup"), operationId, ExecuteFor(corpusMount, utcNow, operationId), CancellationToken.None);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

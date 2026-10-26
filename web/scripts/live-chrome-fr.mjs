@@ -195,6 +195,70 @@
 // review's proposals taken as worded: the search card's head for `outside_named_version` (the refusal translations),
 // `dossier.overlap` ("à la veille du {to}") and `radar.reason.ambiguous_version` ("couvrent cette date", never "s’appliquent"
 // after an entry into force).
+// Today beside the dates and a search kept in the address (the plan's items 3.4 and 3.5; R13, R109): the search page's
+// introduction (`search.intro`, its last sentence: where the phrase goes and where the page keeps it), today beside an older
+// index's date (`search.searchedOlder`, `home.coverageOlder`), a fragment the form will not send (`search.addressUnread`) and
+// a readable address read on another day than today (`reading.notToday`), with the reviewed `form.today` in its new places
+// (the reading form and the export composer, Compare, Changes, the dossier), were reviewed by an independent reviewer
+// (Claude, AI reviewer, not the author) under the same delegation in the addendum of 2026-10-19 on today and the search's
+// address (5 forms, 2 changed in review, the English with them: the phrase is never in "the request's address", not "an
+// address a server could record", which a shared link is; the part after "#" is what the browser never sends, never the
+// page's address; a reading of another day "porte sur" the act, true over a refusal too, as this site holds it "pour cette
+// date"). "au Luxembourg, nous sommes aujourd’hui le {today}" is the table's form of today inside a sentence.
+// The five legal pages (the plan's item 7.1; R49, R50, R62, R70, R74, R92): every form of the sections `legal`,
+// `legalNotice`, `privacy`, `terms`, `accessibility` and `cookies` (97 forms) was reviewed by an independent reviewer
+// (Claude, AI reviewer, not the author) under the same delegation in the addendum of 2026-10-18 "the five legal pages"
+// (14 changed in review: "l’éditeur de Lex" for the site's publisher, never bare "éditeur", which stays the law's
+// publishers; a test's condition and a search engine's permission are "ne doit" and "ne sont autorisés à", never "ne
+// peut"; the EU texts' acknowledgement quoted in English, as they carry it, through `{eurlexAcknowledgement}`; the
+// quotation "le texte cité", the reference "citation"; "Veuillez ne faire figurer"; "fournisseur de messagerie"; no
+// "servir"). Its entry 13 recommended "non conforme" for the accessibility status, with the English "non-conformant": the
+// owner chose it on 2026-10-19 (STATUS-WEB.md), so the statement ships entry 13's recommended English and French word for
+// word, in place of R62's "partiellement conforme". The lawyer's read (O4) of these pages is the owner's choice and has
+// not been done.
+// The legal pages without a person or a contact (the owner's decision of 2026-10-19: no person, no postal address, no
+// e-mail address, no contact): the forms added, changed or moved in the five pages, `legalNotice.intro`,
+// `legalNotice.sections.what` (`heading`, `text`, `notAdvice`), `legalNotice.sections.status` (`heading`, `text`,
+// `prevails`), `legalNotice.sections.sources` (`heading`, `luxembourg`, `europe`, `changes`), `privacy.intro`,
+// `privacy.sections.reading.request`, `.host` and `.nothingHeld`, `terms.intro`, `terms.sections.use` (`heading`, `text`),
+// `terms.sections.texts.licences`, `terms.sections.warranty.text`, `accessibility.intro` and
+// `accessibility.sections.law.text` (22 forms), were reviewed by an independent reviewer (Claude, AI reviewer, not the
+// author) under the same delegation in the addendum of 2026-10-19 "the legal pages without a person or a contact" (7
+// changed in review, the English with two of them: Lex is read "au fil du temps", never "dans le temps"; a text "que Lex
+// montre", never "sur Lex" or "de Lex"; the reader "est libre de" use the texts, a permission, never "peut"; the part
+// after "#" is the only antecedent of what the browser never sends; "Lex ne propose ni compte ni inscription"; the terms
+// announce how to cite the texts, not Lex).
+// The reader's right to complain to the CNPD, kept on the privacy notice as a driver decision of 2026-10-19 (one sentence, the
+// regulator's site linked, no postal address): `privacy.sections.rights.heading` and `privacy.sections.rights.complaint`,
+// entries 52 and 54 of 2026-10-18 less "aussi" and the address, were reviewed by an independent reviewer (Claude, AI
+// reviewer, not the author) under the same delegation in the addendum of 2026-10-19 "the CNPD complaint line kept" (2
+// forms, both approved).
+// PR #990's review (2026-10-26): `legalNotice.sections.what.text`, qualified "pour les textes et les dates qu’il détient"
+// as the terms' service sentence is, and `freshness.noAnswer`, the footer strip of a page that ships no script (the legal
+// pages and the maintenance page), which never has an answer, were reviewed by an independent reviewer (Claude, AI
+// reviewer, not the author) under the same delegation in the addendum of 2026-10-26 "the legal notice qualified and the
+// freshness strip on a page with no answer" (2 forms, both approved; "ne contient aucune réponse", never "n’interroge pas
+// le serveur", which the privacy notice's requests would contradict).
+// The EU authenticity statement chosen by the act's date (the owner's decision of 2026-10-18 on PR #975's question, O4):
+// `citation.europe.authenticity`, one string approved in the addendum of 2026-10-17 on the citation generator, is now two
+// entries keyed by the platform's basis, `citation.europe.authenticity.electronic_edition` (that string, unchanged) and
+// `citation.europe.authenticity.edition_by_publication_date` (new: "Pour un acte publié avant le 1er juillet 2013, l’édition
+// imprimée du Journal officiel de l’Union européenne fait foi …", and "depuis cette date" for the electronic one); both
+// were reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the same delegation in the addendum
+// of 2026-10-18 on the EU authenticity statement (2 forms, none changed; the reviewer's optional points on the owner's
+// English go to the lawyer's read, O4).
+// Freshness and the commits (the plan's items 6.1 and 6.5; R87, R23, R69): the footer strip's region label and as-built
+// line (`freshness.heading`, `freshness.asBuilt`), the index's build date (`freshness.built`, `freshness.builtUndated`),
+// the two publisher channels (`freshness.channels.lu-legilux`, `freshness.channels.eu-eurlex`), each channel's last
+// complete collection with its lag (`freshness.collected`, `one` and `other`, and `freshness.collectedUnstated`), the two
+// commit labels and their unstated value (`freshness.indexCommit`, `freshness.serviceCommit`, `freshness.commitUnstated`),
+// and the staleness banner (`freshness.staleHeading`, `freshness.stale`, `one` and `other`), 15 forms, were reviewed by an
+// independent reviewer (Claude, AI reviewer, not the author) under the same delegation in the addendum of 2026-10-19 on
+// freshness and the commits (12 changed in review: the count is whole days elapsed up to the server's answer, so it is said
+// "jours entiers avant la réponse donnée par le serveur le {today}", never "avant le {today}", which the printed dates could
+// contradict by one; the lag is "le décalage entre publication et collecte", never "délai"; a commit is a "révision du
+// code", never "commit" or "version"; a channel's texts are "provenant de" their publisher; the region is "Mise à jour des
+// données"; the English changed with the count and the banner, and says "(not recorded)").
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -225,7 +289,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Recherche',
     eyebrow: 'Recherche',
     heading: 'Rechercher dans le texte détenu',
-    intro: 'Trouve les actes dont l’intitulé correspond à l’expression et, dans le texte que ce serveur détient et qu’il est autorisé à interroger, les articles qui la contiennent exactement telle que saisie : un texte que ses droits ne permettent pas de communiquer n’entre pas dans la recherche. L’expression est envoyée à ce serveur dans la requête et nulle part ailleurs, et cette page ne conserve rien.',
+    intro: 'Trouve les actes dont l’intitulé correspond à l’expression et, dans le texte que ce serveur détient et qu’il est autorisé à interroger, les articles qui la contiennent exactement telle que saisie : un texte que ses droits ne permettent pas de communiquer n’entre pas dans la recherche. L’expression est envoyée à ce serveur dans le corps de la requête, jamais dans l’adresse de la requête ; cette page ne conserve la recherche que dans sa propre adresse, après « # », dans une partie que le navigateur n’envoie jamais, de sorte qu’un lien vers cette adresse partage la recherche.',
     idle: 'Saisissez une expression pour rechercher dans le texte des articles que ce serveur détient et qu’il est autorisé à interroger.',
     population: Object.freeze({
       one: '« {query} » en {language} : {strict} avec l’expression exacte, {relaxed} avec chacun des mots, dans {works} acte.',
@@ -280,6 +344,8 @@ export const LIVE_CHROME_FR = Object.freeze({
     }),
     searched: 'Recherche effectuée dans {acts} du droit luxembourgeois en {language}, en {versions} comptant {articles} au texte interrogeable, d’après l’index construit le {date}.',
     searchedUndated: 'Recherche effectuée dans {acts} du droit luxembourgeois en {language}, en {versions} comptant {articles} au texte interrogeable ; l’index que ce site détient ne consigne aucune date de construction.',
+    searchedOlder: 'Recherche effectuée dans {acts} du droit luxembourgeois en {language}, en {versions} comptant {articles} au texte interrogeable, d’après l’index construit le {date} ; au Luxembourg, nous sommes aujourd’hui le {today}.',
+    addressUnread: 'La recherche contenue dans l’adresse de cette page n’a pas pu être lue ; aucune recherche n’a donc été effectuée.',
     withheld: Object.freeze({
       one: '{count} version dont les droits ne permettent pas de communiquer le texte n’a pas été interrogée.',
       other: '{count} versions dont les droits ne permettent pas de communiquer le texte n’ont pas été interrogées.',
@@ -378,6 +444,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     europeNewerWording: 'Un libellé ultérieur de cet acte est détenu : le libellé du {date}.',
     europeLaterWordingNotHeld: 'Les données de l’éditeur nomment, pour cet acte, un libellé ultérieur du {date}, dont ce site ne détient pas le texte dans cette langue.',
     openToday: 'Lire cet acte à la date du jour',
+    notToday: 'Cette page porte sur l’acte à la date du {date}, tel que ce site le détient pour cette date ; au Luxembourg, nous sommes aujourd’hui le {today}.',
     title: 'Lecture',
     eyebrow: 'Lecture',
     heading: 'Le texte à une date',
@@ -829,6 +896,30 @@ export const LIVE_CHROME_FR = Object.freeze({
     authenticity: 'Les textes consolidés n’ont aucun effet juridique : seuls font foi les textes publiés au Journal officiel du Grand-Duché de Luxembourg (Mémorial A) et au Journal officiel de l’Union européenne.',
     sources: 'Les textes proviennent de Legilux et de l’Office des publications de l’Union européenne, tels que ce site les détient ; chaque article cité indique sa source officielle.',
   }),
+  freshness: Object.freeze({
+    heading: 'Mise à jour des données',
+    asBuilt: 'Chaque réponse du serveur indique quand l’index a été construit, quand les textes de chaque éditeur ont été collectés pour la dernière fois, ainsi que le code qui a construit l’index et celui qui le sert ; cette page affiche ces indications dès qu’elle a reçu une réponse.',
+    noAnswer: 'Cette page ne contient aucune réponse du serveur ; il n’y a donc rien à afficher ici. Sur une page qui en contient une, cette partie indique, d’après cette réponse, quand l’index a été construit, quand les textes de chaque éditeur ont été collectés pour la dernière fois, ainsi que le code qui a construit l’index et celui qui le sert.',
+    built: 'Index construit le {date}.',
+    builtUndated: 'L’index ne consigne aucune date de construction.',
+    channels: Object.freeze({
+      'lu-legilux': 'Droit luxembourgeois, provenant de Legilux',
+      'eu-eurlex': 'Droit de l’UE, provenant de l’Office des publications de l’Union européenne',
+    }),
+    collected: Object.freeze({
+      one: '{channel} : la dernière collecte complète s’est achevée le {date}, {count} jour entier avant la réponse donnée par le serveur le {today} ; le décalage entre publication et collecte n’est pas encore mesuré.',
+      other: '{channel} : la dernière collecte complète s’est achevée le {date}, {count} jours entiers avant la réponse donnée par le serveur le {today} ; le décalage entre publication et collecte n’est pas encore mesuré.',
+    }),
+    collectedUnstated: '{channel} : la date à laquelle sa dernière collecte complète s’est achevée n’est pas consignée avec cet index ; le décalage entre publication et collecte n’est pas encore mesuré.',
+    indexCommit: 'Révision du code ayant construit l’index',
+    serviceCommit: 'Révision du code du service en fonctionnement',
+    commitUnstated: 'non consignée',
+    staleHeading: 'Certains textes peuvent ne pas être à jour',
+    stale: Object.freeze({
+      one: '{channel} : sa dernière collecte complète s’est achevée le {date}, plus de {count} jour avant la réponse donnée par le serveur le {today}. L’éditeur peut avoir publié des modifications depuis ; consultez son site officiel.',
+      other: '{channel} : sa dernière collecte complète s’est achevée le {date}, plus de {count} jours avant la réponse donnée par le serveur le {today}. L’éditeur peut avoir publié des modifications depuis ; consultez son site officiel.',
+    }),
+  }),
   home: Object.freeze({
     title: 'Le droit luxembourgeois et de l’UE à la date de votre choix',
     eyebrow: 'Rechercher dans le droit',
@@ -837,6 +928,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     aboutHeading: 'Ce qu’est Lex et ce qu’il n’est pas',
     coverage: 'Ce site détient {acts} du droit luxembourgeois, en {versions} comptant {articles}, d’après l’index construit le {date}.',
     coverageUndated: 'Ce site détient {acts} du droit luxembourgeois, en {versions} comptant {articles} ; l’index qu’il détient ne consigne aucune date de construction.',
+    coverageOlder: 'Ce site détient {acts} du droit luxembourgeois, en {versions} comptant {articles}, d’après l’index construit le {date} ; au Luxembourg, nous sommes aujourd’hui le {today}.',
     acts: Object.freeze({
       one: '{count} acte',
       other: '{count} actes',
@@ -872,6 +964,160 @@ export const LIVE_CHROME_FR = Object.freeze({
     eyebrow: 'Maintenance',
     heading: 'Lex est en cours de mise à jour',
     intro: 'Ce site est en cours de mise à jour et ne peut pas répondre pour le moment. Cette page n’est pas une réponse sur le droit. Réessayez dans quelques instants.',
+  }),
+  legal: Object.freeze({
+    menu: 'Informations légales',
+    updated: 'Dernière mise à jour : {date}.',
+    inline: Object.freeze({
+      legalNotice: 'mentions légales',
+      privacy: 'page sur la protection des données',
+      terms: 'conditions d’utilisation',
+      accessibility: 'déclaration d’accessibilité',
+      cookies: 'page sur les cookies',
+    }),
+  }),
+  legalNotice: Object.freeze({
+    title: 'Mentions légales',
+    eyebrow: 'À propos de ce site',
+    heading: 'Mentions légales',
+    intro: 'Ce qu’est Lex, d’où viennent ses textes et sous quelles licences, et qui l’héberge.',
+    sections: Object.freeze({
+      what: Object.freeze({
+        heading: 'Ce qu’est Lex',
+        text: 'Lex est un outil indépendant et non commercial pour lire le droit luxembourgeois et le droit de l’UE au fil du temps : pour les textes et les dates qu’il détient, il montre un texte tel qu’il se présentait à la date de votre choix, et comment il a changé. Il est gratuit, ne comporte aucune publicité et ne demande la création d’aucun compte.',
+        notAdvice: '{notAdvice}',
+      }),
+      status: Object.freeze({
+        heading: 'Aucun statut officiel',
+        text: 'Lex n’a aucun statut officiel. Il n’est un service ni de l’État luxembourgeois, ni du Service central de législation, qui publie Legilux, ni de l’Office des publications de l’Union européenne, et aucun d’eux ne l’approuve.',
+        prevails: '{authenticity} Lorsqu’un texte que Lex montre diffère de sa publication officielle, c’est la publication officielle qui prévaut.',
+      }),
+      sources: Object.freeze({
+        heading: 'Sources et licences',
+        luxembourg: 'Les textes luxembourgeois proviennent de Legilux, publié par le Service central de législation. Lex ne montre le texte d’un fichier que lorsque les propres données de Legilux sur ce fichier lui attribuent la licence Creative Commons Attribution 4.0 International (CC BY 4.0) ; pour tout autre fichier, il montre le lien officiel et non le texte.',
+        europe: 'Les textes de l’UE proviennent de l’Office des publications de l’Union européenne et portent, en anglais, sa mention de la source, « {eurlexAcknowledgement} ». Ils sont réutilisés comme la politique de réutilisation de l’Union européenne le permet (décision 2011/833/UE de la Commission relative à la réutilisation des documents de la Commission).',
+        changes: 'Lex extrait et normalise les textes qu’il montre, et chaque article cité indique sa source officielle.',
+      }),
+      hosting: Object.freeze({
+        heading: 'Hébergement',
+        text: 'Le site est hébergé par Microsoft, sur son service en nuage Microsoft Azure, dans la région France Central, en France.',
+      }),
+    }),
+  }),
+  privacy: Object.freeze({
+    title: 'Protection des données',
+    eyebrow: 'À propos de ce site',
+    heading: 'Protection des données',
+    intro: 'Ce qu’il advient de vos données lorsque vous consultez Lex : il ne vous en demande aucune, ne dépose aucun cookie et ne conserve rien qui vous concerne.',
+    sections: Object.freeze({
+      reading: Object.freeze({
+        heading: 'Lorsque vous consultez le site',
+        request: 'Chaque page que vous ouvrez et chaque recherche que vous envoyez est une requête de votre navigateur au serveur de ce site. La requête comporte l’adresse IP de votre appareil, l’adresse de la page et les informations techniques que tout navigateur envoie. Les mots d’une recherche sont envoyés dans le corps de la requête, jamais dans l’adresse de la requête ; un lien qui conserve une recherche la contient après « # », dans une partie que votre navigateur n’envoie jamais.',
+        host: 'Microsoft, qui héberge le site, achemine chaque requête jusqu’au serveur et sa réponse jusqu’à vous, et traite à cette fin les données de connexion nécessaires, selon ses propres conditions.',
+        kept: 'Le serveur n’utilise la requête que pour y répondre, et n’en conserve rien une fois qu’il a répondu : il ne tient aucun journal des accès ni aucun relevé de ce qui est lu ou recherché, et l’hébergement est configuré sans stockage de journaux ni service de surveillance qui conserverait les requêtes. Cela est vérifié : le serveur est soumis à des requêtes portant des valeurs repérables (une expression recherchée, une adresse, le nom d’un navigateur), dont aucune ne doit apparaître dans ce qu’il écrit.',
+        nothingHeld: 'Lex ne propose ni compte ni inscription : il ne sait donc jamais qui vous êtes. Comme il ne conserve rien d’une visite, il ne détient rien vous concernant qu’il pourrait montrer, rectifier ou effacer.',
+      }),
+      nothingElse: Object.freeze({
+        heading: 'Ni cookie, ni traceur, ni autre site',
+        cookies: 'Le site ne dépose aucun cookie et n’écrit rien dans le stockage de votre navigateur (voir la {cookiesPage}). Il ne charge rien depuis un autre site : ni mesure d’audience, ni publicité, ni police de caractères, script ou image provenant d’ailleurs.',
+        links: 'Les liens vers les sites des éditeurs, comme Legilux et EUR-Lex, sont des liens ordinaires. Si vous en suivez un, votre navigateur s’adresse directement à ce site, selon la politique de protection des données propre à celui-ci ; Lex demande à votre navigateur de ne pas indiquer à ce site de quelle page vous venez.',
+      }),
+      named: Object.freeze({
+        heading: 'Personnes nommées dans les actes publiés',
+        why: 'Certains actes publiés nomment des personnes, par exemple une loi conférant la nationalité. Lex reproduit les textes tels que les journaux officiels les publient, le Journal officiel du Grand-Duché de Luxembourg et le Journal officiel de l’Union européenne, afin que le droit puisse être lu à une date et vérifié auprès de sa source officielle.',
+        searchEngines: 'Les moteurs de recherche ne sont autorisés à indexer la page d’un acte qu’une fois qu’une vérification a constaté que l’acte ne nomme aucune personne privée ; la page de tout autre acte leur demande de ne pas l’indexer.',
+      }),
+      rights: Object.freeze({
+        heading: 'Vos droits',
+        complaint: 'Vous pouvez introduire une réclamation auprès de la Commission nationale pour la protection des données (CNPD), {cnpdSite}.',
+      }),
+    }),
+  }),
+  terms: Object.freeze({
+    title: 'Conditions d’utilisation',
+    eyebrow: 'À propos de ce site',
+    heading: 'Conditions d’utilisation',
+    intro: 'Comment Lex peut être utilisé, sous quelles licences ses textes sont montrés, ce qu’il ne promet pas et comment citer les textes.',
+    sections: Object.freeze({
+      what: Object.freeze({
+        heading: 'Ce qu’est Lex',
+        notAdvice: '{notAdvice}',
+        service: 'C’est un service d’information gratuit : il montre les textes qu’il détient, aux dates auxquelles il les détient, et le dit lorsqu’il ne détient pas de texte ou pas de date. {authenticity}',
+      }),
+      use: Object.freeze({
+        heading: 'Utilisation de Lex',
+        text: 'Chacun est libre de lire les textes que Lex montre, d’y faire des recherches, de les citer et de les exporter, gratuitement et sans compte.',
+      }),
+      texts: Object.freeze({
+        heading: 'Les textes et leurs licences',
+        licences: 'Chaque texte conserve la licence de sa source : la licence Creative Commons Attribution 4.0 International (CC BY 4.0) pour les textes luxembourgeois que Lex montre, et la politique de réutilisation de l’Union européenne (décision 2011/833/UE de la Commission) pour les textes de l’UE. Les {legalNoticePage} indiquent d’où viennent les textes et la mention de la source que chacun porte. Les présentes conditions n’ajoutent aucune restriction à la réutilisation des textes que leurs propres licences permettent.',
+      }),
+      warranty: Object.freeze({
+        heading: 'Absence de garantie',
+        text: 'Lex est proposé tel quel. Il ne garantit pas que les textes soient complets, à jour ou exempts d’erreurs, ni que le site soit toujours accessible. Vérifiez le texte officiel avant de vous y fier. Rien dans les présentes conditions n’exclut ni ne limite une responsabilité que la loi ne permet pas d’exclure ou de limiter.',
+      }),
+      citing: Object.freeze({
+        heading: 'Comment citer',
+        text: 'Citez le texte officiel, par sa référence officielle. Lex donne, pour chaque article qu’il cite, une citation et un permalien vers le texte montré, afin que chacun puisse vérifier le texte cité auprès de sa source officielle.',
+      }),
+    }),
+  }),
+  accessibility: Object.freeze({
+    title: 'Déclaration d’accessibilité',
+    eyebrow: 'À propos de ce site',
+    heading: 'Déclaration d’accessibilité',
+    intro: 'Le degré d’accessibilité de Lex, ce qui a été fait et ce qui n’a pas encore été vérifié.',
+    sections: Object.freeze({
+      status: Object.freeze({
+        heading: 'État de conformité',
+        text: 'Lex est conçu pour respecter les Règles pour l’accessibilité des contenus Web (WCAG) 2.2 au niveau AA. Il n’a pas encore été audité et ne prétend donc pas les respecter : tant qu’un audit du site en service n’a pas été réalisé, il est non conforme, comme est déclaré au Luxembourg le site d’un organisme du secteur public qui n’a fait l’objet d’aucun audit.',
+      }),
+      done: Object.freeze({
+        heading: 'Ce qui a été fait',
+        list: Object.freeze({
+          language: 'Chaque page indique sa langue, et chaque texte de loi cité est marqué de la langue dans laquelle il est rédigé.',
+          skip: 'Un lien en haut de chaque page mène directement à son contenu.',
+          server: 'Les pages d’un acte et de son texte arrivent complètes du serveur et se lisent sans script.',
+          dates: 'Les dates sont toujours des dates du calendrier, jamais des dates relatives.',
+          colour: 'Aucune information n’est donnée par la seule couleur : les mots trouvés par une recherche sont en gras en plus d’être surlignés.',
+          whole: 'Une comparaison est une seule liste, lue dans l’ordre, et les tableaux et listes de conditions d’un texte de loi sont toujours montrés en entier.',
+          keyboard: 'Chaque formulaire s’utilise au clavier seul, et chaque commande montre quand elle a le focus : des tests automatisés le vérifient dans un navigateur à chaque modification du code du site.',
+          announced: 'Une réponse est annoncée aux lecteurs d’écran à son arrivée.',
+        }),
+      }),
+      limits: Object.freeze({
+        heading: 'Ce qui n’a pas encore été vérifié',
+        list: Object.freeze({
+          audit: 'Aucun audit par un expert en accessibilité, et aucun test avec un lecteur d’écran tel que NVDA ou VoiceOver, n’a encore été réalisé.',
+          reflow: 'L’adaptation des pages aux écrans étroits et aux forts agrandissements n’a pas été vérifiée au regard des règles.',
+          pdf: 'Les fichiers exportés en PDF ne sont pas balisés, de sorte qu’un lecteur d’écran ne peut pas en suivre la structure ; l’export JSON contient le même texte.',
+        }),
+      }),
+      law: Object.freeze({
+        heading: 'La loi',
+        text: 'Au Luxembourg, la {accessibilityLaw} fixe les règles d’accessibilité des organismes du secteur public. Lex n’est pas édité par un organisme du secteur public et publie cette déclaration de sa propre initiative.',
+      }),
+      prepared: Object.freeze({
+        heading: 'Établissement de cette déclaration',
+        text: 'Cette déclaration a été établie à partir du code du site et de ses tests automatisés. Aucun audit externe n’a été réalisé.',
+      }),
+    }),
+  }),
+  cookies: Object.freeze({
+    title: 'Cookies',
+    eyebrow: 'À propos de ce site',
+    heading: 'Cookies',
+    intro: 'Lex ne dépose aucun cookie.',
+    sections: Object.freeze({
+      none: Object.freeze({
+        heading: 'Aucun cookie, aucun stockage dans le navigateur',
+        text: 'Ce site ne dépose aucun cookie, ni le sien ni celui d’un tiers, et n’écrit rien dans le stockage de votre navigateur. Il ne charge rien depuis d’autres sites, si bien qu’aucun autre site ne peut en déposer par son intermédiaire. C’est pourquoi il ne vous demande aucun consentement.',
+      }),
+      checked: Object.freeze({
+        heading: 'Comment cela est vérifié',
+        text: 'Des tests automatisés échouent si une page du site dépose un cookie, écrit dans le stockage du navigateur ou demande quoi que ce soit à un autre site, et, avant chaque mise en production, il est vérifié qu’aucune réponse du nouveau déploiement ne dépose de cookie.',
+      }),
+    }),
   }),
   common: Object.freeze({
     loading: 'Interrogation de ce serveur.',
@@ -972,7 +1218,10 @@ export const LIVE_CHROME_FR = Object.freeze({
       suffixed: '{year}/{number}/{domain}',
       plain: '{year}/{number}',
       version: '{citation}, au {date}',
-      authenticity: 'Seul le Journal officiel de l’Union européenne publié sous forme électronique fait foi et produit des effets juridiques (règlement (UE) n° 216/2013, article 1er, paragraphe 2) ; ce texte est une reproduction lue dans le paquet Formex de l’Office des publications, et non l’édition qui fait foi.',
+      authenticity: Object.freeze({
+        electronic_edition: 'Seul le Journal officiel de l’Union européenne publié sous forme électronique fait foi et produit des effets juridiques (règlement (UE) n° 216/2013, article 1er, paragraphe 2) ; ce texte est une reproduction lue dans le paquet Formex de l’Office des publications, et non l’édition qui fait foi.',
+        edition_by_publication_date: 'Pour un acte publié avant le 1er juillet 2013, l’édition imprimée du Journal officiel de l’Union européenne fait foi ; l’édition électronique fait foi depuis cette date (règlement (UE) n° 216/2013). Ce texte est une reproduction lue dans le paquet Formex de l’Office des publications, et non l’édition qui fait foi.',
+      }),
     }),
     evidence: Object.freeze({
       permalink: 'Permalien : {permalink}',

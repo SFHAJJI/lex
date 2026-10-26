@@ -99,7 +99,8 @@ const EUROPE_ENTRIES = new Set([
   "citation.europe.article", "citation.europe.acts.R", "citation.europe.acts.L", "citation.europe.acts.D",
   "citation.europe.domains.EU", "citation.europe.domains.EC", "citation.europe.domains.EEC", "citation.europe.numbered",
   "citation.europe.numberedNoDomain", "citation.europe.yearFirst", "citation.europe.suffixed", "citation.europe.plain",
-  "citation.europe.version", "citation.europe.authenticity", "citation.evidence.originalWording",
+  "citation.europe.version", "citation.europe.authenticity.electronic_edition",
+  "citation.europe.authenticity.edition_by_publication_date", "citation.evidence.originalWording",
   "citation.evidence.consolidatedWording", "citation.evidence.officialJournalNotHeld",
   // The EU act's dates as the publisher records them (the plan's item 2.1; `europe-force-dates.mjs`): EU pages only.
   "common.europeForceDates.heading", "common.europeForceDates.roles.entry_into_force", "common.europeForceDates.roles.application",

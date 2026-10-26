@@ -31,8 +31,9 @@
 // An EU work's bundle (publisher `eu-eurlex`) quotes the original wording the EU index holds, and has
 // its own shape, read by `readEuropeEvidenceBundle`; `readEvidenceBundleAnswer` sends an answer to the
 // reader its publisher names. Its rules, each the answer's own:
-//  - it carries Decision 95's acknowledgement, exactly, and the authenticity statement, and holds no
-//    consolidation;
+//  - it carries Decision 95's acknowledgement, exactly, and the authenticity statement its act's own dates choose (the
+//    owner's decision of 2026-10-18, O4: the electronic edition's for an act dated on or after 1 July 2013, the dated
+//    sentence otherwise), the platform's word for word, and holds no consolidation;
 //  - each wording is of the work, in a language it is held in (the one asked, when one was asked), in
 //    the languages' order, dated by the date asked (the original wording answers only its own date),
 //    and pinned: `/eu-eurlex/{celex}/{wording date}--{wording sha256}/{language}` (R64), its coordinate
@@ -51,6 +52,63 @@ import { readCatalogueFacts, readInterval } from './date-role.mjs';
 
 /** The acknowledgement every EU text served carries (Decision 95). */
 export const EUROPE_TEXT_ACKNOWLEDGEMENT = '© European Union, https://eur-lex.europa.eu';
+
+/**
+ * The first day on which only the electronic edition of the Official Journal is authentic: Regulation (EU) No 216/2013
+ * applies from it (the specification of record's R20).
+ */
+export const EUROPE_ELECTRONIC_EDITION_FROM = '2013-07-01';
+
+/**
+ * The authenticity statement every EU text served carries, for each basis, as the platform words it
+ * (`V3CorpusMount.EuropeTextAuthenticity`, in the owner's words of 2026-10-18 on PR #975's question, item O4). The basis is
+ * read from the act's own dates the answer lists (`authenticity_act_dates`; the index holds no Official Journal
+ * publication date): `electronic_edition` when one is listed and the earliest is on or after 1 July 2013, and
+ * `edition_by_publication_date` otherwise, whose sentence states which edition is authentic on either side of that day.
+ */
+export const EUROPE_AUTHENTICITY_SENTENCES = Object.freeze({
+  electronic_edition:
+    'Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) ' +
+    "No 216/2013, Article 1(2)); this text is a reproduction read from the Publications Office's Formex package, not the authentic edition.",
+  edition_by_publication_date:
+    'For an act published before 1 July 2013, the printed Official Journal of the European Union is authentic; the electronic edition is ' +
+    "authentic since that date (Regulation (EU) No 216/2013). This text is a reproduction read from the Publications Office's Formex " +
+    'package, not the authentic edition.',
+});
+
+/** The basis an act's own dates choose, as the platform's rule chooses it: the earliest decides, and none is the dated sentence. */
+export function europeAuthenticityBasis(actDates) {
+  const earliest = [...actDates].sort()[0];
+  return earliest !== undefined && earliest >= EUROPE_ELECTRONIC_EDITION_FROM ? 'electronic_edition' : 'edition_by_publication_date';
+}
+
+/**
+ * An EU bundle's authenticity statement: its basis, one of the two, chosen by the act's dates it lists (in order, once each,
+ * each a calendar date), and its sentence, the platform's for that basis word for word.
+ */
+function readEuropeAuthenticity(answer, where) {
+  const basis = requireOwn(answer, 'authenticity_basis', where);
+  if (!Object.hasOwn(EUROPE_AUTHENTICITY_SENTENCES, basis)) {
+    throw new Error(`authenticity_basis ${JSON.stringify(basis)} is not one of ${Object.keys(EUROPE_AUTHENTICITY_SENTENCES).join(', ')}`);
+  }
+  const actDates = Object.freeze(requireList(requireOwn(answer, 'authenticity_act_dates', where), 'authenticity_act_dates')
+    .map((date, index) => requireDate(date, `authenticity_act_dates[${index}]`)));
+  for (const [index, date] of actDates.entries()) {
+    if (index > 0 && date <= actDates[index - 1]) throw new Error('authenticity_act_dates lists each date once, in order');
+  }
+  const read = europeAuthenticityBasis(actDates);
+  if (read !== basis) {
+    throw new Error(`authenticity_basis is ${basis}, and the act's dates it lists (${JSON.stringify(actDates)}) make it ${read}`);
+  }
+  const sentence = requireText(requireOwn(answer, 'authenticity', where), 'authenticity');
+  if (sentence !== EUROPE_AUTHENTICITY_SENTENCES[basis]) throw new Error(`authenticity is not the platform's ${basis} statement`);
+  return Object.freeze({
+    sentence,
+    basis,
+    actDates,
+    rule: requireText(requireOwn(answer, 'authenticity_rule', where), 'authenticity_rule'),
+  });
+}
 
 const DIGEST = /^[0-9a-f]{64}$/;
 
@@ -688,6 +746,8 @@ export function readEuropeEvidenceBundle(answer) {
     return Object.freeze({ item, reason: requireText(requireOwn(row, 'reason', `not_held[${index}]`), `not_held[${index}].reason`) });
   }));
 
+  const authenticity = readEuropeAuthenticity(answer, where);
+
   return Object.freeze({
     publisher,
     identifier: requireText(requireOwn(answer, 'requested_identifier', where), 'requested_identifier'),
@@ -698,7 +758,10 @@ export function readEuropeEvidenceBundle(answer) {
     ...readPageRequest(answer, where),
     availableLanguages,
     acknowledgement,
-    authenticity: requireText(requireOwn(answer, 'authenticity', where), 'authenticity'),
+    authenticity: authenticity.sentence,
+    authenticityBasis: authenticity.basis,
+    authenticityActDates: authenticity.actDates,
+    authenticityRule: authenticity.rule,
     consolidationsHeld,
     // The act's dates as the publisher records them, over an EU index /6; null over an older one (`europe-force-dates.mjs`).
     forceDates: readEuropeForceDates(answer, where),
