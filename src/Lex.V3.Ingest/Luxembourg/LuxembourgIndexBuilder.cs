@@ -334,8 +334,9 @@ public sealed record LuxembourgIndexCoverage(
 
 /// <summary>
 /// One article's publisher-stated applicability date, or <c>null</c> where the publisher stated none
-/// for that article. Read from the article-level <c>scl:dateApplicability</c> the inventory retained;
-/// never derived from the state.
+/// for that article, or stated a value that is not one complete calendar date. Read from the
+/// article-level <c>scl:dateApplicability</c> the inventory retained
+/// (<see cref="LuxembourgIndexBuilder.ArticleApplicability"/>); never derived from the state.
 /// </summary>
 public sealed record LuxembourgIndexArticleDate(
     string ArticleIdentitySha256,
@@ -1385,7 +1386,8 @@ public static partial class LuxembourgIndexBuilder
             }
 
             var language = LanguageToken(member.LuxembourgRights.SelectedWemi.LanguageIri);
-            var date = ApplicabilityDate(article.Coordinate.PublisherApplicability);
+            // The article's own date as the index holds it: a calendar date the value states exactly, else none (D1).
+            var date = ArticleApplicability(article.Coordinate.PublisherApplicability).Date;
             projected.Add(new ArticleRow(
                 article.IdentitySha256,
                 objectRefSha256,
@@ -2247,16 +2249,66 @@ public static partial class LuxembourgIndexBuilder
         return stored;
     }
 
-    private static string? ApplicabilityDate(string? value)
+    /// <summary>The article states no <c>dateApplicability</c> of its own.</summary>
+    internal const string ArticleDateNone = "none";
+
+    /// <summary>The value is one calendar date written <c>yyyy-MM-dd</c> (ISO 8601's extended form, the xsd:date form).</summary>
+    internal const string ArticleDateExtended = "extended";
+
+    /// <summary>
+    /// The value is one calendar date written <c>yyyyMMdd</c>: ISO 8601's basic form of the same complete date, eight digits
+    /// with no separator, as the publisher writes the dates of its own ELI paths (<c>…/code/consommation/20220101</c>).
+    /// </summary>
+    internal const string ArticleDateBasic = "basic";
+
+    /// <summary>The value is in neither form, or names no day of the calendar: it gives no date.</summary>
+    internal const string ArticleDateNotRead = "not_a_calendar_date";
+
+    /// <summary>
+    /// An article's own applicability date as the index holds it, and how it was read from the value the publisher wrote.
+    /// </summary>
+    internal readonly record struct ArticleApplicabilityReading(string? Date, string Reading);
+
+    /// <summary>
+    /// Reads the article-level <c>scl:dateApplicability</c> the inventory retained verbatim (D1, 2026-10-26). A complete
+    /// calendar date in either of ISO 8601's two forms is that date, written <c>yyyy-MM-dd</c>: each names exactly one day,
+    /// and the basic form is one the publisher uses itself. Any other value (a partial date, a day the calendar does not
+    /// have, a time or a time zone, another notation) gives no date: the index never guesses one, and one article's value
+    /// never refuses the build. Run 15 holds 229,711 values in the extended form and 3 in the basic form
+    /// (<c>art_l_010-1</c> of three states of the Code de la consommation: <c>20220101</c>), and none in another; the value
+    /// as written stays in custody and in the article's identity, which hashes it.
+    /// </summary>
+    internal static ArticleApplicabilityReading ArticleApplicability(string? value)
     {
         if (value is null)
         {
-            return null;
+            return new(null, ArticleDateNone);
         }
+        if (CalendarDate(value, "yyyy-MM-dd") is { } extended)
+        {
+            return new(extended, ArticleDateExtended);
+        }
+        if (value.Length == 8 && value.All(char.IsAsciiDigit) && CalendarDate(value, "yyyyMMdd") is { } basic)
+        {
+            return new(basic, ArticleDateBasic);
+        }
+        return new(null, ArticleDateNotRead);
+    }
+
+    /// <summary>The value as <c>yyyy-MM-dd</c> when it is exactly one calendar day written in <paramref name="format"/>.</summary>
+    private static string? CalendarDate(string value, string format) =>
+        DateOnly.TryParseExact(value, format, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) &&
+        string.Equals(value, date.ToString(format, CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            ? date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            : null;
+
+    /// <summary>A catalogue date (a typed <c>xsd:date</c> assertion): one exact civil date, or the build refuses.</summary>
+    private static string CatalogueDate(string value)
+    {
         if (!DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture,
                 DateTimeStyles.None, out var date))
         {
-            throw new InvalidDataException("A publisher applicability value is not an exact civil date.");
+            throw new InvalidDataException("A publisher document date is not an exact civil date.");
         }
         return date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     }
@@ -2445,13 +2497,13 @@ public static partial class LuxembourgIndexBuilder
 
     private static string ExactDocumentDate(IEnumerable<string> values)
     {
-        var dates = values.Select(ApplicabilityDate).Distinct(StringComparer.Ordinal).ToArray();
-        if (dates.Length != 1 || dates[0] is null)
+        var dates = values.Select(CatalogueDate).Distinct(StringComparer.Ordinal).ToArray();
+        if (dates.Length != 1)
         {
             throw new InvalidDataException(
                 "A title subject has conflicting publisher document dates.");
         }
-        return dates[0]!;
+        return dates[0];
     }
 
     private static void BuildDatabase(

@@ -2,6 +2,27 @@
 
 Updated 2026-10-26.
 
+## #987 brought up to date with v3/integration, and the D1 fix folded in (sole driver, 2026-10-26)
+
+- **What.** Two merges on the repaired head: `origin/v3/integration` at e504d188 (#989, the web big bang, and #990, the
+  legal pages naming no person), so the branch protection's integration head is in #987; then `data/applicability-dates`
+  at 3503de99 (D1's refusal, the section below). **#987 now also carries the D1 fix, which gets its own independent
+  review in this pull request.**
+- **The integration merge.** Kept both sides of STATUS-WEB.md, `LiveDossier.jsx` (#987's date roles and catalogue chain
+  beside the integration's today line), `initial-answer.mjs` (the integration's imports and #987's `holdsToday`) and
+  `live-chrome-fr.mjs`'s header. The answer and refusal-payload samples re-render to the textual merge byte for byte; the
+  envelope samples differ from it in one envelope, the integration's new "an EU act dated before 1 July 2013", which over
+  the EU index /6 now carries #987's `force_dates` and its not-held reason. The legacy schema-8 and schema-6 base answers
+  are the integration's Linux recording, which the merged code answers byte for byte. The EU schema-5 base answers moved:
+  they were recorded at 24118293, before #989 gave every answer its freshness and commits context, so they were recorded
+  again, as their test says a change of base does, at e504d188 (the code without force dates) with only the schema-5 test
+  class and its fixtures added, on Linux; every row moved by the integration's changes alone (the context; the two
+  bundles' authenticity by the act's date), and the merged code answers them byte for byte.
+- **The D1 merge.** `LuxembourgIndexBuilder.cs` keeps both changes (D1's `ArticleApplicability`; #987's reader
+  `catalogue: true` queries). STATUS-DATA keeps both sections. OWNER-BRIEF.md is the integration's, with D1's rebuild
+  facts folded into its "still thin" line, #987 said as in review, and the stale "turn on Azure Compute" item removed:
+  the rebuild runs on Azure Container Apps.
+
 ## Review and repair (combined #987): the reader's ambiguities, holes and in_force_on, the EU force dates (sole driver, 2026-10-26)
 
 - **What.** The one repair round of the combined data pull request #987 (S7a, S7b, S7c and EU 2.1), after its one review by
@@ -108,6 +129,107 @@ Updated 2026-10-26.
   - Before the fix: f0dcf89c with the new tests, the interval and EU force-date classes and the EU builder's force-date
     test: 29 (22 passed, 7 failed: each new case); the outside dates' two tests fail with the scope's dates put back.
   - `eng/verify-v3-tree.ps1`: 1,666 tracked paths. The web's counts are in STATUS-WEB.md.
+
+## D1's refusal: one article's own date written `yyyyMMdd`; the index reads both ISO 8601 forms and no article's date refuses a build (sole driver, 2026-10-26)
+
+- **What stopped D1.** On 2026-10-19 an Azure job ran D1 at d9917b27 (#987): `rederive-inputs` (rule set `lu-release-1`,
+  policy `a477f4f2…`, base `mount-inputs-b306a972…`), then `derive --custody … --checkpoint mount-inputs-e8fd04ce….json
+  --custody-encoding brotli` over run 15's custody (324,873 files). It exited 3 after 72 minutes (peak RSS 29,107,840
+  KiB, 27.8 GiB): `LuxembourgIndexRefused: DerivationMismatch: A publisher applicability value is not an exact civil
+  date.` The index builder read each admitted article's own date through `ApplicabilityDate`, which refused the whole
+  build on any value not written `yyyy-MM-dd`.
+- **Where the value comes from.** `LuxembourgAknArticleCoordinate.PublisherApplicability`: the trimmed text of the
+  `scl:jolux scl:name="dateApplicability"` the article itself owns (in its `scl:JOLUXWork/scl:JOLUXLegalResource`; the
+  nearest article above it is that article), kept verbatim by inventory /4 (rule line
+  `applicability=scl-jolux-scl-name-dateApplicability-article-owned-single`) and hashed into the article's identity by
+  content /3. Only code and consolidation files write one: derive-c (index 8, inventory /3) held 8,854 articles, all of
+  acts and none with a date of its own, so no build met such a value until Release 1 admitted the codes.
+- **Measured over run 15's custody** (`LuxembourgArticleApplicabilityRun15Probe`, new, opt-in, read-only, never a CI test:
+  inventory /4 over the 11,205 held bodies, content /3 over the 2,721 inventoried acquired ones; custody read by digest
+  through S2's read-only decorator, its 324,873 files untouched; no derive, no network; 92 s and 20 s, peak working set
+  1,597 MiB):
+  - Every main-body article of the 10,644 inventoried bodies: 308,521 articles, 78,807 with no value, 229,711 written
+    `yyyy-MM-dd` (2,646 bodies: 153 code states, 2,493 consolidations) and 3 written `yyyyMMdd`: `art_l_010-1` of the
+    Code de la consommation's states 20220101, 20220528 and 20221125, each `20220101`. No other form, no empty value, no
+    time, time zone or partial date.
+  - What the derive reads (content /3 admitted or marker-only, in an acquired body): 137,632 articles (2,008 refused
+    shapes not counted), 21,226 with no value, 116,404 `yyyy-MM-dd` (122 code states) and 2 `yyyyMMdd` (states 20220101
+    and 20220528; 20221125's rights are withheld). These two refused D1.
+  - In those bodies, 36 other articles of the same code state `2022-01-01` in the extended form; the article before
+    `art_l_010-1` states none and the one after `2018-07-01`.
+  - The catalogue's typed dates the builder also reads (run 15's `work_facts` in derive-c): 24,604 `dateDocument`, 21,828
+    `dateApplicability`, 24,606 `dateEntryInForce`, 2,660 `dateEndApplicability` and 28,605 `publicationDate`, every one
+    an exact `xsd:date`.
+- **The rule** (`LuxembourgIndexBuilder.ArticleApplicability`): a complete calendar date in either of ISO 8601's forms is
+  that date, stored `yyyy-MM-dd`: the extended form (`2017-09-05`) and the basic form (`20220101`, eight digits that are
+  exactly one day of the calendar). Any other value (a partial date, a day the calendar does not have, a time, a time
+  zone, another notation) gives the article no date and never refuses the build. The value as written stays in custody
+  and in the article's identity. The catalogue's document dates keep refusing a value that is not exact (typed
+  `xsd:date` assertions, a different door), under their own sentence now: "A publisher document date is not an exact
+  civil date."
+- **No schema bump, no rule digest moved.** The index stays `lex-v3-luxembourg-index/9` with its exact DDL; the reader is
+  unchanged (it still refuses a stored article date that is not exact, and none is). Inventory /4, content /3, state
+  digest /2 and `lu-release-1` are unchanged, so D1's unsealed inputs (`mount-inputs-e8fd04ce…`) stay valid: D1 reruns
+  from them. Served answers on the committed mounts do not move (their article values are all extended).
+- **Driver decisions (reversible):**
+  - **The basic form is read as its date.** ISO 8601 writes a complete date in two forms; the publisher writes the dates
+    of its own ELI paths in the basic one (`…/code/consommation/20220101`); `20220101` reads the same either way its day
+    and month are taken; and 36 articles of the same state write `2022-01-01`. Reading it invents nothing, while
+    storing no date would say the publisher stated none.
+  - **Any other form gives no date and is not stored.** The index's article row has no column for a value as written,
+    so an unclear value reads as no date (`article_valid_from` null, no validity conflict), as a missing one does. Saying
+    it as unclear needs that column: index /10, not made, because run 15 holds no such value. The probe counts every
+    value's form before a derive; a form it finds unread is the trigger for index /10.
+  - **A time or a time zone is not read**, though an `xsd:date` with a zone names its day: run 15 holds none, and
+    dropping the zone would leave nothing in the index to say it was there.
+  - **The catalogue's typed dates still refuse**: they are `xsd:date` assertions, run 15's are all exact, and a malformed
+    one is a different defect than an article's own value.
+- **Tests.** `LuxembourgArticleApplicabilityTests` (new, 21): the reading of each value (19 rows: run 15's two forms, a
+  second basic date, none, and fifteen forms that give no date: partial, impossible days in both forms, unpadded, short
+  and long digit runs, a zone, `Z`, a time, other notations, full-width digits, empty); the derive's own path end to end
+  (a synthetic consolidation whose articles carry `2017-09-05`, `20220101`, none, `2022-01`, `20220230` and
+  `2019-01-01+01:00`, acquired, re-derived under `lu-release-1`, built, written, verified and opened: the rows hold
+  2017-09-05, 2022-01-01 and four nulls, the reader's article dates the same; with the old reading this build refuses
+  with D1's exact sentence, run once to show it); `as_of` through the real handler on a verified mount (a code state of
+  2022-05-28 whose articles carry `20220101`, `2018-07-01`, none and `2022-01`: `article_valid_from` 2022-01-01,
+  2018-07-01, null, null; conflicts true, true, false, false; the rule's sentence unchanged).
+  `LuxembourgIndexCatalogueStatesTests.Harness.Held` takes each article's value as written (optional). The census pin
+  that moves: `VocabularyRegistryCensusTests` (the static token registries): `LuxembourgIndexBuilder` gains
+  `ArticleDateBasic`, `ArticleDateExtended`, `ArticleDateNone` and `ArticleDateNotRead`, its entry re-transcribed with
+  `ClosedSurfaceCensus.RenderForTranscription` from a throwaway test. No other pin moved.
+- **Measured** (Windows, no browser, no publisher traffic, no Azure; custody read only):
+  - `dotnet build Lex.V3.slnx -c Release --no-incremental`: 0 warnings, 0 errors.
+  - `Lex.V3.Tests`: 3,323 (3,317 passed, 6 skipped).
+  - `Lex.V3.Ingest.Tests` filtered to the new class, the index builder, the catalogue states, the interval, continuity,
+    as_of, evidence bundle, article history, diff, timeline, provenance and dossier mounts, the re-derivation, content /3's
+    mount, index-9 serving, the legacy schema 6 and 8 mounts (their recorded answers replayed unchanged), the three samples
+    classes (unchanged, so not re-rendered), the censuses, public request recording, the first mount build, the offline
+    mount, replay guarantees and the two run-15 probes: 334 (330 passed, 0 failed, 4 skipped: the two probes and the two
+    env-gated writers). The run before the census pin was re-transcribed had that pin as its one failure.
+  - The probe over run 15, before and after the change, as above; `eng/verify-v3-tree.ps1`: 1,668 tracked paths.
+- **D1's memory (peak RSS 29,107,840 KiB: 27.8 GiB on the 32 GiB node), read from its 5-second samples**
+  (`derive-a.resources.jsonl`; the phases mapped from the code order and the read pattern, not from logs, so they are
+  inferences):
+  - The peak, 27.76 GiB RSS (27.66 GiB anonymous, 2.0 GiB available) at minute 38.9, is in R0's replay, not the index
+    build: from minute 29 to 39 the process read nothing and grew from 9 to 27.8 GiB on one core, then fell to 14.9 GiB by
+    minute 41.5. That is the acquisition's post-document step replayed (`LuxembourgQueryExecutionAdapter.RunCoreAsync`: the
+    in-file rights read, then a second full profile resolution, resolver and scope reduction while the first resolution
+    and manifests are still referenced), the step the acquisition itself measured at 20.2 GB private on 2026-10-12 and
+    derive-c's replay at 15.2 GiB working set with paging (S4b above).
+  - From minute 47.7 to 62.2 the process read and wrote nothing at a flat 14.96 GiB on one core: most likely the held-body
+    population's final-rights lookup (`LuxembourgHeldBodyDerivationPopulation.cs:236`), a linear scan of the final
+    resolution's resources for each held record (about 11,000 × 260,000 record comparisons), then the query result's
+    streamed digest.
+  - The index build never ran: the staging directory appeared at minute 72.3 and the refusal followed within seconds, at
+    17.3 GiB RSS. It starts from that baseline (R0's query result, R1's inventory /4 and content /3 populations, the EU
+    and corpus results); S4b measured its increment only on synthetic data. Whether it stays under the 27.8 GiB the replay
+    reached is D1's rerun to measure.
+  - **Cheap reductions, not made here** (none is needed to rerun D1, whose 32 GiB node carried the peak with 2 GiB to
+    spare; each needs its own byte-identity check): drop the first resolution, its resolver and the first manifests
+    before the second resolution in `RunCoreAsync`; build the final-rights lookup once (saves about 15 minutes, not
+    memory); share one validated rejected-manifestation list across observations instead of copying it per observation.
+    No GC setting is configured anywhere (Workstation GC, no heap limit); `DOTNET_GCConserveMemory` or a heap hard limit
+    are untested knobs. Streaming the index's article rows is the larger change S4b names.
 
 ## EU force dates: the EU index /6 holds each act's dates by role, from custody (sole driver, 2026-10-19)
 

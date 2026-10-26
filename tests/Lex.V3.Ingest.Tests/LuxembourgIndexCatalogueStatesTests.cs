@@ -72,10 +72,13 @@ public sealed class LuxembourgIndexCatalogueStatesTests
             return this;
         }
 
-        /// <summary>A held body: acquired, admitted, inventoried, with the given main-body articles of its selected expression.</summary>
+        /// <summary>
+        /// A held body: acquired, admitted, inventoried, with the given main-body articles of its selected expression; each
+        /// article's own date is the builder's reading of <paramref name="applicability"/>'s value as the publisher wrote it.
+        /// </summary>
         internal Harness Held(
             string root, string[] articleIds, string leaf = "fr", string language = "fra", string? inFileDate = null, string identityClass = "own",
-            int[]? positions = null, string? textPrefix = null)
+            int[]? positions = null, string? textPrefix = null, string?[]? applicability = null)
         {
             var objectRef = ObjectRefOf(root);
             Body(root, leaf, language, "acquired", "agreed_same_run_cc_by", "inventoried", null, inFileDate, identityClass, [], [new("admitted", articleIds.Length)]);
@@ -86,7 +89,8 @@ public sealed class LuxembourgIndexCatalogueStatesTests
                 // document not admitted); its wording a text token of its text, so two bodies' wordings differ when their texts do.
                 var text = (textPrefix ?? "texte de ") + id;
                 _articles.Add(new(
-                    Digest("article:" + root + "/" + leaf + "#" + id), objectRef, root + "/" + leaf, id, null, null, language,
+                    Digest("article:" + root + "/" + leaf + "#" + id), objectRef, root + "/" + leaf, id, null,
+                    LuxembourgIndexBuilder.ArticleApplicability(applicability?[index]).Date, language,
                     new string('c', 64), text, textPrefix is null ? "[]" : TextTokens(text), positions?[index] ?? index + 1));
             }
 

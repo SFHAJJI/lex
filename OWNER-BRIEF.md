@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-19 at 08:30 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-26 at 16:35 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -15,10 +15,12 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
   date; and on every page how current the law is and which code built it, with a warning when a source is too old.
 - Ready on 19 October, in a second pull request: the legal pages as you decided, naming no one, with no address, e-mail
   or contact; they say what Lex is, its sources and licences, its host, and that it keeps nothing about readers.
-- Your private copy runs the code of 18 October (a signed release, checked over HTTP) at law.soufien.lu over HTTPS,
-  still open only to this PC and your 14 October address.
+- In review: which version answers a date by the publisher's own start and end dates, each date said for what it is,
+  the gaps between versions said, and an EU act's own dates by role; with the fix below in the same pull request.
 - Still thin: Luxembourg has 1,730 acts as first published, no codes; EU text covers 511 of 1,170 versions. The codes
-  (121,000 articles) and about 28,000 more articles wait for the rebuild on an Azure machine.
+  (121,000 articles) and about 28,000 more articles wait for the rebuild, which runs on Azure. It ran on 19 October and
+  stopped after 72 minutes: one article's date was written 20220101, not 2022-01-01. Fixed on 26 October: both ways of
+  writing a full date are read, and no article's date can stop a build again; it can run again from the same inputs.
 
 ## The plan
 
@@ -32,9 +34,7 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 ## What waits on you
 
-- Now: turn on Azure Compute, with the one Cloud Shell line the driver gave you, so the codes can be rebuilt on an
-  Azure machine (about 5 EUR a rebuild).
-- Nothing waits on you for the legal pages any more.
+- Nothing waits on you for the legal pages or the rebuild.
 - Before 12 November: your 175.70 EUR of credits end. Then the site (about 26 EUR a month), the storage (under 0.50 EUR
   a month) and each rebuild are billed to your payment method.
 - Your choice, not done before the opening: a lawyer's read of the legal texts, an accessibility audit, user tests.
