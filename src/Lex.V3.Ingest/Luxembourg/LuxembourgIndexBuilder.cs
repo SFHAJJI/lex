@@ -1091,31 +1091,55 @@ public static partial class LuxembourgIndexBuilder
             derivedAtText = derivation.ToString(BuiltAtFormat, CultureInfo.InvariantCulture);
         }
 
-        MemberRow[] members;
-        ArticleRow[] articles;
-        StateRow[] states;
-        IntervalRow[] intervals;
-        WorkTitleRow[] workTitles;
-        WorkFactRow[] workFacts;
+        if (!TryProjectRowsCatching(ProjectionInputs.Of(envelope, corpus), builtAtText[..10], out var rows, out refusal, out detail))
+        {
+            return null;
+        }
+
+        return WriteFile(
+            path, corpus.ArtifactRef, rows.Members, rows.Articles, rows.States, rows.Intervals, rows.WorkTitles, rows.WorkFacts,
+            BodiesByObjectRef(corpus.VerifiedSet), predecessor, builtAtText, derivedAtText, out refusal, out detail);
+    }
+
+    /// <summary>The rows <see cref="TryProjectRows"/> made, as one value.</summary>
+    internal sealed record ProjectedRows(
+        MemberRow[] Members,
+        ArticleRow[] Articles,
+        StateRow[] States,
+        IntervalRow[] Intervals,
+        WorkTitleRow[] WorkTitles,
+        WorkFactRow[] WorkFacts);
+
+    /// <summary>
+    /// <see cref="TryProjectRows"/>, with a projection that throws on the publisher's data (an <see cref="InvalidDataException"/>)
+    /// refused as a derivation mismatch, as the build refuses it.
+    /// </summary>
+    internal static bool TryProjectRowsCatching(
+        ProjectionInputs inputs,
+        string builtAtDate,
+        out ProjectedRows rows,
+        out LuxembourgIndexBuildRefusal refusal,
+        out string? detail)
+    {
+        rows = new([], [], [], [], [], []);
         try
         {
             if (!TryProjectRows(
-                    envelope, corpus, builtAtText[..10], out members, out articles, out states, out intervals, out workTitles, out workFacts,
-                    out refusal, out detail))
+                    inputs, builtAtDate, out var members, out var articles, out var states, out var intervals, out var workTitles,
+                    out var workFacts, out refusal, out detail))
             {
-                return null;
+                return false;
             }
+
+            rows = new(members, articles, states, intervals, workTitles, workFacts);
+            return true;
         }
         catch (InvalidDataException exception)
         {
             refusal = LuxembourgIndexBuildRefusal.DerivationMismatch;
             detail = exception.Message;
-            return null;
+            return false;
         }
-
-        return WriteFile(
-            path, corpus.ArtifactRef, members, articles, states, intervals, workTitles, workFacts, BodiesByObjectRef(corpus.VerifiedSet),
-            predecessor, builtAtText, derivedAtText, out refusal, out detail);
     }
 
     /// <summary>
@@ -1203,7 +1227,8 @@ public static partial class LuxembourgIndexBuilder
         string builtAtText,
         string? derivedAtText,
         out LuxembourgIndexBuildRefusal refusal,
-        out string? detail)
+        out string? detail,
+        Action<string, int, SqliteException>? refusedRow = null)
     {
         refusal = LuxembourgIndexBuildRefusal.None;
         detail = null;
@@ -1251,7 +1276,8 @@ public static partial class LuxembourgIndexBuilder
         try
         {
             BuildDatabase(
-                path, corpusRef.Sha256, logicalRowsSha256, members, articles, states, intervals, workTitles, relations, workFacts, events, observations);
+                path, corpusRef.Sha256, logicalRowsSha256, members, articles, states, intervals, workTitles, relations, workFacts, events, observations,
+                refusedRow);
             var (digest, length) = V3BuiltIndexFile.Sha256OfFile(path);
             var indexRef = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
             var manifest = MeasureCapabilities(digest, articles, states, workTitles);
@@ -1272,9 +1298,14 @@ public static partial class LuxembourgIndexBuilder
         }
     }
 
-    private static bool TryProjectRows(
-        Stage3DerivationProfileEnvelope envelope,
-        LexCorpus6BuildResult corpus,
+    /// <summary>
+    /// Every row the index holds, from <paramref name="inputs"/>: the members, articles, states and intervals, titles and
+    /// facts, or the refusal that stops the build. A function of its inputs only (<see cref="ProjectionInputs.Of"/> reads them
+    /// from the envelope and the corpus; the run-15 probe gives them from custody), so the rows a probe measures are the rows
+    /// a build writes.
+    /// </summary>
+    internal static bool TryProjectRows(
+        ProjectionInputs inputs,
         string builtAtDate,
         out MemberRow[] members,
         out ArticleRow[] articles,
@@ -1286,8 +1317,7 @@ public static partial class LuxembourgIndexBuilder
         out string? detail)
     {
         intervals = [];
-        members = corpus.VerifiedSet.Set.Members
-            .Where(static member => member.Publisher == PublisherId.LuLegilux)
+        members = inputs.Members
             .Select(static member => new MemberRow(
                 member.ObjectRefSha256,
                 member.SourceOrdinal,
@@ -1305,10 +1335,9 @@ public static partial class LuxembourgIndexBuilder
             .OrderBy(static row => row.ObjectRefSha256, StringComparer.Ordinal)
             .ToArray();
 
-        var memberByObject = corpus.VerifiedSet.Set.Members
-            .Where(static member => member.Publisher == PublisherId.LuLegilux)
+        var memberByObject = inputs.Members
             .ToDictionary(static member => member.ObjectRefSha256, StringComparer.Ordinal);
-        var sourceRecords = envelope.BodyComposition.Envelope.Luxembourg.CorpusRecordSet!.Set.Records;
+        var sourceRecords = inputs.Records;
         if (members.Length != sourceRecords.Count || memberByObject.Count != sourceRecords.Count)
         {
             articles = [];
@@ -1322,7 +1351,7 @@ public static partial class LuxembourgIndexBuilder
 
         var projected = new List<ArticleRow>();
         var seenOutcomes = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var outcome in envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation.Outcomes)
+        foreach (var outcome in inputs.Content)
         {
             if (!seenOutcomes.Add(outcome.SemanticIdentitySha256))
             {
@@ -1335,8 +1364,7 @@ public static partial class LuxembourgIndexBuilder
                 return false;
             }
 
-            var objectRefSha256 = Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter
-                .ComputeObjectRefSha256(outcome.SourceInventoryOutcome.Input.CorpusRecord.ObjectRef);
+            var objectRefSha256 = outcome.ObjectRefSha256;
             if (!memberByObject.TryGetValue(objectRefSha256, out var member) ||
                 !member.Stage3Outcomes.Any(value =>
                     value.Domain == LexCorpus6Stage3OutcomeDomain.LuxembourgAknLegalContent &&
@@ -1373,7 +1401,7 @@ public static partial class LuxembourgIndexBuilder
             var article = outcome.Article;
             // The article's place in its publisher document: its position among the inventory's top-level articles, which
             // the inventory lists in the publisher's order (index 9; S7a reads a state's articles in that order).
-            var documentPosition = DocumentPositionOf(outcome.SourceInventoryOutcome.Inventory, article.Coordinate.PublisherId);
+            var documentPosition = DocumentPositionOf(outcome.Inventory, article.Coordinate.PublisherId);
             if (documentPosition is null)
             {
                 articles = [];
@@ -1407,13 +1435,12 @@ public static partial class LuxembourgIndexBuilder
         }
 
         articles = projected.OrderBy(static row => row.ArticleIdentitySha256, StringComparer.Ordinal).ToArray();
-        var assertions = envelope.BodyComposition.Envelope.Luxembourg.TypedAssertions;
-        workFacts = ProjectWorkFacts(assertions);
+        var assertions = inputs.Assertions;
+        workFacts = OrderedWorkFacts(assertions.Select(static assertion => assertion.Fact));
 
         // ---- Index 9's states, from the catalogue: the held bodies and what the derivations made of them, the records. ----
-        var contentByObject = envelope.BodyComposition.Envelope.LuxembourgAknLegalContentPopulation.Outcomes
-            .GroupBy(static outcome => Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter
-                .ComputeObjectRefSha256(outcome.SourceInventoryOutcome.Input.CorpusRecord.ObjectRef), StringComparer.Ordinal)
+        var contentByObject = inputs.Content
+            .GroupBy(static outcome => outcome.ObjectRefSha256, StringComparer.Ordinal)
             .ToDictionary(
                 static group => group.Key,
                 static group => (IReadOnlyList<KeyValuePair<string, long>>)group
@@ -1423,10 +1450,9 @@ public static partial class LuxembourgIndexBuilder
                     .ToArray(),
                 StringComparer.Ordinal);
         var bodies = new List<CatalogueBody>();
-        foreach (var outcome in envelope.BodyComposition.Envelope.LuxembourgAknArticleInventoryPopulation.Outcomes)
+        foreach (var input in inputs.Inventory)
         {
-            var objectRefSha256 = Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter
-                .ComputeObjectRefSha256(outcome.Input.CorpusRecord.ObjectRef);
+            var (objectRefSha256, outcome) = (input.ObjectRefSha256, input.Outcome);
             if (!memberByObject.TryGetValue(objectRefSha256, out var member) || member.LuxembourgRights is not { } rights)
             {
                 states = [];
@@ -1456,12 +1482,11 @@ public static partial class LuxembourgIndexBuilder
         }
 
         var records = sourceRecords
-            .Select(static record => (Record: record, ObjectRef: Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter.ComputeObjectRefSha256(record.ObjectRef)))
-            .Select(pair => new CatalogueRecord(
-                pair.Record.ObjectRef.PublisherUri,
-                pair.ObjectRef,
-                ContractWire.NameOf(memberByObject[pair.ObjectRef].Outcome),
-                ContractWire.NameOf(pair.Record.BodyDisposition)))
+            .Select(record => new CatalogueRecord(
+                record.PublisherUri,
+                record.ObjectRefSha256,
+                ContractWire.NameOf(memberByObject[record.ObjectRefSha256].Outcome),
+                record.BodyDisposition))
             .ToArray();
         (states, intervals) = ProjectCatalogueStates(articles, CatalogueFacts.From(workFacts), bodies, records, builtAtDate);
         var articlesBySubject = articles
@@ -1474,13 +1499,13 @@ public static partial class LuxembourgIndexBuilder
                 static group => group.Select(static value => value.Article).Distinct().ToArray(),
                 StringComparer.Ordinal);
         var datesBySubject = assertions
-            .Where(static value => value.FactDisposition.Predicate ==
+            .Where(static value => value.Predicate ==
                 Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.DateDocument)
-            .GroupBy(static value => value.Assertion.SubjectIri, StringComparer.Ordinal)
+            .GroupBy(static value => value.Fact.SubjectIri, StringComparer.Ordinal)
             .ToDictionary(
                 static group => group.Key,
                 static group => ExactDocumentDate(group.Select(
-                    static value => value.Assertion.ObjectIriOrLexical)),
+                    static value => value.Fact.ObjectValue)),
                 StringComparer.Ordinal);
         // The legal resource each held expression's body names, for a title's document date (TitleDocumentDate); an
         // expression named with two legal resources has none.
@@ -1496,23 +1521,23 @@ public static partial class LuxembourgIndexBuilder
             .Where(static group => group.Select(static body => body.RootIri).Distinct(StringComparer.Ordinal).Count() == 1)
             .ToDictionary(static group => group.Key, static group => WorkKeyOf(WorkOfState(group.First().RootIri)), StringComparer.Ordinal);
         workTitles = assertions
-            .Where(static value => value.FactDisposition.Predicate is
+            .Where(static value => value.Predicate is
                 Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.Title or
                 Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.TitleShort)
             .SelectMany(assertion => articlesBySubject.TryGetValue(
-                    assertion.Assertion.SubjectIri, out var matches)
+                    assertion.Fact.SubjectIri, out var matches)
                 ? matches.Select(article => new WorkTitleRow(
                     workKeyByExpression.GetValueOrDefault(article.ExpressionIri) ?? article.PublisherWid ?? article.ExpressionIri,
                     article.ExpressionIri,
                     article.Language,
-                    assertion.Assertion.ObjectIriOrLexical,
-                    NormalizeTitle(assertion.Assertion.ObjectIriOrLexical),
-                    TitleDocumentDate(assertion.Assertion.SubjectIri, article, datesBySubject, legalResourceByExpression),
-                    assertion.FactDisposition.Predicate ==
+                    assertion.Fact.ObjectValue,
+                    NormalizeTitle(assertion.Fact.ObjectValue),
+                    TitleDocumentDate(assertion.Fact.SubjectIri, article, datesBySubject, legalResourceByExpression),
+                    assertion.Predicate ==
                         Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate.Title
                         ? "title"
                         : "title_short",
-                    assertion.FactDisposition.EvidenceRef.Sha256))
+                    assertion.Fact.EvidenceSha256))
                 : [])
             .Where(static row => row.NormalizedTitle.Length != 0)
             .Distinct()
@@ -1536,18 +1561,24 @@ public static partial class LuxembourgIndexBuilder
     /// a status token or a date is the publisher's lexical value.
     /// </summary>
     internal static WorkFactRow[] ProjectWorkFacts(IReadOnlyList<LuxembourgTypedAssertion> assertions) =>
-        assertions
-            .Select(static value => new WorkFactRow(
-                value.Assertion.SubjectIri,
-                ContractWire.NameOf(value.FactDisposition.Predicate),
-                ContractWire.NameOf(value.FactDisposition.FactKind),
-                value.Assertion.ObjectKind == Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionObjectKind.Iri
-                    ? "iri"
-                    : "literal",
-                value.Assertion.ObjectIriOrLexical,
-                value.Assertion.DatatypeIriOrEmpty,
-                value.Assertion.LanguageTagOrEmpty,
-                value.FactDisposition.EvidenceRef.Sha256))
+        OrderedWorkFacts(assertions.Select(WorkFactOf));
+
+    /// <summary>One typed assertion as its <c>work_facts</c> row.</summary>
+    internal static WorkFactRow WorkFactOf(LuxembourgTypedAssertion value) => new(
+        value.Assertion.SubjectIri,
+        ContractWire.NameOf(value.FactDisposition.Predicate),
+        ContractWire.NameOf(value.FactDisposition.FactKind),
+        value.Assertion.ObjectKind == Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionObjectKind.Iri
+            ? "iri"
+            : "literal",
+        value.Assertion.ObjectIriOrLexical,
+        value.Assertion.DatatypeIriOrEmpty,
+        value.Assertion.LanguageTagOrEmpty,
+        value.FactDisposition.EvidenceRef.Sha256);
+
+    /// <summary>The <c>work_facts</c> table's rows: each distinct row once, in the table's key order.</summary>
+    internal static WorkFactRow[] OrderedWorkFacts(IEnumerable<WorkFactRow> rows) =>
+        rows
             .Distinct()
             .OrderBy(static row => row.SubjectIri, StringComparer.Ordinal)
             .ThenBy(static row => row.Predicate, StringComparer.Ordinal)
@@ -2478,10 +2509,13 @@ public static partial class LuxembourgIndexBuilder
 
     /// <summary>
     /// A title's document date: the publisher's <c>dateDocument</c> on the title's own subject, else on the article's work
-    /// identifier (its expression when it has none), else on the expression's legal resource, else the article's own
-    /// applicability date. The publisher dates its journal documents on the legal resource (<c>.../jo</c>) and titles them
-    /// on the expression (<c>.../jo/fr</c>), so before the legal resource was asked none of the Luxembourg population's
-    /// 2,021 titles had a date (the mounted gates of 2026-10-13).
+    /// identifier (its expression when it has none), else on the expression's legal resource, else none. The publisher dates
+    /// its journal documents on the legal resource (<c>.../jo</c>) and titles them on the expression (<c>.../jo/fr</c>), so
+    /// before the legal resource was asked none of the Luxembourg population's 2,021 titles had a date (the mounted gates of
+    /// 2026-10-13). An article's own applicability date is never a title's document date (D1, 2026-10-26): it is another
+    /// date of another thing, and a code's or consolidation's title reached through each of its articles took each
+    /// article's date, so one title made as many rows as its articles had dates, and the build refused (run 15: 2,217 rows).
+    /// The catalogue states no <c>dateDocument</c> for a consolidation or a code state, so their titles have none.
     /// </summary>
     internal static string? TitleDocumentDate(
         string titleSubject,
@@ -2492,8 +2526,7 @@ public static partial class LuxembourgIndexBuilder
         datesBySubject.GetValueOrDefault(article.PublisherWid ?? article.ExpressionIri) ??
         (legalResourceByExpression.TryGetValue(article.ExpressionIri, out var legalResource)
             ? datesBySubject.GetValueOrDefault(legalResource)
-            : null) ??
-        article.ApplicabilityDate;
+            : null);
 
     private static string ExactDocumentDate(IEnumerable<string> values)
     {
@@ -2518,7 +2551,8 @@ public static partial class LuxembourgIndexBuilder
         IReadOnlyList<RelationRow> relations,
         IReadOnlyList<WorkFactRow> workFacts,
         IReadOnlyList<EventRow> events,
-        IReadOnlyList<ObservationRow> observations)
+        IReadOnlyList<ObservationRow> observations,
+        Action<string, int, SqliteException>? refusedRow = null)
     {
         using var connection = Open(path, SqliteOpenMode.ReadWriteCreate);
         Execute(connection, "PRAGMA page_size=4096");
@@ -2531,33 +2565,57 @@ public static partial class LuxembourgIndexBuilder
         Execute(connection, "PRAGMA user_version=9");
         using var transaction = connection.BeginTransaction();
         Execute(connection, Ddl, transaction);
-        foreach (var member in members)
+        // A row the database refuses stops the build, unless the caller collects refusals (the run-15 probe): then each
+        // refused row is named by its table and its place in its list and the next row is inserted, so one pass finds them all.
+        void Row(string table, int index, string sql, params object?[] values)
         {
-            Insert(connection, transaction,
+            if (refusedRow is null)
+            {
+                Insert(connection, transaction, sql, values);
+                return;
+            }
+
+            try
+            {
+                Insert(connection, transaction, sql, values);
+            }
+            catch (SqliteException exception) when (exception.SqliteErrorCode == 19)
+            {
+                refusedRow(table, index, exception);
+            }
+        }
+
+        for (var index = 0; index < members.Count; index++)
+        {
+            var member = members[index];
+            Row("members", index,
                 "INSERT INTO members VALUES($p0,$p1,$p2,$p3,$p4,$p5)",
                 member.ObjectRefSha256, member.SourceOrdinal, member.Outcome,
                 member.RightsDisposition, member.Stage3OutcomesJson, member.GapsJson);
         }
-        foreach (var article in articles)
+        for (var index = 0; index < articles.Count; index++)
         {
-            Insert(connection, transaction,
+            var article = articles[index];
+            Row("articles", index,
                 "INSERT INTO articles VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7,$p8,$p9,$p10)",
                 article.ArticleIdentitySha256, article.ObjectRefSha256, article.ExpressionIri,
                 article.PublisherId, article.PublisherWid, article.ApplicabilityDate,
                 article.Language, article.RuleProfileSha256, article.SearchableText, article.TokensJson,
                 article.DocumentPosition ?? throw new InvalidDataException("An index 9 article has no document position."));
         }
-        foreach (var relation in relations)
+        for (var index = 0; index < relations.Count; index++)
         {
-            Insert(connection, transaction,
+            var relation = relations[index];
+            Row("relations", index,
                 "INSERT INTO relations VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7,$p8,$p9)",
                 relation.FromRef, relation.Ordinal, relation.EdgeType, relation.AssertedBy,
                 relation.SourcePredicate, relation.InNote ? 1 : 0, relation.Label, relation.Href,
                 relation.ToKind, relation.ToRef);
         }
-        foreach (var state in states)
+        for (var index = 0; index < states.Count; index++)
         {
-            Insert(connection, transaction,
+            var state = states[index];
+            Row("states", index,
                 "INSERT INTO states VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7,$p8,$p9,$p10,$p11,$p12,$p13,$p14,$p15,$p16,$p17,$p18,$p19,$p20,$p21)",
                 state.WorkKey, state.ApplicabilityDate, state.StateSha256, state.ExpressionIri,
                 state.PublisherWorkIri, state.PublisherLegalResourceIri, state.Language, state.RuleProfilesJson,
@@ -2565,36 +2623,41 @@ public static partial class LuxembourgIndexBuilder
                 state.Boundary, state.PublicationDate, state.TextStatus, state.TextStatusReason, state.InFileIdentity,
                 state.InFileDate, state.TranslationOf, state.Provisional ? 1 : 0, state.EntryIntoForce);
         }
-        foreach (var interval in intervals)
+        for (var index = 0; index < intervals.Count; index++)
         {
-            Insert(connection, transaction,
+            var interval = intervals[index];
+            Row("intervals", index,
                 "INSERT INTO intervals VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6)",
                 interval.WorkKey, interval.Ordinal, interval.Kind, interval.FromStateSha256, interval.ToStateSha256,
                 interval.SpanFrom, interval.SpanTo);
         }
-        foreach (var title in workTitles)
+        for (var index = 0; index < workTitles.Count; index++)
         {
-            Insert(connection, transaction,
+            var title = workTitles[index];
+            Row("work_titles", index,
                 "INSERT INTO work_titles VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7)",
                 title.WorkIdentifier, title.ExpressionIri, title.Language, title.Title,
                 title.NormalizedTitle, title.DocumentDate, title.TitleKind, title.EvidenceSha256);
         }
-        foreach (var fact in workFacts)
+        for (var index = 0; index < workFacts.Count; index++)
         {
-            Insert(connection, transaction,
+            var fact = workFacts[index];
+            Row("work_facts", index,
                 "INSERT INTO work_facts VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7)",
                 fact.SubjectIri, fact.Predicate, fact.FactKind, fact.ObjectKind, fact.ObjectValue,
                 fact.DatatypeIri, fact.LanguageTag, fact.EvidenceSha256);
         }
-        foreach (var value in events)
+        for (var index = 0; index < events.Count; index++)
         {
-            Insert(connection, transaction,
+            var value = events[index];
+            Row("events", index,
                 "INSERT INTO events VALUES($p0,$p1,$p2,$p3,$p4,$p5)",
                 value.Seq, value.Scope, value.Key, value.Event, value.ObservedFrom, value.DetailJson);
         }
-        foreach (var observation in observations)
+        for (var index = 0; index < observations.Count; index++)
         {
-            Insert(connection, transaction,
+            var observation = observations[index];
+            Row("observations", index,
                 "INSERT INTO observations VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7)",
                 observation.Observation, observation.CorpusSha256, observation.PredecessorIndexSha256,
                 observation.FirstSeq, observation.LastSeq, observation.BuiltAt, observation.ObservedFrom, observation.DerivedAt);
@@ -2962,6 +3025,90 @@ public static partial class LuxembourgIndexBuilder
         string SearchableText,
         string TokensJson,
         int? DocumentPosition = null);
+
+    /// <summary>
+    /// What <see cref="TryProjectRows"/> reads, in the envelope's and the corpus's own orders: the corpus's Luxembourg members,
+    /// the corpus record set's records, the legal-content and inventory outcomes with each body's object reference digest,
+    /// and the typed assertions as their <c>work_facts</c> rows. <see cref="Of"/> reads them from a build's envelope and
+    /// corpus; the run-15 probe gives them from custody and the retained derive's corpus, so both run one projection.
+    /// </summary>
+    internal sealed record ProjectionInputs(
+        IReadOnlyList<LexCorpus6Member> Members,
+        IReadOnlyList<ProjectionRecord> Records,
+        IReadOnlyList<ProjectionContent> Content,
+        IReadOnlyList<ProjectionInventory> Inventory,
+        IReadOnlyList<ProjectionAssertion> Assertions)
+    {
+        /// <summary>A build's inputs: the corpus's Luxembourg members and the envelope's populations and assertions.</summary>
+        internal static ProjectionInputs Of(Stage3DerivationProfileEnvelope envelope, LexCorpus6BuildResult corpus)
+        {
+            var luxembourg = envelope.BodyComposition.Envelope;
+            return new(
+                corpus.VerifiedSet.Set.Members.Where(static member => member.Publisher == PublisherId.LuLegilux).ToArray(),
+                luxembourg.Luxembourg.CorpusRecordSet!.Set.Records
+                    .Select(static record => new ProjectionRecord(
+                        record.ObjectRef.PublisherUri,
+                        Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter.ComputeObjectRefSha256(record.ObjectRef),
+                        ContractWire.NameOf(record.BodyDisposition)))
+                    .ToArray(),
+                luxembourg.LuxembourgAknLegalContentPopulation.Outcomes
+                    .Select(static outcome => new ProjectionContent(
+                        Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter
+                            .ComputeObjectRefSha256(outcome.SourceInventoryOutcome.Input.CorpusRecord.ObjectRef),
+                        outcome.SemanticIdentitySha256,
+                        outcome.Disposition,
+                        outcome.Article,
+                        outcome.SourceInventoryOutcome.Inventory))
+                    .ToArray(),
+                luxembourg.LuxembourgAknArticleInventoryPopulation.Outcomes
+                    .Select(static outcome => new ProjectionInventory(
+                        Lex.V3.Contracts.Source.Scope.ScopeManifestCanonicalWriter.ComputeObjectRefSha256(outcome.Input.CorpusRecord.ObjectRef),
+                        outcome))
+                    .ToArray(),
+                luxembourg.Luxembourg.TypedAssertions
+                    .Select(static assertion => new ProjectionAssertion(assertion.FactDisposition.Predicate, WorkFactOf(assertion)))
+                    .ToArray());
+        }
+    }
+
+    /// <summary>One corpus record: its object's publisher URI, its object reference digest and its body disposition token.</summary>
+    internal readonly record struct ProjectionRecord(string PublisherUri, string ObjectRefSha256, string BodyDisposition);
+
+    /// <summary>
+    /// One legal-content outcome, with its body's object reference digest and the inventory it read. The article is read only
+    /// when the outcome is admitted (or marker-only) in an acquired member. A holder, not a positional record, so it opens no
+    /// door to the guarded article and inventory (the construction census).
+    /// </summary>
+    internal sealed class ProjectionContent(
+        string objectRefSha256,
+        string semanticIdentitySha256,
+        LuxembourgAknLegalContentDisposition disposition,
+        LuxembourgAknLegalContentArticle? article,
+        LuxembourgAknArticleInventory? inventory)
+    {
+        internal string ObjectRefSha256 { get; } = objectRefSha256;
+
+        internal string SemanticIdentitySha256 { get; } = semanticIdentitySha256;
+
+        internal LuxembourgAknLegalContentDisposition Disposition { get; } = disposition;
+
+        internal LuxembourgAknLegalContentArticle? Article { get; } = article;
+
+        internal LuxembourgAknArticleInventory? Inventory { get; } = inventory;
+    }
+
+    /// <summary>One inventory outcome, with its body's object reference digest; a holder, as <see cref="ProjectionContent"/> is.</summary>
+    internal sealed class ProjectionInventory(string objectRefSha256, LuxembourgAknArticleInventoryOutcome outcome)
+    {
+        internal string ObjectRefSha256 { get; } = objectRefSha256;
+
+        internal LuxembourgAknArticleInventoryOutcome Outcome { get; } = outcome;
+    }
+
+    /// <summary>One typed assertion: its predicate and its <c>work_facts</c> row.</summary>
+    internal readonly record struct ProjectionAssertion(
+        Lex.V3.Contracts.Source.Luxembourg.LuxembourgAssertionPredicate Predicate,
+        WorkFactRow Fact);
 
     /// <summary>Schema 8's and 6's article row, exactly as their logical rows hashed it.</summary>
     private sealed record LegacyArticleRow8(

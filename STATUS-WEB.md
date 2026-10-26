@@ -4,6 +4,40 @@ Updated 2026-10-26. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Release 1 on the private copy, and the opening that waits on the owner's command (sole driver, 2026-10-26)
+
+The release `v3-20261026T180319Z-8958ec5fa63f` (from v3/integration at 8958ec5f, #987 merged, over derive-c) was built
+with `--no-browser` and checked:
+- **Signed and reproduced.** It is signed by the release signer, now named `lex-v3-release` with no person's name (the
+  owner's decision of 19 October), its key piped from Key Vault and never printed. A second build from scratch gave the
+  same image (`sha256:93cdd51e…`).
+- **Gates and probes.** The machine gates' card passes every gate over the mount, and every shuffled control was
+  caught. 18 API journey probes, the served pages and the accented title found 0 failures. V2 is absent (566 entries,
+  63 routes asked).
+- **Privacy.** 152 requests: nothing written to output, no file events, no cookie, no other origin.
+- **Freshness.** No promotion refusal: the data's age is within the 30 days.
+- **Kept** at `C:\lex-v3\releases\` with its report.
+
+The deployment and promotion:
+- **Candidate probe.** `deploy.ps1 -Apply` (the driver's identity, through the private-copy wrapper) deployed it as a
+  candidate and probed it at the revision's own address. It answered as the release holds, and its data's age allows
+  promotion. The custom domain stayed bound, and ingress admits only the three named addresses.
+- **Promotion.** All of the private copy's traffic then moved to it. The revision of 18 October was deactivated, so one
+  replica is billed. law.soufien.lu answers ready.
+- **The owner's new address.** The owner's address changed by 2026-10-26 and was added as a third rule,
+  `private-copy-3`. The address rules are removed at the opening.
+
+The opening:
+- **The legal pages are ready.** The opening's check of the legal pages (`deploy-probe.mjs --opening`) was run read-only
+  against https://law.soufien.lu: each of the 10 answers, sets no cookie and shows no e-mail address, mail or telephone
+  link, placeholder or postcode.
+- **The driver may not open.** The opening itself (`deploy.ps1 -Open`, which removes the address rules) was refused to
+  the driver by its harness's safety classifier ("security weaken"), and it was not retried. The owner runs the one
+  command: `pwsh -File <checkout>\deploy\deploy.ps1 -Subscription <id> -ResourceGroup rg-lex-v3 -AppName ca-lex-v3 -Open`.
+- **Then indexing.** After it, the driver deploys the same release with `-Public -SearchEngines indexed` (O27, decided on
+  18 October). The image is already in the registry, so only a new revision and its probe are needed.
+- **Release 2 carries the codes.** Release 2 follows D1, the re-derivation with the codes (STATUS-DATA.md).
+
 ## Review and repair (combined #987): the cards' new reason and coordinate candidates, the closed end's day, dates by role on the radar and in the CSV (sole driver, 2026-10-26)
 
 The web half of the one repair round of the combined data pull request #987 (STATUS-DATA.md, the section of the same day,
