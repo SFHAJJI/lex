@@ -3,7 +3,8 @@
 // Built into `dist-live/` as `locale-<code>.html` for every chrome locale without reviewed copy (German
 // and Luxembourgish; French is reviewed and has its own pages; Decision 41). It says what the preview's page says
 // (`localeUnavailableCopy`), in English and labelled English, under the live banner, since a live page
-// never says "synthetic" (Decision 95, ruling 3). It has no script and asks nothing.
+// never says "synthetic" (Decision 95, ruling 3). It has no script and asks nothing, so its footer's freshness strip says it
+// carries no answer (`answers` false; the review of #990).
 
 import { Document } from './Document.jsx';
 import { renderDocument } from './render-document.mjs';
@@ -19,6 +20,7 @@ export function renderLiveLocaleUnavailablePage(requested) {
       shell="ask"
       density={skinFor('ask').density}
       banner="live"
+      answers={false}
     >
       <h1>{copy.heading}</h1>
       <p className="locale-code">

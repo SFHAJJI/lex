@@ -154,10 +154,11 @@ export function SiteHeader({ state, locale, localePage = null }) {
  * "Documentation, not legal advice."), which texts are authentic, and where the texts come from, then what it holds, and
  * the five legal pages (the plan's item 7.1: "linked from every footer"), the page that is one of them marked current, and
  * last how current that is and which commits built and serve it (R87, R23; `Freshness.jsx`), from `freshness`, an answer's
- * facts (`freshnessFacts`), or as built. The development build's banner said "not a release and not legal advice"; the
- * first half was the build's and went with it, the second is the product's and is said here.
+ * facts (`freshnessFacts`), or as built; on a page that never asks the server (`answers` false), that it carries no answer.
+ * The development build's banner said "not a release and not legal advice"; the first half was the build's and went with
+ * it, the second is the product's and is said here.
  */
-export function SiteFooter({ state = null, freshness = null }) {
+export function SiteFooter({ state = null, freshness = null, answers = true }) {
   const copy = liveChrome();
   const site = copy.site;
   return (
@@ -177,7 +178,7 @@ export function SiteFooter({ state = null, freshness = null }) {
           ))}
         </ul>
       </nav>
-      <FreshnessStripSlot facts={freshness} />
+      <FreshnessStripSlot facts={freshness} answers={answers} />
     </footer>
   );
 }
@@ -222,6 +223,9 @@ export function Document({
   // What the answer a page was rendered from says of the law's freshness and the commits behind it (`freshnessFacts`, R87
   // and R23), or null for a page as built: the footer's strip, and the staleness banner under the header when it is stale.
   freshness = null,
+  // Whether the page can receive an answer from the server: false for a page that ships no script and asks nothing (the
+  // legal pages, the maintenance page), whose footer's strip then says it carries no answer rather than promising one.
+  answers = true,
   children,
 }) {
   // Each axis names itself. Both guards used to raise the same sentence, so a test feeding an
@@ -297,7 +301,7 @@ export function Document({
         {banner === 'live' ? <SiteHeader state={state} locale={locale} localePage={localePage} /> : <SyntheticBanner />}
         {banner === 'live' ? <StalenessBannerSlot facts={freshness} /> : null}
         <main id="main">{children}</main>
-        {banner === 'live' ? <SiteFooter state={state} freshness={freshness} /> : null}
+        {banner === 'live' ? <SiteFooter state={state} freshness={freshness} answers={answers} /> : null}
       </body>
     </html>
   );

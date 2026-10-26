@@ -60,15 +60,11 @@ const NUMBERS_ALLOWED = Object.freeze({
   "citation.europe.authenticity.edition_by_publication_date": ["1", "2013", "216", "2013"],
   "citation.evidence.textSha256": ["256"],
   "citation.evidence.noText": ["256"],
-  // The legal pages (the plan's item 7.1): the GDPR's articles and its number, the CNPD's postal address, the licence's
-  // version, the EU's reuse decision and the accessibility guidelines' version.
-  "privacy.sections.reading.basis": ["6", "1", "2016", "679"],
-  "privacy.sections.email.basis": ["6", "1"],
-  "privacy.sections.named.basis": ["6", "1"],
-  "privacy.sections.rights.ask": ["15", "18", "21"],
-  "privacy.sections.rights.complaint": ["15", "4370"],
-  "terms.sections.texts.luxembourg": ["4", "0", "4", "0"],
-  "terms.sections.texts.europe": ["2011", "833"],
+  // The legal pages (the plan's item 7.1): the licence's version, the EU's reuse decision and the accessibility guidelines'
+  // version. (The GDPR's articles and the CNPD's postal address went with the owner's decision of 2026-10-19.)
+  "legalNotice.sections.sources.luxembourg": ["4", "0", "4", "0"],
+  "legalNotice.sections.sources.europe": ["2011", "833"],
+  "terms.sections.texts.licences": ["4", "0", "4", "0", "2011", "833"],
   "accessibility.sections.status.text": ["2", "2"],
 });
 
