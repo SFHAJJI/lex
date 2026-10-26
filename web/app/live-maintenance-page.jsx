@@ -3,7 +3,8 @@
 //
 // It says that the site is being updated and cannot answer for the moment, that the page is not an answer about the law,
 // and where the law this site holds is published: the publishers' official sites, as a failure panel names them
-// (`OfficialSites`). It asks nothing and ships no script, so it reads the same whatever is or is not running behind it.
+// (`OfficialSites`). It asks nothing and ships no script, so it reads the same whatever is or is not running behind it, and
+// its footer's freshness strip says it carries no answer (`answers` false).
 //
 // Built into `dist-live/maintenance/{language}.html`, once per interface language, by `scripts/build-live.mjs`; neither
 // server serves it (`scripts/not-found.mjs`, `V3WebRoot.NotFound.cs`). Wiring it in front of a deployment is the deploy
@@ -24,6 +25,7 @@ export function renderLiveMaintenancePage() {
       shell="ask"
       density={skinFor('ask').density}
       banner="live"
+      answers={false}
     >
       <p className="eyebrow">{copy.eyebrow}</p>
       <h1>{copy.heading}</h1>

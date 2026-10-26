@@ -74,8 +74,12 @@ test("every live page renders its chrome from the table", () => {
       assert.ok(html.includes(escaped(text)), `${key}: the site says ${JSON.stringify(text.slice(0, 40))}`);
     }
     assert.ok(!html.includes("development build"), `${key}: no development banner`);
-    // Every page as built carries the freshness strip's as-built line in its footer (R87, R23), and no staleness banner.
-    assert.ok(html.includes(`<p>${escaped(copy.freshness.asBuilt)}</p>`), `${key}: the freshness strip as built`);
+    // Every page as built carries the freshness strip in its footer (R87, R23), and no staleness banner: the as-built line on
+    // a page that asks the server, and on one that never does (the maintenance page and the legal pages) that it carries no
+    // answer, never the as-built line's "once it has an answer" (the review of #990).
+    const quiet = key === "maintenance" || LEGAL.has(key);
+    assert.ok(html.includes(`<p>${escaped(quiet ? copy.freshness.noAnswer : copy.freshness.asBuilt)}</p>`), `${key}: the freshness strip as built`);
+    assert.ok(!html.includes(escaped(quiet ? copy.freshness.asBuilt : copy.freshness.noAnswer)), `${key}: only that strip`);
     assert.ok(!html.includes("staleness-banner"), `${key}: no staleness banner as built`);
     assert.ok(html.includes(`<p class="eyebrow">${escaped(entry.eyebrow)}</p>`), `${key}: eyebrow`);
     assert.ok(html.includes(`<h1>${escaped(entry.heading)}</h1>`), `${key}: heading`);

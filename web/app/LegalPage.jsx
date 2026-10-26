@@ -6,7 +6,7 @@
 // servers as the files they are. Each page says its chrome section's words (`live-chrome.mjs`), in its parts' order. By
 // the owner's decision of 2026-10-19 they name no person and give no postal address, no e-mail address and no contact, so
 // a page holds nothing but the table's words and the few values below. A page asks nothing, ships no script and is never
-// indexed (`indexing` stays `never`).
+// indexed (`indexing` stays `never`); so its footer's freshness strip says it carries no answer (`answers` false).
 
 import { Document } from './Document.jsx';
 import { Say, inEnglish } from './LiveAnswer.jsx';
@@ -86,6 +86,7 @@ export function renderLiveLegalPage(pageKey) {
       density={skinFor('ask').density}
       banner="live"
       localePage={page.file}
+      answers={false}
     >
       <LegalPageBody pageKey={pageKey} />
     </Document>,

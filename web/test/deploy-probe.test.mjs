@@ -515,7 +515,7 @@ test("a legal page served with other bytes, without the page's CSP or with a coo
   }
 });
 
-test("the opening's check fails closed: a page showing a contact or a placeholder, a page that does not answer as a page, a cookie, or a site it cannot reach", async () => {
+test("the opening's check fails closed: a page showing a contact or a placeholder, a page that does not answer as a page, a redirect, a cookie, or a site it cannot reach", async () => {
   const clean = await revision({ legal: servedLegal(legalWeb(true)) });
   try {
     assert.deepEqual(await openingFailures(clean.origin), [], "ten pages that name no person and give no contact, each linking the regulator a reader may complain to, served as pages without a cookie: the site may open");
@@ -530,6 +530,12 @@ test("the opening's check fails closed: a page showing a contact or a placeholde
     ["a placeholder a template left", { legal: servedLegal(legalWeb(true), page("/fr/legal-notice.html", "<p>Lex est édité par «PUBLISHER_NAME».</p>")) }, /^\/fr\/legal-notice\.html shows a placeholder a template left \(«LIKE_THIS»\), which/, 1],
     ["a postal address", { legal: servedLegal(legalWeb(true), page("/en/privacy.html", "<p>1, rue de l’Exemple, L-0000 Exempleville</p>")) }, /^\/en\/privacy\.html shows a Luxembourg postcode, as a postal address writes it, which/, 1],
     ["a page missing", { legal: servedLegal(legalWeb(true), (path) => (path === "/en/terms.html" ? { status: 404 } : {})) }, /^\/en\/terms\.html answered 404 text\/html; charset=utf-8, not 200 with a page$/, 1],
+    // A redirect is never followed (the review of #990): the page at the address is what the public reads, so one sent on,
+    // even to a clean legal page of the same site, or to a page elsewhere, keeps the site private.
+    ["a redirect to a clean legal page of the site", { legal: servedLegal(legalWeb(true), (path) => (path === "/en/privacy.html" ? { status: 302, headers: { location: "/en/legal-notice.html" }, body: Buffer.alloc(0) } : {})) },
+      /^\/en\/privacy\.html answered 302 text\/html; charset=utf-8, not 200 with a page$/, 1],
+    ["a permanent redirect to another site", { legal: servedLegal(legalWeb(true), (path) => (path === "/fr/terms.html" ? { status: 308, headers: { location: "https://example.invalid/fr/terms.html" }, body: Buffer.alloc(0) } : {})) },
+      /^\/fr\/terms\.html answered 308 text\/html; charset=utf-8, not 200 with a page$/, 1],
     ["a cookie", { legal: servedLegal(legalWeb(true), (path) => (path === "/en/accessibility.html" ? { headers: { "set-cookie": "affinity=1" } } : {})) }, /^\/en\/accessibility\.html sets a cookie/, 1],
   ];
   for (const [what, change, expected, count] of cases) {

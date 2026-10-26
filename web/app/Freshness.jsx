@@ -2,7 +2,9 @@
 // plan's items 6.1 and 6.5): the strip every live page carries in its footer, and the banner under its header when a
 // publisher channel's data is past the declared maximum age. Both are said from an answer's facts (`freshness.mjs`), never
 // computed here: a page the server rendered from an answer says them from it, a page as built says the strip's as-built
-// line, and either says them again from each answer it later receives (`freshness-client.jsx`).
+// line, and either says them again from each answer it later receives (`freshness-client.jsx`). A page that ships no script
+// (the legal pages, the maintenance page) never receives one, so its strip says that it carries no answer (`noAnswer`),
+// not the as-built line's "once it has an answer" (the review of #990).
 //
 // Each stands in a container of its own (`FRESHNESS_STRIP_ID`, `STALENESS_BANNER_ID`) outside the page's hydrated root, so
 // the browser can draw it again without touching what the server rendered for the root. The strip holds no section inside
@@ -26,9 +28,20 @@ function Commit({ label, commit, unstated }) {
   );
 }
 
-/** The strip: the index's build date, each channel's last complete collection and its lag, and the two commits. */
-export function FreshnessStrip({ facts = null }) {
+/**
+ * The strip: the index's build date, each channel's last complete collection and its lag, and the two commits. With no
+ * facts, the as-built line on a page that will ask the server, and on a page that never does (`answers` false), that it
+ * carries no answer.
+ */
+export function FreshnessStrip({ facts = null, answers = true }) {
   const copy = liveChrome().freshness;
+  if (facts === null && !answers) {
+    return (
+      <section className="freshness-strip" aria-label={copy.heading} data-freshness="no-answer">
+        <p>{copy.noAnswer}</p>
+      </section>
+    );
+  }
   if (facts === null) {
     return (
       <section className="freshness-strip" aria-label={copy.heading} data-freshness="as-built">
@@ -81,11 +94,14 @@ export function StalenessBanner({ facts = null }) {
   );
 }
 
-/** The strip's container in the footer, holding the strip for `facts`, keyed so a page draws it again only for new facts. */
-export function FreshnessStripSlot({ facts = null }) {
+/**
+ * The strip's container in the footer, holding the strip for `facts` (or, on a page that never asks the server, `answers`
+ * false, the strip that says it carries no answer), keyed so a page draws it again only for new facts.
+ */
+export function FreshnessStripSlot({ facts = null, answers = true }) {
   return (
     <div id={FRESHNESS_STRIP_ID} data-freshness-key={freshnessKey(facts)}>
-      <FreshnessStrip facts={facts} />
+      <FreshnessStrip facts={facts} answers={answers} />
     </div>
   );
 }

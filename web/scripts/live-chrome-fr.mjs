@@ -179,6 +179,12 @@
 // entries 52 and 54 of 2026-10-18 less "aussi" and the address, were reviewed by an independent reviewer (Claude, AI
 // reviewer, not the author) under the same delegation in the addendum of 2026-10-19 "the CNPD complaint line kept" (2
 // forms, both approved).
+// PR #990's review (2026-10-26): `legalNotice.sections.what.text`, qualified "pour les textes et les dates qu’il détient"
+// as the terms' service sentence is, and `freshness.noAnswer`, the footer strip of a page that ships no script (the legal
+// pages and the maintenance page), which never has an answer, were reviewed by an independent reviewer (Claude, AI
+// reviewer, not the author) under the same delegation in the addendum of 2026-10-26 "the legal notice qualified and the
+// freshness strip on a page with no answer" (2 forms, both approved; "ne contient aucune réponse", never "n’interroge pas
+// le serveur", which the privacy notice's requests would contradict).
 // The EU authenticity statement chosen by the act's date (the owner's decision of 2026-10-18 on PR #975's question, O4):
 // `citation.europe.authenticity`, one string approved in the addendum of 2026-10-17 on the citation generator, is now two
 // entries keyed by the platform's basis, `citation.europe.authenticity.electronic_edition` (that string, unchanged) and
@@ -735,6 +741,7 @@ export const LIVE_CHROME_FR = Object.freeze({
   freshness: Object.freeze({
     heading: 'Mise à jour des données',
     asBuilt: 'Chaque réponse du serveur indique quand l’index a été construit, quand les textes de chaque éditeur ont été collectés pour la dernière fois, ainsi que le code qui a construit l’index et celui qui le sert ; cette page affiche ces indications dès qu’elle a reçu une réponse.',
+    noAnswer: 'Cette page ne contient aucune réponse du serveur ; il n’y a donc rien à afficher ici. Sur une page qui en contient une, cette partie indique, d’après cette réponse, quand l’index a été construit, quand les textes de chaque éditeur ont été collectés pour la dernière fois, ainsi que le code qui a construit l’index et celui qui le sert.',
     built: 'Index construit le {date}.',
     builtUndated: 'L’index ne consigne aucune date de construction.',
     channels: Object.freeze({
@@ -819,7 +826,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     sections: Object.freeze({
       what: Object.freeze({
         heading: 'Ce qu’est Lex',
-        text: 'Lex est un outil indépendant et non commercial pour lire le droit luxembourgeois et le droit de l’UE au fil du temps : il montre un texte tel qu’il se présentait à la date de votre choix, et comment il a changé. Il est gratuit, ne comporte aucune publicité et ne demande la création d’aucun compte.',
+        text: 'Lex est un outil indépendant et non commercial pour lire le droit luxembourgeois et le droit de l’UE au fil du temps : pour les textes et les dates qu’il détient, il montre un texte tel qu’il se présentait à la date de votre choix, et comment il a changé. Il est gratuit, ne comporte aucune publicité et ne demande la création d’aucun compte.',
         notAdvice: '{notAdvice}',
       }),
       status: Object.freeze({

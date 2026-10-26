@@ -46,8 +46,11 @@ export const legalPage = (key) => LEGAL_PAGES.find((page) => page.key === key);
 /** Every legal page's address, in every interface language (French first, as `INTERFACE_LANGUAGES` orders them), in the footer's order. */
 export const LEGAL_PAGE_PATHS = Object.freeze(INTERFACE_LANGUAGES.flatMap((language) => LEGAL_PAGES.map((page) => `/${language}/${page.file}`)));
 
-/** The date the five texts were last changed, which each page prints ("Last updated"): changed with any of their words. */
-export const LEGAL_TEXTS_UPDATED = "2026-10-19";
+/**
+ * The date the five texts were last changed, which each page prints ("Last updated"): changed with any of their words (on
+ * 2026-10-26, the legal notice's "for the texts and dates it holds", the review of #990).
+ */
+export const LEGAL_TEXTS_UPDATED = "2026-10-26";
 
 /**
  * The supervisory authority a reader may complain to (GDPR art. 77), which the privacy notice names, as a link to its site
@@ -76,12 +79,16 @@ export const ACCESSIBILITY_LAW = "loi du 28 mai 2019 relative à l’accessibili
  * contact channel): each with what it is. Each is a mark only a person's details or a contact leave in a page's bytes, so
  * the check reads the served bytes as they are, markup and all, and needs no judgement of words; the words themselves
  * (a contact, an address to write to) are held at build time, in both languages (`legal-pages.test.mjs`).
+ *
+ * Every pattern reads Unicode (`u`), and a link's scheme and a postcode count only at the edge of a word in any script: a
+ * letter, a combining mark, a digit or "_" on either side is a word's inside, so "Hôtel:" says no "tel:". `\b` cannot say
+ * that, even under `u`: it knows only ASCII's letters, so it found "tel:" after the "ô" (the review of #990).
  */
 export const SHOWN_NOWHERE = Object.freeze([
-  Object.freeze({ what: "an e-mail address", pattern: /[^\s@<>"'()]+@[^\s@<>"'()]+\.[A-Za-z]{2,}/ }),
-  Object.freeze({ what: "a mail or telephone link", pattern: /\b(?:mailto|tel):/i }),
-  Object.freeze({ what: "a placeholder a template left («LIKE_THIS»)", pattern: /«[A-Z][A-Z0-9_]*»/ }),
-  Object.freeze({ what: "a Luxembourg postcode, as a postal address writes it", pattern: /\bL-\d{4}\b/ }),
+  Object.freeze({ what: "an e-mail address", pattern: /[^\s@<>"'()]+@[^\s@<>"'()]+\.[A-Za-z]{2,}/u }),
+  Object.freeze({ what: "a mail or telephone link", pattern: /(?<![\p{L}\p{M}\p{N}_])(?:mailto|tel):/iu }),
+  Object.freeze({ what: "a placeholder a template left («LIKE_THIS»)", pattern: /«[A-Z][A-Z0-9_]*»/u }),
+  Object.freeze({ what: "a Luxembourg postcode, as a postal address writes it", pattern: /(?<![\p{L}\p{M}\p{N}_])L-\d{4}(?![\p{L}\p{M}\p{N}_])/u }),
 ]);
 
 /** What one legal page's text shows of `SHOWN_NOWHERE`, as the kinds it shows, each once, in that list's order. */

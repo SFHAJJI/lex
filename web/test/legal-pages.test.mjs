@@ -118,6 +118,10 @@ test("the five legal pages are built under each interface language, with the sit
     const frenchNotice = await readFile(join(destination, "fr", "legal-notice.html"), "utf8");
     assert.ok(frenchNotice.includes(`« <span lang="en">${EURLEX_ACKNOWLEDGEMENT}</span> »`), "fr/legal-notice.html: the acknowledgement marked English");
     assert.ok(!(await readFile(join(destination, "en", "legal-notice.html"), "utf8")).includes('<span lang="en">'), "en/legal-notice.html: nothing to mark");
+    // What Lex is, for the texts and dates it holds, and the footer strip of a page that never has an answer, in the
+    // reviewed French (the review of #990; the addendum of 2026-10-26).
+    assert.ok(said(frenchNotice).includes(LIVE_CHROME.fr.legalNotice.sections.what.text), "fr/legal-notice.html: what Lex is, qualified");
+    assert.ok(frenchNotice.includes(`<p>${LIVE_CHROME.fr.freshness.noAnswer}</p>`), "fr/legal-notice.html: the strip carries no answer");
 
     // The French pages say the French table's words and none of the English table's own legal words.
     const english = new Map(entriesOf(LIVE_CHROME.en));
@@ -226,6 +230,18 @@ test("the check the opening runs finds each mark of a person's details or a cont
     assert.match(legalPageTextFailures("/fr/privacy.html", html)[0], new RegExp(`^/fr/privacy\\.html shows ${what.replace(/[()«»]/g, ".")}, which the owner's decision of 2026-10-19 keeps off the site`));
   }
   assert.equal(SHOWN_NOWHERE.length, 4);
+  // Every pattern reads Unicode, and a link's scheme or a postcode counts only at the edge of a word in any script (the
+  // review of #990): `\b` took the "ô" of "Hôtel" for a word's edge, even under `u`, and found "tel:" in it.
+  assert.ok(SHOWN_NOWHERE.every(({ pattern }) => pattern.unicode), "every pattern reads Unicode");
+  for (const text of ["Hôtel: rue", "Hôtel: rue", "HÔTEL:", "L’hôtel:", "Motel:", "ÉL-1234", "L-1234é"]) {
+    assert.deepEqual(shownOnPage(text), [], `${JSON.stringify(text)}: inside a word, no link and no postcode`);
+  }
+  for (const [text, what] of [
+    ["Hôtel (tel:+352000000)", "a mail or telephone link"], ["Hôtel tel:+352000000", "a mail or telephone link"], ["Écrire mailto:x", "a mail or telephone link"],
+    ["rue de l’Hôtel, L-1234 Exempleville", "a Luxembourg postcode, as a postal address writes it"], ["«L-1234»", "a Luxembourg postcode, as a postal address writes it"],
+  ]) {
+    assert.deepEqual(shownOnPage(text), [what], `${JSON.stringify(text)}: at a word's edge, found`);
+  }
   // What the pages say that only looks like one: a quotation in French marks, an article's number, a licence's version, a
   // regulation's number, the "#" of a search kept in a link, the link to the regulator a reader may complain to.
   for (const html of ["<p>« © European Union, https://eur-lex.europa.eu »</p>", "<p>WCAG 2.2, CC BY 4.0, 2011/833/EU, « # »</p>", `<a href="${CNPD_SITE.href}" rel="external">${CNPD_SITE.text}</a>`]) {
@@ -314,4 +330,28 @@ test("the accessibility statement declares Lex non-conformant until an audit, th
   assert.equal(french, "Lex est conçu pour respecter les Règles pour l’accessibilité des contenus Web (WCAG) 2.2 au niveau AA. Il n’a pas encore été audité et ne prétend donc pas les respecter : tant qu’un audit du site en service n’a pas été réalisé, il est non conforme, comme est déclaré au Luxembourg le site d’un organisme du secteur public qui n’a fait l’objet d’aucun audit.");
   assert.ok(!JSON.stringify(LIVE_CHROME.fr).includes("partiellement conforme"));
   assert.deepEqual(Object.keys(LIVE_CHROME.en.accessibility.sections), ["status", "done", "limits", "law", "prepared"]);
+});
+
+test("the legal notice promises a text at a date only for the texts and dates Lex holds, as the terms do, and its date says when it changed (the review of #990)", () => {
+  // The English, and the French of the review's addendum of 2026-10-26, byte for byte (a no-break space before the colon).
+  const english = "Lex is an independent, non-commercial tool for reading Luxembourg and EU law over time: for the texts and dates it holds, it shows a text as it stood on the date you choose, and how it changed. It is free, carries no advertising and asks for no account.";
+  const french = "Lex est un outil indépendant et non commercial pour lire le droit luxembourgeois et le droit de l’UE au fil du temps : pour les textes et les dates qu’il détient, il montre un texte tel qu’il se présentait à la date de votre choix, et comment il a changé. Il est gratuit, ne comporte aucune publicité et ne demande la création d’aucun compte.";
+  assert.equal(LIVE_CHROME.en.legalNotice.sections.what.text, english);
+  assert.equal(LIVE_CHROME.fr.legalNotice.sections.what.text, french);
+  // The terms' service sentence makes the same promise with the same limit, in each language.
+  assert.match(LIVE_CHROME.en.terms.sections.what.service, /^It is an information service, free of charge: it shows the texts it holds, at the dates it holds them,/);
+  assert.match(LIVE_CHROME.fr.terms.sections.what.service, /il montre les textes qu’il détient, aux dates auxquelles il les détient,/);
+  // No legal text in either language promises a text at the chosen date without the limit.
+  for (const language of ["en", "fr"]) {
+    const unqualified = language === "en" ? /: it shows a text as it stood/ : /: il montre un texte tel qu’il/;
+    for (const [path, text] of entriesOf(LIVE_CHROME[language]).filter(([one]) => LEGAL_SECTIONS.test(one))) assert.doesNotMatch(text, unqualified, `${language} ${path}`);
+  }
+  assert.ok(said(app.renderLiveLegalPage("legalNotice")).includes(english), "the English page says it");
+  // The texts changed on 2026-10-26, and every page says so ("Last updated"), in words and in the markup.
+  assert.equal(LEGAL_TEXTS_UPDATED, "2026-10-26");
+  for (const page of LEGAL_PAGES) assert.ok(app.renderLiveLegalPage(page.key).includes(`<time dateTime="2026-10-26">26 October 2026</time>`), page.key);
+  // The footer strip of a page that ships no script, as reviewed in the same addendum, byte for byte (shown on every legal
+  // page and the maintenance page: `freshness.test.mjs`; the French page as built says both: the first test above).
+  assert.equal(LIVE_CHROME.fr.freshness.noAnswer, "Cette page ne contient aucune réponse du serveur ; il n’y a donc rien à afficher ici. Sur une page qui en contient une, cette partie indique, d’après cette réponse, quand l’index a été construit, quand les textes de chaque éditeur ont été collectés pour la dernière fois, ainsi que le code qui a construit l’index et celui qui le sert.");
+  assert.equal(LIVE_CHROME.en.freshness.noAnswer, "This page carries no answer from the server, so there is nothing to show here. On a page that has one, this part says, from that answer, when the index was built, when each publisher's texts were last collected and which code built and serves it.");
 });

@@ -1,12 +1,15 @@
 // How current the law is and which commits stand behind an answer (the specification of record's R87 and R23; the plan's
 // items 6.1 and 6.5): the envelope reader holds the freshness header and the commits to the platform's rules, a page reads
 // the answer's facts and computes none of its own, the footer strip and the staleness banner say them (and "lag not yet
-// measured" until a lag is measured), a page as built says the strip's as-built line, and promotion's data-age check says
-// why it refuses.
+// measured" until a lag is measured), a page as built says the strip's as-built line (and a page that ships no script, that
+// it carries no answer), and promotion's data-age check says why it refuses.
 
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
+import { pathToFileURL } from "node:url";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -20,6 +23,8 @@ import { countedEntry, fillCounted, liveChrome } from "../scripts/live-chrome.mj
 import { homeFacts } from "../scripts/live-home.mjs";
 import { dataAgeFailures, homePageFailures, withoutFreshness } from "../scripts/deploy-probe.mjs";
 import { assertTimeVocabulary } from "../scripts/publisher-vocabulary.mjs";
+import { buildLive } from "../scripts/build-live.mjs";
+import { LEGAL_PAGE_PATHS } from "../scripts/legal-pages.mjs";
 
 const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const { contract } = census;
@@ -153,6 +158,10 @@ test("the strip says the build date, each channel's last complete collection and
   assert.ok(!census.includes("data-stale=\"true\""));
   const asBuilt = renderToStaticMarkup(h(FreshnessStrip, {}));
   assert.equal(asBuilt, `<section class="freshness-strip" aria-label="${EN.heading}" data-freshness="as-built"><p>${escaped(EN.asBuilt)}</p></section>`);
+  // A page that never asks the server says it carries no answer, never the as-built line's "once it has an answer" (the
+  // review of #990); an answer's facts, had it any, would still be said.
+  assert.equal(renderToStaticMarkup(h(FreshnessStrip, { answers: false })), `<section class="freshness-strip" aria-label="${EN.heading}" data-freshness="no-answer"><p>${escaped(EN.noAnswer)}</p></section>`);
+  assert.ok(renderToStaticMarkup(h(FreshnessStrip, { facts: freshnessFacts(stale()), answers: false })).includes('data-freshness="answered"'));
 
   // An index that records no build date says so.
   const undated = stale();
@@ -186,7 +195,46 @@ test("the French says each count by the language's plural rule, and no form says
       assertTimeVocabulary(said, `${language} collected ${count}`);
     }
     assertTimeVocabulary(fillCounted(copy.stale, 30, { channel: copy.channels["lu-legilux"], date: "2026-10-05", today: "2026-10-18" }, language), `${language} stale`);
+    for (const line of ["asBuilt", "noAnswer"]) assertTimeVocabulary(copy[line], `${language} ${line}`);
     assert.deepEqual(Object.keys(copy.channels), ["lu-legilux", "eu-eurlex"], language);
+  }
+});
+
+test("a page that ships no script says its strip carries no answer, in English and in French; a page with a script keeps the as-built line (the review of #990)", async () => {
+  const destination = await mkdtemp(join(tmpdir(), "lex-live-freshness-"));
+  try {
+    // Tagged, so this build's intermediate bundles never collide with another test file's build.
+    await buildLive(pathToFileURL(`${destination}/`), { buildTag: "freshness-no-answer" });
+    const pages = [];
+    for (const language of ["en", "fr"]) {
+      for (const name of (await readdir(join(destination, language))).filter((file) => file.endsWith(".html"))) pages.push([`${language}/${name}`, language]);
+      for (const folder of ["not-found", "maintenance"]) pages.push([`${folder}/${language}.html`, language]);
+    }
+    // The language pages German and Luxembourgish readers get, in English (`live-locale-page.jsx`).
+    for (const name of (await readdir(destination)).filter((file) => /^locale-[a-z]+\.html$/.test(file))) pages.push([name, "en"]);
+    const quiet = [];
+    for (const [label, language] of pages) {
+      const html = await readFile(join(destination, label), "utf8");
+      const copy = liveChrome(language).freshness;
+      const strip = html.slice(html.indexOf(`<div id="${FRESHNESS_STRIP_ID}"`), html.indexOf("</footer>"));
+      const line = (said) => `<section class="freshness-strip" aria-label="${escaped(copy.heading)}" data-freshness="${said === copy.noAnswer ? "no-answer" : "as-built"}"><p>${escaped(said)}</p></section>`;
+      if (/<script src="/.test(html)) {
+        // A script that asks the server, and redraws the strip from each answer (`client.jsx`): the as-built line is true.
+        assert.equal(strip, `<div id="${FRESHNESS_STRIP_ID}" data-freshness-key="as-built">${line(copy.asBuilt)}</div>`, label);
+      } else {
+        quiet.push(label);
+        assert.equal(strip, `<div id="${FRESHNESS_STRIP_ID}" data-freshness-key="as-built">${line(copy.noAnswer)}</div>`, label);
+        assert.ok(!html.includes("<form"), `${label}: asks nothing`);
+      }
+    }
+    // The pages that never ask: the ten legal pages, the maintenance page in each language and the two language pages.
+    assert.deepEqual(quiet.sort(), [
+      ...LEGAL_PAGE_PATHS.map((path) => path.slice(1)), "locale-de.html", "locale-lb.html", "maintenance/en.html", "maintenance/fr.html",
+    ].sort());
+    // And the 404 page, which offers the search and so may have an answer, keeps the as-built line.
+    assert.ok(pages.some(([label]) => label === "not-found/fr.html") && !quiet.includes("not-found/fr.html"));
+  } finally {
+    await rm(destination, { recursive: true, force: true });
   }
 });
 

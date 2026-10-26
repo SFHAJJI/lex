@@ -489,10 +489,12 @@ const EN = Object.freeze({
   // the plan's items 6.1 and 6.5; `freshness.mjs`, `Freshness.jsx`): the strip in every page's footer and the staleness
   // banner under its header, each said from the server's answer and nothing else. Every date is the server's, in
   // Luxembourg; every count is the answer's (R11). Until the refresh has run, each channel says "lag not yet measured", and
-  // the publisher re-check's line is absent (R69).
+  // the publisher re-check's line is absent (R69). A page that ships no script (the legal pages, the maintenance page) never
+  // has an answer, so its strip says so (`noAnswer`) in place of the as-built line's promise (the review of #990).
   freshness: Object.freeze({
     heading: "How current this is",
     asBuilt: "Each answer from the server says when its index was built, when each publisher's texts were last collected and which code built and serves it; this page shows it once it has an answer.",
+    noAnswer: "This page carries no answer from the server, so there is nothing to show here. On a page that has one, this part says, from that answer, when the index was built, when each publisher's texts were last collected and which code built and serves it.",
     built: "Index built on {date}.",
     builtUndated: "The index records no build date.",
     channels: Object.freeze({
@@ -598,7 +600,7 @@ const EN = Object.freeze({
     sections: Object.freeze({
       what: Object.freeze({
         heading: "What Lex is",
-        text: "Lex is an independent, non-commercial tool for reading Luxembourg and EU law over time: it shows a text as it stood on the date you choose, and how it changed. It is free, carries no advertising and asks for no account.",
+        text: "Lex is an independent, non-commercial tool for reading Luxembourg and EU law over time: for the texts and dates it holds, it shows a text as it stood on the date you choose, and how it changed. It is free, carries no advertising and asks for no account.",
         notAdvice: "{notAdvice}",
       }),
       status: Object.freeze({
