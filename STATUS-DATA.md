@@ -79,8 +79,9 @@ Updated 2026-10-26.
     bytes, 1,544 cells), no row refused, the reader and the log's source bodies verified, the second write byte-identical,
     0 failures; 11.4 minutes, peak working set 4.4 GiB.
   - `eng/verify-v3-tree.ps1`: 1,689 tracked paths.
-- **Not done here.** D1's rerun (on Azure at 7152de65, started once the probe was clean); index /10; any memory change (both
-  D1 runs peaked in R0's replay at minute 39 to 41).
+- **Not done here.** D1's rerun (on Azure at 7152de65, started once the probe was clean; it succeeded, derive A equal to B,
+  sealed; what it wrote into custody is under "For the dry run" in R1's section below, corrected); index /10; any memory
+  change (both D1 runs peaked in R0's replay at minute 39 to 41).
 
 ## #987 brought up to date with v3/integration, and the D1 fix folded in (sole driver, 2026-10-26)
 
@@ -1384,10 +1385,30 @@ Updated 2026-10-26.
   - The review's notes: the report gives the derivation time as the one the inputs state; the two deviations from the
     design (`verified_under` without reading /1, `profile_identities` without the policy) are recorded as driver
     decisions above.
-- **For the dry run.** `rederive-inputs` and a derive of inputs /3 write two small objects (the inputs and the record) into
-  the custody they read, and a pointer file into its root; nothing else in custody is written. R1 parses each held XML body
-  twice more (/4, /2), after R0's two, and holds content /2's tokens for about 270,000 articles through the builds; the
-  dry run measures that.
+- **For the dry run.** R1 parses each held XML body twice more (/4, /2), after R0's two, and holds content /2's tokens for
+  about 270,000 articles through the builds; the dry run measures that. What a re-derivation writes into the custody it
+  reads was said here as "two small objects"; D1 at 7152de65 (2026-10-26) measured it: 1,291 new files, 58,163,753 bytes,
+  none existing changed (corrected 2026-10-26, from the objects themselves, read-only):
+  - its own objects: the unsealed and the sealed inputs /3 and the record `lex-lu-rederivation/1`, and the two pointer files
+    `mount-inputs-506ffda3…` and `mount-inputs-067ec72d…` in the custody's root;
+  - each derive's hold receipts, which every offline derive of run 15 writes, re-derivation or not: R0's replay holds the
+    acquisition's chunked artefacts again (the two scope manifests and the corpus record set) through
+    `ChunkedDerivedArtifact.WriteAsync`; their 4 MiB chunks are already held, but each chunk's receipt evidence
+    (`lex-v3-durable-blob-write-receipt/2`, which carries the hold's `observed_at`) and so each root are new every run: 619
+    receipts and 3 roots a derive (1,238 and 6 for derives A and B; the R0 derives of 2026-10-13 wrote 622 each). Neither
+    the mount, the sealed inputs nor the record names them (the replay holds each artefact to its canonical digest); they
+    are evidence of that run's holds, not needed to verify the mount, and grow custody by about 0.2 MB a derive;
+  - 22 PDF layout artefacts (`LXPDFL1`, 55,959,023 bytes stored) and the 20 text-layer artefacts made from them
+    (`LXPDTL1`, 1,729,565 bytes), which the build's PDF producers hold by design (content-addressed; the corpus's PDF
+    outcomes name them through their identities). They are new because the layout is not read the same on Linux as on
+    Windows. For each of the 22 sources, custody already held the artefact the acquisition's Windows build wrote on
+    2026-10-12, with the same rule and source and other bytes. Source `cdbb6a99…`: 2,206,811 bytes both, 90 of 27,783
+    glyphs with other bounding boxes (up to 7.6 points; the first glyphs, "Arial,Bold", 2.7 points wide on Windows and 14.1
+    on Linux). PdfPig 0.1.11 reads a font the PDF does not embed from the host's installed fonts, so those glyphs' metrics
+    are the machine's. Derives A and B (both Linux) agree; a Windows derive of the same custody names other PDF outcomes
+    and builds another corpus. **Known defect, not fixed here**: the PDF layout depends on the host's fonts. **Driver
+    decision (reversible)**: D1's artefacts stand, and the population is derived and released on Linux only (as D1 and the
+    release image are) until the layout reads no host font.
 - **Not yet.** Release 2's R1 (S4r: reading /2, the re-resolution, the licence-page index, `measure-lu-rights`); state digest
   /2 and `log.derived_at` (S6); the coverage row and its web copies (S7c); S4b; the dry run.
 
