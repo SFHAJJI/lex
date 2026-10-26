@@ -2,6 +2,86 @@
 
 Updated 2026-10-26.
 
+## D1's second refusal: a code's title dated by each of its articles; the index build now runs over run 15 on this PC first (sole driver, 2026-10-26)
+
+- **What stopped D1 again.** D1's rerun at 3503de99 (inputs `mount-inputs-dc3f4f86…`, `derived_at` 2026-10-26T15:41:19Z, a
+  64 GiB node) got past the article dates and exited 3 after 79 minutes, seconds into the Luxembourg index's first write:
+  `LuxembourgIndexRefused: IndexInvalid: SQLite Error 19: 'UNIQUE constraint failed: work_titles.work_identifier,
+  work_titles.expression_iri, work_titles.language, work_titles.title, work_titles.title_kind, work_titles.evidence_sha256'`.
+  Its peak RSS, 30,948,920 KiB (29.5 GiB) at minute 40.5, is R0's replay again; the index build ran at about 18 GiB.
+- **The cause.** A code state's titles are the catalogue's `title` and `titleShort` on its expression
+  (`…/code/civil/20180401/fr`). The catalogue states no `dateDocument` for a consolidation or a code state (run 15: 24,604
+  `dateDocument`, every one on an act's legal resource). The projection reaches a title through each article of its
+  expression, and `TitleDocumentDate` fell back to the article's own applicability date, so a code's title made one row per
+  distinct article date, all under one key. Before the fix the probe below finds 5,148 title rows, of which 2,217 are refused
+  by that key, every example a code's (`code-civil … 20180401/fr | title | Code civil`: document dates 2017-04-01 and
+  2018-04-01, its articles' own). Index 8 never met it: none of its articles had a date of its own, and no code was admitted
+  before Release 1. The same title, subject, kind and evidence is one fact; the rows differed only by that stand-in date.
+- **The fix** (`LuxembourgIndexBuilder.TitleDocumentDate`): a title's document date is the publisher's `dateDocument` of the
+  title's subject, else of the article's work identifier, else of the expression's legal resource, else none; never an
+  article's own date. The rows that differed only by it are one row again (the projection's `Distinct`). Acts' titles keep
+  their legal resource's date (2,689, all dated); the 242 code titles have none. No schema change; no rule digest moved, so
+  D1's inputs stay valid.
+- **The probe** (`LuxembourgIndexNineBuildRun15Probe`, new, opt-in `LEX_LU_INDEX9_BUILD_PROBE=1`, read-only, never a CI
+  test): the index /9 build over run 15 under Release 1, from the projection to the file read back, in about 10 minutes and
+  3.8 GB on this PC instead of 80 minutes on Azure.
+  - **What it runs.** The acquisition's own corpus record set, read from custody by its retained chain (inputs /2, the
+    Luxembourg catalog, the query checkpoint, `CorpusRecordSetReader`: 260,235 records); inventory /4 and content /3 over the
+    11,205 held bodies as R1 runs them (content /3 in chunks; an article kept only for an acquired body); the corpus's
+    Luxembourg members from derive-c with each held member's legal-content outcomes replaced by content /3's
+    (`LexCorpus6Builder.AknDisposition`, the corpus's order); the typed assertions as derive-c's 1,512,390 `work_facts` rows.
+    Then the build's own code: `TryProjectRows`, `WriteFile` (the exact DDL; with the new collector every row the database
+    refuses is named and the next inserted, so one pass finds every primary key, unique, not-null, check and foreign-key
+    refusal), the reader's file door (`OpenAndVerifyFileAsync`: every validation the reader runs, the logical-rows hash, the
+    capability manifest), its check of the log's source bodies against the corpus, and a second write that must be the same
+    bytes (the build's double build).
+  - **What it does not cover.** The R0 replay and R1 exactly as the derive runs them (the probe's held population is S3a's
+    synthetic one over the real bodies, so the content outcomes' semantic identities, which hash the population and the
+    object's canonical key, are not the derive's: their uniqueness and the stage-3 check run, they are not reproduced); the
+    corpus build under R1 (derive-c's members stand in, with R1's content outcomes; their PDF outcomes are derive-c's); the
+    build-time check against the corpus; the typed assertions' original order (the facts come sorted, so title rows that tie
+    on the table's order may come in another order); the EU index /6 (its force dates' projection and reader check were
+    measured over run 16 by `EuForceDatesRun16Probe`; its whole write is not run here), the mount writer and the seal.
+  - **Measured** (run 15, `probe.json` naming the custody, base inputs `b306a972…`, derive-c, built 2026-10-12T18:17:05Z,
+    derived 2026-10-26T15:41:19Z): inventory /4 10,644 inventoried, 368 not AKN, 178 rejected, 15 naming another state;
+    content /3 298,617 admitted, 9,904 unsupported shapes, 561 upstream not inventoried; the projection 260,235 members,
+    137,632 articles (116,406 with a date), 3,312 states (2,690 held), 752 intervals, 1,512,390 work facts.
+    - Before the fix (the refactor with the old rule): 5,148 title rows, 2,217 refused (`work_titles` key), nothing else refused.
+    - After: 2,931 title rows (code 242, act 2,689; dated: the 2,689 acts'), no row refused, the index 1,378,668,544 bytes
+      with 1,544 capability cells, the reader verifies it and the log's source bodies, the second write the same bytes;
+      0 failures.
+- **The refactor that lets the probe run the build's code** (no output change): `TryProjectRows` reads `ProjectionInputs`
+  (the members, the records, the content and inventory outcomes with their object reference digests, the typed assertions
+  as `work_facts` rows), which `ProjectionInputs.Of` reads from the envelope and corpus as before; `TryProjectRowsCatching`
+  holds the build's `InvalidDataException` rule; `WriteFile` and `BuildDatabase` take an optional refused-row collector
+  (without one, the first refusal stops the build, as before). The content and inventory inputs are holders, not positional
+  records, so they open no door to the guarded types (the construction census pin did not move).
+- **Driver decisions (reversible):**
+  - **An article's own applicability date is never a title's document date.** It is another date of another thing (R21: a
+    date is said with its role); the catalogue states no document date for a consolidation or a code state, so their titles
+    carry none. No fact is dropped: every article keeps its own date, and the title rows that differed only by the stand-in
+    are one fact (one assertion, subject, title, kind and evidence).
+  - **The probe stands in for R0 with derive-c's corpus and work facts and R1's own content outcomes**, as written above,
+    and says what that leaves out; D1 reruns on Azure only once the probe is clean at the head that runs.
+  - **The writer's refused-row collector exists for the probe only**; a build never passes one.
+- **Tests.** `LuxembourgTitleDocumentDateTests` (new): the derive's own path (the synthetic consolidation acquired with a
+  title and a short title on its expression and two articles stating 2026-01-15 and 2026-02-01, re-derived under
+  `lu-release-1`, built, written and verified: one row per title, no document date, each article's own date kept); with the
+  old fallback put back it refuses with D1's sentence (run once to check). The unit test of `TitleDocumentDate` takes the
+  new rule (`ATitleIsDatedByItsSubjectThenItsWorkThenItsLegalResourceAndNeverByItsArticle`). No census pin moved.
+- **Measured** (Windows, no browser, no publisher traffic, no Azure, custody read only; rebased on 8958ec5f, #987 merged):
+  - `dotnet build Lex.V3.slnx -c Release`: 0 warnings, 0 errors (and `--no-incremental` before the rebase).
+  - `Lex.V3.Ingest.Tests`, targeted while the opening release held the PC: the new class, the index builder and catalogue
+    states, the censuses: 96 (96 passed); the three samples classes (unchanged, so not re-rendered), the legacy schema 8 and 6
+    mounts (their recorded answers replayed unchanged) and the article-date class: 39 (38 passed, 1 skipped: the env-gated
+    recorder); the re-derivation, content /3's mount, the interval, continuity, resolve, coverage and search mounts and
+    index-9 serving: 145 (145 passed).
+  - The probe over run 15 as above (before the rebase; the rebase changed no projection code).
+  - `eng/verify-v3-tree.ps1`: 1,689 tracked paths.
+  - Not yet run, waiting for the PC: `Lex.V3.Tests` whole, the wider Ingest set and the probe at this head.
+- **Not done here.** D1's rerun (Azure, once the probe is clean at this head); index /10; any memory change (both D1 runs
+  peaked in R0's replay at minute 39 to 41).
+
 ## #987 brought up to date with v3/integration, and the D1 fix folded in (sole driver, 2026-10-26)
 
 - **What.** Two merges on the repaired head: `origin/v3/integration` at e504d188 (#989, the web big bang, and #990, the
