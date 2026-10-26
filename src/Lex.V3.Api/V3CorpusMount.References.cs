@@ -461,7 +461,9 @@ internal sealed partial class V3CorpusMount
         }
 
         // The date: the reference's own; else the version's an ELI names; else the search's; else today in Luxembourg (R13). A
-        // version an ELI pins opens at its own date.
+        // version an ELI pins is asked at its own date and opens there only where the interval rules serve it (index 9): at its
+        // own date it is refused when that date is ambiguous (another state of another wording covers it) or its interval is
+        // invalid (an end on or before its start), with the rules' refusal (the review of #987).
         var (date, source) = reference.Date is { } own ? (own.Date, "citation")
             : pinnedDate is not null ? (pinnedDate, "identifier")
             : pinnedResource is not null && scoped.Length == 1 ? (scoped[0].ApplicabilityDate, "identifier")

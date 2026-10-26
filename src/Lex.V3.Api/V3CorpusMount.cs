@@ -614,8 +614,8 @@ internal sealed partial class V3CorpusMount : IDisposable
                 var cover = CoverAt(observedWork, language, requestedDate, row => mounted.Contains(row.StateSha256));
                 if (cover.Kind == CoverAmbiguous)
                 {
-                    ambiguous.AddRange(cover.Others.Where(static row => row.Language.Length > 0)
-                        .Select(static row => LuxembourgPermalink(row.WorkKey, row.ApplicabilityDate, row.StateSha256, row.Language)));
+                    // Every candidate, a state naming no expression by its stable coordinate (the review of #987).
+                    ambiguous.AddRange(cover.Others.Select(RowAddress));
                 }
                 else if (cover.Kind == CoverServed)
                 {
@@ -3706,14 +3706,16 @@ internal sealed partial class V3CorpusMount : IDisposable
             if (RulesByInterval)
             {
                 // On index 9 a work with a state before the date may have none covering it (a hole, a closed end, an unclear
-                // end, an invalid interval): only a covered work has a state on the date; the others are counted apart.
-                worksHeldBefore = worksOnDate;
-                worksOnDate = _reader.ResolveWorkKeysWithStateOnOrBefore(requestedDate, requestedLanguage, null, int.MaxValue)
+                // end, an invalid interval): only a covered work has a state on the date; the others are counted apart. The
+                // works are read from the catalogue's rows, held or textless, so a work whose only state on or before the date
+                // holds no text is a row naming it, and counted, as F8 counts it (the review of #987).
+                worksHeldBefore = _reader.CountWorksWithStateOnOrBefore(requestedDate, requestedLanguage, catalogue: true);
+                worksOnDate = _reader.ResolveWorkKeysWithStateOnOrBefore(requestedDate, requestedLanguage, null, int.MaxValue, catalogue: true)
                     .LongCount(key => CoveredOn(key, requestedLanguage, requestedDate));
             }
             // Every work contributes at least one row, so one work more than the limit is enough to
             // know whether anything remains after the last work served.
-            workKeys = _reader.ResolveWorkKeysWithStateOnOrBefore(requestedDate, requestedLanguage, afterWorkKey, limit + 1);
+            workKeys = _reader.ResolveWorkKeysWithStateOnOrBefore(requestedDate, requestedLanguage, afterWorkKey, limit + 1, catalogue: RulesByInterval);
         }
 
         // The work keys read, in order. Before index 9 every work with a state on or before the date gives a row, so one more
@@ -3735,7 +3737,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             var after = workKeys[^1];
             while (true)
             {
-                var batch = _reader!.ResolveWorkKeysWithStateOnOrBefore(requestedDate, requestedLanguage, after, limit + 1);
+                var batch = _reader!.ResolveWorkKeysWithStateOnOrBefore(requestedDate, requestedLanguage, after, limit + 1, catalogue: true);
                 foreach (var key in batch)
                 {
                     yield return key;
@@ -5765,6 +5767,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             object? diff = null;
             string[]? candidates = null;
             string? ruledReason = null;
+            string[]? ruledBaselineCandidates = null;
             if (RulesByInterval)
             {
                 // On index 9 the rows follow the interval rules (the review of #987, F6): a state served under another of the
@@ -5779,15 +5782,23 @@ internal sealed partial class V3CorpusMount : IDisposable
                     continue;
                 }
 
-                sameDate = own.Kind == CoverAmbiguous ? own.Others.Where(static row => row.Language.Length > 0).Select(StateOfRow).ToArray() : [state];
+                // An ambiguity names every candidate, a state naming no expression by its stable coordinate (the review of
+                // #987), so a candidate without a language never makes one state of two.
+                sameDate = own.Kind == CoverAmbiguous ? own.Others.Select(StateOfRow).ToArray() : [state];
                 var before = CoverAt(work, state.Language, DayBefore(state.ApplicabilityDate));
                 baselines = before.Kind == CoverServed
                     ? ofLanguage.Where(other => string.Equals(other.StateSha256, before.Row!.StateSha256, StringComparison.Ordinal)).ToArray()
-                    : before.Kind == CoverAmbiguous ? before.Others.Where(static row => row.Language.Length > 0).Select(StateOfRow).ToArray()
                     : [];
+                if (before.Kind == CoverAmbiguous && HoldsText(before))
+                {
+                    ruledBaselineCandidates = before.Others.Select(RowAddress).Order(StringComparer.Ordinal).ToArray();
+                }
+
                 // No state the rules serve the day before: the first held state of its language when none is held before it,
-                // else a held state whose baseline a hole, an end or a state without text took away.
-                ruledReason = (before.Kind == CoverTextless || before.Kind == CoverNone) && earlier.Length > 0
+                // else a held state whose baseline a hole, an end or a state without text took away, or several states none
+                // of which holds text (the review of #987).
+                ruledReason = (before.Kind == CoverTextless || before.Kind == CoverNone || before.Kind == CoverAmbiguous && !HoldsText(before)) &&
+                              earlier.Length > 0
                     ? "no_held_baseline"
                     : null;
             }
@@ -5803,6 +5814,11 @@ internal sealed partial class V3CorpusMount : IDisposable
             else if (ruledReason is not null)
             {
                 reason = ruledReason;
+            }
+            else if (ruledBaselineCandidates is not null)
+            {
+                reason = "ambiguous_baseline";
+                candidates = ruledBaselineCandidates;
             }
             else if (baselines.Length == 0)
             {
@@ -7079,8 +7095,14 @@ internal sealed partial class V3CorpusMount : IDisposable
     private static string StableCoordinate(LuxembourgIndexResolvedState state) =>
         $"/lu-legilux/{state.WorkKey}/{state.ApplicabilityDate}";
 
+    /// <summary>
+    /// A state's permalink; for a state the catalogue names no expression of (an index 9 row an ambiguity names, which has no
+    /// language and so no permalink), its stable coordinate, as <see cref="RowAddress"/> names it (the review of #987).
+    /// </summary>
     private static string StateUrl(LuxembourgIndexResolvedState state) =>
-        LuxembourgPermalink(state.WorkKey, state.ApplicabilityDate, state.StateSha256, state.Language);
+        state.Language.Length == 0
+            ? StableCoordinate(state)
+            : LuxembourgPermalink(state.WorkKey, state.ApplicabilityDate, state.StateSha256, state.Language);
 
     /// <summary>
     /// A Luxembourg state's permalink, in the one shape of the specification of record's R64

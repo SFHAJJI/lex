@@ -32,7 +32,8 @@ internal sealed partial class V3CorpusMount
 
     internal const string EuropeForceDateNoteRule =
         "publisher_code is the publisher's type-of-date code (ann:type_of_date) exactly as served, or null when the statement carries none; " +
-        "publisher_note is the publisher's comment on the date (ann:comment_on_date) exactly as served, or null when there is none; " +
+        "publisher_note is the publisher's comment on the date (ann:comment_on_date) exactly as served, or null when there is none or it is " +
+        "not a literal (an IRI or a blank node, which the statement's retained properties still carry); " +
         "publisher_note_codes is the same note with each of its {CODE|IRI} carriers written as its code and nothing else changed; this site " +
         "translates no code; open_ended is true only for the publisher's open end (9999-12-31 at xsd:date), which is no date";
 

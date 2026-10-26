@@ -184,10 +184,15 @@ internal sealed partial class V3CorpusMount
             return new Cover(CoverNone, invalid, [], ReasonIntervalInvalid, historyBegins, nearestEarlier, nearestLater, null);
         }
 
-        // Otherwise the state before the date has ended: a hole in the catalogue when a later state begins, else a closed end.
-        var previous = chain.LastOrDefault(row =>
-            !string.Equals(row.Boundary, "invalid", StringComparison.Ordinal) &&
-            string.CompareOrdinal(row.ApplicabilityDate, date) <= 0);
+        // Otherwise the states before the date have ended: a hole in the catalogue when a later state begins, else a closed end.
+        // None covers the date, so each of their ends is on or before it, and the catalogue's states stop covering at the
+        // furthest one, not at the end of the state that begins last (a state nested in an earlier one's interval ends before
+        // it does: the review of #987, F7); among equal ends, the state that begins last.
+        var previous = chain
+            .Where(row => !string.Equals(row.Boundary, "invalid", StringComparison.Ordinal) &&
+                          string.CompareOrdinal(row.ApplicabilityDate, date) <= 0)
+            .OrderBy(static row => row.ApplicableTo, StringComparer.Ordinal)
+            .LastOrDefault();
         if (nearestLater is not null)
         {
             return new Cover(CoverNone, previous, [], ReasonCatalogueHole, historyBegins, nearestEarlier, nearestLater,
@@ -196,6 +201,15 @@ internal sealed partial class V3CorpusMount
 
         return new Cover(CoverNone, previous, [], ReasonAfterClosedEnd, historyBegins, nearestEarlier, null, null);
     }
+
+    /// <summary>
+    /// Whether what covers a date holds text: a state served, or an ambiguity one of whose states holds its text. An ambiguity
+    /// of states none of which holds text holds none (the review of #987): a history breaks there, and a radar row has no
+    /// baseline there.
+    /// </summary>
+    private static bool HoldsText(Cover cover) =>
+        cover.Kind == CoverServed ||
+        cover.Kind == CoverAmbiguous && cover.Others.Any(static row => string.Equals(row.TextStatus, TextHeld, StringComparison.Ordinal));
 
     /// <summary>
     /// Several states covering one date are one wording when every one is held, under the same rule profiles, with the same
@@ -758,23 +772,27 @@ internal sealed partial class V3CorpusMount
     internal const string OutsideScopeRule =
         "outside_named_version: the identifier names a version (named_states) whose interval does not hold the date, and the " +
         "publisher's catalogue gives the date to another state (covering_states), which the identifier does not name; nothing is " +
-        "opened in its place";
+        "opened in its place; history_begins, nearest_earlier and nearest_later are the work's, over its catalogue's states in " +
+        "the language, as for every other reason";
 
     /// <summary>
     /// The refusal for a narrowed scope (an exact reference whose ELI names one version) when the rules serve the date with a
     /// state outside it: <c>no_version_for_date</c>, reason <c>outside_named_version</c>, the scope's states named, the state
-    /// that covers the date named beside them, the nearest dates the scope holds either side. Flat, as every refusal is.
+    /// that covers the date named beside them, and the work's first date and nearest dates either side, over its chain in the
+    /// language as <see cref="CoverAt"/> reads them for every other reason (the French review of #987's repair round: the
+    /// scope's own dates made a declared null say no later state is held where a later one is). Flat, as every refusal is.
     /// </summary>
     private V3PlatformOperationOutcome RefuseOutsideScope(
         V3PlatformOperationRequest request,
         DateTimeOffset observedAt,
+        CatalogueWork work,
         Cover cover,
         string language,
         IReadOnlyList<LuxembourgIndexResolvedState> scope,
         string requestedDate,
         string? bound)
     {
-        var dates = scope.Select(static state => state.ApplicabilityDate).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var dates = ChainOf(work, language).Select(static row => row.ApplicabilityDate).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         var covering = new[] { cover.Row! }.Concat(cover.Others).ToArray();
         var payload = new JsonObject { ["requested_date"] = requestedDate };
         if (bound is not null)
@@ -847,15 +865,16 @@ internal sealed partial class V3CorpusMount
 
         if (cover.Kind == CoverAmbiguous)
         {
+            // Every candidate, a state naming no expression by its stable coordinate (the review of #987).
             return RefuseAmbiguousVersion(request, observedAt, requestedDate,
-                cover.Others.Where(static row => row.Language.Length > 0).Select(RowAddress).Order(StringComparer.Ordinal).ToArray(), bound);
+                cover.Others.Select(RowAddress).Order(StringComparer.Ordinal).ToArray(), bound);
         }
 
         if (cover.Kind == CoverServed)
         {
             // The rules serve a state the caller's narrowed scope does not hold (an ELI that names another version): the scope's
             // version does not cover the date, and the state that does is named (the review of #987, F2).
-            return RefuseOutsideScope(request, observedAt, cover, language, scope ?? [], requestedDate, bound);
+            return RefuseOutsideScope(request, observedAt, work, cover, language, scope ?? [], requestedDate, bound);
         }
 
         var payload = new JsonObject { ["requested_date"] = requestedDate };
@@ -964,12 +983,15 @@ internal sealed partial class V3CorpusMount
 
     internal const string AmbiguousCandidatesRule =
         "on lex-v3-luxembourg-index/9 the candidate_ lists name every state whose interval holds the date, each in the order of " +
-        "candidate_state_sha256s: its kind, its date's role, its interval (candidate_applicability_dates to candidate_applicable_tos, " +
-        "and that end's source), its boundary and its text status; they are not one wording held, so none is chosen";
+        "candidates and of candidate_state_sha256s: its kind, its date's role, its interval (candidate_applicability_dates to " +
+        "candidate_applicable_tos, and that end's source), its boundary and its text status; a candidate the catalogue names no " +
+        "expression of is given by its stable coordinate, since it has no permalink; they are not one wording held, so none is chosen";
 
     /// <summary>
-    /// The candidates of an index 9 ambiguity, by the permalinks the refusal lists (each <c>/lu-legilux/{work}/{date}--{digest}/{language}</c>):
-    /// the catalogue row of each, or none when the index holds no row for it.
+    /// The candidates of an index 9 ambiguity, by the addresses the refusal lists, in their order: a permalink
+    /// (<c>/lu-legilux/{work}/{date}--{digest}/{language}</c>) names its row by digest; a stable coordinate
+    /// (<c>/lu-legilux/{work}/{date}</c>) names a row of that date the catalogue names no expression of, each such row once, by
+    /// digest (the review of #987: such a row has no permalink). A candidate the index holds no row for adds none.
     /// </summary>
     private JsonObject? CandidateStates(IReadOnlyList<string> candidates)
     {
@@ -981,11 +1003,29 @@ internal sealed partial class V3CorpusMount
         var rows = new List<LuxembourgIndexCatalogueState>();
         foreach (var candidate in candidates)
         {
-            if (PermalinkSegments(candidate, "lu-legilux") is { } segments &&
-                CatalogueOf(segments.Work).ByDigest.GetValueOrDefault(segments.Digest) is { } row)
+            if (PermalinkSegments(candidate, "lu-legilux") is { } segments)
             {
-                rows.Add(row);
+                if (CatalogueOf(segments.Work).ByDigest.GetValueOrDefault(segments.Digest) is { } row)
+                {
+                    rows.Add(row);
+                }
             }
+            else if (candidate.Split('/') is [_, "lu-legilux", var work, var date] && IsWorkKey(work) &&
+                     CatalogueOf(work).Rows
+                         .Where(row => row.Language.Length == 0 && string.Equals(row.ApplicabilityDate, date, StringComparison.Ordinal) &&
+                                       rows.All(seen => !string.Equals(seen.StateSha256, row.StateSha256, StringComparison.Ordinal)))
+                         .OrderBy(static row => row.StateSha256, StringComparer.Ordinal)
+                         .FirstOrDefault() is { } unexpressed)
+            {
+                rows.Add(unexpressed);
+            }
+        }
+
+        // The lists describe the candidates one by one, so they are given only when every candidate has its row (a reader
+        // pairs them by place, as the web's card does): a candidate the index holds no row for leaves the lists out, never short.
+        if (rows.Count != candidates.Count)
+        {
+            return null;
         }
 
         return new JsonObject

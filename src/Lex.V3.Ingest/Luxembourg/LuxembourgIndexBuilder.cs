@@ -3217,6 +3217,16 @@ public sealed class LuxembourgIndexReader : IDisposable
     /// </summary>
     private string HeldOnly(string alias) => _version == 9 ? $" AND {alias}.text_status='held'" : string.Empty;
 
+    /// <summary>
+    /// Index 9's catalogue scope of a state row <c>s</c>: any text status; in a language, that language's rows, and in French the
+    /// rows naming no expression too (they stand in the French chain); of a work that holds a state in that scope, so a count
+    /// over it stays within the held population's works.
+    /// </summary>
+    private static string CatalogueScope(string? language) =>
+        (language is null ? string.Empty : " AND (s.language=$language OR ($language='fra' AND s.language=''))") +
+        " AND EXISTS (SELECT 1 FROM states h WHERE h.work_key=s.work_key AND h.text_status='held'" +
+        (language is null ? string.Empty : " AND h.language=$language") + ")";
+
     public SourceArtifactRef CorpusRef { get; }
 
     public long MemberCount => Count("members");
@@ -3614,10 +3624,12 @@ public sealed class LuxembourgIndexReader : IDisposable
     /// The work keys that have a state dated at or before <paramref name="date"/>, in ordinal work-key
     /// order, strictly after <paramref name="afterWorkKey"/> when one is given, at most
     /// <paramref name="take"/> of them. With a language, only that language's states count. Nothing is
-    /// selected here: which state applies is the caller's rule.
+    /// selected here: which state applies is the caller's rule. With <paramref name="catalogue"/> on index 9, every catalogue
+    /// state counts, held or textless (in French the states naming no expression too), of a work that holds a state in the
+    /// scope (<see cref="CatalogueScope"/>; the review of #987: a work whose textless state covers a date is a row of it).
     /// </summary>
     public IReadOnlyList<string> ResolveWorkKeysWithStateOnOrBefore(
-        string date, string? language, string? afterWorkKey, int take)
+        string date, string? language, string? afterWorkKey, int take, bool catalogue = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(date);
         ArgumentOutOfRangeException.ThrowIfLessThan(take, 1);
@@ -3625,8 +3637,8 @@ public sealed class LuxembourgIndexReader : IDisposable
         {
             using var command = _connection.CreateCommand();
             command.CommandText =
-                "SELECT DISTINCT s.work_key FROM states s WHERE s.applicability_date<=$date" + HeldOnly("s") +
-                (language is null ? string.Empty : " AND s.language=$language") +
+                "SELECT DISTINCT s.work_key FROM states s WHERE s.applicability_date<=$date" +
+                (catalogue && _version == 9 ? CatalogueScope(language) : HeldOnly("s") + (language is null ? string.Empty : " AND s.language=$language")) +
                 (afterWorkKey is null ? string.Empty : " AND s.work_key>$after") +
                 " ORDER BY s.work_key LIMIT $take";
             command.Parameters.AddWithValue("$date", date);
@@ -3749,16 +3761,19 @@ public sealed class LuxembourgIndexReader : IDisposable
         }
     }
 
-    /// <summary>How many works have a state dated at or before the date, in the language when one is given.</summary>
-    public long CountWorksWithStateOnOrBefore(string date, string? language)
+    /// <summary>
+    /// How many works have a state dated at or before the date, in the language when one is given; with
+    /// <paramref name="catalogue"/> on index 9, a catalogue state, as <see cref="ResolveWorkKeysWithStateOnOrBefore"/> reads them.
+    /// </summary>
+    public long CountWorksWithStateOnOrBefore(string date, string? language, bool catalogue = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(date);
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
             command.CommandText =
-                "SELECT COUNT(DISTINCT s.work_key) FROM states s WHERE s.applicability_date<=$date" + HeldOnly("s") +
-                (language is null ? string.Empty : " AND s.language=$language");
+                "SELECT COUNT(DISTINCT s.work_key) FROM states s WHERE s.applicability_date<=$date" +
+                (catalogue && _version == 9 ? CatalogueScope(language) : HeldOnly("s") + (language is null ? string.Empty : " AND s.language=$language"));
             command.Parameters.AddWithValue("$date", date);
             if (language is not null)
             {

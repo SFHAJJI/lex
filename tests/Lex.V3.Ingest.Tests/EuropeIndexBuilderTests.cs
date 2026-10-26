@@ -337,9 +337,13 @@ public sealed class EuropeIndexBuilderTests
             rows.Select(static row => row.FactRole).ToArray(), "the accepted contract's own reading is kept beside the role");
         CollectionAssert.AreEqual(new[] { "Entry into force", "Application", null }, rows.Select(static row => row.QualifierLabel).ToArray());
         Assert.AreEqual(EuForceDatesFixture.Gdpr()[2].Note, rows[2].PublisherComment, "the deadline's qualifier is the publisher's note, word for word");
-        Assert.IsTrue(rows.All(static row => !row.OpenEnded && row.DatatypeIri == EuForceDatesFixture.XsdDate && row.PublisherWorkIri == row.PublisherWorkIri));
+        Assert.IsTrue(rows.All(static row => !row.OpenEnded && row.DatatypeIri == EuForceDatesFixture.XsdDate));
         var decoded = envelope.BodyComposition.Envelope.Europe.DateAxioms;
         Assert.HasCount(3, decoded);
+        // Each row is the work its statement names, the seed's own (the review of #987: this compared a row's work with itself).
+        var stated = decoded.Select(static binding => binding.WorkIdentity.Value(Lex.V3.Contracts.Facts.FactsIdentifierFamily.CellarWorkUri)).Distinct().Single();
+        Assert.AreEqual(root, stated, "the act's statements name its seed's work");
+        CollectionAssert.AreEqual(Enumerable.Repeat(stated, rows.Count).ToArray(), rows.Select(static row => row.PublisherWorkIri).ToArray());
         CollectionAssert.AreEquivalent(decoded.Select(static binding => binding.Fact.SourceObservationId).ToArray(),
             rows.Select(static row => row.SourceObservationId).ToArray(), "each date names the delivered batch it was read from");
         Assert.IsEmpty(reader.ReadForceDates("http://publications.europa.eu/resource/cellar/not-a-census-work"));

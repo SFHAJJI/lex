@@ -101,7 +101,7 @@
             "9da1fcd1bb8d396c2e034614512be1d55022092a030621cb4829132a2f0db3a0",
             "a19a1e52a6b82583572168c2b7d6893fe6f7541b06604b045efa2d423e482ac1"
           ],
-          "candidate_states_rule": "on lex-v3-luxembourg-index/9 the candidate_ lists name every state whose interval holds the date, each in the order of candidate_state_sha256s: its kind, its date\u0027s role, its interval (candidate_applicability_dates to candidate_applicable_tos, and that end\u0027s source), its boundary and its text status; they are not one wording held, so none is chosen",
+          "candidate_states_rule": "on lex-v3-luxembourg-index/9 the candidate_ lists name every state whose interval holds the date, each in the order of candidates and of candidate_state_sha256s: its kind, its date\u0027s role, its interval (candidate_applicability_dates to candidate_applicable_tos, and that end\u0027s source), its boundary and its text status; a candidate the catalogue names no expression of is given by its stable coordinate, since it has no permalink; they are not one wording held, so none is chosen",
           "candidate_text_statuses": [
             "held",
             "held"
@@ -153,7 +153,7 @@
           "9da1fcd1bb8d396c2e034614512be1d55022092a030621cb4829132a2f0db3a0",
           "a19a1e52a6b82583572168c2b7d6893fe6f7541b06604b045efa2d423e482ac1"
         ],
-        "candidate_states_rule": "on lex-v3-luxembourg-index/9 the candidate_ lists name every state whose interval holds the date, each in the order of candidate_state_sha256s: its kind, its date\u0027s role, its interval (candidate_applicability_dates to candidate_applicable_tos, and that end\u0027s source), its boundary and its text status; they are not one wording held, so none is chosen",
+        "candidate_states_rule": "on lex-v3-luxembourg-index/9 the candidate_ lists name every state whose interval holds the date, each in the order of candidates and of candidate_state_sha256s: its kind, its date\u0027s role, its interval (candidate_applicability_dates to candidate_applicable_tos, and that end\u0027s source), its boundary and its text status; a candidate the catalogue names no expression of is given by its stable coordinate, since it has no permalink; they are not one wording held, so none is chosen",
         "candidate_text_statuses": [
           "held",
           "held"
@@ -422,6 +422,8 @@
       ],
       "optional_payload_keys": [
         "bound",
+        "covering_state_sha256s",
+        "covering_states",
         "recognised_act",
         "recognised_article",
         "recognised_date",
@@ -434,25 +436,35 @@
       "payload": {
         "asserts_absence_of_law": false,
         "catalogue_read_no_later_than": "2026-10-01T08:00:00Z",
+        "covering_state_sha256s": [
+          "76aa2f70e86f1fbd39a721c5c488d48dbbb4f5511afee9f8cd8893e78a7af78e"
+        ],
+        "covering_states": [
+          "/lu-legilux/loi-1991-08-10-n3/2025-01-01--76aa2f70e86f1fbd39a721c5c488d48dbbb4f5511afee9f8cd8893e78a7af78e/fra"
+        ],
         "history_begins": "2024-02-01",
         "hole_from": null,
         "hole_to": null,
         "language": "fra",
-        "named_state_sha256s": [],
-        "named_states": [],
-        "nearest_earlier": null,
-        "nearest_later": "2024-02-01",
-        "reason": "before_history",
-        "reason_rule": "reason says why no state covers the date in the publisher\u0027s catalogue as this index read it: before_history, the date is before the work\u0027s first state; catalogue_hole, the state before the date ends (the publisher\u0027s end) before the next begins, and the gap (hole) is the catalogue\u0027s, never bridged; after_closed_end, the work\u0027s last state ends before the date and no later state is in the catalogue: an end of the catalogue\u0027s states, which is not an end of the law; publisher_end_convention_unclear, the date is the end the publisher states for a state that ends the day before the next begins, so whether that day belongs to it is unclear and it is given to neither; publisher_interval_invalid, the date falls where a state whose stated end is on or before its own start would apply, so no interval is read for it (its permalink still opens it); no_expression_in_language, a French state covers the date and this index holds no expression of it in the language asked (a state in another language takes its interval from its French state); named_states (with named_state_sha256s) names the states the reason is about, by permalink, or by stable coordinate for a state the catalogue names no expression of; hole_from and hole_to are a hole\u0027s span; after a closed end, closed_on is the last state\u0027s end, and base_act_rule says what the base act\u0027s facts beside it are",
-        "recognised_act": "loi du 10 ao\u00FBt 1991",
-        "recognised_article": "5",
-        "recognised_date": "1990-01-01",
+        "named_state_sha256s": [
+          "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4"
+        ],
+        "named_states": [
+          "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra"
+        ],
+        "nearest_earlier": "2025-01-01",
+        "nearest_later": null,
+        "reason": "outside_named_version",
+        "reason_rule": "outside_named_version: the identifier names a version (named_states) whose interval does not hold the date, and the publisher\u0027s catalogue gives the date to another state (covering_states), which the identifier does not name; nothing is opened in its place; history_begins, nearest_earlier and nearest_later are the work\u0027s, over its catalogue\u0027s states in the language, as for every other reason",
+        "recognised_act": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+        "recognised_article": null,
+        "recognised_date": "2025-06-01",
         "recognised_date_source": "citation",
         "recognised_held_act": "/lu-legilux/loi-1991-08-10-n3",
         "recognised_held_version": null,
         "recognised_kind": "citation",
-        "recognised_title": "R\u00E8glement sur l\u0027\u00E9preuve terminale zeta",
-        "requested_date": "1990-01-01",
+        "recognised_title": null,
+        "requested_date": "2025-06-01",
         "what_would_answer": [
           "new_official_observation"
         ]

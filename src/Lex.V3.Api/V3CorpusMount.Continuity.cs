@@ -22,9 +22,10 @@ internal sealed partial class V3CorpusMount
         "the first state's end meets that start (contiguous: the end the publisher states is the next start; derived: no end is " +
         "stated, so the next start ends it; inclusive_suspected: the stated end is the day before the next start; hole: the stated " +
         "end is before the next start; overlap: the stated end is after the next start; invalid: the stated end is on or before " +
-        "the state's own start), or to the next state of the same date (same_date); gaps lists each hole, from the earlier state's " +
-        "end to the next start, which no state covers and nothing bridges; overlaps lists each span two states both cover, from the " +
-        "next start to the earlier state's end; same_date lists each group of states of one date; unclear_end_days lists each day a " +
+        "the state's own start), or to the next state of the same date (same_date), each span between those two states alone; gaps " +
+        "lists each hole, from the furthest end of the states that begin before it to the next start, which no state covers and " +
+        "nothing bridges; overlaps lists each span two states of different dates both cover, from the later start to the earlier of " +
+        "their ends; same_date lists each group of states of one date; unclear_end_days lists each day a " +
         "suspected inclusive end gives to neither state; invalid_intervals lists each state whose end is on or before its start, " +
         "which covers no date and whose permalink still opens it; every date here is the catalogue's own, and a gap in the " +
         "catalogue is not a gap in the law";
@@ -62,18 +63,21 @@ internal sealed partial class V3CorpusMount
             ["span_from"] = interval.SpanFrom,
             ["span_to"] = interval.SpanTo,
         }).ToArray());
-        node["gaps"] = new JsonArray(work.Intervals.Where(static interval => interval.Kind == "hole").Select(static interval => (JsonNode)new JsonObject
+        // The gaps and overlaps are the reader's, from the chain's own rows as CoverAt reads them, not the transitions' pairwise
+        // spans: a state nested in an earlier one's interval neither opens a gap the earlier one covers nor stretches an
+        // overlap past its own end (the review of #987, F7).
+        node["gaps"] = new JsonArray(GapsOf(work).Select(static gap => (JsonNode)new JsonObject
         {
-            ["from"] = interval.SpanFrom,
-            ["to"] = interval.SpanTo,
-            ["after_state_sha256"] = interval.FromStateSha256,
-            ["before_state_sha256"] = interval.ToStateSha256,
+            ["from"] = gap.From,
+            ["to"] = gap.To,
+            ["after_state_sha256"] = gap.After.StateSha256,
+            ["before_state_sha256"] = gap.Before.StateSha256,
         }).ToArray());
-        node["overlaps"] = new JsonArray(work.Intervals.Where(static interval => interval.Kind == "overlap").Select(static interval => (JsonNode)new JsonObject
+        node["overlaps"] = new JsonArray(OverlapsOf(work).Select(static overlap => (JsonNode)new JsonObject
         {
-            ["from"] = interval.SpanFrom,
-            ["to"] = interval.SpanTo,
-            ["state_sha256s"] = new JsonArray(interval.FromStateSha256, interval.ToStateSha256),
+            ["from"] = overlap.From,
+            ["to"] = overlap.To,
+            ["state_sha256s"] = new JsonArray(overlap.Earlier.StateSha256, overlap.Later.StateSha256),
         }).ToArray());
 
         // A same-date group is every state the chain's same_date links join on one date, in chain order.
@@ -121,10 +125,82 @@ internal sealed partial class V3CorpusMount
         return node;
     }
 
+    /// <summary>
+    /// The catalogue's holes in a work's French chain, as <see cref="CoverAt"/> reads them: between two consecutive start dates,
+    /// the span from the furthest end of the states that begin on or before the first to the second, when that end falls
+    /// before it; never where a state whose end is on or before its start begins (that span is the invalid interval's), and
+    /// never the one day a suspected inclusive end gives to neither state. Each with the state whose end opens it and the
+    /// first state of the next date.
+    /// </summary>
+    private static List<(string From, string To, LuxembourgIndexCatalogueState After, LuxembourgIndexCatalogueState Before)> GapsOf(CatalogueWork work)
+    {
+        static bool Invalid(LuxembourgIndexCatalogueState row) => string.Equals(row.Boundary, "invalid", StringComparison.Ordinal);
+        var chain = ChainOf(work, FrenchLanguage);
+        var dates = chain.Select(static row => row.ApplicabilityDate).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var gaps = new List<(string, string, LuxembourgIndexCatalogueState, LuxembourgIndexCatalogueState)>();
+        for (var index = 0; index + 1 < dates.Length; index++)
+        {
+            var (start, next) = (dates[index], dates[index + 1]);
+            if (chain.Any(row => Invalid(row) && string.Equals(row.ApplicabilityDate, start, StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
+            var before = chain.Where(row => !Invalid(row) && string.CompareOrdinal(row.ApplicabilityDate, start) <= 0).ToArray();
+            if (before.Length == 0 || before.Any(static row => row.ApplicableTo is null))
+            {
+                continue;
+            }
+
+            var furthest = before.OrderBy(static row => row.ApplicableTo, StringComparer.Ordinal).Last();
+            var end = furthest.ApplicableTo!;
+            if (string.CompareOrdinal(end, next) >= 0 ||
+                string.Equals(end, DayBefore(next), StringComparison.Ordinal) &&
+                chain.Any(row => string.Equals(row.Boundary, "inclusive_suspected", StringComparison.Ordinal) &&
+                                 string.Equals(row.ApplicableTo, end, StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
+            gaps.Add((end, next, furthest, chain.First(row => string.Equals(row.ApplicabilityDate, next, StringComparison.Ordinal))));
+        }
+
+        return gaps;
+    }
+
+    /// <summary>
+    /// The spans two states of a work's French chain both cover, for every two of different start dates whose intervals meet:
+    /// from the later start to the earlier of their ends (none for a state whose end is on or before its start, which covers
+    /// no date), in chain order.
+    /// </summary>
+    private static List<(string From, string To, LuxembourgIndexCatalogueState Earlier, LuxembourgIndexCatalogueState Later)> OverlapsOf(CatalogueWork work)
+    {
+        var chain = ChainOf(work, FrenchLanguage).Where(static row => !string.Equals(row.Boundary, "invalid", StringComparison.Ordinal)).ToArray();
+        var overlaps = new List<(string, string, LuxembourgIndexCatalogueState, LuxembourgIndexCatalogueState)>();
+        for (var first = 0; first < chain.Length; first++)
+        {
+            for (var second = first + 1; second < chain.Length; second++)
+            {
+                var (earlier, later) = (chain[first], chain[second]);
+                if (string.Equals(earlier.ApplicabilityDate, later.ApplicabilityDate, StringComparison.Ordinal) ||
+                    earlier.ApplicableTo is not { } earlierEnd || string.CompareOrdinal(earlierEnd, later.ApplicabilityDate) <= 0)
+                {
+                    continue;
+                }
+
+                var to = later.ApplicableTo is { } laterEnd && string.CompareOrdinal(laterEnd, earlierEnd) < 0 ? laterEnd : earlierEnd;
+                overlaps.Add((later.ApplicabilityDate, to, earlier, later));
+            }
+        }
+
+        return overlaps;
+    }
+
     internal const string ContinuityRule =
         "on lex-v3-luxembourg-index/9 continuity_breaks names, per language, each run of dates from the language's first held " +
         "state on that no state with held text covers, by the interval rules as_of applies: a state of the publisher's catalogue " +
-        "whose text this index does not hold (reasons names its text_status), a hole in the catalogue (catalogue_hole), the end " +
+        "whose text this index does not hold, or several such states none of which holds text (reasons names each one's " +
+        "text_status), a hole in the catalogue (catalogue_hole), the end " +
         "day of an unclear end (publisher_end_convention_unclear), where a state whose end is on or before its start would apply " +
         "(publisher_interval_invalid), or a French state with no expression held in the language (no_expression_in_language); " +
         "from is its first date and to the first date a state with held text covers again, null when none does; named_states " +
@@ -150,7 +226,8 @@ internal sealed partial class V3CorpusMount
     /// (<see cref="CoverAt"/>): the interval rules' answer is constant between the dates a state of the chain starts or ends,
     /// so each such date is asked once, and consecutive dates without held text make one run. A date after a closed end, or
     /// before the history, ends the walk: no state of the catalogue is there. Several held states with one wording, or with
-    /// different wordings (an ambiguity), hold text, so neither is a break.
+    /// different wordings (an ambiguity one of whose states holds text), hold text, so neither is a break; an ambiguity of
+    /// states none of which holds text is one, its reasons each state's text status (the review of #987).
     /// </summary>
     private List<ContinuityBreak> ContinuityBreaksOf(string workKey, string language, string firstHeld)
     {
@@ -170,7 +247,7 @@ internal sealed partial class V3CorpusMount
         foreach (var date in dates)
         {
             var cover = CoverAt(work, language, date);
-            var held = cover.Kind is CoverServed or CoverAmbiguous;
+            var held = HoldsText(cover);
             var outside = cover.Kind == CoverNone && cover.Reason is ReasonAfterClosedEnd or ReasonBeforeHistory;
             if (held || outside)
             {
@@ -189,8 +266,11 @@ internal sealed partial class V3CorpusMount
             }
 
             open ??= new ContinuityBreak(language, date, null, [], []);
-            var reason = cover.Kind == CoverTextless ? cover.Row!.TextStatus : cover.Reason!;
-            if (!open.Reasons.Contains(reason, StringComparer.Ordinal))
+            // An ambiguity of states none of which holds text gives each one's text status (the review of #987).
+            var reasons = cover.Kind == CoverTextless ? new[] { cover.Row!.TextStatus }
+                : cover.Kind == CoverAmbiguous ? cover.Others.Select(static row => row.TextStatus).ToArray()
+                : new[] { cover.Reason! };
+            foreach (var reason in reasons.Where(reason => !open.Reasons.Contains(reason, StringComparer.Ordinal)))
             {
                 open.Reasons.Add(reason);
             }

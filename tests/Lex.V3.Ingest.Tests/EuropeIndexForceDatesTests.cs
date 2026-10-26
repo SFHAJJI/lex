@@ -118,4 +118,49 @@ public sealed class EuropeIndexForceDatesTests
         Assert.ThrowsExactly<InvalidDataException>(() => EuropeIndexBuilder.ValidateForceDateEvidence(rows, Census()),
             "a date of a work the census does not hold");
     }
+
+    [TestMethod]
+    [DataRow("http://publications.europa.eu/ontology/cdm#resource_legal_date_end-of-validity", "end_of_validity")]
+    [DataRow("http://publications.europa.eu/ontology/cdm#resource_legal_date_signature", "signature")]
+    public void AnUnpinnedCodeOnTheEndOfValidityOrSignaturePropertyKeepsThePropertysRoleAndItsCode(string predicate, string role)
+    {
+        // The review of #987 (EU 2.1): the contract admits a code its table does not pin on these properties and types it as no
+        // role stated; the property gives the row its role, and the code is kept, as on the entry-into-force property.
+        var coded = Binding("coded", predicate, "2020-01-01", "PE", null, null);
+        Assert.AreEqual(DateSemanticRole.RoleNotStatedByPublisher, coded.Fact.SemanticRole, "the contract admits it");
+        var rows = EuropeIndexBuilder.ProjectForceDates([coded], Census(Work));
+        Assert.AreEqual(role, rows.Single().Role);
+        Assert.AreEqual("PE", rows.Single().QualifierCode);
+        Assert.AreEqual("role_not_stated_by_publisher", rows.Single().FactRole);
+        EuropeIndexBuilder.ValidateForceDateEvidence(rows, Census(Work));
+    }
+
+    [TestMethod]
+    public void TheReaderReopensARowWhoseCommentTheDecodeDidNotReadAsALiteral()
+    {
+        // The review of #987 (EU 2.1): a comment_on_date delivered as an IRI (or a blank node) is retained among the statement's
+        // properties, and the decode reads no note from it (PublisherComment null); the build's own read-back reopens the row.
+        const string place = "http://publications.europa.eu/resource/authority/place/FRA_SXB";
+        var qualifiers = new List<AxiomQualifier>
+        {
+            new("http://www.w3.org/2002/07/owl#annotatedProperty", EuForceDatesFixture.Signature),
+            new("http://www.w3.org/2002/07/owl#annotatedSource", Work),
+            new("http://www.w3.org/2002/07/owl#annotatedTarget", "2016-04-27"),
+            new("http://www.w3.org/1999/02/22-rdf-syntax-ns#type", "http://www.w3.org/2002/07/owl#Axiom"),
+            new("http://publications.europa.eu/ontology/annotation#comment_on_date", place),
+        };
+        // Exactly what the decode builds for a non-literal comment: the term retained, PublisherComment null.
+        var binding = EuDateAxiomBinding.Create(
+            new OfficialIdentitySet(PublisherId.EuEurLex, [new OfficialIdentifier(FactsIdentifierFamily.CellarWorkUri, Work)]),
+            "2016-04-27", PublisherDate.Date, DatePrecision.YearMonthDay, EuForceDatesFixture.Signature,
+            new QualifiedAxiom(EuForceDatesFixture.AxiomIri("iri-note"), qualifiers), null, null, null,
+            EuReifiedAxiomDecode.ParsedByAuthority, "urn:uuid:00000000-0000-0000-0000-00000000000a");
+        var rows = EuropeIndexBuilder.ProjectForceDates([binding], Census(Work));
+        Assert.IsNull(rows.Single().PublisherComment, "no note is read from a comment that is not a literal");
+        StringAssert.Contains(rows.Single().QualifiersJson, place, "the statement's comment is retained as delivered");
+        EuropeIndexBuilder.ValidateForceDateEvidence(rows, Census(Work));
+
+        // A note is still never anything but the retained comment.
+        Assert.ThrowsExactly<InvalidDataException>(() => EuropeIndexBuilder.ValidateForceDateEvidence([rows.Single() with { PublisherComment = "Strasbourg" }], Census(Work)));
+    }
 }

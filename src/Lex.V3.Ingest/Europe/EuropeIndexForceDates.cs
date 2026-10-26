@@ -100,9 +100,11 @@ public static partial class EuropeIndexBuilder
     /// <summary>
     /// The role of one statement, from its date property and the accepted contract's reading of it (which reads the
     /// publisher's type-of-date code): EV on the entry-into-force property is the entry into force and MA the application;
-    /// the end-of-validity and signature properties give their own role; the deadline property is the publisher's deadline,
-    /// with no code (the population's 221 deadlines carry none; their qualifier is the comment, said word for word) or with
-    /// the pinned "at the latest"; any other code on the entry-into-force property, or none, is not pinned and keeps its code.
+    /// the end-of-validity and signature properties give their own role, with no code or with a code the accepted table does
+    /// not pin (which the contract types as no role stated, and the row keeps: the review of #987); the deadline property is
+    /// the publisher's deadline, with no code (the population's 221 deadlines carry none; their qualifier is the comment, said
+    /// word for word) or with the pinned "at the latest"; any other code on the entry-into-force property, or none, is not
+    /// pinned and keeps its code.
     /// </summary>
     internal static string ForceDateRoleOf(string predicate, DateSemanticRole factRole) => factRole switch
     {
@@ -113,6 +115,10 @@ public static partial class EuropeIndexBuilder
         DateSemanticRole.PublisherDeadline => EuropeForceDateRoles.Deadline,
         DateSemanticRole.RoleNotStatedByPublisher when predicate == EuDateQualifierVocabulary.DeadlinePredicateUri =>
             EuropeForceDateRoles.Deadline,
+        DateSemanticRole.RoleNotStatedByPublisher when predicate == EuDateQualifierVocabulary.EndOfValidityPredicateUri =>
+            EuropeForceDateRoles.EndOfValidity,
+        DateSemanticRole.RoleNotStatedByPublisher when predicate == EuDateQualifierVocabulary.SignatureDatePredicateUri =>
+            EuropeForceDateRoles.Signature,
         DateSemanticRole.RoleNotStatedByPublisher when predicate == EuDateQualifierVocabulary.EntryIntoForceAndApplicationPredicateUri =>
             EuropeForceDateRoles.NotPinned,
         _ => throw new InvalidDataException($"An EU date statement on {predicate} has a role no force date takes ({factRole})."),
@@ -192,8 +198,13 @@ public static partial class EuropeIndexBuilder
                 var code = Only(TypeOfDateIri) is { } carrier
                     ? carrier.StartsWith('{') && carrier.IndexOf('|') > 1 ? carrier[1..carrier.IndexOf('|')] : throw new InvalidDataException("EU force-date evidence carries a malformed code.")
                     : null;
+                // The note is the comment the decode read as a literal: a comment the publisher delivered as an IRI or a blank
+                // node is retained among the statement's properties and is no note (null), as the build wrote it (the review of
+                // #987). A note is never anything but the retained comment.
+                var comment = Only(CommentOnDateIri);
                 if (Only(AnnotatedSourceIri) != row.PublisherWorkIri || Only(AnnotatedPropertyIri) != row.SourcePredicateIri ||
-                    Only(AnnotatedTargetIri) != row.DateValue || code != row.QualifierCode || Only(CommentOnDateIri) != row.PublisherComment ||
+                    Only(AnnotatedTargetIri) != row.DateValue || code != row.QualifierCode ||
+                    row.PublisherComment is not null && comment != row.PublisherComment ||
                     !works.Contains(row.PublisherWorkIri) ||
                     row.DateIdentitySha256 != Identity("lex-v3-eu-index-force-date/1", [row.PublisherWorkIri, row.AxiomIri, row.QualifiersJson]) ||
                     JsonSerializer.Serialize(pairs) != row.QualifiersJson)

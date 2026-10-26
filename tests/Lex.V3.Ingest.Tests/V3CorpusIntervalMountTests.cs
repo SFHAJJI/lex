@@ -67,6 +67,53 @@ public sealed class V3CorpusIntervalMountTests
         return h;
     }
 
+    /// <summary>
+    /// <see cref="IntervalFixture"/> and the works the review of #987 reproduced its findings on: two states of one date neither
+    /// of which holds text between two held ones; an act whose text is not held before a held consolidation; an act held beside a
+    /// consolidation of its date that names no expression; a consolidation with another nested in its interval, then a hole, and
+    /// the same without a later state (a closed end); an act held with two held consolidations after it.
+    /// </summary>
+    internal static Harness RepairFixture()
+    {
+        var h = IntervalFixture();
+        const string Fra = "http://publications.europa.eu/resource/authority/language/FRA";
+        h.State(W("loi/2001/01/01/n1/jo"), entryIntoForce: "2001-01-05", memberOf: W("loi/2001/01/01/n1"), expressions: ("fr", Fra))
+            .Held(W("loi/2001/01/01/n1/jo"), ["art_1"], inFileDate: "2001-01-05");
+        h.State(W("loi/2001/01/01/n1/consolide/20100101"), "2010-01-01", memberOf: W("loi/2001/01/01/n1"), expressions: ("fr", Fra))
+            .Withheld(W("loi/2001/01/01/n1/consolide/20100101"));
+        h.State(W("loi/2001/01/01/n1/consolide/20100102"), "2010-01-01", memberOf: W("loi/2001/01/01/n1"), expressions: ("fr", Fra))
+            .Pdf(W("loi/2001/01/01/n1/consolide/20100102"));
+        h.State(W("loi/2001/01/01/n1/consolide/20150101"), "2015-01-01", memberOf: W("loi/2001/01/01/n1"), expressions: ("fr", Fra))
+            .Held(W("loi/2001/01/01/n1/consolide/20150101"), ["art_1"], identityClass: "same_work_act");
+
+        h.State(W("loi/2002/02/02/n1/jo"), entryIntoForce: "2002-02-05", memberOf: W("loi/2002/02/02/n1"), expressions: ("fr", Fra))
+            .Pdf(W("loi/2002/02/02/n1/jo"));
+        h.State(W("loi/2002/02/02/n1/consolide/20120101"), "2012-01-01", memberOf: W("loi/2002/02/02/n1"), expressions: ("fr", Fra))
+            .Held(W("loi/2002/02/02/n1/consolide/20120101"), ["art_1"], identityClass: "same_work_act");
+
+        h.State(W("loi/2003/03/03/n1/jo"), entryIntoForce: "2003-03-07", memberOf: W("loi/2003/03/03/n1"), expressions: ("fr", Fra))
+            .Held(W("loi/2003/03/03/n1/jo"), ["art_1"], inFileDate: "2003-03-03");
+        h.State(W("loi/2003/03/03/n1/consolide/20030303"), "2003-03-03", memberOf: W("loi/2003/03/03/n1"));
+
+        h.State(W("loi/2004/04/04/n1/consolide/20200101"), "2020-01-01", "2023-01-01", memberOf: W("loi/2004/04/04/n1"), expressions: ("fr", Fra))
+            .Held(W("loi/2004/04/04/n1/consolide/20200101"), ["art_1"]);
+        h.State(W("loi/2004/04/04/n1/consolide/20210101"), "2021-01-01", "2022-01-01", memberOf: W("loi/2004/04/04/n1"), expressions: ("fr", Fra))
+            .Held(W("loi/2004/04/04/n1/consolide/20210101"), ["art_1"]);
+        h.State(W("loi/2004/04/04/n1/consolide/20250101"), "2025-01-01", memberOf: W("loi/2004/04/04/n1"), expressions: ("fr", Fra))
+            .Held(W("loi/2004/04/04/n1/consolide/20250101"), ["art_1"]);
+        h.State(W("loi/2007/07/07/n1/consolide/20200101"), "2020-01-01", "2023-01-01", memberOf: W("loi/2007/07/07/n1"), expressions: ("fr", Fra))
+            .Held(W("loi/2007/07/07/n1/consolide/20200101"), ["art_1"]);
+        h.State(W("loi/2007/07/07/n1/consolide/20210101"), "2021-01-01", "2022-01-01", memberOf: W("loi/2007/07/07/n1"), expressions: ("fr", Fra))
+            .Held(W("loi/2007/07/07/n1/consolide/20210101"), ["art_1"]);
+
+        h.State(W("loi/2008/08/08/n1/jo"), entryIntoForce: "2008-08-10", memberOf: W("loi/2008/08/08/n1"), expressions: ("fr", Fra))
+            .Held(W("loi/2008/08/08/n1/jo"), ["art_1"], inFileDate: "2008-08-10");
+        h.State(W("loi/2008/08/08/n1/consolide/20100101"), "2010-01-01", memberOf: W("loi/2008/08/08/n1"), expressions: ("fr", Fra))
+            .Held(W("loi/2008/08/08/n1/consolide/20100101"), ["art_1"], identityClass: "same_work_act");
+        h.State(W("loi/2008/08/08/n1/consolide/20120101"), "2012-01-01", memberOf: W("loi/2008/08/08/n1"), expressions: ("fr", Fra))
+            .Held(W("loi/2008/08/08/n1/consolide/20120101"), ["art_1"], identityClass: "same_work_act");
+        return h;
+    }
     internal sealed class IntervalMount : IAsyncDisposable
     {
         private readonly MountedFixture _shared;
@@ -437,9 +484,14 @@ public sealed class V3CorpusIntervalMountTests
         CollectionAssert.DoesNotContain(works, "loi-1798-11-03-n1");
         CollectionAssert.DoesNotContain(works, "loi-2005-01-01-n1");
         CollectionAssert.Contains(works, "loi-2018-09-14-a883");
-        Assert.IsTrue(dated.GetProperty("hits").EnumerateArray().Where(static hit => hit.GetProperty("work_key").GetString() == "loi-2018-09-14-a883")
-            .All(static hit => hit.GetProperty("state_sha256").GetString() == hit.GetProperty("state_sha256").GetString() &&
-                               hit.GetProperty("date_role").GetString() == "applicability_in_file"), "the act as published is the version served");
+        // Every hit of the work is the act as published's (the review of #987: this compared a hit's digest with itself).
+        var act = (await AskAsync(mount, "dossier", new { identifier = "/lu-legilux/loi-2018-09-14-a883" })).Result!.Value.GetProperty("states")
+            .EnumerateArray().Single(static state => state.GetProperty("publisher_legal_resource_iri").GetString()!.EndsWith("/jo", StringComparison.Ordinal))
+            .GetProperty("state_sha256").GetString();
+        var actHits = dated.GetProperty("hits").EnumerateArray().Where(static hit => hit.GetProperty("work_key").GetString() == "loi-2018-09-14-a883").ToArray();
+        Assert.IsNotEmpty(actHits);
+        Assert.IsTrue(actHits.All(hit => hit.GetProperty("state_sha256").GetString() == act &&
+                                         hit.GetProperty("date_role").GetString() == "applicability_in_file"), "the act as published is the version served");
         Assert.AreEqual(JsonValueKind.Undefined, dated.TryGetProperty("fold", out var fold) ? fold.ValueKind : JsonValueKind.Undefined,
             "with a date nothing is folded");
 
@@ -543,12 +595,27 @@ public sealed class V3CorpusIntervalMountTests
         Assert.AreEqual(V3CorpusMount.ReasonOutsideNamedVersion, laterPayload.GetProperty("reason").GetString());
         StringAssert.Contains(laterPayload.GetProperty("covering_states").EnumerateArray().Single().GetString(), "/2010-01-01--");
         StringAssert.Contains(laterPayload.GetProperty("named_states").EnumerateArray().Single().GetString(), "/2005-01-05--");
-        Assert.AreEqual("2005-01-05", laterPayload.GetProperty("nearest_earlier").GetString());
+        // The work's first and nearest dates, as every reason gives them (the French review of #987's repair round): the 2010
+        // consolidation is the nearest earlier state, and none is later.
+        Assert.AreEqual("2005-01-05", laterPayload.GetProperty("history_begins").GetString());
+        Assert.AreEqual("2010-01-01", laterPayload.GetProperty("nearest_earlier").GetString());
+        Assert.AreEqual(JsonValueKind.Null, laterPayload.GetProperty("nearest_later").ValueKind);
         Assert.IsTrue(laterPayload.EnumerateObject().All(static member => member.Value.ValueKind is not JsonValueKind.Object), "flat, as a card reads it");
 
         // On a date the act covers, the act opens.
         var own = await AskAsync(mount, "search", new { query = W("loi/2005/01/01/n1/jo") + ", au 1er janvier 2008", language = "fra" });
         Assert.AreEqual(V3Verdicts.Answer, own.Verdict, own.Refusal?.HelpfulPayload.GetRawText());
+
+        // An ELI with no date is asked at its version's own date, and is refused there when that date is ambiguous or the
+        // version's interval is invalid (the review of #987: the comment said it always opened).
+        Assert.AreEqual(V3Verdicts.Answer, (await AskAsync(mount, "search", new { query = W("loi/2005/01/01/n1/jo"), language = "fra" })).Verdict);
+        foreach (var eli in new[] { "loi/2021/05/05/n1/jo", "loi/2021/05/05/n1/consolide/20210505" })
+        {
+            Refused(await AskAsync(mount, "search", new { query = W(eli), language = "fra" }), "ambiguous_version");
+        }
+
+        var invalid = Refused(await AskAsync(mount, "search", new { query = W("rgd/2007/06/07/n2/consolide/20230717"), language = "fra" }), "no_version_for_date");
+        Assert.AreEqual(V3CorpusMount.ReasonIntervalInvalid, invalid.GetProperty("reason").GetString());
     }
 
     [TestMethod]
@@ -644,5 +711,186 @@ public sealed class V3CorpusIntervalMountTests
             var rows = reader.ResolveCatalogueStates(work);
             CollectionAssert.AreEqual(rows.ToArray(), V3CorpusMount.Rechain(rows), $"{work}: the API's chain recomputes the index's ends and boundaries");
         }
+    }
+
+    [TestMethod]
+    public async Task AnAmbiguityOfStatesNoneOfWhichHoldsTextIsAContinuityBreakAndLeavesTheRadarNoBaseline()
+    {
+        await using var fixture = await IntervalMount.CreateAsync(RepairFixture());
+        var mount = fixture.Mount;
+
+        // The review of #987: two consolidations of 2010, one withheld and one a PDF, cover 2010 to 2015; as_of names both.
+        var asOf = Refused(await AsOfAsync(mount, "loi-2001-01-01-n1", "2012-01-01"), "ambiguous_version");
+        CollectionAssert.AreEquivalent(new[] { "withheld_rights", "not_available_pdf" },
+            asOf.GetProperty("candidate_text_statuses").EnumerateArray().Select(static status => status.GetString()).ToArray());
+
+        // No state with held text covers those dates: a break, with each state's text status, and the next row after it.
+        var history = (await AskAsync(mount, "article_history", new { identifier = "/lu-legilux/loi-2001-01-01-n1", anchor = "art_1" })).Result!.Value;
+        var gap = history.GetProperty("continuity_breaks").EnumerateArray().Single();
+        Assert.AreEqual("2010-01-01", gap.GetProperty("from").GetString());
+        Assert.AreEqual("2015-01-01", gap.GetProperty("to").GetString());
+        CollectionAssert.AreEquivalent(new[] { "withheld_rights", "not_available_pdf" },
+            gap.GetProperty("reasons").EnumerateArray().Select(static reason => reason.GetString()).ToArray());
+        Assert.AreEqual(2, gap.GetProperty("named_state_sha256s").GetArrayLength());
+        CollectionAssert.AreEqual(new[] { "2001-01-05:False", "2015-01-01:True" },
+            history.GetProperty("states").EnumerateArray()
+                .Select(static row => $"{row.GetProperty("applicability_date").GetString()}:{row.GetProperty("after_break").GetBoolean()}").ToArray());
+
+        // The radar: the day before the 2015 consolidation is covered by the two states without text, so it has no baseline.
+        var row = (await AskAsync(mount, "changes_in_period", new { identifier = "/lu-legilux/loi-2001-01-01-n1", date_from = "2015-01-01", date_to = "2015-01-01" }))
+            .Result!.Value.GetProperty("changes").EnumerateArray().Single();
+        Assert.AreEqual("no_held_baseline", row.GetProperty("reason").GetString());
+        Assert.AreEqual(JsonValueKind.Null, row.GetProperty("candidates").ValueKind);
+        Assert.AreEqual(JsonValueKind.Null, row.GetProperty("baseline").ValueKind);
+
+        // An ambiguity one of whose states holds text is no break (the act and its consolidation of 2021 differ, both held).
+        var held = (await AskAsync(mount, "article_history", new { identifier = "/lu-legilux/loi-2021-05-05-n1", anchor = "art_1" })).Result!.Value;
+        Assert.AreEqual(0, held.GetProperty("continuity_breaks").GetArrayLength());
+    }
+
+    [TestMethod]
+    public async Task InForceOnAcrossWorksNamesAWorkWhoseOnlyStateOnOrBeforeTheDateHoldsNoTextAndCountsItCovered()
+    {
+        await using var fixture = await IntervalMount.CreateAsync(RepairFixture());
+        var mount = fixture.Mount;
+
+        // The review of #987: the 2002 act's text is not held (a PDF) and its first held state is of 2012; on 2005-01-01 the act
+        // covers the date, so the work is a row naming it and why, as as_of refuses the date for its text.
+        Refused(await AsOfAsync(mount, "loi-2002-02-02-n1", "2005-01-01"), "text_not_available");
+        foreach (var language in new[] { null, "fra" })
+        {
+            var across = (await AskAsync(mount, "in_force_on", language is null ? new { date = "2005-01-01" } : (object)new { date = "2005-01-01", language })).Result!.Value;
+            var row = across.GetProperty("states").EnumerateArray().Single(static row => row.GetProperty("work_key").GetString() == "loi-2002-02-02-n1");
+            Assert.AreEqual("text_not_available", row.GetProperty("reason").GetString(), language);
+            Assert.AreEqual("not_available_pdf", row.GetProperty("state").GetProperty("text_status").GetString());
+            Assert.AreEqual(JsonValueKind.Null, row.GetProperty("resolve").ValueKind);
+
+            // Counted as F8 counts a covered work: the covered works are the works with rows, and every work is counted once.
+            var population = across.GetProperty("population");
+            var works = across.GetProperty("states").EnumerateArray().Select(static row => row.GetProperty("work_key").GetString()).Distinct().LongCount();
+            Assert.AreEqual(works, population.GetProperty("works_with_a_state_on_date").GetInt64(), language);
+            var inScope = language is null ? population.GetProperty("works_held").GetInt64() : population.GetProperty("works_holding_the_language").GetInt64();
+            Assert.AreEqual(inScope,
+                population.GetProperty("works_with_a_state_on_date").GetInt64() + population.GetProperty("works_not_covered_on_date").GetInt64() +
+                population.GetProperty("works_beginning_later").GetInt64(), language);
+            Assert.IsGreaterThanOrEqualTo(0L, population.GetProperty("works_not_covered_on_date").GetInt64());
+        }
+
+        // Paging finds it too.
+        var (paged, _) = await PagedInForceOnAsync(mount, "2005-01-01", 1);
+        CollectionAssert.Contains(paged, "loi-2002-02-02-n1");
+    }
+
+    [TestMethod]
+    public async Task AnAmbiguityNamesAStateTheCatalogueNamesNoExpressionOfByItsCoordinateWithItsListsAligned()
+    {
+        await using var fixture = await IntervalMount.CreateAsync(RepairFixture());
+        var mount = fixture.Mount;
+
+        // The review of #987: the 2003 act held and a consolidation of its date that names no expression (so no language and
+        // no permalink) both cover 2004-01-01. Each operation names both, the consolidation by its stable coordinate, never a
+        // permalink without a language, and the candidate lists stay aligned on the candidates.
+        const string Coordinate = "/lu-legilux/loi-2003-03-03-n1/2003-03-03";
+        foreach (var (operation, parameters) in new (string, object)[]
+                 {
+                     ("as_of", new { identifier = "/lu-legilux/loi-2003-03-03-n1", date = "2004-01-01" }),
+                     ("evidence_bundle", new { identifier = "/lu-legilux/loi-2003-03-03-n1", date = "2004-01-01" }),
+                     ("in_force_on", new { identifier = "/lu-legilux/loi-2003-03-03-n1", date = "2004-01-01" }),
+                 })
+        {
+            var payload = Refused(await AskAsync(mount, operation, parameters), "ambiguous_version");
+            var candidates = payload.GetProperty("candidates").EnumerateArray().Select(static candidate => candidate.GetString()!).ToArray();
+            Assert.HasCount(2, candidates, operation);
+            Assert.AreEqual(Coordinate, candidates[0], operation);
+            StringAssert.StartsWith(candidates[1], Coordinate + "--");
+            StringAssert.EndsWith(candidates[1], "/fra");
+            var digests = payload.GetProperty("candidate_state_sha256s").EnumerateArray().Select(static digest => digest.GetString()!).ToArray();
+            Assert.HasCount(2, digests, operation);
+            Assert.AreEqual(digests[1], candidates[1][(Coordinate.Length + 2)..^4], "the permalink's digest is its place's");
+            foreach (var list in new[] { "candidate_state_kinds", "candidate_date_roles", "candidate_applicability_dates", "candidate_applicable_tos",
+                         "candidate_applicable_to_sources", "candidate_boundaries", "candidate_text_statuses" })
+            {
+                Assert.AreEqual(2, payload.GetProperty(list).GetArrayLength(), $"{operation} {list}");
+            }
+
+            CollectionAssert.AreEqual(new[] { "not_acquired", "held" },
+                payload.GetProperty("candidate_text_statuses").EnumerateArray().Select(static status => status.GetString()).ToArray(), operation);
+        }
+
+        // Across works, the dated search and the radar name it the same way.
+        var across = (await AskAsync(mount, "in_force_on", new { date = "2004-01-01" })).Result!.Value.GetProperty("states").EnumerateArray()
+            .Single(static row => row.GetProperty("work_key").GetString() == "loi-2003-03-03-n1");
+        Assert.AreEqual(Coordinate, across.GetProperty("candidates")[0].GetString());
+        var search = (await AskAsync(mount, "search", new { query = "texte", language = "fra", date = "2004-01-01" })).Result!.Value
+            .GetProperty("ambiguous_works").EnumerateArray().Single(static row => row.GetProperty("work_key").GetString() == "loi-2003-03-03-n1");
+        Assert.AreEqual(Coordinate, search.GetProperty("candidates")[0].GetString());
+        var radar = (await AskAsync(mount, "changes_in_period", new { identifier = "/lu-legilux/loi-2003-03-03-n1", date_from = "2003-03-03", date_to = "2003-03-03" }))
+            .Result!.Value.GetProperty("changes").EnumerateArray().Single();
+        Assert.AreEqual("ambiguous_version", radar.GetProperty("reason").GetString());
+        Assert.AreEqual(Coordinate, radar.GetProperty("candidates")[0].GetString());
+        Assert.AreEqual(2, radar.GetProperty("candidates").GetArrayLength());
+    }
+
+    [TestMethod]
+    public async Task AHoleOrAClosedEndAfterANestedStateBeginsWhereTheLastStateCoveringEnds()
+    {
+        await using var fixture = await IntervalMount.CreateAsync(RepairFixture());
+        var mount = fixture.Mount;
+
+        // The review of #987, F7: the 2020 consolidation covers to 2023 and the 2021 one, nested in it, to 2022.
+        Assert.AreEqual("loi/2004/04/04/n1/consolide/20200101", Resource(Served(await AsOfAsync(mount, "loi-2004-04-04-n1", "2022-06-01"))));
+        var hole = Refused(await AsOfAsync(mount, "loi-2004-04-04-n1", "2024-01-01"), "no_version_for_date");
+        Assert.AreEqual("catalogue_hole", hole.GetProperty("reason").GetString());
+        Assert.AreEqual("2023-01-01", hole.GetProperty("hole_from").GetString(), "the 2020 consolidation covers 2022 to 2023");
+        Assert.AreEqual("2025-01-01", hole.GetProperty("hole_to").GetString());
+        CollectionAssert.AreEqual(new[] { "2020-01-01" }, Named(hole), "the state whose end opens the hole");
+
+        // The dossier and the timeline say the same gap, and the overlap ends where the nested state does.
+        var dossier = (await AskAsync(mount, "dossier", new { identifier = "/lu-legilux/loi-2004-04-04-n1" })).Result!.Value;
+        var digest = dossier.GetProperty("states").EnumerateArray().ToDictionary(static state => state.GetProperty("applicability_date").GetString()!,
+            static state => state.GetProperty("state_sha256").GetString()!);
+        foreach (var answer in new[] { dossier, (await AskAsync(mount, "timeline", new { identifier = "/lu-legilux/loi-2004-04-04-n1" })).Result!.Value })
+        {
+            var gap = answer.GetProperty("gaps").EnumerateArray().Single();
+            Assert.AreEqual("2023-01-01", gap.GetProperty("from").GetString());
+            Assert.AreEqual("2025-01-01", gap.GetProperty("to").GetString());
+            Assert.AreEqual(digest["2020-01-01"], gap.GetProperty("after_state_sha256").GetString());
+            Assert.AreEqual(digest["2025-01-01"], gap.GetProperty("before_state_sha256").GetString());
+            var overlap = answer.GetProperty("overlaps").EnumerateArray().Single();
+            Assert.AreEqual("2021-01-01", overlap.GetProperty("from").GetString());
+            Assert.AreEqual("2022-01-01", overlap.GetProperty("to").GetString(), "the two states both cover 2021 only");
+        }
+
+        // The history breaks over the same span.
+        var history = (await AskAsync(mount, "article_history", new { identifier = "/lu-legilux/loi-2004-04-04-n1", anchor = "art_1" })).Result!.Value;
+        var broken = history.GetProperty("continuity_breaks").EnumerateArray().Single();
+        Assert.AreEqual("2023-01-01", broken.GetProperty("from").GetString());
+        Assert.AreEqual("2025-01-01", broken.GetProperty("to").GetString());
+
+        // Without a later state, the catalogue's states end where the 2020 consolidation does.
+        var closed = Refused(await AsOfAsync(mount, "loi-2007-07-07-n1", "2024-01-01"), "no_version_for_date");
+        Assert.AreEqual("after_closed_end", closed.GetProperty("reason").GetString());
+        Assert.AreEqual("2023-01-01", closed.GetProperty("closed_on").GetString());
+        Assert.AreEqual(JsonValueKind.Null, closed.GetProperty("nearest_later").ValueKind);
+    }
+
+    [TestMethod]
+    public async Task AnIdentifierOutsideItsVersionGivesTheWorksFirstAndNearestDatesNotTheVersionsOwn()
+    {
+        await using var fixture = await IntervalMount.CreateAsync(RepairFixture());
+        var mount = fixture.Mount;
+
+        // The French review of #987's repair round: the ELI names the 2008 act as published, and its 2010 consolidation covers
+        // 2011-06-01, before the 2012 one. Over the named version alone, the refusal said the nearest earlier state is the act
+        // and gave no later one, which the card says as "No later state is held: the requested date follows every state
+        // held"; over the work's chain, 2010 is the nearest earlier date and 2012 the nearest later.
+        var payload = Refused(await AskAsync(mount, "search", new { query = W("loi/2008/08/08/n1/jo") + ", au 1er juin 2011", language = "fra" }),
+            "no_version_for_date");
+        Assert.AreEqual(V3CorpusMount.ReasonOutsideNamedVersion, payload.GetProperty("reason").GetString());
+        StringAssert.Contains(payload.GetProperty("named_states").EnumerateArray().Single().GetString(), "/2008-08-10--");
+        StringAssert.Contains(payload.GetProperty("covering_states").EnumerateArray().Single().GetString(), "/2010-01-01--");
+        Assert.AreEqual("2008-08-10", payload.GetProperty("history_begins").GetString());
+        Assert.AreEqual("2010-01-01", payload.GetProperty("nearest_earlier").GetString());
+        Assert.AreEqual("2012-01-01", payload.GetProperty("nearest_later").GetString());
     }
 }
