@@ -62,11 +62,12 @@ public sealed class LuxembourgIndexBuilderTests
     /// <summary>
     /// The publisher dates its journal documents on the legal resource (<c>.../jo</c>) and titles them on the expression
     /// (<c>.../jo/fr</c>): none of the population's 2,021 titles had a date before the legal resource was asked. A title's
-    /// date is its own subject's, else its article's work identifier's, else its expression's legal resource's, else the
-    /// article's own date.
+    /// date is its own subject's, else its article's work identifier's, else its expression's legal resource's, and never the
+    /// article's own applicability date (D1, 2026-10-26: a code's title reached through each of its articles took each
+    /// article's date, and the build refused the rows that made).
     /// </summary>
     [TestMethod]
-    public void ATitleIsDatedByItsSubjectThenItsWorkThenItsLegalResourceThenItsArticle()
+    public void ATitleIsDatedByItsSubjectThenItsWorkThenItsLegalResourceAndNeverByItsArticle()
     {
         const string Expression = "http://data.legilux.public.lu/eli/etat/leg/loi/2018/04/17/a257/jo/fr";
         const string LegalResource = "http://data.legilux.public.lu/eli/etat/leg/loi/2018/04/17/a257/jo";
@@ -80,7 +81,7 @@ public sealed class LuxembourgIndexBuilderTests
         Assert.AreEqual("2018-04-17", Dated(new(StringComparer.Ordinal) { [LegalResource] = "2018-04-17" }, article), "the legal resource's, the population's case");
         Assert.AreEqual("2018-04-16", Dated(new(StringComparer.Ordinal) { [Expression] = "2018-04-16", [LegalResource] = "2018-04-17" }, article), "the subject's own first");
         Assert.AreEqual("2018-04-15", Dated(new(StringComparer.Ordinal) { [Work] = "2018-04-15", [LegalResource] = "2018-04-17" }, article with { PublisherWid = Work }), "then the work's");
-        Assert.AreEqual("2018-04-23", Dated(new(StringComparer.Ordinal), article), "the article's own date last");
+        Assert.IsNull(Dated(new(StringComparer.Ordinal), article), "never the article's own applicability date");
         Assert.IsNull(Dated(new(StringComparer.Ordinal), article with { ApplicabilityDate = null }), "and none when nothing dates it");
         Assert.IsNull(LuxembourgIndexBuilder.TitleDocumentDate(Expression, article with { ApplicabilityDate = null },
             new Dictionary<string, string>(StringComparer.Ordinal) { [LegalResource] = "2018-04-17" }, new Dictionary<string, string>(StringComparer.Ordinal)),

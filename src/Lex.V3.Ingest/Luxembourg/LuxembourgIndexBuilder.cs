@@ -2508,10 +2508,13 @@ public static partial class LuxembourgIndexBuilder
 
     /// <summary>
     /// A title's document date: the publisher's <c>dateDocument</c> on the title's own subject, else on the article's work
-    /// identifier (its expression when it has none), else on the expression's legal resource, else the article's own
-    /// applicability date. The publisher dates its journal documents on the legal resource (<c>.../jo</c>) and titles them
-    /// on the expression (<c>.../jo/fr</c>), so before the legal resource was asked none of the Luxembourg population's
-    /// 2,021 titles had a date (the mounted gates of 2026-10-13).
+    /// identifier (its expression when it has none), else on the expression's legal resource, else none. The publisher dates
+    /// its journal documents on the legal resource (<c>.../jo</c>) and titles them on the expression (<c>.../jo/fr</c>), so
+    /// before the legal resource was asked none of the Luxembourg population's 2,021 titles had a date (the mounted gates of
+    /// 2026-10-13). An article's own applicability date is never a title's document date (D1, 2026-10-26): it is another
+    /// date of another thing, and a code's or consolidation's title reached through each of its articles took each
+    /// article's date, so one title made as many rows as its articles had dates, and the build refused (run 15: 2,217 rows).
+    /// The catalogue states no <c>dateDocument</c> for a consolidation or a code state, so their titles have none.
     /// </summary>
     internal static string? TitleDocumentDate(
         string titleSubject,
@@ -2522,8 +2525,7 @@ public static partial class LuxembourgIndexBuilder
         datesBySubject.GetValueOrDefault(article.PublisherWid ?? article.ExpressionIri) ??
         (legalResourceByExpression.TryGetValue(article.ExpressionIri, out var legalResource)
             ? datesBySubject.GetValueOrDefault(legalResource)
-            : null) ??
-        article.ApplicabilityDate;
+            : null);
 
     private static string ExactDocumentDate(IEnumerable<string> values)
     {
