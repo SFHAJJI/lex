@@ -292,7 +292,7 @@ function layout(model, unsettable = null) {
   for (const item of model.items) {
     const subject = `article ${item.publisherId}`;
     gap(12);
-    add(`${item.publisherId} (${item.language}, applying from ${item.appliesFrom})`, { size: 12, leading: 16, keep: 120, field: `${subject}'s heading` });
+    add(`${item.publisherId} (${item.language}, ${stateDateSaid(item)})`, { size: 12, leading: 16, keep: 120, field: `${subject}'s heading` });
     add(item.citation, { font: 'mono', size: 8, label: 'citation        ', field: `${subject}'s permalink` });
     add(item.statePermalink, { font: 'mono', size: 8, label: 'state           ', field: `${subject}'s state permalink` });
     add(item.textSha256, { font: 'mono', size: 8, label: 'text sha-256    ' });
@@ -300,7 +300,9 @@ function layout(model, unsettable = null) {
     add(item.officialSource, { font: 'mono', size: 8, label: 'official source ', field: `${subject}'s official source` });
     add(`Rights: ${item.rightsDisposition}.`, { size: 9, field: `${subject}'s rights` });
     if (item.validityConflict) {
-      add(`This article's own date is ${item.articleValidFrom}; its state applies from ${item.appliesFrom}.`, { size: 9 });
+      add(item.datedByEntryIntoForce
+        ? `This article's own date is ${item.articleValidFrom}; its state is the act as published, dated by its entry into force on ${item.appliesFrom} (publisher).`
+        : `This article's own date is ${item.articleValidFrom}; its state applies from ${item.appliesFrom}.`, { size: 9 });
     }
     gap(3);
     if (item.segments === null || item.segments === undefined) add(item.text, { field: `${subject}'s text` });
@@ -317,7 +319,7 @@ function layout(model, unsettable = null) {
     add('Excluded', { size: 12, leading: 16, keep: 40 });
     for (const entry of model.excluded) {
       const subject = `excluded article ${entry.publisherId}`;
-      add(`${entry.publisherId} (${entry.language}, applying from ${entry.appliesFrom}): excluded, ${entry.reason}.`, { field: subject });
+      add(`${entry.publisherId} (${entry.language}, ${stateDateSaid(entry)}): excluded, ${entry.reason}.`, { field: subject });
       add(entry.citation, { font: 'mono', size: 8, label: 'citation ', field: `${subject}'s permalink` });
       add(entry.statePermalink, { font: 'mono', size: 8, label: 'state    ', field: `${subject}'s state permalink` });
       addCitation(add, entry.citations, subject);
@@ -429,6 +431,16 @@ function ascii(text) {
   const encoded = encode(text);
   if (encoded.unsettable) throw new Error(`the PDF cannot set ${encoded.unsettable.join(', ')}`);
   return encoded.bytes;
+}
+
+/**
+ * A state's date as the PDF says it beside an article (R21): "applying from {date}", or for a state dated by its entry into
+ * force "dated by its entry into force on {date} (publisher)", never an application (the review of #987, F5).
+ */
+function stateDateSaid(entry) {
+  return entry.datedByEntryIntoForce
+    ? `dated by its entry into force on ${entry.appliesFrom} (publisher)`
+    : `applying from ${entry.appliesFrom}`;
 }
 
 /**

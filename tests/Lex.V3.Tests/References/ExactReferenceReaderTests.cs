@@ -245,6 +245,9 @@ public sealed class ExactReferenceReaderTests
     [DataRow("article 6 du règlement (UE) 2016/679 du 27 avril 2016", nameof(ReferenceActForm.EuropeName), "règlement (UE) 2016/679 du 27 avril 2016", "6", null)]
     [DataRow("article 6 du règlement (UE) n° 2016/679", nameof(ReferenceActForm.EuropeName), "règlement (UE) n° 2016/679", "6", null)]
     [DataRow("art. 2, loi du 10 août 1991, 15 mars 2024", nameof(ReferenceActForm.TypeAndDate), "loi du 10 août 1991", "2", "2024-03-15")]
+    // The citation generator's usual form of a version dated by its entry into force (S7a; R21) asks for that version.
+    [DataRow("Art. 1er de la loi du 3 novembre 1798, dans sa version publiée, entrée en vigueur le 7 novembre 1798", nameof(ReferenceActForm.TypeAndDate), "loi du 3 novembre 1798", "1", "1798-11-07")]
+    [DataRow("Code du travail, article L. 121-6, as published, entry into force on March 15, 2021", nameof(ReferenceActForm.Title), "Code du travail", "L.121-6", "2021-03-15")]
     public void ACitationOfAnArticleOfAnActAtADateKeepsEachOfItsParts(
         string written, string form, string act, string? article, string? date)
     {

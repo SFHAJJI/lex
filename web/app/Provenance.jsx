@@ -19,7 +19,7 @@
 // would assert authenticity the platform refuses to claim, and the only party available to mint a
 // signature is us.
 
-import { NOT_STATED, PROFILE_NOTE, narrowedNote, readProvenance } from '../scripts/provenance.mjs';
+import { CATALOGUE_FACTS, NOT_STATED, PROFILE_NOTE, narrowedNote, readProvenance, stateHeading } from '../scripts/provenance.mjs';
 
 /** One labelled row, in the same layout the string renderer and every strip on the site use. */
 function Row({ label, children }) {
@@ -87,9 +87,7 @@ function Source({ source }) {
 function State({ state }) {
   return (
     <section className="provenance-state">
-      <h3>
-        {state.language}, applicable from {state.applicability_date}
-      </h3>
+      <h3>{stateHeading(state)}</h3>
       <dl className="provenance-facts">
         <Row label="state digest"><Evidence value={state.state_sha256} /></Row>
         <Row label="permalink"><Evidence value={state.permalink} /></Row>
@@ -106,6 +104,12 @@ function State({ state }) {
         <Row label="rule profiles">
           {state.rule_profile_sha256s.map((profile) => <Evidence key={profile} value={profile} />)}
         </Row>
+        {/* Index 9's row facts, which state digest /2 covers (S7a): every one shown, null as not stated. */}
+        {state.catalogue === null ? null : CATALOGUE_FACTS.map(([key, label]) => (
+          <Row key={key} label={label}>
+            {state.catalogue[key] === null ? <NotStated /> : <Evidence value={String(state.catalogue[key])} />}
+          </Row>
+        ))}
       </dl>
       <p className="provenance-profile-note">{PROFILE_NOTE}</p>
       <h4>The documents these articles came from</h4>

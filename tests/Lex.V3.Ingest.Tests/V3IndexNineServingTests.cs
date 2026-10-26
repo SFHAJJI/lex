@@ -5,28 +5,17 @@ using Lex.V3.Ingest.Luxembourg;
 namespace Lex.V3.Ingest.Tests;
 
 /// <summary>
-/// The tripwire of the review of #980 (F4): until S7a serves index 9 (its interval rules, and a date's role worded apart,
-/// R21), the server refuses a built mount of lex-v3-luxembourg-index/9, one that carries its build report as a release's
-/// mount does, with one sentence; a test fixture mount, with no build report, is still served; a mount of schema 8 is
-/// served either way. The index-9 mount here is built from the synthetic act of <c>Fixtures/LegacySchema8Mount</c>
-/// (no publisher text).
+/// The tripwire of the review of #980 (F4), turned by S7a: the server refused a built mount of lex-v3-luxembourg-index/9 (one
+/// that carries its build report, as a release's mount does) until the reader's interval rules served it and a date's role
+/// was worded apart (R21). Both have landed, so a built mount of index 9 is served, as a fixture mount and a built mount of
+/// schema 8 are. The index-9 mount here is built from the synthetic act of <c>Fixtures/LegacySchema8Mount</c> (no publisher
+/// text).
 /// </summary>
 [TestClass]
 public sealed class V3IndexNineServingTests
 {
-    /// <summary>
-    /// The switch is off. This fails when S7a turns it on: update this test, the G5 case of V3ReplayGuaranteesTests (from
-    /// the answer alone) and STATUS-DATA.md with it.
-    /// </summary>
     [TestMethod]
-    public void IndexNineIsNotServedUntilS7aTurnsTheSwitch()
-    {
-        Assert.IsFalse(V3CorpusMount.ServesIndexNine,
-            "S7a serves index 9: update V3IndexNineServingTests, G5 from the answer alone in V3ReplayGuaranteesTests, and STATUS-DATA.md");
-    }
-
-    [TestMethod]
-    public async Task ABuiltMountOfIndexNineIsRefusedWithItsSentenceAndAFixtureMountIsServed()
+    public async Task ABuiltMountOfIndexNineIsServedAsAFixtureMountIs()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"lex-v3-index9-serving-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
@@ -40,11 +29,10 @@ public sealed class V3IndexNineServingTests
                 Assert.IsNotNull(fixture);
             }
 
-            // The same files as a built mount: refused, with the sentence.
+            // The same files as a built mount: served too, since S7a.
             await File.WriteAllTextAsync(Path.Combine(directory, V3CorpusMount.BuildReportFileName), "{}");
-            var opened = await V3CorpusMount.OpenAsync(directory, CancellationToken.None);
-            var refused = Assert.ThrowsExactly<InvalidDataException>(() => V3CorpusMount.Served(opened, directory));
-            Assert.AreEqual(V3CorpusMount.IndexNineNotServedSentence, refused.Message);
+            using var built = V3CorpusMount.Served(await V3CorpusMount.OpenAsync(directory, CancellationToken.None), directory);
+            Assert.IsNotNull(built);
         }
         finally
         {

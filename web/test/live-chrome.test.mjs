@@ -203,6 +203,9 @@ test("every code a reader admits has a label in the table, so a page never print
   assert.deepEqual(Object.keys(copy.compare.status).sort(), [...ARTICLE_STATUSES].sort(), "a compared article's status");
   assert.deepEqual(Object.keys(copy.compare.bound).sort(), ["from", "to"], "the bound a language is not compared on");
   assert.deepEqual(Object.keys(copy.radar.reason).sort(), [...RADAR_REASONS].sort(), "why a radar row is not compared");
+  const { EUROPE_FORCE_DATE_ROLES, EUROPE_FORCE_DATE_NAMED_ROLES } = await import("../scripts/europe-force-dates.mjs");
+  assert.deepEqual(Object.keys(copy.common.europeForceDates.roles), [...EUROPE_FORCE_DATE_ROLES], "an EU force date's role, in its order");
+  assert.deepEqual(Object.keys(copy.common.europeForceDates.roleNames), [...EUROPE_FORCE_DATE_NAMED_ROLES], "a role not held");
   const { EXPORT_FORMATS } = await import("../scripts/live-export.mjs");
   assert.deepEqual(Object.keys(copy.export.save).sort(), EXPORT_FORMATS.map((format) => format.id).sort(), "each format's save button");
 });

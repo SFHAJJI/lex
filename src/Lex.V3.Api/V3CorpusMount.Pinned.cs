@@ -255,6 +255,13 @@ internal sealed partial class V3CorpusMount
                 new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
         }
 
+        // On index 9 a permalink may pin a catalogue state whose text this index does not hold (a textless row, which the events
+        // answer names): it is refused for its text, naming the state, never unknown and never answered by another state.
+        if (TextlessRowAt(workKey, date, digest, language) is { } textless)
+        {
+            return RefuseTextless(request, observedAt, textless, date, bound: null);
+        }
+
         var atCoordinate = _reader.ResolveState(workKey, date);
         var heldLanguages = atCoordinate.Select(static state => state.Language)
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();

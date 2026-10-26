@@ -25,10 +25,13 @@ public sealed class V3CorpusDossierMountTests
     private const string DossierRawTarget = "/api/v3/dossier";
     private const string TimelineRawTarget = "/api/v3/timeline";
 
+    // The fixture is an index 9: its states carry their publication date, an act's entry into force and their interval's
+    // end (S7a), so those are not on the list, and the catalogue's gaps are listed (S7b), so the list says what that list is
+    // not (an index 8 or 6 keeps its own list, base-answers.json).
     private static readonly string[] NotHeldItems =
     [
-        "document_type", "current_state_flag", "publication_date", "entry_into_force", "application",
-        "historical_identifiers", "responsible_ministry", "first_observed", "coverage_gaps",
+        "document_type", "current_state_flag", "application",
+        "historical_identifiers", "responsible_ministry", "first_observed", "catalogue_completeness",
         // Not a fixed row: the fixture's act is held only as first published, and the answer says its later versions
         // are not held (the plan's item 0.6).
         "later_versions",
@@ -216,8 +219,8 @@ public sealed class V3CorpusDossierMountTests
             }
 
             // The comparison is not empty: ten shared fields on every row, the count of articles the document had
-            // and the state does not hold among them.
-            Assert.AreEqual(10 * dossierRows.Length, shared, language);
+            // and the state does not hold among them, and on index 9 the row's thirteen catalogue facts (S7a).
+            Assert.AreEqual(23 * dossierRows.Length, shared, language);
         }
 
         // Every state the fixture holds is in the unfiltered answer, in the reader's order.
@@ -309,6 +312,13 @@ public sealed class V3CorpusDossierMountTests
             "states[].expression_iri", "states[].language",
             "states[].next_applicability_date", "states[].permalink", "states[].publisher_legal_resource_iri",
             "states[].publisher_work_iri", "states[].stable_coordinate", "states[].state_sha256",
+            // Index 9's row facts (S7a).
+            "states[].state_kind", "states[].date_role", "states[].entry_into_force", "states[].applicable_to", "states[].applicable_to_source",
+            "states[].boundary", "states[].publication_date", "states[].text_status", "states[].text_status_reason", "states[].in_file_identity",
+            "states[].in_file_date", "states[].translation_of", "states[].provisional",
+            // Index 9's catalogue chain (S7b): the fixture's states are held and its chain has no transition to list, so only the
+            // members are walked here; V3CorpusContinuityMountTests holds their rows.
+            "catalogue_chain_rule", "gaps", "invalid_intervals", "overlaps", "same_date", "textless_states", "transitions", "unclear_end_days",
             "titles", "titles[].expression_iri", "titles[].language",
             "titles[].short_titles", "titles[].short_titles[].evidence_sha256", "titles[].short_titles[].title",
             "titles[].titles", "titles[].titles[].evidence_sha256", "titles[].titles[].title",
@@ -355,13 +365,11 @@ public sealed class V3CorpusDossierMountTests
                 {
                     "the publisher's document type is not part of this record; classification serves the typeDocument facts the publisher asserted, verbatim",
                     "no current-state flag is part of this record; status_on serves the publisher's force assertions for a date, and a flag about now would not be a statement about any date listed here",
-                    "no publication date is held; the document date the index stores beside a title falls back to an article's applicability date, so it is not served as one",
-                    "no entry-into-force date is part of this record; status_on serves the publisher's dateEntryInForce when asserted; a state's applicability date is the date that state applies from, which is a different fact",
-                    "no application date is held; a state's applicability date is the date that state applies from, which is a different fact",
+                    "no date of application is held beyond each state's own date, whose date_role says what it is: a state dated by its entry into force is not dated by an application date",
                     "no historical identifier is held, so no earlier or later identifier of this work is mapped to it",
                     "no responsible ministry is held",
                     "no observation time is held, so nothing here says when this work was first seen; the event log's first_sighting (events) says only that a state is first present in that log",
-                    "each state carries the date it applies from and no end date, so no gap between states can be stated, and this answer never says there is none",
+                    "the states listed are the publisher catalogue's as this index read it, held or not (textless_states); a state the catalogue did not list is not here, and a gap in the catalogue (gaps) is not a gap in the law",
                     "later versions of this act are not held",
                 },
                 notHeld.Select(static row => row.GetProperty("reason").GetString()).ToArray());

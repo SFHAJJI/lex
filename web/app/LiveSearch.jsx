@@ -76,6 +76,7 @@ import { TodayHint, useLuxembourgToday } from './Today.jsx';
 import { OFFICIAL_SEARCH_PAGES } from '../scripts/live-failure.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillCounted, fillText, liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { articlePermalink, permalinkHref } from '../scripts/permalinks.mjs';
+import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -157,7 +158,7 @@ function AmbiguousWorks({ works, date }) {
               values={{
                 work: work.workKey,
                 candidates: work.candidates.map((candidate, index) => (
-                  <span key={candidate}>
+                  <span key={`${candidate}#${index}`}>
                     {index > 0 ? ', ' : ''}
                     <Permalink value={candidate} />
                   </span>
@@ -238,6 +239,10 @@ function Passage({ hit }) {
       <a href={permalinkHref(articlePermalink(hit.permalink, hit.publisherId), CHROME_LOCALE)}><strong>{hit.publisherId}</strong></a>
       {hit.lane === 'relaxed' ? <>{' '}<span className="badge">{COPY.lane.relaxed}</span></> : null}
       <Extract extract={hit.extract} language={hit.language} />
+      {/* An undated search folds one wording into one passage (S7a): the other versions that hold it are said, not dropped. */}
+      {hit.sameWording?.length > 0 ? (
+        <p className="note" data-same-wording={hit.sameWording.length}>{fillCounted(COPY.sameWording, hit.sameWording.length)}</p>
+      ) : null}
     </li>
   );
 }
@@ -262,10 +267,14 @@ function ActGroups({ view }) {
             {act.asPublished ? <span data-as-published-label="">{`${asPublishedLabel.charAt(0).toUpperCase()}${asPublishedLabel.slice(1)}.`} </span> : null}
             <span data-act-hits={act.hits}>{fillCounted(COPY.actPassages, act.hits)}</span>
           </p>
-          {versions.map(({ stateSha256, applicabilityDate, hits }) => (
+          {versions.map(({ stateSha256, applicabilityDate, dateRole, hits }) => (
             <section key={stateSha256} data-version={applicabilityDate}>
-              <p className="version-line">
-                <Say template={act.asPublished ? COPY.versionAsPublished : COPY.version} values={{ date: applicabilityDate }} />
+              <p className="version-line" data-date-role={dateRole ?? undefined}>
+                {/* An act dated by its entry into force is never said as applicable from it (R21, `date-role.mjs`). */}
+                <Say
+                  template={datedByEntryIntoForce({ dateRole }) ? COPY.versionAsPublishedEntryIntoForce : act.asPublished ? COPY.versionAsPublished : COPY.version}
+                  values={{ date: applicabilityDate }}
+                />
               </p>
               <ol className="passages">
                 {hits.map((hit) => <Passage key={`${hit.stateSha256}.${hit.articleIdentitySha256}`} hit={hit} />)}

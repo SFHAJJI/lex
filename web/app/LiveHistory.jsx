@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RefusalCard } from './RefusalCard.jsx';
 import { HISTORY_LANGUAGES, LIVE_HISTORY_IDLE, createHistorySession } from '../scripts/live-history.mjs';
 import { ENGLISH_LANG, fillCounted, fillText, liveChrome } from '../scripts/live-chrome.mjs';
+import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
 import { FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, TableRegion, refusalCardCopyFor } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
@@ -39,13 +40,44 @@ function wordingKind(row, firstOfLanguage) {
   return row.wordingChanged ? 'changed' : 'unchanged';
 }
 
+/**
+ * Where no version whose text this site holds covers the dates (index 9's continuity breaks, S7b): each run in its
+ * language, from its first date to the date a version with held text covers again (or with none later), and why, in the
+ * page's words; and that an unchanged wording across one says nothing of it. Nothing on an answer that names none.
+ */
+function Breaks({ breaks = [] }) {
+  if (breaks.length === 0) return null;
+  return (
+    <>
+      <h3>{COPY.breaksHeading}</h3>
+      <ul data-breaks={breaks.length}>
+        {breaks.map((gap) => {
+          const reasons = gap.reasons.map((reason) => COPY.breakReasons[reason]).join(COMMON.listSeparator);
+          return (
+            <li key={`${gap.language}.${gap.from}`} data-break-from={gap.from} data-break-to={gap.to ?? ''}>
+              {gap.to === null
+                ? fillText(COPY.breakOpen, { language: gap.language, from: gap.from, reasons })
+                : fillText(COPY.breakTo, { language: gap.language, from: gap.from, to: gap.to, reasons })}
+            </li>
+          );
+        })}
+      </ul>
+      <p>{COPY.breaksNote}</p>
+    </>
+  );
+}
+
 /** One lineage view, laid out: the rows that carry the id, the states that do not, and the counts. */
 export function HistoryView({ view }) {
+  const dossier = liveChrome().dossier;
   const seen = new Set();
   const runs = Object.entries(view.wordingRuns);
+  // The lineage begins with its first row, whose date is said with its role: an act dated by its entry into force is never
+  // said as from it (R21; the review of #987).
+  const byForce = datedByEntryIntoForce(view.rows[0]);
   const carried = view.language === null
-    ? fillCounted(COPY.carried, view.rows.length, { from: view.historyBegins })
-    : fillCounted(COPY.carriedIn, view.rows.length, { language: view.language, from: view.historyBegins });
+    ? fillCounted(byForce ? COPY.carriedEntryIntoForce : COPY.carried, view.rows.length, { from: view.historyBegins })
+    : fillCounted(byForce ? COPY.carriedInEntryIntoForce : COPY.carriedIn, view.rows.length, { language: view.language, from: view.historyBegins });
   return (
     <>
       <h2>
@@ -74,11 +106,14 @@ export function HistoryView({ view }) {
             seen.add(row.language);
             const kind = wordingKind(row, first);
             return (
-              <tr key={row.stateSha256} data-row={row.stateSha256} data-wording={kind}>
+              <tr key={row.stateSha256} data-row={row.stateSha256} data-wording={kind} data-after-break={row.afterBreak ? '' : undefined}>
                 <td>{row.language}</td>
-                <td>{row.applicabilityDate}</td>
+                {/* A row dated by its entry into force answers the column as the dossier's does (R21, S7b). */}
+                <td data-date-role={row.dateRole ?? undefined}>
+                  {datedByEntryIntoForce(row) ? fillText(dossier.entryIntoForceDate, { date: row.applicabilityDate }) : row.applicabilityDate}
+                </td>
                 <td>{row.nextApplicabilityDate ?? COMMON.noneHeld}</td>
-                <td>{COPY.wording[kind]}</td>
+                <td>{row.afterBreak ? `${COPY.wording[kind]}${COMMON.listSeparator}${COPY.afterBreak}` : COPY.wording[kind]}</td>
                 <td>
                   {row.articles
                     .map((article) => (article.validFrom === null
@@ -93,13 +128,15 @@ export function HistoryView({ view }) {
         </tbody>
       </table>
       </TableRegion>
+      {view.rows.some(datedByEntryIntoForce) ? <p data-entry-into-force-note="">{dossier.entryIntoForceNote}</p> : null}
+      <Breaks breaks={view.breaks} />
       {view.absent.length > 0 ? (
         <>
           <h3><Say template={COPY.absentHeading} values={{ anchor: view.anchor }} /></h3>
           <ul data-absent={view.absent.length}>
             {view.absent.map((state) => (
               <li key={state.stateSha256}>
-                <Say template={COPY.absentRow} values={{ language: state.language, from: state.applicabilityDate, permalink: <Permalink value={state.permalink} /> }} />
+                <Say template={datedByEntryIntoForce(state) ? COPY.absentRowEntryIntoForce : COPY.absentRow} values={{ language: state.language, from: state.applicabilityDate, permalink: <Permalink value={state.permalink} /> }} />
               </li>
             ))}
           </ul>

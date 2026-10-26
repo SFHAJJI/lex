@@ -357,16 +357,21 @@ public sealed class V3CorpusSearchMountTests
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
 
-        // The unchanged article is a hit in each state that holds it, and the count says it is one.
+        // The unchanged article is held in each state, and on index 9 an undated search folds its one wording into one hit,
+        // the latest state's, naming the other state that holds it (design §3.2, decision 8; S7a), and says the fold.
         var everyState = (await SearchAsync(mount, Phrase, mode: "strict")).Result!.Value;
         var hits = everyState.GetProperty("hits").EnumerateArray().ToArray();
-        Assert.AreEqual(2, hits.Length);
-        CollectionAssert.AreEqual(new[] { fixture.ApplicabilityDate, laterDate },
-            hits.Select(static hit => hit.GetProperty("applicability_date").GetString()).ToArray());
-        CollectionAssert.AreEqual(new[] { fixture.StateSha256, later.StateSha256 },
-            hits.Select(static hit => hit.GetProperty("state_sha256").GetString()).ToArray());
-        Assert.IsTrue(hits.All(hit => hit.GetProperty("publisher_id").GetString() == both));
-        Assert.AreEqual(2, everyState.GetProperty("population").GetProperty("strict_hits").GetInt32());
+        Assert.AreEqual(1, hits.Length);
+        Assert.AreEqual(laterDate, hits[0].GetProperty("applicability_date").GetString());
+        Assert.AreEqual(later.StateSha256, hits[0].GetProperty("state_sha256").GetString());
+        Assert.AreEqual(both, hits[0].GetProperty("publisher_id").GetString());
+        var folded = hits[0].GetProperty("same_wording_states").EnumerateArray().Single();
+        Assert.AreEqual(fixture.StateSha256, folded.GetProperty("state_sha256").GetString());
+        Assert.AreEqual(fixture.ApplicabilityDate, folded.GetProperty("applicability_date").GetString());
+        Assert.AreEqual(fixture.Permalink, folded.GetProperty("permalink").GetString());
+        Assert.AreEqual(1, everyState.GetProperty("population").GetProperty("strict_hits").GetInt32());
+        Assert.AreEqual(2, everyState.GetProperty("fold").GetProperty("strict_hits_before_fold").GetInt32());
+        Assert.AreEqual(V3CorpusMount.SearchFoldRule, everyState.GetProperty("fold").GetProperty("rule").GetString());
         Assert.AreEqual(1, everyState.GetProperty("population").GetProperty("distinct_publisher_articles").GetInt32());
         // Two dated states, one language: the searchable languages are listed once each, not once per date.
         CollectionAssert.AreEqual(new[] { "fra" }, Strings(everyState.GetProperty("searchable_languages")));
@@ -527,11 +532,14 @@ public sealed class V3CorpusSearchMountTests
         Assert.AreEqual(fixture.StateSha256,
             namedOnFirst.Result!.Value.GetProperty("hits").EnumerateArray().Single().GetProperty("state_sha256").GetString());
 
-        // With a work named and no date, only that work's states are searched.
+        // With a work named and no date, only that work's states are searched: three hold the one wording, so on index 9 it is
+        // one hit, the others named (S7a's fold).
         var namedNoDate = (await SearchAsync(mount, Phrase, identifier: identifier, mode: "strict")).Result!.Value;
         Assert.IsTrue(namedNoDate.GetProperty("hits").EnumerateArray()
             .All(row => row.GetProperty("work_key").GetString() == fixture.WorkKey));
-        Assert.AreEqual(3, namedNoDate.GetProperty("hits").GetArrayLength());
+        Assert.AreEqual(1, namedNoDate.GetProperty("hits").GetArrayLength());
+        Assert.AreEqual(2, namedNoDate.GetProperty("hits")[0].GetProperty("same_wording_states").GetArrayLength());
+        Assert.AreEqual(3, namedNoDate.GetProperty("fold").GetProperty("strict_hits_before_fold").GetInt32());
     }
 
     [TestMethod]
@@ -654,7 +662,9 @@ public sealed class V3CorpusSearchMountTests
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
         await WriteTextsAsync(fixture);
-        await fixture.AddStateAsync(Shift(fixture.ApplicabilityDate, 400), "later");
+        var later = await fixture.AddStateAsync(Shift(fixture.ApplicabilityDate, 400), "later");
+        // The later state's wording its own, still matching both lanes, so an undated search on index 9 folds nothing here (S7a).
+        await SetTextsAsync(fixture, later.ExpressionIri, BothLanes + " Modifie.", TermsOnly + " Modifie.", Neither);
         await fixture.AddStateAsync(fixture.ApplicabilityDate, "other-work", workLeaf: "n4");
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);

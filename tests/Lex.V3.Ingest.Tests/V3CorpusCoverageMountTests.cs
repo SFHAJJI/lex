@@ -485,7 +485,9 @@ public sealed class V3CorpusCoverageMountTests
                 "how many acts the publisher holds, or how many of them this mount lacks: the mount records only what was admitted",
                 "the count of as-published acts never consolidated is a corpus-level statement this mount does not carry",
                 "no observation time is held, so nothing here says when anything was first seen; events serves the event log, whose first_sighting events say only that a state is first present in that log",
-                "history gives when each build ran, an upper bound on when its corpus was observed and never an observation time, and nothing here says how current these counts are against the publisher; no build time of the corpus file itself is held; the corpus and index digests name exactly which artifacts are mounted",
+                // The fixture is an index 9, whose build-time row says what a derived index's build time is (S7c, the row S4 left;
+                // an index 8 keeps its row, base-answers.json).
+                V3CorpusMount.CoverageBuildTimeRowNine[1],
                 "no status, repeal or commencement fact is counted here; status_on serves the publisher's force assertions per work, verbatim",
             },
             notHeld.Select(static row => row.GetProperty("reason").GetString()).ToArray());

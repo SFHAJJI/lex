@@ -186,7 +186,7 @@ export function renderCoverageReactPage() {
       </p>
       <p>
         Nothing on it says how current the counts are. Its build times, in the history section, say
-        when each build ran, an upper bound on observation, and none of them dates the counts; what
+        when each acquiring build read its acquisition, an upper bound on observation, and none of them dates the counts; what
         names the artifacts these counts came from is a pair of digests. The calendar dates in the
         tables are the publisher&rsquo;s facts about the law and are a different kind of thing.
       </p>

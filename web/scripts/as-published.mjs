@@ -131,10 +131,14 @@ export function laterVersionFactsBetween(asPublished, dateFrom, dateTo) {
  * `laterVersionFactsBetween`. Never whether the text changed. The platform's own rule
  * (`V3CorpusMount.AsPublishedSameTextNote`), word for word.
  */
-export function sameTextHeldNote(applicabilityDate, onlyStateHeld, between) {
-  // With another state of the language held, "later versions are not held" would contradict its sides' next state.
-  let note = `Both dates select ${onlyStateHeld ? 'the one text held' : 'the same text held'}, the act as published, applicable from ` +
-    `${applicabilityDate} (publisher); ${onlyStateHeld ? 'later versions are not held' : 'no consolidated version is held'}`;
+export function sameTextHeldNote(applicabilityDate, onlyStateHeld, between, datedByEntryIntoForce = false) {
+  // With another state of the language held, "later versions are not held" would contradict its sides' next state. An act
+  // dated by its entry into force (index 9, S7b; R21) is said as that, as the platform's note says it.
+  const dated = datedByEntryIntoForce
+    ? `dated by its entry into force on ${applicabilityDate} (publisher)`
+    : `applicable from ${applicabilityDate} (publisher)`;
+  let note = `Both dates select ${onlyStateHeld ? 'the one text held' : 'the same text held'}, the act as published, ${dated}; ` +
+    `${onlyStateHeld ? 'later versions are not held' : 'no consolidated version is held'}`;
   const { after, onOrBefore, consolidations, endOfForce } = between;
   if (consolidations.length > 0) {
     const named = consolidations.length === 1

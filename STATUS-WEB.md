@@ -4,6 +4,302 @@ Updated 2026-10-26. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Review and repair (combined #987): the cards' new reason and coordinate candidates, the closed end's day, dates by role on the radar and in the CSV (sole driver, 2026-10-26)
+
+The web half of the one repair round of the combined data pull request #987 (STATUS-DATA.md, the section of the same day,
+has the platform's half and the review). Each finding was reproduced with the review's probes and is held by a test that
+fails on the reviewed head (f0dcf89c) and passes after: there, 8 of the new or changed web cases fail. Code at 5e311bb8.
+- **1 (medium-high), `outside_named_version` on the card.** F2's reason was not in the card's closed set, so `reasonView`
+  threw and a search with an ELI of a version outside its date showed no card. `reasons.outside_named_version` says it, in
+  English and French, with the payload's date and the catalogue's read time; and the search page's head for that reason
+  says the version named is held and does not cover the date (`LIVE_SEARCH_HELD_ACT_REFUSAL_SENTENCES["lu-legilux"].outside`),
+  where "No state of this work that this index holds applies on that date" was false (the French review's point 1). Tests
+  (`catalogue-chain.test.mjs`, `exact-reference.test.mjs`): the platform's real payload, from the refusal census's new
+  scenario, through the search page in both languages and both renderers, its head and its named and covering states; and
+  among the per-reason loop's payloads.
+- **5 (low), a candidate naming no expression.** The platform names such a state by its stable coordinate (it has no
+  permalink). The card reads a coordinate candidate by the digest, kind and role at its place in index 9's lists, says it
+  with `refusalCard.candidateUnexpressed` ("{version}, hash {hash}: the publisher's catalogue names no expression of it,
+  …"), its version named as the dossier names a version without text, with its coordinate as code in parentheses and no
+  link, in both renderers. A coordinate without the lists, lists of another length, or a reading URL whose digest is not
+  the one at its place is refused, after the choice's own rules (a list offering one state twice is still said to). The
+  dated search's ambiguous works and the radar's candidates take a coordinate too. Test: the card in both renderers and
+  languages (the French after a version named "l’acte tel que publié" too), and the four refusals.
+- **6 (low), the closed end's day.** `reasons.after_closed_end` called the end the publisher gives the last day applicable
+  ("applicable to {closed}", "jusqu’au {closed}"); `closed_on` is the first day the state does not cover. It now says "the
+  version that ends last is applicable until the day before {closed} (publisher), and no version begins on or after
+  {closed}" / "la version dont la fin est la plus tardive est applicable jusqu’à la veille du {closed} (éditeur), et aucune
+  version ne commence le {closed} ni après", as the reviewed `history.breakTo` and the platform's F7 (after a nested
+  version the last to begin is not the last to end). `dossier.overlap`'s exclusive end is said the same way. Test: both
+  languages, the nested fixture's dates, never the old words.
+- **8 (low, R21), the radar's row.** `radar.row` said "from {date}" of an act dated by its entry into force (the reader
+  dropped `date_role`). `radar-answer.mjs` reads the role and entry into force (`readDateFacts`), and the row says
+  `radar.rowEntryIntoForce` ("…, the act as published, dated by its entry into force on {from} (publisher): …"), as
+  History's F5 forms do, its verdict `radar.notComparedAct` ("non comparé" after the act); its ambiguity "covers" the date
+  rather than "applies" on it. `date-speech.test.mjs` says the radar too (seven screens, both languages) and its regex now
+  catches a bare "from {date}" and "à partir du {date}"; it caught the radar's row on f0dcf89c. Test: the radar's row and
+  verdict in both languages, and a schema-8 radar with no role.
+- **3 (medium, R21), the CSV.** It said an entry into force as `applies_from` with no role. A `date_role` column is
+  appended after `segments`, so every column before it keeps its place: `entry_into_force`, `applicability` or
+  `applicability_in_file` on index 9, empty on schema 8 or 6. Test (`date-role.test.mjs`): a bundle dated by its entry into
+  force, the census's own, and the schema-8 mount's recorded bundle; `content3-wording.test.mjs` pins the last two columns.
+- **9 (latent, EU 3).** The EU force dates' reader refused an `xsd:date` with a timezone (2016-05-24Z), which the contract's
+  `PublisherDate` admits. It takes a year, a year and month or a date with `Z` or a signed offset up to 14:00, and the open
+  end in any of them. Test (`europe-force-dates.test.mjs`): three zoned dates read as served, three malformed refused, the
+  zoned open end, and an unpinned code on the end-of-validity and signature properties read with its code.
+- **10, tests that did not test what they claimed.** `date-role.test.mjs` and `catalogue-chain.test.mjs` held "an older
+  index names no role / no chain" to a census answer of index 9 compared with itself; they now read the schema-8 mount's
+  recorded answers (`base-answers.json`, which the platform replays byte for byte): its search, dossier, bundle and radar.
+  `europe-force-dates.test.mjs`'s drift cases each assert their own rule's message, and "the code EV given no role" adds a
+  not-pinned EV row of its own (it had also removed the application, so the reader refused it for other rules, and still
+  did with the EV check taken out, which the new case does not: measured by removing the check).
+- **The worked example** of `no_version_for_date` (`refusal-catalog.mjs`) shows a French version named
+  (`no_expression_in_language`), since the census's richest payload now names states and an example must teach a list's
+  rows.
+- **French** (Decision 41): one independent reviewer (Claude, AI reviewer, not the author) under the owner's delegation, in
+  the addendum of 2026-10-26 of `C:\lex-v3\lanes\fr-review\review.md` ("the closed end's day, an identifier outside its
+  version, a candidate naming no expression and the radar's entry into force"): 4 forms reviewed and 1 added, 3 changed in
+  review (the English too in 1): `after_closed_end` (the version that ends last), `outside_named_version` (an identifier
+  "désigne"), `candidateUnexpressed` ("cette version", never "elle" after "l’acte tel que publié"; "propose"),
+  `rowEntryIntoForce` approved, `notComparedAct` added. Its proposals taken as worded: the search card's head for
+  `outside_named_version`, `dossier.overlap` and `radar.reason.ambiguous_version`; its platform point (the outside refusal's
+  nearest dates) is fixed in the platform's half; its point 5 (the coordinate in parentheses) is taken. The finals are
+  applied, the addendum is appended with the driver's note, and the forms are named in `live-chrome-fr.mjs`.
+- **Measured** (Windows, no browser, no publisher traffic), on 5e311bb8:
+  - `npm run build`: 30 state pages. `npm test`: 1,309 (1,306 passed, 0 failed, 3 skipped).
+  - The journey unit tests (`node --test web/test/journey*.test.mjs`): 62 of 62.
+  - Before the fix: the five changed test files on f0dcf89c's web with the new census sample: 47 (39 passed, 8 failed:
+    each new or changed case); the unmasked EU drift case fails with the not-pinned check removed.
+  - `eng/verify-v3-tree.ps1`: 1,666 tracked paths.
+
+## EU force dates on the EU dossier and at the head of an EU reading (sole driver, 2026-10-19)
+
+The web half of the plan's item 2.1 (STATUS-DATA.md, "EU force dates"; R79's E1, R21).
+- **The answers.** Over an EU index /6, `dossier`, `timeline`, `as_of` and `evidence_bundle` of an EU act carry
+  `force_dates` (`V3CorpusMount.EuropeForceDates.cs`): each date with its role (`entry_into_force`, `application`,
+  `end_of_validity`, `deadline`, `signature`, `not_pinned`), the value exactly as served, the publisher's code, its note
+  and the note in its codes (`publisher_note_codes`), the date property and the publisher's statement it was read from;
+  the named roles not held; a conflict list for two entry-into-force dates; and the rules (role, note, not held,
+  conflict). The not-held row `force_dates` then says what of them is still not held, and that none of them chooses a
+  wording. Over an index /5 nothing changes (`V3CorpusEuropeSchema5MountTests`, byte for byte).
+- **The pages.** `europe-force-dates.mjs` reads the member (null when absent) and throws on drift: a role no date takes,
+  EV or MA under the wrong role, codes that are not the note's, an open end that is a date, roles not held that the dates
+  contradict, dates out of order, a conflict the dates do not hold, another act's dates, a date said twice.
+  `EuropeForceDates` (`LiveAnswer.jsx`) says them in the page's language: on the EU dossier after the expressions, and at
+  the head of an EU reading, before its wordings. Each date is said with its role ("Entry into force: {date}"; an end of
+  validity "in whole or in part", since 20 of run 16's 24 are partial; the open end as no date), the qualifier in
+  parentheses after it, the publisher's note in its own codes, as code, marked `lang="zxx"` and never translated; the
+  roles not held are listed; two entries into force are both said; and under at least one date, the reading adds that
+  none of them chooses a wording, each wording carrying its own date.
+- **French** (Decision 41): seventeen forms under `common.europeForceDates`, reviewed by an independent reviewer
+  (Claude, AI reviewer, not the author) under the owner's delegation in the addendum of 2026-10-19 of
+  `C:\lex-v3\lanes\fr-review\review.md` (17 forms, 11 changed in review, the English too in 5: the heading says what this
+  site holds, "Les dates de l’éditeur que ce site détient pour cet acte", never "les dates de l’acte", which the wording
+  headings use for the Formex date; MA is "mise en application"; an end of validity "totale ou partielle"; the qualifier
+  is "la mention de l’éditeur, mot pour mot"; and the reading's last line says no date above chooses a wording).
+  The R21 guard takes S7a's hunk byte for byte (the noun "entrée en vigueur" passes, "en vigueur" as a state stays
+  refused), so the two branches merge without a conflict there. The EUR-Lex French labels are the reviewer's knowledge,
+  not checked against the publisher (no request was made).
+- **Tests.** `europe-force-dates.test.mjs` (reading, twelve drifts, the seventeen entries in both languages against the
+  R21 guard, the census's EU dossier, and a reading led by the dates before its wordings); `date-speech.test.mjs`
+  counts the seventeen entries as EU entries (no Luxembourg date word); `live-chrome.test.mjs` holds the roles and role
+  names to the reader's lists. The answer and envelope censuses' EU mount holds the GDPR's three dated statements as
+  run 16 holds them (entry into force 2016-05-24, application 2018-05-25, deadline 2020-05-25 "AU+TARD V ART 97"); both
+  were re-rendered from the handler and verify without the variables.
+- **Measured** (this branch, rebased on `v3/integration` at 0b908870), with no browser started:
+  - `dotnet build Lex.V3.slnx -c Release --no-incremental`: 0 warnings, 0 errors.
+  - `Lex.V3.Tests`: 3,321 (3,315 passed, 6 skipped).
+  - `Lex.V3.Ingest.Tests`, the classes of the EU index, the EU time view, dossier, search, reference, evidence bundles and
+    capabilities, the censuses, the samples and the evaluation card, privacy (public request recording, serving temporary
+    storage), the legacy schema-8 and schema-6 mounts, the EU schema-5 mount, mount build files, the offline mount, the
+    machine gates, the annex control case, EU permalinks, generation quotes, first-mount reuse, the consolidated first
+    mount, the reified-axiom wiring and the journey mounts: 202 (192 passed, 10 skipped, all opt-in).
+  - The web build; the web suite, 1,279 (1,275 passed, 3 skipped, 1 failed: `image-run.test.mjs`'s mount test spawns
+    `awk`, which this PC's PATH lacks; it passes where awk is, as in CI).
+  - `eng/verify-v3-tree.ps1`: 1,659 tracked paths.
+
+## The catalogue between versions, a date said with its role everywhere, the cards' own reasons, the caveat and the translation label (sole driver, 2026-10-19)
+
+Slices S7b and S7c of the Luxembourg data design (STATUS-DATA.md, the section of the same day), with what S7a (#987) left
+them: the web of index 9's catalogue chain and continuity breaks, R21 on every page that still said an entry into force with
+application words, the refusal cards' own sentences, the consolidation and code caveat (L5), the translation label (R18).
+On an index of schema 8 or 6 every page says what it said before, except the coverage page's note, whose new words are true
+of every index.
+- **R21, the rest of S7a's list** (an entry into force is never said as an application):
+  - Compare (`LiveCompare.jsx`, `compare-answer.mjs`): a side dated by its entry into force is "the act as published, dated by
+    its entry into force on X (publisher)" (`compare.sideEntryIntoForce`, `…Next`); one state on both dates is said so
+    (`compare.sameVersionEntryIntoForce`, `sameTextHeldEntryIntoForce`, `sameTextHeldOfSeveralEntryIntoForce`), and the
+    reader holds the platform's note by role (`SAME_STATE_ENTRY_INTO_FORCE_SENTENCE`, `sameTextHeldNote`'s role).
+  - History (`LiveHistory.jsx`, `history-answer.mjs`): a row dated by its entry into force answers the "Applies from" column
+    as the dossier does (the reviewed `dossier.entryIntoForceDate` and its note, reused).
+  - The export (`LiveExport.jsx`, `export-build.mjs`, `export-pdf.mjs`): `export.itemEntryIntoForce` and
+    `excludedEntryIntoForce`; the PDF's heading, conflict line and exclusion line; the JSON names `date_role` on index 9.
+  - One state heading by role (`StateHeadingWords`) for the reading, the export's pins and the cited article's source: the
+    last two still said "the state applying from" of every state, which the per-role speech test found.
+  - `reading.validityConflict` and `search.dated` are S7a's repair's (its F5), as the coordinator moved them there; rebased
+    on S7a's final head, the per-role speech test finds no application word of an entry into force on any page.
+  - The dossier's span (`dossier.statesEntryIntoForce`, `statesFromEntryIntoForce`, `statesInEntryIntoForce`,
+    `statesInFromEntryIntoForce`): a first state dated by its entry into force is said as that.
+  - The refusal card's candidate (`refusalCard.candidateEntryIntoForce`, `…WithdrawalNotStated`), from the platform's new
+    `candidate_date_roles`.
+- **The timeline speech test, per date role** (`date-speech.test.mjs`, the launch contract's evidence): every census
+  Luxembourg answer said again with its first state dated by its entry into force (as index 9 dates an act as published),
+  through search, dossier, reading, export (composed with every article pinned), history and compare, in English and in
+  French: no application word stands right before that date; a borrowed heading and five application phrasings are caught,
+  four right ones are not.
+- **The refusal cards' own sentences** (`refusal-card.mjs`'s `reasonView`, both renderers, the page's copy): why no version
+  covers the date for each of S7a's six reasons (`refusalCard.reasons.*`: the catalogue as read no later than its build, a
+  hole's span "this site does not fill", a closed end "which says nothing of whether the law ends" with the base act's
+  end-of-force date when the publisher's record gives one, an unclear end day given to neither, an invalid interval whose
+  own link still opens it, no expression in the language asked); the textless version covering the date named by its kind
+  and role and why its text is not held (`refusalCard.textless`, `textlessNamed`, `versions.*`, `textNotHeld.*`). A reason or
+  a text status outside the platform's closed set is refused, so a new one is worded before it is shown.
+- **The reading's caveat and label** (`VersionCaveats`): a consolidated version "is documentation without probative value.
+  Only the texts published in the Journal officiel (Mémorial A) are authentic: the act as published, {act}, and the acts that
+  amended it, whose list Lex does not yet hold." (R20's words; {act} its work's `/jo`, as the platform names a base act); a
+  code's version "documentation without probative value: the authentic texts are the acts published in the Journal officiel
+  (Mémorial A) that it brings together"; an expression in another language than French "the publisher's {language}
+  expression of the act, beside its French expression {french}. The publisher's record does not state which language version
+  is authentic." (R18; never "only the French text is authentic").
+- **The dossier: the catalogue between versions** (`CatalogueChain`, `dossier-answer.mjs`'s `readCatalogueChain`): the versions
+  the catalogue lists whose text this site does not hold, named as the card names them, each with its permalink (which
+  refuses for its text) or its coordinate; each gap, overlap, same-date group, unclear end day and invalid interval in
+  words with the answer's dates; and that a gap in the catalogue is not one in the law. A held state listed without text is
+  drift, and refused.
+- **The history's breaks** (`Breaks`): each run of dates no version with held text covers, in its language, with why
+  (`history.breakReasons.*`), each row after one marked (`history.afterBreak`), and that an unchanged wording across one says
+  nothing of it; the reader holds each row's mark to the breaks it names.
+- **Coverage** (the row S4 left): the page's note says the history's build times are when each acquiring build read its
+  acquisition (`COUNTS_PROVENANCE_NOTE`, `coverageAnswer.countsProvenance`), and the preview carries index 9's row.
+- **The L5 sentences** (design §5; ruling 4's pattern: the drafts ship and the owner revises them in person): the
+  consolidation and code caveat (`reading.consolidationCaveat`, in R20's words, `reading.codeCaveat`), the translation label with R18's
+  sentence (`reading.translation`), and the refusal wordings for a catalogue hole, an unclear end day and an invalid interval
+  (`refusalCard.reasons.catalogue_hole`, `.publisher_end_convention_unclear`, `.publisher_interval_invalid`), English beside
+  French by `node web/scripts/refusal-sentences.mjs`. The other L5 sentences are not this slice's (the single-channel
+  disclosure and the attribution line wait for the owner's L1 and L2; the coverage counts of withheld files; the struck
+  wording shipped with S3b).
+- **French** (Decision 41): 59 forms reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the
+  owner's delegation in the addendum of 2026-10-19 "the catalogue's chain, continuity breaks, dates by role elsewhere, index
+  9's refusal sentences and the version caveats" of `C:\lex-v3\lanes\fr-review\review.md`; 10 changed in review, 49 approved,
+  and one form its point 1 asked for (`refusalCard.publishedAct`, "publié le" of an act's candidate) reviewed with them.
+  Changed: "ce site n’a pas acquis cette version" (it follows a version named "l’acte tel que publié"); "fait foi", never
+  "authentique", and "un outil de documentation" in both caveats; a gap and a break named by their ends' roles, the break's
+  end exclusive ("to the day before {to}", "à la veille du"), the English changed with these two; "les textes" after a
+  plural; "un vide juridique"; an apposition's comma in two spans; "de l’acte, publiée par l’éditeur". Its points 2 and 4
+  are done (the textless row starts with a capital; the uncounted one-state span only for one state). The forms are named in
+  the header comment of `live-chrome-fr.mjs`. Its point 5 (`history.carried`, `carriedIn` and `absentRow` can carry an entry
+  into force as "from {from}") goes to S7a's repair with `search.dated` and `reading.validityConflict`.
+- **Tests.** `web/test/catalogue-chain.test.mjs` (new, 9): the card's six reasons and its textless versions in both renderers
+  and in French, an unknown reason and status refused, an ambiguity's act by its role and a misaligned role list refused; the
+  dossier's chain and its span by role, and drift refused; the history's breaks, its column by role and a row's mark held;
+  the reading's caveat for a consolidation and a code and its translation label; Compare, the export (lines and JSON) by role;
+  every added form held to the time-word guard. `date-speech.test.mjs` (+2): the per-role speech test and its control.
+  Updated: `coverage.test.mjs`, `refusal-catalog.mjs`'s worked example. On the combined data branch (S7a's final head
+  943cbd2d, S7b and S7c rebased on it, `data/eu-force-dates` merged): `npm run build` 30 state pages; `npm test` 1,304 tests,
+  1,301 passed, 0 failed, 3 skipped (the browser tests, which run only with `LEX_BROWSER_TESTS=1`); the per-role speech test
+  and its control pass (before the rebase they found the reading's validity-conflict line, S7a's F5).
+- **Driver decisions (reversible).**
+  - **The web's timeline is the dossier's**: the design's `Timeline.jsx` (holes hatched, overlaps stacked) is the pre-V3
+    preview, served nowhere; the live dossier says the catalogue's chain in words, under the states table, which needs no
+    client chart and reads the same to a screen reader.
+  - **The textless version is named with the refusal card's words** (`refusalCard.versions`, `textNotHeld`) on the card and in
+    the dossier, so a version is said one way wherever it is.
+  - **The History table reuses the dossier's reviewed cell and note** for a row dated by its entry into force (same column).
+  - **The caveat's act is the consolidation's work's `/jo`**, as the platform names a base act (`base_act_iri`); a code's
+    caveat names no act (a code brings several together).
+  - **The consolidation caveat ships in R20's words** ("Only the texts published in the Journal officiel (Mémorial A) are
+    authentic: the act as published, {act}, and the acts that amended it, whose list Lex does not yet hold"), the specification
+    of record's, which rules where the design's L5 draft ("the authentic text is the act in the Journal officiel") says less:
+    the act as published lacks every amendment the consolidation carries (the French review's blocking point). The owner
+    revises it with the other L5 sentences; for the lawyer's read (O4), older codes such as the Code civil were not first
+    published in the Mémorial A.
+- **Left.** The coverage page's state range (`coverageAnswer.stateRange`, "the first and last applicability dates") may begin
+  at an entry into force on index 9; the platform names no role for an aggregate's end (STATUS-DATA.md). The radar's row
+  ("from {date}") names no role and says no application word.
+
+## Index /9 served: a date said with its role, a missing article said in place, the cards read the new refusals (sole driver, 2026-10-18)
+
+Slice S7a of the Luxembourg data design (STATUS-DATA.md, the section of the same day): the reader's interval rules over
+lex-v3-luxembourg-index/9, and with them R21's "every date said with its role" on the pages that say a Luxembourg state's
+date. The server now serves a built mount of index 9.
+- **The role** (`web/scripts/date-role.mjs`): `readDateRole`, `readEntryIntoForce` and `readDateFacts` read a state's
+  `date_role` (`applicability`, `applicability_in_file`, `entry_into_force`) and its act's `entry_into_force`, hold the two to
+  each other (a state dated by its entry into force names that date as its entry into force), refuse any other role, and give
+  null on an index of schema 8 or 6, which names none, so those pages say what they said before.
+- **Where it is said.**
+  - The reading (`LiveReading.jsx`): a state dated by its entry into force is headed "{work}, {language}, the act as
+    published, dated by its entry into force on {from} (publisher)" (`reading.stateHeadingEntryIntoForce`, and `…Next` with
+    the next state held), never "the state applying from".
+  - The dossier (`LiveDossier.jsx`): under "Applies from" such a row says "no date stated (entry into force: {date})", and
+    once under the table what the mark means (`dossier.entryIntoForceDate`, `dossier.entryIntoForceNote`).
+  - The search page (`LiveSearch.jsx`, #982's version line): "The act as published, entry into force on {date} (publisher)"
+    (`search.versionAsPublishedEntryIntoForce`); each hit carries `dateRole` (`search-answer.mjs`), each version group its
+    role (`actGroups`).
+  - The citation generator (`citation.mjs`): the usual form "{citation}, as published, entry into force on {date}" and the
+    evidence line "Version: the act as published, entry into force on {date} (publisher)"; the exact-reference phase reads
+    the usual form back (STATUS-DATA.md).
+  - The provenance page (`provenance.mjs`, `Provenance.jsx`, its preview): a state's thirteen row facts, state digest /2's
+    inputs, in rows (null said as not stated), and its heading by its role.
+- **Missing articles.** `reading-answer.mjs` reads each article's `document_position` and the state's `missing_articles`;
+  the reading says, inside the next quoted article and before its heading, "At this point, the publisher's document has an
+  article that this site does not hold in this version." (`reading.missingBefore`, `one` and `other`).
+- **The undated fold** (STATUS-DATA.md): a passage folded from several versions says "The same wording is in {count} other
+  version(s) this site searched." (`search.sameWording`).
+- **The cards read index 9's refusals.** `refusal-card.mjs` declares their optional members (`INTERVAL_KEYS`: the reason,
+  the named states, a hole's span, a closed end and the base act's facts; each ambiguous candidate's kind, interval, boundary
+  and text status; a textless state's fields), so a card is shown as before, never refused for an undeclared member; the
+  catalogue's worked examples carry them. Their own wording on the card is S7c's.
+- **The time-word guard** (`publisher-vocabulary.mjs`, `FORBIDDEN_TIME_WORDS`): "en vigueur" stays refused as a state and
+  over an interval; only the noun of the typed date, "entrée(s) en vigueur", gets through (the French review's point 1:
+  "entré en vigueur", "rentrée en vigueur", "est en vigueur", "la version en vigueur" stay refused; ten refused controls and
+  eight allowed ones in `compare-vocabulary.test.mjs`).
+- **French** (Decision 41): 11 forms reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the
+  owner's delegation in the addendum of 2026-10-18 "dates by role and missing articles" of `C:\lex-v3\lanes\fr-review\review.md`;
+  6 changed in review (the notice's "À cet endroit", since "ici" is this table's "on this site"; the dossier's cell answers its
+  column with "aucune date indiquée" and its note classifies the value rather than saying when the act applies; a semicolon
+  parts the act as published from its entry into force; "interrogées par ce site"), the English of four with them; 5 approved;
+  the forms are named in the header comment of `live-chrome-fr.mjs`. Its blocking points (the guard; a run of one missing
+  article threw) and point 3 (the exact references) are done; point 4 is S7b's and S7c's (below).
+- **Tests.** `web/test/date-role.test.mjs` (8): the role read and refused; the reading's heading, the dossier's mark and
+  note, the citation's two forms and the search's version line and folded line, in English, and the reading in French; every
+  form of the slice held to the time-word guard in both languages; a missing article said in place, and a run that does not
+  add up refused. Updated: `compare-vocabulary.test.mjs` (the guard's controls), `provenance.test.mjs` (the row facts' nulls).
+  `npm test` (rebased on 24118293, #985): 1,280 tests, 1,277 passed, 0 failed, 3 skipped (the browser tests, which run only with `LEX_BROWSER_TESTS=1`).
+- **Driver decisions (reversible).** The dossier's cell answers its column ("no date stated") rather than renaming the
+  column, which is right for every other row. The provenance page's labels are English, as the rest of that page's are. The
+  refusal payloads are flat rather than the card gaining structured members (STATUS-DATA.md).
+- **Review and repair (#987, 2026-10-19).** The web's findings, each with its test in `web/test/date-role.test.mjs` (now 14):
+  - **F3 (medium), today.** `luxembourgCurrent` (`citation.mjs`) and `answersToday` (`initial-answer.mjs`) took a state
+    as today's by its next held state alone, so a state after a closed end, or followed only by textless states, was
+    today's. `date-role.mjs` reads `applicable_to` (`readInterval`), and `holdsToday` asks both bounds: no later held state
+    on or before today, and on index 9 an end after today or none. Test: a closed state is not today's, an open one is, an
+    index 8 state is read as before; the citation's usual form of a closed state carries its version.
+  - **F5 (medium), R21 on default pages.** `reading.validityConflict` said "its state applies from" an entry into force: a
+    state so dated now gets `reading.validityConflictEntryIntoForce` on the reading, the pinned reading and the PDF (whose
+    "applying from" lines say "dated by its entry into force on" too). `search.dated` says index 9's rule. Test: the census
+    bundle's 49 conflicting articles rendered with the role; the repair's forms held to the guard in both languages.
+  - **F6's reason.** `radar-answer.mjs` reads `no_held_baseline` (no baseline, no candidates); `radar.reason.no_held_baseline`
+    says it. Test: the census radar row rendered with it, and refused if it names candidates.
+  - **F7 (low), the provenance heading.** Test: `stateHeading` follows the role in both renderers.
+  - **The History page (the coordinator's addition, from the S7b/S7c French review).** `history.carried`, `carriedIn` and
+    `absentRow` said an entry into force as "from {from}". `history-answer.mjs` reads the role on rows and absent states;
+    `LiveHistory.jsx` says the lineage's first row (whose date is `history_begins`) and an absent state so dated with
+    `history.carriedEntryIntoForce`, `carriedInEntryIntoForce` and `absentRowEntryIntoForce`. Test: the census history
+    rendered with the role on its row and an absent state, and as before without it. The table's date column stays S7b's.
+  - **French** (Decision 41): six forms, reviewed by the same reviewer in the addendum of 2026-10-19 "S7a's repair round (the
+    review of #987)" of `C:\lex-v3\lanes\fr-review\review.md`: the three of F5 and F6 changed in review (the English with
+    them: "son" tied to the act; "les dates de l’éditeur" and "ne détient pas le texte"; "pas de version de référence", since
+    an earlier held version may exist), the three of the History approved (5 strings; the reviewer's optional English "the
+    first being" taken). Named in the header comment of `live-chrome-fr.mjs`. The reviewer's point that `search.severalOnDate`
+    reads broader than what it counts on index 9 is left until index 9 serves such a case (not reached on derive-c).
+  - Pinned anew: `live-home.test.mjs` (the dated search's sentence), `radar-answer.test.mjs` (the reasons).
+  - `npm run build` and `npm test`: 1,288 tests, 1,285 passed, 0 failed, 3 skipped (the browser tests, which run only with
+    `LEX_BROWSER_TESTS=1`).
+- **Left to S7b and S7c** (the French review's point 4; the repair took `reading.validityConflict`, `search.dated`, the PDF's
+  "applying from" and the History's summary and absent rows): the Compare card's same-version note and sides,
+  the exports' item lines, the History table's column, and the dossier's state
+  span, which still say a state dated by its entry into force with application words; the refusal cards' own sentences for
+  the new reasons; the translation label on the reading.
 ## The legal pages name no person and give no contact: the owner's decision of 19 October (sole driver, 2026-10-19)
 
 **The owner's legal decision of 2026-10-19, made, and recorded as the owner's** (STATUS.md, the owner's decisions of

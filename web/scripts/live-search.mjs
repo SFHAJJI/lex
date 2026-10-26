@@ -142,6 +142,9 @@ export const LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES = Object.freeze({
 export const LIVE_SEARCH_HELD_ACT_REFUSAL_SENTENCES = Object.freeze({
   "lu-legilux": Object.freeze({
     version: "This site holds the act the reference names, but not the version it names, so nothing was opened and no word was searched.",
+    // `no_version_for_date` with the reason `outside_named_version`: the version named is held and another covers the date
+    // (the review of #987, F2), so "no state applies" would be false.
+    outside: "This site holds the act the reference names and the version it names, but that version does not cover that date, so nothing was opened and no word was searched.",
     article: "This site holds the act the reference names and the version the date selects, but no article of that version, so nothing was opened and no word was searched.",
   }),
   "eu-eurlex": Object.freeze({
@@ -154,9 +157,15 @@ export function referenceRefusalSentences(context) {
   return context?.publisher === "eu-eurlex" ? LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES : LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES;
 }
 
-/** The sentence table for a refusal of the phase: its publisher's, with the held act's sentence when the act is held. */
-function referenceTableFor(context, code, recognition) {
+/**
+ * The sentence table for a refusal of the phase: its publisher's, with the held act's sentence when the act is held, and,
+ * when the version a reference names is held and does not cover the date (`outside_named_version`), the sentence that says so.
+ */
+function referenceTableFor(context, code, recognition, reason = null) {
   const table = referenceRefusalSentences(context);
+  if (code === "no_version_for_date" && reason === "outside_named_version" && context?.publisher !== "eu-eurlex") {
+    return Object.freeze({ ...table, no_version_for_date: LIVE_SEARCH_HELD_ACT_REFUSAL_SENTENCES["lu-legilux"].outside });
+  }
   if (code !== "identifier_unknown" || recognition.heldAct === null) return table;
   const held = LIVE_SEARCH_HELD_ACT_REFUSAL_SENTENCES[context?.publisher === "eu-eurlex" ? "eu-eurlex" : "lu-legilux"];
   const sentence = held[recognition.heldVersion === null ? "version" : "article"];
@@ -251,7 +260,7 @@ export function actGroups(view) {
   return view.acts.map((act) => {
     const versions = new Map();
     for (const hit of view.hits.filter((candidate) => candidate.workKey === act.workKey)) {
-      const version = versions.get(hit.stateSha256) ?? { stateSha256: hit.stateSha256, applicabilityDate: hit.applicabilityDate, hits: [] };
+      const version = versions.get(hit.stateSha256) ?? { stateSha256: hit.stateSha256, applicabilityDate: hit.applicabilityDate, dateRole: hit.dateRole ?? null, hits: [] };
       version.hits.push(hit);
       versions.set(hit.stateSha256, version);
     }
@@ -344,7 +353,7 @@ export function searchOutcome(asked) {
     } catch (error) {
       return { state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(error.message)) };
     }
-    const table = recognition === null ? LIVE_SEARCH_REFUSAL_SENTENCES : referenceTableFor(asked.envelope.context, code, recognition);
+    const table = recognition === null ? LIVE_SEARCH_REFUSAL_SENTENCES : referenceTableFor(asked.envelope.context, code, recognition, payload?.reason ?? null);
     const sentence = code === "no_corpus_mounted"
       ? noCorpusMountedSentence(payload)
       : tableRefusalSentence(table, code, unexpectedRefusalSentence);

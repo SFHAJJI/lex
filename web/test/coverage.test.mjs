@@ -458,7 +458,7 @@ test("the two claims the platform refuses to make are gone, and its reasons are 
     assert.ok(/\d{4}-\d{2}-\d{2}/.test(body), "the page carries no calendar date at all");
 
     // And the platform's own two reasons, which are what stands in their place.
-    assert.ok(body.includes("history gives when each build ran"));
+    assert.ok(body.includes("history gives each build&#x27;s time") || body.includes("history gives each build's time"));
     assert.ok(body.includes("no observation time is held"));
     assert.ok(body.includes(answer.mounted.corpus_sha256));
     assert.ok(body.includes(answer.mounted.index_sha256));

@@ -48,6 +48,7 @@ public sealed class V3RefusalPayloadSamplesTests
         await ObserveUnmountedAsync(census);
         await ObserveReferenceListsAsync(census);
         await ObserveEuropeReferencesAsync(census);
+        await ObserveOutsideNamedVersionAsync(census);
         Assert.IsEmpty(census.Problems, "Scenarios that did not yield the refusal they name:\n" + string.Join("\n", census.Problems));
         var observed = census.Observed;
 
@@ -287,6 +288,20 @@ public sealed class V3RefusalPayloadSamplesTests
 
         // coverage
         await DriveAsync(observed, mount, "coverage", "a language not held", new { language = "eng" }, "language_not_available");
+    }
+
+    private static async Task ObserveOutsideNamedVersionAsync(Census observed)
+    {
+        // An exact reference whose ELI names one version (the act as published), at a date a later consolidation of the act
+        // covers: index 9's rules serve the consolidation, which the ELI does not name, so no_version_for_date says
+        // outside_named_version and names both (the review of #987: the web's card is held to this payload).
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await fixture.AddStateAsync("2025-01-01", "fr/xml", legalResourceLeaf: "consolide/20250101");
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        await DriveAsync(observed, mount, "search", "an ELI naming the act as published, at a date a later consolidation covers",
+            new { query = "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo, au 1er juin 2025", language = "fra" }, "no_version_for_date");
     }
 
     private static async Task ObserveRightsAsync(Census observed)

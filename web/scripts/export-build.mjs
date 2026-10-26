@@ -66,7 +66,9 @@ export const EUROPE_WITHOUT_TEXT = 'articles_without_text';
  * what the export as a whole carries (the snapshot's observation time, the rights rule, the corpus, index and registry
  * digests), so a row copied out alone loses none of it (review of #789). The last, `segments`, is the JSON of an article's
  * segments (content /3), empty for any other; it comes last so every column before it keeps its place under
- * `lex-v3-export/1` (the review of #981, F4).
+ * `lex-v3-export/1` (the review of #981, F4). After it, `date_role`: what `applies_from` is on index 9 (`applicability`,
+ * `applicability_in_file`, or `entry_into_force`, an act's entry into force, which the state does not apply from; R21), empty
+ * on an index of schema 8 or 6, which names none; appended, so every column before it keeps its place (the review of #987).
  */
 export const CSV_COLUMNS = Object.freeze([
   'work_key', 'language', 'applies_from', 'article', 'status', 'citation', 'citation_conventional', 'citation_with_permalink', 'citation_evidence', 'state_permalink',
@@ -74,6 +76,7 @@ export const CSV_COLUMNS = Object.freeze([
   'as_published', 'later_versions', 'authenticity',
   'observed_at', 'rights_rule', 'corpus_sha256', 'index_sha256', 'registry_sha256',
   'segments',
+  'date_role',
 ]);
 
 /**
@@ -159,6 +162,10 @@ export function composeExport({ view, pinned, observedAt }) {
         workKey: view.workKey,
         language: state.language,
         appliesFrom: state.applicabilityDate,
+        // A state dated by its entry into force, which the PDF never says as applying from it (R21; the review of #987).
+        datedByEntryIntoForce: state.dateRole === 'entry_into_force',
+        // The date's role (index 9; null on an index of schema 8 or 6): an entry into force is never said as applying (R21).
+        dateRole: state.dateRole ?? null,
         publisherId: article.publisherId,
         citation: article.permalink,
         citations: citationsOf(view, state, article, observedAt),
@@ -181,6 +188,8 @@ export function composeExport({ view, pinned, observedAt }) {
         workKey: view.workKey,
         language: state.language,
         appliesFrom: state.applicabilityDate,
+        datedByEntryIntoForce: state.dateRole === 'entry_into_force',
+        dateRole: state.dateRole ?? null,
         publisherId: entry.publisherId,
         // The article is held in its state, without text, so it is cited as any article of that
         // state is: the state's hash-pinned permalink and the publisher's article id as a last segment (R64).
@@ -325,6 +334,8 @@ export function exportJson(model) {
       work_key: item.workKey,
       language: item.language,
       applies_from: item.appliesFrom,
+      // Index 9 names what that date is (R21): an entry into force is a date of its own, never one the state applies from.
+      ...(item.dateRole === null ? {} : { date_role: item.dateRole }),
       article: item.publisherId,
       citation: item.citation,
       citation_forms: citationsJson(item.citations),
@@ -344,6 +355,7 @@ export function exportJson(model) {
       work_key: entry.workKey,
       language: entry.language,
       applies_from: entry.appliesFrom,
+      ...(entry.dateRole === null ? {} : { date_role: entry.dateRole }),
       article: entry.publisherId,
       citation: entry.citation,
       citation_forms: citationsJson(entry.citations),
@@ -463,6 +475,7 @@ export function exportCsv(model) {
       ...published,
       ...provenance,
       item.segments === null ? '' : JSON.stringify(segmentsJson(item.segments)),
+      item.dateRole ?? '',
     ]),
     ...model.excluded.map((entry) => [
       entry.workKey, entry.language, entry.appliesFrom, entry.publisherId, `excluded: ${entry.reason}`, entry.citation, ...citationsCsv(entry.citations), entry.statePermalink,
@@ -470,6 +483,7 @@ export function exportCsv(model) {
       ...published,
       ...provenance,
       '',
+      entry.dateRole ?? '',
     ]),
   ];
   return [CSV_COLUMNS, ...rows].map((row) => row.map(csvField).join(',')).join('\r\n') + '\r\n';

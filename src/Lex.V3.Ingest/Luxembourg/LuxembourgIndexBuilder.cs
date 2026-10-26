@@ -334,8 +334,9 @@ public sealed record LuxembourgIndexCoverage(
 
 /// <summary>
 /// One article's publisher-stated applicability date, or <c>null</c> where the publisher stated none
-/// for that article. Read from the article-level <c>scl:dateApplicability</c> the inventory retained;
-/// never derived from the state.
+/// for that article, or stated a value that is not one complete calendar date. Read from the
+/// article-level <c>scl:dateApplicability</c> the inventory retained
+/// (<see cref="LuxembourgIndexBuilder.ArticleApplicability"/>); never derived from the state.
 /// </summary>
 public sealed record LuxembourgIndexArticleDate(
     string ArticleIdentitySha256,
@@ -376,7 +377,8 @@ public sealed record LuxembourgIndexStateArticle(
     string? ApplicabilityDate,
     string Text,
     string TokensJson,
-    string ObjectRefSha256);
+    string ObjectRefSha256,
+    int? DocumentPosition = null);
 
 public sealed record LuxembourgIndexInboundCitation(
     string ArticleIdentitySha256,
@@ -517,7 +519,9 @@ public sealed record LuxembourgIndexObservedState(
     string ExpressionIri,
     string Language,
     string StateSha256,
-    IReadOnlyList<string> SourceBodySha256);
+    IReadOnlyList<string> SourceBodySha256,
+    string? TextStatus = null,
+    string? PublisherEnd = null);
 
 /// <summary>
 /// One observation of the index's event log: the build that observed (its corpus), the index whose log it carried
@@ -1382,7 +1386,8 @@ public static partial class LuxembourgIndexBuilder
             }
 
             var language = LanguageToken(member.LuxembourgRights.SelectedWemi.LanguageIri);
-            var date = ApplicabilityDate(article.Coordinate.PublisherApplicability);
+            // The article's own date as the index holds it: a calendar date the value states exactly, else none (D1).
+            var date = ArticleApplicability(article.Coordinate.PublisherApplicability).Date;
             projected.Add(new ArticleRow(
                 article.IdentitySha256,
                 objectRefSha256,
@@ -2244,16 +2249,66 @@ public static partial class LuxembourgIndexBuilder
         return stored;
     }
 
-    private static string? ApplicabilityDate(string? value)
+    /// <summary>The article states no <c>dateApplicability</c> of its own.</summary>
+    internal const string ArticleDateNone = "none";
+
+    /// <summary>The value is one calendar date written <c>yyyy-MM-dd</c> (ISO 8601's extended form, the xsd:date form).</summary>
+    internal const string ArticleDateExtended = "extended";
+
+    /// <summary>
+    /// The value is one calendar date written <c>yyyyMMdd</c>: ISO 8601's basic form of the same complete date, eight digits
+    /// with no separator, as the publisher writes the dates of its own ELI paths (<c>…/code/consommation/20220101</c>).
+    /// </summary>
+    internal const string ArticleDateBasic = "basic";
+
+    /// <summary>The value is in neither form, or names no day of the calendar: it gives no date.</summary>
+    internal const string ArticleDateNotRead = "not_a_calendar_date";
+
+    /// <summary>
+    /// An article's own applicability date as the index holds it, and how it was read from the value the publisher wrote.
+    /// </summary>
+    internal readonly record struct ArticleApplicabilityReading(string? Date, string Reading);
+
+    /// <summary>
+    /// Reads the article-level <c>scl:dateApplicability</c> the inventory retained verbatim (D1, 2026-10-26). A complete
+    /// calendar date in either of ISO 8601's two forms is that date, written <c>yyyy-MM-dd</c>: each names exactly one day,
+    /// and the basic form is one the publisher uses itself. Any other value (a partial date, a day the calendar does not
+    /// have, a time or a time zone, another notation) gives no date: the index never guesses one, and one article's value
+    /// never refuses the build. Run 15 holds 229,711 values in the extended form and 3 in the basic form
+    /// (<c>art_l_010-1</c> of three states of the Code de la consommation: <c>20220101</c>), and none in another; the value
+    /// as written stays in custody and in the article's identity, which hashes it.
+    /// </summary>
+    internal static ArticleApplicabilityReading ArticleApplicability(string? value)
     {
         if (value is null)
         {
-            return null;
+            return new(null, ArticleDateNone);
         }
+        if (CalendarDate(value, "yyyy-MM-dd") is { } extended)
+        {
+            return new(extended, ArticleDateExtended);
+        }
+        if (value.Length == 8 && value.All(char.IsAsciiDigit) && CalendarDate(value, "yyyyMMdd") is { } basic)
+        {
+            return new(basic, ArticleDateBasic);
+        }
+        return new(null, ArticleDateNotRead);
+    }
+
+    /// <summary>The value as <c>yyyy-MM-dd</c> when it is exactly one calendar day written in <paramref name="format"/>.</summary>
+    private static string? CalendarDate(string value, string format) =>
+        DateOnly.TryParseExact(value, format, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) &&
+        string.Equals(value, date.ToString(format, CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            ? date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            : null;
+
+    /// <summary>A catalogue date (a typed <c>xsd:date</c> assertion): one exact civil date, or the build refuses.</summary>
+    private static string CatalogueDate(string value)
+    {
         if (!DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture,
                 DateTimeStyles.None, out var date))
         {
-            throw new InvalidDataException("A publisher applicability value is not an exact civil date.");
+            throw new InvalidDataException("A publisher document date is not an exact civil date.");
         }
         return date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     }
@@ -2442,13 +2497,13 @@ public static partial class LuxembourgIndexBuilder
 
     private static string ExactDocumentDate(IEnumerable<string> values)
     {
-        var dates = values.Select(ApplicabilityDate).Distinct(StringComparer.Ordinal).ToArray();
-        if (dates.Length != 1 || dates[0] is null)
+        var dates = values.Select(CatalogueDate).Distinct(StringComparer.Ordinal).ToArray();
+        if (dates.Length != 1)
         {
             throw new InvalidDataException(
                 "A title subject has conflicting publisher document dates.");
         }
-        return dates[0]!;
+        return dates[0];
     }
 
     private static void BuildDatabase(
@@ -3214,6 +3269,16 @@ public sealed class LuxembourgIndexReader : IDisposable
     /// </summary>
     private string HeldOnly(string alias) => _version == 9 ? $" AND {alias}.text_status='held'" : string.Empty;
 
+    /// <summary>
+    /// Index 9's catalogue scope of a state row <c>s</c>: any text status; in a language, that language's rows, and in French the
+    /// rows naming no expression too (they stand in the French chain); of a work that holds a state in that scope, so a count
+    /// over it stays within the held population's works.
+    /// </summary>
+    private static string CatalogueScope(string? language) =>
+        (language is null ? string.Empty : " AND (s.language=$language OR ($language='fra' AND s.language=''))") +
+        " AND EXISTS (SELECT 1 FROM states h WHERE h.work_key=s.work_key AND h.text_status='held'" +
+        (language is null ? string.Empty : " AND h.language=$language") + ")";
+
     public SourceArtifactRef CorpusRef { get; }
 
     public long MemberCount => Count("members");
@@ -3611,10 +3676,12 @@ public sealed class LuxembourgIndexReader : IDisposable
     /// The work keys that have a state dated at or before <paramref name="date"/>, in ordinal work-key
     /// order, strictly after <paramref name="afterWorkKey"/> when one is given, at most
     /// <paramref name="take"/> of them. With a language, only that language's states count. Nothing is
-    /// selected here: which state applies is the caller's rule.
+    /// selected here: which state applies is the caller's rule. With <paramref name="catalogue"/> on index 9, every catalogue
+    /// state counts, held or textless (in French the states naming no expression too), of a work that holds a state in the
+    /// scope (<see cref="CatalogueScope"/>; the review of #987: a work whose textless state covers a date is a row of it).
     /// </summary>
     public IReadOnlyList<string> ResolveWorkKeysWithStateOnOrBefore(
-        string date, string? language, string? afterWorkKey, int take)
+        string date, string? language, string? afterWorkKey, int take, bool catalogue = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(date);
         ArgumentOutOfRangeException.ThrowIfLessThan(take, 1);
@@ -3622,8 +3689,8 @@ public sealed class LuxembourgIndexReader : IDisposable
         {
             using var command = _connection.CreateCommand();
             command.CommandText =
-                "SELECT DISTINCT s.work_key FROM states s WHERE s.applicability_date<=$date" + HeldOnly("s") +
-                (language is null ? string.Empty : " AND s.language=$language") +
+                "SELECT DISTINCT s.work_key FROM states s WHERE s.applicability_date<=$date" +
+                (catalogue && _version == 9 ? CatalogueScope(language) : HeldOnly("s") + (language is null ? string.Empty : " AND s.language=$language")) +
                 (afterWorkKey is null ? string.Empty : " AND s.work_key>$after") +
                 " ORDER BY s.work_key LIMIT $take";
             command.Parameters.AddWithValue("$date", date);
@@ -3746,16 +3813,19 @@ public sealed class LuxembourgIndexReader : IDisposable
         }
     }
 
-    /// <summary>How many works have a state dated at or before the date, in the language when one is given.</summary>
-    public long CountWorksWithStateOnOrBefore(string date, string? language)
+    /// <summary>
+    /// How many works have a state dated at or before the date, in the language when one is given; with
+    /// <paramref name="catalogue"/> on index 9, a catalogue state, as <see cref="ResolveWorkKeysWithStateOnOrBefore"/> reads them.
+    /// </summary>
+    public long CountWorksWithStateOnOrBefore(string date, string? language, bool catalogue = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(date);
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
             command.CommandText =
-                "SELECT COUNT(DISTINCT s.work_key) FROM states s WHERE s.applicability_date<=$date" + HeldOnly("s") +
-                (language is null ? string.Empty : " AND s.language=$language");
+                "SELECT COUNT(DISTINCT s.work_key) FROM states s WHERE s.applicability_date<=$date" +
+                (catalogue && _version == 9 ? CatalogueScope(language) : HeldOnly("s") + (language is null ? string.Empty : " AND s.language=$language"));
             command.Parameters.AddWithValue("$date", date);
             if (language is not null)
             {
@@ -4242,7 +4312,8 @@ public sealed class LuxembourgIndexReader : IDisposable
 
     /// <summary>
     /// Every article one state binds, with its publisher-minted id and wording digest, ordered by
-    /// publisher id then identity, in one query.
+    /// publisher id then identity, in one query; on index 9 each with its place in its publisher document
+    /// (<c>document_position</c>), in that order (<see cref="LuxembourgIndexQueries.StateArticlesNine"/>).
     /// </summary>
     public IReadOnlyList<LuxembourgIndexStateArticle> ResolveStateArticles(string stateSha256)
     {
@@ -4250,7 +4321,15 @@ public sealed class LuxembourgIndexReader : IDisposable
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
-            command.CommandText = LuxembourgIndexQueries.StateArticles;
+            if (_version == 9)
+            {
+                command.CommandText = LuxembourgIndexQueries.StateArticlesNine;
+            }
+            else
+            {
+                command.CommandText = LuxembourgIndexQueries.StateArticles;
+            }
+
             command.Parameters.AddWithValue("$digest", stateSha256);
             using var reader = command.ExecuteReader();
             var values = new List<LuxembourgIndexStateArticle>();
@@ -4261,10 +4340,44 @@ public sealed class LuxembourgIndexReader : IDisposable
                     reader.GetString(0), reader.GetString(1), WordingSha256(tokensJson),
                     reader.IsDBNull(3) ? null : reader.GetString(3),
                     reader.IsDBNull(4) ? null : reader.GetString(4),
-                    reader.GetString(5), tokensJson, reader.GetString(6)));
+                    reader.GetString(5), tokensJson, reader.GetString(6),
+                    _version == 9 ? reader.GetInt32(7) : null));
             }
             return Array.AsReadOnly(values.ToArray());
         }
+    }
+
+    /// <summary>
+    /// Each article's wording digest (<see cref="WordingSha256"/>), by article identity, for the identities asked, read by
+    /// primary key, as <see cref="ResolveArticleSearchableTexts"/> reads their texts; an identity the index does not hold is absent.
+    /// The undated search's fold reads it (S7a): hits of one work and publisher id with one wording are one.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ResolveArticleWordings(IReadOnlyList<string> articleIdentities)
+    {
+        ArgumentNullException.ThrowIfNull(articleIdentities);
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (articleIdentities.Count == 0)
+        {
+            return values;
+        }
+
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = """
+                SELECT article_identity_sha256, tokens_json
+                FROM articles
+                WHERE article_identity_sha256 IN (SELECT value FROM json_each($identities))
+                """;
+            command.Parameters.AddWithValue("$identities", JsonSerializer.Serialize(articleIdentities.Distinct(StringComparer.Ordinal).ToArray()));
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                values[reader.GetString(0)] = WordingSha256(reader.GetString(1));
+            }
+        }
+
+        return values;
     }
 
     /// <summary>The distinct publisher-minted article ids of one state, in ordinal order.</summary>
@@ -4797,7 +4910,15 @@ public sealed class LuxembourgIndexReader : IDisposable
     /// once held stays held (absence is not a withdrawal). Ordered by language, date and expression
     /// (<see cref="LuxembourgIndexQueries.WorkEventsUpTo"/>).
     /// </summary>
-    public IReadOnlyList<LuxembourgIndexObservedState> ResolveObservedStates(string workKey, long lastSeq)
+    public IReadOnlyList<LuxembourgIndexObservedState> ResolveObservedStates(string workKey, long lastSeq) =>
+        ResolveObservedStates(workKey, lastSeq, includeTextless: false);
+
+    /// <summary>
+    /// <see cref="ResolveObservedStates(string, long)"/>, and on index 9 with <paramref name="includeTextless"/> every state row
+    /// the log sighted, held or textless, each with the text status and the end the publisher states as its last event logged
+    /// them (log /3), so the interval rules select over the snapshot as they do over the mounted rows (S7a).
+    /// </summary>
+    public IReadOnlyList<LuxembourgIndexObservedState> ResolveObservedStates(string workKey, long lastSeq, bool includeTextless)
     {
         ArgumentException.ThrowIfNullOrEmpty(workKey);
         if (lastSeq < 0) throw new ArgumentOutOfRangeException(nameof(lastSeq));
@@ -4821,12 +4942,13 @@ public sealed class LuxembourgIndexReader : IDisposable
                     reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5)));
             }
 
-            // Until the interval rules land (S7a), as_observed reads the held states of the log, as before index 9.
+            // The held states of the log, as before index 9, unless every row is asked for (the interval rules, S7a).
             return Array.AsReadOnly(LuxembourgIndexBuilder.FoldLog(events, LogSchema).Values
-                .Where(static held => held.TextStatus is null || string.Equals(held.TextStatus, LuxembourgIndexBuilder.TextHeld, StringComparison.Ordinal))
-                .Select(static held => new LuxembourgIndexObservedState(
+                .Where(held => includeTextless || held.TextStatus is null || string.Equals(held.TextStatus, LuxembourgIndexBuilder.TextHeld, StringComparison.Ordinal))
+                .Select(held => new LuxembourgIndexObservedState(
                     held.WorkKey, held.ApplicabilityDate, held.ExpressionIri, held.Language, held.StateSha256,
-                    Array.AsReadOnly(held.SourceBodies.ToArray())))
+                    Array.AsReadOnly(held.SourceBodies.ToArray()),
+                    includeTextless ? held.TextStatus : null, includeTextless ? held.PublisherEnd : null))
                 .OrderBy(static held => held.Language, StringComparer.Ordinal)
                 .ThenBy(static held => held.ApplicabilityDate, StringComparer.Ordinal)
                 .ThenBy(static held => held.ExpressionIri, StringComparer.Ordinal)

@@ -26,6 +26,7 @@ public sealed class LuxembourgIndexQueryPlanTests
         ("AnchorArticles", LuxembourgIndexQueries.AnchorArticles,
             [("$states", "[\"" + Digest + "\"]"), ("$anchor", "art_1")], false),
         ("StateArticles", LuxembourgIndexQueries.StateArticles, [("$digest", Digest)], false),
+        ("StateArticlesNine", LuxembourgIndexQueries.StateArticlesNine, [("$digest", Digest)], false),
         ("ArticleIds", LuxembourgIndexQueries.ArticleIds, [("$digest", Digest)], false),
         ("StateSources", LuxembourgIndexQueries.StateSources, [("$state", Digest)], true),
         ("StateCitations", LuxembourgIndexQueries.StateCitations, [("$digest", Digest), ("$anchor", "art_1")], false),
@@ -646,7 +647,8 @@ public sealed class LuxembourgIndexQueryPlanTests
 
                 SqliteConnection.ClearAllPools();
                 using var connection = LuxembourgIndexBuilder.Open(copy, SqliteOpenMode.ReadOnly);
-                problems.AddRange(Queries.SelectMany(query =>
+                // An index 9 text (its name ends in Nine) reads columns schema 8 does not have, and the reader runs it on index 9 only.
+                problems.AddRange(Queries.Where(static query => !query.Name.EndsWith("Nine", StringComparison.Ordinal)).SelectMany(query =>
                     Problems(label, query.Name, Plan(connection, query.Sql, query.Parameters), query.ReadsMembers, stateIsSearched)));
                 problems.AddRange(HeldWorksProblems(label, Plan(connection, LuxembourgIndexQueries.HeldWorks, HeldWorksQuery.Parameters)));
                 problems.AddRange(StatesOfExpressionsProblems(label, Plan(connection, LuxembourgIndexQueries.StatesOfExpressions, StatesOfExpressionsQuery.Parameters)));

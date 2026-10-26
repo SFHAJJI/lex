@@ -13,7 +13,7 @@
 // expression's own language, because hardcoding French mislabels every EU expression and makes a
 // screen reader read English law in a French voice.
 
-import { REFUSAL_CARD_COPY, candidateView, validateRefusal } from '../scripts/refusal-card.mjs';
+import { REFUSAL_CARD_COPY, candidateView, reasonView, validateRefusal, versionNameKey } from '../scripts/refusal-card.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG, fillText } from '../scripts/live-chrome.mjs';
 import { permalinkHref } from '../scripts/permalinks.mjs';
 import { Say } from './LiveAnswer.jsx';
@@ -66,10 +66,17 @@ function AbsenceEvidence({ absence, copy }) {
 
 /** One offered state, in the card's words: its date, its hash as code, its publication and standing. */
 function Candidate({ candidate, copy }) {
-  const published = candidate.publicationDate === null ? copy.publicationNotStated : fillText(copy.published, { date: candidate.publicationDate });
+  // An act as published is "published" as an act, in a language that agrees the word (the French review of S7b and S7c).
+  const published = candidate.publicationDate === null
+    ? copy.publicationNotStated
+    : fillText(candidate.datedByEntryIntoForce ? copy.publishedAct : copy.published, { date: candidate.publicationDate });
+  // An act dated by its entry into force is offered as that, never as applicable from it (R21; index 9's candidate roles).
+  const template = candidate.datedByEntryIntoForce
+    ? (candidate.withdrawalStated ? copy.candidateEntryIntoForce : copy.candidateEntryIntoForceWithdrawalNotStated)
+    : (candidate.withdrawalStated ? copy.candidate : copy.candidateWithdrawalNotStated);
   return (
     <Say
-      template={candidate.withdrawalStated ? copy.candidate : copy.candidateWithdrawalNotStated}
+      template={template}
       values={{ validFrom: candidate.validFrom, hash: <code>{candidate.hashPrefix}</code>, published }}
     />
   );
@@ -88,13 +95,27 @@ function Payload({ parts, copy }) {
     <>
       {parts.structured.map((item) => (item.kind === 'candidates' ? (
         <ul className="refusal-candidates" key={item.key}>
-          {item.values.map(candidateView).map((candidate) => (
-            <li className="refusal-candidate" key={candidate.href}>
-              {/* A candidate is a permalink as the API mints it: linked under the page's own language (R61). */}
-              <a href={permalinkHref(candidate.href, CHROME_LOCALE)}>
-                <Candidate candidate={candidate} copy={copy} />
-              </a>
-            </li>
+          {item.values.map((value, index) => candidateView(value, item.dateRoles, item.places?.[index] ?? null)).map((candidate, index) => (
+            candidate.coordinate !== null ? (
+              // A state the catalogue names no expression of (index 9): named by its kind and role, with no link (the review of #987).
+              <li className="refusal-candidate" key={`${candidate.coordinate}#${index}`} data-candidate-unexpressed="">
+                <Say
+                  template={copy.candidateUnexpressed}
+                  values={{
+                    version: fillText(copy.versions[versionNameKey(candidate.version.kind, candidate.version.role)], { date: candidate.validFrom }),
+                    hash: <code>{candidate.hashPrefix}</code>,
+                  }}
+                />
+                {' ('}<code>{candidate.coordinate}</code>{')'}
+              </li>
+            ) : (
+              <li className="refusal-candidate" key={candidate.href}>
+                {/* A candidate is a permalink as the API mints it: linked under the page's own language (R61). */}
+                <a href={permalinkHref(candidate.href, CHROME_LOCALE)}>
+                  <Candidate candidate={candidate} copy={copy} />
+                </a>
+              </li>
+            )
           ))}
         </ul>
       ) : (
@@ -171,6 +192,10 @@ export function RefusalCard({ code, sentence, payload, governingText, handoff, c
         <code className="refusal-code">{card.code}</code>
       </p>
       {card.retryable ? <p className="refusal-retry">{copy.retry}</p> : null}
+      {/* Index 9's reasons and textless versions, in this page's words and the payload's values (S7c). */}
+      {(reasonView(card.code, card.payload, copy) ?? []).map((line) => (
+        <p className="refusal-reason" key={line.key} data-reason={line.key}>{line.text}</p>
+      ))}
       {card.note ? <p className="refusal-note">{copy.notes[card.code]}</p> : null}
       <AbsenceEvidence absence={card.absence} copy={copy} />
       <Payload parts={card.payloadParts} copy={copy} />

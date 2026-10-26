@@ -171,16 +171,25 @@ export const SAME_STATE_SENTENCE = closedTable({
 });
 
 /**
+ * The same sentence for a Luxembourg act as published dated by its entry into force (index 9's `date_role`, S7b; R21): its
+ * date is said as that, never as applicable from it, as the platform's note says it (`SameVersionNote`).
+ */
+export const SAME_STATE_ENTRY_INTO_FORCE_SENTENCE = (from) =>
+  `Both dates fall within the same version, the act as published, dated by its entry into force on ${from} (publisher)`;
+
+/**
  * The words R21 never says of a date or an interval, in any language: "in force" and "en vigueur", and "applied" with
  * every past form of the French "appliquer" ("appliqué", "appliquée", "s’appliquait", "qui s’y appliquaient",
  * "appliquèrent"), with or without "s’". R21's own words are not among them: "applicable", the publisher's for a
  * Luxembourg version, and the present "s’applique", "applies", "applying" and "appliquant", which say what applies on a
- * date asked and are no past interval; a typed publisher date (an end-of-force date, "date de fin de vigueur") is spoken
- * as its own value. Each word stands alone: no letter before or after it, in any script. It is matched against
- * `vocabularyText`, never against the raw text.
+ * date asked and are no past interval; a typed publisher date (an end-of-force date, "date de fin de vigueur", and an
+ * entry into force, "entry into force" and the noun "entrée(s) en vigueur": index 9's date role, S7a) is spoken as its own
+ * value, so "en vigueur" is refused except right after the word "entrée" or "entrées" (the French review of S7a; "entré en
+ * vigueur", "rentrée en vigueur" and "est en vigueur" stay refused). Each word stands alone: no letter before or after it, in
+ * any script. It is matched against `vocabularyText`, never against the raw text.
  */
 export const FORBIDDEN_TIME_WORDS =
-  /(?<!\p{L})(?:in force|en vigueur|applied|appliqu(?:é|ée|és|ées|ai|ais|ait|aient|a|as|âmes|âtes|èrent))(?!\p{L})/iu;
+  /(?<!\p{L})(?:in force|(?<!(?:^|[^\p{L}])entrées? )en vigueur|applied|appliqu(?:é|ée|és|ées|ai|ais|ait|aient|a|as|âmes|âtes|èrent))(?!\p{L})/iu;
 
 /**
  * A text as the vocabulary check reads it (the review of #964, which found each of these let through): composed to NFC,

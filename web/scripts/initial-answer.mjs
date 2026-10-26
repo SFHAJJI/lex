@@ -10,6 +10,7 @@
 
 import { anchorText, articlePermalink, currentAddress, dateOfQuery, pageOfQuery, parseSitePath, readingRequestFor } from './permalinks.mjs';
 import { isCalendarDate, luxembourgDateOrNull } from './temporal.mjs';
+import { holdsToday } from './date-role.mjs';
 
 /** The id of the data block that carries the answer a page was rendered from. */
 export const INITIAL_ANSWER_ID = 'lex-initial-answer';
@@ -124,7 +125,9 @@ export function answersToday(view, version, today) {
     if (version.nextDate === undefined) return false;
     return version.wordingDate <= today && (version.nextDate === null || version.nextDate > today);
   }
-  return version.applicabilityDate <= today && (version.nextApplicabilityDate === null || version.nextApplicabilityDate > today);
+  // On index 9 by the interval's end (`holdsToday`): a closed state, or an act followed only by states without text, is not
+  // what its readable address shows today, which refuses (the review of #987, F3).
+  return holdsToday(version, today);
 }
 
 /** Today in Luxembourg (R13) at an answer's own instant (`context.freshness.observed_at`), or null when it names none. */

@@ -76,7 +76,8 @@ const EN = Object.freeze({
     placeholder: "Search by title, number, ELI or CELEX, or words from the text",
     // What a Luxembourg search was asked at (R13: the date is printed), said of what this site holds (R21, R22, R76): the
     // latest held version applicable by the date, which for an act held only as published is that act as published.
-    dated: "Only Luxembourg acts were searched. For each, the latest version this site holds that is applicable from {date} or an earlier date (publisher) was searched, and an act with no such version was not. An act held only as published is searched as published, and may have been amended since.",
+    // What a dated search searched, by the interval rules (the review of #987, F5: the rule before index 9 is no longer the one).
+    dated: "Only Luxembourg acts were searched. For each, the version whose publisher dates cover {date} was searched; an act with no such version, or for which this site does not hold that version's text, was not. An act held only as published is searched as published, and may have been amended since.",
     undated: "Only Luxembourg acts were searched, with no date: every version this site holds was searched, and each result names its version's date.",
     // A search with no work named searches Luxembourg law alone, and its no-hit sentence says so.
     noHitLuxembourg: "No article of the Luxembourg text this server holds and may search contains “{query}”.",
@@ -132,6 +133,13 @@ const EN = Object.freeze({
     }),
     version: "Version applicable from {date} (publisher)",
     versionAsPublished: "The act as published, applicable from {date} (publisher)",
+    // An act dated by its entry into force (index 9's date_role, S7a; R21), and a passage an undated search folded the other
+    // versions holding its wording into.
+    versionAsPublishedEntryIntoForce: "The act as published, entry into force on {date} (publisher)",
+    sameWording: Object.freeze({
+      one: "The same wording is in {count} other version this site searched.",
+      other: "The same wording is in {count} other versions this site searched.",
+    }),
     // The plain no-hit card (the plan's item 4.5; R59, R90): which searches ran, that only exact matching ran and what that
     // means, the population searched (the line above), and the publishers' own search pages, as links only.
     searchesRun: "What was searched",
@@ -181,6 +189,30 @@ const EN = Object.freeze({
       other: "{count} expressions held, each shown with its original wording.",
     }),
     wordingDate: "Wording date",
+    // The span of the states when the first is the act as published dated by its entry into force (S7b; R21): every state so
+    // dated (one per language, all on one date), or the first so dated and the latest applying from its date; and the same in
+    // one language.
+    statesEntryIntoForce: Object.freeze({
+      one: "{count} state, the act as published, dated by its entry into force on {from} (publisher).",
+      other: "{count} states, the act as published in each of its languages, dated by its entry into force on {from} (publisher).",
+    }),
+    statesFromEntryIntoForce: "{count} states: the first, the act as published, dated by its entry into force on {from} (publisher); the latest applying from {to}.",
+    statesInEntryIntoForce: "{count} state in {language}, the act as published, dated by its entry into force on {from} (publisher).",
+    statesInFromEntryIntoForce: "{count} states in {language}: the first, the act as published, dated by its entry into force on {from} (publisher); the latest applying from {to}.",
+    // The publisher's catalogue between the versions (index 9's chain, S7b; its web S7c): the versions whose text is not held,
+    // each named as the refusal card names it, then the gaps, overlaps, same-date groups, unclear end days and invalid intervals.
+    chainHeading: "The publisher's catalogue between versions",
+    textlessHeading: "Versions whose text this site does not hold",
+    textlessRow: "{version}: {why}.",
+    gap: "From {from}, the end the publisher's catalogue gives for one version, to {to}, when the next begins, the catalogue lists no version: a gap this site does not fill.",
+    overlap: "From {from} to the day before {to}, two versions in the publisher's catalogue are both applicable (publisher).",
+    sameDate: "On {date}, the publisher's catalogue lists {count} versions.",
+    unclearEndDay: "{date} is the end the publisher's catalogue gives for one version, the day before the next begins; whether that day belongs to it is unclear, and this site gives it to neither.",
+    invalidInterval: "The version from {date} has an end in the publisher's catalogue, {to}, on or before its own start, so it covers no date; its own link still opens it.",
+    chainNote: "These are the dates of the publisher's catalogue as this site read it; a gap in the catalogue is not a gap in the law.",
+    // A state dated by its entry into force (S7a; R21), in the date column, and what that mark means, said once under the table.
+    entryIntoForceDate: "no date stated (entry into force: {date})",
+    entryIntoForceNote: "The mark “no date stated” means that the act's file states no exact applicability date; the date in brackets is the act's entry into force in the publisher's record, not an applicability date.",
   }),
   reading: Object.freeze({
     pinReplaced: "This link pins {pinned}, which is not the version this site serves for that date; the version it serves is shown below.",
@@ -211,11 +243,26 @@ const EN = Object.freeze({
     rightsIn: "Text served under {rights}. Read on {date} in {language}.",
     stateHeading: "{work}, {language}, the state applying from {from}",
     stateHeadingNext: "{work}, {language}, the state applying from {from} (the next state held applies from {next})",
+    // A state dated by its entry into force (index 9's date_role, S7a; R21): never said as applying from that date.
+    stateHeadingEntryIntoForce: "{work}, {language}, the act as published, dated by its entry into force on {from} (publisher)",
+    stateHeadingEntryIntoForceNext: "{work}, {language}, the act as published, dated by its entry into force on {from} (publisher) (the next state held applies from {next})",
+    // The places of the publisher's document before an article that its version holds no article at (S7a).
+    missingBefore: Object.freeze({
+      one: "At this point, the publisher's document has an article that this site does not hold in this version.",
+      other: "At this point, the publisher's document has {count} articles that this site does not hold in this version.",
+    }),
     counts: Object.freeze({
       one: "{count} article quoted, {withoutText} held without text, {notAdmitted} not admitted; {conflicts} with their own date differing from the state's.",
       other: "{count} articles quoted, {withoutText} held without text, {notAdmitted} not admitted; {conflicts} with their own date differing from the state's.",
     }),
     validityConflict: "This article's own date is {own}; its state applies from {state}.",
+    // The same for a state dated by its entry into force (R21; the review of #987, F5): never said as applying from it.
+    validityConflictEntryIntoForce: "This article's own date is {own}; its state is the act as published, dated by its entry into force on {state} (publisher).",
+    // S7c: an expression in another language than French that the publisher issued (index 9's translation_of; R18), and what a
+    // consolidated version or a code's version is and is not (the design's L5 caveat; spec 33 §3), with the act it consolidates.
+    translation: "This text is the publisher's {language} expression of the act, beside its French expression {french}. The publisher's record does not state which language version is authentic.",
+    consolidationCaveat: "A consolidated version is documentation without probative value. Only the texts published in the Journal officiel (Mémorial A) are authentic: the act as published, {act}, and the acts that amended it, whose list Lex does not yet hold.",
+    codeCaveat: "A version of a code is documentation without probative value: the authentic texts are the acts published in the Journal officiel (Mémorial A) that it brings together.",
     // Content /3 (S3b): the publisher's deleted wording, struck through, said to a screen reader at its start and end; the
     // sentence under an article that holds some; a note whose reference the publisher wrote without a marker.
     deletedWordingStart: "Wording the publisher marks deleted:",
@@ -288,6 +335,15 @@ const EN = Object.freeze({
       one: "Carried by {count} held state in {language}, from {from};",
       other: "Carried by {count} held states in {language}, from {from};",
     }),
+    // The lineage's first row dated by its entry into force (R21; the review of #987).
+    carriedEntryIntoForce: Object.freeze({
+      one: "Carried by {count} held state, the act as published, dated by its entry into force on {from} (publisher);",
+      other: "Carried by {count} held states, the first being the act as published, dated by its entry into force on {from} (publisher);",
+    }),
+    carriedInEntryIntoForce: Object.freeze({
+      one: "Carried by {count} held state in {language}, the act as published, dated by its entry into force on {from} (publisher);",
+      other: "Carried by {count} held states in {language}, the first being the act as published, dated by its entry into force on {from} (publisher);",
+    }),
     absent: Object.freeze({
       one: "{count} held state does not carry it.",
       other: "{count} held states do not carry it.",
@@ -303,6 +359,25 @@ const EN = Object.freeze({
     ownDateDiffers: "{date} (differs from the state's)",
     absentHeading: "Held states that do not carry {anchor}",
     absentRow: "{language}, from {from}: {permalink}",
+    absentRowEntryIntoForce: "{language}, the act as published, dated by its entry into force on {from} (publisher): {permalink}",
+    // Index 9's continuity breaks (S7b): the runs of dates no version whose text this site holds covers, each with why, the
+    // mark on a row after one, and what an unchanged wording across one does not say.
+    breaksHeading: "Dates no version with held text covers",
+    breakTo: "In {language}, from {from} to the day before {to}: {reasons}.",
+    breakOpen: "In {language}, from {from}, with no later version whose text this site holds: {reasons}.",
+    breakReasons: Object.freeze({
+      withheld_rights: "a version whose rights did not admit its text",
+      not_available_pdf: "a version whose publisher file is a PDF, which this site does not read",
+      not_available_derivation: "a version whose text could not be read from the publisher's file",
+      not_available_misfiled: "a version whose publisher file is another version's",
+      not_acquired: "a version this site did not acquire",
+      catalogue_hole: "a gap in the publisher's catalogue",
+      publisher_end_convention_unclear: "a day the publisher's catalogue leaves unclear between two versions",
+      publisher_interval_invalid: "a version whose end is on or before its start",
+      no_expression_in_language: "a version with no expression held in this language",
+    }),
+    afterBreak: "after dates no version with held text covers",
+    breaksNote: "No version whose text this site holds covers these dates, so an unchanged wording across them says nothing of them.",
   }),
   compare: Object.freeze({
     title: "Compare",
@@ -316,6 +391,9 @@ const EN = Object.freeze({
     sideTo: "To",
     side: "{side}: the state applying from {from}, {articles} articles, {conflicts} with their own date differing from the state's, {permalink}",
     sideNext: "{side}: the state applying from {from} (the next state held applies from {next}), {articles} articles, {conflicts} with their own date differing from the state's, {permalink}",
+    // A side dated by its entry into force (S7b; R21): the act as published, never "the state applying from" that date.
+    sideEntryIntoForce: "{side}: the act as published, dated by its entry into force on {from} (publisher), {articles} articles, {conflicts} with their own date differing from the state's, {permalink}",
+    sideEntryIntoForceNext: "{side}: the act as published, dated by its entry into force on {from} (publisher) (the next state held applies from {next}), {articles} articles, {conflicts} with their own date differing from the state's, {permalink}",
     counts: "{changed} changed, {added} added, {removed} removed, {unchanged} unchanged.",
     // Both dates select one state: said in the publisher's clock, never "applied" (R21; the plan's item 0.6).
     sameVersion: "Both dates fall within the same version, applicable from {from} (publisher).",
@@ -324,6 +402,10 @@ const EN = Object.freeze({
     // and the card names each, a version in the as-published block's form (`common.asPublished.consolidationFromTo`).
     sameTextHeld: "Both dates select the one text held, the act as published, applicable from {from} (publisher); later versions are not held.",
     sameTextHeldOfSeveral: "Both dates select the same text held, the act as published, applicable from {from} (publisher); no consolidated version is held.",
+    // The same three when that state is dated by its entry into force (S7b; R21), as the platform's note says them.
+    sameVersionEntryIntoForce: "Both dates fall within the same version, the act as published, dated by its entry into force on {from} (publisher).",
+    sameTextHeldEntryIntoForce: "Both dates select the one text held, the act as published, dated by its entry into force on {from} (publisher); later versions are not held.",
+    sameTextHeldOfSeveralEntryIntoForce: "Both dates select the same text held, the act as published, dated by its entry into force on {from} (publisher); no consolidated version is held.",
     betweenNamed: Object.freeze({
       one: "The publisher's record names, for this act, {count} consolidated version whose applicability date falls after {after} and on or before {onOrBefore}:",
       other: "The publisher's record names, for this act, {count} consolidated versions whose applicability dates fall after {after} and on or before {onOrBefore}:",
@@ -358,14 +440,19 @@ const EN = Object.freeze({
     windowMisses: "This window does not meet what this index holds.",
     windowMissesRange: "This window does not meet what this index holds, from {first} to {last}.",
     row: "{work}, {language}, from {from}: {verdict}. {permalink}",
+    // A row whose state is an act dated by its entry into force, said as that (R21; the review of #987), as History says it.
+    rowEntryIntoForce: "{work}, {language}, the act as published, dated by its entry into force on {from} (publisher): {verdict}. {permalink}",
     wording: Object.freeze({ changed: "wording changed", unchanged: "wording unchanged" }),
     compared: "{wording} from the state of {date}{baseline}: {changed} changed, {added} added, {removed} removed, {unchanged} unchanged",
     notCompared: "not compared: {reason}{named}",
+    // The same after a row naming the act as published (`rowEntryIntoForce`), a twin for a language that agrees it with "act".
+    notComparedAct: "not compared: {reason}{named}",
     reason: Object.freeze({
       first_held_state: "the first state this index holds for the work and language, so there is nothing to compare it with",
-      ambiguous_version: "several states of the work apply on this date, so none is compared",
+      ambiguous_version: "several states of the work cover this date, so none is compared",
       ambiguous_baseline: "several states apply on the date before it, so no baseline is chosen",
       profiles_differ: "this state and its baseline were read under different rule profiles, so they are not compared",
+      no_held_baseline: "the day before it is covered by no state whose text this site holds, so there is no baseline",
     }),
     named: "({label} {permalinks})",
     baseline: "baseline",
@@ -393,6 +480,8 @@ const EN = Object.freeze({
     snapshot: "Read on {date}, from the snapshot observed at {observedAt}. Corpus {corpus}, index {index}, registry {registry}.",
     item: "{article} ({language}, applying from {from}): {citation}, text digest {digest}, official source {source}",
     excluded: "{article} ({language}, applying from {from}): excluded, {reason}, {citation}",
+    itemEntryIntoForce: "{article} ({language}, the act as published, entry into force on {from}): {citation}, text digest {digest}, official source {source}",
+    excludedEntryIntoForce: "{article} ({language}, the act as published, entry into force on {from}): excluded, {reason}, {citation}",
     // An EU export's: its text is served with Decision 95's acknowledgement, and each article is dated as its wording is.
     europeRights: "Text served with the acknowledgement {acknowledgement}, which every exported article carries, and the authenticity statement below.",
     europeItem: "{article} ({language}, wording of {date}): {citation}, text digest {digest}, official source {source}",
@@ -759,6 +848,32 @@ const EN = Object.freeze({
       one: "{count} annex of the {language} wording is not served as text, and is never searched, quoted or exported: {reason}. Official source {source}.",
       other: "{count} annexes of the {language} wording are not served as text, and are never searched, quoted or exported: {reason}. Official source {source}.",
     }),
+    // The EU act's dates as the publisher records them in its dated statements (the plan's item 2.1; R79's E1, R21: each date a
+    // value of its own, said with its role; `europe-force-dates.mjs`), where the act is read or its dossier shown: the act's
+    // dates, never a wording's. A qualifier is the publisher's note in its own codes, said word for word and never translated.
+    europeForceDates: Object.freeze({
+      heading: "The publisher's dates this site holds for this act",
+      roles: Object.freeze({
+        entry_into_force: "Entry into force: {date}",
+        application: "Application: {date}",
+        end_of_validity: "End of validity, in whole or in part: {date}",
+        deadline: "Deadline: {date}",
+        signature: "Signature: {date}",
+        not_pinned: "A date with the publisher's code {code}, to which this site gives no role: {date}",
+      }),
+      notPinnedNoCode: "A date with no code from the publisher, to which this site gives no role: {date}",
+      openEnd: "End of validity: no date (the publisher records {date}, its mark of an open end)",
+      qualifier: "(the publisher's qualifier, word for word: {qualifier})",
+      roleNames: Object.freeze({
+        entry_into_force: "entry into force",
+        application: "application",
+        end_of_validity: "end of validity",
+        deadline: "deadline",
+      }),
+      notHeld: "Not held for this act: {roles}. The publisher's dated statements this site holds for it give no such date, which says nothing of whether the act has one.",
+      conflict: "The publisher records more than one entry into force for this act ({dates}): each is shown, and this site chooses none.",
+      notWording: "None of the dates above is used to choose a wording: each wording below carries its own date.",
+    }),
     // A Luxembourg act held only as first published (the plan's item 0.6, `as-published.mjs`): its label, what this site
     // holds of later versions, and the authenticity sentence of its case, with the act as published in {act}. The label
     // and the authenticity sentences are drafts pending the lawyer's read (the owner's item O4).
@@ -812,6 +927,8 @@ const EN = Object.freeze({
         amin: "Ministerial Decree of {date}",
       }),
       version: "{citation}, as applicable on {date}",
+      // A version dated by its entry into force (S7a; R21): said as that, never as applicable on it.
+      versionEntryIntoForce: "{citation}, as published, entry into force on {date}",
     }),
     europe: Object.freeze({
       article: "Article {number}",
@@ -841,6 +958,7 @@ const EN = Object.freeze({
       celex: "CELEX: {celex}",
       title: "Title (publisher): {title}",
       version: "Version: applicable from {date} (publisher)",
+      versionEntryIntoForce: "Version: the act as published, entry into force on {date} (publisher)",
       memorial: "Published in: Mémorial A No {number} of {year} ({iri})",
       memorialIri: "Published in: {iri}",
       memorialNotHeld: "Published in: the issue of the Mémorial A is not held by this index.",
