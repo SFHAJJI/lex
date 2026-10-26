@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-18 at 09:10 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-26 at 14:20 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -16,6 +16,9 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
   codes page by page, the reader of dated versions, quoted and struck-out wording, a lighter rebuild.
 - Still thin: Luxembourg has 1,730 acts as first published, no codes; EU text covers 511 of 1,170 versions. The codes
   (121,000 articles) and about 28,000 more articles wait for the rebuild on an Azure machine.
+- That rebuild ran on Azure on 19 October and stopped after 72 minutes: one article of the consumer code writes its
+  date 20220101, not 2022-01-01, and the build refused it. Fixed on 26 October: both ways of writing a full date are
+  read, and no article's date can stop a build again. The rebuild can run again from the same inputs.
 
 ## The plan
 
