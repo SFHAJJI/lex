@@ -70,17 +70,17 @@ Updated 2026-10-26.
   old fallback put back it refuses with D1's sentence (run once to check). The unit test of `TitleDocumentDate` takes the
   new rule (`ATitleIsDatedByItsSubjectThenItsWorkThenItsLegalResourceAndNeverByItsArticle`). No census pin moved.
 - **Measured** (Windows, no browser, no publisher traffic, no Azure, custody read only; rebased on 8958ec5f, #987 merged):
-  - `dotnet build Lex.V3.slnx -c Release`: 0 warnings, 0 errors (and `--no-incremental` before the rebase).
-  - `Lex.V3.Ingest.Tests`, targeted while the opening release held the PC: the new class, the index builder and catalogue
-    states, the censuses: 96 (96 passed); the three samples classes (unchanged, so not re-rendered), the legacy schema 8 and 6
-    mounts (their recorded answers replayed unchanged) and the article-date class: 39 (38 passed, 1 skipped: the env-gated
-    recorder); the re-derivation, content /3's mount, the interval, continuity, resolve, coverage and search mounts and
-    index-9 serving: 145 (145 passed).
-  - The probe over run 15 as above (before the rebase; the rebase changed no projection code).
+  - `dotnet build Lex.V3.slnx -c Release --no-incremental` at 7152de65: 0 warnings, 0 errors.
+  - `Lex.V3.Tests` whole: 3,329 (3,323 passed, 0 failed, 6 skipped).
+  - `Lex.V3.Ingest.Tests` whole, once: 3,493 (3,452 passed, 0 failed, 41 skipped: every one an opt-in probe, a live canary or
+    an env-gated writer). It holds the censuses, the three samples classes (unchanged, so not re-rendered) and the legacy
+    schema 8 and 6 mounts (their recorded answers replayed unchanged).
+  - The probe over run 15 at 7152de65: the same rows and the same index as before the rebase (`f407c05c…`, 1,378,668,544
+    bytes, 1,544 cells), no row refused, the reader and the log's source bodies verified, the second write byte-identical,
+    0 failures; 11.4 minutes, peak working set 4.4 GiB.
   - `eng/verify-v3-tree.ps1`: 1,689 tracked paths.
-  - Not yet run, waiting for the PC: `Lex.V3.Tests` whole, the wider Ingest set and the probe at this head.
-- **Not done here.** D1's rerun (Azure, once the probe is clean at this head); index /10; any memory change (both D1 runs
-  peaked in R0's replay at minute 39 to 41).
+- **Not done here.** D1's rerun (on Azure at 7152de65, started once the probe was clean); index /10; any memory change (both
+  D1 runs peaked in R0's replay at minute 39 to 41).
 
 ## #987 brought up to date with v3/integration, and the D1 fix folded in (sole driver, 2026-10-26)
 
