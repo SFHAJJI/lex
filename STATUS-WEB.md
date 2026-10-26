@@ -27,9 +27,11 @@ privacy notice says it. One slice on `writer/legal-no-person`, stacked on `write
   18 and 21), the CNPD's postal address, and the objection; the terms' "Reporting an error"; the accessibility statement's "Reporting a
   barrier" and "published by a private person". With no contact, no e-mail is received or kept, so the 12 months apply to
   nothing (superseded, above).
-- **What each page says now** (`live-chrome.mjs`, `live-chrome-fr.mjs`; "Last updated: 19 October 2026"):
-  - **legal notice:** what Lex is (an independent, non-commercial tool for reading Luxembourg and EU law over time: a text
-    as it stood on the date you choose, and how it changed; free, no advertising, no account) and R50's sentence; no
+- **What each page says now** (`live-chrome.mjs`, `live-chrome-fr.mjs`; "Last updated: 26 October 2026", since the
+  review's qualifier below; 19 October before it):
+  - **legal notice:** what Lex is (an independent, non-commercial tool for reading Luxembourg and EU law over time: for the
+    texts and dates it holds, a text as it stood on the date you choose, and how it changed; free, no advertising, no
+    account) and R50's sentence; no
     official status (not a service of the State, the Service central de législation or the Publications Office, none of
     which endorses it) and the authenticity line, then "where a text on Lex differs from its official publication, the
     official publication prevails"; the sources and licences (Legilux under CC BY 4.0, for the files whose own records
@@ -129,6 +131,25 @@ privacy notice says it. One slice on `writer/legal-no-person`, stacked on `write
   "n’écrit rien" and "ce qu’il écrit"); `eng/verify-v3-tree.ps1` passes (1,662 tracked paths: the data file removed). A
   whole `Lex.V3.Ingest.Tests` run was started for good measure and stopped unfinished after about 20 minutes, because it
   held the build's files; the classes above ran in its place, as the brief asks.
+- **Review (#990)**, one round, by the other model family: MERGE, with four non-blocking notes, each taken with a test.
+  Rebased first on #989's repair (1e8c4276): `deploy.ps1` kept this branch's wording and the repair's
+  `@(if ($Public) { '--opening' })`; this file kept both sections; `deploy-run.test.mjs`'s F1 case now fails a `-Public`
+  candidate on a legal page with an e-mail address (what `legalPageTextFailures` says of it), not a placeholder.
+  - **N1:** the opening's fail-closed test adds a 302 to a clean legal page of the site and a 308 to another site.
+  - **N2:** `SHOWN_NOWHERE` reads Unicode (`u`), and a `mailto:`/`tel:` or a postcode counts only at a word's edge in
+    any script (lookarounds on letters, marks, digits and "_"): `u` alone keeps `\b` ASCII's, so "Hôtel:" still said
+    "tel:". `shownOnPage("Hôtel: rue")` now finds nothing.
+  - **N3:** the legal notice's "what Lex is" says "for the texts and dates it holds", as the terms do; the five texts'
+    "Last updated" is 26 October 2026.
+  - **N4:** the 404 page ships the search's script, which redraws the strip from an answer, so it keeps the as-built
+    line; the pages that ship none (the ten legal pages, the two maintenance pages, `locale-de.html` and
+    `locale-lb.html`) never have an answer, and their strip now says so (`freshness.noAnswer`, `Document`'s `answers`).
+  - **French:** the 2 forms (N3, N4), by one independent reviewer (Claude, AI reviewer, not the author), in the
+    addendum of 2026-10-26: both approved as drafted, no English change. Its note for the owner: "how it changed" reads,
+    for an EU act, as its successive wordings (`home.intro` says the same).
+  - **Measured** (no browser, no Azure, no publisher): `npm run build`, then a plain `npm test`: 1,324 tests, 1,321
+    passed, 3 skipped (they start a browser); the deploy tests 49 of 49; `eng/verify-v3-tree.ps1` passes (1,665 tracked
+    paths); `dotnet build Lex.V3.slnx -c Release`, 0 warnings, 0 errors; `Lex.V3.Tests` 3,327, 3,321 passed, 6 skipped.
 
 ## Four web slices in one pull request, and the owner's decisions of 19 October (sole driver, 2026-10-19)
 
