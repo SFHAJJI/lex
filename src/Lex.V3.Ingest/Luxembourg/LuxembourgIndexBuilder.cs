@@ -1450,8 +1450,9 @@ public static partial class LuxembourgIndexBuilder
                     .ToArray(),
                 StringComparer.Ordinal);
         var bodies = new List<CatalogueBody>();
-        foreach (var (objectRefSha256, outcome) in inputs.Inventory)
+        foreach (var input in inputs.Inventory)
         {
+            var (objectRefSha256, outcome) = (input.ObjectRefSha256, input.Outcome);
             if (!memberByObject.TryGetValue(objectRefSha256, out var member) || member.LuxembourgRights is not { } rights)
             {
                 states = [];
@@ -3075,17 +3076,34 @@ public static partial class LuxembourgIndexBuilder
 
     /// <summary>
     /// One legal-content outcome, with its body's object reference digest and the inventory it read. The article is read only
-    /// when the outcome is admitted (or marker-only) in an acquired member.
+    /// when the outcome is admitted (or marker-only) in an acquired member. A holder, not a positional record, so it opens no
+    /// door to the guarded article and inventory (the construction census).
     /// </summary>
-    internal sealed record ProjectionContent(
-        string ObjectRefSha256,
-        string SemanticIdentitySha256,
-        LuxembourgAknLegalContentDisposition Disposition,
-        LuxembourgAknLegalContentArticle? Article,
-        LuxembourgAknArticleInventory? Inventory);
+    internal sealed class ProjectionContent(
+        string objectRefSha256,
+        string semanticIdentitySha256,
+        LuxembourgAknLegalContentDisposition disposition,
+        LuxembourgAknLegalContentArticle? article,
+        LuxembourgAknArticleInventory? inventory)
+    {
+        internal string ObjectRefSha256 { get; } = objectRefSha256;
 
-    /// <summary>One inventory outcome, with its body's object reference digest.</summary>
-    internal readonly record struct ProjectionInventory(string ObjectRefSha256, LuxembourgAknArticleInventoryOutcome Outcome);
+        internal string SemanticIdentitySha256 { get; } = semanticIdentitySha256;
+
+        internal LuxembourgAknLegalContentDisposition Disposition { get; } = disposition;
+
+        internal LuxembourgAknLegalContentArticle? Article { get; } = article;
+
+        internal LuxembourgAknArticleInventory? Inventory { get; } = inventory;
+    }
+
+    /// <summary>One inventory outcome, with its body's object reference digest; a holder, as <see cref="ProjectionContent"/> is.</summary>
+    internal sealed class ProjectionInventory(string objectRefSha256, LuxembourgAknArticleInventoryOutcome outcome)
+    {
+        internal string ObjectRefSha256 { get; } = objectRefSha256;
+
+        internal LuxembourgAknArticleInventoryOutcome Outcome { get; } = outcome;
+    }
 
     /// <summary>One typed assertion: its predicate and its <c>work_facts</c> row.</summary>
     internal readonly record struct ProjectionAssertion(
