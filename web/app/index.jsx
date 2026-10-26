@@ -7,6 +7,7 @@
 
 export { Document, SyntheticBanner, SYNTHETIC_MARKER, SiteFooter, SiteHeader, LIVE_MARKER } from './Document.jsx';
 export { renderDocument } from './render-document.mjs';
+export { FRESHNESS_STRIP_ID, FreshnessStrip, FreshnessStripSlot, STALENESS_BANNER_ID, StalenessBanner, StalenessBannerSlot } from './Freshness.jsx';
 export { RefusalCard, Mark } from './RefusalCard.jsx';
 export { Dossier } from './Dossier.jsx';
 export { CSP_DIRECTIVES, FORBIDDEN_SOURCES, cspValue } from '../scripts/csp.mjs';
@@ -30,16 +31,21 @@ export { LocaleNav, localeHome, localeHref } from './LocaleNav.jsx';
 export { renderLiveLocaleUnavailablePage } from './live-locale-page.jsx';
 export { renderLiveNotFoundPage } from './live-not-found-page.jsx';
 export { renderLiveMaintenancePage } from './live-maintenance-page.jsx';
+export {
+  LegalPageBody, legalValues, renderLiveAccessibilityPage, renderLiveCookiesPage, renderLiveLegalNoticePage, renderLiveLegalPage,
+  renderLivePrivacyPage, renderLiveTermsPage,
+} from './LegalPage.jsx';
 export { LiveSearch, SEARCH_VARIANTS, SearchAnswerView, SearchResultsView, SearchWorkResolution } from './LiveSearch.jsx';
 export { LIVE_SEARCH_ROOT, LiveSearchRoot, liveSearchTree, renderLiveSearchPage } from './live-search-page.jsx';
 export { CoverageLine, HomeLinks, LiveHome } from './LiveHome.jsx';
+export { TodayHint, TodayLine, useLuxembourgToday } from './Today.jsx';
 export { LIVE_HOME_ROOT, liveHomeTree, renderLiveHomePage } from './live-home-page.jsx';
 export { DossierAnswerView, DossierTitles, DossierView, EuropeDossierView, LiveDossier } from './LiveDossier.jsx';
 export { LIVE_DOSSIER_ROOT, liveDossierTree, renderLiveDossierPage } from './live-dossier-page.jsx';
 export { LiveReading, ReadingAnswerView, ReadingView, readingHolds } from './LiveReading.jsx';
 export { FailureFrame, OfficialSites, Permalink, TableRegion } from './LiveAnswer.jsx';
 export { LIVE_READING_ROOT, liveReadingTree, readingLawPath, readingTitle, renderLiveReadingPage } from './live-reading-page.jsx';
-export { ArticleNotHeld, Citations, PageNotHeld, PinnedLead, citedArticle, citedTitle, versionShown } from './PinnedReading.jsx';
+export { ArticleNotHeld, Citations, NotToday, PageNotHeld, PinnedLead, citedArticle, citedTitle, versionShown } from './PinnedReading.jsx';
 export { HistoryAnswerView, HistoryView, LiveHistory } from './LiveHistory.jsx';
 export { LIVE_HISTORY_ROOT, liveHistoryTree, renderLiveHistoryPage } from './live-history-page.jsx';
 export { CompareAnswerView, CompareView, LiveCompare } from './LiveCompare.jsx';

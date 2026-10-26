@@ -175,10 +175,32 @@ internal sealed class V3PlatformHost
     {
     }
 
-    internal V3PlatformHost(IV3PlatformSchemaDocuments schemas)
+    internal V3PlatformHost(IV3PlatformSchemaDocuments schemas, string? servingRuntimeSourceCommit = null)
     {
         _schemas = schemas ?? throw new ArgumentNullException(nameof(schemas));
+        ServingRuntimeSourceCommit = servingRuntimeSourceCommit is null || V3Commits.IsCommit(servingRuntimeSourceCommit)
+            ? servingRuntimeSourceCommit
+            : throw new ArgumentException("A source commit is 40 lowercase hexadecimal digits.", nameof(servingRuntimeSourceCommit));
     }
+
+    /// <summary>
+    /// A host whose every answer names <paramref name="servingRuntimeSourceCommit"/> as the commit its service runs (R23,
+    /// "service running"): the server passes the commit its own build stamped (<see cref="StampedServingRuntimeSourceCommit"/>);
+    /// a host made without one names none, as a test's or a census's handler does, so their answers hold from commit to commit.
+    /// </summary>
+    internal V3PlatformHost(string? servingRuntimeSourceCommit)
+        : this(V3PlatformSchemaDocuments.Reviewed, servingRuntimeSourceCommit)
+    {
+    }
+
+    /// <summary>The commit every answer of this host names as the one its service runs, or null when it names none.</summary>
+    internal string? ServingRuntimeSourceCommit { get; }
+
+    /// <summary>
+    /// The commit this server was built from, as the SDK stamped it in the API assembly's informational version (after its
+    /// <c>+</c>); null for a build that stamped none (a build outside a checkout).
+    /// </summary>
+    internal static string? StampedServingRuntimeSourceCommit { get; } = V3Commits.StampedIn(typeof(V3PlatformHost).Assembly);
 
     public Task WriteRestSuccessAsync(
         HttpResponse response,
@@ -459,7 +481,7 @@ internal sealed class V3PlatformHost
         var envelope = _builder.Success(
             requestReference,
             operation.OperationId,
-            context,
+            context.WithServingRuntimeSourceCommit(ServingRuntimeSourceCommit),
             result.Verdict,
             result.Schema,
             result.ObjectType,
@@ -517,7 +539,7 @@ internal sealed class V3PlatformHost
         var envelope = _builder.Refusal(
             requestReference,
             operation.OperationId,
-            context,
+            context.WithServingRuntimeSourceCommit(ServingRuntimeSourceCommit),
             refusal.Schema,
             refusal.Code,
             refusal.HelpfulPayload);

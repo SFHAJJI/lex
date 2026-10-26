@@ -17,6 +17,9 @@ import {
   EU_SEARCH_ON_FIXTURE,
   EU_SEARCH_PHRASE,
   EU_SEARCH_STEP,
+  KEPT_SEARCH_STEP,
+  NOT_FOUND_STEP,
+  addressExpectations,
   HISTORY_ANCHOR,
   READING_LANGUAGE,
   JOURNEY_STEPS,
@@ -24,6 +27,7 @@ import {
   answerCitations,
   verifyEvidence,
   bodyOn,
+  endAddressesOf,
   frontDoorOf,
   journeyStepsFor,
   NOT_ADVICE_SAID,
@@ -153,6 +157,9 @@ test("each way a run can fail is a failure, named", () => {
     .some((failure) => /does not name the refusal no_corpus_mounted/.test(failure)));
 });
 
+/** Where a step's page ends on `today` (`endAddressesOf`): its path, with what the page writes into its own address. */
+const endOf = (step, today = todayInLuxembourgAt(Date.now())) => `${ORIGIN}${endAddressesOf(step, [today])[0]}`;
+
 function goodSearch() {
   return {
     ...good(),
@@ -168,7 +175,7 @@ function goodSearch() {
         postData: JSON.stringify(JOURNEY_STEPS.search.body),
       },
     ],
-    location: `${ORIGIN}/en/search.html`,
+    location: endOf(JOURNEY_STEPS.search),
     history: { atLoad: 2, atEnd: 2, state: "null" },
     cookie: "",
   };
@@ -185,6 +192,10 @@ test("each way a search run can fail is a failure, named", () => {
     ["another body", (o) => { o.requests[2].postData = JSON.stringify({ operation_id: "search", parameters: { query: SEARCH_PHRASE, language: "fra", echo: 1 } }); }, /body was .*echo/],
     ["no body observed", (o) => { delete o.requests[2].postData; }, /body was not observed/],
     ["the phrase in the address", (o) => { o.location = `${ORIGIN}/en/search.html?query=x`; }, /ended at .*\?query=x/],
+    // The search after "#" (R109; the plan's item 3.5): kept there, and the one the page asked.
+    ["the search not kept in the address", (o) => { o.location = `${ORIGIN}/en/search.html`; }, /ended at .*search\.html, not .*#q=/],
+    ["another search kept", (o) => { o.location = `${ORIGIN}/en/search.html#q=x&lang=fra`; }, /ended at .*#q=x&lang=fra, not/],
+    ["the phrase in the query beside it", (o) => { o.location = `${o.location.replace("#", "?q=x#")}`; }, /ended at .*\?q=x#/],
     ["the coverage operation", (o) => { o.requests[2].url = `${ORIGIN}/api/v3/coverage`; }, /not POST \/api\/v3\/search/],
     ["a text missing", (o) => { o.text = "nothing"; }, /does not show "4 with the exact phrase"/],
     ["two searches", (o) => { o.requests.push({ ...o.requests[2] }); }, /2 requests to the API/],
@@ -219,7 +230,7 @@ function goodHome(today = todayInLuxembourgAt(Date.now())) {
   run.requests[0].url = `${ORIGIN}/en/`;
   run.requests[1].url = `${ORIGIN}/en/client-live-home.js`;
   run.requests[2].postData = JSON.stringify(bodyOn(JOURNEY_STEPS.home.body, today));
-  run.location = `${ORIGIN}/en/`;
+  run.location = endOf(JOURNEY_STEPS.home, today);
   run.todays = [today];
   run.frontDoor = { coverageLine: "counted", dateField: today, facts: true };
   run.firstScreen = { height: 640, inputFirst: true, input: 333, statement: 591 };
@@ -388,7 +399,7 @@ test("a permalink run passes when its page shows the pinned state with the artic
       { url: `${ORIGIN}/en/client-live-reading.js`, method: "GET", headers: {} },
       { url: `${ORIGIN}/api/v3/evidence_bundle`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(step.body) },
     ],
-    location: `${ORIGIN}${step.path}`,
+    location: endOf(step),
     text: "49 articles quoted",
     pinReplaced: false,
     inView: "shown",
@@ -424,7 +435,7 @@ test("a permalink run checks the cited article's evidence form: verify confirms 
       { url: `${ORIGIN}/en/client-live-reading.js`, method: "GET", headers: {} },
       { url: `${ORIGIN}/api/v3/evidence_bundle`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(step.body) },
     ],
-    location: `${ORIGIN}${step.path}`,
+    location: endOf(step),
     text: "49 articles quoted",
     pinReplaced: false,
     inView: "shown",
@@ -469,7 +480,7 @@ test("a stale permalink run passes when it is refused, and its page says, in vie
       { url: `${ORIGIN}${step.path.split("#")[0]}`, method: "GET", headers: {} },
       { url: `${ORIGIN}/api/v3/evidence_bundle`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(step.body) },
     ],
-    location: `${ORIGIN}${step.path}`,
+    location: endOf(step),
     text: "This link pins …, which is not the version this site holds for that date; the version it holds is … pinned_digest_mismatch",
     pinReplaced: false,
     pinNotHeld: true,
@@ -505,7 +516,7 @@ test("a readable address run passes when its page shows the article it names fir
       { url: `${ORIGIN}${step.path}`, method: "GET", headers: {} },
       { url: `${ORIGIN}/en/client-live-reading.js`, method: "GET", headers: {} },
     ],
-    location: `${ORIGIN}${step.path}`,
+    location: endOf(step),
     text: "Quoted from loi-1991-08-10-n3, fra, the state applying from 2024-02-01. 49 articles quoted",
     inView: "shown",
     targetFocused: true,
@@ -533,7 +544,7 @@ test("a page at a law's address the server renders asks nothing as it loads and 
       { url: `${ORIGIN}${step.path.split("#")[0]}`, method: "GET", headers: {} },
       { url: `${ORIGIN}/en/client-live-reading.js`, method: "GET", headers: {} },
     ],
-    location: `${ORIGIN}${step.path}`,
+    location: endOf(step),
     text: "49 articles quoted",
     pinReplaced: false,
     inView: "shown",
@@ -567,7 +578,7 @@ test("a law's page names as canonical the address it shows in its own interface 
   const observed = (change = {}) => ({
     ...goodSearch(),
     requests: [{ url: `${ORIGIN}${step.path}`, method: "GET", headers: {} }],
-    location: `${ORIGIN}${step.path}`,
+    location: endOf(step),
     text: "49 articles quoted",
     pinReplaced: false,
     inView: "shown",
@@ -931,6 +942,37 @@ test("a run whose page the API served is held to the headers the page arrived wi
   assert.deepEqual(journeyVerdict({ ...opened, robots: [] }, { ...expected, searchEngines: "indexed" }), []);
 });
 
+test("a page ends at its own address with what it writes there: a search after #, a readable address's date (plan 3.4, 3.5)", () => {
+  const phrase = "#q=assembl%C3%A9e%20g%C3%A9n%C3%A9rale&lang=fra";
+  assert.deepEqual(endAddressesOf(JOURNEY_STEPS.search, ["2026-10-18"]), [`/en/search.html${phrase}`], "the search kept after #, undated");
+  // The home page's search is dated today: either of a run's two days, across midnight in Luxembourg.
+  assert.deepEqual(endAddressesOf(JOURNEY_STEPS.home, ["2026-10-24", "2026-10-25"]), [`/en/${phrase}&date=2026-10-24`, `/en/${phrase}&date=2026-10-25`]);
+  assert.deepEqual(endAddressesOf(EU_SEARCH_STEP, ["2026-10-18"]), ["/en/search.html#q=personal%20data&lang=eng&work=32016R0679"], "the work named");
+  // The 404 page's box keeps nothing; a page opened at a kept search stays there.
+  assert.deepEqual(endAddressesOf(NOT_FOUND_STEP, ["2026-10-18"]), ["/en/no-such-page"]);
+  assert.deepEqual(endAddressesOf(KEPT_SEARCH_STEP, ["2026-10-18"]), [`/en/search.html${phrase}`]);
+  // An act's readable address ends with the date it read the act at; one that keeps a date keeps it; a permalink names its own.
+  // The readable address step asks the date it was made on (`journeyStepsFor`'s `today`), the date its page writes back.
+  assert.deepEqual(endAddressesOf(JOURNEY_STEPS.current, ["2026-10-18"]), [`${JOURNEY_STEPS.current.path}?date=${JOURNEY_STEPS.current.body.parameters.date}`]);
+  const madeOn = journeyStepsFor({ identifier: "/lu-legilux/x", date: "2024-02-01", anchor: "art_1", today: "2026-10-25" }).current;
+  assert.deepEqual(endAddressesOf(madeOn, ["2026-10-24"]), ["/en/lu-legilux/x/fra/art_1?date=2026-10-25"]);
+  const kept = { ...JOURNEY_STEPS.current, path: `${JOURNEY_STEPS.current.path}?date=2024-02-01`, body: { ...JOURNEY_STEPS.current.body, parameters: { ...JOURNEY_STEPS.current.body.parameters, date: "2024-02-01" } } };
+  assert.deepEqual(endAddressesOf(kept, ["2026-10-18"]), [kept.path]);
+  const paged = { ...JOURNEY_STEPS.current, path: "/en/lu-legilux/loi-1991-08-10-n3/fra?page=2" };
+  assert.deepEqual(endAddressesOf(paged, ["2026-10-18"]), [`/en/lu-legilux/loi-1991-08-10-n3/fra?page=2&date=${JOURNEY_STEPS.current.body.parameters.date}`]);
+  for (const step of [JOURNEY_STEPS.permalink, JOURNEY_STEPS.dossier, JOURNEY_STEPS.reading, JOURNEY_STEPS.coverage]) {
+    assert.deepEqual(endAddressesOf(step, ["2026-10-18"]), [step.path], step.path);
+  }
+  // The kept search's run is one request, its body the fragment's search, ending where it began.
+  const [[name, expected]] = addressExpectations();
+  assert.equal(name, "a search kept in the address");
+  assert.equal(expected.step, KEPT_SEARCH_STEP);
+  assert.equal(KEPT_SEARCH_STEP.typed, undefined, "nothing typed");
+  const observed = { ...goodSearch(), location: `${ORIGIN}${KEPT_SEARCH_STEP.path}` };
+  assert.deepEqual(journeyVerdict(observed, { origin: ORIGIN, ...expected, texts: ["4 with the exact phrase"] }), []);
+  assert.ok(journeyVerdict({ ...observed, location: `${ORIGIN}/en/search.html` }, { origin: ORIGIN, ...expected, texts: [] }).some((failure) => /ended at/.test(failure)), "the fragment dropped");
+});
+
 test("on the fixture mount every step must answer, and coverage must name the mount's own digests", () => {
   const mount = { corpus_sha256: "a".repeat(64), index_sha256: "b".repeat(64), work_key: "lu-legilux/loi-1991-08-10-n3" };
   const expectations = fixtureMountExpectations(mount);
@@ -1024,6 +1066,7 @@ test("an EU citation is pinned by its wording, verifies as that wording, and nam
   const observed = {
     ...goodSearch(),
     requests: goodSearch().requests.map((request) => (request.postData ? { ...request, postData: JSON.stringify(step.body) } : request)),
+    location: endOf(step),
     citations: [wording, article, escaped],
     verifications: [matches(wording), matches(article, "026"), matches(escaped, "26(a)")],
   };
@@ -1049,6 +1092,7 @@ test("a keyboard run that chooses an option counts the select among the fields T
   const observed = {
     ...goodSearch(),
     requests: goodSearch().requests.map((request) => (request.postData ? { ...request, postData: JSON.stringify(step.body) } : request)),
+    location: endOf(step),
     keyboard: { stops: [], placed: 3, wanted: 3, characters: 24, keyPresses: 24 },
   };
   const expected = { origin: ORIGIN, step, state: "success", keyboard: true };
@@ -1080,6 +1124,7 @@ test("the specification's journeys the eight steps do not walk are held to their
     { url: `${ORIGIN}/en/search.html`, method: "GET", headers: {} },
     { url: `${ORIGIN}/api/v3/search`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(NO_HIT_SEARCH_STEP.body) },
   ];
+  observed.location = endOf(NO_HIT_SEARCH_STEP);
   observed.text = byJourney.J2.texts.join(" ");
   observed.citations = [];
   observed.emptyAnswer = true;

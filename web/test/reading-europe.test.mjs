@@ -11,12 +11,12 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { ExportAnswerView, ReadingAnswerView, readingHolds } from "../.react-build/app.mjs";
-import { EUROPE_SAMPLE, europeAnnexRow as annexRow, europeBundle, europeEnvelope as envelopeOf, sha256 } from "../scripts/europe-bundle-sample.mjs";
+import { EUROPE_SAMPLE, datedBefore1July2013, europeAnnexRow as annexRow, europeBundle, europeEnvelope as envelopeOf, sha256 } from "../scripts/europe-bundle-sample.mjs";
 import { EUROPE_EXPORT_SCHEMA } from "../scripts/export-build.mjs";
 import { liveChrome } from "../scripts/live-chrome.mjs";
 import { NOTHING_PINNED, exportState, pinKey } from "../scripts/live-export.mjs";
 import { LIVE_READING_EUROPE_REFUSAL_SENTENCES, LIVE_READING_REFUSAL_SENTENCES, readingOutcome } from "../scripts/live-reading.mjs";
-import { EUROPE_TEXT_ACKNOWLEDGEMENT, readEuropeEvidenceBundle, readEvidenceBundleAnswer } from "../scripts/reading-answer.mjs";
+import { EUROPE_AUTHENTICITY_SENTENCES, EUROPE_TEXT_ACKNOWLEDGEMENT, europeAuthenticityBasis, readEuropeEvidenceBundle, readEvidenceBundleAnswer } from "../scripts/reading-answer.mjs";
 import { escapeProvision } from "../scripts/search-answer.mjs";
 
 const { work: WORK, bodySha256: BODY, permalink: PERMALINK, articles: ARTICLES } = EUROPE_SAMPLE;
@@ -65,6 +65,47 @@ test("each rule the EU bundle states about itself is refused when broken, with t
   for (const [what, change, reason] of cases) {
     assert.throws(() => readEuropeEvidenceBundle(europeBundle(change)), reason, what);
   }
+});
+
+test("the EU authenticity statement is the one the act's own date chooses, the platform's word for word (O4, 2026-10-18)", () => {
+  // An act dated 27 April 2016: only the electronic edition is authentic.
+  const view = readEuropeEvidenceBundle(europeBundle());
+  assert.equal(view.authenticity, EUROPE_AUTHENTICITY_SENTENCES.electronic_edition);
+  assert.equal(view.authenticityBasis, "electronic_edition");
+  assert.deepEqual(view.authenticityActDates, ["2016-04-27"]);
+  // An act dated June 2013: the dated statement, true whichever side of 1 July 2013 it was published on.
+  const dated = readEuropeEvidenceBundle(europeBundle(datedBefore1July2013));
+  assert.equal(dated.authenticity, EUROPE_AUTHENTICITY_SENTENCES.edition_by_publication_date);
+  assert.equal(dated.authenticityBasis, "edition_by_publication_date");
+  assert.deepEqual(dated.authenticityActDates, ["2013-06-26"]);
+  // The rule, as the platform states it: the earliest of the act's dates decides, and none held is the dated statement.
+  for (const [dates, basis] of [
+    [["2013-06-30"], "edition_by_publication_date"], [["2013-07-01"], "electronic_edition"], [["2013-07-02"], "electronic_edition"],
+    [[], "edition_by_publication_date"], [["2013-06-28", "2013-07-02"], "edition_by_publication_date"], [["2022-12-14", "2022-12-15"], "electronic_edition"],
+  ]) assert.equal(europeAuthenticityBasis(dates), basis, JSON.stringify(dates));
+  const none = readEuropeEvidenceBundle(europeBundle((b) => { datedBefore1July2013(b); b.authenticity_act_dates = []; }));
+  assert.equal(none.authenticityBasis, "edition_by_publication_date", "no date of the act held: the dated statement");
+
+  const cases = [
+    ["a basis outside the two", (b) => { b.authenticity_basis = "printed_edition"; }, /not one of electronic_edition, edition_by_publication_date/],
+    ["the undated statement for an act dated before the day", (b) => { b.authenticity_act_dates = ["2013-06-30"]; }, /make it edition_by_publication_date/],
+    ["the dated statement for an act dated on the day", (b) => { datedBefore1July2013(b); b.authenticity_act_dates = ["2013-07-01"]; }, /make it electronic_edition/],
+    ["the electronic basis with no date held", (b) => { b.authenticity_act_dates = []; }, /make it edition_by_publication_date/],
+    ["another statement for the basis", (b) => { b.authenticity = EUROPE_AUTHENTICITY_SENTENCES.edition_by_publication_date; }, /not the platform's electronic_edition statement/],
+    ["a statement of no basis", (b) => { b.authenticity = "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects."; }, /not the platform's/],
+    ["an act date that is not a date", (b) => { b.authenticity_act_dates = ["20160427"]; }, /not a calendar date/],
+    ["the act's dates out of order", (b) => { b.authenticity_act_dates = ["2016-05-04", "2016-04-27"]; }, /once, in order/],
+    ["the act's date twice", (b) => { b.authenticity_act_dates = ["2016-04-27", "2016-04-27"]; }, /once, in order/],
+    ["no basis", (b) => { delete b.authenticity_basis; }, /does not carry authenticity_basis/],
+    ["no act dates", (b) => { delete b.authenticity_act_dates; }, /does not carry authenticity_act_dates/],
+    ["no rule", (b) => { delete b.authenticity_rule; }, /does not carry authenticity_rule/],
+  ];
+  for (const [what, change, reason] of cases) assert.throws(() => readEuropeEvidenceBundle(europeBundle(change)), reason, what);
+
+  // The reading's lead says the statement the act's date chose.
+  const markup = renderToStaticMarkup(h(ReadingAnswerView, { outcome: readingOutcome({ state: "success", envelope: envelopeOf(europeBundle(datedBefore1July2013)) }) }));
+  assert.ok(markup.includes("For an act published before 1 July 2013, the printed Official Journal of the European Union is authentic"), "the reading's lead");
+  assert.ok(!markup.includes("published in electronic form is authentic"), "never the undated statement");
 });
 
 test("an EU provision is escaped as the platform escapes it in an article's permalink", () => {

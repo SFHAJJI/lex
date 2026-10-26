@@ -118,6 +118,7 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Contracts.Platform.V3ClaimTemplates: ByIdValue=4, All=4, "
                     + "const NoStateForDate, const PublisherReference, const StateInterval, "
                     + "const TextOnDate",
+                "Lex.V3.Contracts.Platform.V3EnvelopeJson: ChannelMembers=6, FreshnessMembers=7",
                 "Lex.V3.Contracts.Platform.V3EuropeRefusedOperations: Rows=13",
                 "Lex.V3.Contracts.Platform.V3EventRegistry: Mintable=12, Revising=2, "
                     + "const ChainedBasis, const ExpressionAdded, const FileReplaced, "

@@ -21,6 +21,11 @@
 // The cited article carries its citations (`Citations`): the one citation generator's three forms (`citation.mjs`; the plan's
 // item 3.3, R65), each said in the language of the text it cites, under the page's labels, as text a reader copies.
 //
+// At an act's readable address that reads the act on another day than today (an address that keeps a date, `?date=`, the
+// plan's item 3.4; R13), the page says first the date it reads and today beside it, with the link to the act at today's
+// date (`NotToday`); the whole act and the pages link to the version it shows, by its permalink, since the act's readable
+// address shows today's version.
+//
 // What it does not say: "The publisher replaced this file on {date}". The API's typed fact for it, a chained log's
 // `file_replaced` event, holds no date of the replacement (no observation time is held; a build's time only bounds it
 // from above), so the sentence would state a date Lex does not hold (STATUS-WEB.md, driver decisions).
@@ -29,7 +34,8 @@ import { Permalink, Say } from './LiveAnswer.jsx';
 import { ArticleText, EuropeWordingHeading, QuoteEvidence } from './LiveReading.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { CHROME_LOCALE, fillText, liveChrome } from '../scripts/live-chrome.mjs';
-import { anchorText, currentAddress, permalinkHref } from '../scripts/permalinks.mjs';
+import { anchorText, currentAddress, permalinkHref, readingPageAddress } from '../scripts/permalinks.mjs';
+import { readsAnotherDay, todayAt } from '../scripts/initial-answer.mjs';
 import { citationForms, citationLang } from '../scripts/citation.mjs';
 
 const COPY = liveChrome().reading;
@@ -81,13 +87,14 @@ function VersionHeading({ view, version }) {
  * whether or not the next wording's text is held here (review of #972), so it is said held only when it is, and otherwise
  * as the publisher's record names it, with no link to a text this site does not hold.
  */
-function ChangedSince({ view, version, pin, cited }) {
+function ChangedSince({ view, version, pin, cited, anotherDay }) {
   const europe = view.publisher === 'eu-eurlex';
   const next = europe ? version.nextDate : version.nextApplicabilityDate;
   if (typeof next !== 'string') return null;
   const notHeld = europe && version.nextTextHeld !== true;
-  // At a permalink, the act as it stands today, at its readable address (R67); a readable address is that page already.
-  const today = pin.kind === 'state' && !notHeld
+  // At a permalink, the act as it stands today, at its readable address (R67); a readable address is that page already,
+  // unless it keeps another date (the plan's item 3.4).
+  const today = (pin.kind === 'state' || anotherDay) && !notHeld
     ? permalinkHref(currentAddress({ publisher: view.publisher, work: europe ? view.celex : view.workKey, language: version.language, publisherId: cited?.publisherId ?? null }), CHROME_LOCALE)
     : null;
   return (
@@ -140,7 +147,7 @@ export function Citations({ view, version, article, observedAt }) {
 }
 
 /** The cited article, first: its title, the version it is quoted from, its text and evidence, its citations, and the whole act. */
-function CitedArticle({ view, version, pin, cited, observedAt }) {
+function CitedArticle({ view, version, pin, cited, observedAt, anotherDay }) {
   const europe = view.publisher === 'eu-eurlex';
   const heading = europe ? cited.quoted?.heading ?? '' : '';
   return (
@@ -171,7 +178,7 @@ function CitedArticle({ view, version, pin, cited, observedAt }) {
       <Citations view={view} version={version} article={cited.quoted ?? { publisherId: cited.publisherId }} observedAt={observedAt} />
       <p data-whole-act="">
         {/* At a readable address, the act the answer names, never the request's (review of #972). */}
-        <a href={permalinkHref(pin.kind === 'state' ? version.permalink : currentAddress({ publisher: view.publisher, work: europe ? view.celex : view.workKey, language: version.language }), CHROME_LOCALE)}>
+        <a href={permalinkHref(pin.kind === 'state' || anotherDay ? version.permalink : currentAddress({ publisher: view.publisher, work: europe ? view.celex : view.workKey, language: version.language }), CHROME_LOCALE)}>
           {europe ? COPY.europeWholeAct : COPY.wholeAct}
         </a>
       </p>
@@ -186,7 +193,8 @@ function CitedArticle({ view, version, pin, cited, observedAt }) {
 export function ArticleNotHeld({ outcome, pin }) {
   if (pin === null || outcome.state !== 'refusal' || outcome.code !== 'anchor_not_in_version' || outcome.page) return null;
   const europe = outcome.context?.publisher === 'eu-eurlex';
-  const act = pin.kind === 'state' ? pin.permalink : pin.act;
+  // At a readable address that keeps a date, the act at that date (the plan's item 3.4).
+  const act = pin.kind === 'state' ? pin.permalink : readingPageAddress(pin.act, 1, readsAnotherDay(pin, outcome) ? pin.request.date : null);
   return (
     <p data-article-not-held="">
       <a href={permalinkHref(act, CHROME_LOCALE)}>{europe ? COPY.europeWholeAct : COPY.wholeAct}</a>
@@ -200,15 +208,17 @@ export function ArticleNotHeld({ outcome, pin }) {
  */
 export function PageNotHeld({ outcome, pin }) {
   if (pin === null || outcome.state !== 'refusal' || !outcome.page) return null;
-  const first = permalinkHref(pin.kind === 'state' ? pin.permalink : pin.act, CHROME_LOCALE);
+  const base = permalinkHref(pin.kind === 'state' ? pin.permalink : pin.act, CHROME_LOCALE);
+  // At a readable address that keeps a date, its pages keep it too (the plan's item 3.4).
+  const date = readsAnotherDay(pin, outcome) ? pin.request.date : null;
   const { pages } = outcome.page;
   return (
     <p data-page-not-held={pages}>
-      <a href={first} data-first-page="">{COPY.firstPage}</a>
+      <a href={readingPageAddress(base, 1, date)} data-first-page="">{COPY.firstPage}</a>
       {pages > 1 ? (
         <>
           {' '}
-          <a href={`${first}?page=${pages}`} data-last-page={pages}><Say template={COPY.lastPage} values={{ pages }} /></a>
+          <a href={readingPageAddress(base, pages, date)} data-last-page={pages}><Say template={COPY.lastPage} values={{ pages }} /></a>
         </>
       ) : null}
     </p>
@@ -216,15 +226,33 @@ export function PageNotHeld({ outcome, pin }) {
 }
 
 /**
- * What a reading at a law's address shows before the reading (`pin`, `readingPinOf`): for a permalink refused because its
- * digest is not the version held at its date, the notice with the current version's link; for a reading, what changed
- * since the version shown, then the cited article. Null when there is nothing to say first. The page brings it into view
- * and gives it the focus (`LiveReading.jsx`), so a reader meets the notice before the text it is about.
+ * At an act's readable address that reads the act on another day than today (`readsAnotherDay`; the plan's item 3.4, R13):
+ * the date it reads, today in Luxembourg beside it (the answer's own day), and the link to the act at today's date, at the
+ * same address with no date. Null anywhere else.
+ */
+export function NotToday({ outcome, pin }) {
+  if (!readsAnotherDay(pin, outcome)) return null;
+  return (
+    <p data-not-today={pin.request.date}>
+      <Say template={COPY.notToday} values={{ date: pin.request.date, today: todayAt(outcome.context.freshness.observed_at) }} />{' '}
+      <a href={permalinkHref(pin.address, CHROME_LOCALE)} data-read-today="">{COPY.openToday}</a>
+    </p>
+  );
+}
+
+/**
+ * What a reading at a law's address shows before the reading (`pin`, `readingPinOf`): at a readable address that reads the
+ * act on another day than today, that date and today (`NotToday`); for a permalink refused because its digest is not the
+ * version held at its date, the notice with the current version's link; for a reading, what changed since the version
+ * shown, then the cited article. Null when there is nothing to say first. The page brings it into view and gives it the
+ * focus (`LiveReading.jsx`), so a reader meets the notice before the text it is about.
  */
 export function PinnedLead({ outcome, pin }) {
+  const anotherDay = readsAnotherDay(pin, outcome);
+  const dated = <NotToday outcome={outcome} pin={pin} />;
   if (outcome.state === 'refusal') {
     const current = outcome.code === 'pinned_digest_mismatch' && pin.kind === 'state' ? outcome.payload?.current_hash_pinned_url : undefined;
-    if (typeof current !== 'string') return null;
+    if (typeof current !== 'string') return anotherDay ? <div data-pinned-lead="">{dated}</div> : null;
     return (
       <p data-pinned-lead="" data-pin-not-held="">
         <Say
@@ -236,14 +264,15 @@ export function PinnedLead({ outcome, pin }) {
   }
   if (outcome.state !== 'success') return null;
   const version = versionShown(outcome.view, pin);
-  if (version === undefined) return null;
+  if (version === undefined) return anotherDay ? <div data-pinned-lead="">{dated}</div> : null;
   const cited = citedArticle(version, pin);
-  const changed = <ChangedSince view={outcome.view} version={version} pin={pin} cited={cited} />;
-  if (cited === null && (outcome.view.publisher === 'eu-eurlex' ? typeof version.nextDate !== 'string' : version.nextApplicabilityDate === null)) return null;
+  const changed = <ChangedSince view={outcome.view} version={version} pin={pin} cited={cited} anotherDay={anotherDay} />;
+  if (!anotherDay && cited === null && (outcome.view.publisher === 'eu-eurlex' ? typeof version.nextDate !== 'string' : version.nextApplicabilityDate === null)) return null;
   return (
     <div data-pinned-lead="">
+      {dated}
       {changed}
-      {cited === null ? null : <CitedArticle view={outcome.view} version={version} pin={pin} cited={cited} observedAt={outcome.context?.freshness?.observed_at} />}
+      {cited === null ? null : <CitedArticle view={outcome.view} version={version} pin={pin} cited={cited} observedAt={outcome.context?.freshness?.observed_at} anotherDay={anotherDay} />}
     </div>
   );
 }

@@ -24,7 +24,8 @@ public sealed partial class EuFirstMountAcquisitionTests
 
     /// <summary>
     /// A package whose text differs from <paramref name="bytes"/>: every <paramref name="find"/> in its XML entries replaced. Throws
-    /// when nothing changed, so a test that needs two different texts cannot pass on two identical ones.
+    /// when nothing changed, so a test that needs two different texts cannot pass on two identical ones. Its bytes are the same
+    /// on every system (<see cref="PortableZip"/>): the envelope samples record its digest.
     /// </summary>
     internal static byte[] RewrittenPackage(byte[] bytes, string find, string replace)
     {
@@ -46,11 +47,19 @@ public sealed partial class EuFirstMountAcquisitionTests
             }
 
         if (!changed) throw new InvalidOperationException($"The package holds no '{find}' to rewrite.");
-        return output.ToArray();
+        return PortableZip.Normalise(output.ToArray());
     }
 
     /// <summary>The census and acquisition of the GDPR's original wording and the consolidated works given.</summary>
-    internal static async Task<EuFirstMountAcquisitionResult> AcquireConsolidatedWorksAsync(ICustodyStore store, params ConsolidatedWorkSpec[] consolidated)
+    internal static Task<EuFirstMountAcquisitionResult> AcquireConsolidatedWorksAsync(ICustodyStore store, params ConsolidatedWorkSpec[] consolidated) =>
+        AcquireConsolidatedWorksAsync(store, GdprEnglishPackage(), consolidated);
+
+    /// <summary>
+    /// The same, with the original wording served from <paramref name="originalEnglish"/> in English and its synthetic French in
+    /// French (a test of the act's own date rewrites the GDPR's package date, which the index then holds as the original's).
+    /// </summary>
+    internal static async Task<EuFirstMountAcquisitionResult> AcquireConsolidatedWorksAsync(
+        ICustodyStore store, byte[] originalEnglish, params ConsolidatedWorkSpec[] consolidated)
     {
         var root = EuAxiomWiringHarness.SeedRoot(ConsolidatedSeed);
         var byWork = consolidated.ToDictionary(static work => work.WorkIri, StringComparer.Ordinal);
@@ -94,7 +103,7 @@ public sealed partial class EuFirstMountAcquisitionTests
         scripts["A"] = EuAcquisitionTestFixture.AxiomAbsenceScriptFor(works);
         scripts["L"] = EuAcquisitionTestFixture.LocatedAmendmentAbsenceScriptFor(works);
 
-        var english = GdprEnglishPackage();
+        var english = originalEnglish;
         var french = SyntheticFrenchPackage(english);
         // A language a work holds no package in lists no Formex manifestation for it: its enumeration completes empty, so the
         // expression is proven not eligible and its text is not held there. Every expression is enumerated, since acquisition

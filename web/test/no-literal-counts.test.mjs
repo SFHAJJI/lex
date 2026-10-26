@@ -19,7 +19,7 @@ import test from "node:test";
 import {
   LIVE_CONTRACT, renderLiveComparePage, renderLiveCoveragePage, renderLiveDossierPage, renderLiveExportPage, renderLiveHistoryPage,
   renderLiveHomePage, renderLiveMaintenancePage, renderLiveNotFoundPage, renderLiveRadarPage, renderLiveReadingPage, renderLiveSearchPage,
-  SearchAnswerView,
+  SearchAnswerView, renderLiveLegalPage,
 } from "../.react-build/app.mjs";
 import { LIVE_CHROME, REFUSAL_TRANSLATIONS, entriesOf } from "../scripts/live-chrome.mjs";
 import { servedRefusalSentences } from "../scripts/refusal-sentences.mjs";
@@ -54,11 +54,22 @@ const NUMBERS_ALLOWED = Object.freeze({
   "common.asPublished.authenticity.electronic_journal_officiel": ["1", "2017", "23", "2016", "5"],
   "common.asPublished.authenticity.printed_memorial": ["1", "2017"],
   "form.articleIdPlaceholder": ["15"],
-  // The citation generator's words (`citation.mjs`): the EU's authenticity statement cites its regulation and article, and
-  // the evidence form names its digest's algorithm.
-  "citation.europe.authenticity": ["216", "2013", "1", "2"],
+  // The citation generator's words (`citation.mjs`): the EU's authenticity statements cite their regulation (and its article,
+  // or the day from which the electronic edition alone is authentic), and the evidence form names its digest's algorithm.
+  "citation.europe.authenticity.electronic_edition": ["216", "2013", "1", "2"],
+  "citation.europe.authenticity.edition_by_publication_date": ["1", "2013", "216", "2013"],
   "citation.evidence.textSha256": ["256"],
   "citation.evidence.noText": ["256"],
+  // The legal pages (the plan's item 7.1): the GDPR's articles and its number, the CNPD's postal address, the licence's
+  // version, the EU's reuse decision and the accessibility guidelines' version.
+  "privacy.sections.reading.basis": ["6", "1", "2016", "679"],
+  "privacy.sections.email.basis": ["6", "1"],
+  "privacy.sections.named.basis": ["6", "1"],
+  "privacy.sections.rights.ask": ["15", "18", "21"],
+  "privacy.sections.rights.complaint": ["15", "4370"],
+  "terms.sections.texts.luxembourg": ["4", "0", "4", "0"],
+  "terms.sections.texts.europe": ["2011", "833"],
+  "accessibility.sections.status.text": ["2", "2"],
 });
 
 const TABLES = Object.freeze([
@@ -113,6 +124,7 @@ test("no live page, as built or rendered from the census answers, says a pack fi
     export: renderLiveExportPage(),
     "404": renderLiveNotFoundPage(),
     maintenance: renderLiveMaintenancePage(),
+    ...Object.fromEntries(["legalNotice", "privacy", "terms", "accessibility", "cookies"].map((key) => [key, renderLiveLegalPage(key)])),
   };
   for (const [name, html] of Object.entries(pages)) {
     // What a reader is shown: the text and the human-read attributes, without the scripts and the head's machine links.
@@ -122,11 +134,16 @@ test("no live page, as built or rendered from the census answers, says a pack fi
   }
 });
 
-test("the home page's coverage line says the counts the coverage answer serves, and no other number than its build's date", () => {
+/** An answer given long after any build the census records: its index is older than today, so today is said beside it. */
+const LATER = "2026-12-01T10:00:00.0000000Z";
+
+test("the home page's coverage line says the counts the coverage answer serves, and no other number than its build's date and today's", () => {
   const base = census.envelopes.find((entry) => entry.operation === "coverage" && entry.envelope.result !== null).envelope;
-  // Counts no table holds, and the pack's own figures served as counts: a served figure is shown, as served.
-  for (const [works, states, articles] of [[7919, 7927, 7933], [1402, 24579, 23370], [0, 0, 0]]) {
+  // Counts no table holds, and the pack's own figures served as counts: a served figure is shown, as served; and the same
+  // answered once the index is older than today (R13; the plan's item 3.4), when today's date is said beside the build's.
+  for (const [works, states, articles, later] of [[7919, 7927, 7933], [1402, 24579, 23370], [0, 0, 0], [7919, 7927, 7933, true], [1402, 24579, 23370, true]]) {
     const envelope = structuredClone(base);
+    if (later) envelope.context.freshness.observed_at = LATER;
     const value = envelope.result.value;
     value.totals = { ...value.totals, works, states, articles };
     value.languages = value.languages.map((row) => ({ ...row, works, states, articles, articles_with_searchable_text: Math.min(row.articles_with_searchable_text, articles), searchable_text_held: Math.min(row.articles_with_searchable_text, articles) > 0 }));
@@ -136,15 +153,17 @@ test("the home page's coverage line says the counts the coverage answer serves, 
     const html = renderLiveHomePage({ facts });
     const line = /data-coverage-line="counted"[^>]*>([^<]+)</.exec(html)?.[1];
     assert.ok(line !== undefined, "the line");
-    assert.deepEqual(line.match(/\d+(?:-\d+)*/g), [String(works), String(states), String(articles), facts.coverage.builtOn], line);
+    assert.deepEqual(line.match(/\d+(?:-\d+)*/g), [String(works), String(states), String(articles), facts.coverage.builtOn, ...(later ? ["2026-12-01"] : [])], line);
   }
 });
 
-test("a search's population line says the counts the search answer serves, and no other number than its index's build date (the plan's item 4.3)", () => {
+test("a search's population line says the counts the search answer serves, and no other number than its index's build date and today's (the plan's items 4.3 and 3.4)", () => {
   const base = census.envelopes.find((entry) => entry.operation === "search" && entry.scenario.startsWith("the phrase as the site asks it")).envelope;
-  // Counts no table holds, the pack's own figures served as counts, and none: a served figure is shown, as served.
-  for (const [works, states, articles] of [[7919, 7927, 7933], [1402, 24579, 23370], [0, 0, 0]]) {
+  // Counts no table holds, the pack's own figures served as counts, and none: a served figure is shown, as served; and the
+  // same answered once the index is older than today, when today's date is said beside the build's (R13).
+  for (const [works, states, articles, later] of [[7919, 7927, 7933], [1402, 24579, 23370], [0, 0, 0], [7919, 7927, 7933, true], [0, 0, 0, true]]) {
     const envelope = structuredClone(base);
+    if (later) envelope.context.freshness.observed_at = LATER;
     const value = envelope.result.value;
     const hits = value.hits.length;
     value.searched = { ...value.searched, works: Math.max(works, 1), states: Math.max(states, 1), articles_with_searchable_text: Math.max(articles, hits) };
@@ -154,6 +173,6 @@ test("a search's population line says the counts the search answer serves, and n
     const line = /<p data-searched="\d+"[^>]*>([^<]+)</.exec(html)?.[1];
     assert.ok(line !== undefined, "the line");
     const served = value.searched;
-    assert.deepEqual(line.match(/\d+(?:-\d+)*/g), [String(served.works), String(served.states), String(served.articles_with_searchable_text), builtOnOf(served.index_built_at)], line);
+    assert.deepEqual(line.match(/\d+(?:-\d+)*/g), [String(served.works), String(served.states), String(served.articles_with_searchable_text), builtOnOf(served.index_built_at), ...(later ? ["2026-12-01"] : [])], line);
   }
 });

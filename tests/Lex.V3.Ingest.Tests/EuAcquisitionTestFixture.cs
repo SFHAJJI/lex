@@ -481,7 +481,7 @@ internal static class EuAcquisitionTestFixture
                 writer.Write(xml);
             }
         }
-        return bytes.ToArray();
+        return PortableZip.Normalise(bytes.ToArray());
     }
 
     /// <summary>

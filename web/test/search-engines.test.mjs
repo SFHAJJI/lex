@@ -25,6 +25,7 @@ import { readEvidenceBundleAnswer } from "../scripts/reading-answer.mjs";
 import {
   CENSUS_EVALUATION_CARD, renderLiveComparePage, renderLiveCoveragePage, renderLiveDossierPage, renderLiveExportPage, renderLiveHistoryPage, renderLiveHomePage,
   renderLiveLocaleUnavailablePage, renderLiveMaintenancePage, renderLiveNotFoundPage, renderLiveRadarPage, renderLiveReadingPage, renderLiveSearchPage,
+  renderLiveLegalPage,
 } from "../.react-build/app.mjs";
 import { LIVE_CONTRACT as CONTRACT } from "../.react-build/app.mjs";
 import { homeFacts } from "../scripts/live-home.mjs";
@@ -227,6 +228,8 @@ test("every live page names one robots noindex as built: the switch opens the ho
   // The home page as built, and rendered with no corpus mounted, is never opened (review of #976, F2).
   never["the home page as built"] = renderLiveHomePage();
   never["the home page with no corpus mounted"] = renderLiveHomePage({ facts: homeFacts(UNMOUNTED_COVERAGE, CONTRACT) });
+  // The five legal pages (the plan's item 7.1) are about the site, not the law: never opened, whatever the switch.
+  for (const key of ["legalNotice", "privacy", "terms", "accessibility", "cookies"]) never[`the legal page ${key}`] = renderLiveLegalPage(key);
   for (const [what, html] of Object.entries(never)) assert.deepEqual(robotsMetas(html), [NEVER_INDEXED_META], what);
   const opened = {
     home: renderLiveHomePage({ facts: homeFacts(COVERAGE, CONTRACT) }),

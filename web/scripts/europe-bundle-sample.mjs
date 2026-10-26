@@ -106,6 +106,9 @@ export function europeBundle(change = () => {}) {
     }],
     acknowledgement: '© European Union, https://eur-lex.europa.eu',
     authenticity: "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) No 216/2013, Article 1(2)); this text is a reproduction read from the Publications Office's Formex package, not the authentic edition.",
+    authenticity_basis: 'electronic_edition',
+    authenticity_act_dates: [wordingDate],
+    authenticity_rule: "the sentence is chosen by the act's own date, since this index holds no Official Journal publication date",
     rights_rule: 'rights are enforced when the bundle is composed, before any text is read',
     date_rule: "the EU index holds one wording of each expression, the original act's, dated by its Formex act date",
     date_semantics: "the wording date is the date the publisher's Formex package gives the act",
@@ -127,6 +130,19 @@ export function europeBundle(change = () => {}) {
     }
   }
   return copy;
+}
+
+/**
+ * The change that makes the sample's act one dated before 1 July 2013, as the platform answers for such an act (the owner's
+ * decision of 2026-10-18, O4): the dated authenticity statement, its basis and the act's date, June 2013's. The wording keeps
+ * the sample's own date, which no reader compares with the act's (a consolidation of an older act has a later one too).
+ */
+export function datedBefore1July2013(bundle) {
+  Object.assign(bundle, {
+    authenticity: "For an act published before 1 July 2013, the printed Official Journal of the European Union is authentic; the electronic edition is authentic since that date (Regulation (EU) No 216/2013). This text is a reproduction read from the Publications Office's Formex package, not the authentic edition.",
+    authenticity_basis: 'edition_by_publication_date',
+    authenticity_act_dates: ['2013-06-26'],
+  });
 }
 
 /** A bundle as a page reads it from its envelope: the answer, the context and the registry digest. */
