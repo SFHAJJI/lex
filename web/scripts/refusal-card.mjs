@@ -558,6 +558,13 @@ const CANDIDATE_KEYS = new Set(['valid_from', 'hash', 'publication_date', 'href'
  */
 function requireStateCoordinate(candidate, publisher, work, what) {
   requireCalendarDate(candidate?.valid_from, `${what} valid_from`);
+  if (candidate?.coordinate) {
+    // A state the catalogue names no expression of: its coordinate and its digest at its place, and no link to read it at.
+    if (!SHA256.test(candidate.hash ?? '') || candidate.publisher !== publisher || candidate.work !== work) {
+      throw new Error(`${what} ${candidate.coordinate} is not a state of ${publisher}/${work} with a digest at its place`);
+    }
+    return;
+  }
   // The publication date is checked when there is one. A candidate sent as a bare hash-pinned
   // link carries no publication date at all, and `null` here means NOT STATED, not "a date that
   // is not a date": the renderer says so in words. Demanding one of a producer that does not hold
@@ -612,26 +619,95 @@ function requireStateCoordinate(candidate, publisher, work, what) {
  * The object form is unchanged and keeps every rule it had, so a producer that sends more is
  * honoured and checked more strictly than one that sends less.
  */
-function normaliseCandidate(candidate) {
+function normaliseCandidate(candidate, digest = null) {
   if (typeof candidate !== 'string') {
     return { ...candidate, stated: true };
   }
 
   const target = parseObjectUrl(candidate);
   if (target?.kind !== 'reading') {
-    throw new Error(
-      `a candidate given as a link must be a reading URL: ${JSON.stringify(candidate)} names none`,
-    );
+    // Index 9 names a state its publisher's catalogue names no expression of by its stable coordinate, since it has no
+    // language and so no reading URL (the review of #987): offered as a version this site cannot open, identified by the
+    // digest index 9 gives at its place in `candidate_state_sha256s`, never guessed from the coordinate.
+    const coordinate = stableCoordinateOf(candidate);
+    if (coordinate === null) {
+      throw new Error(
+        `a candidate given as a link must be a reading URL or a state's stable coordinate: ${JSON.stringify(candidate)} is neither`,
+      );
+    }
+    if (digest === null) {
+      throw new Error(
+        `the candidate ${candidate} is a stable coordinate, which names no one state; only index 9's candidate_state_sha256s ` +
+          'at its place says which, and none is given',
+      );
+    }
+    return {
+      href: null,
+      coordinate: candidate,
+      publisher: coordinate.publisher,
+      work: coordinate.work,
+      valid_from: coordinate.validFrom,
+      hash: digest,
+      publication_date: null,
+      withdrawn: null,
+      stated: false,
+    };
   }
 
   return {
     href: candidate,
+    coordinate: null,
+    publisher: target.publisher,
+    work: target.work,
     valid_from: target.validFrom,
     hash: target.hash,
     publication_date: null,
     withdrawn: null,
     stated: false,
   };
+}
+
+/** A state's stable coordinate, `/{publisher}/{work}/{date}`, read into its parts; null for anything else. */
+function stableCoordinateOf(value) {
+  if (typeof value !== 'string') return null;
+  const dossier = parseObjectUrl(value.slice(0, value.lastIndexOf('/')));
+  const date = value.slice(value.lastIndexOf('/') + 1);
+  return dossier?.kind === 'dossier' && isCalendarDate(date) ? { publisher: dossier.publisher, work: dossier.work, validFrom: date } : null;
+}
+
+/**
+ * Index 9's candidate lists, each aligned on the candidates (`candidate_state_sha256s`, `candidate_state_kinds`,
+ * `candidate_date_roles`), or null when the payload names none (an index of schema 8 or 6). A list of another length, or a
+ * reading URL whose digest is not the one at its place, is drift: the lists describe the candidates one by one.
+ */
+function candidateLists(payload) {
+  const digests = own(payload, 'candidate_state_sha256s');
+  if (!Array.isArray(digests)) return null;
+  const given = own(payload, 'candidates');
+  const lists = { digests, kinds: own(payload, 'candidate_state_kinds'), roles: own(payload, 'candidate_date_roles') };
+  const named = { digests: ['candidate_state_sha256s', 'digests'], kinds: ['candidate_state_kinds', 'kinds'], roles: ['candidate_date_roles', 'roles'] };
+  for (const [name, list] of Object.entries(lists)) {
+    if (list !== undefined && (!Array.isArray(list) || !Array.isArray(given) || list.length !== given.length)) {
+      const [key, noun] = named[name];
+      throw new Error(
+        `${key} lists ${Array.isArray(list) ? list.length : 'no'} ${noun} for ${Array.isArray(given) ? given.length : 'no'} candidates; the lists are aligned on the candidates`,
+      );
+    }
+  }
+  given.forEach((candidate, index) => {
+    const target = typeof candidate === 'string' ? parseObjectUrl(candidate) : null;
+    if (target?.kind === 'reading' && target.hash !== digests[index]) {
+      throw new Error(`the candidate ${candidate} is listed beside the digest ${digests[index]}; the lists are aligned on the candidates`);
+    }
+  });
+  return Object.freeze({ digests, kinds: lists.kinds ?? null, roles: lists.roles ?? null });
+}
+
+/** What index 9's lists say of the candidate at one place: its digest, kind and date role, or nulls. */
+function candidateAt(lists, index) {
+  return lists === null
+    ? { digest: null, kind: null, role: null }
+    : { digest: lists.digests[index], kind: lists.kinds?.[index] ?? null, role: lists.roles?.[index] ?? null };
 }
 
 function requireCandidates(payload) {
@@ -643,7 +719,11 @@ function requireCandidates(payload) {
     );
   }
 
-  const candidates = given.map(normaliseCandidate);
+  // The digest index 9 gives at each place (a candidate given by its stable coordinate is identified by it); whether the
+  // lists are aligned on the candidates is checked after the choice's own rules below, so a list offering one state twice is
+  // refused for that.
+  const placed = own(payload, 'candidate_state_sha256s');
+  const candidates = given.map((candidate, index) => normaliseCandidate(candidate, Array.isArray(placed) ? placed[index] ?? null : null));
   // Whether the publisher's ranking is knowable at all. When every candidate states it, the rules
   // below are the ones this card was built on. When the producer states none of it, those rules
   // have nothing to read, and the card says the withdrawal is not stated rather than assuming
@@ -729,8 +809,9 @@ function requireCandidates(payload) {
   //
   // A payload that DOES state them is honoured and cross-checked, so the day that decision lands
   // this keeps working and gets stronger rather than needing to be rewritten.
-  const first = parseObjectUrl(candidates[0].href ?? '');
-  if (first?.kind !== 'reading') {
+  // A candidate given by its stable coordinate (index 9's state naming no expression) names its work as a reading URL does.
+  const first = candidates[0].stated ? parseObjectUrl(candidates[0].href ?? '') : candidates[0];
+  if (first === null || (candidates[0].stated && first.kind !== 'reading')) {
     throw new Error(
       'the first candidate needs a reading URL: the work being disambiguated is read from the ' +
         `candidates, and ${JSON.stringify(candidates[0]?.href)} names none`,
@@ -765,6 +846,9 @@ function requireCandidates(payload) {
   for (const candidate of candidates) {
     requireStateCoordinate(candidate, publisher, work, 'a candidate');
   }
+
+  // Index 9's lists describe the candidates one by one (the review of #987).
+  candidateLists(payload);
 }
 
 /**
@@ -843,6 +927,11 @@ const NULL_SENTENCE = new Map([
 /** How an offered state is described, in the words both renderers use. */
 const CANDIDATE = 'applicable from {validFrom}, hash {hash}, {published}';
 const CANDIDATE_WITHDRAWAL_NOT_STATED = 'applicable from {validFrom}, hash {hash}, {published}, withdrawal not stated by the platform';
+/**
+ * An offered state the publisher's catalogue names no expression of (index 9; the review of #987): named by its kind and its
+ * date's role, with its digest, and offered without a link, since this site holds none of its text and it has no reading URL.
+ */
+const CANDIDATE_UNEXPRESSED = "{version}, hash {hash}: the publisher's catalogue names no expression of it, so this site holds none of its text and offers no link to it";
 /** An offered act dated by its entry into force (index 9's `candidate_date_roles`; R21): never offered as applicable from it. */
 const CANDIDATE_ENTRY_INTO_FORCE = 'the act as published, dated by its entry into force on {validFrom} (publisher), hash {hash}, {published}';
 const CANDIDATE_ENTRY_INTO_FORCE_WITHDRAWAL_NOT_STATED =
@@ -856,10 +945,14 @@ const CANDIDATE_ENTRY_INTO_FORCE_WITHDRAWAL_NOT_STATED =
 const REASONS = Object.freeze({
   before_history: "The publisher's catalogue, as this site read it no later than {read}, lists no version of this act before {begins}.",
   catalogue_hole: "The publisher's catalogue, as this site read it no later than {read}, lists no version of this act from {from}, the end its publisher gives for the version before, to {to}, when the next version begins; this site does not fill that gap with another version.",
-  after_closed_end: "The last version in the publisher's catalogue, as this site read it no later than {read}, is applicable to {closed} (publisher), and the catalogue lists no later version: that is where the catalogue's versions end, which says nothing of whether the law ends.",
+  // `{closed}` is the first day no version covers, and the version it ends is the one whose end is furthest (the review of
+  // #987: the end is exclusive, and after a nested version the last to begin is not the last to end).
+  after_closed_end: "In the publisher's catalogue, as this site read it no later than {read}, the version that ends last is applicable until the day before {closed} (publisher), and no version begins on or after {closed}: that is where the catalogue's versions end, which says nothing of whether the law ends.",
   publisher_end_convention_unclear: "The publisher's catalogue gives {date}, the day before the next version begins, as the end of the version before it, so whether that day belongs to that version is unclear; this site gives it to neither.",
   publisher_interval_invalid: "The publisher's catalogue gives the version that would apply on this date an end on or before its own start, so this site reads no interval for it and serves no version for this date; that version's own link still opens it.",
   no_expression_in_language: "A French version of this act covers this date, and this site holds no expression of it in {language}.",
+  // An identifier that names one version, on a date another version covers (the review of #987, F2).
+  outside_named_version: "The version this identifier names does not cover {date} in the publisher's catalogue, as this site read it no later than {read}: another version covers that date, and this site does not open it in place of the version named.",
 });
 
 /** After a closed end, the base act's own end-of-force facts, verbatim (the platform's `base_act_rule`), when it states one. */
@@ -935,6 +1028,7 @@ export const REFUSAL_CARD_COPY = Object.freeze({
   publishedAct: PUBLISHED_ACT,
   candidateEntryIntoForce: CANDIDATE_ENTRY_INTO_FORCE,
   candidateEntryIntoForceWithdrawalNotStated: CANDIDATE_ENTRY_INTO_FORCE_WITHDRAWAL_NOT_STATED,
+  candidateUnexpressed: CANDIDATE_UNEXPRESSED,
   reasons: REASONS,
   baseActEndOfForce: BASE_ACT_END_OF_FORCE,
   versions: VERSION_NAMED,
@@ -1127,10 +1221,14 @@ function requirePayload(code, payload) {
  * platform's own `ambiguous_version` payload (bare links), where this string renderer normalised it;
  * one description for both keeps them saying the same thing.
  */
-export function candidateView(candidate, dateRoles = null) {
-  const one = normaliseCandidate(candidate);
+export function candidateView(candidate, dateRoles = null, at = null) {
+  const one = normaliseCandidate(candidate, at?.digest ?? null);
   return Object.freeze({
     href: one.href,
+    // A state the catalogue names no expression of (index 9; the review of #987): offered by its coordinate, without a link,
+    // and named by its kind and its date's role, as the dossier names a version held without text.
+    coordinate: one.coordinate ?? null,
+    version: one.coordinate ? Object.freeze({ kind: at.kind, role: at.role }) : null,
     validFrom: one.valid_from,
     hashPrefix: one.hash.slice(0, 8),
     // Index 9 names each candidate's date role (`candidate_date_roles`, aligned on `candidate_state_sha256s`): an act dated by
@@ -1152,10 +1250,16 @@ export function candidateView(candidate, dateRoles = null) {
   });
 }
 
-function renderCandidates(candidates, dateRoles = null) {
+function renderCandidates(candidates, dateRoles = null, places = null) {
   const items = candidates
-    .map((candidate) => candidateView(candidate, dateRoles))
+    .map((candidate, index) => candidateView(candidate, dateRoles, places?.[index] ?? null))
     .map((candidate) => {
+      if (candidate.coordinate !== null) {
+        const version = fillCard(VERSION_NAMED[versionNameKey(candidate.version.kind, candidate.version.role)], { date: candidate.validFrom });
+        const filled = { '{version}': escapeHtml(version), '{hash}': `<code>${escapeHtml(candidate.hashPrefix)}</code>` };
+        const words = CANDIDATE_UNEXPRESSED.split(/(\{[a-zA-Z]+\})/).map((part) => filled[part] ?? escapeHtml(part)).join('');
+        return `<li class="refusal-candidate" data-candidate-unexpressed="">${words} (<code>${escapeHtml(candidate.coordinate)}</code>)</li>`;
+      }
       // The description's own words, with the hash set as code, as the React card sets it.
       const values = {
         '{validFrom}': escapeHtml(candidate.validFrom),
@@ -1212,7 +1316,12 @@ export function payloadParts(code, payload) {
 
   for (const [key, value] of entries) {
     if (code === 'ambiguous_version' && key === 'candidates') {
-      structured.push({ kind: 'candidates', key, values: value, dateRoles: candidateDateRoles(payload) });
+      const lists = candidateLists(payload);
+      structured.push({
+        kind: 'candidates', key, values: value, dateRoles: candidateDateRoles(payload),
+        // Index 9's digest, kind and role at each candidate's place, or nulls (an index of schema 8 or 6).
+        places: Object.freeze(value.map((_, index) => Object.freeze(candidateAt(lists, index)))),
+      });
     } else if (key === 'nearest_anchors' && Array.isArray(value)) {
       structured.push({ kind: 'chips', key, className: 'refusal-anchors', values: value });
     } else if (value === null) {
@@ -1236,7 +1345,7 @@ function renderPayload(code, payload) {
 
   const structured = parts.structured
     .map((item) => (item.kind === 'candidates'
-      ? renderCandidates(item.values, item.dateRoles)
+      ? renderCandidates(item.values, item.dateRoles, item.places)
       : renderChips(item.className, item.values)))
     .join('');
 

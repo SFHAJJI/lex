@@ -184,6 +184,17 @@
 // ships in R20's words, which the review offered for the owner (L5): "Seuls font foi les textes publiés au Journal officiel
 // (Mémorial A) : l’acte tel que publié, …, et les actes qui l’ont modifié, dont Lex ne détient pas encore la liste."
 // `search.dated` and `reading.validityConflict` are S7a's repair's, and not this review's.
+// The combined repair round of that pull request (the review of #987, 2026-10-26): five forms reviewed by an independent
+// reviewer (Claude, AI reviewer, not the author) under the same delegation, in the addendum of 2026-10-26 "the closed end's
+// day, an identifier outside its version, a candidate naming no expression and the radar's entry into force" (4 forms and 1
+// added; 3 changed in review, the English too in 1): `refusalCard.reasons.after_closed_end` ("jusqu’à la veille du
+// {closed}", the end being the first day not covered, and "la version dont la fin est la plus tardive", since after a nested
+// version the last to begin is not the last to end), `refusalCard.reasons.outside_named_version` (an identifier "désigne"),
+// `refusalCard.candidateUnexpressed` ("cette version", never "elle" after "l’acte tel que publié"; "propose"),
+// `radar.rowEntryIntoForce` (approved) and `radar.notComparedAct` (added: "non comparé" after the act). With them, the
+// review's proposals taken as worded: the search card's head for `outside_named_version` (the refusal translations),
+// `dossier.overlap` ("à la veille du {to}") and `radar.reason.ambiguous_version` ("couvrent cette date", never "s’appliquent"
+// after an entry into force).
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -345,7 +356,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     textlessHeading: 'Versions dont ce site ne détient pas les textes',
     textlessRow: '{version} : {why}.',
     gap: 'Du {from}, fin que le catalogue de l’éditeur indique pour une version, au {to}, début de la suivante, ce catalogue ne recense aucune version : ce site ne comble pas cet intervalle.',
-    overlap: 'Du {from} au {to}, deux versions du catalogue de l’éditeur sont toutes deux applicables (éditeur).',
+    overlap: 'Du {from} à la veille du {to}, deux versions du catalogue de l’éditeur sont toutes deux applicables (éditeur).',
     sameDate: 'Pour le {date}, le catalogue de l’éditeur recense {count} versions.',
     unclearEndDay: 'Le {date} est la fin que le catalogue de l’éditeur indique pour une version, la veille du début de la suivante ; on ne sait pas si ce jour lui appartient, et ce site ne l’attribue à aucune des deux.',
     invalidInterval: 'La version du {date} a, dans le catalogue de l’éditeur, une fin, le {to}, antérieure ou égale à son propre début : elle ne couvre aucune date ; son propre lien l’ouvre toujours.',
@@ -552,12 +563,14 @@ export const LIVE_CHROME_FR = Object.freeze({
     windowMisses: 'Cet intervalle ne recoupe pas ce que cet index détient.',
     windowMissesRange: 'Cet intervalle ne recoupe pas ce que cet index détient, du {first} au {last}.',
     row: '{work}, {language}, à partir du {from} : {verdict}. {permalink}',
+    rowEntryIntoForce: '{work}, {language}, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur) : {verdict}. {permalink}',
     wording: Object.freeze({ changed: 'libellé modifié', unchanged: 'libellé inchangé' }),
     compared: '{wording} par rapport à la version du {date}{baseline} ; modifiés : {changed} ; ajoutés : {added} ; supprimés : {removed} ; inchangés : {unchanged}',
     notCompared: 'non comparée : {reason}{named}',
+    notComparedAct: 'non comparé : {reason}{named}',
     reason: Object.freeze({
       first_held_state: 'c’est la première version que cet index détient pour cet acte et cette langue ; il n’y a donc rien à quoi la comparer',
-      ambiguous_version: 'plusieurs versions de l’acte s’appliquent à cette date ; aucune n’est donc comparée',
+      ambiguous_version: 'plusieurs versions de l’acte couvrent cette date ; aucune n’est donc comparée',
       ambiguous_baseline: 'plusieurs versions s’appliquent la veille de cette date ; aucune version de référence n’est donc retenue',
       profiles_differ: 'cette version et sa version de référence ont été lues selon des profils de règles différents ; elles ne sont donc pas comparées',
       no_held_baseline: 'la veille de cette date n’est couverte par aucune version dont ce site détient le texte ; il n’y a donc pas de version de référence',
@@ -684,13 +697,15 @@ export const LIVE_CHROME_FR = Object.freeze({
     publishedAct: 'publié le {date}',
     candidateEntryIntoForce: 'l’acte tel que publié, daté de son entrée en vigueur le {validFrom} (éditeur), empreinte {hash}, {published}',
     candidateEntryIntoForceWithdrawalNotStated: 'l’acte tel que publié, daté de son entrée en vigueur le {validFrom} (éditeur), empreinte {hash}, {published}, retrait non indiqué par la plateforme',
+    candidateUnexpressed: '{version}, empreinte {hash} : le catalogue de l’éditeur n’en nomme aucune expression ; ce site n’en détient donc aucun texte et ne propose aucun lien vers cette version',
     reasons: Object.freeze({
       before_history: 'Le catalogue de l’éditeur, tel que ce site l’a lu au plus tard le {read}, ne recense aucune version de cet acte avant le {begins}.',
       catalogue_hole: 'Le catalogue de l’éditeur, tel que ce site l’a lu au plus tard le {read}, ne recense aucune version de cet acte du {from}, fin que l’éditeur indique pour la version précédente, au {to}, début de la version suivante ; ce site ne comble pas cet intervalle avec une autre version.',
-      after_closed_end: 'La dernière version du catalogue de l’éditeur, tel que ce site l’a lu au plus tard le {read}, est applicable jusqu’au {closed} (éditeur), et le catalogue ne recense aucune version ultérieure : c’est là que s’arrêtent les versions du catalogue, ce qui ne dit rien de la fin éventuelle de la règle de droit.',
+      after_closed_end: 'Dans le catalogue de l’éditeur, tel que ce site l’a lu au plus tard le {read}, la version dont la fin est la plus tardive est applicable jusqu’à la veille du {closed} (éditeur), et aucune version ne commence le {closed} ni après : c’est là que s’arrêtent les versions du catalogue, ce qui ne dit rien de la fin éventuelle de la règle de droit.',
       publisher_end_convention_unclear: 'Le catalogue de l’éditeur indique le {date}, veille du début de la version suivante, comme fin de la version précédente : on ne sait donc pas si ce jour appartient à cette version, et ce site ne l’attribue à aucune des deux.',
       publisher_interval_invalid: 'Le catalogue de l’éditeur donne à la version qui s’appliquerait à cette date une fin antérieure ou égale à son propre début : ce site ne lit donc aucun intervalle pour elle et ne communique aucune version pour cette date ; le lien propre de cette version l’ouvre toujours.',
       no_expression_in_language: 'Une version française de cet acte couvre cette date, et ce site n’en détient aucune expression en {language}.',
+      outside_named_version: 'La version que désigne cet identifiant ne couvre pas le {date} dans le catalogue de l’éditeur, tel que ce site l’a lu au plus tard le {read} : une autre version couvre cette date, et ce site ne l’ouvre pas à la place de la version désignée.',
     }),
     baseActEndOfForce: 'Les données de l’éditeur indiquent le {dates} comme date de fin de vigueur de l’acte (dateNoLongerInForce).',
     versions: Object.freeze({
@@ -1075,6 +1090,8 @@ export const REFUSALS_FR = Object.freeze({
       'Ce site ne détient aucun acte que la référence désigne ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
     'The reference does not name a single act or article for certain, and none is chosen.':
       'La référence ne désigne pas avec certitude un seul acte ou article, et aucun n’est retenu.',
+    'This site holds the act the reference names and the version it names, but that version does not cover that date, so nothing was opened and no word was searched.':
+      'Ce site détient l’acte que la référence désigne et la version qu’elle désigne, mais cette version ne couvre pas cette date ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
     'This site holds the act the reference names, but not the version it names, so nothing was opened and no word was searched.':
       'Ce site détient l’acte que la référence désigne, mais non la version qu’elle désigne ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
     'This site holds the act the reference names and the version the date selects, but no article of that version, so nothing was opened and no word was searched.':

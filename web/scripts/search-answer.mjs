@@ -65,6 +65,7 @@ export const WORK_RESOLUTION_OUTCOMES = Object.freeze([
 
 const CURSOR = /^(strict|relaxed)\.[0-9a-f]{64}\.[0-9a-f]{64}$/;
 const STATE_PERMALINK = /^\/lu-legilux\/([^/]+)\/(\d{4}-\d{2}-\d{2})--[0-9a-f]{64}\/[a-z]{3}$/;
+const STATE_COORDINATE = /^\/lu-legilux\/([^/]+)\/(\d{4}-\d{2}-\d{2})$/;
 
 /** An EU page's cursor names the lane and the article identity: an EU search is in one wording, so no state is named. */
 const EUROPE_CURSOR = /^(strict|relaxed)\.[0-9a-f]{64}$/;
@@ -212,7 +213,8 @@ function readAmbiguousWorks(value, requestedDate, hits) {
     }
     const candidates = requireTexts(requireOwn(entry, 'candidates', where), `${where} candidates`, { atLeast: 2 });
     for (const candidate of candidates) {
-      const match = STATE_PERMALINK.exec(candidate);
+      // A state its catalogue names no expression of is named by its stable coordinate (index 9; the review of #987).
+      const match = STATE_PERMALINK.exec(candidate) ?? STATE_COORDINATE.exec(candidate);
       if (match === null || match[1] !== workKey || !isCalendarDate(match[2]) || match[2] > requestedDate) {
         throw new Error(`${where} names ${candidate}, which is not a state of ${workKey} applying by ${requestedDate}`);
       }

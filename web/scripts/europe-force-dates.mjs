@@ -24,7 +24,11 @@ export const EUROPE_OPEN_END = '9999-12-31';
 
 const XSD_DATE = 'http://www.w3.org/2001/XMLSchema#date';
 const DIGEST = /^[0-9a-f]{64}$/;
-const LEXICAL = /^\d{4}(?:-\d{2}(?:-\d{2})?)?$/;
+// A publisher date as the contract admits it (`PublisherDate`): a year, a year and month, or a date, each with the timezone its
+// XSD datatype admits, `Z` or a signed offset of at most 14:00 (2016-05-24Z is a date; the review of #987, EU 2.1).
+const LEXICAL = /^\d{4}(?:-\d{2}(?:-\d{2})?)?(?:Z|[+-](?:(?:0\d|1[0-3]):[0-5]\d|14:00))?$/;
+/** A lexical date without its timezone, as the contract compares the open end (`PublisherDate.DatePart`). */
+const datePart = (value) => value.replace(/(?:Z|[+-]\d{2}:\d{2})$/, '');
 const CARRIER = /\{([^{}|]+)\|[^{}]*\}/g;
 
 /** The publisher's note with each `{CODE|IRI}` carrier written as its code, nothing else changed (the answer's note rule). */
@@ -82,7 +86,7 @@ export function readEuropeForceDates(answer, where) {
     const datatype = text(row, 'datatype', at);
     const openEnded = own(row, 'open_ended', at);
     if (typeof openEnded !== 'boolean') throw new Error(`${at}.open_ended is true or false`);
-    if (openEnded !== (date === EUROPE_OPEN_END && datatype === XSD_DATE)) {
+    if (openEnded !== (datePart(date) === EUROPE_OPEN_END && datatype === XSD_DATE)) {
       throw new Error(`${at} says open_ended is ${openEnded} of ${date}; only the publisher's ${EUROPE_OPEN_END} at xsd:date is its open end`);
     }
     const code = textOrNull(row, 'publisher_code', at);

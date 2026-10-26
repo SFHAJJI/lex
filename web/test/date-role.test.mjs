@@ -27,6 +27,8 @@ import { historyOutcome } from "../scripts/live-history.mjs";
 import { renderProvenance } from "../scripts/provenance.mjs";
 import { citationForms } from "../scripts/citation.mjs";
 import { LIVE_CHROME, fillText } from "../scripts/live-chrome.mjs";
+import { exportState, pinKey } from "../scripts/live-export.mjs";
+import { CSV_COLUMNS, exportCsv } from "../scripts/export-build.mjs";
 
 const web = new URL("../", import.meta.url);
 const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", web), "utf8"));
@@ -43,6 +45,37 @@ function sample(operation, scenario) {
 }
 
 const bundle = () => sample("evidence_bundle", "the work on its state's date");
+
+/**
+ * An answer of an index of schema 8 or 6 as the real handler sent it before index 9 (the legacy mount's recorded answers,
+ * `base-answers.json`, replayed byte for byte by the platform's own tests): what "an older index names no role" is held to,
+ * rather than a census answer of index 9 compared with itself (the review of #987).
+ */
+const legacyAnswers = JSON.parse(await readFile(new URL("../tests/Lex.V3.Ingest.Tests/Fixtures/LegacySchema8Mount/base-answers.json", web), "utf8"));
+function legacy(operation, schema = 8) {
+  const entry = legacyAnswers[`schema${schema}_answers`].find((candidate) => candidate.operation === operation);
+  assert.ok(entry, `the schema-${schema} mount's recorded ${operation}`);
+  const envelope = JSON.parse(entry.body);
+  assert.ok(envelope.result, `the schema-${schema} ${operation} is an answer`);
+  return envelope;
+}
+
+/** The French app, built as the French pages are (`__LEX_CHROME_LOCALE__`). */
+async function frenchApp() {
+  const out = fileURLToPath(new URL(".react-build/app-fr-date-role-radar-test.mjs", web));
+  await build({
+    stdin: { contents: "export * from './app/index.jsx';", resolveDir: fileURLToPath(web), sourcefile: "date-role-radar-french-test.jsx", loader: "jsx" },
+    outfile: out,
+    bundle: true,
+    format: "esm",
+    platform: "node",
+    jsx: "automatic",
+    packages: "external",
+    logLevel: "silent",
+    define: { __LEX_CHROME_LOCALE__: JSON.stringify("fr") },
+  });
+  return import(`${pathToFileURL(out).href}?${Date.now()}`);
+}
 
 /** The census bundle's state dated by its entry into force, as index 9 serves an act its file does not date. */
 function byEntryIntoForce(envelope) {
@@ -197,9 +230,65 @@ test("the search page says a version dated by its entry into force as that, and 
   assert.ok(markup.includes('data-same-wording="1"'));
   assert.ok(markup.includes(fillText(EN.search.sameWording.one, { count: 1 })));
 
-  // An answer of an index of schema 8 or 6 names no role, and the page says what it said before.
-  const plain = searchOutcome({ state: "success", envelope: structuredClone(entry.envelope) });
-  assert.equal(plain.view.hits[0].dateRole ?? null, entry.envelope.result.value.hits[0].date_role ?? null);
+  // An answer of an index of schema 8 names no role, and the page says what it said before: the version line of its date.
+  const older = legacy("search");
+  assert.ok(older.result.value.hits.length > 0 && older.result.value.hits.every((hit) => !Object.hasOwn(hit, "date_role")), "schema 8 names no role");
+  const plain = searchOutcome({ state: "success", envelope: older });
+  assert.equal(plain.state, "success", plain.sentence);
+  assert.ok(plain.view.hits.every((hit) => hit.dateRole === null));
+  const plainMarkup = decode(renderToStaticMarkup(h(SearchAnswerView, { outcome: plain, onNextPage: () => {} })));
+  assert.ok(!plainMarkup.includes("dated by its entry into force"), "no role is said where none is served");
+});
+
+test("the CSV export says what its date is in a date_role column after the segments, and nothing on an older index (R21; the review of #987)", () => {
+  // The column is appended, so every column before it keeps its place.
+  assert.deepEqual(CSV_COLUMNS.slice(-2), ["segments", "date_role"]);
+  const csvOf = (envelope) => {
+    const outcome = readingOutcome({ state: "success", envelope });
+    assert.equal(outcome.state, "success", outcome.sentence);
+    const state = outcome.view.states[0];
+    const pins = new Set([...state.articles, ...state.articlesWithoutText].map((article) => pinKey(state.stateSha256, article.publisherId)));
+    const rows = exportCsv(exportState(outcome, pins).model).split("\r\n").filter((line) => line.length > 0);
+    assert.equal(rows[0], CSV_COLUMNS.join(","));
+    return rows.slice(1).map((row) => row.slice(row.lastIndexOf(",") + 1));
+  };
+  // A state dated by its entry into force: its applies_from cell is that date, and the role says what it is.
+  const dated = csvOf(byEntryIntoForce(bundle()));
+  assert.ok(dated.length > 0 && dated.every((role) => role === "entry_into_force"), JSON.stringify(dated));
+  // The census state dated by its own applicability date.
+  assert.ok(csvOf(bundle()).every((role) => role !== "entry_into_force" && role.length > 0));
+  // An index of schema 8 names no role: the cell is empty.
+  const older = legacy("evidence_bundle");
+  assert.ok(older.result.value.states.every((state) => !Object.hasOwn(state, "date_role")), "schema 8 names no role");
+  assert.ok(csvOf(older).every((role) => role === ""));
+});
+
+test("the radar says a row whose state is an act dated by its entry into force as that, in English and in French (R21; the review of #987)", async () => {
+  const envelope = structuredClone(census.envelopes.find((entry) => entry.operation === "changes_in_period" && entry.envelope.result?.value?.changes?.length).envelope);
+  const row = envelope.result.value.changes[0];
+  Object.assign(row.state, { date_role: "entry_into_force", entry_into_force: row.state.applicability_date, state_kind: "as_published" });
+  const date = row.state.applicability_date;
+  const outcome = radarOutcome({ state: "success", envelope });
+  assert.equal(outcome.state, "success", outcome.sentence);
+  assert.equal(outcome.view.rows[0].state.dateRole, "entry_into_force");
+  const english = decode(renderToStaticMarkup(h(RadarAnswerView, { outcome })));
+  assert.ok(english.replace(/<[^>]+>/g, "").includes(`the act as published, dated by its entry into force on ${date} (publisher)`), "the row's role");
+  assert.ok(!english.replace(/<[^>]+>/g, "").includes(`from ${date}:`), "never a bare from of it");
+  const french = await frenchApp();
+  const frenchText = decode(renderToStaticMarkup(h(french.RadarAnswerView, { outcome }))).replace(/<[^>]+>/g, "");
+  assert.ok(frenchText.includes(`l’acte tel que publié, daté de son entrée en vigueur le ${date} (éditeur)`), "the row's role, in French");
+  assert.ok(!frenchText.includes(`à partir du ${date}`));
+  // A row not compared after the act agrees with it (`radar.notComparedAct`; the French review of #987's repair round).
+  if (outcome.view.rows[0].reason !== null) {
+    assert.ok(frenchText.includes("(éditeur)\u00a0: non comparé\u00a0:"), frenchText);
+    assert.ok(!frenchText.includes("(éditeur)\u00a0: non comparée"), "never feminine after the act");
+  }
+  assert.notEqual(outcome.view.rows[0].reason, null, "the census row is one not compared, so the agreement is said");
+  // An older index names no role, and the row says what it said before.
+  const older = legacy("changes_in_period");
+  const plain = radarOutcome({ state: "success", envelope: older });
+  assert.equal(plain.state, "success", plain.sentence);
+  assert.ok(plain.view.rows.every((one) => one.state.dateRole === null));
 });
 
 test("a state answers today by its interval's end on index 9, so a closed state is never today's (the review of #987, F3)", () => {

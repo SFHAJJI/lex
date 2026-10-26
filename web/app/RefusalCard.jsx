@@ -13,7 +13,7 @@
 // expression's own language, because hardcoding French mislabels every EU expression and makes a
 // screen reader read English law in a French voice.
 
-import { REFUSAL_CARD_COPY, candidateView, reasonView, validateRefusal } from '../scripts/refusal-card.mjs';
+import { REFUSAL_CARD_COPY, candidateView, reasonView, validateRefusal, versionNameKey } from '../scripts/refusal-card.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG, fillText } from '../scripts/live-chrome.mjs';
 import { permalinkHref } from '../scripts/permalinks.mjs';
 import { Say } from './LiveAnswer.jsx';
@@ -95,13 +95,27 @@ function Payload({ parts, copy }) {
     <>
       {parts.structured.map((item) => (item.kind === 'candidates' ? (
         <ul className="refusal-candidates" key={item.key}>
-          {item.values.map((value) => candidateView(value, item.dateRoles)).map((candidate) => (
-            <li className="refusal-candidate" key={candidate.href}>
-              {/* A candidate is a permalink as the API mints it: linked under the page's own language (R61). */}
-              <a href={permalinkHref(candidate.href, CHROME_LOCALE)}>
-                <Candidate candidate={candidate} copy={copy} />
-              </a>
-            </li>
+          {item.values.map((value, index) => candidateView(value, item.dateRoles, item.places?.[index] ?? null)).map((candidate, index) => (
+            candidate.coordinate !== null ? (
+              // A state the catalogue names no expression of (index 9): named by its kind and role, with no link (the review of #987).
+              <li className="refusal-candidate" key={`${candidate.coordinate}#${index}`} data-candidate-unexpressed="">
+                <Say
+                  template={copy.candidateUnexpressed}
+                  values={{
+                    version: fillText(copy.versions[versionNameKey(candidate.version.kind, candidate.version.role)], { date: candidate.validFrom }),
+                    hash: <code>{candidate.hashPrefix}</code>,
+                  }}
+                />
+                {' ('}<code>{candidate.coordinate}</code>{')'}
+              </li>
+            ) : (
+              <li className="refusal-candidate" key={candidate.href}>
+                {/* A candidate is a permalink as the API mints it: linked under the page's own language (R61). */}
+                <a href={permalinkHref(candidate.href, CHROME_LOCALE)}>
+                  <Candidate candidate={candidate} copy={copy} />
+                </a>
+              </li>
+            )
           ))}
         </ul>
       ) : (

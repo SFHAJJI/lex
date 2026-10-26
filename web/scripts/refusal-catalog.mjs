@@ -109,13 +109,15 @@ export const REFUSAL_EXAMPLES = Object.freeze({
       what_would_answer: ['new_official_observation'],
       asserts_absence_of_law: false,
       // What a mount of lex-v3-luxembourg-index/9 adds (S7a): why no state covers the date, in the language its chain is,
-      // the states that reason names (none before the history), a hole's span, and when the catalogue was read.
-      language: 'fra',
-      reason: 'before_history',
+      // the states that reason names, a hole's span, and when the catalogue was read. Here a French version covers the date
+      // and no English expression of it is held, so the English history begins later and names the French version (the
+      // census's richest payload names states since the review of #987, and an example teaches the list's rows).
+      language: 'eng',
+      reason: 'no_expression_in_language',
       reason_rule: 'reason says why no state covers the date in the publisher catalogue as this index read it',
       catalogue_read_no_later_than: '2026-01-01T00:00:00Z',
-      named_states: [],
-      named_state_sha256s: [],
+      named_states: [`/${PUBLISHER}/${WORK}/1995-01-01--${CANDIDATE_A}/fra`],
+      named_state_sha256s: [CANDIDATE_A],
       hole_from: null,
       hole_to: null,
     },

@@ -16,6 +16,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { RefusalCard } from './RefusalCard.jsx';
 import { LIVE_RADAR_IDLE, RADAR_LANGUAGES, createRadarSession } from '../scripts/live-radar.mjs';
 import { ENGLISH_LANG, fillCounted, liveChrome } from '../scripts/live-chrome.mjs';
+import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
 import { FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, refusalCardCopyFor } from './LiveAnswer.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
@@ -33,7 +34,7 @@ function asSentence(text) {
 /** The states a row names besides its own, each by its permalink, so a reader can open either. */
 function Named({ label, permalinks }) {
   const listed = permalinks.map((permalink, index) => (
-    <Fragment key={permalink}>
+    <Fragment key={`${permalink}#${index}`}>
       {index === 0 ? '' : ', '}
       <Permalink value={permalink} />
     </Fragment>
@@ -68,7 +69,8 @@ function Verdict({ row }) {
       {row.baseline === null ? null : <Named label={COPY.baseline} permalinks={[row.baseline.permalink]} />}
     </>
   );
-  return <Say template={COPY.notCompared} values={{ reason: COPY.reason[row.reason], named }} />;
+  // After a row naming the act as published, the verdict agrees with the act (the French review of #987's repair round).
+  return <Say template={datedByEntryIntoForce(row.state) ? COPY.notComparedAct : COPY.notCompared} values={{ reason: COPY.reason[row.reason], named }} />;
 }
 
 /** One radar view, laid out: the window, the population, the rows and the caveat. */
@@ -102,7 +104,7 @@ export function RadarView({ view }) {
           {view.rows.map((row) => (
             <li key={row.state.stateSha256} data-reason={row.reason ?? (row.wordingChanged ? 'changed' : 'unchanged')}>
               <Say
-                template={COPY.row}
+                template={datedByEntryIntoForce(row.state) ? COPY.rowEntryIntoForce : COPY.row}
                 values={{
                   work: <strong>{row.workKey}</strong>,
                   language: row.state.language,

@@ -24,6 +24,7 @@
 // Nothing is derived: no legal effect, no amending act, no entry into force.
 
 import { isCalendarDate } from './temporal.mjs';
+import { readDateFacts } from './date-role.mjs';
 import { luxembourgPermalink } from './permalinks.mjs';
 
 const DIGEST = /^[0-9a-f]{64}$/;
@@ -107,6 +108,9 @@ function readStateReference(state, where, workKey) {
     language,
     applicabilityDate,
     nextApplicabilityDate: next,
+    // The date's role and the act's entry into force on index 9 (null on an index of schema 8 or 6): a row whose state is an
+    // act dated by its entry into force says that date as that, never as one it applies from (R21; the review of #987).
+    ...readDateFacts(state, applicabilityDate, where),
     stateSha256,
     expressionIri: requireText(requireOwn(state, 'expression_iri', where), `${where} expression_iri`),
     articleCount: requireCount(requireOwn(state, 'article_count', where), `${where} article_count`),

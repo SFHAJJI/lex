@@ -71,29 +71,69 @@ test("the act's dates are read by role, with the publisher's code and its qualif
 });
 
 test("a force date that breaks the answer's own rules is thrown, never said", () => {
-  const drift = {
-    "an unknown role": (value) => { value.dates[0].role = "in_force"; },
-    "an entry into force without EV": (value) => { value.dates[0].publisher_code = "MA"; },
-    "an application without MA": (value) => { value.dates[1].publisher_code = "EV"; },
-    "the code EV given no role": (value) => { value.dates[1].role = "not_pinned"; value.dates[1].publisher_code = "EV"; },
-    "codes that are not the note's": (value) => { value.dates[2].publisher_note_codes = "AU+TARD V ART 98"; },
-    "an open end that is a date": (value) => { value.dates[2].open_ended = true; },
-    "a role said not held that has a date": (value) => { value.roles_not_held = ["entry_into_force", "end_of_validity"]; },
-    "a role not said not held that has none": (value) => { value.roles_not_held = []; },
-    "dates out of role order": (value) => { value.dates.reverse(); },
-    "a conflict the dates do not hold": (value) => { value.conflicts = [{ role: "entry_into_force", dates: ["2016-05-24", "2016-05-25"] }]; },
-    "another act's dates": (value) => { value.seed_celex = "32014L0065"; },
-    "a date said twice": (value) => { value.dates[1].date_identity_sha256 = value.dates[0].date_identity_sha256; },
+  // Each case breaks one rule and is refused for that rule, by its message: a case that broke two would pass on the other and
+  // mask the one it names (the review of #987: "the code EV given no role" also removed the application, so the reader
+  // refused it for the role order and the roles not held, and still did with the EV check taken out).
+  const notPinned = (code) => (value) => {
+    value.dates.push({ ...value.dates[2], role: "not_pinned", date: "2021-01-01", publisher_code: code, publisher_note: null,
+      publisher_note_codes: null, date_identity_sha256: "e".repeat(64) });
   };
-  for (const [name, change] of Object.entries(drift)) {
-    assert.throws(() => readEuropeForceDates({ celex: "32016R0679", force_dates: forceDates(change) }, "an answer"), Error, name);
+  const drift = {
+    "an unknown role": [(value) => { value.dates[0].role = "in_force"; }, /which no force date takes/],
+    "an entry into force without EV": [(value) => { value.dates[0].publisher_code = "MA"; }, /the code EV gives that role/],
+    "an application without MA": [(value) => { value.dates[1].publisher_code = "EV"; }, /the code MA gives that role/],
+    "the code EV given no role": [notPinned("EV"), /gives no role to the code EV, which has one/],
+    "the code MA given no role": [notPinned("MA"), /gives no role to the code MA, which has one/],
+    "codes that are not the note's": [(value) => { value.dates[2].publisher_note_codes = "AU+TARD V ART 98"; }, /not its note's/],
+    "an open end that is a date": [(value) => { value.dates[2].open_ended = true; }, /only the publisher's 9999-12-31/],
+    "a date that is no publisher date": [(value) => { value.dates[2].date = "2020-05-25T00:00:00"; }, /which is no publisher date/],
+    "a role said not held that has a date": [(value) => { value.roles_not_held = ["entry_into_force", "end_of_validity"]; }, /are not held, and its dates leave/],
+    "a role not said not held that has none": [(value) => { value.roles_not_held = []; }, /are not held, and its dates leave/],
+    "dates out of role order": [(value) => { value.dates.reverse(); }, /the dates are in role order/],
+    "a conflict the dates do not hold": [(value) => { value.conflicts = [{ role: "entry_into_force", dates: ["2016-05-24", "2016-05-25"] }]; }, /names 1 conflicts/],
+    "another act's dates": [(value) => { value.seed_celex = "32014L0065"; }, /are 32014L0065's dates/],
+    "a date said twice": [(value) => { value.dates[1].date_identity_sha256 = value.dates[0].date_identity_sha256; }, /repeats a date/],
+  };
+  for (const [name, [change, rule]] of Object.entries(drift)) {
+    assert.throws(() => readEuropeForceDates({ celex: "32016R0679", force_dates: forceDates(change) }, "an answer"), rule, name);
   }
+  // The isolated not-pinned row is read when its code has no role of its own.
+  assert.equal(readEuropeForceDates({ celex: "32016R0679", force_dates: forceDates(notPinned("MA/PART")) }, "an answer").dates.at(-1).code, "MA/PART");
   // Two entries into force: both are held, the conflict names both, and the reader reads it.
   const two = forceDates((value) => {
     value.dates.splice(1, 0, { ...value.dates[0], date: "2016-05-25", date_identity_sha256: "d".repeat(64) });
     value.conflicts = [{ role: "entry_into_force", dates: ["2016-05-24", "2016-05-25"] }];
   });
   assert.deepEqual(readEuropeForceDates({ celex: "32016R0679", force_dates: two }, "an answer").conflicts[0].dates, ["2016-05-24", "2016-05-25"]);
+});
+
+test("a date in the forms the contract admits is read, the open end in any of them, and an unpinned code keeps its property's role (the review of #987)", () => {
+  // xsd:date with a timezone (2016-05-24Z, +02:00, -14:00), as the contract's PublisherDate admits it; the open end with one.
+  for (const date of ["2016-05-24Z", "2016-05-24+02:00", "2016-05-24-14:00"]) {
+    const view = readEuropeForceDates({ celex: "32016R0679", force_dates: forceDates((value) => { value.dates[0].date = date; }) }, "an answer");
+    assert.equal(view.dates[0].date, date, "said exactly as served");
+  }
+  for (const date of ["2016-05-24+15:00", "2016-05-24Z+01:00", "2016-5-24"]) {
+    assert.throws(() => readEuropeForceDates({ celex: "32016R0679", force_dates: forceDates((value) => { value.dates[0].date = date; }) }, "an answer"),
+      /which is no publisher date/, date);
+  }
+  const open = (date) => forceDates((value) => {
+    value.dates.splice(2, 0, { ...value.dates[2], role: "end_of_validity", date, open_ended: true, publisher_code: null, publisher_note: null,
+      publisher_note_codes: null, date_identity_sha256: "f".repeat(64) });
+    value.roles_not_held = [];
+  });
+  for (const date of ["9999-12-31", "9999-12-31Z"]) {
+    assert.equal(readEuropeForceDates({ celex: "32016R0679", force_dates: open(date) }, "an answer").dates[2].openEnded, true, date);
+  }
+  // A code the table does not pin on the end-of-validity or signature property: the property's role, the code kept.
+  for (const role of ["end_of_validity", "signature"]) {
+    const view = readEuropeForceDates({ celex: "32016R0679", force_dates: forceDates((value) => {
+      value.dates.splice(2, 0, { ...value.dates[2], role, date: "2020-01-01", publisher_code: "PE", date_identity_sha256: "f".repeat(64) });
+      value.dates.sort((a, b) => EUROPE_FORCE_DATE_ROLES.indexOf(a.role) - EUROPE_FORCE_DATE_ROLES.indexOf(b.role));
+      value.roles_not_held = EUROPE_FORCE_DATE_NAMED_ROLES.filter((one) => !value.dates.some((row) => row.role === one));
+    }) }, "an answer");
+    assert.equal(view.dates.find((row) => row.role === role).code, "PE", role);
+  }
 });
 
 test("each force-date entry says its role in its own words, in English and in French, and never 'in force' on an interval (R21)", () => {

@@ -306,7 +306,9 @@ test("the speech test fails a screen that borrows the other publisher's date wor
  * The words of an application said right before a date, in English and in French: what R21 never says of an entry into
  * force. "applies from" of the next state held is said of that state's own date, which is another date.
  */
-const APPLICATION_BEFORE = /(?:appl(?:y|ies|ying|icable)(?: (?:from|on|to))?|s[’']appliqu\p{L}*(?: à partir)?(?: du| au| le)?|applicables? (?:à partir )?(?:du|au|le|jusqu[’']au))\s*$/iu;
+// A bare "from" or "à partir du" right before the date is caught too: it says the date is one the state applies from, which
+// R21 never says of an entry into force (the review of #987: the radar's row said "from {date}" with no role).
+const APPLICATION_BEFORE = /(?:appl(?:y|ies|ying|icable)(?: (?:from|on|to))?|s[’']appliqu\p{L}*(?: à partir)?(?: du| au| le)?|applicables? (?:à partir )?(?:du|au|le|jusqu[’']au)|\bfrom|à partir du)\s*$/iu;
 
 /** Where a screen says an application word right before a date: each such place, with the words before it. */
 function applicationSaidOf(markup, date) {
@@ -325,7 +327,7 @@ function datedByItsEntryIntoForce(operation, envelope) {
   const stated = (holder) => holder !== null && typeof holder === "object" && typeof holder.applicability_date === "string" && typeof holder.state_sha256 === "string";
   const holders = operation === "search" ? value.hits
     : operation === "diff" ? value.comparisons.flatMap((comparison) => [comparison.from, comparison.to])
-    : operation === "changes_in_period" ? []
+    : operation === "changes_in_period" ? value.changes.flatMap((change) => [change.state, change.baseline]).filter((holder) => holder !== null)
     : value.states;
   const dated = (holders ?? []).filter(stated);
   if (dated.length === 0) return null;
@@ -363,7 +365,7 @@ async function frenchViews() {
 
 test("per date role: no screen says an entry into force as an application, in English or in French, for every census answer", async () => {
   const french = await frenchViews();
-  const views = { en: { SearchAnswerView, DossierAnswerView, ReadingAnswerView, ExportAnswerView, ExportPanel, HistoryAnswerView, CompareAnswerView }, fr: french };
+  const views = { en: { SearchAnswerView, DossierAnswerView, ReadingAnswerView, ExportAnswerView, ExportPanel, HistoryAnswerView, CompareAnswerView, RadarAnswerView }, fr: french };
   const screens = [
     ["search", searchOutcome, "SearchAnswerView"],
     ["dossier", dossierOutcome, "DossierAnswerView"],
@@ -371,8 +373,11 @@ test("per date role: no screen says an entry into force as an application, in En
     ["evidence_bundle", readingOutcome, "ExportAnswerView"],
     ["article_history", historyOutcome, "HistoryAnswerView"],
     ["diff", compareOutcome, "CompareAnswerView"],
+    // The radar's rows (the review of #987).
+    ["changes_in_period", radarOutcome, "RadarAnswerView"],
   ];
   let said = 0;
+  const screensSaid = new Set();
   for (const [operation, outcomeOf, name] of screens) {
     for (const entry of census.envelopes.filter((candidate) => candidate.operation === operation && candidate.envelope.result?.value?.publisher === "lu-legilux")) {
       const redated = datedByItsEntryIntoForce(operation, entry.envelope);
@@ -391,10 +396,13 @@ test("per date role: no screen says an entry into force as an application, in En
         assert.ok(decode(markup).includes(redated.date), `${language} ${name} (${entry.scenario}) says the date`);
         assert.deepEqual(applicationSaidOf(markup, redated.date), [], `${language} ${name} (${entry.scenario}) says an entry into force as an application`);
         said += 1;
+        screensSaid.add(`${language} ${name}`);
       }
     }
   }
-  assert.ok(said >= 14, `every screen was said in both languages: ${said}`);
+  assert.ok(said >= 16, `every screen was said in both languages: ${said}`);
+  assert.equal(screensSaid.size, 14, `each of the seven screens in both languages, the radar's among them: ${[...screensSaid].join(", ")}`);
+  assert.ok(screensSaid.has("fr RadarAnswerView"));
 });
 
 test("the per-role speech test fails a screen that says an entry into force as an application", () => {
@@ -405,7 +413,8 @@ test("the per-role speech test fails a screen that says an entry into force as a
   const borrowed = markup.replace(`dated by its entry into force on ${redated.date}`, `the state applying from ${redated.date}`);
   assert.notEqual(borrowed, markup, "the heading says the entry into force");
   assert.notDeepEqual(applicationSaidOf(borrowed, redated.date), []);
-  for (const words of ["applicable from", "applies from", "la version applicable à partir du", "s’applique à partir du", "applicable jusqu’au"]) {
+  for (const words of ["applicable from", "applies from", "la version applicable à partir du", "s’applique à partir du", "applicable jusqu’au",
+    "loi-1991-08-10-n3, fra, from", "loi-1991-08-10-n3, fra, à partir du", "Carried by 1 held state, from"]) {
     assert.notDeepEqual(applicationSaidOf(`<p>${words} ${redated.date}</p>`, redated.date), [], words);
   }
   for (const words of ["entry into force on", "daté de son entrée en vigueur le", "entrée en vigueur :", "Read on"]) {

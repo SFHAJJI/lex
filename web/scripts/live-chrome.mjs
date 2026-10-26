@@ -201,7 +201,7 @@ const EN = Object.freeze({
     textlessHeading: "Versions whose text this site does not hold",
     textlessRow: "{version}: {why}.",
     gap: "From {from}, the end the publisher's catalogue gives for one version, to {to}, when the next begins, the catalogue lists no version: a gap this site does not fill.",
-    overlap: "From {from} to {to}, two versions in the publisher's catalogue are both applicable (publisher).",
+    overlap: "From {from} to the day before {to}, two versions in the publisher's catalogue are both applicable (publisher).",
     sameDate: "On {date}, the publisher's catalogue lists {count} versions.",
     unclearEndDay: "{date} is the end the publisher's catalogue gives for one version, the day before the next begins; whether that day belongs to it is unclear, and this site gives it to neither.",
     invalidInterval: "The version from {date} has an end in the publisher's catalogue, {to}, on or before its own start, so it covers no date; its own link still opens it.",
@@ -433,12 +433,16 @@ const EN = Object.freeze({
     windowMisses: "This window does not meet what this index holds.",
     windowMissesRange: "This window does not meet what this index holds, from {first} to {last}.",
     row: "{work}, {language}, from {from}: {verdict}. {permalink}",
+    // A row whose state is an act dated by its entry into force, said as that (R21; the review of #987), as History says it.
+    rowEntryIntoForce: "{work}, {language}, the act as published, dated by its entry into force on {from} (publisher): {verdict}. {permalink}",
     wording: Object.freeze({ changed: "wording changed", unchanged: "wording unchanged" }),
     compared: "{wording} from the state of {date}{baseline}: {changed} changed, {added} added, {removed} removed, {unchanged} unchanged",
     notCompared: "not compared: {reason}{named}",
+    // The same after a row naming the act as published (`rowEntryIntoForce`), a twin for a language that agrees it with "act".
+    notComparedAct: "not compared: {reason}{named}",
     reason: Object.freeze({
       first_held_state: "the first state this index holds for the work and language, so there is nothing to compare it with",
-      ambiguous_version: "several states of the work apply on this date, so none is compared",
+      ambiguous_version: "several states of the work cover this date, so none is compared",
       ambiguous_baseline: "several states apply on the date before it, so no baseline is chosen",
       profiles_differ: "this state and its baseline were read under different rule profiles, so they are not compared",
       no_held_baseline: "the day before it is covered by no state whose text this site holds, so there is no baseline",

@@ -29,6 +29,18 @@ import { LIVE_CHROME, entriesOf, fillText } from "../scripts/live-chrome.mjs";
 
 const web = new URL("../", import.meta.url);
 const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", web), "utf8"));
+const refusalSamples = JSON.parse(await readFile(new URL("../schemas/v3-platform/refusal-payload-samples.json", web), "utf8"));
+
+/**
+ * The payload the platform's handler sent for an exact reference whose ELI names the act as published, at a date a later
+ * consolidation covers (`outside_named_version`, the review of #987, F2), as the refusal census recorded it.
+ */
+function outsideNamedVersion() {
+  const row = refusalSamples.produced.find((candidate) => candidate.code === "no_version_for_date");
+  const payload = [row.payload, ...(row.more_payloads ?? [])].find((candidate) => candidate.reason === "outside_named_version");
+  assert.ok(payload, "the refusal census holds the platform's outside_named_version payload");
+  return structuredClone(payload);
+}
 const EN = LIVE_CHROME.en;
 const FR = LIVE_CHROME.fr;
 const ENTITIES = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#x27;": "'", "&#39;": "'" };
@@ -43,11 +55,26 @@ function sample(operation, scenario) {
   return structuredClone(entry.envelope);
 }
 
+/**
+ * An answer of an index of schema 8 or 6 as the real handler sent it before index 9 (the legacy mount's recorded answers,
+ * `base-answers.json`, replayed byte for byte by the platform's own tests): what "an older index names no role" is held to,
+ * rather than a census answer of index 9 compared with itself (the review of #987).
+ */
+const legacyAnswers = JSON.parse(await readFile(new URL("../tests/Lex.V3.Ingest.Tests/Fixtures/LegacySchema8Mount/base-answers.json", web), "utf8"));
+function legacy(operation, schema = 8) {
+  const entry = legacyAnswers[`schema${schema}_answers`].find((candidate) => candidate.operation === operation);
+  assert.ok(entry, `the schema-${schema} mount's recorded ${operation}`);
+  const envelope = JSON.parse(entry.body);
+  assert.ok(envelope.result, `the schema-${schema} ${operation} is an answer`);
+  return envelope;
+}
+
 /** The French app, built as the French pages are (`__LEX_CHROME_LOCALE__`). */
 async function frenchApp() {
   const out = fileURLToPath(new URL(".react-build/app-fr-catalogue-chain-test.mjs", web));
   await build({
-    stdin: { contents: "export * from './app/index.jsx';", resolveDir: fileURLToPath(web), sourcefile: "catalogue-chain-french-test.jsx", loader: "jsx" },
+    // The search page's outcome too, so its head sentence is said as the French page says it.
+    stdin: { contents: "export * from './app/index.jsx'; export { searchOutcome as liveSearchOutcome } from './scripts/live-search.mjs';", resolveDir: fileURLToPath(web), sourcefile: "catalogue-chain-french-test.jsx", loader: "jsx" },
     outfile: out,
     bundle: true,
     format: "esm",
@@ -86,6 +113,8 @@ const REASON_PAYLOADS = Object.freeze({
   no_expression_in_language: () => noVersion("no_expression_in_language", {
     requested_date: "2018-01-01", language: "eng", history_begins: "2017-07-25", nearest_earlier: "2017-07-25", nearest_later: null,
   }),
+  // The platform's own payload, as its handler sent it (the review of #987).
+  outside_named_version: outsideNamedVersion,
 });
 
 /** A textless version's refusal, as the platform's RefuseTextless sends it (S7a). */
@@ -138,6 +167,24 @@ test("the refusal card says why no version covers the date for each of index 9's
       assertTimeVocabulary(reasonView(card.code, payload, copy).map((line) => line.text).join(" "), `${language} ${reason}`);
     }
   }
+  // A closed end is said as the reviewed history says an end: the day it gives is the first not covered, so the version is
+  // applicable until the day before it, never "to" it (the review of #987).
+  for (const [copy, said, never] of [
+    [EN.refusalCard, "is applicable until the day before 2015-01-01 (publisher)", "applicable to 2015-01-01"],
+    [FR.refusalCard, "est applicable jusqu’à la veille du 2015-01-01 (éditeur)", "jusqu’au 2015-01-01"],
+  ]) {
+    const [line] = reasonView("no_version_for_date", REASON_PAYLOADS.after_closed_end(), copy);
+    assert.ok(line.text.includes(said), line.text);
+    assert.ok(!line.text.includes(never), line.text);
+  }
+  // On the platform's nested fixture (the 2020 consolidation to 2023, the 2021 one inside it to 2022), the version named is
+  // the one that ends last, not the last to begin.
+  const nested = REASON_PAYLOADS.after_closed_end();
+  Object.assign(nested, { closed_on: "2023-01-01", requested_date: "2024-01-01", history_begins: "2020-01-01", nearest_earlier: "2021-01-01" });
+  assert.ok(reasonView("no_version_for_date", nested)[0].text.includes("the version that ends last is applicable until the day before 2023-01-01 (publisher), and no version begins on or after 2023-01-01"));
+  assert.ok(reasonView("no_version_for_date", nested, FR.refusalCard)[0].text.includes("la version dont la fin est la plus tardive est applicable jusqu’à la veille du 2023-01-01 (éditeur)"));
+  assert.match(EN.history.breakTo, /to the day before \{to\}/, "the same end convention as the history's");
+  assert.match(FR.history.breakTo, /à la veille du \{to\}/);
   // After a closed end, the base act's end-of-force date the publisher's record gives, and nothing said of force otherwise.
   const closed = reasonView("no_version_for_date", REASON_PAYLOADS.after_closed_end());
   assert.equal(closed[1].text, fillText(EN.refusalCard.baseActEndOfForce, { dates: "2015-01-01" }));
@@ -255,9 +302,13 @@ test("the dossier lists the catalogue's versions held without text and its gaps,
     assert.ok(markup.includes(said), said);
   }
   assert.ok(markup.includes(`<code>${outcome.view.chain.textless[1].stableCoordinate}</code>`), "a version naming no expression is given by its coordinate");
-  // An index of schema 8 or 6 names no chain, and the page says what it said before.
-  assert.equal(dossierOutcome({ state: "success", envelope: sample("dossier", "the work, in the language it is held in") }).view.chain === null,
-    !Object.hasOwn(sample("dossier", "the work, in the language it is held in").result.value, "catalogue_chain_rule"));
+  // An index of schema 8 names no chain, and the page says what it said before (the schema-8 mount's recorded dossier).
+  const older = legacy("dossier");
+  assert.ok(!Object.hasOwn(older.result.value, "catalogue_chain_rule"), "schema 8 names no chain");
+  const plain = dossierOutcome({ state: "success", envelope: older });
+  assert.equal(plain.state, "success", plain.sentence);
+  assert.equal(plain.view.chain, null);
+  assert.ok(!decode(renderToStaticMarkup(h(DossierAnswerView, { outcome: plain }))).includes(EN.dossier.chainHeading));
   // A held state listed as without text is drift, and refused.
   const drift = dossierWithChain();
   drift.result.value.textless_states[0].state_sha256 = drift.result.value.states[0].state_sha256;
@@ -407,4 +458,101 @@ test("every form these slices add says no application word of an entry into forc
     }
   }
   assert.deepEqual(Object.keys(REFUSAL_CARD_COPY.reasons).sort(), Object.keys(FR.refusalCard.reasons).sort());
+});
+
+test("the search page says the platform's outside_named_version refusal on its card, in English and in French (the review of #987)", async () => {
+  // The search refusal the census holds, carrying the platform's own outside_named_version payload: the card the page shows.
+  const template = census.envelopes.find((entry) => entry.operation === "search" && entry.envelope.refusal);
+  assert.ok(template, "the census holds a search refusal");
+  const payload = outsideNamedVersion();
+  const envelope = structuredClone(template.envelope);
+  envelope.refusal = { ...envelope.refusal, code: "no_version_for_date", helpful_payload: payload };
+  const outcome = searchOutcome({ state: "refusal", envelope });
+  assert.equal(outcome.state, "refusal", outcome.sentence);
+  assert.ok(outcome.card, "the refusal is a card, not an unreadable answer");
+  // Its head says what is true here: the version named is held and does not cover the date; never "no state applies"
+  // (the French review of #987's repair round, its point 1).
+  assert.equal(outcome.sentence, "This site holds the act the reference names and the version it names, but that version does not cover that date, so nothing was opened and no word was searched.");
+  // The census payload's nearest dates are the work's: the covering consolidation is the nearest earlier state.
+  assert.ok(payload.covering_states[0].includes(`/${payload.nearest_earlier}--`), "the nearest earlier date is the covering state's");
+  const [line] = reasonView("no_version_for_date", payload);
+  assert.equal(line.key, "reasons.outside_named_version");
+  assert.ok(line.text.includes(payload.requested_date) && line.text.includes(payload.catalogue_read_no_later_than));
+  const english = decode(renderToStaticMarkup(h(SearchAnswerView, { outcome, onNextPage: () => {} })));
+  assert.ok(english.includes(line.text), "the English page says why");
+  for (const state of [...payload.named_states, ...payload.covering_states]) assert.ok(english.includes(state), `the card names ${state}`);
+  const french = await frenchApp();
+  const frenchOutcome = french.liveSearchOutcome({ state: "refusal", envelope });
+  const frenchPage = decode(renderToStaticMarkup(h(french.SearchAnswerView, { outcome: frenchOutcome, onNextPage: () => {} })));
+  assert.ok(frenchPage.includes(reasonView("no_version_for_date", payload, FR.refusalCard)[0].text), "the French page says why");
+  assert.ok(frenchPage.includes("mais cette version ne couvre pas cette date"), "and its head, in French");
+  assert.ok(!frenchPage.includes("ne s’applique à cette date"), "never that no version applies");
+  assert.ok(decode(renderRefusalCard({ code: "no_version_for_date", sentence: "x.", payload })).includes(line.text), "the string card says it");
+});
+
+/** An ambiguity on index 9 whose candidates include a state the catalogue names no expression of, as the platform sends it. */
+function ambiguityWithAStateNamingNoExpression() {
+  const coordinate = "/lu-legilux/loi-2003-03-03-n1/2003-03-03";
+  return {
+    code: "ambiguous_version",
+    sentence: "Several states of this work apply on that date, and none is chosen.",
+    payload: {
+      requested_date: "2004-01-01",
+      candidates: [coordinate, `${coordinate}--${DIGEST_B}/fra`],
+      candidate_state_sha256s: [DIGEST_A, DIGEST_B],
+      candidate_state_kinds: ["consolidation", "as_published"],
+      candidate_date_roles: ["applicability", "applicability_in_file"],
+      candidate_applicability_dates: ["2003-03-03", "2003-03-03"],
+      candidate_applicable_tos: [null, null],
+      candidate_applicable_to_sources: [null, null],
+      candidate_boundaries: ["derived", "derived"],
+      candidate_text_statuses: ["not_acquired", "held"],
+      candidate_states_rule: "the candidate_ lists, in the order of the candidates",
+    },
+  };
+}
+
+test("an ambiguity names a state its catalogue names no expression of by its coordinate, without a link, in both renderers (the review of #987)", async () => {
+  const card = ambiguityWithAStateNamingNoExpression();
+  validateRefusal(card);
+  const version = fillText(EN.refusalCard.versions.consolidation, { date: "2003-03-03" });
+  const said = fillText(EN.refusalCard.candidateUnexpressed, { version, hash: DIGEST_A.slice(0, 8) });
+  const markup = decode(renderToStaticMarkup(h(RefusalCard, card)));
+  assert.ok(markup.replace(/<[^>]+>/g, "").includes(said), "the React card names it by its kind and role");
+  assert.ok(markup.includes("<code>/lu-legilux/loi-2003-03-03-n1/2003-03-03</code>"), "and by its coordinate");
+  assert.ok(!markup.includes('href="/lu-legilux/loi-2003-03-03-n1/2003-03-03"') && !markup.includes("2003-03-03--" + DIGEST_A), "with no link");
+  assert.equal((markup.match(/<a href=/g) ?? []).length, 1, "the held state keeps its link");
+  const string = decode(renderRefusalCard(card));
+  assert.ok(string.replace(/<[^>]+>/g, "").includes(said), "the string card says the same");
+  assert.ok(string.includes("data-candidate-unexpressed"));
+  const french = await frenchApp();
+  const frenchSaid = fillText(FR.refusalCard.candidateUnexpressed, {
+    version: fillText(FR.refusalCard.versions.consolidation, { date: "2003-03-03" }), hash: DIGEST_A.slice(0, 8),
+  });
+  assert.ok(decode(renderToStaticMarkup(h(french.RefusalCard, { ...card, copy: FR.refusalCard }))).replace(/<[^>]+>/g, "").includes(frenchSaid));
+  // After a version named as the act as published, the French names "cette version", never "elle" (the French review).
+  const act = ambiguityWithAStateNamingNoExpression();
+  act.payload.candidate_state_kinds = ["as_published", "as_published"];
+  act.payload.candidate_date_roles = ["entry_into_force", "applicability_in_file"];
+  const frenchAct = decode(renderToStaticMarkup(h(french.RefusalCard, { ...act, copy: FR.refusalCard }))).replace(/<[^>]+>/g, "");
+  assert.ok(frenchAct.includes("l’acte tel que publié, daté de son entrée en vigueur le 2003-03-03 (éditeur), empreinte aaaaaaaa"), frenchAct);
+  assert.ok(frenchAct.includes("ne propose aucun lien vers cette version") && !frenchAct.includes("vers elle"));
+  assert.ok(frenchAct.includes("(/lu-legilux/loi-2003-03-03-n1/2003-03-03)"), "the coordinate set apart");
+
+  // A coordinate names no one state: without index 9's digest at its place, or with lists not aligned on the candidates, the
+  // card refuses the payload rather than guess.
+  const bare = ambiguityWithAStateNamingNoExpression();
+  for (const key of Object.keys(bare.payload).filter((key) => key.startsWith("candidate_"))) delete bare.payload[key];
+  assert.throws(() => validateRefusal(bare), /names no one state/);
+  const shifted = ambiguityWithAStateNamingNoExpression();
+  shifted.payload.candidate_state_sha256s[1] = "c".repeat(64);
+  assert.throws(() => validateRefusal(shifted), /aligned on the candidates/);
+  const short = ambiguityWithAStateNamingNoExpression();
+  short.payload.candidate_state_kinds = ["consolidation"];
+  assert.throws(() => validateRefusal(short), /candidate_state_kinds lists 1 kinds for 2 candidates/);
+  // A coordinate of another work is not a state of the work the choice is about.
+  const stranger = ambiguityWithAStateNamingNoExpression();
+  stranger.payload.candidates = [stranger.payload.candidates[1], "/lu-legilux/loi-1999-01-01-n1/2003-03-03"];
+  stranger.payload.candidate_state_sha256s = [DIGEST_B, DIGEST_A];
+  assert.throws(() => validateRefusal(stranger), /is not a state of lu-legilux\/loi-2003-03-03-n1/);
 });

@@ -164,16 +164,21 @@ test("a refusal of the phase says what was recognised above its card, with the p
       const table = europe ? LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES : LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES;
       assert.equal(outcome.state, "refusal", row.code);
       assert.equal(outcome.card, true, `${row.code}: the card accepts what was recognised: ${outcome.sentence}`);
-      assert.equal(outcome.sentence, table[row.code], row.code);
+      // A version the reference names that is held and does not cover the date has its own head (the French review of
+      // #987's repair round): "no state applies" would be false there.
+      const outside = row.code === "no_version_for_date" && payload.reason === "outside_named_version";
+      assert.equal(outcome.sentence, outside ? LIVE_SEARCH_HELD_ACT_REFUSAL_SENTENCES["lu-legilux"].outside : table[row.code], row.code);
+      assert.ok(Object.hasOwn(REFUSALS_FR.sentences, outcome.sentence), `${row.code}: no reviewed French`);
       assert.equal(outcome.recognition.act, payload.recognised_act, row.code);
       const shown = text(view(outcome));
       assert.ok(shown.includes(`Recognised: ${payload.recognised_title ?? payload.recognised_act}`), `${row.code}: ${shown}`);
       assert.ok(shown.includes(outcome.sentence), row.code);
       assert.ok(shown.indexOf("Recognised:") < shown.indexOf(outcome.sentence), `${row.code}: the recognition above the card`);
-      seen.add(`${europe ? "eu" : "lu"}:${row.code}`);
+      seen.add(`${europe ? "eu" : "lu"}:${row.code}${outside ? ":outside_named_version" : ""}`);
     }
   }
-  for (const code of ["eu:text_not_available", "eu:retrieval_mode_unavailable", "lu:ambiguous_identifier", "lu:identifier_unknown", "lu:anchor_not_in_version"]) {
+  for (const code of ["eu:text_not_available", "eu:retrieval_mode_unavailable", "lu:ambiguous_identifier", "lu:identifier_unknown", "lu:anchor_not_in_version",
+    "lu:no_version_for_date:outside_named_version"]) {
     assert.ok(seen.has(code), `the census drives the phase's ${code}`);
   }
   // A refusal of a word search says nothing recognised, and its sentence is the search's.
