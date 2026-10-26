@@ -18,8 +18,17 @@ namespace Lex.V3.Ingest.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Temporal: each work's held states in one language, grouped by applicability date, are a timeline, and the
-/// timeline says what a dated request must select on any day: nothing before the first date
+/// Temporal, over <c>lex-v3-luxembourg-index/9</c>: the interval oracle (<see cref="IntervalOracle"/>, the data design's §3.5)
+/// says what a dated request must select from the catalogue's own facts by the specification's interval rules, apart from the
+/// reader and from the index's own chain; each arm is held to its own operation's answer (<c>as_of</c> refuses a state whose
+/// text is not held, for its reason; <c>in_force_on</c> names it in a row) and every refusal to its code and, for
+/// <c>no_version_for_date</c>, its reason. The cases are each day a chain's rules change on (each start and each end), a day
+/// inside and the last day of each span between them, the day before the first and a day long after the last.
+/// </para>
+/// <para>
+/// Temporal, over an index of schema 8 or 6 (the rule those readers keep): each work's held states in one language, grouped
+/// by applicability date, are a timeline, and the timeline says what a dated request must select on any day: nothing before
+/// the first date
 /// (<c>no_version_for_date</c>), the one state of the latest date on or before the day, or
 /// <c>ambiguous_version</c> where two states share that date. The cases are the day before the first date,
 /// each date, a day inside and the last day of each window, and a day long after the latest date, for a
@@ -83,7 +92,10 @@ public sealed partial class V3MountedGatesTests
         }
     }
 
-    /// <summary>The timelines of a mount's Luxembourg index, per work and language.</summary>
+    /// <summary>
+    /// The timelines of a mount's Luxembourg index, per work and language: its held states, the states whose text it holds
+    /// (on index 9 the states table also names the catalogue's states without text, which bind no article).
+    /// </summary>
     internal static IReadOnlyList<Timeline> Timelines(string mountDirectory)
     {
         var index = Path.Combine(mountDirectory, V3CorpusMount.IndexFileName);
@@ -94,6 +106,7 @@ public sealed partial class V3MountedGatesTests
 
         using var connection = LuxembourgIndexBuilder.Open(index, SqliteOpenMode.ReadOnly);
         return ReadStates(connection)
+            .Where(static row => row.ArticleIdentitiesJson != "[]")
             .GroupBy(static row => (row.WorkKey, row.Language))
             .OrderBy(static group => group.Key.WorkKey, StringComparer.Ordinal)
             .ThenBy(static group => group.Key.Language, StringComparer.Ordinal)
@@ -156,6 +169,56 @@ public sealed partial class V3MountedGatesTests
     }
 
     /// <summary>
+    /// The days the interval oracle asks of one work in one language, or with none (<paramref name="language"/> null): the day
+    /// before its first boundary, each boundary (each start and each end of its chain), a day inside and the last day of each
+    /// span between two, and a day long after the last; each with what the operation must answer, by the oracle.
+    /// </summary>
+    internal static IReadOnlyList<TemporalCase> IntervalCases(IntervalOracle oracle, string workKey, string? language, Func<string, string?, DateOnly, string> expected)
+    {
+        var dates = oracle.Boundaries(workKey, language);
+        return dates.Count == 0
+            ? []
+            : Cases($"{workKey}/{language ?? "any"}", workKey, dates, day => expected(workKey, language, day));
+    }
+
+    /// <summary>
+    /// <c>as_of</c> over index 9, in a language or with none, keyed as the oracle keys it: the sorted states served; a refusal by
+    /// its code, and <c>no_version_for_date</c> with its reason.
+    /// </summary>
+    internal static TemporalArm IntervalAsOfArm(V3CorpusMount mount, string? language) => (workKey, asOf) =>
+    {
+        var envelope = EnvelopeAsync(mount, "/api/v3/as_of", "as_of", DatedRequest(workKey, asOf, language)).GetAwaiter().GetResult();
+        return envelope.Refusal is { } refusal
+            ? RefusalKey(refusal)
+            : string.Join('+', envelope.Result!.Value.GetProperty("states").EnumerateArray()
+                .Select(static state => state.GetProperty("state_sha256").GetString()!).Order(StringComparer.Ordinal));
+    };
+
+    /// <summary><c>in_force_on</c> for a named work over index 9, keyed the same way: its rows' states, each the one it names.</summary>
+    internal static TemporalArm IntervalInForceOnArm(V3CorpusMount mount, string? language) => (workKey, asOf) =>
+    {
+        var envelope = EnvelopeAsync(mount, "/api/v3/in_force_on", "in_force_on", DatedRequest(workKey, asOf, language)).GetAwaiter().GetResult();
+        if (envelope.Refusal is { } refusal)
+        {
+            return RefusalKey(refusal);
+        }
+
+        var rows = envelope.Result!.Value.GetProperty("states").EnumerateArray().ToArray();
+        return rows.Any(static row => row.GetProperty("state").ValueKind != System.Text.Json.JsonValueKind.Object)
+            ? null
+            : string.Join('+', rows.Select(static row => row.GetProperty("state").GetProperty("state_sha256").GetString()!).Order(StringComparer.Ordinal));
+    };
+
+    private static string RefusalKey(Lex.V3.Contracts.Platform.V3EnvelopeRefusal refusal) =>
+        "refusal:" + refusal.Code +
+        (refusal.Code == "no_version_for_date" && refusal.HelpfulPayload.TryGetProperty("reason", out var reason) ? ":" + reason.GetString() : "");
+
+    private static object DatedRequest(string workKey, DateOnly asOf, string? language) =>
+        language is null
+            ? new { identifier = $"/lu-legilux/{workKey}", date = asOf.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) }
+            : new { identifier = $"/lu-legilux/{workKey}", date = asOf.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), language };
+
+    /// <summary>
     /// <c>as_of</c> asked with no language, keyed as a work timeline keys it: a refusal by its code, an answer by the
     /// sorted states it serves (one per language that holds one).
     /// </summary>
@@ -198,7 +261,39 @@ public sealed partial class V3MountedGatesTests
     /// work with no language, with its date control.
     /// </summary>
     internal static EvaluationCardSet[] RunTemporalGate(V3CorpusMount mount, string mountDirectory) =>
-        RunTemporalGate(mount, Sample(Timelines(mountDirectory), WorkSample, Seed));
+        RunTemporalGate(mount, Sample(Timelines(mountDirectory), WorkSample, Seed), mountDirectory);
+
+    /// <summary>
+    /// The temporal gate over the sample's works: on index 9 by the interval oracle, an arm per language and operation and
+    /// one per operation with no language, each held to its own operation's answer; on an index of schema 8 or 6 by the works'
+    /// timelines, as those readers select.
+    /// </summary>
+    internal static EvaluationCardSet[] RunTemporalGate(V3CorpusMount mount, IReadOnlyList<Timeline> timelines, string mountDirectory)
+    {
+        using var oracle = IntervalOracle.Open(mountDirectory);
+        return oracle is null ? RunTemporalGate(mount, timelines) : RunIntervalGate(mount, timelines, oracle);
+    }
+
+    internal static EvaluationCardSet[] RunIntervalGate(V3CorpusMount mount, IReadOnlyList<Timeline> timelines, IntervalOracle oracle)
+    {
+        var shift = ShiftDays(timelines);
+        var arms = new List<(string Name, TemporalArm Arm, IReadOnlyList<TemporalCase> Cases, Func<string, DateOnly, string> ExpectedAt)>();
+        var works = timelines.Select(static value => value.WorkKey).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        foreach (var language in timelines.Select(static value => value.Language).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+        {
+            var held = timelines.Where(value => value.Language == language).Select(static value => value.WorkKey).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            arms.Add(($"as_of in {language}", IntervalAsOfArm(mount, language),
+                held.SelectMany(work => IntervalCases(oracle, work, language, oracle.AsOf)).ToArray(), (work, day) => oracle.AsOf(work, language, day)));
+            arms.Add(($"in_force_on in {language}", IntervalInForceOnArm(mount, language),
+                held.SelectMany(work => IntervalCases(oracle, work, language, oracle.InForceOn)).ToArray(), (work, day) => oracle.InForceOn(work, language, day)));
+        }
+
+        arms.Add(("as_of with no language", IntervalAsOfArm(mount, null),
+            works.SelectMany(work => IntervalCases(oracle, work, null, oracle.AsOf)).ToArray(), (work, day) => oracle.AsOf(work, null, day)));
+        arms.Add(("in_force_on with no language", IntervalInForceOnArm(mount, null),
+            works.SelectMany(work => IntervalCases(oracle, work, null, oracle.InForceOn)).ToArray(), (work, day) => oracle.InForceOn(work, null, day)));
+        return TemporalSets(arms, shift, "there is no temporal case to shift: the mount holds no Luxembourg state for this arm");
+    }
 
     internal static EvaluationCardSet[] RunTemporalGate(V3CorpusMount mount, IReadOnlyList<Timeline> timelines)
     {
@@ -364,7 +459,7 @@ public sealed partial class V3MountedGatesTests
         using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None);
         Assert.IsNotNull(mount, $"{directory} does not mount.");
         var timelines = Sample(Timelines(directory), WorkSample, Seed);
-        var temporal = RunTemporalGate(mount, timelines);
+        var temporal = RunTemporalGate(mount, timelines, directory);
         var europeTemporal = RunEuropeTemporalGate(mount, directory);
         var (refusal, derived) = RunRefusalGate(mount, directory, timelines);
         // An EU index that holds a usable word in a wording EU search answers must give the EU requests (review of #846).

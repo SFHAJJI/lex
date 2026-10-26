@@ -1,0 +1,132 @@
+using System.Globalization;
+using Lex.V3.Contracts.Evaluation;
+using static Lex.V3.Ingest.Tests.LuxembourgIndexCatalogueStatesTests;
+using static Lex.V3.Ingest.Tests.V3CorpusIntervalMountTests;
+
+namespace Lex.V3.Ingest.Tests;
+
+/// <summary>
+/// The mounted gates' interval oracle (<see cref="V3MountedGatesTests.IntervalOracle"/>, the data design's §3.5) against the
+/// reader, on index 9 built from the interval fixture and the review of #987's works: every class the design names (a hole, a
+/// closed end, an unclear end day, an invalid interval, a state without text covering a date, withheld or not, a same-date
+/// pair of one wording and one of two, a date before the first held state that a state without text covers, a translation),
+/// each day the oracle derives answered as it says, in each language and with none; and a gate held to an oracle that bridges
+/// a hole fails, so neither side can serve through one unseen. The R1 gates of 2026-10-26: run 15's first mount with codes
+/// and multi-state works failed its temporal gate on the oracle's index 8 rule.
+/// </summary>
+[TestClass]
+public sealed class V3MountedGatesOracleTests
+{
+    private static DateOnly Day(string date) => DateOnly.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    private static string DigestOf(V3MountedGatesTests.IntervalOracle oracle, string work, string resource, string language = "fra") =>
+        oracle.RowsOf(work).Single(row => row.LegalResource == W(resource) && row.Language == language).Digest;
+
+    [TestMethod]
+    public async Task TheIntervalOracleNamesEachClassAsTheSpecificationsRulesSay()
+    {
+        var harness = RepairFixture();
+        await using var fixture = await IntervalMount.CreateAsync(harness);
+        using var oracle = V3MountedGatesTests.IntervalOracle.Open(fixture.Directory, harness.MemberOutcomes)!;
+        Assert.IsNotNull(oracle, "index 9");
+        var asOf = V3MountedGatesTests.IntervalAsOfArm(fixture.Mount, "fra");
+        var inForceOn = V3MountedGatesTests.IntervalInForceOnArm(fixture.Mount, "fra");
+
+        // Each class: what the oracle says, and that the reader answers it, through as_of and in_force_on.
+        var withheld = DigestOf(oracle, "loi-1798-11-03-n1", "loi/1798/11/03/n1/consolide/20200101");
+        var pdfAct = DigestOf(oracle, "loi-2002-02-02-n1", "loi/2002/02/02/n1/jo");
+        var act2018 = DigestOf(oracle, "loi-2018-09-14-a883", "loi/2018/09/14/a883/jo");
+        foreach (var (work, date, expectedAsOf, expectedInForceOn, what) in new[]
+                 {
+                     ("loi-1798-11-03-n1", "2021-07-01", "refusal:no_version_for_date:catalogue_hole", "refusal:no_version_for_date:catalogue_hole", "a hole"),
+                     ("loi-2005-01-01-n1", "2016-01-01", "refusal:no_version_for_date:after_closed_end", "refusal:no_version_for_date:after_closed_end", "after a closed end"),
+                     ("loi-2007-07-07-n1", "2022-06-01", DigestOf(oracle, "loi-2007-07-07-n1", "loi/2007/07/07/n1/consolide/20200101"), DigestOf(oracle, "loi-2007-07-07-n1", "loi/2007/07/07/n1/consolide/20200101"), "a nested state's end, the outer covering"),
+                     ("loi-1996-11-07-n1", "2022-12-31", "refusal:no_version_for_date:publisher_end_convention_unclear", "refusal:no_version_for_date:publisher_end_convention_unclear", "an unclear end day"),
+                     ("rgd-2007-06-07-n2", "2023-08-01", "refusal:no_version_for_date:publisher_interval_invalid", "refusal:no_version_for_date:publisher_interval_invalid", "an invalid interval"),
+                     ("loi-1798-11-03-n1", "2020-06-01", "refusal:text_withheld", withheld, "a withheld state covers"),
+                     ("loi-2002-02-02-n1", "2005-01-01", "refusal:text_not_available", pdfAct, "before the first held state, a PDF act covers"),
+                     ("loi-2018-09-14-a883", "2018-09-14", act2018, act2018, "a same-date pair of one wording, the act designated"),
+                     ("loi-2021-05-05-n1", "2021-06-01", "refusal:ambiguous_version", "refusal:ambiguous_version", "a same-date pair of two wordings"),
+                     ("code-civil", "2016-08-31", "refusal:no_version_for_date:before_history", "refusal:no_version_for_date:before_history", "before the history"),
+                 })
+        {
+            Assert.AreEqual(expectedAsOf, oracle.AsOf(work, "fra", Day(date)), $"oracle as_of: {what}");
+            Assert.AreEqual(expectedInForceOn, oracle.InForceOn(work, "fra", Day(date)), $"oracle in_force_on: {what}");
+            Assert.AreEqual(expectedAsOf, asOf(work, Day(date)), $"reader as_of: {what}");
+            Assert.AreEqual(expectedInForceOn, inForceOn(work, Day(date)), $"reader in_force_on: {what}");
+        }
+
+        // A translation held alone, of a French state not acquired: its own language serves it; French refuses for the text.
+        var english = DigestOf(oracle, "loi-2017-07-20-a674", "loi/2017/07/20/a674/jo", "eng");
+        Assert.AreEqual(english, oracle.AsOf("loi-2017-07-20-a674", "eng", Day("2018-01-01")));
+        Assert.AreEqual(english, oracle.AsOf("loi-2017-07-20-a674", null, Day("2018-01-01")), "with no language, the language that holds text");
+        Assert.AreEqual(english, V3MountedGatesTests.IntervalAsOfArm(fixture.Mount, null)("loi-2017-07-20-a674", Day("2018-01-01")));
+    }
+
+    [TestMethod]
+    public async Task EveryDerivedDayOfTheIntervalFixtureIsAnsweredAsTheOracleSaysInEachLanguageAndWithNone()
+    {
+        var harness = RepairFixture();
+        await using var fixture = await IntervalMount.CreateAsync(harness);
+        using var oracle = V3MountedGatesTests.IntervalOracle.Open(fixture.Directory, harness.MemberOutcomes)!;
+        var timelines = V3MountedGatesTests.Timelines(fixture.Directory);
+        Assert.IsTrue(timelines.All(timeline => oracle.RowsOf(timeline.WorkKey).Any(row => row.Held)), "the timelines name the states whose text is held");
+        var sets = V3MountedGatesTests.RunIntervalGate(fixture.Mount, timelines, oracle);
+        CollectionAssert.AreEquivalent(
+            new[] { "as_of in eng", "in_force_on in eng", "as_of in fra", "in_force_on in fra", "as_of with no language", "in_force_on with no language" },
+            sets.Select(static set => set.Arm).ToArray());
+        foreach (var set in sets)
+        {
+            Assert.IsTrue(set.Gates.All(static gate => gate.Verdict == GateVerdict.Pass), $"{set.Arm}: every derived day answered as the oracle says ({set.CaseCount} cases)");
+            Assert.AreEqual(ControlVerdict.CaughtTheShuffle, set.Control.Verdict, $"{set.Arm}: {set.Control.Reason}");
+            // English holds one translation (3 days); French and no language hold every class above.
+            Assert.IsGreaterThan(set.Arm.EndsWith(" in eng", StringComparison.Ordinal) ? 2 : 100, set.CaseCount, set.Arm);
+        }
+    }
+
+    [TestMethod]
+    public async Task AGateHeldToAnOracleThatBridgesAHoleFailsAndSoDoesOneThatServesATextlessState()
+    {
+        var harness = RepairFixture();
+        await using var fixture = await IntervalMount.CreateAsync(harness);
+        using var oracle = V3MountedGatesTests.IntervalOracle.Open(fixture.Directory, harness.MemberOutcomes)!;
+        var arm = V3MountedGatesTests.IntervalAsOfArm(fixture.Mount, "fra");
+
+        // The rule of an index of schema 8, "the latest held state on or before the day", bridges the 1798 act's hole and its
+        // withheld consolidation with the act; the reader does not, and the gate says the oracle is wrong.
+        var act = DigestOf(oracle, "loi-1798-11-03-n1", "loi/1798/11/03/n1/jo");
+        foreach (var day in new[] { "2021-07-01", "2020-06-01" })
+        {
+            var bridged = new TemporalCase($"loi-1798-11-03-n1/fra/{day}", "loi-1798-11-03-n1", Day(day), act);
+            var report = TemporalEvaluation.Evaluate([bridged], arm, floor: 1);
+            Assert.AreEqual(GateVerdict.Fail, report.Gate.Verdict, $"{day}: a bridged expectation is caught");
+            var right = new TemporalCase(bridged.CaseId, bridged.WorkKey, bridged.AsOf, oracle.AsOf("loi-1798-11-03-n1", "fra", Day(day)));
+            Assert.AreEqual(GateVerdict.Pass, TemporalEvaluation.Evaluate([right], arm, floor: 1).Gate.Verdict, $"{day}: the interval oracle's is answered");
+        }
+
+        // And the index 8 oracle's own expectation (Timeline.Expected, over the held states' dates) fails the gate where a work
+        // has an unclear end day between two held states or a hole after a nested one, as run 15's gate failed: its last day of
+        // the 2020 consolidation (2022-12-31) and of the 2021 one (2024-12-31) are no state's.
+        foreach (var work in new[] { "loi-1996-11-07-n1", "loi-2004-04-04-n1" })
+        {
+            var cases = V3MountedGatesTests.Timelines(fixture.Directory).Where(timeline => timeline.WorkKey == work).SelectMany(V3MountedGatesTests.Cases).ToArray();
+            Assert.AreEqual(GateVerdict.Fail, TemporalEvaluation.Evaluate(cases, Lex.V3.Ingest.Tests.V3MachineGatesTests.AsOfArm(fixture.Mount, "fra"), floor: cases.Length).Gate.Verdict, work);
+        }
+    }
+
+    [TestMethod]
+    public async Task TheRefusalSetOverIndexNineAnchorsOnStatesTheRulesServeAloneAndIsAnsweredCodeForCode()
+    {
+        // On index 9 the refusal set's anchors are what the rules serve (the R1 gates, 2026-10-26): its held anchor a state the
+        // rules serve alone on its date, its date before the history before the catalogue's first state, its ambiguity one
+        // the oracle says is one (the act and consolidation of one wording are served once, so they are no twin).
+        var harness = RepairFixture();
+        await using var fixture = await IntervalMount.CreateAsync(harness);
+        var timelines = V3MountedGatesTests.Timelines(fixture.Directory);
+        var (set, derived) = V3MountedGatesTests.RunRefusalGate(fixture.Mount, fixture.Directory, timelines);
+        var report = string.Join("; ", derived.Requests.Select(static pair => $"{pair.Key}={pair.Value.Gold}"));
+        Assert.AreEqual(GateVerdict.Pass, set.Gates.Single().Verdict, report);
+        Assert.AreEqual("ambiguous_version", derived.Requests["twin-states"].Gold, "the 2021 pair of two wordings");
+        StringAssert.Contains(System.Text.Json.JsonSerializer.Serialize(derived.Requests["twin-states"].Parameters), "loi-2021-05-05-n1");
+    }
+}

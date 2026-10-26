@@ -64,10 +64,18 @@ public sealed partial class V3MountedGatesTests
             notProduced["no_corpus_mounted"] = "the mount holds an EU index, so an EU request is not refused for want of one";
         }
 
+        // On index 9 the interval oracle says what the rules serve on a day (the data design's §3.5), so an anchor is a state
+        // the rules serve alone on its own date, a date before the history is before the catalogue's first state (a state
+        // without text may begin before the first held one), and two states of one date are ambiguous only when the oracle
+        // says so (one wording is served once). On an index of schema 8 or 6 the timelines say it (the R1 gates, 2026-10-26).
+        using var oracle = IntervalOracle.Open(mountDirectory);
+        bool ServedAlone(string work, string language, DateOnly date, string state) =>
+            oracle is null || oracle.AsOf(work, language, date) == state;
+
         // A dated state held alone on its date: the anchor of every request that names one state.
         var held = timelines
             .SelectMany(static timeline => timeline.Dates.Where(static date => date.States.Count == 1).Select(date => (Timeline: timeline, date.Date, State: date.States[0])))
-            .FirstOrDefault();
+            .FirstOrDefault(value => ServedAlone(value.Timeline.WorkKey, value.Timeline.Language, value.Date, value.State));
         if (held.Timeline is null)
         {
             foreach (var code in new[] { "identifier_unknown", "language_not_available", "no_version_for_date", "anchor_not_in_version", "pinned_digest_mismatch", "retrieval_mode_unavailable", "snapshot_unknown", "format_not_available", "ambiguous_version", "ambiguous_identifier", "profiles_differ", "text_withheld", "text_not_available" })
@@ -85,7 +93,8 @@ public sealed partial class V3MountedGatesTests
         requests["a-held-state"] = new("as_of", new { identifier = work, date = day, language }, "answer");
         requests["the-held-permalink"] = new("verify", new { identifier = $"{work}/{day}--{state}/{language}", language }, "answer");
         requests["unknown-work"] = new("as_of", new { identifier = NoSuchWork, date = day }, "identifier_unknown");
-        requests["before-history"] = new("as_of", new { identifier = work, date = timeline.Dates[0].Date.AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), language }, "no_version_for_date");
+        var first = oracle is null ? timeline.Dates[0].Date : oracle.Boundaries(timeline.WorkKey, language)[0];
+        requests["before-history"] = new("as_of", new { identifier = work, date = first.AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), language }, "no_version_for_date");
         requests["anchor-not-held"] = new("article_history", new { identifier = work, anchor = "art_no_such_anchor", language }, "anchor_not_in_version");
         requests["pinned-digest-not-held"] = new("verify", new { identifier = $"{work}/{day}--{new string('0', 64)}/{language}", language }, "pinned_digest_mismatch");
         requests["mode-not-held"] = new("search", new { query = "loi", language, mode = "bm25" }, "retrieval_mode_unavailable");
@@ -103,7 +112,8 @@ public sealed partial class V3MountedGatesTests
             notProduced["language_not_available"] = $"{timeline.WorkKey} is held in every candidate language";
         }
 
-        var twin = timelines.SelectMany(static value => value.Dates.Where(static date => date.States.Count > 1).Select(date => (Timeline: value, date.Date))).FirstOrDefault();
+        var twin = timelines.SelectMany(static value => value.Dates.Where(static date => date.States.Count > 1).Select(date => (Timeline: value, date.Date)))
+            .FirstOrDefault(value => oracle is null || oracle.AsOf(value.Timeline.WorkKey, value.Timeline.Language, value.Date) == Ambiguous);
         if (twin.Timeline is not null)
         {
             requests["twin-states"] = new("as_of", new { identifier = $"/lu-legilux/{twin.Timeline.WorkKey}", date = twin.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), language = twin.Timeline.Language }, "ambiguous_version");
@@ -146,10 +156,12 @@ public sealed partial class V3MountedGatesTests
         }
 
         // Two states of one work in one language, each alone on its date, whose rule profiles differ.
-        var profiles = Rows(connection, "SELECT work_key, language, applicability_date, rule_profiles_json FROM states ORDER BY work_key, language, applicability_date")
+        // Held states only (on index 9 a state without text binds no article), each the one the rules serve on its date.
+        var profiles = Rows(connection, "SELECT work_key, language, applicability_date, rule_profiles_json, state_sha256 FROM states WHERE article_identities_json <> '[]' ORDER BY work_key, language, applicability_date")
             .GroupBy(static row => (row[0], row[1], row[2]))
             .Where(static group => group.Count() == 1)
             .Select(static group => group.Single())
+            .Where(row => ServedAlone(row[0], row[1], Day(row[2]), row[4]))
             .GroupBy(static row => (row[0], row[1]))
             .SelectMany(static group => group.Zip(group.Skip(1), static (from, to) => (From: from, To: to)))
             .FirstOrDefault(static pair => pair.From[3] != pair.To[3]);
@@ -165,7 +177,7 @@ public sealed partial class V3MountedGatesTests
         // A state held alone on its date whose text the bundle withholds by its own rule (review of #839: the first
         // version guessed a "non_admitting" prefix and missed a disposition such as `conflict`); and one whose text it
         // does not withhold but whose every article holds none, since rights are decided before any text is read.
-        var withheld = StateWhere(connection, StateWithheld);
+        var withheld = StateWhere(connection, StateWithheld, ServedAlone);
         if (withheld is { } blocked)
         {
             requests["rights-not-agreed"] = new("evidence_bundle", new { identifier = $"/lu-legilux/{blocked.Work}", date = blocked.Date, language = blocked.Language }, "text_withheld");
@@ -175,7 +187,7 @@ public sealed partial class V3MountedGatesTests
             notProduced["text_withheld"] = "every state's sources were acquired under the one admitting rights disposition";
         }
 
-        var empty = StateWhere(connection, $"NOT {StateWithheld} AND NOT EXISTS (SELECT 1 FROM articles a WHERE a.expression_iri = s.expression_iri AND a.searchable_text <> '')");
+        var empty = StateWhere(connection, $"NOT {StateWithheld} AND NOT EXISTS (SELECT 1 FROM articles a WHERE a.expression_iri = s.expression_iri AND a.searchable_text <> '')", ServedAlone);
         if (empty is { } textless)
         {
             requests["no-text-held"] = new("evidence_bundle", new { identifier = $"/lu-legilux/{textless.Work}", date = textless.Date, language = textless.Language }, "text_not_available");
@@ -307,13 +319,16 @@ public sealed partial class V3MountedGatesTests
         text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(static token => token.Length >= 6 && token.All(char.IsLetter));
 
     /// <summary>A state alone on its date, with articles, that meets a condition on its articles (as <c>s</c>).</summary>
-    private static (string Work, string Date, string Language)? StateWhere(SqliteConnection connection, string condition)
+    private static (string Work, string Date, string Language)? StateWhere(
+        SqliteConnection connection, string condition, Func<string, string, DateOnly, string, bool> servedAlone)
     {
+        // The first such state the rules serve alone on its own date (on index 9 another state may cover it too).
         var row = Rows(connection,
-            "SELECT s.work_key, s.applicability_date, s.language FROM states s " +
+            "SELECT s.work_key, s.applicability_date, s.language, s.state_sha256 FROM states s " +
             "WHERE EXISTS (SELECT 1 FROM articles a WHERE a.expression_iri = s.expression_iri) AND " + condition + " " +
             "AND (SELECT COUNT(*) FROM states t WHERE t.work_key = s.work_key AND t.language = s.language AND t.applicability_date = s.applicability_date) = 1 " +
-            "ORDER BY s.work_key, s.applicability_date, s.language LIMIT 1").FirstOrDefault();
+            "ORDER BY s.work_key, s.applicability_date, s.language LIMIT 64")
+            .FirstOrDefault(candidate => servedAlone(candidate[0], candidate[2], Day(candidate[1]), candidate[3]));
         return row is null ? null : (row[0], row[1], row[2]);
     }
 
