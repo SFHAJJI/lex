@@ -83,8 +83,34 @@ test("the candidate is probed at its own address, once it is ready, never throug
   assert.match(code, /\$state\.health -eq 'Healthy'/);
   assert.match(code, /"\$\(\$state\.provisioning\)" -eq 'Failed' -or "\$\(\$state\.running\)" -eq 'Failed'/, "a failed revision ends the wait at once");
   assert.match(code, /\$state\.active -eq \$false/, "an inactive revision ends the wait at once");
-  assert.match(code, /if \(\(Get-Date\) -gt \$readyBy\) \{\s*Step "the candidate did not become ready: deactivate the candidate \$candidate"\s*az containerapp revision deactivate/,
+  assert.match(code, /if \(\(Get-Date\) -gt \$readyBy\) \{\s*Disable-Candidate 'the candidate did not become ready'\s*throw /,
     "a candidate that never becomes ready is deactivated, and no traffic moves");
+});
+
+test("a deployment deactivates only the revision it made: every deactivation is the candidate's, behind one guard read before Azure changes", () => {
+  // The incident of 2026-10-27: a deployment Azure refused (its suffix was the live revision's) had its failure step
+  // deactivate the revision of that name, the live one. deploy-run.test.mjs runs each path; this keeps the shape.
+  const removal = code.slice(code.indexOf("if ($Remove) {"), code.indexOf("exit 0", code.indexOf("if ($Remove) {")));
+  const deactivations = code.replace(removal, "").split("\n").filter((line) => line.includes("revision deactivate") && !line.trim().startsWith("Write-Host"));
+  assert.deepEqual(deactivations.map((line) => line.trim()), ["az containerapp revision deactivate -g $ResourceGroup -n $AppName --revision $candidate"],
+    "outside -Remove, the one deactivation is the guard's, of the candidate");
+  const guard = code.slice(code.indexOf("function Disable-Candidate("), code.indexOf("az containerapp revision deactivate -g $ResourceGroup -n $AppName --revision $candidate"));
+  assert.match(guard, /^function Disable-Candidate\(\[string\] \$Why, \[switch\] \$IfActive\) \{\s*if \(-not \$candidateIsOurs\) \{\n/, "the guard's first question");
+  assert.match(guard.slice(0, guard.indexOf("if ($IfActive)")), /\n\s*return\n\s*\}\s*$/, "nothing is deactivated unless the candidate is this deployment's");
+  assert.match(code, /\$candidateIsOurs = \$null -ne \$priorRevisions -and \$priorRevisions -notcontains \$candidate -and \$candidate -ne \$LiveRevision\n/);
+  assert.equal((code.match(/^\s*Disable-Candidate '/gm) ?? []).length, 4, "the failed deployment, the candidate that fails or is never ready, and the failed probe");
+  // The revisions, every inactive one too, are read and a name the app holds (or -LiveRevision's) refused before the image
+  // is copied, the template previewed or anything else in Azure changes.
+  const read = code.indexOf('az containerapp revision list -g $ResourceGroup -n $AppName --all --query "[].name" -o tsv');
+  const refused = code.indexOf('throw "The revision $candidate already exists in $AppName');
+  assert.ok(read > 0 && read < refused && refused < code.indexOf('Step "copy the image') && refused < code.indexOf("az deployment group what-if"), "read and refused before any change");
+  assert.match(code, /\$held = @\(@\(\$priorRevisions\) \+ @\(\$LiveRevision\) \| Where-Object \{ \$_ \}\)\nif \(\$held -contains \$candidate\) \{/);
+  assert.match(code, /elseif \(-not \[string\]::IsNullOrEmpty\(\$LiveRevision\)\) \{\s*throw "The revisions of \$AppName could not be read; nothing was deployed/, "a read that fails stops a redeployment");
+  // The suffix names the release and a digest of what makes the revision, so the same release with another setting is a
+  // revision of its own.
+  assert.match(code, /\$revisionSettings = \[ordered\]@\{\s*image = \$image; searchEngines = \$SearchEngines; openToPublic = \[bool\]\$Public; allowedSourceCidrs = @\(\$AllowedCidr\)\s*template = /);
+  assert.match(code, /\$suffix = Get-RevisionSuffix \$manifest\.version \$AppName \$revisionSettings\n\$candidate = "\$AppName--\$suffix"/);
+  assert.match(code, /revisionSuffix = \$suffix;/, "the template is handed that suffix");
 });
 
 test("until the owner opens the site, every deployment admits only the named ranges, and one that names none admits no one", () => {
@@ -287,7 +313,7 @@ test("the script deploys only a release that verifies, and only by the image's d
   // Once the site is open, a -Public deployment's probe holds the candidate's legal pages to the opening's rule; and every
   // candidate's probe says whether promotion refuses its data's age (`--promotion-check`, exit 3).
   assert.match(code, /\$openingArgs = @\(if \(\$Public\) \{ '--opening' \}\)/);
-  assert.match(code, /deploy-probe\.mjs'\) --origin \$origin --release \$releasePath --public-key \$keyPath @signerProbe @browserArgs @openingArgs --promotion-check\n/);
+  assert.match(code, /deploy-probe\.mjs'\) --origin \$origin --release \$releasePath --public-key \$keyPath @signerProbe @browserArgs @openingArgs --promotion-check --search-engines \$SearchEngines\n/);
   // A deployment applies only a release the release signer signed: -Apply requires -SignerIdentity, which both read-backs
   // carry, so a rehearsal release is read in a plan run only.
   assert.match(script, /if \(\$Apply -and \[string\]::IsNullOrWhiteSpace\(\$SignerIdentity\)\) \{\s*throw "-Apply deploys a release signed by the release signer/);
@@ -302,12 +328,14 @@ test("the script deploys only a release that verifies, and only by the image's d
   assert.match(code, /Write-Host "  > az containerapp ingress traffic set -g \$ResourceGroup -n \$AppName --revision-weight \$LiveRevision=100"/);
   // A failed probe deactivates the candidate (the removal step) and stops; a candidate that passes while promotion refuses
   // its data's age (the probe's exit 3, R87 and O11) stays, with no traffic, and no promotion or rollback command is printed.
-  assert.match(script, /\$dataAgeRefused = \$LASTEXITCODE -eq 3\r?\nif \(\$LASTEXITCODE -ne 0 -and -not \$dataAgeRefused\) \{[\s\S]*?revision deactivate[\s\S]*?throw "The candidate failed its probe/);
+  assert.match(script, /\$dataAgeRefused = \$LASTEXITCODE -eq 3\r?\nif \(\$LASTEXITCODE -ne 0 -and -not \$dataAgeRefused\) \{[\s\S]*?Disable-Candidate 'the probe failed'[\s\S]*?throw "The candidate failed its probe/);
   const answered = code.slice(code.indexOf('Step "the candidate $candidate answers as the release holds"'));
   assert.match(answered, /^Step [^\n]*\n[^\n]*\nif \(\$dataAgeRefused\) \{\n[^}]*Promotion refuses this release's data[^}]*\}\nelseif \(\[string\]::IsNullOrEmpty\(\$LiveRevision\)\) \{[^}]*\}\nelse \{\n[^}]*--revision-weight \$candidate=100"\n\}/, "the promotion command only when the data's age allows it");
   assert.match(answered, /if \(-not \[string\]::IsNullOrEmpty\(\$LiveRevision\) -and -not \$dataAgeRefused\) \{\n    Write-Host "  After promotion, deactivate/, "and the rollback lines, which follow a promotion, only then");
   // A candidate that never becomes ready fails the deployment itself, before the probe: it is deactivated too, if active,
-  // and the run stops (review of #963: readiness answers 503 without the law, so Azure's deadline ends the deployment).
-  assert.match(code, /catch \{[\s\S]*?\$failedCandidate = "\$AppName--\$suffix"[\s\S]*?revision show [^\n]*--revision \$failedCandidate --query properties\.active[\s\S]*?revision deactivate -g \$ResourceGroup -n \$AppName --revision \$failedCandidate[\s\S]*?throw "The candidate revision did not deploy/);
-  assert.ok(code.indexOf("az deployment group create") < code.indexOf("$failedCandidate = "), "the catch is the deployment's own");
+  // and the run stops (review of #963: readiness answers 503 without the law, so Azure's deadline ends the deployment); only
+  // if this deployment made it (the incident of 2026-10-27).
+  assert.match(code, /catch \{[\s\S]*?Disable-Candidate 'the deployment failed' -IfActive[\s\S]*?throw "The candidate revision did not deploy/);
+  assert.match(code, /if \(\$IfActive\) \{\s*\$active = az containerapp revision show -g \$ResourceGroup -n \$AppName --revision \$candidate --query properties\.active -o tsv 2>\$null\s*if \(\$LASTEXITCODE -ne 0 -or \$active -ne 'true'\) \{ return \}/);
+  assert.ok(code.indexOf("az deployment group create") < code.indexOf("Disable-Candidate 'the deployment failed'"), "the catch is the deployment's own");
 });

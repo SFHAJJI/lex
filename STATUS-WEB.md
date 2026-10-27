@@ -231,6 +231,50 @@ as the legal pages are (`scripts/reference-pages.mjs`, `app/ReferencePages.jsx`)
   narrows "how each article changed" to Luxembourg acts, where `home.intro` still says it generally; the lawyer's read (O4)
   of "un avocat ou un autre conseiller de votre choix" and of R50's "conseil juridique".
 
+## The live revision deactivated by a redeployment, 01:10 to 01:13 UTC, and the fix (sole driver, 2026-10-27)
+
+- **What happened.** The site (the container app `ca-lex-v3`), open to everyone, served release
+  `v3-20261026T180319Z-8958ec5fa63f` as the revision `ca-lex-v3--v3-20261026t180319z-8958ec5fa63f`, at 100 per cent. The
+  driver deployed the same release again with `-Public -SearchEngines indexed -LiveRevision <that revision> -Apply`, to
+  change only `LEX_V3_SEARCH_ENGINES` (O27). The change of setting did not deploy.
+- **The cause: two defects in `deploy/deploy.ps1`.**
+  - It named the revision from the release alone. The new revision took the live one's suffix, and Azure refused the
+    deployment: "revision with suffix ... already exists".
+  - Its failure step then deactivated the revision with the candidate's name without asking whether this deployment had
+    made it. That revision was the live one.
+- **The outage.** The site was down for about three minutes, 01:10 to 01:13 UTC, until the driver activated the revision
+  again (`C:\lex-v3\release-20261026\deploy-public.log`).
+- **The fix: each deployment makes its own revision.** The suffix is the release's version followed by 8 hex digits of a
+  SHA-256 over the image, `searchEngines`, `openToPublic`, the allowed ranges and `deploy/main.bicep`. The incident's
+  command now names `ca-lex-v3--v3-20261026t180319z-8958ec5fa63f-54d663c3` (52 characters; at this template).
+- **Azure's naming limits.** The suffix has lower-case letters, digits and '-', a letter first, no '--', and at most 64
+  characters (the Container Apps documentation, "Revisions"). The whole name is at most 63, one DNS label, since the probe
+  asks the revision's own address. A name that cannot be formed is refused, and the plan prints the name.
+- **The fix: nothing deactivated that the deployment did not create.** The app's revisions, inactive ones too, are read
+  before anything in Azure changes.
+  - A name the app holds, or -LiveRevision's, is refused there with nothing changed. A failed read stops a redeployment.
+  - Every deactivation (failed deployment, candidate failed or never ready, failed probe) goes through one guard. It acts
+    only on a revision absent from that read. If the revisions were not read (a first deployment), it deactivates
+    nothing, says so, and names `-Remove`.
+- **Tests.** `deploy-run.test.mjs`'s made-up Azure CLI now holds revisions as Azure does. Six new run tests cover the
+  incident's command, the suffix rules, a collision refused with no Azure write, a failed deployment named as the live
+  revision, the probe and provisioning failures, and the normal new-release path. `deploy-kit.test.mjs` gains a rule that
+  the guard's is the only deactivation outside `-Remove`.
+- **The tests fail on the old script.** With db0a7b53's script put back, the five defect run tests fail and the other
+  eight pass, the normal-path test among them. Three kit rules fail: the new one and the two rewritten for the guard. The
+  incident test replays the production log's line: "the deployment failed: deactivate the candidate
+  ca-lex-v3--v3-20261026t180319z-8958ec5fa63f".
+- **Counts.**
+  - The web build is clean. `npm test` runs 1,366 tests (1,359 before): 1,363 pass, 0 fail, and 3 skip, the
+    real-browser tests that run only in CI.
+  - The deploy files all pass: deploy-kit 16, deploy-run 13, deploy-probe 16, no-browser-probes 11.
+  - `eng/verify-v3-tree.ps1` verifies 1,689 tracked paths. `deploy/validate.ps1` is clean.
+- **Driver decisions (reversible).**
+  - A digest rather than an `-r2` counter: a plan run asks Azure nothing and still prints the exact name.
+  - The template is in the digest, so a template change on the same release can still deploy.
+  - The same release with the same settings and template is refused before any change; a revision that exists is
+    activated by hand.
+
 ## Release 1 on the private copy, and the opening that waits on the owner's command (sole driver, 2026-10-26)
 
 The release `v3-20261026T180319Z-8958ec5fa63f` (from v3/integration at 8958ec5f, #987 merged, over derive-c) was built
