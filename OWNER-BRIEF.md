@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-26 at 23:10 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-27 at 02:15 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -10,9 +10,10 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
   its link, the legal pages naming no one, the EU authenticity line, how current the law is on every page); the data
   (which version answers a date, each date said for what it is, the gaps between versions, an EU act's own dates).
 - Released on 26 October: a signed release of that code, rebuilt identically, every quality gate passed, no cookie,
-  nothing kept about readers. It serves law.soufien.lu since 21:00 UTC, still open only to your addresses.
-- The site opens to everyone with one command that you run (below): the driver's safety system will not let it
-  remove the address rules itself. The legal pages were checked first and are ready.
+  nothing kept about readers. It serves law.soufien.lu, open to everyone since 27 October 01:08 UTC, when you removed
+  the address rules from your phone. The legal pages were checked first and again after.
+- Down 3 minutes on 27 October (01:10 to 01:13 UTC): a redeployment switched off the live version by mistake. The
+  deployment script is fixed so it never switches off a version it did not make.
 - Today Luxembourg has 1,730 acts as first published, no codes; EU text covers 511 of 1,170 versions.
 - The codes (121,000 articles) were rebuilt on Azure on 26 October after two fixes found on real data (a date written
   20220101, and a code's title given each article's date): two builds agreed byte for byte. Their quality gates pass
@@ -32,9 +33,7 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 ## What waits on you
 
-- Now: open the site. In PowerShell on this PC:
-  pwsh -File C:\lex-v3\worktrees\claude-release\deploy\deploy.ps1 -Subscription <your subscription> -ResourceGroup
-  rg-lex-v3 -AppName ca-lex-v3 -Open   (the full line is in the driver's message of 26 October)
+- Now: your yes for two collection runs from the publishers (an EU refresh, and the Constitution from Legilux).
 - Before 4 November: a new collection of the EU texts, which the driver runs once the codes are in.
 - Before 12 November: your 175.70 EUR of credits end. Then the site (about 26 EUR a month), the storage (under 0.50 EUR
   a month) and each rebuild (5 to 8 EUR) are billed to your payment method.
