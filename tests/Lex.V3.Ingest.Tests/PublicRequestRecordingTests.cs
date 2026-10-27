@@ -105,7 +105,7 @@ public sealed class PublicRequestRecordingTests
         new("the preview route", s => ("/api/v3-preview/resolve?x=" + s.UserText, "GET", string.Empty), false),
     ];
 
-    private static DefaultHttpContext Context(Scenario scenario, Sentinels who, string traceIdentifier)
+    private static DefaultHttpContext Context(Scenario scenario, Sentinels who, string traceIdentifier, string? ingress = null)
     {
         var (target, method, body) = scenario.Build(who);
         var bytes = Encoding.UTF8.GetBytes(body);
@@ -119,7 +119,7 @@ public sealed class PublicRequestRecordingTests
             context.Request.Headers[header] = value;
         }
 
-        context.Connection.RemoteIpAddress = IPAddress.Parse(who.Address);
+        context.Connection.RemoteIpAddress = IPAddress.Parse(ingress ?? who.Address);
         context.Connection.RemotePort = 51234;
         context.Features.Get<IHttpRequestFeature>()!.RawTarget = target;
         context.Response.Body = new MemoryStream();
@@ -127,9 +127,9 @@ public sealed class PublicRequestRecordingTests
     }
 
     private static async Task<Observation> ObserveAsync(
-        V3ApiHandler handler, EmittedDiagnostics emitted, Scenario scenario, Sentinels who, string traceIdentifier)
+        V3ApiHandler handler, EmittedDiagnostics emitted, Scenario scenario, Sentinels who, string traceIdentifier, string? ingress = null)
     {
-        var context = Context(scenario, who, traceIdentifier);
+        var context = Context(scenario, who, traceIdentifier, ingress);
         emitted.Drain();
         var previousOut = Console.Out;
         var previousError = Console.Error;
@@ -461,12 +461,31 @@ public sealed class PublicRequestRecordingTests
 
         foreach (var withCorpus in new[] { true, false })
         {
-            var handler = HandlerOver(withCorpus ? mount : null);
-            foreach (var scenario in Scenarios)
+            // Through the platform's ingress too: a peer inside the host, so the per-client limit hashes the address the
+            // planted X-Forwarded-For names (V3ClientLimiter.ClientOf), which must turn up nowhere either.
+            foreach (var ingress in new string?[] { null, "10.0.0.4" })
             {
-                var seen = await ObserveAsync(handler, emitted, scenario, First, "trace-" + scenario.Name.Length);
-                var leaks = Leaks(seen, First);
-                Assert.IsEmpty(leaks, $"{scenario.Name} ({(withCorpus ? "corpus mounted" : "no corpus")}): {string.Join("; ", leaks)}");
+                var handler = HandlerOver(withCorpus ? mount : null);
+                var how = $"{(withCorpus ? "corpus mounted" : "no corpus")}{(ingress is null ? string.Empty : ", through the ingress")}";
+                foreach (var scenario in Scenarios)
+                {
+                    var seen = await ObserveAsync(handler, emitted, scenario, First, "trace-" + scenario.Name.Length, ingress);
+                    var leaks = Leaks(seen, First);
+                    Assert.IsEmpty(leaks, $"{scenario.Name} ({how}): {string.Join("; ", leaks)}");
+                }
+
+                // And past the limit (R109): every answer up to the refusal rate_limited, which is a path of its own.
+                Observation? limited = null;
+                for (var index = 0; index < 3 * V3ClientLimiter.ApiPerMinute && limited is null; index++)
+                {
+                    var seen = await ObserveAsync(handler, emitted, Scenarios[0], First, "trace-limit", ingress);
+                    var leaks = Leaks(seen, First);
+                    Assert.IsEmpty(leaks, $"search {index + 1} ({how}): {string.Join("; ", leaks)}");
+                    limited = seen.Status == StatusCodes.Status429TooManyRequests ? seen : null;
+                }
+
+                Assert.IsNotNull(limited, $"the limit refused none ({how}), so its path was not observed");
+                StringAssert.Contains(limited.Body, "\"rate_limited\"", how);
             }
         }
 
@@ -620,15 +639,32 @@ public sealed class PublicRequestRecordingTests
 
     // The source of the public process. Comments and literals are blanked first, so a word in a comment or a
     // message is not code, and each rule names what a place to record or a source of client identity looks like.
+    // The one read of the caller's address, and of the address the platform's ingress forwards, handed whole to the per-client
+    // limit's keyed hash (R109; V3ClientLimiter.ClientOf): written once, in V3ApiHandler, and counted on its own below. Each rule
+    // that would see it sees through this exact expression and nothing else.
+    private const string ClientRead =
+        "_limiter.ClientOf(context.Connection.RemoteIpAddress, context.Request.Headers[V3ClientLimiter.ForwardedForHeader].ToString())";
+
+    /// <summary>
+    /// A rule's exception for <see cref="ClientRead"/> at the point a match would start: <paramref name="before"/> is the part
+    /// of the expression before that point, and the exception holds only when the whole expression stands there, the part
+    /// before behind and the rest ahead, so any other use of the same words is still a finding.
+    /// </summary>
+    private static string NotTheClientRead(string before) =>
+        "(?!(?<=" + Regex.Escape(before) + ")" + Regex.Escape(ClientRead[before.Length..]) + ")";
+
     private static readonly (string Rule, Regex Pattern)[] Rules =
     [
-        ("the caller's address", new Regex(@"\b(RemoteIpAddress|LocalIpAddress|RemotePort|LocalPort|ClientCertificate)\b")),
+        ("the caller's address", new Regex(
+            NotTheClientRead("_limiter.ClientOf(context.Connection.") + @"\bRemoteIpAddress\b|\b(LocalIpAddress|RemotePort|LocalPort|ClientCertificate)\b")),
         // One request header is read, by name, and counted on its own below: the browser's Accept-Language, which chooses
-        // the language a redirect sends a reader to (R61) and is recorded nowhere.
-        ("the caller's headers", new Regex(@"(?<![Rr]esponse)\.Headers\b(?!\.AcceptLanguage\b)|\bHeaderNames\b|\bIHeaderDictionary\b")),
+        // the language a redirect sends a reader to (R61) and is recorded nowhere. The forwarded address is the limit's read.
+        ("the caller's headers", new Regex(
+            @"(?<![Rr]esponse)" + NotTheClientRead("_limiter.ClientOf(context.Connection.RemoteIpAddress, context.Request") +
+            @"\.Headers\b(?!\.AcceptLanguage\b)|\bHeaderNames\b|\bIHeaderDictionary\b")),
         ("the agent, the referrer or a cookie", new Regex(@"\b(UserAgent|Referer|Cookies?|Authorization)\b")),
         ("forwarded-header handling", new Regex(@"\b(UseForwardedHeaders|ForwardedHeaders\w*)\b")),
-        ("the connection", new Regex(@"\.Connection\b")),
+        ("the connection", new Regex(NotTheClientRead("_limiter.ClientOf(context") + @"\.Connection\b")),
         ("the path or query of the request", new Regex(@"[Rr]equest\.(Query|QueryString|Path|PathBase|Host|Scheme|Protocol|Form|ContentType)\b")),
         ("a logger", new Regex(@"\b(ILogger\w*|LoggerFactory|LoggerMessage|LogInformation|LogWarning|LogError|LogDebug|LogTrace|LogCritical)\b")),
         ("a logging or telemetry provider", new Regex(@"\b(AddConsole|AddSimpleConsole|AddJsonConsole|AddDebug|AddEventLog|AddEventSourceLogger|AddOpenTelemetry|UseHttpLogging|AddHttpLogging|W3CLogging\w*|ActivitySource|Activity|Meter|EventSource|DiagnosticListener|DiagnosticSource|TelemetryClient)\b")),
@@ -749,8 +785,10 @@ public sealed class PublicRequestRecordingTests
     }
 
     [TestMethod]
-    public void TheOneRequestHeaderTheApiReadsIsAcceptLanguageOnlyToChooseAPagesLanguage()
+    public void AcceptLanguageIsReadOnlyToChooseAPagesLanguage()
     {
+        // Besides it, the one other header the API reads is the address the platform's ingress forwards, beside the
+        // connection's own, for the per-client limit's keyed hash alone (TheCallersAddressIsReadOnce... below).
         // The specification of record's R61: a reader naming no language is sent to the one their browser prefers. The
         // header goes straight into the pure choice of a redirect (V3WebRoot.RedirectFor, NegotiateLanguage), whose
         // answer is one of two languages, so neither it nor anything of it is kept or written anywhere (S4-A11). Since
@@ -780,6 +818,48 @@ public sealed class PublicRequestRecordingTests
                  })
         {
             CollectionAssert.Contains(Findings(Blank(other)).ToArray(), "the caller's headers", other);
+        }
+    }
+
+    [TestMethod]
+    public void TheCallersAddressIsReadOnceAndHandedWholeToThePerClientLimitsKeyedHash()
+    {
+        // R109: the per-client limit keys an in-memory bucket by a keyed hash of the client's address. The address is read in
+        // one place (V3ApiHandler.ClientOf), with the address the platform's ingress forwards beside it, and both are handed
+        // straight to V3ClientLimiter.ClientOf, which keeps 16 bytes of an HMAC under a key drawn at random and never written,
+        // and neither of them (V3ClientLimiterTests). The behavioural test above shows neither reaches any output, through
+        // the ingress or not, past the limit or not.
+        var sources = ApiSources();
+        var reads = sources.SelectMany(static source => CountOf(source.Code, ClientRead).Select(_ => source.File)).ToArray();
+        CollectionAssert.AreEqual(new[] { "V3ApiHandler.cs" }, reads, "the address is read once, and only to be handed to the limit");
+        foreach (var name in new[] { "RemoteIpAddress", ".Connection", "ForwardedForHeader]" })
+        {
+            var all = sources.Sum(source => CountOf(source.Code, name).Count());
+            Assert.AreEqual(1, all, $"{name} appears outside the one read");
+        }
+
+        var header = typeof(V3ClientLimiter).GetField("ForwardedForHeader", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        Assert.AreEqual("X-Forwarded-For", header.GetValue(null), "the one header the limit reads beside the address");
+
+        Assert.IsEmpty(Findings(Blank(ClientRead + ";")), "the rules see through the one read");
+        foreach (var other in new[]
+                 {
+                     "var a = context.Connection.RemoteIpAddress;",
+                     "_limiter.ClientOf(context.Connection.RemoteIpAddress, context.Request.Headers[\"Cookie\"].ToString());",
+                     "_limiter.ClientOf(context.Connection.LocalIpAddress, context.Request.Headers[V3ClientLimiter.ForwardedForHeader].ToString());",
+                     "other.ClientOf(context.Connection.RemoteIpAddress, context.Request.Headers[V3ClientLimiter.ForwardedForHeader].ToString());",
+                     "_limiter.ClientOf(context.Connection.RemoteIpAddress, context.Request.Headers[V3ClientLimiter.ForwardedForHeader].ToString()); var b = context.Connection.RemoteIpAddress;",
+                 })
+        {
+            Assert.IsNotEmpty(Findings(Blank(other)), other);
+        }
+
+        static IEnumerable<int> CountOf(string code, string text)
+        {
+            for (var at = code.IndexOf(text, StringComparison.Ordinal); at >= 0; at = code.IndexOf(text, at + text.Length, StringComparison.Ordinal))
+            {
+                yield return at;
+            }
         }
     }
 
@@ -914,6 +994,8 @@ public sealed class PublicRequestRecordingTests
             ("Open(p, SqliteOpenMode.ReadWriteCreate);", "a database opened for writing"),
             ("var f = context.Features.Get<IHttpConnectionFeature>();", "a feature other than the request's raw target"),
             ("var f = context.Features.Get<IHttpRequestFeature>()?.Headers;", "a member of the request feature other than the raw target"),
+            ("_limiter.ClientOf(context.Connection.RemoteIpAddress, context.Request.Headers[\"Referer\"].ToString());", "the caller's headers"),
+            ("Console.Error.WriteLine(context.Connection.RemoteIpAddress);", "the caller's address"),
         };
         foreach (var (code, rule) in planted)
         {
@@ -922,5 +1004,6 @@ public sealed class PublicRequestRecordingTests
 
         Assert.IsEmpty(Findings(Blank("var raw = context.Features.Get<IHttpRequestFeature>()?.RawTarget ?? string.Empty;")));
         Assert.IsEmpty(Findings(Blank("context.Response.Headers.Allow = HttpMethods.Get;")));
+        Assert.IsEmpty(Findings(Blank(ClientRead + ";")), "the per-client limit's one read");
     }
 }

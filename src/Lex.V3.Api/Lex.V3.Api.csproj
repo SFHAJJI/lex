@@ -33,6 +33,11 @@
     <None Remove="article-numbers.json" />
     <Content Remove="article-numbers.json" />
     <EmbeddedResource Include="article-numbers.json" LogicalName="Lex.V3.Api.ArticleNumbers.json" />
+    <!-- The published key set (R116), served at /.well-known/lex-keys.json from the committed bytes (V3KeySet); its public
+         key, well-known/lex-v3-release.pem, stays in the repository beside it and is built into nothing. -->
+    <None Remove="well-known/**/*" />
+    <Content Remove="well-known/**/*" />
+    <EmbeddedResource Include="well-known/lex-keys.json" LogicalName="Lex.V3.Api.WellKnown.LexKeys.json" />
     <None Remove="preview-graph/**/*" />
     <None Remove="preview-trust/**/*" />
     <Content Remove="preview-graph/**/*" />

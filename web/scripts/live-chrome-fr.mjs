@@ -239,6 +239,14 @@
 // reviewer, not the author) under the same delegation in the addendum of 2026-10-26 "the legal notice qualified and the
 // freshness strip on a page with no answer" (2 forms, both approved; "ne contient aucune réponse", never "n’interroge pas
 // le serveur", which the privacy notice's requests would contradict).
+// The privacy notice and the per-client limit (R109; `V3ClientLimiter`): `privacy.intro`, `privacy.sections.reading.kept`,
+// `.limit` (new) and `.nothingHeld` were reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the
+// same delegation in the addendum of 2026-10-27 "the privacy notice and the per-client limit" (4 forms, 2 changed in review,
+// the English with them: "à elle seule" for the English's "single", "mémoire vive" never "mémoire de travail", the count one
+// noun, "décompte", where `nothingHeld` takes it up; the test's marked value "une adresse IP", as the English now says; the
+// wait "un instant", "à la fois ou en une minute", since the server asks for a second and caps four requests at once). The
+// notice draws its line at writing: "n’enregistre rien", "n’en écrit rien nulle part", "jamais écrite"; what it holds for a
+// moment it "garde … en mémoire vive", and `nothingHeld`'s "ensuite" keeps it true.
 // The EU authenticity statement chosen by the act's date (the owner's decision of 2026-10-18 on PR #975's question, O4):
 // `citation.europe.authenticity`, one string approved in the addendum of 2026-10-17 on the citation generator, is now two
 // entries keyed by the platform's basis, `citation.europe.authenticity.electronic_edition` (that string, unchanged) and
@@ -1008,14 +1016,15 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Protection des données',
     eyebrow: 'À propos de ce site',
     heading: 'Protection des données',
-    intro: 'Ce qu’il advient de vos données lorsque vous consultez Lex : il ne vous en demande aucune, ne dépose aucun cookie et ne conserve rien qui vous concerne.',
+    intro: 'Ce qu’il advient de vos données lorsque vous consultez Lex : il ne vous en demande aucune, ne dépose aucun cookie et n’enregistre rien qui vous concerne.',
     sections: Object.freeze({
       reading: Object.freeze({
         heading: 'Lorsque vous consultez le site',
         request: 'Chaque page que vous ouvrez et chaque recherche que vous envoyez est une requête de votre navigateur au serveur de ce site. La requête comporte l’adresse IP de votre appareil, l’adresse de la page et les informations techniques que tout navigateur envoie. Les mots d’une recherche sont envoyés dans le corps de la requête, jamais dans l’adresse de la requête ; un lien qui conserve une recherche la contient après « # », dans une partie que votre navigateur n’envoie jamais.',
         host: 'Microsoft, qui héberge le site, achemine chaque requête jusqu’au serveur et sa réponse jusqu’à vous, et traite à cette fin les données de connexion nécessaires, selon ses propres conditions.',
-        kept: 'Le serveur n’utilise la requête que pour y répondre, et n’en conserve rien une fois qu’il a répondu : il ne tient aucun journal des accès ni aucun relevé de ce qui est lu ou recherché, et l’hébergement est configuré sans stockage de journaux ni service de surveillance qui conserverait les requêtes. Cela est vérifié : le serveur est soumis à des requêtes portant des valeurs repérables (une expression recherchée, une adresse, le nom d’un navigateur), dont aucune ne doit apparaître dans ce qu’il écrit.',
-        nothingHeld: 'Lex ne propose ni compte ni inscription : il ne sait donc jamais qui vous êtes. Comme il ne conserve rien d’une visite, il ne détient rien vous concernant qu’il pourrait montrer, rectifier ou effacer.',
+        kept: 'Le serveur utilise la requête pour y répondre et pour la compter (voir ci-dessous), et n’en écrit rien nulle part : il ne tient aucun journal des accès ni aucun relevé de ce qui est lu ou recherché, et l’hébergement est configuré sans stockage de journaux ni service de surveillance qui conserverait les requêtes. Cela est vérifié : le serveur est soumis à des requêtes portant des valeurs repérables (une expression recherchée, une adresse IP, le nom d’un navigateur), dont aucune ne doit apparaître dans ce qu’il écrit.',
+        limit: 'Pour qu’aucune adresse IP ne puisse à elle seule surcharger le serveur, celui-ci compte les requêtes qui proviennent de chaque adresse IP. Il garde pour cela, dans sa seule mémoire vive, une empreinte de l’adresse IP, accompagnée du décompte de ses requêtes récentes. L’empreinte est calculée avec une clé secrète tirée au hasard, jamais écrite et remplacée chaque jour ; l’adresse IP elle-même n’est pas conservée. Ni l’empreinte ni ce décompte ne sont jamais écrits, et tous deux sont oubliés au plus tard deux minutes environ après la dernière requête provenant de cette adresse IP, ou lorsque le serveur redémarre. Une adresse IP qui envoie trop de requêtes à la fois ou en une minute est invitée à patienter un instant.',
+        nothingHeld: 'Lex ne propose ni compte ni inscription : il ne sait donc jamais qui vous êtes. Comme il n’enregistre rien d’une visite et oublie en quelques minutes le décompte ci-dessus, il ne détient rien vous concernant qu’il pourrait ensuite montrer, rectifier ou effacer.',
       }),
       nothingElse: Object.freeze({
         heading: 'Ni cookie, ni traceur, ni autre site',

@@ -26,6 +26,8 @@ export const SERVED_OPERATIONS = Object.freeze([
 
 const PROBLEM_MEDIA_TYPE = "application/problem+json";
 const JSON_MEDIA_TYPE = "application/json";
+/** The status the API answers `rate_limited` with (R109; `V3ResolveRestRoute.HandleRateLimitedAsync`). */
+const RATE_LIMITED_STATUS = 429;
 
 /**
  * Reads the whole body as text. A cancellation stays a cancellation; any other failure while the
@@ -108,7 +110,11 @@ export async function askV3(operation, parameters, options) {
     return { state: "transport_failure", code, status: response.status };
   }
 
-  if (response.status !== 200 || type !== JSON_MEDIA_TYPE) {
+  // Over the reader's per-client limit (R109) the API answers the typed refusal `rate_limited` with 429 and Retry-After: an
+  // envelope read by the same rules as any other, and shown as the refusal it is (the failure panel's, with its retry). Any
+  // other answer sent with 429 is no answer.
+  const limited = response.status === RATE_LIMITED_STATUS;
+  if ((response.status !== 200 && !limited) || type !== JSON_MEDIA_TYPE) {
     return {
       state: "invalid_envelope",
       reason: `the API answered ${response.status} ${type || "with no media type"}, not an envelope`,
@@ -122,6 +128,9 @@ export async function askV3(operation, parameters, options) {
 
   const read = readV3Envelope(parsed.value, contract, { operation, objectType });
   if (!read.ok) return { state: "invalid_envelope", reason: read.reason };
+  if (limited && (read.state !== "refusal" || read.envelope.refusal?.code !== "rate_limited")) {
+    return { state: "invalid_envelope", reason: `the API answered ${RATE_LIMITED_STATUS} with an envelope that is not the refusal rate_limited` };
+  }
   // Every answer says how current the law is and which commits stand behind it (R87, R23): the page's footer strip and its
   // staleness banner follow the latest one (`freshness.mjs`, `client.jsx`).
   announceAnswer(read.envelope);

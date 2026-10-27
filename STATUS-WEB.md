@@ -6504,7 +6504,7 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   `annexes_not_served`. Every one is served as `text_not_available`, whatever its disposition, and linked to its
   expression's official source. No annex text is served even where the publisher's PDF has a text layer; that
   waits until annexes are indexed as units of their own, with their own rights rule and citations.
-- The six refusal codes no operation produces at launch (the refusal census's `not_produced` list),
+- The six refusal codes no operation produced at launch (five since 2026-10-27; the refusal census's `not_produced` list),
   each unreachable by construction, decided under that delegation (2026-10-02). The launch contract's
   refusal line holds them in the closed registry with their payloads; the refusal case set measures the
   fourteen produced codes.
@@ -6519,11 +6519,11 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   - `out_of_corpus_scope`: an identifier neither index holds answers `identifier_unknown`, naming this
     service's own `search` as the way forward (`official_search_actions`); a list of publishers known to
     be out of scope (a CSSF circular, a court decision) would produce it, and none is kept at launch.
-  - `rate_limited`: the one-server host applies no per-client limit at launch, since it keeps no IP
-    address or user agent (the launch contract's privacy line). Cost under abuse is bounded by one
-    replica per revision (`minReplicas` and `maxReplicas` 1 in `deploy/main.bicep`); the kit runs in
-    multiple-revision mode, so each active revision runs its own replica. A per-client limit that needs
-    no identifying record is follow-on work.
+  - `rate_limited`: **reversed on 2026-10-27** (R109 reverses it by name): the per-client limit ships, in memory, keyed by
+    a keyed hash of the address, and every served operation produces `rate_limited` past it (the section "The per-client
+    limit, the key set, the headers on every answer, the outside monitor and the runbook", above). The decision it
+    replaces: no per-client limit at launch, since the host kept no IP address or user agent, with cost under abuse
+    bounded by one replica per revision. Five codes stay unproduced.
   - `upstream_unreachable`: serving never contacts a publisher: the API holds no HTTP client, and the
     only publisher client (`RoutedHttpAcquisitionSession`) is built by acquisition, which the API never
     references; a mount is served from its own files, so no upstream can be unreachable at request time.

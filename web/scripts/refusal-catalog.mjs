@@ -280,9 +280,11 @@ export const REFUSAL_EXAMPLES = Object.freeze({
     sentence: 'The publisher did not answer.',
     payload: { host: 'preview.invalid' },
   },
+  // The per-client limit (R109): the client's own requests to this site, never the publisher's; the wait in whole seconds, as
+  // Retry-After says it, as the platform sends it (refusal-payload-samples.json).
   rate_limited: {
-    sentence: 'Too many requests reached the publisher.',
-    payload: { retry_after: '30s' },
+    sentence: 'Too many requests came from your address in the last minute.',
+    payload: { retry_after: 1, retryable: true },
   },
   advice_boundary: {
     sentence: 'I cannot apply the law to your situation.',

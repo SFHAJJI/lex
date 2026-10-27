@@ -68,6 +68,12 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Api.SyntheticIndexResolver: constructor private instance "
                     + "Lex.V3.Api.SyntheticIndexResolver::.ctor, "
                     + "method public static Lex.V3.Api.SyntheticIndexResolver::Open",
+                "Lex.V3.Api.V3ClientLimiter: constructor internal instance "
+                    + "Lex.V3.Api.V3ClientLimiter::.ctor, "
+                    + "constructor private static Lex.V3.Api.V3ClientLimiter::.cctor",
+                "Lex.V3.Api.V3ClientLimiter+Admission: constructor internal instance "
+                    + "Lex.V3.Api.V3ClientLimiter+Admission::.ctor, "
+                    + "method internal instance Lex.V3.Api.V3ClientLimiter::AdmitApi",
                 "Lex.V3.Api.V3CorpusMount: constructor private instance "
                     + "Lex.V3.Api.V3CorpusMount::.ctor, "
                     + "constructor private static Lex.V3.Api.V3CorpusMount::.cctor, "

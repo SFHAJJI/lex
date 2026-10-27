@@ -713,14 +713,16 @@ const EN = Object.freeze({
     title: "Privacy notice",
     eyebrow: "About this site",
     heading: "Privacy notice",
-    intro: "What happens to your data when you read Lex: it asks you for none, sets no cookie and keeps nothing about you.",
+    intro: "What happens to your data when you read Lex: it asks you for none, sets no cookie and records nothing about you.",
     sections: Object.freeze({
       reading: Object.freeze({
         heading: "When you read the site",
         request: "Each page you open and each search you send is a request from your browser to this site's server. The request carries your device's IP address, the address of the page and the technical details every browser sends. A search's words travel in the body of the request, never in the request's address; a link that keeps a search holds it in the part after the “#”, which your browser never sends.",
         host: "Microsoft, which hosts the site, carries each request to the server and its answer back to you, and handles the connection data this needs under its own terms.",
-        kept: "The server uses the request only to answer it, and keeps nothing of it once it has answered: it writes no access log and no record of what is read or searched, and the hosting is set up with no log store and no monitoring service that would keep requests. This is tested: the server is run with requests carrying marked values (a search phrase, an address, a browser's name), and none of them may appear in anything it writes.",
-        nothingHeld: "Lex has no accounts and no sign-up, so it never knows who you are. Since it keeps nothing about a visit, it holds nothing about you that it could show, correct or erase.",
+        kept: "The server uses the request to answer it and to count it (see below), and writes nothing of it anywhere: it keeps no access log and no record of what is read or searched, and the hosting is set up with no log store and no monitoring service that would keep requests. This is tested: the server is run with requests carrying marked values (a search phrase, an IP address, a browser's name), and none of them may appear in anything it writes.",
+        // The per-client limit (R109; V3ClientLimiter): what the server holds of an IP address, where, and for how long.
+        limit: "So that no single IP address can overload the server, the server counts the requests that come from each IP address. For this it holds, in its working memory only, a fingerprint of the IP address beside a count of its recent requests. The fingerprint is computed with a secret key that is drawn at random, never written down and replaced every day; the IP address itself is not kept. Neither the fingerprint nor the count is ever written down, and both are forgotten at the latest about two minutes after the last request from that IP address, or when the server restarts. An IP address that sends too many requests at once or in a minute is asked to wait a moment.",
+        nothingHeld: "Lex has no accounts and no sign-up, so it never knows who you are. Since it records nothing about a visit, and forgets the count above within minutes, it holds nothing about you that it could later show, correct or erase.",
       }),
       nothingElse: Object.freeze({
         heading: "No cookies, no trackers, no other sites",
