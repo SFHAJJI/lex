@@ -6,8 +6,8 @@
 // - what Lex is and is not: the site's introduction, under its own heading;
 // - the coverage line (R11): every count the coverage answer's, said "as of the index built on" its build's date
 //   (`live-home.mjs`), and today beside it when the index is older (R13: "When the index is older, both dates are shown");
-// - links to the site's served pages that a reader starts from: Changes, and Trust and Coverage. Developers and Get help
-//   have no live page yet, so nothing links to them (R52: nothing unserved is shown).
+// - links to the site's served pages that a reader starts from: Changes, Trust and Coverage, Developers and Get help, the
+//   specification of record's list (§3, Shell and home), each by the name its own page gives it.
 //
 // No example searches: the coverage answer and the browse answer name no title and no text (browse names a work by its
 // identifiers only), so no example could be shown to land on text this server holds without a literal the mount may not
@@ -22,6 +22,7 @@ import { useEffect, useState } from 'react';
 import { LiveSearch } from './LiveSearch.jsx';
 import { UNMOUNTED_SENTENCE, startHomeCoverage } from '../scripts/live-home.mjs';
 import { fillCounted, fillText, liveChrome, livePath, refusalSentence } from '../scripts/live-chrome.mjs';
+import { referencePage } from '../scripts/reference-pages.mjs';
 import { indexOlderThanToday } from '../scripts/live-search.mjs';
 import { useLuxembourgToday } from './Today.jsx';
 
@@ -56,6 +57,8 @@ export function HomeLinks() {
       <ul>
         <li><a href={livePath('radar.html')}>{liveChrome().site.radar}</a></li>
         <li><a href={livePath('coverage.html')}>{liveChrome().coverage.title}</a></li>
+        <li><a href={livePath(referencePage('developers').file)}>{liveChrome().developers.title}</a></li>
+        <li><a href={livePath(referencePage('help').file)}>{liveChrome().help.title}</a></li>
       </ul>
     </nav>
   );

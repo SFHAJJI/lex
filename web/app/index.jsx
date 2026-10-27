@@ -35,6 +35,10 @@ export {
   LegalPageBody, legalValues, renderLiveAccessibilityPage, renderLiveCookiesPage, renderLiveLegalNoticePage, renderLiveLegalPage,
   renderLivePrivacyPage, renderLiveTermsPage,
 } from './LegalPage.jsx';
+export {
+  DevelopersBody, Glossary, GuideBody, HelpBody, guideValues, helpValues, renderLiveDevelopersPage, renderLiveGuidePage,
+  renderLiveHelpPage, renderLiveReferencePage,
+} from './ReferencePages.jsx';
 export { LiveSearch, SEARCH_VARIANTS, SearchAnswerView, SearchResultsView, SearchWorkResolution } from './LiveSearch.jsx';
 export { LIVE_SEARCH_ROOT, LiveSearchRoot, liveSearchTree, renderLiveSearchPage } from './live-search-page.jsx';
 export { CoverageLine, HomeLinks, LiveHome } from './LiveHome.jsx';
