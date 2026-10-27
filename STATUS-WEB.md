@@ -23,6 +23,12 @@ The independent review of #1004 (`writer/truth-and-coverage` at b02c978a) said R
 - **F5.** The select and the checkbox stand in the controls' 44 px rule.
 - **Also said in the PR**: every `out_of_corpus_scope` law page is a 404 in both servers, the out-of-scope list's classes
   included, and both still render the refusal card.
+- **French**: the one changed form reviewed by one independent reviewer (the supplement "the review of #1004, F2" in the
+  record), its recommended pair taken in both languages, byte for byte.
+- **Counts**: `dotnet build Lex.V3.slnx -c Release` 0 warnings; `Lex.V3.Tests` whole 3,375 (3,369 passed, 0 failed, 6 skipped);
+  the Ingest classes touched with every census class and the legacy replays 194 (191 passed, 0 failed, 3 skipped);
+  `Lex.V3.Ingest.Tests` whole 3,592 (3,547 passed, 0 failed, 45 skipped); `npm run build`, `npm test` 1,459 (1,456 passed,
+  0 failed, 3 skipped); `eng/verify-v3-tree.ps1` 1,776 tracked paths. No legacy row moved.
 
 ## Truth and coverage: the six overclaims narrowed, R80, R79, R78/R82/R12 on Coverage, R62 and R65 (sole driver, 2026-10-27)
 
