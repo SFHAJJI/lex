@@ -313,7 +313,7 @@ test("the script deploys only a release that verifies, and only by the image's d
   // Once the site is open, a -Public deployment's probe holds the candidate's legal pages to the opening's rule; and every
   // candidate's probe says whether promotion refuses its data's age (`--promotion-check`, exit 3).
   assert.match(code, /\$openingArgs = @\(if \(\$Public\) \{ '--opening' \}\)/);
-  assert.match(code, /deploy-probe\.mjs'\) --origin \$origin --release \$releasePath --public-key \$keyPath @signerProbe @browserArgs @openingArgs --promotion-check\n/);
+  assert.match(code, /deploy-probe\.mjs'\) --origin \$origin --release \$releasePath --public-key \$keyPath @signerProbe @browserArgs @openingArgs --promotion-check --search-engines \$SearchEngines\n/);
   // A deployment applies only a release the release signer signed: -Apply requires -SignerIdentity, which both read-backs
   // carry, so a rehearsal release is read in a plan run only.
   assert.match(script, /if \(\$Apply -and \[string\]::IsNullOrWhiteSpace\(\$SignerIdentity\)\) \{\s*throw "-Apply deploys a release signed by the release signer/);
