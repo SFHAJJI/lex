@@ -323,6 +323,21 @@ test("a revision that already exists is refused before anything in Azure changes
   assert.deepEqual(planned.calls.filter((call) => !call.startsWith("node ")), []);
 });
 
+test("a redeployment names the revision serving now, and it must be one of the app's: otherwise nothing changes (the review's note 1)", () => {
+  const settings = ["-SignerIdentity", "signer", "-AllowedCidr", "203.0.113.7/32", "-Apply"];
+  // The app holds a revision and -LiveRevision is not given: the template would send all traffic to the unprobed candidate.
+  const unnamed = deploy(settings, { RULES: PRIVATE_RULES, REVISIONS: LIVE }, { live: "" });
+  assert.match(unnamed.result, /^RESULT:threw ca-lex-v3 holds 1 revision\(s\), so this is a redeployment: name the revision serving now with -LiveRevision\..*Nothing was deployed and nothing changed\./, unnamed.out);
+  assert.deepEqual(writes(unnamed), [], unnamed.calls.join("\n"));
+  assert.deepEqual(unnamed.deployments, []);
+  assert.deepEqual(unnamed.deactivated, []);
+  // -LiveRevision names a revision the app does not hold.
+  const stranger = deploy(settings, { RULES: PRIVATE_RULES, REVISIONS: "ca-lex-v3--v3-20261001t000000z-000000000000" }, { live: LIVE });
+  assert.match(stranger.result, new RegExp(`^RESULT:threw -LiveRevision ${LIVE} is not a revision of ca-lex-v3 .*Nothing was deployed and nothing changed\\.`), stranger.out);
+  assert.deepEqual(writes(stranger), [], stranger.calls.join("\n"));
+  assert.deepEqual(stranger.deployments, []);
+});
+
 test("a failed deployment deactivates only a revision it created: never the live one, and nothing when it cannot tell", () => {
   // The incident's shape: the name this deployment computes is the live revision's, and the deployment fails.
   const settings = ["-SignerIdentity", "signer", "-Public", "-SearchEngines", "indexed"];

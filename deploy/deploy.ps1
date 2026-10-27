@@ -286,6 +286,14 @@ if ($Apply) {
     if ($LASTEXITCODE -eq 0) {
         $priorRevisions = @($listed | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
         Write-Host "  $AppName holds $($priorRevisions.Count) revision(s), active and inactive"
+        # A redeployment names the revision that serves, and it must be one of the app's: without it the template's first
+        # deployment rule sends all traffic to the unprobed candidate (the review of the incident fix, its note 1).
+        if ($priorRevisions.Count -gt 0 -and [string]::IsNullOrEmpty($LiveRevision)) {
+            throw "$AppName holds $($priorRevisions.Count) revision(s), so this is a redeployment: name the revision serving now with -LiveRevision. Without it the template sends all traffic to the candidate before its probe. Nothing was deployed and nothing changed."
+        }
+        if (-not [string]::IsNullOrEmpty($LiveRevision) -and $priorRevisions -notcontains $LiveRevision) {
+            throw "-LiveRevision $LiveRevision is not a revision of $AppName (it holds: $($priorRevisions -join ', ')). Nothing was deployed and nothing changed."
+        }
     }
     elseif (-not [string]::IsNullOrEmpty($LiveRevision)) {
         throw "The revisions of $AppName could not be read; nothing was deployed: without them a failure could not tell a revision this deployment made from one that serves (the incident of 2026-10-27)."
