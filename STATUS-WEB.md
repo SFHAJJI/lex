@@ -98,6 +98,14 @@ back).
   - **Driver decisions (reversible):** `file_articles_no_state` is the record's name for Coverage's `files_with_text` where the
     index holds a file's articles and no state (derive-c: 209, derive-r1: none); Coverage still counts those articles as
     served, which is Coverage's wording and outside this round. The textless forms say "shows" too (the French review's point).
+- **Carries #1004** (`writer/truth-and-coverage` at 85b0e595, merged at 27a36a09; its sections follow): both slices' meaning
+  kept (R80's `out_of_corpus_scope` for an EU act outside the population, a treaty never; its 404 law pages with the card;
+  R77's records and R57's paged diff), each refusal its own sentence (R92, then R77, then R80), both reviews' French byte for
+  byte, #1004's narrowed How to read Lex kept (R77 does not make its removed promise true; a narrower sentence for acts Lex
+  holds no version of would need R92's exception and new French: not added, a reversible driver decision). Samples
+  re-rendered (equal to the merge); on Linux at 27a36a09 the 38 legacy rows equal caaff24d's, and 3 EU schema-5 rows move,
+  each by a slice. Counts at 04e18046: build 0 warnings; Lex.V3.Tests 3,375 (3,369 pass, 6 skip); Lex.V3.Ingest.Tests whole
+  3,611 (3,566 pass, 45 skip, 61 min); `npm test` 1,480 (1,477 pass, 3 skip); verify-v3-tree 1,790 paths.
 - **Not done:** R57's side-by-side view and its swap control; R56's gap rows on the reading's version list.
 ## Review and repair (#1004): treaties never out of the population, How to read Lex as narrow as index 8 (sole driver, 2026-10-27)
 
