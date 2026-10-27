@@ -95,6 +95,9 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::AsOfEurope, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::AsOfEuropeOf, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::AsOfEuropePinned, "
+                    // R77: an act only the catalogue holds is refused with its record (V3CorpusMount.CatalogueRecords.cs).
+                    + "method private instance Lex.V3.Api.V3CorpusMount::CatalogueOnlyRefusal, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::CatalogueRecordRefusal, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::DossierEurope, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::EuropeReference, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::EvidenceBundleEurope, "
