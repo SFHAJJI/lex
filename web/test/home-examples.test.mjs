@@ -179,3 +179,37 @@ test("a build handed the record compiles it into the home page's bundles: the se
     await rm(destination, { recursive: true, force: true });
   }
 });
+
+test("the journeys and the image probe hold a served home page to its examples, each asked of the same server", async () => {
+  const { frontDoorFailures, frontDoorOf } = await import("../scripts/journey.mjs");
+  const { examplesListed, homeExampleFailures } = await import("../scripts/home-examples-run.mjs");
+  const record = await deriveHomeExamples({ ask: census_ask((parameters) => opensArticle(parameters.query, "art_1er", "1")).ask, contract, today: TODAY });
+  const facts = homeFacts(COVERAGE, contract);
+  const page = (examples, language = "en") => `<main>${renderToStaticMarkup(h(LiveHome, { contract, facts, examples }))}</main>`.replaceAll("/en/search.html", `/${language}/search.html`);
+  const [example] = record.examples;
+  assert.deepEqual(examplesListed(page(record)), [{ href: exampleHref(example, "en"), opens: example.opens }]);
+  assert.deepEqual(frontDoorOf(page(record)).examples, examplesListed(page(record)));
+
+  // The journeys' front door: exactly the build's examples over the mount, none over no mount.
+  const door = (bytes) => ({ frontDoor: frontDoorOf(bytes), todays: ["2026-10-27"], firstScreen: { height: 640, input: 100, statement: 200, inputFirst: true } });
+  const exampleFailures = (observed, expected) => frontDoorFailures(observed, expected).filter((failure) => failure.includes("example searches"));
+  assert.deepEqual(exampleFailures(door(page(record)), { homeExamples: record, state: "success" }), []);
+  assert.equal(exampleFailures(door(page(null)), { homeExamples: record, state: "success" }).length, 1, "a page that lists none");
+  assert.deepEqual(exampleFailures(door(page(null)), { homeExamples: record, state: "refusal", refusalCode: "no_corpus_mounted" }), [], "no mount, none");
+  assert.deepEqual(exampleFailures(door(page(record)), { state: "success" }), [], "a run handed no record holds nothing");
+
+  // The image probe: each example the page lists asked of the server as the search page asks it.
+  const searched = [];
+  const serve = (opens) => async (url, init) => {
+    if (init?.method === "POST") {
+      searched.push(JSON.parse(init.body));
+      return { ok: true, status: 200, json: async () => ({ result: { value: { reference: { outcome: "opens", opens: { page: "reading", address: opens } } } } }) };
+    }
+    const language = new URL(url).pathname.split("/")[1];
+    return { status: 200, text: async () => page(record, language) };
+  };
+  assert.deepEqual(await homeExampleFailures("http://image", { expected: record, fetchImpl: serve(example.opens) }), []);
+  assert.deepEqual(searched[0], { operation_id: "search", parameters: { query: example.query, language: "fra", mode: "strict" } });
+  assert.equal((await homeExampleFailures("http://image", { expected: record, fetchImpl: serve("/lu-legilux/elsewhere") })).length, 2, "an example that opens another article, on each page");
+  assert.equal((await homeExampleFailures("http://image", { expected: null, fetchImpl: serve(example.opens) })).filter((failure) => failure.includes("not the build's")).length, 2, "a page listing examples the build did not carry");
+});

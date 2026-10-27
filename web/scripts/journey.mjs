@@ -74,6 +74,12 @@
 // midnight in Luxembourg during the run); and at 320 by 640 CSS pixels, the box is the first control of the page's
 // content and both it and the sentence under it, which says what Lex is not, are in view without scrolling.
 //
+// The home page's example searches (R47; `home-examples.mjs`) are derived over the run's mount before the pages are built,
+// through the API's own answers, and compiled into the build (`homeExamplesOverMount`): the home page, rendered over the
+// mount, must list exactly those examples, each a link to the search page with its search in the address and naming the
+// article it opens, and over no mount none (`frontDoorFailures`). On the fixture mount the derivation must find one: the
+// fixture's act's first article, cited as usual, which the exact-reference phase opens.
+//
 // The specification of record's R60 has runs of its own on the fixture mount (`failurePageExpectations`): an address
 // the site has no page for must arrive as the 404 page, with status 404, and its search must answer as the home page's
 // does, or with no mount show the failure panel; and the search with no mount must show the failure panel, whose retry,
@@ -101,6 +107,7 @@ import { searchFragment } from "./search-address.mjs";
 import { INDEXED, X_ROBOTS_TAG } from "./search-engines.mjs";
 import { CANONICAL_HOST } from "./routes.mjs";
 import { luxembourgDate } from "./temporal.mjs";
+import { exampleHref } from "./home-examples.mjs";
 
 /** The origin the site's head links name (`Document.jsx`, `head-links.mjs`), whatever server a journey runs against. */
 const SITE_ORIGIN = `https://${CANONICAL_HOST}`;
@@ -799,6 +806,8 @@ export function frontDoorOf(bytes) {
     coverageLine: /data-coverage-line="([a-z]+)"/.exec(bytes)?.[1] ?? null,
     dateField: field === null ? null : (/\svalue="([^"]*)"/.exec(field)?.[1] ?? ""),
     facts: bytes.includes('id="lex-home-facts"'),
+    // The example searches the page lists (R47): each link's address and the article it says it opens, in order.
+    examples: [...bytes.matchAll(/<a href="([^"]*)" data-home-example="([^"]*)"/g)].map(([, href, opens]) => ({ href: href.replaceAll("&amp;", "&"), opens })),
   };
 }
 
@@ -817,6 +826,13 @@ export function frontDoorFailures(observed, expected) {
   if (door.coverageLine !== line) failures.push(`the home page's coverage line is ${door.coverageLine ?? "absent"}, not ${line}`);
   if (!todaysOf(observed).includes(door.dateField)) {
     failures.push(`the home page's date field holds ${JSON.stringify(door.dateField)}, not today in Luxembourg (${todaysOf(observed).join(" or ")})`);
+  }
+  // The example searches the build carries (R47), over the mount they were derived from, and none over no mount.
+  if (expected.homeExamples !== undefined) {
+    const shown = JSON.stringify(door.examples ?? null);
+    const examples = unmounted || expected.homeExamples === null ? [] : expected.homeExamples.examples;
+    const wanted = JSON.stringify(examples.map((example) => ({ href: exampleHref(example, "en"), opens: example.opens })));
+    if (shown !== wanted) failures.push(`the home page lists the example searches ${shown}, not the build's ${wanted}`);
   }
   const screen = observed.firstScreen;
   if (screen === undefined || screen === null || typeof screen.height !== "number") failures.push("the home page was not measured at a small phone's size");
@@ -2224,50 +2240,58 @@ async function main(argv) {
   const longAct = journeyMount?.long_act !== undefined;
   // `--live-root` serves a directory built elsewhere instead of building one: how a deliberately
   // broken page is shown to fail the journey.
-  const liveRoot = argv.includes("--live-root") ? argument("--live-root") : await buildLive();
+  // The home page's example searches, derived over this mount through the API's answers, then built in (R47).
+  const { homeExamplesOverMount } = await import("./home-examples-run.mjs");
+  const homeExamples = argv.includes("--live-root") ? undefined : await homeExamplesOverMount({ apiOutput, mount, log: (line) => console.log(`  example searches: ${line}`) });
+  if (homeExamples !== undefined) console.log(`example searches over the mount: ${JSON.stringify(homeExamples?.examples ?? [])}`);
+  const liveRoot = argv.includes("--live-root") ? argument("--live-root") : await buildLive(undefined, { examples: homeExamples ?? null });
   const browser = await findBrowser();
   const servedByApi = argv.includes("--served-by-api");
   const keyboard = argv.includes("--keyboard");
   const results = [];
-  if (realMount) results.push(...await realMountRuns(apiOutput, mount, { servedByApi, keyboard }, browser, liveRoot));
-  else if (licenceBlocked) results.push(...await licenceBlockedRuns(apiOutput, mount, { servedByApi, keyboard }, browser, liveRoot));
+  if (realMount) results.push(...await realMountRuns(apiOutput, mount, { servedByApi, keyboard, homeExamples }, browser, liveRoot));
+  else if (licenceBlocked) results.push(...await licenceBlockedRuns(apiOutput, mount, { servedByApi, keyboard, homeExamples }, browser, liveRoot));
   else if (twoState) {
     for (const [name, expected] of twoStateExpectations(journeyMount)) {
-      results.push([`${name}, with the two-state mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
+      results.push([`${name}, with the two-state mount`, await run(apiOutput, mount, { servedByApi, keyboard, homeExamples, ...expected }, browser, liveRoot)]);
     }
   } else if (europeAnnex) {
     for (const [name, expected] of europeAnnexExpectations(journeyMount)) {
-      results.push([`${name}, with the EU annex control mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
+      results.push([`${name}, with the EU annex control mount`, await run(apiOutput, mount, { servedByApi, keyboard, homeExamples, ...expected }, browser, liveRoot)]);
     }
   } else if (longAct) {
     for (const [name, expected] of longActExpectations(journeyMount)) {
-      results.push([`${name}, with the long act mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
+      results.push([`${name}, with the long act mount`, await run(apiOutput, mount, { servedByApi, keyboard, homeExamples, ...expected }, browser, liveRoot)]);
     }
   } else {
     // Each step with the fixture mount, then with no mount, where every page shows the refusal card.
     for (const [name, expected] of fixtureMountExpectations(journeyMount)) {
-      results.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
-      results.push([`${name}, with no mount`, await run(apiOutput, null, { servedByApi, keyboard, step: expected.step, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)]);
+      results.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { servedByApi, keyboard, homeExamples, ...expected }, browser, liveRoot)]);
+      results.push([`${name}, with no mount`, await run(apiOutput, null, { servedByApi, keyboard, homeExamples, step: expected.step, state: "refusal", refusalCode: "no_corpus_mounted" }, browser, liveRoot)]);
     }
     // The 404 page and a failure's retry (R60).
     for (const [name, expected, mounted] of failurePageExpectations()) {
-      results.push([name, await run(apiOutput, mounted ? mount : null, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
+      results.push([name, await run(apiOutput, mounted ? mount : null, { servedByApi, keyboard, homeExamples, ...expected }, browser, liveRoot)]);
     }
     // A search kept in the page's address, opened as a shared link (R109; the plan's item 3.5).
     for (const [name, expected] of addressExpectations()) {
-      results.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
+      results.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { servedByApi, keyboard, homeExamples, ...expected }, browser, liveRoot)]);
     }
     // The specification's journeys the eight steps do not walk (J1's refusal, J2, J5).
     for (const [name, expected] of specificationJourneyExpectations()) {
-      results.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { servedByApi, keyboard, ...expected }, browser, liveRoot)]);
+      results.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { servedByApi, keyboard, homeExamples, ...expected }, browser, liveRoot)]);
     }
     // The EU steps: the fixture mount holds no EU index, so the EU work is refused for the EU corpus.
-    results.push(["eu search, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, ...EU_SEARCH_ON_FIXTURE }, browser, liveRoot)]);
-    results.push(["eu dossier, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, ...EU_DOSSIER_ON_FIXTURE }, browser, liveRoot)]);
+    results.push(["eu search, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, homeExamples, ...EU_SEARCH_ON_FIXTURE }, browser, liveRoot)]);
+    results.push(["eu dossier, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, homeExamples, ...EU_DOSSIER_ON_FIXTURE }, browser, liveRoot)]);
   }
   // Journeys J6, J7 and J8 at the API (no page asks the contained assistant or MCP, or polls events), on the
   // fixture mount.
   const apiResults = realMount || licenceBlocked || twoState || europeAnnex || longAct ? [] : await apiJourneyRuns(apiOutput, mount);
+  // R47 on the fixture mount: its one act gives one example search, the exact-reference phase opening its first article.
+  if (!(realMount || licenceBlocked || twoState || europeAnnex || longAct) && homeExamples !== undefined) {
+    apiResults.push(["R47, the home page's example searches over the fixture mount", (homeExamples?.examples.length ?? 0) > 0 ? [] : ["the fixture mount gave no example search: its act's first article, cited as usual, did not open its text"]]);
+  }
   let failed = false;
   for (const [label, failures] of apiResults) {
     console.log(`${label}: ${failures.length === 0 ? "PASS" : "FAIL"}`);

@@ -29,6 +29,9 @@
 // puts it on no disk at all.
 // The evaluation card is the machine gates run over the mount the image carries (ruling 2), derived from the
 // mount by `V3MountedGatesTests` (`--platform-card` takes the platform's fixture card instead).
+// The home page's example searches (R47) are derived over the same mount through the API's own answers, the API published
+// from this checkout and started over the mount for that alone (`home-examples-run.mjs`), and built into both images'
+// pages; the probes hold the image's home pages to them, each example asked of the image's own API.
 // Last, the release assets are published into a versioned directory (the image, its signature, the
 // evaluation card the image serves at its stable route `/evaluation-card.json`, which the probes fetch, the mount's report, and a signed release manifest naming each by
 // hash), read back and verified (`release-assets.mjs`).
@@ -469,11 +472,11 @@ const ARTIFACTS = join(repository, "artifacts", "image-rehearsal");
  * the checkout are mapped (a directory per build outside it gave each build its own assemblies). The
  * SDK's image is then made reproducible (`reproducibleImage`). Answers `{ webRoot, archive, image }`.
  */
-async function buildImage({ into, mountPath, epoch, card, log }) {
+async function buildImage({ into, mountPath, epoch, card, examples = null, log }) {
   log("building the live pages");
   const { buildLive } = await import("./build-live.mjs");
   const webRoot = join(into, "v3-web");
-  await buildLive(pathToFileURL(`${webRoot}/`), { card, buildTag: "image-rehearsal" });
+  await buildLive(pathToFileURL(`${webRoot}/`), { card, examples, buildTag: "image-rehearsal" });
 
   log("building the image (dotnet publish -t:PublishContainer)");
   const sdkArchive = join(into, "sdk-image.tar");
@@ -538,6 +541,24 @@ async function mountedCard({ mountPath, into, log }) {
   spawnSync("dotnet", ["build-server", "shutdown"], { encoding: "utf8" });
   if (!existsSync(output)) throw new Error("the machine gates over the mount wrote no card");
   return readFile(output);
+}
+
+/**
+ * The home page's example searches over the mount the image carries (R47; `home-examples.mjs`): the API published from this
+ * checkout into its own directory, started over the mount as the journeys start it, asked through its own answers, and
+ * closed; the directory is removed whatever happens. The record, or null when the mount counts no corpus.
+ */
+async function mountHomeExamples({ mountPath, into, log }) {
+  log("deriving the home page's example searches over the mount, through the API's own answers (home-examples-run.mjs)");
+  const output = join(into, "api");
+  try {
+    run("dotnet", ["publish", join(repository, "src", "Lex.V3.Api", "Lex.V3.Api.csproj"), "-c", "Release", "-o", output, "-m:1", "-nodeReuse:false", "-v", "q"]);
+    spawnSync("dotnet", ["build-server", "shutdown"], { encoding: "utf8" });
+    const { homeExamplesOverMount } = await import("./home-examples-run.mjs");
+    return await homeExamplesOverMount({ apiOutput: output, mount: mountPath, log: (line) => log(`  ${line}`) });
+  } finally {
+    await rm(into, { recursive: true, force: true });
+  }
 }
 
 /** What a report says in place of the browser's walk on a machine where no browser may run (the owner's order of 2026-10-16). */
@@ -630,7 +651,7 @@ export async function recordedRequests(origin, during) {
  * (`findBrowser` is never called), the report says `browserProbes: "skipped: --no-browser"`, and `stepsNotWalked` names
  * each page step a walk would have reported, so no report reads as browser-probed when it was not.
  */
-export async function probeImage({ startServer, mountPath, mountKind, web, card, corpusSha256, browser, log = () => {} }) {
+export async function probeImage({ startServer, mountPath, mountKind, web, card, corpusSha256, browser, homeExamples = undefined, log = () => {} }) {
   browserNamed(browser, "probeImage");
   const { apiJourneyRuns, processRecordFailures, REAL_MOUNT_EVENTS_VERIFIED } = await import("./journey.mjs");
   const { servedPageFailures } = await import("./deploy-probe.mjs");
@@ -647,7 +668,10 @@ export async function probeImage({ startServer, mountPath, mountKind, web, card,
       const notes = [];
       // What promotion would say of the data's age (R87, O11), recorded beside the probes and never one of their failures.
       const promotion = [];
-      const servedPages = { failures: await servedPageFailures(server.origin, { web, card, corpusSha256, notes, promotion }), notes, promotion };
+      // The home pages' example searches (R47), when the rehearsal derived them: exactly the build's, each opening its article.
+      const { homeExampleFailures } = await import("./home-examples-run.mjs");
+      const examples = homeExamples === undefined ? [] : await homeExampleFailures(server.origin, { expected: homeExamples });
+      const servedPages = { failures: [...await servedPageFailures(server.origin, { web, card, corpusSha256, notes, promotion }), ...examples], notes, promotion };
       const v2Routes = { routesAsked: V2_ROUTES.length, routeFailures: await v2RouteFailures(server.origin, { v3Files: servedPaths(web) }) };
       // Ready with its mount, and no synthetic preview (plan 0.7).
       const serverAnswers = { failures: await serverFailures(server.origin) };
@@ -688,7 +712,7 @@ export async function probeImage({ startServer, mountPath, mountKind, web, card,
   const { fixtureMountRuns, realMountRuns } = await import("./journey.mjs");
   const { findBrowser } = await import("./browser-evidence.mjs");
   const found = await findBrowser();
-  const options = { servedByApi: true, keyboard: false, startServer };
+  const options = { servedByApi: true, keyboard: false, startServer, homeExamples };
   const runs = mountKind === "fixture"
     ? await fixtureMountRuns(null, mountPath, options, found, null)
     : await realMountRuns(null, mountPath, options, found, null, { apiRuns: async () => [] });
@@ -737,7 +761,10 @@ export async function rehearse({ mount, keep = false, probe = true, browser, rep
       sets: cardView.sets.map((set) => ({ set: set.set, arm: set.arm, cases: set.cases, gates: set.gates.map((gate) => `${gate.gate}: ${gate.verdict}`) })),
       controls: cardView.controls.map((control) => `${control.set}, ${control.arm}: ${control.verdict}`),
     };
-    let { webRoot, archive, image } = await buildImage({ into: join(work, "first"), mountPath, epoch: source.epoch, card, log });
+    // The home page's example searches over this mount (R47), derived once for both images.
+    const homeExamples = await mountHomeExamples({ mountPath, into: join(work, "examples"), log });
+    result.homeExamples = homeExamples === null ? null : { indexSha256: homeExamples.index_sha256, derivedOn: homeExamples.derived_on, examples: homeExamples.examples };
+    let { webRoot, archive, image } = await buildImage({ into: join(work, "first"), mountPath, epoch: source.epoch, card, examples: homeExamples, log });
     result.archiveBytes = (await stat(archive)).size;
 
     log("verifying the image");
@@ -783,7 +810,7 @@ export async function rehearse({ mount, keep = false, probe = true, browser, rep
     if (reproduce) {
       // Reproducible: a second build, from scratch in its own directory, must give the same image.
       log("building the image a second time, from scratch, to check it is reproducible");
-      let second = await buildImage({ into: join(work, "second"), mountPath, epoch: source.epoch, card, log });
+      let second = await buildImage({ into: join(work, "second"), mountPath, epoch: source.epoch, card, examples: homeExamples, log });
       const differences = reproductionFailures(image, second.image);
       result.reproduced = { manifestDigest: second.image.manifestDigest, identical: differences.length === 0 };
       second = null;
@@ -814,7 +841,7 @@ export async function rehearse({ mount, keep = false, probe = true, browser, rep
       const deadlineMs = 90_000 + Math.ceil(((tmpMebibytes - TMP_MARGIN_MEBIBYTES) / 1024) * 60_000);
       const { v2Routes, ...probed } = await probeImage({
         startServer: () => startImage({ run: container, config: image.config, tmpMebibytes, deadlineMs }),
-        mountPath, mountKind, web, card: servedCard, corpusSha256: report.corpus?.Sha256 ?? null, browser, log,
+        mountPath, mountKind, web, card: servedCard, corpusSha256: report.corpus?.Sha256 ?? null, browser, homeExamples, log,
       });
       Object.assign(result, probed);
       Object.assign(result.v2Absent, v2Routes);
