@@ -21,7 +21,10 @@ namespace Lex.V3.Api;
 /// <see cref="HandleMaintenanceAsync"/> in place of the API's routing (<c>Program.cs</c>).
 /// </para>
 /// <para>
-/// A page request (<see cref="IsPageRequest"/>: a GET or a HEAD whose path is not under <c>/api/</c>, <c>/mcp</c> or
+/// The web root's files that are no page (the stylesheet, the fonts, the favicon, a script or a schema) are served as the
+/// root always serves them, with status 200, so the maintenance page a browser shows is styled as the site is (the review of
+/// writer/screens-gaps, F2: the stylesheet and the fonts answered the maintenance page itself, and the page showed unstyled).
+/// Every other page request (<see cref="IsPageRequest"/>: a GET or a HEAD whose path is not under <c>/api/</c>, <c>/mcp</c> or
 /// <c>/health/</c>) is answered 503 with <c>Retry-After</c> and every header a page carries (<c>X-Robots-Tag: noindex</c> and
 /// <c>no-store</c> among them), and the maintenance page as the build wrote it, in the interface language the path stands
 /// under, else in the one the reader's languages choose, exactly as the 404 page is chosen (<see cref="NotFoundPageFor"/>,
@@ -62,6 +65,42 @@ internal sealed partial class V3WebRoot
     internal Task<bool> TryServeMaintenanceAsync(HttpContext context, string rawTarget, CancellationToken cancellationToken) =>
         TryServeBuiltPageAsync(context, rawTarget, MaintenanceDirectory, _maintenancePages, StatusCodes.Status503ServiceUnavailable, MaintenanceRetryAfter, cancellationToken);
 
+    /// <summary>
+    /// Answers a GET or a HEAD of one of this root's files that is no page (any extension but <c>.html</c>: the stylesheet, the
+    /// fonts, the favicon, a script, a schema) as the root serves it outside maintenance, with status 200, its type and every
+    /// header the root's answers carry, and returns true; returns false, touching nothing, for any other request.
+    /// </summary>
+    internal async Task<bool> TryServeAssetAsync(HttpContext context, string rawTarget, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(rawTarget);
+        var method = context.Request.Method;
+        if (!HttpMethods.IsGet(method) && !HttpMethods.IsHead(method))
+        {
+            return false;
+        }
+
+        var queryAt = rawTarget.IndexOf('?', StringComparison.Ordinal);
+        var path = queryAt < 0 ? rawTarget : rawTarget[..queryAt];
+        if (!_files.TryGetValue(path, out var file) || string.Equals(Path.GetExtension(file), ".html", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var response = context.Response;
+        _ = WritePageHeaders(response, method);
+        var bytes = await File.ReadAllBytesAsync(file, cancellationToken).ConfigureAwait(false);
+        response.StatusCode = StatusCodes.Status200OK;
+        response.ContentType = ContentTypes[Path.GetExtension(file)];
+        response.ContentLength = bytes.Length;
+        if (HttpMethods.IsGet(method))
+        {
+            await response.Body.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
+        }
+
+        return true;
+    }
+
     /// <summary>The maintenance revision's request delegate, run in place of the API's (<c>Program.cs</c>), over <paramref name="webRoot"/>, or none.</summary>
     internal static RequestDelegate CreateMaintenanceRequestDelegate(V3WebRoot? webRoot) =>
         context => HandleMaintenanceAsync(webRoot, context, context.RequestAborted);
@@ -74,10 +113,17 @@ internal sealed partial class V3WebRoot
     internal static async Task HandleMaintenanceAsync(V3WebRoot? webRoot, HttpContext context, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        // Every answer carries the host's security headers, as the API's do; a page replaces the policy with its own.
+        V3HostHeaders.Apply(context.Response);
         var rawTarget = context.Features.Get<IHttpRequestFeature>()?.RawTarget ?? string.Empty;
         if (string.Equals(rawTarget, V3ApiHandler.ReadinessRawTarget, StringComparison.Ordinal))
         {
             await WriteMaintenanceReadinessAsync(webRoot, context, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (webRoot is not null && await webRoot.TryServeAssetAsync(context, rawTarget, cancellationToken).ConfigureAwait(false))
+        {
             return;
         }
 

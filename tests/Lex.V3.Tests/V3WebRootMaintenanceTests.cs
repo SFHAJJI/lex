@@ -27,11 +27,14 @@ public sealed class V3WebRootMaintenanceTests
 
     private const string NotFoundEnglish = "<!doctype html><p>There is no page at this address</p>";
 
+    /// <summary>The bytes of a font the stylesheet loads, as the build copies it (made up: any bytes are a file to serve).</summary>
+    private static readonly byte[] Font = [0x77, 0x4F, 0x46, 0x32, 0x00, 0x01, 0x02, 0x03];
+
     /// <summary>A web root as the build writes it, with the maintenance pages of <paramref name="languages"/> (both when null).</summary>
     private static string NewWebDirectory(string[]? languages = null)
     {
         var directory = Path.Combine(Path.GetTempPath(), $"lex-v3-web-maintenance-{Guid.NewGuid():N}");
-        foreach (var folder in new[] { "en", "fr", "not-found", "maintenance" })
+        foreach (var folder in new[] { "en", "fr", "not-found", "maintenance", "fonts" })
         {
             Directory.CreateDirectory(Path.Combine(directory, folder));
         }
@@ -41,6 +44,7 @@ public sealed class V3WebRootMaintenanceTests
         File.WriteAllText(Path.Combine(directory, "fr", "index.html"), "<!doctype html><p>accueil</p>");
         File.WriteAllText(Path.Combine(directory, "en", "search.html"), "<!doctype html><p>search</p>");
         File.WriteAllText(Path.Combine(directory, "styles.css"), "body{}");
+        File.WriteAllBytes(Path.Combine(directory, "fonts", "inter-400-latin.woff2"), Font);
         File.WriteAllText(Path.Combine(directory, "not-found", "en.html"), NotFoundEnglish, new UTF8Encoding(false));
         File.WriteAllText(Path.Combine(directory, "not-found", "fr.html"), "<!doctype html><p>Il n’y a aucune page à cette adresse</p>", new UTF8Encoding(false));
         foreach (var language in languages ?? V3WebRoot.InterfaceLanguages)
@@ -107,7 +111,8 @@ public sealed class V3WebRootMaintenanceTests
         Assert.AreEqual("300", context.Response.Headers.RetryAfter.ToString(), target);
         Assert.AreEqual("no-store", context.Response.Headers.CacheControl.ToString(), target);
         Assert.AreEqual("nosniff", context.Response.Headers.XContentTypeOptions.ToString(), target);
-        Assert.AreEqual(0, context.Response.Headers.ContentSecurityPolicy.Count, $"{target}: a machine's answer, not a page");
+        Assert.AreEqual(V3HostHeaders.MachineContentSecurityPolicy, context.Response.Headers.ContentSecurityPolicy.ToString(), $"{target}: a machine's answer, not a page");
+        Assert.AreEqual("no-referrer", context.Response.Headers["Referrer-Policy"].ToString(), target);
         using var problem = JsonDocument.Parse(Body(context));
         var root = problem.RootElement;
         Assert.AreEqual(V3TransportResponse.Schema, root.GetProperty("schema").GetString(), target);
@@ -181,6 +186,48 @@ public sealed class V3WebRootMaintenanceTests
             var opened = await InMaintenanceAsync(indexed, "GET", "/en/");
             Assert.AreEqual("noindex", opened.Response.Headers["X-Robots-Tag"].ToString());
             Assert.AreEqual(MaintenanceBodies["maintenance/en.html"], Body(opened));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public async Task TheRootsFilesThatAreNoPageAreServedAsAlwaysSoTheMaintenancePageIsStyled()
+    {
+        var directory = NewWebDirectory();
+        try
+        {
+            var root = V3WebRoot.Open(directory)!;
+            foreach (var (method, target, bytes, type) in new (string Method, string Target, byte[] Bytes, string Type)[]
+                     {
+                         ("GET", "/styles.css", Encoding.UTF8.GetBytes("body{}"), "text/css; charset=utf-8"),
+                         ("GET", "/styles.css?v=1", Encoding.UTF8.GetBytes("body{}"), "text/css; charset=utf-8"),
+                         ("GET", "/fonts/inter-400-latin.woff2", Font, "font/woff2"),
+                         ("HEAD", "/fonts/inter-400-latin.woff2", Font, "font/woff2"),
+                     })
+            {
+                var label = $"{method} {target}";
+                var context = await InMaintenanceAsync(root, method, target);
+                Assert.AreEqual(StatusCodes.Status200OK, context.Response.StatusCode, label);
+                Assert.AreEqual(type, context.Response.ContentType, label);
+                Assert.AreEqual(bytes.Length, context.Response.ContentLength, label);
+                CollectionAssert.AreEqual(method == "HEAD" ? Array.Empty<byte>() : bytes, Bytes(context), label);
+                Assert.AreEqual(root.ContentSecurityPolicy, context.Response.Headers.ContentSecurityPolicy.ToString(), label);
+                Assert.AreEqual("nosniff", context.Response.Headers.XContentTypeOptions.ToString(), label);
+                Assert.AreEqual(0, context.Response.Headers.RetryAfter.Count, $"{label}: a file served is not in maintenance");
+            }
+
+            // A page of the root is still the maintenance page, and a file asked with another method the problem.
+            var page = await InMaintenanceAsync(root, "GET", "/en/search.html");
+            Assert.AreEqual(StatusCodes.Status503ServiceUnavailable, page.Response.StatusCode);
+            Assert.AreEqual(MaintenanceBodies["maintenance/en.html"], Body(page));
+            AssertInMaintenance(await InMaintenanceAsync(root, "POST", "/styles.css"), "POST /styles.css");
+            // A file the root does not hold is a page request like any other: the maintenance page.
+            var missing = await InMaintenanceAsync(root, "GET", "/fonts/no-such-font.woff2", "en");
+            Assert.AreEqual(StatusCodes.Status503ServiceUnavailable, missing.Response.StatusCode);
+            Assert.AreEqual(MaintenanceBodies["maintenance/en.html"], Body(missing));
         }
         finally
         {

@@ -46,9 +46,15 @@ const MAINTENANCE = {
   fr: Buffer.from("<!doctype html><title>Lex est en cours de mise à jour</title><p>Legilux, EUR-Lex</p>\n"),
   en: Buffer.from("<!doctype html><title>Lex is being updated</title><p>Legilux, EUR-Lex</p>\n"),
 };
+// The files the maintenance page loads, which a maintenance revision serves as always (the review of writer/screens-gaps, F2).
+const ASSET_FILES = {
+  "styles.css": Buffer.from("body{color:#17211b}\n"),
+  "fonts/inter-400-latin.woff2": Buffer.from([0x77, 0x4f, 0x46, 0x32, 0x00, 0x01]),
+};
 const WEB = [
   ["fr/index.html", Buffer.from("<!doctype html><p>accueil</p>\n")], ["evaluation-card.json", CARD],
   ["maintenance/fr.html", MAINTENANCE.fr], ["maintenance/en.html", MAINTENANCE.en],
+  ...Object.entries(ASSET_FILES),
 ];
 
 /** The headers a maintenance revision's page carries (`WritePageHeaders`, and Retry-After). */
@@ -71,7 +77,7 @@ const without = (name) => Object.fromEntries(Object.entries(PAGE_HEADERS).filter
  */
 async function maintenanceRevision(change = {}) {
   const answer = {
-    ready: 204, pageStatus: 503, headers: PAGE_HEADERS, pages: MAINTENANCE, vary: true,
+    ready: 204, pageStatus: 503, headers: PAGE_HEADERS, pages: MAINTENANCE, vary: true, assets: ASSET_FILES,
     problem: { status: 503, code: "service_in_maintenance", retryAfter: "300" }, ...change,
   };
   const seen = [];
@@ -83,6 +89,10 @@ async function maintenanceRevision(change = {}) {
     if (read && path === "/health/ready") {
       response.writeHead(answer.ready, { "cache-control": "no-store", "x-content-type-options": "nosniff" });
       response.end(answer.ready === 204 ? undefined : "No maintenance page is held in each interface language.\n");
+    } else if (read && answer.assets !== null && Object.hasOwn(answer.assets, path.slice(1))) {
+      // A file of the root that is no page: served as always.
+      response.writeHead(200, { "content-type": path.endsWith(".css") ? "text/css; charset=utf-8" : "font/woff2", "x-content-type-options": "nosniff", "cache-control": "no-store" });
+      response.end(request.method === "HEAD" ? undefined : answer.assets[path.slice(1)]);
     } else if (read && !["/api/", "/mcp", "/health/"].some((prefix) => path.startsWith(prefix))) {
       const named = ["fr", "en"].find((language) => path.startsWith(`/${language}/`)) ?? null;
       const language = named ?? negotiateLanguage(request.headers["accept-language"]);
@@ -101,13 +111,17 @@ async function maintenanceRevision(change = {}) {
 }
 
 test("a maintenance revision that answers as the API's switch does passes, asked its readiness, each page the probe names and the API", async () => {
-  // The pages asked: both languages' homes, another page, and the root, whose language the reader's browser chooses.
-  assert.deepEqual(MAINTENANCE_PROBES.map(({ path, language, acceptLanguage }) => [path, language, acceptLanguage]),
+  // The pages asked: both languages' homes, another page, and the root, whose language the reader's browser chooses; and
+  // the stylesheet and a font the maintenance page loads.
+  assert.deepEqual(MAINTENANCE_PROBES.filter((probe) => probe.file === undefined).map(({ path, language, acceptLanguage }) => [path, language, acceptLanguage]),
     [["/fr/", "fr", null], ["/en/", "en", null], ["/en/search.html", "en", null], ["/", "en", "en"]]);
+  assert.deepEqual(MAINTENANCE_PROBES.filter((probe) => probe.file !== undefined).map(({ path, file }) => [path, file]),
+    [["/styles.css", "styles.css"], ["/fonts/inter-400-latin.woff2", "fonts/inter-400-latin.woff2"]]);
   const served = await maintenanceRevision();
   try {
     assert.deepEqual(await maintenanceFailures(served.origin, { web: WEB }), []);
-    assert.deepEqual(served.seen, ["GET /health/ready", ...MAINTENANCE_PROBES.map(({ path }) => `GET ${path}`), "POST /api/v3/coverage"]);
+    assert.deepEqual(served.seen, ["GET /health/ready", ...MAINTENANCE_PROBES.filter((probe) => probe.file !== undefined).map(({ path }) => `GET ${path}`),
+      ...MAINTENANCE_PROBES.filter((probe) => probe.file === undefined).map(({ path }) => `GET ${path}`), "POST /api/v3/coverage"]);
     assert.deepEqual(takeTouches(), [], "nothing reached the launcher or started a process");
   } finally {
     await served.close();
@@ -133,6 +147,10 @@ test("each way a maintenance revision can differ from its release fails with its
     ["the API answering as a server that is not in maintenance", { problem: { status: 404, code: "unknown_route", retryAfter: null } },
       /^POST \/api\/v3\/coverage answered 404 application\/problem\+json \(unknown_route\), not 503 application\/problem\+json with the code service_in_maintenance: the revision is not in maintenance$/],
     ["the API's problem without Retry-After", { problem: { status: 503, code: "service_in_maintenance", retryAfter: null } }, /^POST \/api\/v3\/coverage carries Retry-After null, not a number of seconds$/],
+    // F2 of the review: the stylesheet and the fonts answered the maintenance page itself, and the page showed unstyled.
+    ["the stylesheet answered as a page", { assets: null }, /^GET \/styles\.css answered 503, not 200: the maintenance page would show unstyled$/],
+    ["a font answered as a page", { assets: { "styles.css": ASSET_FILES["styles.css"] } }, /^GET \/fonts\/inter-400-latin\.woff2 answered 503, not 200/],
+    ["another stylesheet than the release's", { assets: { ...ASSET_FILES, "styles.css": Buffer.from("body{}") } }, /^GET \/styles\.css answered a body that is not the release image's own styles\.css, byte for byte$/],
   ];
   for (const [what, change, expected] of cases) {
     const served = await maintenanceRevision(change);

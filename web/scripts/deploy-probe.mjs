@@ -564,15 +564,19 @@ export async function deployedReleaseFailures(origin, releaseDirectory, { public
 }
 
 /**
- * The pages a maintenance revision is asked for (R60), each with the interface language its maintenance page must be in:
- * both languages' homes, another page, and the root for a reader whose browser prefers English, whose answer depends on
- * that preference (`acceptLanguage`, and then `Vary: Accept-Language`).
+ * What a maintenance revision is asked for (R60): the pages, each with the interface language its maintenance page must be
+ * in (both languages' homes, another page, and the root for a reader whose browser prefers English, whose answer depends on
+ * that preference: `acceptLanguage`, and then `Vary: Accept-Language`); and the files the maintenance page loads, the
+ * stylesheet and a font, each the release image's own file (`file`), served as always, so the page shows styled (the
+ * review of writer/screens-gaps, F2).
  */
 export const MAINTENANCE_PROBES = Object.freeze([
   Object.freeze({ path: "/fr/", language: "fr", acceptLanguage: null }),
   Object.freeze({ path: "/en/", language: "en", acceptLanguage: null }),
   Object.freeze({ path: "/en/search.html", language: "en", acceptLanguage: null }),
   Object.freeze({ path: "/", language: "en", acceptLanguage: "en" }),
+  Object.freeze({ path: "/styles.css", file: "styles.css", type: "text/css" }),
+  Object.freeze({ path: "/fonts/inter-400-latin.woff2", file: "fonts/inter-400-latin.woff2", type: "font/woff2" }),
 ]);
 
 /** A `Retry-After` given in seconds, as the maintenance revision gives it. */
@@ -608,7 +612,23 @@ export async function maintenanceFailures(origin, { web }) {
   cookie("GET /health/ready", ready);
 
   const policy = `${cspValue()}; frame-ancestors 'none'`;
-  for (const { path, language, acceptLanguage } of MAINTENANCE_PROBES) {
+  for (const { path, file, type } of MAINTENANCE_PROBES.filter((probe) => probe.file !== undefined)) {
+    // A file the maintenance page loads: the release image's own, served as always (200, its type, no Retry-After).
+    const held = files.get(file);
+    if (held === undefined) {
+      failures.push(`the release image holds no ${file}, which the maintenance page loads`);
+      continue;
+    }
+    const answer = await fetch(`${origin}${path}`, { redirect: "manual" });
+    const bytes = Buffer.from(await answer.arrayBuffer());
+    const said = `GET ${path}`;
+    if (answer.status !== 200) failures.push(`${said} answered ${answer.status}, not 200: the maintenance page would show unstyled`);
+    if (!(answer.headers.get("content-type") ?? "").startsWith(type)) failures.push(`${said} answered ${answer.headers.get("content-type")}, not ${type}`);
+    if (!bytes.equals(held)) failures.push(`${said} answered a body that is not the release image's own ${file}, byte for byte`);
+    if (answer.headers.get("x-content-type-options") !== "nosniff") failures.push(`${said} carries no nosniff`);
+    cookie(said, answer);
+  }
+  for (const { path, language, acceptLanguage } of MAINTENANCE_PROBES.filter((probe) => probe.file === undefined)) {
     const answer = await fetch(`${origin}${path}`, { redirect: "manual", headers: acceptLanguage === null ? {} : { "accept-language": acceptLanguage } });
     const bytes = Buffer.from(await answer.arrayBuffer());
     const said = `GET ${path}${acceptLanguage === null ? "" : ` (Accept-Language: ${acceptLanguage})`}`;
