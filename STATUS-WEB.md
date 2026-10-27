@@ -91,6 +91,13 @@ UTC.
   The operating page stays a repository document (`docs/OPERATING.md`): R8 asks for a numbered page, not a public one, and
   a link from the site to the repository would print its owner's account name, which the decision of 2026-10-19 keeps off
   the pages (a driver decision, reversible).
+- **Counts** (this PC, Windows, no browser, no publisher traffic, nothing sent to Azure; at the combined head):
+  `dotnet build Lex.V3.slnx -c Release` 0 warnings; Lex.V3.Tests 3,346 (3,340 passed, 6 skipped); the Ingest classes this
+  touches with the censuses and the samples (Census, envelope and answer samples, MCP, `PublicRequestRecordingTests`, the
+  refusal census, `V3ClientLimitTests`, `V3MachineGatesTests`) 57 passed; the refusal census and the evaluation card
+  rendered with their variables and verified without; `npm run build` and `npm test` 1,380 (1,377 passed, 3 skipped: the
+  browser tests, run in CI), from Git Bash (from PowerShell the image run's awk test cannot find awk on that PATH);
+  `eng/verify-v3-tree.ps1` 1,709 tracked paths; the monitor run once against https://law.soufien.lu, five checks ok.
 - **Not done here:** a reviewed sentence for
   `rate_limited` on each screen (the panel says the code today); latency, error-rate and restart alerts; the load test
   that re-sizes the limit.
