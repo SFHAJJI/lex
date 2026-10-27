@@ -26,6 +26,7 @@ import { Fragment } from 'react';
 import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillParts, liveChrome } from '../scripts/live-chrome.mjs';
 import { OFFICIAL_SITES, isFailure } from '../scripts/live-failure.mjs';
 import { isSiteAddress, permalinkHref } from '../scripts/permalinks.mjs';
+import { GuideLink } from './GuideLink.jsx';
 
 /**
  * A permalink as every live page prints it: its text as code, inside a link to this site's page for it (`permalinks.mjs`),
@@ -191,6 +192,8 @@ export function AsPublished({ asPublished }) {
       <p data-as-published-authenticity="">
         <Say template={copy.authenticity[asPublished.authenticity.basis]} values={{ act: <code>{asPublished.journalOfficielIri}</code> }} />
       </p>
+      {/* The label's info control (R48): what an act as published and a consolidated version are, in How to read Lex. */}
+      <p data-guide-note=""><GuideLink section="versions" /></p>
     </section>
   );
 }

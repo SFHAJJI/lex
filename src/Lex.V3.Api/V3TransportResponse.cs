@@ -17,6 +17,12 @@ internal enum V3TransportFailureKind
     InternalResponseInvalid,
     InternalFailure,
     OperationNotServed,
+
+    /// <summary>
+    /// A maintenance revision's answer to every request that is not a page's or its readiness (the specification of record's
+    /// R60, R108, R115; the plan's item 10.14; <see cref="V3WebRoot.HandleMaintenanceAsync"/>): the server serves no law.
+    /// </summary>
+    ServiceInMaintenance,
 }
 
 internal sealed class V3TransportFailureException : Exception
@@ -126,6 +132,8 @@ internal static class V3TransportResponse
             ("internal_response_invalid", "Internal response invalid", StatusCodes.Status500InternalServerError),
         V3TransportFailureKind.InternalFailure =>
             ("internal_failure", "Internal failure", StatusCodes.Status500InternalServerError),
+        V3TransportFailureKind.ServiceInMaintenance =>
+            ("service_in_maintenance", "Service in maintenance", StatusCodes.Status503ServiceUnavailable),
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
     };
 }

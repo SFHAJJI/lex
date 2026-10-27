@@ -6,10 +6,15 @@ builder.Logging.ClearProviders();
 builder.WebHost.ConfigureKestrel(static options => options.AddServerHeader = false);
 var app = builder.Build();
 
+// The release's maintenance revision (R60, R108, R115; the plan's item 10.14): with LEX_V3_MAINTENANCE exactly `on`, read
+// once here, the server opens no preview and no mount, so it starts in seconds and serves no law, and answers every page
+// request with the maintenance page and everything else with a 503 (V3WebRoot.Maintenance.cs). Any other value: as before.
+var maintenance = V3WebRoot.MaintenanceState(Environment.GetEnvironmentVariable(V3WebRoot.MaintenanceVariable));
+
 // The synthetic preview and its key are for tests and the S0-05 image only: the one-server image, which carries the law,
 // ships neither (Lex.V3.Api.csproj; plan 0.7), so its server starts no preview and answers no preview route.
 SyntheticApiState? state = null;
-if (Directory.Exists(Path.Combine(AppContext.BaseDirectory, "preview-graph")))
+if (!maintenance && Directory.Exists(Path.Combine(AppContext.BaseDirectory, "preview-graph")))
 {
     try
     {
@@ -49,21 +54,24 @@ if (Environment.GetEnvironmentVariable(V3StaleIndexCopies.PrivateTemporaryFolder
 }
 
 V3CorpusMount? corpusMount = null;
-try
+if (!maintenance)
 {
-    // The server's one door to a mount (index 9, 8 or 6).
-    corpusMount = V3CorpusMount.Served(
-        await V3CorpusMount.OpenAsync(
-            Path.Combine(AppContext.BaseDirectory, "v3-corpus"),
-            app.Lifetime.ApplicationStopping),
-        Path.Combine(AppContext.BaseDirectory, "v3-corpus"));
+    try
+    {
+        // The server's one door to a mount (index 9, 8 or 6).
+        corpusMount = V3CorpusMount.Served(
+            await V3CorpusMount.OpenAsync(
+                Path.Combine(AppContext.BaseDirectory, "v3-corpus"),
+                app.Lifetime.ApplicationStopping),
+            Path.Combine(AppContext.BaseDirectory, "v3-corpus"));
 
-    // What search's exact references read on their first use, read once here, so no request pays it or waits behind it.
-    corpusMount?.Warm();
-}
-catch (Exception exception)
-{
-    Console.Error.WriteLine($"V3 corpus mount refused: {exception.GetType().Name}: {exception.Message}");
+        // What search's exact references read on their first use, read once here, so no request pays it or waits behind it.
+        corpusMount?.Warm();
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine($"V3 corpus mount refused: {exception.GetType().Name}: {exception.Message}");
+    }
 }
 
 // The live pages beside the API, one origin for both (Decision 95, ruling 3). A directory this server
@@ -74,8 +82,9 @@ try
 {
     // What the pages say to search engines is the release's switch (R67, O27): kept out unless LEX_V3_SEARCH_ENGINES is
     // `indexed`; a law's page is opened only for a work the indexing record beside the mount lists (R92, O28) and the mount
-    // holds. With the site indexed, the mount is asked once, here, its build time and which listed works it holds.
-    var searchEngines = Environment.GetEnvironmentVariable(V3WebRoot.SearchEnginesVariable);
+    // holds. With the site indexed, the mount is asked once, here, its build time and which listed works it holds. A
+    // maintenance revision is kept out whatever the switch says, and holds no mount to ask.
+    var searchEngines = maintenance ? null : Environment.GetEnvironmentVariable(V3WebRoot.SearchEnginesVariable);
     var (indexingRecord, lastmod) = string.Equals(V3WebRoot.SearchEnginesState(searchEngines), V3WebRoot.Indexed, StringComparison.Ordinal) && corpusMount is not null
         ? V3WebRoot.SearchEngineFacts(
             V3WebRoot.ReadIndexingRecordFile(Path.Combine(AppContext.BaseDirectory, "v3-corpus", V3WebRoot.IndexingRecordFile)),
@@ -93,11 +102,13 @@ app.Lifetime.ApplicationStopped.Register(() =>
     corpusMount?.Dispose();
     state?.Dispose();
 });
-app.Run(V3ApiHandler.CreateRequestDelegate(
-    state,
-    static () => DateTimeOffset.UtcNow,
-    corpusMount,
-    webRoot));
+app.Run(maintenance
+    ? V3WebRoot.CreateMaintenanceRequestDelegate(webRoot)
+    : V3ApiHandler.CreateRequestDelegate(
+        state,
+        static () => DateTimeOffset.UtcNow,
+        corpusMount,
+        webRoot));
 await app.RunAsync();
 
 public partial class Program;
