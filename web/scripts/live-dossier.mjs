@@ -102,7 +102,7 @@ export function dossierOutcome(asked) {
     const { code, helpful_payload: payload } = asked.envelope.refusal;
     const sentence = code === "no_corpus_mounted"
       ? noCorpusMountedSentence(payload)
-      : tableRefusalSentence(LIVE_DOSSIER_REFUSAL_SENTENCES, code, unexpectedRefusalSentence);
+      : tableRefusalSentence(LIVE_DOSSIER_REFUSAL_SENTENCES, code, unexpectedRefusalSentence, payload);
     try {
       validateRefusal({ code, sentence, payload });
     } catch (error) {

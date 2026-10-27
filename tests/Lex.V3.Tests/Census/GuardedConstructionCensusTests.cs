@@ -87,6 +87,8 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Api.V3PlatformOperationOutcome::.ctor, "
                     + "method internal instance Lex.V3.Api.V3CorpusMount::RefuseOutOfScope, "
                     + "method internal instance Lex.V3.Api.V3CorpusMount::Unserved, "
+                    // The names record's gate on every answer (R92; V3CorpusMount.Names.cs).
+                    + "method internal instance Lex.V3.Api.V3CorpusMount::WithNamesWithheld, "
                     + "method internal static Lex.V3.Api.V3ApiHandler::ExecuteFor, "
                     + "method internal static Lex.V3.Api.V3ApiHandler::RateLimitedOutcome, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::AnchorNotInVersion, "
@@ -110,6 +112,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseAmbiguousVersion, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseArticleNotInVersion, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseEuropeLanguage, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNamesWithheld, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseOutsideScope, "
@@ -163,7 +166,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Api.V3CorpusMount::Verify, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Refused, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Success, "
-                    + "28 compiler-generated",
+                    // ExecuteFor's dispatch names each operation's method, so its one lambda is the gates'.
+                    + "3 compiler-generated",
                 "Lex.V3.Api.V3PlatformSchemaDocuments: constructor private instance "
                     + "Lex.V3.Api.V3PlatformSchemaDocuments::.ctor, "
                     + "constructor private static Lex.V3.Api.V3PlatformSchemaDocuments::.cctor, "

@@ -111,7 +111,7 @@ export function historyOutcome(asked) {
     const { code, helpful_payload: payload } = asked.envelope.refusal;
     const sentence = code === "no_corpus_mounted"
       ? noCorpusMountedSentence(payload)
-      : tableRefusalSentence(LIVE_HISTORY_REFUSAL_SENTENCES, code, unexpectedRefusalSentence);
+      : tableRefusalSentence(LIVE_HISTORY_REFUSAL_SENTENCES, code, unexpectedRefusalSentence, payload);
     try {
       validateRefusal({ code, sentence, payload });
     } catch (error) {

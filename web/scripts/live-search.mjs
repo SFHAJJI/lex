@@ -356,7 +356,7 @@ export function searchOutcome(asked) {
     const table = recognition === null ? LIVE_SEARCH_REFUSAL_SENTENCES : referenceTableFor(asked.envelope.context, code, recognition, payload?.reason ?? null);
     const sentence = code === "no_corpus_mounted"
       ? noCorpusMountedSentence(payload)
-      : tableRefusalSentence(table, code, unexpectedRefusalSentence);
+      : tableRefusalSentence(table, code, unexpectedRefusalSentence, payload);
     try {
       validateRefusal({ code, sentence, payload });
     } catch (error) {

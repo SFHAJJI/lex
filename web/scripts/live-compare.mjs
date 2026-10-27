@@ -110,7 +110,7 @@ export function compareOutcome(asked) {
     const { code, helpful_payload: payload } = asked.envelope.refusal;
     const sentence = code === "no_corpus_mounted"
       ? noCorpusMountedSentence(payload)
-      : tableRefusalSentence(LIVE_COMPARE_REFUSAL_SENTENCES, code, unexpectedRefusalSentence);
+      : tableRefusalSentence(LIVE_COMPARE_REFUSAL_SENTENCES, code, unexpectedRefusalSentence, payload);
     try {
       validateRefusal({ code, sentence, payload });
     } catch (error) {

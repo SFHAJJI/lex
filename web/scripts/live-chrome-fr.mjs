@@ -354,6 +354,13 @@
 // review of #1000's repair added `noFileFormat` (2 forms, reviewed the same way: the EU's approved, the Luxembourg one's
 // "un fichier PDF", as the neighbouring forms say, the English with it).
 // Typography: a no-break space (U+00A0) stands before : ; ! ? % and » and after «, and the apostrophe is ’.
+// R92's sentence for a work the names record withholds (the plan's item 1.11; `NAMES_WITHHELD_SENTENCE` in
+// `live-refusals.mjs`, said on every screen that asks about one work) was reviewed by an independent reviewer (Claude, AI
+// reviewer, not the author) under the same delegation in the addendum of 2026-10-27 "R92: an act that names private
+// individuals" (1 form, changed in both languages): "private individuals" is "personnes privées", the term the record fixed on
+// 2026-10-18 for this same check (never "particuliers" nor "personnes physiques", which a countersigning minister is too); the
+// claim is tied to the check ("D’après la vérification de Lex" / "According to Lex's check"), since a class is withheld whole
+// and an office holder named with an honorific is counted; and the link is the act's ("en suivant le lien officiel").
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
 
@@ -1855,6 +1862,9 @@ export const REFUSALS_FR = Object.freeze({
       'Plusieurs versions de cet acte s’appliquent à cette date, et aucune n’est retenue.',
     "This state's text is withheld: its rights did not admit it.":
       'Le texte de cette version n’est pas communiqué : ses droits ne le permettaient pas.',
+    // R92 (the plan's item 1.11): a work the names record withholds, said on every screen that asks about one work.
+    "According to Lex's check, this act names private individuals, so Lex shows neither its text nor its titles: read it at the publisher, by following the official link.":
+      'D’après la vérification de Lex, cet acte nomme des personnes privées ; Lex n’en communique donc ni le texte ni les intitulés : lisez-le chez l’éditeur, en suivant le lien officiel.',
     'This index holds this state but no text for it.':
       'Cet index contient cette version, mais aucun texte de celle-ci.',
     "This index cannot read this work's text.":

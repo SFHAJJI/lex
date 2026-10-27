@@ -119,6 +119,22 @@ public sealed class VocabularyRegistryCensusTests
                     + "const RightsReResolved",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgReferralDateComposition: const HasOpinion, "
                     + "const IriKind, const ReferralDate",
+                "Lex.V3.Ingest.Names.IndexingRecord: const FileName, const Schema",
+                "Lex.V3.Ingest.Names.NamesMeasurement: const EuropeIndexFile, const EuropeSchema, "
+                    + "const LuxembourgIndexFile, const LuxembourgSchema, const MeasurementFileName, "
+                    + "const MeasurementSchema",
+                "Lex.V3.Ingest.Names.NamesRecord: const EuropePublisher, const FileName, "
+                    + "const LuxembourgPublisher, const Rule, const Schema",
+                "Lex.V3.Ingest.Names.PrivateIndividuals: Classes=11, NamingClasses=9, Particulars=5, "
+                    + "ReasonCodes=7, const BirthDateCode, const BirthLabelSignal, const BirthPlaceCode, "
+                    + "const CapitalToken, const ClassCode, const DomicileCode, const EuropeGeneral, "
+                    + "const EuropeRestrictiveMeasures, const EuropeTextNamesPerson, const Honorific, "
+                    + "const IdentityDocumentCode, const Lower, const LuxembourgCivilStatusOfNamedPerson, "
+                    + "const LuxembourgGeneral, const LuxembourgGrantToNamedPerson, const LuxembourgNaturalisation, "
+                    + "const LuxembourgNobility, const LuxembourgPropertyOfNamedPerson, "
+                    + "const LuxembourgTextNamesPerson, const LuxembourgTitleNamesPerson, const MeasureVersion, "
+                    + "const MonthsEnglish, const MonthsFrench, const NameToken, const NationalNumberCode, "
+                    + "const Office, const OldHonorific, const PersonNamedCode, const Reason, const Upper",
                 "Lex.V3.Ingest.V3CorpusMountWriter: GenerationFiles=6, "
                     + "const GenerationsDirectoryName, const ReportFileName, "
                     + "const ReportSchema, const RetentionFileName",
