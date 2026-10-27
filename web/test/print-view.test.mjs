@@ -125,3 +125,32 @@ test("a touch target is at least 44 by 44 CSS pixels, links in lists, summaries,
   assert.match(css.slice(head, css.indexOf("}", head)), /min-block-size: 44px;/);
   assert.doesNotMatch(css, /(?:select|checkbox[^{]*)\{[^}]*(?:min-block-size|block-size|height):\s*(?:[0-3]?\d|4[0-3])px/, "no rule lowers a select or a checkbox");
 });
+
+test("at 320 CSS pixels the coverage page's sentences wrap and its blocks never widen the page (the journeys' coverage step)", () => {
+  const rule = (selector) => {
+    const at = css.indexOf(`${selector} {`);
+    assert.ok(at >= 0, selector);
+    return css.slice(at, css.indexOf("}", at));
+  };
+  // One column no wider than the block, and the platform's sentences, which name its tokens in plain text, wrap anywhere.
+  assert.match(rule(".coverage-block"), /grid-template-columns: minmax\(0, 1fr\);/);
+  const wrapped = css.slice(css.indexOf(".coverage-scope,\n.coverage-note,\n.coverage-held {"), css.indexOf("}", css.indexOf(".coverage-scope,\n.coverage-note,\n.coverage-held {")));
+  assert.match(wrapped, /overflow-wrap: anywhere;/);
+  // A table keeps its own scroll region rather than wrapping its cells letter by letter.
+  assert.match(css.slice(css.indexOf(".coverage-scroll,\n.table-scroll {")), /^[^}]*overflow-x: auto;/);
+});
+
+test("on a phone the first screen gives way around the 44 pixel targets, never the targets themselves (R62, R47)", () => {
+  // Every rule for a phone's width (max-width: 30rem), read whole.
+  const phone = [...css.matchAll(/@media \(max-width: 30rem\) \{([\s\S]*?)\n\}/g)].map((match) => match[1]).join("\n");
+  assert.match(phone, /\.site-tagline \{\s*display: none;\s*\}/, "the tagline steps out on a phone (the home page's heading says the same)");
+  assert.match(phone, /\.site-nav ul \{\s*gap: 0 0\.5rem;\s*\}/);
+  assert.match(phone, /\.not-advice \{\s*line-height: 1\.4;\s*\}/);
+  // No phone rule touches a target's size: the floors of the links in lists, the controls and the info control stand.
+  for (const block of phone.split("}")) {
+    const [selectors, body = ""] = block.split("{");
+    if (/\b(?:a|button|input|select|summary)\b|filter-chip|info-control|check-official/.test(selectors ?? "")) {
+      assert.doesNotMatch(body, /(?:min-)?(?:block-size|height)\s*:/, `a phone rule sizes a target: ${selectors.trim()}`);
+    }
+  }
+});

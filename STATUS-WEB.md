@@ -4,6 +4,23 @@ Updated 2026-10-27. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The combine's two layout failures in CI's journeys (sole driver, 2026-10-27)
+
+CI's journeys at dfb8d82f failed two layout checks, both from #1004's changes:
+- **Coverage at 320 CSS pixels** scrolled sideways (main at 331 px in a 305 px window): the declared scope's rule names its
+  disposition tokens in plain text, and an auto grid column took the longest as its floor. Each `.coverage-block` is now one
+  `minmax(0, 1fr)` column, and the platform's sentences (`.coverage-scope`, `.coverage-note`, `.coverage-held`) wrap
+  anywhere; tables still scroll inside their own regions.
+- **The home page's sentence under the box** ended at 720 px, below the first 640 (with and without a mount), once the menu's
+  and the languages' links grew to 44 px. On a phone the targets stay 44 px and the rest gives way: the tagline steps out (the
+  heading says the same), the header's and main's gaps and padding close, the menu's words step down to 0.8rem with a 0.5rem
+  gap so its links take two rows rather than three, the labels' and the form's gaps narrow, and the sentence's line height is
+  1.4.
+- No browser here: the fix is reasoned from the walk's measurement (320 by 640, `REFLOW`, `FIRST_SCREEN` in `journey.mjs`), and
+  `print-view.test.mjs` holds the rules (the coverage column and wrapping; the phone rules, and that no phone rule sizes a
+  target). `npm run build`; `npm test`: 1,482 (1,479 passed, 0 failed, 3 skipped); `eng/verify-v3-tree.ps1`: 1,790 tracked
+  paths. CI's journeys measure the result.
+
 ## R77's records of the acts only the catalogue holds, and R57's wording on Compare (sole driver, 2026-10-27)
 
 The audit of 2026-10-27 (`C:\lex-v3\AUDIT-2026-10-27.md`), gaps 1 and 2, as one pull request (`writer/catalogue-and-compare`,

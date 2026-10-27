@@ -759,23 +759,38 @@ blockquote.law {
   }
 
   .site-nav ul {
-    gap: 0.1rem 0.8rem;
+    gap: 0 0.5rem;
   }
 
   .site-header .locale-nav ul {
-    gap: 0.1rem 0.6rem;
+    gap: 0 0.5rem;
   }
 
   .site-nav {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
   }
 
   .site-header .locale-nav {
     font-size: 0.8rem;
   }
 
+  /* The menu's and the languages' links keep their 44 pixel targets (R62), so the rest of the first screen gives way: the
+     tagline (the home page's heading says the same) steps out, the gaps close, the menu's words step down so its links take
+     two rows rather than three, and the main column keeps the header's gutter, so the sentence under the box ends within 640 pixels (the journeys' home step, the combine of
+     #1003 and #1004, found it at 720 px once the targets grew to 44). */
+  .site-header {
+    row-gap: 0.1rem;
+    padding-block: 0.35rem;
+  }
+
+  .site-tagline {
+    display: none;
+  }
+
   .site-header ~ main {
-    padding-block: 1rem 1.5rem;
+    padding-block: 0.5rem 1.5rem;
+    padding-inline: 0.75rem;
+    gap: 0.5rem;
   }
 
   [data-preview-state="live-home"] main > .eyebrow {
@@ -784,10 +799,19 @@ blockquote.law {
 
   [data-preview-state="live-home"] main > h1 {
     font-size: 1.3rem;
+    line-height: 1.1;
   }
 
   .site-header ~ main .search-home form {
-    gap: 0.6rem 0.75rem;
+    gap: 0.45rem 0.75rem;
+  }
+
+  .site-header ~ main form label {
+    gap: 0.15rem;
+  }
+
+  .not-advice {
+    line-height: 1.4;
   }
 
   .site-header ~ main .search-home form > .field-hint {
@@ -1333,8 +1357,20 @@ summary {
    one block's counts from reading as part of the next block's. */
 .coverage-block {
   display: grid;
+  /* One column that never grows past the page: an auto column took the widest unbreakable word of any block as its floor. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3, 0.75rem);
   min-inline-size: 0;
+}
+
+/* The platform's sentences on Coverage name its tokens in plain text (the declared scope's rule names every disposition, such
+   as admitted_where_regulatory_awaiting_a_run), and one such word set the page's minimum width: the journeys' coverage step
+   found main at 331 px in a 305 px window (the combine of #1003 and #1004). Each sentence wraps anywhere; a table still
+   scrolls inside its own region. */
+.coverage-scope,
+.coverage-note,
+.coverage-held {
+  overflow-wrap: anywhere;
 }
 
 /* The export composer's JSON, shown as it will be saved: wrapped within the page, so opening it never widens the page
