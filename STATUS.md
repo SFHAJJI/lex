@@ -195,7 +195,9 @@ Only money, legal or public claims, credentials and going live (ruling 7):
     and ten testers); and, asked on 2026-10-17, whether a beta may open to the public before the lawyer's read and
     the audits (going live; recommended: no, a private beta first).
   - **By Friday 30 October**: O6, the Luxembourg licence rulings (recommended: L2, L1 and L1b yes for every file, each
-    with a visible per-file disclosure; L3 yes in principle; L4 kept withheld; a letter to the SCL); O7, the population
+    with a visible per-file disclosure; L3 yes in principle; L4 kept withheld; a letter to the SCL). Built and switched
+    off on 2026-10-27; measured over run 15 under content /3: L2 adds 1,055 files and 64,094 articles, L1 2,196 and
+    21,041, L1b 31 and 583; with option (b), the three together add 1,911 and 16,891 (STATUS-DATA.md); O7, the population
     and its yield; O28, personal data; O5, the legal pages (answered on 2026-10-19: no person, no contact, above); O4,
     the lawyer's read as a condition of going live; O26, the usability sessions; O13, hosting and money; O16, the
     signing keys; N3, how outside reviewers reach the private copy.
