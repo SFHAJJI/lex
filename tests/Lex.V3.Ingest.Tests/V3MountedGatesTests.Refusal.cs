@@ -243,7 +243,11 @@ public sealed partial class V3MountedGatesTests
         const string NotHeld = "32099R9999";
         if (Scalar(connection, $"SELECT publisher_work_celex FROM articles WHERE publisher_work_celex = '{NotHeld}' LIMIT 1") is null)
         {
-            requests["eu-unknown-celex"] = new("search", new { query = word, language, identifier = NotHeld }, "identifier_unknown");
+            // An EU act outside the population an EU index states (its census of seed acts) is out of the corpus's scope (R80);
+            // an index that states no population (no states table, or none in it) still answers it unknown.
+            var statesPopulation = Scalar(connection, "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'states'") is not null &&
+                                   Scalar(connection, "SELECT seed_celex FROM states LIMIT 1") is not null;
+            requests["eu-unknown-celex"] = new("search", new { query = word, language, identifier = NotHeld }, statesPopulation ? "out_of_corpus_scope" : "identifier_unknown");
         }
 
         var held = Rows(connection, $"SELECT DISTINCT language FROM articles WHERE publisher_work_celex = '{celex.Replace("'", "''", StringComparison.Ordinal)}'").Select(static row => row[0]).ToHashSet(StringComparer.Ordinal);
@@ -446,7 +450,8 @@ public sealed partial class V3MountedGatesTests
         CollectionAssert.IsSubsetOf(
             new[] { "eu-search-held", "eu-unknown-celex", "eu-language-not-held", "eu-dated-search", "eu-in-force-on", "eu-pinned-provision", "eu-pinned-digest-not-held", "eu-provision-not-held" },
             derived.Requests.Keys.ToArray());
-        foreach (var code in new[] { "identifier_unknown", "language_not_available", "retrieval_mode_unavailable", "pinned_digest_mismatch", "anchor_not_in_version" })
+        // An unheld CELEX is out of the population the fixture's EU index states (R80), so out_of_corpus_scope is the EU's here.
+        foreach (var code in new[] { "out_of_corpus_scope", "language_not_available", "retrieval_mode_unavailable", "pinned_digest_mismatch", "anchor_not_in_version" })
         {
             Assert.IsFalse(derived.NotProduced.ContainsKey(code), $"{code} is produced by an EU request");
         }

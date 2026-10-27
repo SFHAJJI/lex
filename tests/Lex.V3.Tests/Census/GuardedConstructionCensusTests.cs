@@ -115,6 +115,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNamesWithheld, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
+                    // An EU act outside the mounted EU population, refused out of scope (R80; V3CorpusMount.Scope.cs).
+                    + "method private instance Lex.V3.Api.V3CorpusMount::RefuseOutsideEuropePopulation, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseOutsideScope, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefusePageNotInVersion, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseTextless, "
