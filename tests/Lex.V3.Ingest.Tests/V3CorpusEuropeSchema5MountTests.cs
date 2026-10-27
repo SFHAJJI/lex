@@ -40,8 +40,9 @@ public sealed class V3CorpusEuropeSchema5MountTests
     // French is not acquired) and, on its own branch, ee44bf68 (R77 and R57, writer/catalogue-and-compare: the exact-reference
     // rule now names the record of an act only the catalogue holds, so the one search answer with a reference moved by that
     // rule's text alone) and caaff24d (the review of #1003: diff's request schema gained `page`, so every row moved by the
-    // registry digest alone).
-    private const string RecordedAtCommit = "caaff24d";
+    // registry digest alone), then 27a36a09 (the two combined, #1003 carrying #1004): the two dossier rows by #1004's sentence
+    // alone and the search row by both slices' (#1004's not-held reason, R77's exact-reference rule); no other row moved.
+    private const string RecordedAtCommit = "27a36a09";
 
     private static byte[] Fixture(string name) =>
         File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuSchema5Mount", name));
@@ -94,7 +95,7 @@ public sealed class V3CorpusEuropeSchema5MountTests
 
     /// <summary>
     /// Every recorded request, asked again of the same committed files, answers the same bytes. The answers were recorded at
-    /// the base (24118293 on Windows, again at e504d188, 9b28c5c3, 320c0f20, 81fc8ac1, ee44bf68 and caaff24d on Linux); nothing in an EU answer reads the system (paths, culture or
+    /// the base (24118293 on Windows, again at e504d188, 9b28c5c3, 320c0f20, 81fc8ac1, ee44bf68, caaff24d and 27a36a09 on Linux); nothing in an EU answer reads the system (paths, culture or
     /// clock: the handler answers at one fixed observation time), and every system is held to them.
     /// </summary>
     [TestMethod]
