@@ -59,10 +59,17 @@ internal static class HostFontFreePdf
             Install(document, hostFonts);
             return document;
         }
-        catch
+        catch (PdfHostFontIsolationException)
         {
             document.Dispose();
             throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            // Any other failure of the replacement itself (reflection on a field a later PdfPig typed or named otherwise)
+            // is the door's, never the PDF's: it stops the run instead of reading as an unreadable PDF (the review's note).
+            document.Dispose();
+            throw new PdfHostFontIsolationException($"The font finder could not be replaced: {exception.Message}", exception);
         }
     }
 
@@ -172,4 +179,4 @@ internal static class HostFontFreePdf
 /// PdfPig's document graph is not the one <see cref="HostFontFreePdf"/> names, so the document could not be opened
 /// without the host's fonts. Never a property of the PDF: callers let it through rather than record the PDF unreadable.
 /// </summary>
-internal sealed class PdfHostFontIsolationException(string message) : InvalidOperationException(message);
+internal sealed class PdfHostFontIsolationException(string message, Exception? inner = null) : InvalidOperationException(message, inner);
