@@ -20,8 +20,13 @@ With -Apply, in order:
 2. with -Public, the app's address rules are read before anything in Azure changes, and any rule, or a read that fails,
    stops the deployment, having changed nothing: a -Public deployment admits everyone (the template empties the rules as it
    deploys, before the candidate is probed), so it is for the open site only, and the opening is -Open's (the review of
-   #989: on the private copy the rules were removed, and a failed probe deactivated only the candidate). A plan run says so;
-   then the app's revisions are read, also before anything in Azure changes. The candidate is named
+   #989: on the private copy the rules were removed, and a failed probe deactivated only the candidate). Without -Public the
+   same rules are read, and none at all (the open site) stops the deployment too: on the open site every deployment says
+   -Public, since -AllowedCidr would restrict it again; a read that fails stops a redeployment. A plan run says so;
+   then the app's revisions are read, also before anything in Azure changes, and on a redeployment its traffic: -LiveRevision
+   must be the revision that holds all of it now, since the template keeps it at 100 per cent and gives the new revision
+   none (naming a candidate not yet promoted would move every reader to it, unprobed); traffic no one revision holds, or a
+   read that fails, stops it too. The candidate is named
    `<app>--<release>-<digest>`: the release's version, and the first 8 hex digits of a SHA-256 over what makes the
    revision (the image, -SearchEngines, -Public, the -AllowedCidr ranges and deploy/main.bicep), so the same release
    deployed again with another setting is a revision of its own (the incident of 2026-10-27, STATUS-WEB.md). A name the
@@ -163,6 +168,20 @@ function Get-RevisionSuffix([string] $Version, [string] $App, [System.Collection
     return $suffix
 }
 
+# The revision that serves all of the app's traffic, from what Azure answers for its ingress traffic and its latest revision
+# (`{traffic, latest}` as JSON): the one entry that carries 100 per cent, named by its revision or, for the latest-revision
+# entry a first deployment leaves, by the app's latest revision; null when no one revision carries all of it (split traffic,
+# none, or an answer that cannot be read).
+function Get-ServingRevision([string] $Text) {
+    try { $routing = $Text | ConvertFrom-Json } catch { return $null }
+    if ($null -eq $routing) { return $null }
+    $entries = @($routing.traffic | Where-Object { $_ -and [int]$_.weight -gt 0 })
+    if ($entries.Count -ne 1 -or [int]$entries[0].weight -ne 100) { return $null }
+    if (-not [string]::IsNullOrEmpty($entries[0].revisionName)) { return [string]$entries[0].revisionName }
+    if ($entries[0].latestRevision -eq $true -and -not [string]::IsNullOrEmpty($routing.latest)) { return [string]$routing.latest }
+    return $null
+}
+
 # Without -BrowserProbe the probes run with the browser trap loaded first, so nothing they run can find or start a browser;
 # the opening's check of the legal pages runs under it too. The trap's file URL by the constructor, never a cast: on Linux a
 # cast reads `/home/...` as a relative URI, whose AbsoluteUri throws, and PowerShell turns a getter's throw into $null, so
@@ -248,10 +267,11 @@ $browserArgs = @(if ($BrowserProbe) { '--browser' })
 # address, a mail or telephone link, a placeholder or a postcode.
 $openingArgs = @(if ($Public) { '--opening' })
 # The release's maintenance revision (-Maintenance; R60, R108, R115; the plan's item 10.14) is built beside the revision that
-# serves now, which keeps all the traffic: it is never a first deployment (the template's first-deployment rule would send
-# all traffic to it), and it is probed over HTTP only, under the browser trap. Both are refused before anything is read.
+# serves now, -LiveRevision, which the deployment keeps at all the traffic (it must already hold it: checked below, before
+# anything in Azure changes): it is never a first deployment (the template's first-deployment rule would send all traffic to
+# it), and it is probed over HTTP only, under the browser trap. Both are refused before anything is read.
 if ($Maintenance -and [string]::IsNullOrEmpty($LiveRevision)) {
-    throw "-Maintenance builds the release's maintenance revision beside the revision serving now, which keeps all the traffic: name that revision with -LiveRevision. A maintenance revision is never a first deployment. Nothing was deployed and nothing changed."
+    throw "-Maintenance builds the release's maintenance revision beside the revision serving now: name that revision, the one that holds all the traffic, with -LiveRevision. A maintenance revision is never a first deployment. Nothing was deployed and nothing changed."
 }
 if ($Maintenance -and $BrowserProbe) { throw "-Maintenance is probed over HTTP only, under the browser trap: leave out -BrowserProbe." }
 # What the revision this run makes is called in what it says: the candidate, or the maintenance revision.
@@ -311,6 +331,30 @@ if ($Public) {
         Write-Host "  > az containerapp show -g $ResourceGroup -n $AppName --query properties.configuration.ingress.ipSecurityRestrictions -o json: any address rule stops a -Public deployment here, before anything in Azure changes (the site is private: open it with deploy.ps1 -Open first)"
     }
 }
+else {
+    # And the other way round: once the owner has opened the site, a deployment without -Public would put the private copy's
+    # address rules back as it deploys, closing the open site to everyone but the named ranges. The rules are read before
+    # anything in Azure changes: none at all is the open site, and stops the deployment here. A read that fails stops a
+    # redeployment too; only a first deployment, with no app yet, has nothing to read.
+    Step "check that $AppName is still the private copy: on the open site every deployment says -Public"
+    if ($Apply) {
+        $restrictions = az containerapp show -g $ResourceGroup -n $AppName --query "properties.configuration.ingress.ipSecurityRestrictions" -o json
+        if ($LASTEXITCODE -ne 0) {
+            if (-not [string]::IsNullOrEmpty($LiveRevision)) { throw "Who $AppName admits could not be read; nothing was deployed and nothing changed: a deployment without -Public on the open site would restrict it again." }
+            Write-Host "  a first deployment: $AppName holds no address rule yet"
+        }
+        else {
+            $text = $restrictions -join "`n"
+            try { $rules = @(if (-not [string]::IsNullOrWhiteSpace($text)) { $text | ConvertFrom-Json | Where-Object { $_ } }) }
+            catch { throw "Who $AppName admits could not be read; nothing was deployed and nothing changed ($($_.Exception.Message))." }
+            if ($rules.Count -eq 0) { throw "The site is open: every deployment says -Public. Nothing was deployed and nothing changed: a deployment naming -AllowedCidr would restrict the open site to those ranges again." }
+            Write-Host "  $AppName admits only its address rules: the private copy"
+        }
+    }
+    else {
+        Write-Host "  > az containerapp show -g $ResourceGroup -n $AppName --query properties.configuration.ingress.ipSecurityRestrictions -o json: no address rule at all is the open site, and stops a deployment without -Public here, before anything in Azure changes"
+    }
+}
 # The app's revisions, read before anything in Azure changes, every inactive one too: the deployment never names one that
 # exists, and a failure deactivates only a revision this deployment made (the incident of 2026-10-27). A read that fails stops
 # a redeployment here; a first deployment, whose app holds none yet, goes on, and a failure of it then deactivates nothing.
@@ -339,6 +383,26 @@ if ($Apply) {
 }
 else {
     Write-Host "  > az containerapp revision list -g $ResourceGroup -n $AppName --all --query [].name -o tsv: a revision already named $candidate stops the deployment here, before anything in Azure changes"
+}
+# The revision -LiveRevision names must be the one serving all the traffic now, read from the app before anything in Azure
+# changes: the template keeps -LiveRevision at 100 per cent and gives the new revision none, so naming another revision (a
+# candidate not yet promoted, as a pre-build line run too early would) moves every reader to it, unprobed. On every
+# redeployment, the maintenance revision's included; a read that fails, or traffic that no one revision holds, stops it too.
+if (-not [string]::IsNullOrEmpty($LiveRevision)) {
+    Step "check that $LiveRevision serves all the traffic of $AppName"
+    if ($Apply) {
+        $routing = az containerapp show -g $ResourceGroup -n $AppName --query "{traffic: properties.configuration.ingress.traffic, latest: properties.latestRevisionName}" -o json
+        if ($LASTEXITCODE -ne 0) { throw "The traffic of $AppName could not be read; nothing was deployed and nothing changed: the deployment keeps -LiveRevision at all the traffic, so it must be the revision that holds it now." }
+        $serving = Get-ServingRevision ($routing -join "`n")
+        if ($serving -ne $LiveRevision) {
+            $which = if ($null -eq $serving) { 'no one revision holds all of it' } else { "$serving holds all of it" }
+            throw "-LiveRevision $LiveRevision is not the revision serving all the traffic of $AppName ($which). Nothing was deployed and nothing changed: the template would give $LiveRevision all the traffic. Name the revision that serves now (after a promotion, the promoted one)."
+        }
+        Write-Host "  $LiveRevision serves all the traffic"
+    }
+    else {
+        Write-Host "  > az containerapp show -g $ResourceGroup -n $AppName --query {traffic: properties.configuration.ingress.traffic, latest: properties.latestRevisionName} -o json: unless $LiveRevision holds all the traffic, the deployment stops here, before anything in Azure changes"
+    }
 }
 $held = @(@($priorRevisions) + @($LiveRevision) | Where-Object { $_ })
 if ($held -contains $candidate) {
@@ -559,7 +623,7 @@ if ($Maintenance) {
     # failed candidate's, so only a revision this run made is ever deactivated.
     Disable-Candidate 'the maintenance revision answers as its release holds, and is kept inactive until it is switched on'
     if ($LASTEXITCODE -ne 0) { throw "The maintenance revision $candidate passed its probe and could not be deactivated: deactivate it with deploy.ps1 -Remove -Revision $candidate, since an active revision is billed. No traffic moved." }
-    Step "the maintenance revision $candidate is built, probed and inactive, beside $LiveRevision, which keeps all the traffic"
+    Step "the maintenance revision $candidate is built, probed and inactive, beside $LiveRevision, which serves all the traffic"
     Write-MaintenanceSwitch
     exit 0
 }
@@ -609,8 +673,12 @@ if (-not [string]::IsNullOrEmpty($LiveRevision) -and -not $dataAgeRefused) {
 }
 if (-not $dataAgeRefused) {
     # R60: a deployment that must take the site down shows the maintenance page. Each release's is pre-built beside the
-    # revision that serves (-Maintenance), from this command's own parameters, and kept inactive until it is switched on.
+    # revision that serves (-Maintenance), from this command's own parameters, and kept inactive until it is switched on. It
+    # is run once this release is promoted, naming the revision that serves then; the line printed names the one serving as
+    # it is printed (-LiveRevision, or on a first deployment the candidate, which takes the traffic), and the kit refuses any
+    # -LiveRevision that does not hold all the traffic, so run too early or too late it changes nothing.
     $ranges = if ($Public) { '-Public' } else { "-AllowedCidr $($AllowedCidr -join ',')" }
-    Write-Host "  To pre-build this release's maintenance revision (R60: the page shown while a deployment must take the site down), beside the revision that serves then ($candidate once it serves):"
-    Write-Host "  > pwsh -File deploy/deploy.ps1 -Subscription $Subscription -ResourceGroup $ResourceGroup -AppName $AppName -EnvironmentId $EnvironmentId -Registry $Registry -Repository $Repository -IdentityResourceId $IdentityResourceId -SigningPublicKey '$($keyPath -replace "'", "''")' -SignerIdentity '$($SignerIdentity -replace "'", "''")' -Release '$($releasePath -replace "'", "''")' $ranges -SearchEngines $SearchEngines -LiveRevision $candidate -Maintenance -Apply"
+    $servingNow = if ([string]::IsNullOrEmpty($LiveRevision)) { $candidate } else { $LiveRevision }
+    Write-Host "  To pre-build this release's maintenance revision (R60: the page shown while a deployment must take the site down): run this after the promotion, with -LiveRevision naming the revision that serves then (the kit refuses one that does not hold all the traffic). The revision serving as this is printed is $($servingNow):"
+    Write-Host "  > pwsh -File deploy/deploy.ps1 -Subscription $Subscription -ResourceGroup $ResourceGroup -AppName $AppName -EnvironmentId $EnvironmentId -Registry $Registry -Repository $Repository -IdentityResourceId $IdentityResourceId -SigningPublicKey '$($keyPath -replace "'", "''")' -SignerIdentity '$($SignerIdentity -replace "'", "''")' -Release '$($releasePath -replace "'", "''")' $ranges -SearchEngines $SearchEngines -LiveRevision $servingNow -Maintenance -Apply"
 }

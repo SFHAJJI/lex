@@ -60,7 +60,9 @@ const [SHOWS_CONTACT] = legalPageTextFailures("/fr/legal-notice.html", CONTACT_P
 // Azure's did on 2026-10-27, creating nothing, and `DEPLOYMENT_FAILS` fails one after its revision is created (a candidate
 // that never becomes ready); `CANDIDATE_FAILS` makes a revision's state read say it failed to provision;
 // `MAINTENANCE_PROBE_FAILS` makes the maintenance revision's probe (`--maintenance`) fail, and `DATA_AGE_REFUSED` a
-// candidate's probe exit 3 (it answers as its release holds, and promotion refuses its data's age).
+// candidate's probe exit 3 (it answers as its release holds, and promotion refuses its data's age). The app's traffic read
+// says that `SERVING` (by default the first of `REVISIONS`) holds all of it; `TRAFFIC` gives the whole answer instead, and
+// `TRAFFIC_READ_FAILS` makes the read fail.
 const STUBS = `
   $global:calls = [System.Collections.Generic.List[string]]::new()
   $global:revisions = [System.Collections.Generic.List[string]]::new()
@@ -89,6 +91,12 @@ const STUBS = `
       return $env:RULES
     }
     if ($line -like 'containerapp show*customDomains*') { return '[]' }
+    if ($line -like 'containerapp show*ingress.traffic*') {
+      if ($env:TRAFFIC_READ_FAILS) { $global:LASTEXITCODE = 3; return }
+      if ($env:TRAFFIC) { return $env:TRAFFIC }
+      $serving = if ($env:SERVING) { $env:SERVING } else { @($global:revisions)[0] }
+      return '{"traffic":[{"revisionName":"' + $serving + '","weight":100},{"latestRevision":true,"weight":0,"label":"candidate"}],"latest":"' + @($global:revisions)[-1] + '"}'
+    }
     if ($line -like 'containerapp revision list*') {
       if ($env:REVISIONS_READ_FAILS) { $global:LASTEXITCODE = 3; return }
       return @($global:revisions)
@@ -142,7 +150,7 @@ function deploy(parameters, env = {}, { live = LIVE, release = releaseDirectory 
     encoding: "utf8", timeout: 120_000,
     env: {
       ...process.env, RULES: "", RULES_READ_FAILS: "", LEGAL_PAGE_FAILURE: "", REVISIONS: LIVE, REVISIONS_READ_FAILS: "", DEPLOYMENT_FAILS: "", CANDIDATE_FAILS: "",
-      MAINTENANCE_PROBE_FAILS: "", DATA_AGE_REFUSED: "", ...env,
+      MAINTENANCE_PROBE_FAILS: "", DATA_AGE_REFUSED: "", SERVING: "", TRAFFIC: "", TRAFFIC_READ_FAILS: "", ...env,
     },
   });
   assert.equal(run.error, undefined, `pwsh could not run: ${run.error}`);
@@ -207,15 +215,18 @@ test("the browser probes, asked for, are handed over whole beside --opening, and
   assert.ok(!probe.includes("--import"), "the browser probes run without the trap");
 });
 
-test("the private copy's probe reads no --opening, and its deployment asks nothing about the rules first (F1, F2)", () => {
+test("the private copy's probe reads no --opening, and its rules are read before anything changes and again once it is deployed (F1, F2)", () => {
   const run = deploy(["-SignerIdentity", "signer", "-AllowedCidr", "203.0.113.7/32", "-Apply"], { RULES: PRIVATE_RULES });
   assert.equal(run.result, "RESULT:returned", run.out);
   const [probe] = run.probes;
   assert.deepEqual(probeTail(probe), ["--signer", "signer", "--promotion-check"], JSON.stringify(probe));
   assert.ok(!probe.some((token) => token.includes("opening") || token === "o"), JSON.stringify(probe));
   assert.deepEqual(run.deployments.map((deployment) => deployment.openToPublic), ["False"], run.calls.join("\n"));
-  // The rules are read once the deployment is made (the read-back of who ingress admits), not before it.
-  assert.ok(indexOf(run.calls, /ipSecurityRestrictions/) > indexOf(run.calls, /^az deployment group create/), run.calls.join("\n"));
+  // The rules are read before anything in Azure changes (on the open site a deployment without -Public would restrict it
+  // again), and once the deployment is made (the read-back of who ingress admits).
+  const reads = run.calls.map((call, at) => [call, at]).filter(([call]) => /ipSecurityRestrictions/.test(call)).map(([, at]) => at);
+  assert.equal(reads.length, 2, run.calls.join("\n"));
+  assert.ok(reads[0] < indexOf(run.calls, /^az acr login |^oras /) && reads[1] > indexOf(run.calls, /^az deployment group create/), run.calls.join("\n"));
 });
 
 test("a -Public deployment on the private app is refused before anything in Azure changes: open it with -Open first (F2)", () => {
@@ -261,7 +272,7 @@ test("a -Public plan run says it would check that the site is open, and asks Azu
 test("the incident of 2026-10-27: the live release redeployed with -SearchEngines indexed is a new revision, deployed and probed, and nothing is deactivated", () => {
   // The driver's command of 01:10 UTC, as a run: the release live at 100 per cent, again, to change one setting.
   const run = deploy(["-SignerIdentity", "signer", "-Public", "-SearchEngines", "indexed", "-Apply"],
-    { RULES: "[]", REVISIONS: `ca-lex-v3--v3-20261018t000000z-000000000000,${INCIDENT_LIVE}` }, { release: INCIDENT_RELEASE, live: INCIDENT_LIVE });
+    { RULES: "[]", REVISIONS: `ca-lex-v3--v3-20261018t000000z-000000000000,${INCIDENT_LIVE}`, SERVING: INCIDENT_LIVE }, { release: INCIDENT_RELEASE, live: INCIDENT_LIVE });
   assert.equal(run.result, "RESULT:returned", run.out);
   assert.deepEqual(run.deactivated, [], `nothing is deactivated: ${run.calls.join("\n")}`);
   assert.equal(run.deployments.length, 1, run.calls.join("\n"));
@@ -403,8 +414,10 @@ test("a new release over the live revision deploys as it did: one new candidate,
   assert.ok(run.out.includes(`After promotion, deactivate ${LIVE} `), run.out);
   // In order: the image copied, the template previewed and deployed, who ingress admits read back, the candidate awaited,
   // then probed.
-  const order = [/^oras cp /, /^az deployment group what-if /, /^az deployment group create /, /ipSecurityRestrictions/, /^az containerapp revision show .*runningState/, /^node .*--origin/]
-    .map((pattern) => indexOf(run.calls, pattern));
+  const after = (pattern, from) => run.calls.findIndex((call, at) => at > from && pattern.test(call));
+  const deployed = indexOf(run.calls, /^az deployment group create /);
+  const order = [indexOf(run.calls, /^oras cp /), indexOf(run.calls, /^az deployment group what-if /), deployed, after(/ipSecurityRestrictions/, deployed),
+    indexOf(run.calls, /^az containerapp revision show .*runningState/), indexOf(run.calls, /^node .*--origin/)];
   assert.ok(order.every((at, index) => at >= 0 && (index === 0 || at > order[index - 1])), `${order}: ${run.calls.join("\n")}`);
 });
 
@@ -455,8 +468,9 @@ test("-Maintenance deploys the maintenance revision beside the live one with no 
   assert.ok(!probe.some((token) => ["--promotion-check", "--opening", "--browser"].includes(token)), JSON.stringify(probe));
   // Then deactivated, kept for the day it is switched on; nothing else is deactivated, and no traffic moves.
   assert.deepEqual(run.deactivated, [name], run.calls.join("\n"));
-  const order = [/^az deployment group create /, /ipSecurityRestrictions/, /^az containerapp revision show .*runningState/, /^node .*--maintenance/, /^az containerapp revision deactivate /]
-    .map((pattern) => indexOf(run.calls, pattern));
+  const deployed = indexOf(run.calls, /^az deployment group create /);
+  const order = [deployed, run.calls.findIndex((call, at) => at > deployed && /ipSecurityRestrictions/.test(call)),
+    ...[/^az containerapp revision show .*runningState/, /^node .*--maintenance/, /^az containerapp revision deactivate /].map((pattern) => indexOf(run.calls, pattern))];
   assert.ok(order.every((at, index) => at >= 0 && (index === 0 || at > order[index - 1])), `${order}: ${run.calls.join("\n")}`);
   assert.ok(!movesTraffic(run), run.calls.join("\n"));
   for (const command of switchCommands(name)) assert.ok(run.out.includes(command), `${command}: ${run.out}`);
@@ -473,7 +487,7 @@ test("a maintenance revision that fails its probe is deactivated, the run stops,
 });
 
 test("-Maintenance with no -LiveRevision or with the browser probes is refused before anything is read, and one whose revisions cannot be read before anything changes", () => {
-  const unnamed = /^RESULT:threw -Maintenance builds the release's maintenance revision beside the revision serving now, which keeps all the traffic: name that revision with -LiveRevision\. A maintenance revision is never a first deployment\. Nothing was deployed and nothing changed\.$/;
+  const unnamed = /^RESULT:threw -Maintenance builds the release's maintenance revision beside the revision serving now: name that revision, the one that holds all the traffic, with -LiveRevision\. A maintenance revision is never a first deployment\. Nothing was deployed and nothing changed\.$/;
   for (const [what, parameters, live, said] of [
     ["no -LiveRevision", [...MAINTAINED, "-Maintenance", "-Apply"], "", unnamed],
     ["no -LiveRevision, in a plan run", ["-AllowedCidr", "203.0.113.7/32", "-Maintenance"], "", unnamed],
@@ -488,12 +502,14 @@ test("-Maintenance with no -LiveRevision or with the browser probes is refused b
   assert.deepEqual(writes(unread), [], unread.calls.join("\n"));
 });
 
-test("a deployment's closing lines say how to pre-build its release's maintenance revision, from its own parameters, beside the candidate once it serves", () => {
+test("a deployment's closing lines say how to pre-build its release's maintenance revision, from its own parameters, after the promotion, naming the revision serving as it is printed", () => {
   const run = deploy(["-SignerIdentity", "signer", "-AllowedCidr", "203.0.113.7/32", "-Apply"], { RULES: PRIVATE_RULES });
   assert.equal(run.result, "RESULT:returned", run.out);
   const line = run.out.split(/\r?\n/).find((one) => one.includes(" -Maintenance -Apply")) ?? "";
   assert.match(line, /^  > pwsh -File deploy\/deploy\.ps1 -Subscription s -ResourceGroup rg -AppName ca-lex-v3 -EnvironmentId env -Registry crlex\.azurecr\.io -Repository lex-v3 -IdentityResourceId id -SigningPublicKey '[^']+' -SignerIdentity 'signer' -Release '[^']+' -AllowedCidr 203\.0\.113\.7\/32 -SearchEngines kept-out -LiveRevision \S+ -Maintenance -Apply$/, run.out);
-  assert.equal(/-LiveRevision (\S+) -Maintenance/.exec(line)?.[1], run.candidate);
+  // The revision serving as the line is printed, never the candidate not yet promoted (the review of writer/screens-gaps, F1).
+  assert.equal(/-LiveRevision (\S+) -Maintenance/.exec(line)?.[1], LIVE);
+  assert.ok(run.out.includes(`run this after the promotion, with -LiveRevision naming the revision that serves then (the kit refuses one that does not hold all the traffic). The revision serving as this is printed is ${LIVE}:`), run.out);
   const open = deploy(["-SignerIdentity", "signer", "-Public", "-SearchEngines", "indexed", "-Apply"], { RULES: "[]" });
   assert.match(open.out, / -Release '[^']+' -Public -SearchEngines indexed -LiveRevision \S+ -Maintenance -Apply\r?$/m, open.out);
   // Not where promotion refuses the release's data: that release is not to serve.
@@ -501,4 +517,74 @@ test("a deployment's closing lines say how to pre-build its release's maintenanc
   assert.equal(refused.result, "RESULT:returned", refused.out);
   assert.match(refused.out, /Promotion refuses this release's data/);
   assert.doesNotMatch(refused.out, /-Maintenance -Apply/);
+});
+
+// The review of writer/screens-gaps, F1: the template keeps -LiveRevision at all the traffic, so every redeployment reads the
+// app's traffic before anything in Azure changes and goes ahead only when -LiveRevision holds all of it. The pre-build line
+// run before the promotion, naming the candidate, was the reviewer's reproduction: it moved every reader to the candidate.
+test("a deployment whose -LiveRevision does not hold all the traffic is refused before anything changes: the pre-build run too early (F1)", () => {
+  const first = deploy(["-SignerIdentity", "signer", "-AllowedCidr", "203.0.113.7/32", "-Apply"], { RULES: PRIVATE_RULES });
+  assert.equal(first.result, "RESULT:returned", first.out);
+  const candidate = first.candidate;
+  // The reviewer's case: the app holds the live revision and the candidate, which has no traffic; -LiveRevision names it.
+  const early = deploy([...MAINTAINED, "-Maintenance", "-Apply"], { RULES: PRIVATE_RULES, REVISIONS: `${LIVE},${candidate}` }, { live: candidate });
+  assert.equal(early.result, `RESULT:threw -LiveRevision ${candidate} is not the revision serving all the traffic of ca-lex-v3 (${LIVE} holds all of it). Nothing was deployed and nothing changed: the template would give ${candidate} all the traffic. Name the revision that serves now (after a promotion, the promoted one).`, early.out);
+  assert.deepEqual(writes(early), [], early.calls.join("\n"));
+  assert.deepEqual(early.deployments, []);
+  // The same for a candidate's redeployment, for split traffic, and for a read that fails.
+  for (const [what, env, said] of [
+    ["a candidate's deployment naming a revision with no traffic", { REVISIONS: `${LIVE},${candidate}` }, /is not the revision serving all the traffic of ca-lex-v3 \(ca-lex-v3--v3-live holds all of it\)/],
+    ["traffic split between two revisions", { REVISIONS: `${LIVE},${candidate}`, TRAFFIC: `{"traffic":[{"revisionName":"${candidate}","weight":50},{"revisionName":"${LIVE}","weight":50}],"latest":"${candidate}"}` }, /\(no one revision holds all of it\)/],
+    ["a traffic read that fails", { REVISIONS: `${LIVE},${candidate}`, TRAFFIC_READ_FAILS: "1" }, /^RESULT:threw The traffic of ca-lex-v3 could not be read; nothing was deployed and nothing changed/],
+  ]) {
+    const run = deploy(["-SignerIdentity", "signer", "-AllowedCidr", "203.0.113.7/32", "-Apply"], { RULES: PRIVATE_RULES, ...env }, { live: candidate });
+    assert.match(run.result, said, `${what}: ${run.out}`);
+    assert.deepEqual(writes(run), [], `${what}: ${run.calls.join("\n")}`);
+  }
+});
+
+test("after the promotion the maintenance revision is pre-built beside the promoted revision, and the normal paths go ahead as before (F1)", () => {
+  const first = deploy(["-SignerIdentity", "signer", "-AllowedCidr", "203.0.113.7/32", "-Apply"], { RULES: PRIVATE_RULES });
+  const candidate = first.candidate;
+  // Promoted: the candidate holds all the traffic, and the pre-build names it.
+  const run = deploy([...MAINTAINED, "-Maintenance", "-Apply"], { RULES: PRIVATE_RULES, REVISIONS: `${LIVE},${candidate}`, SERVING: candidate }, { live: candidate });
+  assert.equal(run.result, "RESULT:returned", run.out);
+  assert.equal(run.deployments.length, 1, run.calls.join("\n"));
+  assert.equal(run.deployments[0].liveRevision, candidate, "the promoted revision keeps all the traffic");
+  assert.equal(run.deployments[0].maintenance, "True");
+  assert.ok(run.out.includes(`${candidate} serves all the traffic`), run.out);
+  // The traffic is read after the revisions and before anything changes.
+  const read = indexOf(run.calls, /^az containerapp show .*ingress\.traffic/);
+  assert.ok(read > indexOf(run.calls, /^az containerapp revision list /) && read < indexOf(run.calls, /^az acr login |^oras /), run.calls.join("\n"));
+  // An app a first deployment left routes all its traffic to its latest revision, named by no entry: that is the one serving.
+  const latest = deploy(["-SignerIdentity", "signer", "-AllowedCidr", "203.0.113.7/32", "-Apply"],
+    { RULES: PRIVATE_RULES, TRAFFIC: `{"traffic":[{"latestRevision":true,"weight":100,"label":"candidate"}],"latest":"${LIVE}"}` });
+  assert.equal(latest.result, "RESULT:returned", latest.out);
+  // A first deployment names no -LiveRevision, so there is no traffic to read.
+  const firstDeployment = deploy(["-SignerIdentity", "signer", "-AllowedCidr", "203.0.113.7/32", "-Apply"], { RULES: PRIVATE_RULES, REVISIONS: "", REVISIONS_READ_FAILS: "1" }, { live: "" });
+  assert.equal(firstDeployment.result, "RESULT:returned", firstDeployment.out);
+  assert.equal(indexOf(firstDeployment.calls, /ingress\.traffic/), -1, firstDeployment.calls.join("\n"));
+  // A plan run says it would read the traffic, and asks Azure nothing.
+  const plan = deploy(["-AllowedCidr", "203.0.113.7/32"], { RULES: PRIVATE_RULES });
+  assert.ok(plan.out.includes(`unless ${LIVE} holds all the traffic, the deployment stops here, before anything in Azure changes`), plan.out);
+  assert.equal(indexOf(plan.calls, /ingress\.traffic/), -1, plan.calls.join("\n"));
+});
+
+// And the gap that predates the maintenance slice: on the open site a deployment without -Public would put the private copy's
+// address rules back as it deploys, closing the site again.
+test("on the open site a deployment without -Public is refused before anything changes: every deployment says -Public", () => {
+  for (const rules of ["[]", "null", ""]) {
+    const run = deploy(["-SignerIdentity", "signer", "-AllowedCidr", "203.0.113.7/32", "-Apply"], { RULES: rules });
+    assert.equal(run.result, "RESULT:threw The site is open: every deployment says -Public. Nothing was deployed and nothing changed: a deployment naming -AllowedCidr would restrict the open site to those ranges again.", `${JSON.stringify(rules)}: ${run.out}`);
+    assert.deepEqual(writes(run), [], run.calls.join("\n"));
+  }
+  const maintenance = deploy([...MAINTAINED, "-Maintenance", "-Apply"], { RULES: "[]" });
+  assert.match(maintenance.result, /^RESULT:threw The site is open: every deployment says -Public\./, maintenance.out);
+  // A redeployment whose rules cannot be read is refused too; a first deployment, with no app to read, goes on.
+  const unread = deploy(["-SignerIdentity", "signer", "-AllowedCidr", "203.0.113.7/32", "-Apply"], { RULES_READ_FAILS: "1" });
+  assert.match(unread.result, /^RESULT:threw Who ca-lex-v3 admits could not be read; nothing was deployed and nothing changed/, unread.out);
+  assert.deepEqual(writes(unread), [], unread.calls.join("\n"));
+  // The private copy itself goes ahead, and -Public on the open site as before.
+  assert.equal(deploy(["-SignerIdentity", "signer", "-AllowedCidr", "203.0.113.7/32", "-Apply"], { RULES: PRIVATE_RULES }).result, "RESULT:returned");
+  assert.equal(deploy(["-SignerIdentity", "signer", "-Public", "-Apply"], { RULES: "[]" }).result, "RESULT:returned");
 });

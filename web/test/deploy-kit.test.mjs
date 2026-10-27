@@ -129,8 +129,14 @@ test("the release's maintenance revision is the same image with LEX_V3_MAINTENAN
     "az containerapp revision deactivate -g $ResourceGroup -n $AppName --revision $candidate",
   ], "switch on, then off: printed");
   assert.ok(switching.split("\n").slice(1).every((line) => line.trim().startsWith("Write-Host")), "and nothing in it runs");
-  // Every deployment says how to pre-build its release's maintenance revision (R60).
-  assert.match(code, /-LiveRevision \$candidate -Maintenance -Apply"\n/);
+  // Every deployment says how to pre-build its release's maintenance revision (R60), naming the revision serving as it is
+  // printed and never the candidate not yet promoted (the review of writer/screens-gaps, F1).
+  assert.match(code, /-LiveRevision \$servingNow -Maintenance -Apply"\n/);
+  assert.doesNotMatch(code, /-LiveRevision \$candidate -Maintenance/);
+  // And every redeployment reads the traffic before anything in Azure changes: -LiveRevision must hold all of it.
+  const trafficRead = code.indexOf("properties.configuration.ingress.traffic");
+  assert.ok(trafficRead > 0 && trafficRead < code.indexOf("oras cp") && trafficRead < code.indexOf("az deployment group create"), "the traffic is read before the image is copied or the template deployed");
+  assert.match(code, /if \(\$serving -ne \$LiveRevision\) \{/);
 });
 
 test("the candidate is probed at its own address, once it is ready, never through the candidate label", () => {
