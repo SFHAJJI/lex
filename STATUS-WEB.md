@@ -88,7 +88,16 @@ per-client limit, merged before it was handed back: both sides kept).
   27 tools), `V3McpHttpEndpointTests` (all 27 tool calls identical to REST), the coverage, census, builder and vocabulary
   pins. Web: `reference-pages.test.mjs` (payload schemas and digests, the out-of-scope list, the instructions and the replay
   tests held to the C#, the live examples), `live-ssr.test.mjs` (the built renderer renders the page from browse), the
-  coverage page's two new columns, J5's expectations, the card's out-of-scope payload.
+  coverage page's two new columns, J5's expectations, the card's out-of-scope payload. The refusal gates (the fixture card's
+  and the mount's) gain the circular, its twin (a CSSF regulation, `identifier_unknown`) and an operation served from no data.
+- **Counts** (this PC, targeted, as the lane's rules ask; CI runs the whole suites and the journeys). `dotnet build Lex.V3.slnx
+  -c Release`: 0 warnings. Lex.V3.Tests, 131 of the classes this slice touches (registry, schemas, out-of-scope list, host,
+  envelope JSON, every census, capability manifests, web root, the limiter, host answers): 131 pass. Lex.V3.Ingest.Tests:
+  94 (scope, MCP, coverage, the limit, public request recording, locator, ask, as published, EU capability, both refusal
+  gates and the card, the partition and vocabulary pins), the three censuses (7) and the legacy replays (12, the two
+  recorders skipped): all pass. `npm run build`; `npm test`: 1,400 tests, 1,396 pass, 3 skip (the real-browser tests, CI
+  only) and 1 fails here alone, `image-run.test.mjs`'s mount table, which spawns `awk`, absent from this PC's PATH (it fails
+  so on writer/probe-search-engines too; CI's Linux has it). `eng/verify-v3-tree.ps1`: 1,737 tracked paths.
 - **Driver decisions (reversible).**
   - `retrieval_mode_unavailable` is the typed reason for an operation served from no data, not a new code: the registry's
     set of 20 is closed (the launch contract's refusal line), and the code already means "this mode is not served here, these
