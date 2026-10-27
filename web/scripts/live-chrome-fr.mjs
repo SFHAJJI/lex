@@ -332,6 +332,13 @@
 // "Ouverture"). Vocabulary: a breadcrumb is a "Fil d’Ariane"; a version crumb says its reading heading's words; an info
 // control is "Comment lire ceci"; the usual citation is the "citation usuelle" ("telle qu’on l’écrit d’ordinaire"), never
 // "d’habitude"; an example "lance la recherche", never "recherche".
+// The line for a consolidated Treaty's parts this site does not serve as text (`common.europeTreatyParts`, both forms; the
+// review of #996, F2) was reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the same
+// delegation in the addendum of 2026-10-27 on a Treaty's parts not served (2 forms, both changed in review, the English too:
+// the Declarations are annexed to the Final Act and the tables of equivalences to the Treaty of Lisbon, so an item is
+// "publié avec" the Treaty, never "annexé au"; it is an "élément", never a "partie", the TFUE's own division; "le
+// libellé en {language} du traité", one Treaty in equally authentic languages; "tableau de correspondance", the
+// official term; and "ou" in the plural, since a count may be of Protocols only).
 // Typography: a no-break space (U+00A0) stands before : ; ! ? % and » and after «, and the apostrophe is ’.
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
@@ -1596,6 +1603,10 @@ export const LIVE_CHROME_FR = Object.freeze({
     europeAnnexes: Object.freeze({
       one: '{count} annexe du libellé en {language} n’est pas communiquée sous forme de texte et n’est jamais interrogée, citée ni exportée : {reason}. Source officielle {source}.',
       other: '{count} annexes du libellé en {language} ne sont pas communiquées sous forme de texte et ne sont jamais interrogées, citées ni exportées : {reason}. Source officielle {source}.',
+    }),
+    europeTreatyParts: Object.freeze({
+      one: '{count} élément publié avec le libellé en {language} du traité (un protocole, une annexe, une déclaration ou un tableau de correspondance) n’est pas communiqué sous forme de texte et n’est jamais interrogé, cité ni exporté : {reason}. Source officielle {source}.',
+      other: '{count} éléments publiés avec le libellé en {language} du traité (protocoles, annexes, déclarations ou tableaux de correspondance) ne sont pas communiqués sous forme de texte et ne sont jamais interrogés, cités ni exportés : {reason}. Source officielle {source}.',
     }),
     europeForceDates: Object.freeze({
       heading: 'Les dates de l’éditeur que ce site détient pour cet acte',

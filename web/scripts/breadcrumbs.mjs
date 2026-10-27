@@ -20,7 +20,7 @@
 // Data and pure functions only: the screens and the tests share them.
 
 import { CHROME_LOCALE, fillText, liveChrome } from './live-chrome.mjs';
-import { permalinkHref } from './permalinks.mjs';
+import { europeWorkSegment, permalinkHref } from './permalinks.mjs';
 import { datedByEntryIntoForce } from './date-role.mjs';
 
 /** The parts a crumb can be, in the record's order (R48). */
@@ -30,7 +30,7 @@ const isEurope = (view) => view.publisher === 'eu-eurlex';
 
 /** An act's address with no interface language, as the API mints a dossier's (`/lu-legilux/{work}`, `/eu-eurlex/{celex}`). */
 function actAddress(view) {
-  return isEurope(view) ? `/eu-eurlex/${view.celex}` : `/lu-legilux/${view.workKey}`;
+  return isEurope(view) ? `/eu-eurlex/${europeWorkSegment(view.celex)}` : `/lu-legilux/${view.workKey}`;
 }
 
 /** The act's name on the page: its work key or its CELEX, as the page's headings name it; null when the view names none. */

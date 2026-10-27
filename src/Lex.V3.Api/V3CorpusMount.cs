@@ -7349,7 +7349,55 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// the wording is one expression in one language, and its digest pins that language's articles.
     /// </summary>
     private static string EuropePermalink(string celex, string wordingDate, string wordingSha256, string language) =>
-        $"/{EuropePermalinkPublisher}/{celex}/{wordingDate}--{wordingSha256}/{language}";
+        $"/{EuropePermalinkPublisher}/{EuropeWorkSegment(celex)}/{wordingDate}--{wordingSha256}/{language}";
+
+    /// <summary>
+    /// A CELEX as the one path segment R64's <c>{work}</c> is: unchanged unless it carries a solidus, which RFC 3986 writes
+    /// <c>%2F</c> inside a segment. The Treaties' and the Charter's CELEX numbers carry one (<c>12016E/TXT</c>, served from
+    /// main-body profile /5 on); every other CELEX this index holds has none, so its addresses keep their bytes.
+    /// </summary>
+    internal static string EuropeWorkSegment(string celex) => celex.Replace("/", "%2F", StringComparison.Ordinal);
+
+    /// <summary>An EU act's address, <c>/eu-eurlex/{celex}</c>, its CELEX as one segment (<see cref="EuropeWorkSegment"/>).</summary>
+    internal static string EuropeActAddress(string celex) => $"/{EuropePermalinkPublisher}/{EuropeWorkSegment(celex)}";
+
+    /// <summary>
+    /// The CELEX a path segment names, or null: letters, digits and <c>( ) _ - .</c>, as before, and a solidus written
+    /// <c>%2F</c> (or <c>%2f</c>), the only escape a CELEX segment takes (<see cref="EuropeWorkSegment"/>).
+    /// </summary>
+    internal static string? EuropeCelexOfSegment(string segment)
+    {
+        if (segment.Length == 0)
+        {
+            return null;
+        }
+
+        var celex = new StringBuilder(segment.Length);
+        for (var index = 0; index < segment.Length; index++)
+        {
+            var character = segment[index];
+            if (character == '%')
+            {
+                if (index + 2 >= segment.Length || segment[index + 1] != '2' || segment[index + 2] is not ('F' or 'f'))
+                {
+                    return null;
+                }
+
+                celex.Append('/');
+                index += 2;
+            }
+            else if (char.IsAsciiLetterOrDigit(character) || character is '(' or ')' or '_' or '-' or '.')
+            {
+                celex.Append(character);
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        return celex.ToString();
+    }
 
     /// <summary>
     /// The EU stable coordinate, <c>/eu-eurlex/{celex}/{language}/{wording date}</c>, of a wording's permalink
@@ -7382,13 +7430,12 @@ internal sealed partial class V3CorpusMount : IDisposable
     {
         celex = language = wordingDate = requestedDigest = string.Empty;
         provision = null;
-        if (PermalinkSegments(value, EuropePermalinkPublisher) is not { } pin ||
-            !pin.Work.All(static character => char.IsAsciiLetterOrDigit(character) || character is '(' or ')' or '_' or '-' or '.'))
+        if (PermalinkSegments(value, EuropePermalinkPublisher) is not { } pin || EuropeCelexOfSegment(pin.Work) is not { } work)
         {
             return false;
         }
 
-        (celex, wordingDate, requestedDigest, language, provision) = (pin.Work, pin.Date, pin.Digest, pin.Language, pin.Anchor);
+        (celex, wordingDate, requestedDigest, language, provision) = (work, pin.Date, pin.Digest, pin.Language, pin.Anchor);
         return true;
     }
 

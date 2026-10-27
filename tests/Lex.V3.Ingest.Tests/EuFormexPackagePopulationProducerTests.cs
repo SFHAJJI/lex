@@ -354,10 +354,14 @@ public sealed partial class EuFormexPackagePopulationProducerTests
     /// An annex-bearing package (the real 2026 package: act, annex, descriptor, table of contents)
     /// whose held work body is the GDPR XHTML, which carries no publisher annex convention: fetched,
     /// bound and inventoried with its one annex member, then not acquired with the XHTML reason. No
-    /// PDF request is sent; the ZIP stays in custody; the corpus states the typed disposition.
+    /// PDF request is sent; the ZIP stays in custody, and the outcome carries the admitted inventory, so
+    /// the package's main body is still read (main-body profile /5): the corpus states
+    /// <c>formex_main_body_admitted_annexes_unclassified</c> and the EU index holds the act's two articles,
+    /// none of the annex's. Before profile /5 the annex chain's failure hid the main body: EU run 16 held 46
+    /// original acts' packages this way and served none of their text.
     /// </summary>
     [TestMethod]
-    public async Task AnAnnexPackageWhoseHeldBodyHasNoAnnexConventionIsRetainedButNotAcquired()
+    public async Task AnAnnexPackageWhoseHeldBodyHasNoAnnexConventionIsRetainedNotAcquiredAndItsMainBodyRead()
     {
         var annexPackage = await FixtureAsync("new-fmx4-200-body.bin");
         var (result, handler, english, store) = await AcquireEnglishAsync(request =>
@@ -376,6 +380,9 @@ public sealed partial class EuFormexPackagePopulationProducerTests
         StringAssert.Contains(outcome.Detail, "PublisherAnnexConventionAbsent");
         Assert.AreEqual(0, handler.PdfRequests.Count, "no PDF is fetched for a body that cannot be inventoried.");
         Assert.AreEqual(0, result.AnnexClassifications.Count);
+        Assert.IsNull(outcome.AcquiredInventory);
+        Assert.IsNotNull(outcome.RetainedInventory, "the admitted package's inventory travels with the not-acquired outcome.");
+        Assert.HasCount(1, outcome.RetainedInventory.Members);
 
         // The held member reaches the corpus with the typed disposition, so the corpus states a
         // package that was fetched and not acquired, not a transport refusal; the builder's domain
@@ -394,7 +401,21 @@ public sealed partial class EuFormexPackagePopulationProducerTests
                     .FormexMainBodyLegalContent!.Outcomes.Single(source =>
                         source.Source.ExpressionIdentity == outcome.ExpressionIdentity).SemanticIdentitySha256)
             .Disposition;
-        Assert.AreEqual(LexCorpus6Stage3Disposition.FormexMainBodyPackageNotAcquired, disposition);
+        Assert.AreEqual(LexCorpus6Stage3Disposition.FormexMainBodyAdmittedAnnexesUnclassified, disposition);
+        var mainBody = envelope.BodyComposition.Envelope.FormexMainBodyLegalContent!.Outcomes
+            .Single(source => source.Source.ExpressionIdentity == outcome.ExpressionIdentity);
+        Assert.AreEqual(EuFormexMainBodyLegalContentDisposition.AdmittedAnnexesUnclassified, mainBody.Disposition);
+        Assert.HasCount(2, mainBody.Articles);
+        Assert.IsTrue(mainBody.Articles.All(static article => article.PackageEntry == "L_202601965EN.000101.fmx.xml"),
+            "the annex unit never enters the main body.");
+        StringAssert.Contains(mainBody.Detail, "annex_xhtml_not_inventoried");
+
+        // The EU index serves the main body's articles, from the retained package, like an acquired package's.
+        var index = EuropeIndexBuilder.TryBuild(envelope, out var indexRefusal, out var indexDetail);
+        Assert.IsNotNull(index, $"{indexRefusal}: {indexDetail}");
+        using var reader = EuropeIndexReader.OpenAndVerify(
+            index.IndexRef, index.IndexBytes.Span, built.ArtifactRef, index.CapabilityManifest);
+        Assert.AreEqual(2, reader.ArticleCount);
     }
 
     /// <summary>

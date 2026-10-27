@@ -1272,6 +1272,12 @@ const EN = Object.freeze({
       one: "{count} annex of the {language} wording is not served as text, and is never searched, quoted or exported: {reason}. Official source {source}.",
       other: "{count} annexes of the {language} wording are not served as text, and are never searched, quoted or exported: {reason}. Official source {source}.",
     }),
+    // The items published with a consolidated EU Treaty (its Protocols, Annexes, Declarations and tables of equivalences), never
+    // served as text, beside the Treaty's own articles (`europe-annexes.mjs`, `treaty_part_not_served`; review of #996, F2).
+    europeTreatyParts: Object.freeze({
+      one: "{count} item published with the {language} wording of the Treaty (a Protocol, Annex, Declaration or table of equivalences) is not served as text, and is never searched, quoted or exported: {reason}. Official source {source}.",
+      other: "{count} items published with the {language} wording of the Treaty (Protocols, Annexes, Declarations or tables of equivalences) are not served as text, and are never searched, quoted or exported: {reason}. Official source {source}.",
+    }),
     // The EU act's dates as the publisher records them in its dated statements (the plan's item 2.1; R79's E1, R21: each date a
     // value of its own, said with its role; `europe-force-dates.mjs`), where the act is read or its dossier shown: the act's
     // dates, never a wording's. A qualifier is the publisher's note in its own codes, said word for word and never translated.
