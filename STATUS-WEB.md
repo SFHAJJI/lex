@@ -322,8 +322,9 @@ pages exist).
   - Release revisions carry `LEX_V3_MAINTENANCE=off` explicitly, so the template's environment stays one list.
 - **Not yet**:
   - The live site shows the breadcrumbs, info controls and print view from the next release, and the maintenance revision
-    is pre-built from it too (`-Maintenance`). The example searches need more: no release carries an indexing record yet (R92's
-    measurement, the plan's item 1.11, writes it), so until one does the home page shows none.
+    is pre-built from it too (`-Maintenance`). The example searches need more: no release served yet carries an indexing
+    record (R92's measurement, the plan's item 1.11, writes it; every release from `data/names-r92` on carries one), so until
+    one is served the home page shows none.
   - The Developers page's sentence on failures below the envelope ("a request the server cannot read or route") covers a
     maintenance revision's 503 only loosely; its wording waits for a French review of its own.
   - The JavaScript live server (`serve-live.mjs`, the journeys' and development's) has no maintenance mode; only the API,
@@ -1500,7 +1501,8 @@ deployment supports, every detail only the owner can give a marked placeholder i
     DNS zone (Azure DNS in `rg-lex-v3` since the owner's switch of 2026-10-18) is Microsoft's, as the host is, and answers
     resolvers, not readers, so it is not named apart.
   - Search engines (O27, answered yes on 2026-10-18): the privacy notice says what the code does, that an act's page is opened
-    to them only once the release's indexing record lists the act (`search-engines.mjs`: R92's check; none is listed yet), and
+    to them only once the release's indexing record lists the act (`search-engines.mjs`: R92's check, which every release
+    runs since `data/names-r92`), and
     no more; when R92's measurement ships, its section on named people names the check.
 - **Not in this slice** (next): the sources and licences page (R70, Reg53); the security contact (`/.well-known/security.txt`,
   R74) and "Report a problem with this page" (R74, O29); the mailbox's provider in the privacy notice (once the owner names the
@@ -1633,8 +1635,8 @@ indexing (O27) as recommended ("yes yes go with what you recommend"), and the op
   Azure nothing.
 - **Search engines by deployment.** The template takes `searchEngines` (`kept-out`, the default, or `indexed`) and sets
   `LEX_V3_SEARCH_ENGINES` for the API; `deploy.ps1 -SearchEngines indexed` sets it. It is set at the opening. Law pages
-  still open only for the works the release's indexing record lists (R92); no record exists yet, so at first only the
-  home and Coverage pages are indexable.
+  still open only for the works the release's indexing record lists (R92), which every release carries since
+  `data/names-r92`; a release before it opens only the home and Coverage pages.
 - `deploy-kit.test.mjs` pins both: the parameter and its default, the variable the API reads, the domains read back and
   passed on, and the binding's DNS wait, CNAME validation and plan-only default.
 - The review of #988 found that one failed read of the app's domains would have passed "none" to the template and
@@ -2322,9 +2324,22 @@ the site stays out.
   (`readIndexingRecord`, `V3WebRoot.ReadIndexingRecord`, held to 4 admitted and 15 refused records). With the site indexed,
   each server asks its API once (the API at startup, `V3ApiHandler.AnswerAtStartup`; the live server on its first need) the
   `dossier` of every listed work, and a work it does not answer is dropped, never opened nor listed (`searchEngineFacts`,
-  `V3WebRoot.SearchEngineFacts`; review of #976, F5). No release carries a record yet, so with the switch on no law's page
-  would be opened and the sitemap would list only the home pages and Trust and Coverage: indexing waits on O28's
-  measurement, as the plan's risk 14 says ("indexing (O27) only after O28"). The markup names no person (below).
+  `V3WebRoot.SearchEngineFacts`; review of #976, F5). Since `data/names-r92` (STATUS-DATA.md, R92) every release measures its
+  own mount and carries the record beside it in its image: over derive-r1 it lists 2,642 works (2,572 Luxembourg, 70 EU; the
+  sitemap would hold 10,711 addresses in one part), and the names record beside it withholds 971 acts the catalogue names
+  only by a title; no served act names a private individual by the measurement. A work the names record withholds is never
+  listed (the release checks the two records together), and its dossier answers `text_withheld`, which `SearchEngineFacts`
+  drops in any case. The markup names no person (below).
+- **R92 on the screens** (`data/names-r92`): a refusal `text_withheld` whose payload's `reason` is `names_private_individuals`
+  is said on every screen that asks about one work (search, dossier, reading and export, provision history, compare, radar)
+  in one sentence, `NAMES_WITHHELD_SENTENCE` (`live-refusals.mjs`, `tableRefusalSentence` reading the payload): "According to
+  Lex's check, this act names private individuals, so Lex shows neither its text nor its titles: read it at the publisher,
+  by following the official link." / "D’après la vérification de Lex, cet acte nomme des personnes privées ; Lex n’en
+  communique donc ni le texte ni les intitulés : lisez-le chez l’éditeur, en suivant le lien officiel." No person and no
+  contact; the card below gives the official link and the digests. French (Decision 41): one form reviewed by an independent
+  reviewer (Claude, AI reviewer, not the author) in the addendum of 2026-10-27 "R92: an act that names private individuals" of
+  `C:\lex-v3\lanes\fr-review\review.md`, changed in both languages ("personnes privées", the term fixed on 2026-10-18 for
+  this check; the claim tied to the check; the link the act's), applied byte for byte and named in `live-chrome-fr.mjs`.
 - **The sitemap** (`sitemapFiles`, `V3WebRoot.SitemapFiles`, byte for byte one table), with the site indexed: an index at
   `/sitemap.xml` naming its parts `/sitemap-1.xml` on, each at most the protocol's 50,000 addresses and 50 MiB (review of
   #976, F3: the population already lists about 29,000), built once, at `V3WebRoot.Open` and on the live server's first need
@@ -6822,10 +6837,12 @@ The plan's item 3.6, what is left after the switch, the sitemap and the markup (
 1. The owner's O27, asked in the pull request: when it is answered yes, the deploy kit sets `LEX_V3_SEARCH_ENGINES=indexed` on
    the container app (a parameter of `deploy/main.bicep`, its default kept out), and the deploy probe's journeys say
    `searchEngines: "indexed"`.
-2. The indexing record, R92's outcome: the data lane's measurement of the classes of acts that name private individuals (the
+2. Done in `data/names-r92` (STATUS-DATA.md, R92). The indexing record, R92's outcome: the data lane's measurement of the
+   classes of acts that name private individuals (the
    plan's item 1.11, O28) writes `v3-corpus/indexing-record.json` beside the mount it measured, listing each work found to name
    none and the text languages its readable address answers a reading in; until then no law's page is opened.
-3. The objection contact R92 and R49 ask for, in the privacy notice's section for people named in acts (O5).
+3. The objection contact R92 and R49 ask for: not built. The owner's order of 2026-10-19 gives no contact channel, so R92
+   points an act that names private individuals to the publisher instead (`data/names-r92`, STATUS-DATA.md).
 4. Each article's readable address in the sitemap, once reading by article (3.7) gives an article a page of its own (the
    sitemap index past 50,000 addresses was done in the review of #976).
 

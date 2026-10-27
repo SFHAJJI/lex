@@ -2,6 +2,73 @@
 
 Updated 2026-10-27.
 
+## R92: the acts that name private individuals measured, withheld and kept out of search engines; the release carries both records (sole driver, 2026-10-27)
+
+The plan's item 1.11 and the specification of record's R92(1) and (2), O28, O27 (`data/names-r92`).
+- **Measurement** (`Lex.V3.Ingest.Names`; `Lex.V3.Tool names-records --mount <v3-corpus> --out <dir>`, read-only and offline,
+  never writing into the mount): every work the mount serves gets a class from what it is (a Luxembourg act's titles, the
+  index's and the catalogue's; an EU act's operative text, since the EU index holds no title), and its served text is read
+  by a conservative detector: a person's particulars (a birth date or place given as one, an identity document or national
+  number, a residence) within 300 characters of a person named after an honorific, or two particulars of different kinds. A
+  label with no value, a residence rule, a variable written "M." and an office ("Monsieur le Ministre") are no finding. The
+  acts the Luxembourg catalogue names only by a title (no version held) are measured too: search's exact references serve
+  their titles. Classes: `lu_naturalisation`, `lu_nobility`, `lu_grant_to_named_person`, `lu_property_of_named_person`,
+  `lu_civil_status_of_named_person`, `lu_title_names_person`, `lu_text_names_person`, `eu_restrictive_measures`,
+  `eu_text_names_person`, and the two general classes. Output, one form per mount (two runs over derive-r1 byte-identical):
+  the indexing record (`lex-v3-indexing-record/1`, the web's), the names record (`lex-v3-names-record/1`, bound to the
+  mount's corpus and index digests) and the counts (`names-measurement.json`). None holds a name: identifiers, classes, reason
+  codes, counts and hashes only.
+- **Over derive-r1** (`C:\lex-v3\lu-population-20261011-15\derive-r1`, 31 s): Luxembourg, 2,572 works held (137,632
+  articles), every one `lu_general`, no detector finding, 2,572 listed for search engines; 22,048 acts the catalogue names
+  only by a title, 971 withheld (954 `lu_naturalisation`, 7 `lu_grant_to_named_person`, 3 `lu_property_of_named_person`, 7
+  `lu_title_names_person`; acts of the 1840s to the 2000s); EU, 82 acts (173,820 articles), every one `eu_general` (the
+  population holds no restrictive measures act), no finding, 70 listed (12 hold no text). Signals the detector saw and set
+  aside: 536 Luxembourg articles (53 works) and 118 EU articles (5 acts) with a particulars' label and no value, 2 Luxembourg
+  articles of a form whose "Lieu de naissance" is an empty field, 1 a naming rule's placeholders. Digests: indexing record
+  `3105aa4f…`, names record `242b8fde…`, counts `672d578c…`, bound to corpus `0746826f…` and indexes `da7725df…` and
+  `090e166f…` (the build report's). The served text names no private individual by this detector, so Release 2 withholds
+  no served act; what it withholds is 971 catalogue acts whose titles name people or whose class does.
+- **Calibration** (read-only, on masked text: every capitalised word and every digit replaced before anything was printed,
+  so no name was read): 40 of the 971 withheld at random, and all 17 outside naturalisation, are acts about named people (57
+  of 57; "conférant la naturalisation." names its people in its text, by the class). 40 of the 834 general catalogue titles
+  with a person-like word (pension, "en faveur de", nationalité): none names a person (none missed in the sample). In served
+  text the detector flagged nothing, so its precision there is unmeasured; its 3 candidate articles were judged general (3 of
+  3 set aside rightly), and its recall is held only by the synthetic tests. A public office holder named with an honorific
+  would be counted (a false positive by design).
+- **Handling** (driver decision, reversible): the owner's standing order names no person and gives no contact channel, so R92's
+  first option (text kept out of search with an objection contact, R49) is not available; a class or work found to name
+  private individuals is pointed to the publisher. It is out of the indexing record (search engines, the sitemap, the home
+  page's examples), and the API answers `text_withheld` with `reason: names_private_individuals`, its class and reason codes,
+  its identity, every state digest and the official link on every operation about it; search never matches its text nor shows
+  its titles (the title ladder, search's references, a catalogue act's title), and another act's `cited_by` never quotes its
+  articles. `browse`, `coverage`, `events` and `changes_in_period` still name it by identifiers (R92(2)). Every screen says
+  it in one sentence, reviewed in French (STATUS-WEB.md). No refusal code is added: `text_withheld` with a reason, under
+  #998's payload schema (its three mandated fields, more allowed).
+- **Where it is applied, and why** (driver decision, reversible): at serve time, from the record beside the mount, not in the
+  derive. The measurement reads the derived indexes, so it needs no new derive and the two-build derive stays byte-stable; a
+  withdrawal is a new release with a new record (R92(2)); the indexes that hold the withheld text live only in the private
+  image and custody, never in a public asset (R92(3)): the release's public assets are its manifest, the card, the mount
+  report and now the two records and the counts. Fail closed: a names record of another build, or one that breaks a rule,
+  refuses the mount; a mount with no record withholds nothing, so the release path measures its own mount every time. Were
+  the indexes ever a public download, the withheld text would have to leave them in the derive.
+- **Release path** (`web/scripts/image-rehearsal.mjs`): the rehearsal, and the release from custody with its bound tool, run
+  the measurement over the mount into the work directory, refuse a mount that already holds either record, hold the two
+  together (no withheld work offered to search engines or in the sitemap), publish both beside the mount in the image
+  (`LexImageMountRecords`), hold the image to them byte for byte, derive the home page's examples among the acts the record
+  admits, probe the running image (a withheld held work's dossier is `text_withheld` for R92; a catalogue act's ELI is
+  answered without its title) and publish both records and the counts as release assets.
+- **Tests**: `V3NamesDetectorTests` (9: each class and the general acts beside it, the detector's positives and negatives,
+  the window, the signals, EU restrictive measures, work IRIs), `V3NamesRecordTests` (4: one form, the binding, 26 broken
+  records refused, the indexing record admitted by `V3WebRoot.ReadIndexingRecord`), `V3CorpusNamesMountTests` (4: a synthetic
+  act naming an invented person measured and withheld on all 18 operations asked, search unmatched; a general act listed and
+  served; the GDPR withheld by a record on 6 operations; 4 bad records refuse the mount), the refusal census (R92's payload
+  among `text_withheld`'s), the census pins (4 Ingest registries, the API's gate doors), and the web's `names-records` (4)
+  and `image-rehearsal` (1 more).
+- **Not done here**: Trust and Coverage does not count the works withheld under R92; search's `searched` counts a withheld
+  work's states as searched (none on Release 2's mount); the privacy notice's section on people named in acts does not yet say
+  that such an act is pointed to the publisher (a public claim, asked in the pull request). R92(1) asks the measurement again
+  before any widening run: the release path makes it part of every release.
+
 ## The text yield, measured from custody: why 659 EU works and every Luxembourg consolidation have no text; the EU main body reads the Treaties, the Charter and the packages whose annexes are unclassified (sole driver, 2026-10-27)
 
 - **What was asked.** The served EU index (derive-r1, index /6) holds text for 511 of the 1,170 Cellar works the census
