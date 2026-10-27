@@ -30,6 +30,8 @@
 // `file_replaced` event, holds no date of the replacement (no observation time is held; a build's time only bounds it
 // from above), so the sentence would state a date Lex does not hold (STATUS-WEB.md, driver decisions).
 
+import { useEffect, useState } from 'react';
+
 import { Permalink, Say } from './LiveAnswer.jsx';
 import { ArticleText, EuropeWordingHeading, QuoteEvidence, StateHeadingWords } from './LiveReading.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
@@ -109,6 +111,37 @@ function ChangedSince({ view, version, pin, cited, anotherDay }) {
 }
 
 /**
+ * A button that copies one citation form (R65), in its own line under the form: progressive enhancement. The server renders
+ * nothing, so a page without its script, or a browser without the clipboard, shows the citation as selectable text and no button
+ * that cannot work, and the form's own line is never changed; once the page's script runs in a browser that offers
+ * `navigator.clipboard.writeText`, the button appears, named by the form it copies, and says when the copy is done, or that it
+ * failed, in a status line a screen reader announces.
+ */
+export function CopyCitation({ text, form }) {
+  const [ready, setReady] = useState(false);
+  const [state, setState] = useState('idle');
+  useEffect(() => {
+    setReady(typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function');
+  }, []);
+  if (!ready) return null;
+  const copy = () => {
+    navigator.clipboard.writeText(text).then(() => setState('copied'), () => setState('failed'));
+  };
+  return (
+    <dd className="copy-citation-row" data-copy-citation={form}>
+      <button type="button" className="copy-citation" aria-label={fillText(COPY.copyCitationLabel, { form: COPY[FORM_LABELS[form]] })} onClick={copy}>
+        {COPY.copyCitation}
+      </button>
+      {' '}
+      <span role="status" className="copy-citation-status">{state === 'copied' ? COPY.citationCopied : state === 'failed' ? COPY.citationNotCopied : ''}</span>
+    </dd>
+  );
+}
+
+/** The label of each citation form a copy button names, by the form it copies. */
+const FORM_LABELS = Object.freeze({ conventional: 'citeConventional', permalink: 'citeWithPermalink', evidence: 'citeEvidence' });
+
+/**
  * One article's citations (R65), from the one generator: the usual form, the usual form with the dated permalink, and the
  * evidence form, line by line, each marked in the language of the text it cites, under the page's labels. Nothing when the
  * text's language is one no citation is composed in; the usual form says why it is not composed when it is not.
@@ -127,8 +160,10 @@ export function Citations({ view, version, article, observedAt }) {
         {forms.conventional === null
           ? <dd data-citation-form="conventional" data-not-composed="">{COPY.citeNotComposed}</dd>
           : <dd data-citation-form="conventional" lang={lang}>{forms.conventional}</dd>}
+        {forms.conventional === null ? null : <CopyCitation text={forms.conventional} form="conventional" />}
         <dt>{COPY.citeWithPermalink}</dt>
         <dd data-citation-form="permalink" lang={lang}>{forms.withPermalink}</dd>
+        <CopyCitation text={forms.withPermalink} form="permalink" />
         <dt>{COPY.citeEvidence}</dt>
         {/* The permalink and text digest the form carries, which a check of it asks `verify` to confirm (the journeys). */}
         <dd data-citation-form="evidence" lang={lang} data-permalink={forms.permalink} data-text-sha256={forms.textSha256 ?? ''}>
@@ -139,6 +174,7 @@ export function Citations({ view, version, article, observedAt }) {
             </span>
           ))}
         </dd>
+        <CopyCitation text={forms.evidenceLines.join('\n')} form="evidence" />
       </dl>
     </section>
   );

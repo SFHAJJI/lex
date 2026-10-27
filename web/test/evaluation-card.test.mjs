@@ -12,6 +12,7 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { EvaluationCardView, renderLiveCoveragePage } from "../.react-build/app.mjs";
+import { LIVE_CHROME } from "../scripts/live-chrome.mjs";
 import { CARD_ROUTE, EMPTY_CASES_SHA256, NOT_YET_LABELLED, readEvaluationCard, ruleOfThree, wilson95 } from "../scripts/evaluation-card.mjs";
 
 const card = JSON.parse(await readFile(new URL("../../schemas/v3-platform/evaluation-card.json", import.meta.url), "utf8"));
@@ -80,7 +81,7 @@ test("each rule of the card, broken, is refused with that rule's reason", () => 
   for (const [what, change, reason] of cases) assert.throws(() => readEvaluationCard(mutate(change)), reason, what);
 });
 
-test("the page prints the card after the answer, its target first, every table whole, and asks nothing for it", () => {
+test("the page prints the card after the answer, its target first, every table whole, and asks nothing for it", async () => {
   const html = renderLiveCoveragePage();
   const root = html.indexOf('<div id="live-coverage-root">');
   const at = html.indexOf("data-evaluation-card");
@@ -89,6 +90,18 @@ test("the page prints the card after the answer, its target first, every table w
   const target = section.indexOf(`Run over: ${card.target}`);
   assert.ok(target >= 0 && target < section.indexOf("<table"), "what the card was run over, before any number");
   assert.ok(section.includes("Every machine gate on this card passes, and every shuffled control caught its shuffle."));
+  // What the card holds and what it does not, said before its verdict (the audit of 2026-10-27, overclaim 3): the gates it
+  // carries, by name, from the card, and the refusal codes no operation sends, from the refusal census, none typed here.
+  const scope = section.indexOf("This card holds only the machine gates listed below");
+  assert.ok(scope >= 0 && scope < section.indexOf("Every machine gate on this card passes"), "the card's scope comes before its verdict");
+  const gates = [...new Set(card.machine_gates.flatMap((set) => set.gates.map((gate) => gate.gate)))];
+  const said = section.slice(scope, section.indexOf("</p>", scope));
+  const separator = LIVE_CHROME.en.common.listSeparator;
+  assert.ok(said.includes(`(${gates.map((gate) => `<code>${gate}</code>`).join(separator)})`), said);
+  const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/refusal-payload-samples.json", import.meta.url), "utf8"));
+  assert.ok(census.not_produced.length > 0);
+  assert.ok(said.includes(`(${census.not_produced.map((code) => `<code>${code}</code>`).join(separator)})`), said);
+  for (const absent of ["gates on the data", "the quality of answers", "speed", "two systems deriving the same index"]) assert.ok(said.includes(absent), absent);
   assert.equal([...section.matchAll(/<table data-set=/g)].length, card.machine_gates.length);
   for (const set of card.machine_gates) assert.ok(section.includes(`<caption>${set.set}, ${set.arm}: ${set.cases} cases, digest <code>${set.cases_sha256}</code></caption>`));
   assert.ok(section.includes("<td>0.6756 to 1</td>") && section.includes("<td>failure rate below 0.375</td>"));

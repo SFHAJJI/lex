@@ -71,6 +71,8 @@ const NUMBERS_ALLOWED = Object.freeze({
   "reading.disclosure.lu_rights_publisher_catalogue_only_file_silent": ["4", "0"],
   "reading.disclosure.lu_rights_publisher_catalogue_only_own_block_empty": ["4", "0"],
   "reading.disclosure.lu_rights_publisher_catalogue_only_file_names_other_identity": ["4", "0"],
+  // R77's record of an act the catalogue licenses CC BY 4.0 and Lex has not acquired: the licence's version.
+  "refusalCard.catalogue.reasons.catalogue_cc_by_not_acquired": ["4", "0"],
 });
 
 const TABLES = Object.freeze([

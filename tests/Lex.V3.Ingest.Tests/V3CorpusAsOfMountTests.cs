@@ -378,12 +378,13 @@ public sealed class V3CorpusAsOfMountTests
         Assert.AreEqual(PublisherId.LuLegilux, luxembourgOnCombined.Context.Publisher);
         Assert.AreEqual(TimelineSemantics.PublisherApplicability, luxembourgOnCombined.Context.TimelineSemantics);
         // This combined fixture's EU index (the complete profile envelope's, with one collision article added) holds a census
-        // that does not list 32016R0679 and no wording of it, so the act is unknown there, with EU context, as dossier answers
+        // that does not list 32016R0679 and no wording of it, so the act is not held there, with EU context, as dossier answers
         // it: the time view answers EU acts, so the mode refusal no longer describes an act the EU index does not hold
         // (review of #913).
+        // An act outside the population that index states is out of the corpus's scope there (R80), with EU context.
         var euOnCombined = await AsOfAsync(combined, "32016R0679", "2024-01-01");
         Assert.AreEqual(V3Verdicts.Refuse, euOnCombined.Verdict);
-        Assert.AreEqual("identifier_unknown", euOnCombined.Refusal!.Code);
+        Assert.AreEqual("out_of_corpus_scope", euOnCombined.Refusal!.Code);
         Assert.AreEqual(PublisherId.EuEurLex, euOnCombined.Context.Publisher);
         Assert.AreEqual(TimelineSemantics.OfficialConsolidationState, euOnCombined.Context.TimelineSemantics);
     }

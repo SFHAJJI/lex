@@ -5,7 +5,7 @@
     "envelope_schema": "lex-v3-envelope/1",
     "version": "v3",
     "registry_schema": "lex-v3-operation-registry/2",
-    "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+    "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
     "refusal_schema": "lex-v3-refusal/1",
     "verdicts": [
       "answer",
@@ -546,7 +546,7 @@
         "operation_id": "coverage",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "coverage_report",
@@ -591,6 +591,127 @@
               }
             ],
             "counts_note": "counts are of rows the index holds; totals.articles and languages[].articles count the articles the index holds, and the corpus can have recorded more articles than the index holds: members.article_outcomes counts what it recorded; a missing publisher date is counted as missing and never dropped; articles_with_searchable_text is what the capability cells measure: each article with searchable text, at its own publisher date where it carries one, else at the date of the state that holds it, and an article with neither is not counted; so it and articles_without_publisher_date are not addends; when a language is requested, requested_language echoes it and only languages and capability_cells are narrowed to it, and every other member, totals included, is the whole mount\u0027s",
+            "declared_scope": {
+              "europe_languages": null,
+              "luxembourg_classes_not_held": [
+                {
+                  "class": "Constitution",
+                  "disposition": "awaiting_a_run"
+                },
+                {
+                  "class": "AGD",
+                  "disposition": "admitted_awaiting_a_run"
+                },
+                {
+                  "class": "ARGD",
+                  "disposition": "admitted_awaiting_a_run"
+                },
+                {
+                  "class": "RMIN",
+                  "disposition": "admitted_awaiting_a_run"
+                },
+                {
+                  "class": "AMIN",
+                  "disposition": "admitted_where_regulatory_awaiting_a_run"
+                },
+                {
+                  "class": "RCSF",
+                  "disposition": "admitted_awaiting_a_run"
+                },
+                {
+                  "class": "RBCL",
+                  "disposition": "admitted_awaiting_a_run"
+                },
+                {
+                  "class": "RILR",
+                  "disposition": "admitted_awaiting_a_run"
+                },
+                {
+                  "class": "TC",
+                  "disposition": "documentation_awaiting_a_run"
+                },
+                {
+                  "class": "RECT",
+                  "disposition": "corrective_awaiting_a_run"
+                },
+                {
+                  "class": "ACC",
+                  "disposition": "constitutional_review_awaiting_a_run"
+                },
+                {
+                  "class": "memorial_b",
+                  "disposition": "out_of_scope"
+                },
+                {
+                  "class": "communal_regulations",
+                  "disposition": "out_of_scope"
+                },
+                {
+                  "class": "A",
+                  "disposition": "no_ruling_admits_it"
+                },
+                {
+                  "class": "AGC",
+                  "disposition": "no_ruling_admits_it"
+                },
+                {
+                  "class": "CONV",
+                  "disposition": "no_ruling_admits_it"
+                },
+                {
+                  "class": "ORD",
+                  "disposition": "no_ruling_admits_it"
+                },
+                {
+                  "class": "PROT",
+                  "disposition": "no_ruling_admits_it"
+                },
+                {
+                  "class": "REG",
+                  "disposition": "no_ruling_admits_it"
+                },
+                {
+                  "class": "RGC",
+                  "disposition": "no_ruling_admits_it"
+                },
+                {
+                  "class": "RI",
+                  "disposition": "no_ruling_admits_it"
+                },
+                {
+                  "class": "ST",
+                  "disposition": "no_ruling_admits_it"
+                },
+                {
+                  "class": "ACCA",
+                  "disposition": "out_of_scope"
+                },
+                {
+                  "class": "RC",
+                  "disposition": "out_of_scope"
+                },
+                {
+                  "class": "DIV",
+                  "disposition": "no_ruling_admits_it"
+                },
+                {
+                  "class": "PA",
+                  "disposition": "no_ruling_admits_it"
+                },
+                {
+                  "class": "RECUEIL",
+                  "disposition": "no_ruling_admits_it"
+                }
+              ],
+              "observations_begin": [
+                {
+                  "basis": "first_build_in_log",
+                  "date": "2026-10-01",
+                  "publisher": "lu-legilux"
+                }
+              ],
+              "rule": "luxembourg_classes_not_held declares, once per class and by the publisher\u0027s legal-type code where it has one, each Luxembourg class this mount does not hold, with its disposition: awaiting_a_run (not admitted or refused by a ruling yet, and a bounded run, once authorised, would collect it), admitted_awaiting_a_run (admitted, and a later run, once authorised, collects it), admitted_where_regulatory_awaiting_a_run (only an act a role rule shows is regulatory), documentation_awaiting_a_run, corrective_awaiting_a_run and constitutional_review_awaiting_a_run (admitted, under that label only, never as statutory text), out_of_scope (not held and not planned), no_ruling_admits_it (not collected, and no ruling admits it yet); the families held are the text yield\u0027s; europe_languages names the languages the EU index holds wording in, of the EU\u0027s official languages; observations_begin gives, per publisher, when Lex\u0027s own observations held here begin: the first build the Luxembourg log records (first_build_in_log), and for the EU the completion of the one acquisition the mount holds, as its build report states it (acquisition_completed), or not_stated with a null date; date is that instant\u0027s calendar date in Luxembourg (the instant itself is history\u0027s first build time, or the EU channel\u0027s newest completed observation in the envelope\u0027s freshness)"
+            },
             "history": {
               "history_begins": "2026-10-01T08:00:00Z",
               "log_records_builds": true,
@@ -660,7 +781,7 @@
               "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
               "publisher": "lu-legilux",
-              "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+              "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
             },
             "not_held": [
               {
@@ -831,7 +952,7 @@
         "operation_id": "ask",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "handoff_card",
@@ -942,7 +1063,7 @@
         "operation_id": "browse",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "work_record",
@@ -975,7 +1096,7 @@
             "verified_by": {
               "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+              "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
             },
             "works": [
               {
@@ -1075,7 +1196,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -1148,7 +1269,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -1196,7 +1317,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -1256,7 +1377,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -1307,7 +1428,7 @@
         "operation_id": "search",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "quote",
@@ -1613,7 +1734,7 @@
               "phase": "exact_reference",
               "reason": null,
               "recognised": null,
-              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
             },
             "requested_after": null,
             "requested_date": null,
@@ -1697,7 +1818,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -1748,7 +1869,7 @@
         "operation_id": "search",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "quote",
@@ -2006,7 +2127,7 @@
               "phase": "exact_reference",
               "reason": null,
               "recognised": null,
-              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
             },
             "requested_after": null,
             "requested_date": null,
@@ -2093,7 +2214,7 @@
         "operation_id": "search",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "quote",
@@ -2147,7 +2268,7 @@
               "phase": "exact_reference",
               "reason": null,
               "recognised": null,
-              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
             },
             "requested_after": null,
             "requested_date": null,
@@ -2233,7 +2354,7 @@
         "operation_id": "search",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "quote",
@@ -2325,7 +2446,7 @@
               },
               {
                 "item": "other_languages",
-                "reason": "an expression in a language this index holds no wording in is not searched; French expressions are not acquired (Decision 89)"
+                "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
               },
               {
                 "item": "article_text",
@@ -2360,7 +2481,7 @@
               "phase": "exact_reference",
               "reason": null,
               "recognised": null,
-              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
             },
             "requested_after": null,
             "requested_date": null,
@@ -2444,7 +2565,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -2495,7 +2616,7 @@
         "operation_id": "search",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "quote",
@@ -2569,7 +2690,7 @@
               },
               {
                 "item": "other_languages",
-                "reason": "an expression in a language this index holds no wording in is not searched; French expressions are not acquired (Decision 89)"
+                "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
               },
               {
                 "item": "article_text",
@@ -2604,7 +2725,7 @@
               "phase": "exact_reference",
               "reason": null,
               "recognised": null,
-              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
             },
             "requested_after": null,
             "requested_date": null,
@@ -2679,7 +2800,7 @@
         "operation_id": "search",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "quote",
@@ -2716,7 +2837,7 @@
               },
               {
                 "item": "other_languages",
-                "reason": "an expression in a language this index holds no wording in is not searched; French expressions are not acquired (Decision 89)"
+                "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
               },
               {
                 "item": "article_text",
@@ -2751,7 +2872,7 @@
               "phase": "exact_reference",
               "reason": null,
               "recognised": null,
-              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
             },
             "requested_after": null,
             "requested_date": null,
@@ -2824,24 +2945,29 @@
         "object_type": "envelope",
         "operation_id": "search",
         "refusal": {
-          "code": "identifier_unknown",
+          "code": "out_of_corpus_scope",
           "helpful_payload": {
             "asserts_absence_of_law": false,
-            "official_search_actions": [
-              "search"
-            ],
-            "population_disclosure": "This build\u0027s EU index holds 1 members of the EU population it acquired; an identifier outside them was not searched further.",
+            "instrument": "an EU act outside the EU population this site holds",
+            "official_source": "https://eur-lex.europa.eu/legal-content/AUTO/?uri=CELEX:32099R9999",
+            "out_of_scope_class": "eu_act_outside_population",
+            "population_seed_acts": 1,
+            "reason": "The EU population Lex\u0027s rule selects is the 1 act of its seed list (Decision 84), and 32099R9999 is not one of them.",
             "requested_identifier": "32099R9999",
             "what_would_answer": [
-              "corrected_identifier",
               "expanded_official_scope"
             ],
-            "what_would_answer_detail": "an EU work identifier (CELEX, work or expression IRI) or provision present in the mounted EU index"
+            "what_would_answer_detail": "Lex extending its EU population to this act, which it has not done: after the acts of its seed list, the rule takes next the EU acts Legilux links to, then primary law (TEU, TFEU, Charter); the official place and who_to_ask name where the act is published",
+            "who_to_ask": {
+              "link": "https://eur-lex.europa.eu/",
+              "name": "Publications Office of the European Union (EUR-Lex)",
+              "role": "information"
+            }
           },
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -2892,7 +3018,7 @@
         "operation_id": "dossier",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "work_record",
@@ -2928,6 +3054,16 @@
             ],
             "catalogue_chain_rule": "on lex-v3-luxembourg-index/9 the publisher catalogue\u0027s states of this work as this index read it, beside the held states: textless_states names each state of the catalogue in scope whose text this index does not hold, with why (text_status), and none of them is served in another\u0027s place; transitions is the chain of the work\u0027s French states (a state of another language takes its French state\u0027s interval), each from one state to the first state of the next later date, its kind how the first state\u0027s end meets that start (contiguous: the end the publisher states is the next start; derived: no end is stated, so the next start ends it; inclusive_suspected: the stated end is the day before the next start; hole: the stated end is before the next start; overlap: the stated end is after the next start; invalid: the stated end is on or before the state\u0027s own start), or to the next state of the same date (same_date), each span between those two states alone; gaps lists each hole, from the furthest end of the states that begin before it to the next start, which no state covers and nothing bridges; overlaps lists each span two states of different dates both cover, from the later start to the earlier of their ends; same_date lists each group of states of one date; unclear_end_days lists each day a suspected inclusive end gives to neither state; invalid_intervals lists each state whose end is on or before its start, which covers no date and whose permalink still opens it; every date here is the catalogue\u0027s own, and a gap in the catalogue is not a gap in the law",
             "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "force": {
+              "entry_into_force": [],
+              "in_force_status": [],
+              "no_longer_in_force": [],
+              "rule": "the publisher\u0027s own assertions about this act as a whole, on its work and its act as published (the work IRI followed by /jo), read verbatim from the index\u0027s fact table: in_force_status (jolux:inForceStatus, the publisher\u0027s token, not read), entry_into_force (jolux:dateEntryInForce) and no_longer_in_force (jolux:dateNoLongerInForce), each with its subject, value, datatype and evidence digest; an empty list says only that the index holds no such assertion; a consolidated version\u0027s own dates are its states\u0027 (applicability_date, applicable_to), a different fact; nothing here says whether the act applies to anyone, and status_on reads these dates for one date by a fixed rule",
+              "subjects": [
+                "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+                "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo"
+              ]
+            },
             "gaps": [],
             "history_begins": "2024-02-01",
             "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -3074,7 +3210,387 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": null,
+        "schema": "lex-v3-envelope/1",
+        "verdict": "refuse",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "dossier",
+      "scenario": "an act the publisher\u0027s catalogue holds and the index holds no version of (R77): a refusal with its record",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
+          "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "lu",
+          "provisional": false,
+          "publisher": "lu-legilux",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "refusal",
+          "timeline_semantics": "publisher_applicability"
+        },
+        "object_type": "envelope",
+        "operation_id": "dossier",
+        "refusal": {
+          "code": "text_not_available",
+          "helpful_payload": {
+            "act_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo",
+            "asserts_absence_of_law": false,
+            "catalogue_read_no_later_than": "2026-10-01T08:00:00Z",
+            "date_document": [
+              "1991-08-10"
+            ],
+            "disposition": null,
+            "document_type": [
+              "http://data.legilux.public.lu/resource/authority/resource-type/LOI"
+            ],
+            "document_type_codes": [
+              "LOI"
+            ],
+            "entry_into_force": [
+              "1991-08-27"
+            ],
+            "historical_legal_id": [
+              "1991A10580"
+            ],
+            "in_force_status": [
+              "http://data.legilux.public.lu/resource/authority/application-status/no-longer-in-force"
+            ],
+            "in_force_status_codes": [
+              "no-longer-in-force"
+            ],
+            "memorial_issue": [
+              "http://data.legilux.public.lu/eli/etat/leg/memorial/1991/a58"
+            ],
+            "no_longer_in_force": [
+              "2010-01-01"
+            ],
+            "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo",
+            "official_pdf": [
+              "http://data.legilux.public.lu/filestore/eli/etat/leg/memorial/1991/a58/fr/pdf/eli-etat-leg-memorial-1991-a58-fr-pdf.pdf"
+            ],
+            "official_source": "http://data.legilux.public.lu/filestore/eli/etat/leg/memorial/1991/a58/fr/pdf/eli-etat-leg-memorial-1991-a58-fr-pdf.pdf",
+            "publication_date": [
+              "1991-08-23"
+            ],
+            "reason": "catalogue_licence_scl",
+            "reason_rule": "each reason is the one Coverage counts the version under, by one rule (V3TextYield): for a version whose file the corpus holds, file_articles_no_state, the index holds the file\u0027s articles and no state of the version, so none is served (Coverage counts it with text), file_withheld, its rights withhold its text (its disposition: the rights disposition by its wire name), file_pdf_only, the file was admitted and is a PDF from which no text is served, or file_no_article_served, the file was admitted and no article of it is served (its dispositions: its legal-content dispositions, joined with \u002B); for a version of which the corpus holds no file, what the publisher\u0027s catalogue states of it, never why the acquisition did not fetch it: catalogue_licence_scl, every XML and PDF file of its French text is licensed licenceSCL, which this site does not reproduce; catalogue_licence_scl_in_part, some are licensed licenceSCL and some otherwise; catalogue_cc_by_not_acquired, every one is licensed CC BY 4.0 and none was acquired; catalogue_no_or_other_licence, they carry no licence or another one; catalogue_no_xml_or_pdf_manifestation, its French text has no XML or PDF file; catalogue_translations_only, the catalogue names its text in other languages than French only; catalogue_no_expression, the catalogue names no text of it; reason and disposition are the act as published\u0027s, else the work\u0027s first version\u0027s",
+            "record_address": "/lu-legilux/loi-1991-08-10-n5",
+            "record_evidence_sha256s": [
+              "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+            ],
+            "record_kind": "catalogue_only",
+            "retained_transport_evidence": "none",
+            "rule": "R77: the publisher\u0027s catalogue holds this act and this index holds no version of it, so it is answered text_not_available with its record, read from the catalogue\u0027s facts in the index and the files the corpus holds, as they stand: official_identity is the act as published (the work followed by /jo) where the catalogue names it, else the work\u0027s first version; official_source is the publisher\u0027s PDF file of that version\u0027s French text where the catalogue names one, else the same identity; retained_transport_evidence is the receipt of that version\u0027s file\u0027s body where the corpus holds one, else none; document_type, date_document, publication_date, entry_into_force, no_longer_in_force, in_force_status, memorial_issue and historical_legal_id are the act as published\u0027s own typeDocument, dateDocument, publicationDate, dateEntryInForce, dateNoLongerInForce, inForceStatus, isPartOf and historicalLegalId facts, verbatim, and document_type_codes and in_force_status_codes the last segment of each of the first two IRIs, the publisher\u0027s own word; each is a list, empty when the catalogue states none and for a work the catalogue names no act as published of (a code, whose versions\u0027 own facts are not the act\u0027s); in_force_status is never a consolidation\u0027s; each date is the publisher\u0027s and has the role its fact names, and none is an applicability date; title is the French title the catalogue states of the act, else of the work\u0027s first version, or null; versions lists the work\u0027s versions in the catalogue and in the corpus (as published, consolidated, a code\u0027s), each with its kind, the reason no text of it is served here (reason_rule) and that reason\u0027s disposition or dispositions, or null; record_address is the address this site gives the act, where this record is its page; nothing here is the act\u0027s text, and an absence of text here is not an absence of law",
+            "title": "Loi du 10 ao\u00FBt 1991 portant approbation de la Convention de La Haye",
+            "title_language": "fra",
+            "version_dispositions": [
+              null
+            ],
+            "version_kinds": [
+              "as_published"
+            ],
+            "version_reasons": [
+              "catalogue_licence_scl"
+            ],
+            "versions": [
+              "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo"
+            ],
+            "what_would_answer": [
+              "new_official_observation"
+            ],
+            "work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5",
+            "work_key": "loi-1991-08-10-n5"
+          },
+          "schema": "lex-v3-refusal/1"
+        },
+        "registry_schema": "lex-v3-operation-registry/2",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": null,
+        "schema": "lex-v3-envelope/1",
+        "verdict": "refuse",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "evidence_bundle",
+      "scenario": "the same act read at its address in French: a refusal with its record",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
+          "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "lu",
+          "provisional": false,
+          "publisher": "lu-legilux",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "refusal",
+          "timeline_semantics": "publisher_applicability"
+        },
+        "object_type": "envelope",
+        "operation_id": "evidence_bundle",
+        "refusal": {
+          "code": "text_not_available",
+          "helpful_payload": {
+            "act_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo",
+            "asserts_absence_of_law": false,
+            "catalogue_read_no_later_than": "2026-10-01T08:00:00Z",
+            "date_document": [
+              "1991-08-10"
+            ],
+            "disposition": null,
+            "document_type": [
+              "http://data.legilux.public.lu/resource/authority/resource-type/LOI"
+            ],
+            "document_type_codes": [
+              "LOI"
+            ],
+            "entry_into_force": [
+              "1991-08-27"
+            ],
+            "historical_legal_id": [
+              "1991A10580"
+            ],
+            "in_force_status": [
+              "http://data.legilux.public.lu/resource/authority/application-status/no-longer-in-force"
+            ],
+            "in_force_status_codes": [
+              "no-longer-in-force"
+            ],
+            "memorial_issue": [
+              "http://data.legilux.public.lu/eli/etat/leg/memorial/1991/a58"
+            ],
+            "no_longer_in_force": [
+              "2010-01-01"
+            ],
+            "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo",
+            "official_pdf": [
+              "http://data.legilux.public.lu/filestore/eli/etat/leg/memorial/1991/a58/fr/pdf/eli-etat-leg-memorial-1991-a58-fr-pdf.pdf"
+            ],
+            "official_source": "http://data.legilux.public.lu/filestore/eli/etat/leg/memorial/1991/a58/fr/pdf/eli-etat-leg-memorial-1991-a58-fr-pdf.pdf",
+            "publication_date": [
+              "1991-08-23"
+            ],
+            "reason": "catalogue_licence_scl",
+            "reason_rule": "each reason is the one Coverage counts the version under, by one rule (V3TextYield): for a version whose file the corpus holds, file_articles_no_state, the index holds the file\u0027s articles and no state of the version, so none is served (Coverage counts it with text), file_withheld, its rights withhold its text (its disposition: the rights disposition by its wire name), file_pdf_only, the file was admitted and is a PDF from which no text is served, or file_no_article_served, the file was admitted and no article of it is served (its dispositions: its legal-content dispositions, joined with \u002B); for a version of which the corpus holds no file, what the publisher\u0027s catalogue states of it, never why the acquisition did not fetch it: catalogue_licence_scl, every XML and PDF file of its French text is licensed licenceSCL, which this site does not reproduce; catalogue_licence_scl_in_part, some are licensed licenceSCL and some otherwise; catalogue_cc_by_not_acquired, every one is licensed CC BY 4.0 and none was acquired; catalogue_no_or_other_licence, they carry no licence or another one; catalogue_no_xml_or_pdf_manifestation, its French text has no XML or PDF file; catalogue_translations_only, the catalogue names its text in other languages than French only; catalogue_no_expression, the catalogue names no text of it; reason and disposition are the act as published\u0027s, else the work\u0027s first version\u0027s",
+            "record_address": "/lu-legilux/loi-1991-08-10-n5",
+            "record_evidence_sha256s": [
+              "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+            ],
+            "record_kind": "catalogue_only",
+            "retained_transport_evidence": "none",
+            "rule": "R77: the publisher\u0027s catalogue holds this act and this index holds no version of it, so it is answered text_not_available with its record, read from the catalogue\u0027s facts in the index and the files the corpus holds, as they stand: official_identity is the act as published (the work followed by /jo) where the catalogue names it, else the work\u0027s first version; official_source is the publisher\u0027s PDF file of that version\u0027s French text where the catalogue names one, else the same identity; retained_transport_evidence is the receipt of that version\u0027s file\u0027s body where the corpus holds one, else none; document_type, date_document, publication_date, entry_into_force, no_longer_in_force, in_force_status, memorial_issue and historical_legal_id are the act as published\u0027s own typeDocument, dateDocument, publicationDate, dateEntryInForce, dateNoLongerInForce, inForceStatus, isPartOf and historicalLegalId facts, verbatim, and document_type_codes and in_force_status_codes the last segment of each of the first two IRIs, the publisher\u0027s own word; each is a list, empty when the catalogue states none and for a work the catalogue names no act as published of (a code, whose versions\u0027 own facts are not the act\u0027s); in_force_status is never a consolidation\u0027s; each date is the publisher\u0027s and has the role its fact names, and none is an applicability date; title is the French title the catalogue states of the act, else of the work\u0027s first version, or null; versions lists the work\u0027s versions in the catalogue and in the corpus (as published, consolidated, a code\u0027s), each with its kind, the reason no text of it is served here (reason_rule) and that reason\u0027s disposition or dispositions, or null; record_address is the address this site gives the act, where this record is its page; nothing here is the act\u0027s text, and an absence of text here is not an absence of law",
+            "title": "Loi du 10 ao\u00FBt 1991 portant approbation de la Convention de La Haye",
+            "title_language": "fra",
+            "version_dispositions": [
+              null
+            ],
+            "version_kinds": [
+              "as_published"
+            ],
+            "version_reasons": [
+              "catalogue_licence_scl"
+            ],
+            "versions": [
+              "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo"
+            ],
+            "what_would_answer": [
+              "new_official_observation"
+            ],
+            "work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5",
+            "work_key": "loi-1991-08-10-n5"
+          },
+          "schema": "lex-v3-refusal/1"
+        },
+        "registry_schema": "lex-v3-operation-registry/2",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": null,
+        "schema": "lex-v3-envelope/1",
+        "verdict": "refuse",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "search",
+      "scenario": "a reference naming the same act by the address this site gives it: a refusal with its record and what was recognised",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
+          "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "lu",
+          "provisional": false,
+          "publisher": "lu-legilux",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "refusal",
+          "timeline_semantics": "publisher_applicability"
+        },
+        "object_type": "envelope",
+        "operation_id": "search",
+        "refusal": {
+          "code": "text_not_available",
+          "helpful_payload": {
+            "act_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo",
+            "asserts_absence_of_law": false,
+            "catalogue_read_no_later_than": "2026-10-01T08:00:00Z",
+            "date_document": [
+              "1991-08-10"
+            ],
+            "disposition": null,
+            "document_type": [
+              "http://data.legilux.public.lu/resource/authority/resource-type/LOI"
+            ],
+            "document_type_codes": [
+              "LOI"
+            ],
+            "entry_into_force": [
+              "1991-08-27"
+            ],
+            "historical_legal_id": [
+              "1991A10580"
+            ],
+            "in_force_status": [
+              "http://data.legilux.public.lu/resource/authority/application-status/no-longer-in-force"
+            ],
+            "in_force_status_codes": [
+              "no-longer-in-force"
+            ],
+            "memorial_issue": [
+              "http://data.legilux.public.lu/eli/etat/leg/memorial/1991/a58"
+            ],
+            "no_longer_in_force": [
+              "2010-01-01"
+            ],
+            "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo",
+            "official_pdf": [
+              "http://data.legilux.public.lu/filestore/eli/etat/leg/memorial/1991/a58/fr/pdf/eli-etat-leg-memorial-1991-a58-fr-pdf.pdf"
+            ],
+            "official_source": "http://data.legilux.public.lu/filestore/eli/etat/leg/memorial/1991/a58/fr/pdf/eli-etat-leg-memorial-1991-a58-fr-pdf.pdf",
+            "publication_date": [
+              "1991-08-23"
+            ],
+            "reason": "catalogue_licence_scl",
+            "reason_rule": "each reason is the one Coverage counts the version under, by one rule (V3TextYield): for a version whose file the corpus holds, file_articles_no_state, the index holds the file\u0027s articles and no state of the version, so none is served (Coverage counts it with text), file_withheld, its rights withhold its text (its disposition: the rights disposition by its wire name), file_pdf_only, the file was admitted and is a PDF from which no text is served, or file_no_article_served, the file was admitted and no article of it is served (its dispositions: its legal-content dispositions, joined with \u002B); for a version of which the corpus holds no file, what the publisher\u0027s catalogue states of it, never why the acquisition did not fetch it: catalogue_licence_scl, every XML and PDF file of its French text is licensed licenceSCL, which this site does not reproduce; catalogue_licence_scl_in_part, some are licensed licenceSCL and some otherwise; catalogue_cc_by_not_acquired, every one is licensed CC BY 4.0 and none was acquired; catalogue_no_or_other_licence, they carry no licence or another one; catalogue_no_xml_or_pdf_manifestation, its French text has no XML or PDF file; catalogue_translations_only, the catalogue names its text in other languages than French only; catalogue_no_expression, the catalogue names no text of it; reason and disposition are the act as published\u0027s, else the work\u0027s first version\u0027s",
+            "recognised_act": "/lu-legilux/loi-1991-08-10-n5",
+            "recognised_article": null,
+            "recognised_catalogue_works": [
+              "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5"
+            ],
+            "recognised_date": null,
+            "recognised_date_source": null,
+            "recognised_held_act": null,
+            "recognised_held_version": null,
+            "recognised_kind": "permalink",
+            "recognised_title": null,
+            "record_address": "/lu-legilux/loi-1991-08-10-n5",
+            "record_evidence_sha256s": [
+              "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+            ],
+            "record_kind": "catalogue_only",
+            "retained_transport_evidence": "none",
+            "rule": "R77: the publisher\u0027s catalogue holds this act and this index holds no version of it, so it is answered text_not_available with its record, read from the catalogue\u0027s facts in the index and the files the corpus holds, as they stand: official_identity is the act as published (the work followed by /jo) where the catalogue names it, else the work\u0027s first version; official_source is the publisher\u0027s PDF file of that version\u0027s French text where the catalogue names one, else the same identity; retained_transport_evidence is the receipt of that version\u0027s file\u0027s body where the corpus holds one, else none; document_type, date_document, publication_date, entry_into_force, no_longer_in_force, in_force_status, memorial_issue and historical_legal_id are the act as published\u0027s own typeDocument, dateDocument, publicationDate, dateEntryInForce, dateNoLongerInForce, inForceStatus, isPartOf and historicalLegalId facts, verbatim, and document_type_codes and in_force_status_codes the last segment of each of the first two IRIs, the publisher\u0027s own word; each is a list, empty when the catalogue states none and for a work the catalogue names no act as published of (a code, whose versions\u0027 own facts are not the act\u0027s); in_force_status is never a consolidation\u0027s; each date is the publisher\u0027s and has the role its fact names, and none is an applicability date; title is the French title the catalogue states of the act, else of the work\u0027s first version, or null; versions lists the work\u0027s versions in the catalogue and in the corpus (as published, consolidated, a code\u0027s), each with its kind, the reason no text of it is served here (reason_rule) and that reason\u0027s disposition or dispositions, or null; record_address is the address this site gives the act, where this record is its page; nothing here is the act\u0027s text, and an absence of text here is not an absence of law",
+            "title": "Loi du 10 ao\u00FBt 1991 portant approbation de la Convention de La Haye",
+            "title_language": "fra",
+            "version_dispositions": [
+              null
+            ],
+            "version_kinds": [
+              "as_published"
+            ],
+            "version_reasons": [
+              "catalogue_licence_scl"
+            ],
+            "versions": [
+              "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo"
+            ],
+            "what_would_answer": [
+              "new_official_observation"
+            ],
+            "work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5",
+            "work_key": "loi-1991-08-10-n5"
+          },
+          "schema": "lex-v3-refusal/1"
+        },
+        "registry_schema": "lex-v3-operation-registry/2",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -3134,7 +3650,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -3191,7 +3707,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -3242,7 +3758,7 @@
         "operation_id": "dossier",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "work_record",
@@ -3358,7 +3874,7 @@
               },
               {
                 "item": "other_languages",
-                "reason": "an expression in a language the index holds no wording in is not listed; French expressions are not acquired (Decision 89)"
+                "reason": "an expression in a language the index holds no wording in is not listed; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
               },
               {
                 "item": "annexes",
@@ -3436,7 +3952,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -3487,7 +4003,7 @@
         "operation_id": "evidence_bundle",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "evidence_bundle",
@@ -4630,7 +5146,7 @@
             "verified_by": {
               "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+              "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
             },
             "work_key": "loi-1991-08-10-n3"
           }
@@ -4704,7 +5220,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -4771,7 +5287,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -4831,7 +5347,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -4879,7 +5395,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -4930,7 +5446,7 @@
         "operation_id": "evidence_bundle",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "evidence_bundle",
@@ -6073,7 +6589,7 @@
             "verified_by": {
               "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+              "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
             },
             "work_key": "loi-1991-08-10-n3"
           }
@@ -6139,7 +6655,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -6205,7 +6721,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -6256,7 +6772,7 @@
         "operation_id": "evidence_bundle",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "evidence_bundle",
@@ -7741,7 +8257,7 @@
             "verified_by": {
               "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+              "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
             },
             "work_key": "loi-1991-08-10-n3"
           }
@@ -7794,7 +8310,7 @@
         "operation_id": "evidence_bundle",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "evidence_bundle",
@@ -8138,7 +8654,7 @@
             "verified_by": {
               "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+              "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
             },
             "work_key": "loi-1991-08-10-n3"
           }
@@ -8210,7 +8726,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -8269,7 +8785,7 @@
         "operation_id": "evidence_bundle",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "evidence_bundle",
@@ -9241,7 +9757,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -9300,7 +9816,7 @@
         "operation_id": "evidence_bundle",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "evidence_bundle",
@@ -9582,7 +10098,7 @@
         "operation_id": "verify",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "verification",
@@ -9654,7 +10170,7 @@
             "verified_by": {
               "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+              "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
             },
             "work_key": "loi-1991-08-10-n3"
           }
@@ -9715,7 +10231,7 @@
         "operation_id": "verify",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "verification",
@@ -9761,7 +10277,7 @@
             "verified_by": {
               "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+              "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
             },
             "wording_date": "2016-04-27",
             "wording_date_semantics": "an EU wording date is the date of a wording of the act: for the original wording, the date the publisher\u0027s Formex package gives the act; for a consolidated version, the publisher\u0027s consolidation date (cdm:act_consolidated_date) of that version; it is not an entry-into-force, application or publication date, and an EU date is never merged with a Luxembourg applicability date",
@@ -9817,7 +10333,7 @@
         "operation_id": "article_history",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "provision_history",
@@ -9955,7 +10471,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -10022,7 +10538,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -10070,7 +10586,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -10121,7 +10637,7 @@
         "operation_id": "diff",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "diff",
@@ -10488,6 +11004,7 @@
                 "language": "fra",
                 "note": "Both dates select the one text held, the act as published, applicable from 2024-02-01 (publisher); later versions are not held",
                 "same_state": true,
+                "text_page": null,
                 "to": {
                   "applicability_date": "2024-02-01",
                   "applicable_to": null,
@@ -10831,6 +11348,7 @@
             "requested_date_to": "2024-02-01",
             "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
             "requested_language": "fra",
+            "text_rule": "R57: each entry of a changed, added or removed article on the page of the wording served carries the article\u0027s text as evidence_bundle serves it (text, and text_sha256, the SHA-256 of its UTF-8 bytes) when that side\u0027s state\u0027s rights admit its text, and null for both when they do not, so a reader can show the wording that changed; the changed, added and removed articles are cut into pages as a reading\u0027s are, in the rows\u0027 order, each page at most 50 articles and 98,304 bytes of their texts (UTF-8, both sides), an article whose texts alone pass that bound being a page of its own; page asks one (the first by default), text_page names it, its count and its first and last ids (null where nothing moved), and a page past the last of every comparison is refused anchor_not_in_version, as a reading\u0027s is; an article on another page, and an unchanged one, carries no text; the text is the publisher\u0027s as served, and every article\u0027s status is still decided by the wording digests alone",
             "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date",
             "wording_rule": "wording_sha256 is the SHA-256 of a canonical JSON array of [kind, text, target] for the Text and Reference tokens of the article\u0027s stored token stream, in order, with consecutive text merged into one entry (reference labels and targets included; note references, note bodies and modification markers excluded); wording_changed is true when it differs from the previous state of the same language, and any byte difference in the merged text or in a reference counts; paragraph and inline-formatting boundaries and whitespace-only nodes are not compared; wording_runs counts the first state and every change per language; distinct_wordings counts distinct digests per language",
             "work_key": "loi-1991-08-10-n3"
@@ -10906,7 +11424,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -10973,7 +11491,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -11021,7 +11539,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",
@@ -11072,7 +11590,7 @@
         "operation_id": "changes_in_period",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "change_list",
@@ -11200,7 +11718,7 @@
         "operation_id": "changes_in_period",
         "refusal": null,
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": {
           "object_type": "change_list",
@@ -11284,7 +11802,7 @@
           "schema": "lex-v3-refusal/1"
         },
         "registry_schema": "lex-v3-operation-registry/2",
-        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059",
         "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
         "result": null,
         "schema": "lex-v3-envelope/1",

@@ -95,6 +95,8 @@ const NULLABLE = new Set([
   "requested_language", "history.history_begins", "history.retention_policy",
   "text_yield", "text_yield.publishers[].classes[].annexes", "text_yield.publishers[].classes[].versions_not_held",
   "text_yield.publishers[].classes[].files_pdf_only",
+  // What the mount declares (R82, R12): no EU languages on a mount with no EU index, and a date its basis does not state.
+  "declared_scope.europe_languages", "declared_scope.observations_begin[].date",
 ]);
 
 const HISTORY_HEADING = "What this mount keeps of its history";
@@ -305,6 +307,7 @@ test("the page renders the answer the platform really sends", async () => {
     "How these counts are counted",
     "What this mount holds",
     "How much text this site serves, class by class",
+    "Since when Lex observes, and what it does not collect",
     "What the corpus recorded for its members",
     "What can be asked of this mount",
     HISTORY_HEADING,
@@ -1267,6 +1270,8 @@ test("a date on this page is a currency claim, and the guard is a reach rather t
     const held = new Set([
       ...answer.languages.flatMap((row) => [row.first_state_date, row.last_state_date]),
       ...answer.capability_cells.flatMap((cell) => [cell.period_from, cell.period_to]),
+      // The calendar date in Luxembourg on which Lex's own observations begin (R12), a date the answer carries.
+      ...(answer.declared_scope?.observations_begin ?? []).map((row) => row.date),
     ]);
     const instants = historyInstants(answer);
     for (const render of [string, react]) {
@@ -1737,7 +1742,7 @@ test("R26's sentence and the class table say the same figures, which are the bui
     const sentences = yieldSentences(html);
     assert.deepEqual(sentences, [
       "This site holds the codes and lois that Legilux publishes: text for 5 of the 13 versions its catalogue lists and for 4 of its 7 acts, 240 articles in all.",
-      "This site holds acts of the European Union in English and French: text for 3 of the 6 wordings the Publications Office lists for the acts this site selected, 560 articles in all.",
+      "This site holds acts of the European Union that its population rule selects: text for 3 of the 6 wordings the Publications Office lists for them, 560 articles in all.",
     ]);
     const classes = tableRows(html, YIELD_CLASSES);
     assert.deepEqual(classes, [
@@ -1791,7 +1796,7 @@ test("in French, R26's sentence says the same figures as the table, in the revie
   const sentences = yieldSentences(html);
   assert.deepEqual(sentences, [
     "Ce site détient les codes et lois que publie Legilux : du texte pour 5 des 13 versions que recense son catalogue et pour 4 de ses 7 actes, soit 240 articles en tout.",
-    "Ce site détient des actes de l’Union européenne en anglais et en français : du texte pour 3 des 6 libellés que l’Office des publications recense pour les actes que ce site a retenus, soit 560 articles en tout.",
+    "Ce site détient des actes de l’Union européenne que retient sa règle de population : du texte pour 3 des 6 libellés que l’Office des publications recense pour ces actes, soit 560 articles en tout.",
   ]);
   const classes = tableRows(html, copy.captions.yieldClasses);
   assert.deepEqual(classes.map((row) => row[0]), [
@@ -1809,7 +1814,7 @@ test("in French, R26's sentence says the same figures as the table, in the revie
     yieldSentences(react(answer)).map((sentence) => sentence.match(/\d+/g)));
   assert.ok(text(html).includes(copy.noAnnexOutcomes["lu-legilux"]));
   // The page's whitespace is read normalised above; the table's own typography keeps a no-break space before the colon.
-  assert.ok(copy.textYieldLuxembourg.includes("Legilux : du texte") && copy.textYieldEurope.includes("français : du texte"));
+  assert.ok(copy.textYieldLuxembourg.includes("Legilux : du texte") && copy.textYieldEurope.includes("règle de population : du texte"));
   for (const key of Object.keys(LIVE_CHROME.en.coverageAnswer)) {
     assert.ok(Object.hasOwn(copy, key), `the French coverage words lack ${key}`);
   }
@@ -1885,5 +1890,45 @@ test("a yield that does not hold to its arithmetic or to the mount is refused by
     assert.throws(() => readCoverage(mutant), message);
     assert.throws(() => string(mutant), message);
     assert.throws(() => react(mutant), message);
+  }
+});
+
+test("what the mount declares beside its counts, in both renderers: when Lex's own observations begin, the EU languages held of the official ones, each class not held (R12, R82, R78)", async () => {
+  const captured = withDigests(await capturedAnswer());
+  assert.ok(captured.declared_scope, "the platform's census sends what the mount declares (index 9)");
+  const answer = mutate(captured, (a) => {
+    a.declared_scope.europe_languages = { held: ["eng", "fra"], official: 24 };
+    a.declared_scope.observations_begin.push({ basis: "acquisition_completed", date: "2026-10-05", publisher: "eu-eurlex" });
+  });
+  for (const render of [string, react]) {
+    const html = render(answer);
+    assert.ok(headings(html).includes("Since when Lex observes, and what it does not collect"));
+    assert.deepEqual(tableRows(html, "When Lex’s own observations begin, by publisher"), [
+      ["Legilux lu-legilux", captured.declared_scope.observations_begin[0].date, "the first build the mounted log records first_build_in_log"],
+      ["EUR-Lex eu-eurlex", "2026-10-05", "the end of the one collection this site holds acquisition_completed"],
+    ]);
+    // R82's count and denominator are the answer's, never typed into the copy.
+    assert.ok(text(html).includes("Lex holds EU acts in 2 of the EU’s 24 official languages (eng, fra); EUR-Lex publishes their texts in the other languages where these exist."));
+    const classes = tableRows(html, "Luxembourg classes this site does not hold, and what is decided for each");
+    assert.deepEqual(classes.map((row) => row[0].split(" ").at(-1)), captured.declared_scope.luxembourg_classes_not_held.map((row) => row.class));
+    assert.deepEqual(classes.find((row) => row[0].endsWith(" RCSF")), [
+      "regulations of the CSSF RCSF",
+      "admitted, and not collected yet: a later collection run, once authorised, adds it admitted_awaiting_a_run",
+    ]);
+    assert.ok(text(html).includes(captured.declared_scope.rule), "the platform's rule, verbatim");
+  }
+  // A mount with no EU index says nothing of EU languages.
+  assert.ok(!text(string(captured)).includes("Lex holds EU acts in"));
+  // The rules the reader holds the declaration to.
+  for (const [change, message] of [
+    [(a) => { a.declared_scope.luxembourg_classes_not_held[0].disposition = "maybe"; }, /disposition "maybe"/],
+    [(a) => { a.declared_scope.luxembourg_classes_not_held.push({ ...a.declared_scope.luxembourg_classes_not_held[0] }); }, /lists/],
+    [(a) => { a.declared_scope.observations_begin[0].date = null; }, /states a date exactly when its basis is stated/],
+    [(a) => { a.declared_scope.observations_begin[0].publisher = "preview-synthetic"; }, /no publisher this site holds/],
+    [(a) => { a.declared_scope.europe_languages = { held: ["eng"], official: 0 }; }, /more than the 0 official ones/],
+  ]) {
+    const mutant = mutate(captured, change);
+    assert.throws(() => readCoverage(mutant), message);
+    assert.throws(() => string(mutant), message);
   }
 });

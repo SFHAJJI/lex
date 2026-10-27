@@ -528,3 +528,24 @@ test("the usual form is verified by the exact-reference phase: read as the searc
   assert.equal(usualVerdict(forms, null), "refused");
   assert.equal(usualVerdict({ ...forms, conventional: null }, view), "refused", "no usual form, nothing to verify");
 });
+
+test("each citation form gets a copy button only where the page's script can copy (R65, progressive enhancement)", async () => {
+  // The server renders no button: a page without its script shows each form as selectable text, and each form's own line is
+  // the one the journeys and the print view read, unchanged.
+  const quoted = consolidated();
+  const markup = renderToStaticMarkup(h(Citations, { view: quoted.view, version: quoted.state, article: { publisherId: "art_1er", textSha256: "a".repeat(64), permalink: `${quoted.state.permalink}/art_1er` }, observedAt: "2026-10-17T10:00:00Z" }));
+  assert.ok(markup.includes('data-citation-form="evidence"'));
+  assert.doesNotMatch(markup, /copy-citation|<button/, "no button the server cannot make work");
+  // The button's words, in both reviewed languages; its name says which form it copies.
+  for (const language of ["en", "fr"]) {
+    const reading = (await import("../scripts/live-chrome.mjs")).LIVE_CHROME[language].reading;
+    for (const key of ["copyCitation", "copyCitationLabel", "citationCopied", "citationNotCopied"]) assert.ok(reading[key], `${language} reading.${key}`);
+    assert.ok(reading.copyCitationLabel.includes("{form}"));
+  }
+  // The component asks for the clipboard after it mounts, and only a browser that offers writeText shows it; the print view hides it.
+  const source = await readFile(new URL("../app/PinnedReading.jsx", import.meta.url), "utf8");
+  assert.match(source, /typeof navigator\.clipboard\?\.writeText === 'function'/);
+  assert.match(source, /<CopyCitation text=\{forms\.withPermalink\} form="permalink" \/>/);
+  const css = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
+  assert.match(css.slice(css.indexOf("@media print")), /\.copy-citation-row,/);
+});

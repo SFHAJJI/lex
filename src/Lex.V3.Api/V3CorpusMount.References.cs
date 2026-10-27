@@ -30,7 +30,8 @@ internal sealed partial class V3CorpusMount
         "date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search's " +
         "date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU " +
         "act's name or a type and date that names no act the indexes or the publisher's catalogue hold is refused " +
-        "identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with " +
+        "identifier_unknown, with no list; one act the publisher's catalogue holds and the indexes hold no version of is refused " +
+        "text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with " +
         "every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name " +
         "none of that day's acts, open nothing on their own: a title is searched as words, and the day's acts are listed; a date " +
         "in a date's shape that names no calendar day opens nothing; a query that is no reference is searched as words";
@@ -339,7 +340,7 @@ internal sealed partial class V3CorpusMount
 
     /// <summary>
     /// A reference to a Luxembourg act, once located: one held act opens (at the article and date, or its dossier); one act the
-    /// catalogue names and the index holds no version of is <c>identifier_unknown</c> naming it; several are
+    /// catalogue names and the index holds no version of is <c>text_not_available</c> with its record (R77), naming it; several are
     /// <c>ambiguous_identifier</c> with every one, each marked held or not, and none is chosen; none is <c>identifier_unknown</c>.
     /// </summary>
     private V3PlatformOperationOutcome LuxembourgReference(
@@ -382,8 +383,10 @@ internal sealed partial class V3CorpusMount
         recognition = recognition with { Work = act.WorkKey, Title = act.Title, TitleLanguage = act.TitleLanguage };
         if (!act.Held)
         {
-            // The catalogue names this act, and the index holds no version of it: said, with the act the catalogue names.
-            return WithRecognition(request, Unknown(request, query, observedAt, PublisherId.LuLegilux,
+            // The catalogue names this act, and the index holds no version of it: its record (R77, text_not_available, or R92's
+            // text_withheld), with the act the catalogue names; identifier_unknown only when the catalogue names no version of it.
+            var record = CatalogueOnlyWorkOf(act.WorkIri) is { } catalogued ? CatalogueRecordRefusal(request, catalogued, observedAt) : null;
+            return WithRecognition(request, record ?? Unknown(request, query, observedAt, PublisherId.LuLegilux,
                 "an act this index holds a version of: the publisher's catalogue names this one, and no version of it is held" + ReferenceNotHeld),
                 recognition with { CatalogueWorks = [act.WorkIri] });
         }
@@ -623,9 +626,12 @@ internal sealed partial class V3CorpusMount
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-    /// <summary>Whether the publisher's catalogue states anything of a work, or of a version or expression of it.</summary>
+    /// <summary>
+    /// Whether the publisher's catalogue states anything of a work, or of a version or expression of it. An IRI with no work's
+    /// shape (a whole act type, a year) names none and reads no range of the catalogue (the review of #1003, F2).
+    /// </summary>
     private bool CatalogueNames(string workIri) =>
-        _reader!.ResolveFacts([workIri]).Count > 0 || _reader.ResolveSubjectsUnder(workIri + "/").Count > 0;
+        IsWorkShape(workIri) && (_reader!.ResolveFacts([workIri]).Count > 0 || _reader.ResolveSubjectsUnder(workIri + "/").Count > 0);
 
     /// <summary>
     /// The catalogue's subjects of one Mémorial issue (by its IRI) or of one historical legal identifier, from the fact table
@@ -965,6 +971,12 @@ internal sealed partial class V3CorpusMount
             var articleId = segments.Length == 5 ? Uri.UnescapeDataString(segments[4]) : null;
             return OpenLuxembourgWork(request, query, language, requestedDate, mode, recognition with { Work = segments[2] }, segments[2],
                 null, segments[3], null, observedAt, heldArticleId: articleId, reading: true);
+        }
+
+        // The address this site gives an act the catalogue holds and the index holds no version of (R77): its record.
+        if (TryParseStableWorkCoordinate(address, out _) && CatalogueOnlyWorkOf(address) is { } catalogued)
+        {
+            return WithRecognition(request, CatalogueRecordRefusal(request, catalogued, observedAt), recognition with { CatalogueWorks = [catalogued] });
         }
 
         return WithRecognition(request, Unknown(request, query, observedAt, PublisherId.LuLegilux,

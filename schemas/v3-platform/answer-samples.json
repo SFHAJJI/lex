@@ -954,7 +954,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+          "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
         },
         "works": [
           {
@@ -1306,7 +1306,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+          "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -1355,6 +1355,127 @@
           }
         ],
         "counts_note": "counts are of rows the index holds; totals.articles and languages[].articles count the articles the index holds, and the corpus can have recorded more articles than the index holds: members.article_outcomes counts what it recorded; a missing publisher date is counted as missing and never dropped; articles_with_searchable_text is what the capability cells measure: each article with searchable text, at its own publisher date where it carries one, else at the date of the state that holds it, and an article with neither is not counted; so it and articles_without_publisher_date are not addends; when a language is requested, requested_language echoes it and only languages and capability_cells are narrowed to it, and every other member, totals included, is the whole mount\u0027s",
+        "declared_scope": {
+          "europe_languages": null,
+          "luxembourg_classes_not_held": [
+            {
+              "class": "Constitution",
+              "disposition": "awaiting_a_run"
+            },
+            {
+              "class": "AGD",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "ARGD",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "RMIN",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "AMIN",
+              "disposition": "admitted_where_regulatory_awaiting_a_run"
+            },
+            {
+              "class": "RCSF",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "RBCL",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "RILR",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "TC",
+              "disposition": "documentation_awaiting_a_run"
+            },
+            {
+              "class": "RECT",
+              "disposition": "corrective_awaiting_a_run"
+            },
+            {
+              "class": "ACC",
+              "disposition": "constitutional_review_awaiting_a_run"
+            },
+            {
+              "class": "memorial_b",
+              "disposition": "out_of_scope"
+            },
+            {
+              "class": "communal_regulations",
+              "disposition": "out_of_scope"
+            },
+            {
+              "class": "A",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "AGC",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "CONV",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "ORD",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "PROT",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "REG",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "RGC",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "RI",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "ST",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "ACCA",
+              "disposition": "out_of_scope"
+            },
+            {
+              "class": "RC",
+              "disposition": "out_of_scope"
+            },
+            {
+              "class": "DIV",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "PA",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "RECUEIL",
+              "disposition": "no_ruling_admits_it"
+            }
+          ],
+          "observations_begin": [
+            {
+              "basis": "first_build_in_log",
+              "date": "2026-10-01",
+              "publisher": "lu-legilux"
+            }
+          ],
+          "rule": "luxembourg_classes_not_held declares, once per class and by the publisher\u0027s legal-type code where it has one, each Luxembourg class this mount does not hold, with its disposition: awaiting_a_run (not admitted or refused by a ruling yet, and a bounded run, once authorised, would collect it), admitted_awaiting_a_run (admitted, and a later run, once authorised, collects it), admitted_where_regulatory_awaiting_a_run (only an act a role rule shows is regulatory), documentation_awaiting_a_run, corrective_awaiting_a_run and constitutional_review_awaiting_a_run (admitted, under that label only, never as statutory text), out_of_scope (not held and not planned), no_ruling_admits_it (not collected, and no ruling admits it yet); the families held are the text yield\u0027s; europe_languages names the languages the EU index holds wording in, of the EU\u0027s official languages; observations_begin gives, per publisher, when Lex\u0027s own observations held here begin: the first build the Luxembourg log records (first_build_in_log), and for the EU the completion of the one acquisition the mount holds, as its build report states it (acquisition_completed), or not_stated with a null date; date is that instant\u0027s calendar date in Luxembourg (the instant itself is history\u0027s first build time, or the EU channel\u0027s newest completed observation in the envelope\u0027s freshness)"
+        },
         "history": {
           "history_begins": "2026-10-01T08:00:00Z",
           "log_records_builds": true,
@@ -1424,7 +1545,7 @@
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
           "publisher": "lu-legilux",
-          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+          "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
         },
         "not_held": [
           {
@@ -1591,6 +1712,127 @@
           }
         ],
         "counts_note": "counts are of rows the index holds; totals.articles and languages[].articles count the articles the index holds, and the corpus can have recorded more articles than the index holds: members.article_outcomes counts what it recorded; a missing publisher date is counted as missing and never dropped; articles_with_searchable_text is what the capability cells measure: each article with searchable text, at its own publisher date where it carries one, else at the date of the state that holds it, and an article with neither is not counted; so it and articles_without_publisher_date are not addends; when a language is requested, requested_language echoes it and only languages and capability_cells are narrowed to it, and every other member, totals included, is the whole mount\u0027s",
+        "declared_scope": {
+          "europe_languages": null,
+          "luxembourg_classes_not_held": [
+            {
+              "class": "Constitution",
+              "disposition": "awaiting_a_run"
+            },
+            {
+              "class": "AGD",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "ARGD",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "RMIN",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "AMIN",
+              "disposition": "admitted_where_regulatory_awaiting_a_run"
+            },
+            {
+              "class": "RCSF",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "RBCL",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "RILR",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "TC",
+              "disposition": "documentation_awaiting_a_run"
+            },
+            {
+              "class": "RECT",
+              "disposition": "corrective_awaiting_a_run"
+            },
+            {
+              "class": "ACC",
+              "disposition": "constitutional_review_awaiting_a_run"
+            },
+            {
+              "class": "memorial_b",
+              "disposition": "out_of_scope"
+            },
+            {
+              "class": "communal_regulations",
+              "disposition": "out_of_scope"
+            },
+            {
+              "class": "A",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "AGC",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "CONV",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "ORD",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "PROT",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "REG",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "RGC",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "RI",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "ST",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "ACCA",
+              "disposition": "out_of_scope"
+            },
+            {
+              "class": "RC",
+              "disposition": "out_of_scope"
+            },
+            {
+              "class": "DIV",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "PA",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "RECUEIL",
+              "disposition": "no_ruling_admits_it"
+            }
+          ],
+          "observations_begin": [
+            {
+              "basis": "first_build_in_log",
+              "date": "2026-10-01",
+              "publisher": "lu-legilux"
+            }
+          ],
+          "rule": "luxembourg_classes_not_held declares, once per class and by the publisher\u0027s legal-type code where it has one, each Luxembourg class this mount does not hold, with its disposition: awaiting_a_run (not admitted or refused by a ruling yet, and a bounded run, once authorised, would collect it), admitted_awaiting_a_run (admitted, and a later run, once authorised, collects it), admitted_where_regulatory_awaiting_a_run (only an act a role rule shows is regulatory), documentation_awaiting_a_run, corrective_awaiting_a_run and constitutional_review_awaiting_a_run (admitted, under that label only, never as statutory text), out_of_scope (not held and not planned), no_ruling_admits_it (not collected, and no ruling admits it yet); the families held are the text yield\u0027s; europe_languages names the languages the EU index holds wording in, of the EU\u0027s official languages; observations_begin gives, per publisher, when Lex\u0027s own observations held here begin: the first build the Luxembourg log records (first_build_in_log), and for the EU the completion of the one acquisition the mount holds, as its build report states it (acquisition_completed), or not_stated with a null date; date is that instant\u0027s calendar date in Luxembourg (the instant itself is history\u0027s first build time, or the EU channel\u0027s newest completed observation in the envelope\u0027s freshness)"
+        },
         "history": {
           "history_begins": "2026-10-01T08:00:00Z",
           "log_records_builds": true,
@@ -1660,7 +1902,7 @@
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
           "publisher": "lu-legilux",
-          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+          "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
         },
         "not_held": [
           {
@@ -2117,6 +2359,7 @@
             "language": "fra",
             "note": "Both dates select the one text held, the act as published, applicable from 2024-02-01 (publisher); later versions are not held",
             "same_state": true,
+            "text_page": null,
             "to": {
               "applicability_date": "2024-02-01",
               "applicable_to": null,
@@ -2460,6 +2703,7 @@
         "requested_date_to": "2024-02-01",
         "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
         "requested_language": "fra",
+        "text_rule": "R57: each entry of a changed, added or removed article on the page of the wording served carries the article\u0027s text as evidence_bundle serves it (text, and text_sha256, the SHA-256 of its UTF-8 bytes) when that side\u0027s state\u0027s rights admit its text, and null for both when they do not, so a reader can show the wording that changed; the changed, added and removed articles are cut into pages as a reading\u0027s are, in the rows\u0027 order, each page at most 50 articles and 98,304 bytes of their texts (UTF-8, both sides), an article whose texts alone pass that bound being a page of its own; page asks one (the first by default), text_page names it, its count and its first and last ids (null where nothing moved), and a page past the last of every comparison is refused anchor_not_in_version, as a reading\u0027s is; an article on another page, and an unchanged one, carries no text; the text is the publisher\u0027s as served, and every article\u0027s status is still decided by the wording digests alone",
         "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date",
         "wording_rule": "wording_sha256 is the SHA-256 of a canonical JSON array of [kind, text, target] for the Text and Reference tokens of the article\u0027s stored token stream, in order, with consecutive text merged into one entry (reference labels and targets included; note references, note bodies and modification markers excluded); wording_changed is true when it differs from the previous state of the same language, and any byte difference in the merged text or in a reference counts; paragraph and inline-formatting boundaries and whitespace-only nodes are not compared; wording_runs counts the first state and every change per language; distinct_wordings counts distinct digests per language",
         "work_key": "loi-1991-08-10-n3"
@@ -2585,6 +2829,8 @@
                 "from": [
                   {
                     "article_identity_sha256": "05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
+                    "text": "Art. 15.(1)L\u2019Assembl\u00E9e g\u00E9n\u00E9rale annuelle se tient dans la premi\u00E8re quinzaine du mois de juillet.(2)L\u2019ordre du jour de l\u2019assembl\u00E9e g\u00E9n\u00E9rale annuelle comprend notamment la pr\u00E9sentation du rapport d\u2019activit\u00E9s du B\u00E2tonnier et du Conseil de l\u2019Ordre, la pr\u00E9sentation des comptes relatifs \u00E0 l\u2019ann\u00E9e \u00E9coul\u00E9e, l\u2019approbation de ces comptes, la d\u00E9signation parmi les membres de l\u2019Assembl\u00E9e d\u2019un ou de plusieurs r\u00E9viseurs des comptes pour l\u2019exercice \u00E0 venir et, s\u2019il y a lieu, l\u2019\u00E9lection du B\u00E2tonnier, des membres du Conseil de l\u2019Ordre et celle des membres du Conseil disciplinaire et administratif ainsi que la proposition des membres du Conseil disciplinaire et administratif d\u2019appel.(3)L\u2019assembl\u00E9e annuelle fixe, sur proposition du Conseil de l\u2019ordre, les cotisations annuelles respectives \u00E0 charge des avocats inscrits aux listes I, II, III, IV, V et VI du tableau des avocats.A d\u00E9faut de paiement, le B\u00E2tonnier peut requ\u00E9rir l\u2019ex\u00E9cutoire de la cotisation par le Pr\u00E9sident du tribunal d\u2019arrondissement.(4)Des assembl\u00E9es g\u00E9n\u00E9rales extraordinaires peuvent \u00EAtre convoqu\u00E9es avec un ordre du jour \u00E0 fixer par le Conseil de l\u2019ordre.(5)Une assembl\u00E9e g\u00E9n\u00E9rale extraordinaire doit \u00EAtre convoqu\u00E9e dans le mois toutes les fois qu\u2019un cinqui\u00E8me des membres de l\u2019Assembl\u00E9e au moins en fait la demande \u00E9crite et pr\u00E9cise l\u2019ordre du jour.",
+                    "text_sha256": "ad6654247c3b53a0f9bb0b944b7348e2765e2030618e9f8ec1215eb9f772d835",
                     "wording_sha256": "fa7df678cc734fd6b4d9565e69bbd3dcbbf6248af798b28e08d131b2917c31a2"
                   }
                 ],
@@ -2593,6 +2839,8 @@
                 "to": [
                   {
                     "article_identity_sha256": "3a6f7c284b20a46b3ecbec71fc085aed1c068b2e56f62896836bfb3ab4878632",
+                    "text": "Art. 15.(1)L\u2019Assembl\u00E9e g\u00E9n\u00E9rale annuelle se tient dans la premi\u00E8re quinzaine du mois de juillet.(2)L\u2019ordre du jour de l\u2019assembl\u00E9e g\u00E9n\u00E9rale annuelle comprend notamment la pr\u00E9sentation du rapport d\u2019activit\u00E9s du B\u00E2tonnier et du Conseil de l\u2019Ordre, la pr\u00E9sentation des comptes relatifs \u00E0 l\u2019ann\u00E9e \u00E9coul\u00E9e, l\u2019approbation de ces comptes, la d\u00E9signation parmi les membres de l\u2019Assembl\u00E9e d\u2019un ou de plusieurs r\u00E9viseurs des comptes pour l\u2019exercice \u00E0 venir et, s\u2019il y a lieu, l\u2019\u00E9lection du B\u00E2tonnier, des membres du Conseil de l\u2019Ordre et celle des membres du Conseil disciplinaire et administratif ainsi que la proposition des membres du Conseil disciplinaire et administratif d\u2019appel.(3)L\u2019assembl\u00E9e annuelle fixe, sur proposition du Conseil de l\u2019ordre, les cotisations annuelles respectives \u00E0 charge des avocats inscrits aux listes I, II, III, IV, V et VI du tableau des avocats.A d\u00E9faut de paiement, le B\u00E2tonnier peut requ\u00E9rir l\u2019ex\u00E9cutoire de la cotisation par le Pr\u00E9sident du tribunal d\u2019arrondissement.(4)Des assembl\u00E9es g\u00E9n\u00E9rales extraordinaires peuvent \u00EAtre convoqu\u00E9es avec un ordre du jour \u00E0 fixer par le Conseil de l\u2019ordre.(5)Une assembl\u00E9e g\u00E9n\u00E9rale extraordinaire doit \u00EAtre convoqu\u00E9e dans le mois toutes les fois qu\u2019un cinqui\u00E8me des membres de l\u2019Assembl\u00E9e au moins en fait la demande \u00E9crite et pr\u00E9cise l\u2019ordre du jour. amended",
+                    "text_sha256": "a7964f236abefe57b1e47ab7d5dab3f39275b92846dc6dc0629ef04bd9aa7b4a",
                     "wording_sha256": "5dd1c0fcf0106cc7d076d4358695d4a733ded1a9f61f9626c8504fad70da1128"
                   }
                 ]
@@ -2601,6 +2849,8 @@
                 "from": [
                   {
                     "article_identity_sha256": "2bcf7567d4fec6a1a48c08e2007848bf9dbcf548c4e759da1cb252870d2dcfb5",
+                    "text": "Art. 16.(1)Le Conseil de l\u2019Ordre se compose du B\u00E2tonnier et de deux membres, dont le B\u00E2tonnier sortant; pour chaque tranche suppl\u00E9mentaire enti\u00E8re ou partielle de soixante-quinze avocats inscrits sur chacune des listes I et IV du tableau des avocats, le nombre des membres est augment\u00E9 de deux unit\u00E9s, sans d\u00E9passer le nombre de quinze membres.(2)Le Conseil de l\u2019Ordre \u00E9lu par l\u2019assembl\u00E9e g\u00E9n\u00E9rale annuelle entre en fonction le 15 septembre qui suit l\u2019assembl\u00E9e g\u00E9n\u00E9rale et reste en fonction pendant deux ans.(3)Le B\u00E2tonnier et les membres du Conseil de l\u2019ordre sont r\u00E9\u00E9ligibles.(4)Les membres du Conseil de l\u2019ordre autres que le B\u00E2tonnier et le B\u00E2tonnier sortant sont \u00E9lus parmi les avocats inscrits \u00E0 la liste I des avocats au scrutin secret et \u00E0 la majorit\u00E9 relative; dans les cas de parit\u00E9 de suffrage, le plus ancien en rang est \u00E9lu.En cas de vacance d\u2019un poste, le rempla\u00E7ant est coopt\u00E9 par le Conseil de l\u2019ordre.Le Conseil de l\u2019ordre ne peut comprendre en m\u00EAme temps qu\u2019un seul avocat d\u2019une m\u00EAme personne morale admise au tableau ou association d\u2019avocats.(5)Sur proposition du Conseil de l\u2019ordre, il peut \u00EAtre pourvu \u00E0 l\u2019attribution d\u2019un des si\u00E8ges du Conseil selon les r\u00E8gles de scrutin pr\u00E9vues pour la d\u00E9signation du B\u00E2tonnier, I\u2019attributaire de ce si\u00E8ge \u00E9tant d\u00E9sign\u00E9 comme le vice-b\u00E2tonnier.(6)Le Conseil de l\u2019ordre ne peut d\u00E9lib\u00E9rer que si la majorit\u00E9 des membres qui le composent est pr\u00E9sente. Si cette majorit\u00E9 ne peut \u00EAtre constitu\u00E9e pour cause de maladie, absence ou autres emp\u00EAchements, il est appel\u00E9 par le B\u00E2tonnier, pour compl\u00E9ter le nombre indispensable, des rempla\u00E7ants parmi les avocats inscrits \u00E0 la liste I des avocats. (7)Les d\u00E9cisions du Conseil de l\u2019ordre sont prises \u00E0 la majorit\u00E9 des membres votants. En cas de partage de voix, celle du B\u00E2tonnier est pr\u00E9pond\u00E9rante.",
+                    "text_sha256": "e87969f9e9db76c969142a112635b667b33b82b796addde79b95cf168676aa01",
                     "wording_sha256": "2c5ff5738d6c501a8fde2ac35e8c8b063b46d0b09b9ca102e95b4cdfaf646da5"
                   }
                 ],
@@ -2615,6 +2865,8 @@
                 "to": [
                   {
                     "article_identity_sha256": "89cfc38e229314684b90651b5822e44951d744a747705d5bac74260905401021",
+                    "text": "Art. 16.(1)Le Conseil de l\u2019Ordre se compose du B\u00E2tonnier et de deux membres, dont le B\u00E2tonnier sortant; pour chaque tranche suppl\u00E9mentaire enti\u00E8re ou partielle de soixante-quinze avocats inscrits sur chacune des listes I et IV du tableau des avocats, le nombre des membres est augment\u00E9 de deux unit\u00E9s, sans d\u00E9passer le nombre de quinze membres.(2)Le Conseil de l\u2019Ordre \u00E9lu par l\u2019assembl\u00E9e g\u00E9n\u00E9rale annuelle entre en fonction le 15 septembre qui suit l\u2019assembl\u00E9e g\u00E9n\u00E9rale et reste en fonction pendant deux ans.(3)Le B\u00E2tonnier et les membres du Conseil de l\u2019ordre sont r\u00E9\u00E9ligibles.(4)Les membres du Conseil de l\u2019ordre autres que le B\u00E2tonnier et le B\u00E2tonnier sortant sont \u00E9lus parmi les avocats inscrits \u00E0 la liste I des avocats au scrutin secret et \u00E0 la majorit\u00E9 relative; dans les cas de parit\u00E9 de suffrage, le plus ancien en rang est \u00E9lu.En cas de vacance d\u2019un poste, le rempla\u00E7ant est coopt\u00E9 par le Conseil de l\u2019ordre.Le Conseil de l\u2019ordre ne peut comprendre en m\u00EAme temps qu\u2019un seul avocat d\u2019une m\u00EAme personne morale admise au tableau ou association d\u2019avocats.(5)Sur proposition du Conseil de l\u2019ordre, il peut \u00EAtre pourvu \u00E0 l\u2019attribution d\u2019un des si\u00E8ges du Conseil selon les r\u00E8gles de scrutin pr\u00E9vues pour la d\u00E9signation du B\u00E2tonnier, I\u2019attributaire de ce si\u00E8ge \u00E9tant d\u00E9sign\u00E9 comme le vice-b\u00E2tonnier.(6)Le Conseil de l\u2019ordre ne peut d\u00E9lib\u00E9rer que si la majorit\u00E9 des membres qui le composent est pr\u00E9sente. Si cette majorit\u00E9 ne peut \u00EAtre constitu\u00E9e pour cause de maladie, absence ou autres emp\u00EAchements, il est appel\u00E9 par le B\u00E2tonnier, pour compl\u00E9ter le nombre indispensable, des rempla\u00E7ants parmi les avocats inscrits \u00E0 la liste I des avocats. (7)Les d\u00E9cisions du Conseil de l\u2019ordre sont prises \u00E0 la majorit\u00E9 des membres votants. En cas de partage de voix, celle du B\u00E2tonnier est pr\u00E9pond\u00E9rante.",
+                    "text_sha256": "e87969f9e9db76c969142a112635b667b33b82b796addde79b95cf168676aa01",
                     "wording_sha256": "2c5ff5738d6c501a8fde2ac35e8c8b063b46d0b09b9ca102e95b4cdfaf646da5"
                   }
                 ]
@@ -3627,6 +3879,12 @@
             "language": "fra",
             "note": "two publisher-dated states; each article is compared by its publisher-minted id and wording digest, and nothing about legal effect is asserted",
             "same_state": false,
+            "text_page": {
+              "first": "art_15",
+              "last": "art_16-new",
+              "page": 1,
+              "pages": 1
+            },
             "to": {
               "applicability_date": "2025-03-07",
               "applicable_to": null,
@@ -3970,6 +4228,7 @@
         "requested_date_to": "2025-03-07",
         "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
         "requested_language": "fra",
+        "text_rule": "R57: each entry of a changed, added or removed article on the page of the wording served carries the article\u0027s text as evidence_bundle serves it (text, and text_sha256, the SHA-256 of its UTF-8 bytes) when that side\u0027s state\u0027s rights admit its text, and null for both when they do not, so a reader can show the wording that changed; the changed, added and removed articles are cut into pages as a reading\u0027s are, in the rows\u0027 order, each page at most 50 articles and 98,304 bytes of their texts (UTF-8, both sides), an article whose texts alone pass that bound being a page of its own; page asks one (the first by default), text_page names it, its count and its first and last ids (null where nothing moved), and a page past the last of every comparison is refused anchor_not_in_version, as a reading\u0027s is; an article on another page, and an unchanged one, carries no text; the text is the publisher\u0027s as served, and every article\u0027s status is still decided by the wording digests alone",
         "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date",
         "wording_rule": "wording_sha256 is the SHA-256 of a canonical JSON array of [kind, text, target] for the Text and Reference tokens of the article\u0027s stored token stream, in order, with consecutive text merged into one entry (reference labels and targets included; note references, note bodies and modification markers excluded); wording_changed is true when it differs from the previous state of the same language, and any byte difference in the merged text or in a reference counts; paragraph and inline-formatting boundaries and whitespace-only nodes are not compared; wording_runs counts the first state and every change per language; distinct_wordings counts distinct digests per language",
         "work_key": "loi-1991-08-10-n3"
@@ -4366,6 +4625,7 @@
             "language": "fra",
             "note": "Both dates select the one text held, the act as published, applicable from 2024-02-01 (publisher); later versions are not held; the publisher\u0027s record names 2 consolidated versions of it whose applicability dates fall after 2024-02-10 and on or before 2024-10-31, applicable from 2024-03-11 to 2024-06-24 and from 2024-06-25 to 2024-09-29 (publisher); the publisher\u0027s record gives 2024-09-30 as the act\u0027s end-of-force date (dateNoLongerInForce), which falls after 2024-02-10 and on or before 2024-10-31",
             "same_state": true,
+            "text_page": null,
             "to": {
               "applicability_date": "2024-02-01",
               "applicable_to": null,
@@ -4729,6 +4989,7 @@
         "requested_date_to": "2024-10-31",
         "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
         "requested_language": "fra",
+        "text_rule": "R57: each entry of a changed, added or removed article on the page of the wording served carries the article\u0027s text as evidence_bundle serves it (text, and text_sha256, the SHA-256 of its UTF-8 bytes) when that side\u0027s state\u0027s rights admit its text, and null for both when they do not, so a reader can show the wording that changed; the changed, added and removed articles are cut into pages as a reading\u0027s are, in the rows\u0027 order, each page at most 50 articles and 98,304 bytes of their texts (UTF-8, both sides), an article whose texts alone pass that bound being a page of its own; page asks one (the first by default), text_page names it, its count and its first and last ids (null where nothing moved), and a page past the last of every comparison is refused anchor_not_in_version, as a reading\u0027s is; an article on another page, and an unchanged one, carries no text; the text is the publisher\u0027s as served, and every article\u0027s status is still decided by the wording digests alone",
         "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date",
         "wording_rule": "wording_sha256 is the SHA-256 of a canonical JSON array of [kind, text, target] for the Text and Reference tokens of the article\u0027s stored token stream, in order, with consecutive text merged into one entry (reference labels and targets included; note references, note bodies and modification markers excluded); wording_changed is true when it differs from the previous state of the same language, and any byte difference in the merged text or in a reference counts; paragraph and inline-formatting boundaries and whitespace-only nodes are not compared; wording_runs counts the first state and every change per language; distinct_wordings counts distinct digests per language",
         "work_key": "loi-1991-08-10-n3"
@@ -4769,6 +5030,16 @@
         ],
         "catalogue_chain_rule": "on lex-v3-luxembourg-index/9 the publisher catalogue\u0027s states of this work as this index read it, beside the held states: textless_states names each state of the catalogue in scope whose text this index does not hold, with why (text_status), and none of them is served in another\u0027s place; transitions is the chain of the work\u0027s French states (a state of another language takes its French state\u0027s interval), each from one state to the first state of the next later date, its kind how the first state\u0027s end meets that start (contiguous: the end the publisher states is the next start; derived: no end is stated, so the next start ends it; inclusive_suspected: the stated end is the day before the next start; hole: the stated end is before the next start; overlap: the stated end is after the next start; invalid: the stated end is on or before the state\u0027s own start), or to the next state of the same date (same_date), each span between those two states alone; gaps lists each hole, from the furthest end of the states that begin before it to the next start, which no state covers and nothing bridges; overlaps lists each span two states of different dates both cover, from the later start to the earlier of their ends; same_date lists each group of states of one date; unclear_end_days lists each day a suspected inclusive end gives to neither state; invalid_intervals lists each state whose end is on or before its start, which covers no date and whose permalink still opens it; every date here is the catalogue\u0027s own, and a gap in the catalogue is not a gap in the law",
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "force": {
+          "entry_into_force": [],
+          "in_force_status": [],
+          "no_longer_in_force": [],
+          "rule": "the publisher\u0027s own assertions about this act as a whole, on its work and its act as published (the work IRI followed by /jo), read verbatim from the index\u0027s fact table: in_force_status (jolux:inForceStatus, the publisher\u0027s token, not read), entry_into_force (jolux:dateEntryInForce) and no_longer_in_force (jolux:dateNoLongerInForce), each with its subject, value, datatype and evidence digest; an empty list says only that the index holds no such assertion; a consolidated version\u0027s own dates are its states\u0027 (applicability_date, applicable_to), a different fact; nothing here says whether the act applies to anyone, and status_on reads these dates for one date by a fixed rule",
+          "subjects": [
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo"
+          ]
+        },
         "gaps": [],
         "history_begins": "2024-02-01",
         "index_sha256": "\u003Cvaries-per-run\u003E",
@@ -4966,7 +5237,7 @@
           },
           {
             "item": "other_languages",
-            "reason": "an expression in a language the index holds no wording in is not listed; French expressions are not acquired (Decision 89)"
+            "reason": "an expression in a language the index holds no wording in is not listed; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
           },
           {
             "item": "annexes",
@@ -6234,7 +6505,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+          "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -6317,7 +6588,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+          "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -6406,7 +6677,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+          "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -6716,7 +6987,7 @@
           "phase": "exact_reference",
           "reason": null,
           "recognised": null,
-          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
         },
         "requested_after": null,
         "requested_date": null,
@@ -6860,7 +7131,7 @@
           "phase": "exact_reference",
           "reason": null,
           "recognised": null,
-          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
         },
         "requested_after": null,
         "requested_date": null,
@@ -7164,7 +7435,7 @@
           "phase": "exact_reference",
           "reason": null,
           "recognised": null,
-          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
         },
         "requested_after": "strict.803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4.05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
         "requested_date": null,
@@ -7580,7 +7851,7 @@
           "phase": "exact_reference",
           "reason": null,
           "recognised": null,
-          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
         },
         "requested_after": null,
         "requested_date": null,
@@ -7672,7 +7943,7 @@
           "phase": "exact_reference",
           "reason": null,
           "recognised": null,
-          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
         },
         "requested_after": null,
         "requested_date": null,
@@ -7967,7 +8238,7 @@
           "phase": "exact_reference",
           "reason": null,
           "recognised": null,
-          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
         },
         "requested_after": null,
         "requested_date": null,
@@ -8059,7 +8330,7 @@
           "phase": "exact_reference",
           "reason": null,
           "recognised": null,
-          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
         },
         "requested_after": null,
         "requested_date": null,
@@ -8188,7 +8459,7 @@
           },
           {
             "item": "other_languages",
-            "reason": "an expression in a language this index holds no wording in is not searched; French expressions are not acquired (Decision 89)"
+            "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
           },
           {
             "item": "article_text",
@@ -8223,7 +8494,7 @@
           "phase": "exact_reference",
           "reason": null,
           "recognised": null,
-          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
         },
         "requested_after": null,
         "requested_date": null,
@@ -8305,7 +8576,7 @@
           },
           {
             "item": "other_languages",
-            "reason": "an expression in a language this index holds no wording in is not searched; French expressions are not acquired (Decision 89)"
+            "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
           },
           {
             "item": "article_text",
@@ -8340,7 +8611,7 @@
           "phase": "exact_reference",
           "reason": null,
           "recognised": null,
-          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
         },
         "requested_after": null,
         "requested_date": null,
@@ -8440,7 +8711,7 @@
           },
           {
             "item": "other_languages",
-            "reason": "an expression in a language this index holds no wording in is not searched; French expressions are not acquired (Decision 89)"
+            "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
           },
           {
             "item": "article_text",
@@ -8475,7 +8746,7 @@
           "phase": "exact_reference",
           "reason": null,
           "recognised": null,
-          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
         },
         "requested_after": "strict.7ab119a143803f39c2c7bccb41c19504294baa152fdfda20607356624da54a2c",
         "requested_date": null,
@@ -8538,7 +8809,7 @@
           },
           {
             "item": "other_languages",
-            "reason": "an expression in a language this index holds no wording in is not searched; French expressions are not acquired (Decision 89)"
+            "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
           },
           {
             "item": "article_text",
@@ -8573,7 +8844,7 @@
           "phase": "exact_reference",
           "reason": null,
           "recognised": null,
-          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
         },
         "requested_after": null,
         "requested_date": null,
@@ -8639,7 +8910,7 @@
             "language": null,
             "text": "loi du 10 ao\u00FBt 1991"
           },
-          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
         },
         "requested_after": null,
         "requested_date": null,
@@ -8699,7 +8970,7 @@
             "language": "fra",
             "text": "article 15 de la loi du 10 ao\u00FBt 1991, 15 mars 2024"
           },
-          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
         },
         "requested_after": null,
         "requested_date": null,
@@ -8759,7 +9030,7 @@
             "language": "fra",
             "text": "article 15 de la loi du 10 ao\u00FBt 1991"
           },
-          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
         },
         "requested_after": null,
         "requested_date": null,
@@ -8810,7 +9081,7 @@
             "language": null,
             "text": "article 15 de la loi du 10 ao\u00FBt 1991, 31 f\u00E9vrier 2024"
           },
-          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
         },
         "requested_after": null,
         "requested_date": null,
@@ -8870,7 +9141,7 @@
             "language": "fra",
             "text": "Art. 15 de la loi du 10 ao\u00FBt 1991, dans sa version applicable au 1er f\u00E9vrier 2024"
           },
-          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
         },
         "requested_after": null,
         "requested_date": null,
@@ -8920,7 +9191,7 @@
             "language": null,
             "text": "Regulation (EU) 2016/679"
           },
-          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
         },
         "requested_after": null,
         "requested_date": null,
@@ -8980,7 +9251,7 @@
             "language": "eng",
             "text": "Article 99 of Regulation (EU) 2016/679"
           },
-          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+          "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
         },
         "requested_after": null,
         "requested_date": null,
@@ -9063,7 +9334,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+          "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
         },
         "what_would_answer": [
           "new_official_observation"

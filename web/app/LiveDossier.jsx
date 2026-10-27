@@ -19,7 +19,7 @@
 // Today, the calendar date in Luxembourg on the day the server answered (R13; the plan's item 3.4), is said under the
 // count of the versions held, so a reader holds each version's dates against today, never against a day assumed.
 
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { DOSSIER_LANGUAGES, LIVE_DOSSIER_IDLE, createDossierSession, dossierOutcome } from '../scripts/live-dossier.mjs';
@@ -29,7 +29,7 @@ import { ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/liv
 import { parseSitePath } from '../scripts/permalinks.mjs';
 import { answerHandedWith } from '../scripts/v3-client.mjs';
 import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
-import { fillCard, versionNameKey } from '../scripts/refusal-card.mjs';
+import { catalogueRecord, fillCard, versionNameKey } from '../scripts/refusal-card.mjs';
 import { todayAt } from '../scripts/initial-answer.mjs';
 import { TodayLine } from './Today.jsx';
 import { Breadcrumbs } from './Breadcrumbs.jsx';
@@ -160,6 +160,42 @@ function CatalogueChain({ chain }) {
 }
 
 /**
+ * The act's force as the publisher records it (R79, E3; index 9's `force`, read by `dossier-answer.mjs`): its status in the
+ * publisher's own token, its entry into force and the date from which it is no longer in force, each said with its role and as
+ * the publisher's (R21), and a note that this is the publisher's statement about the whole act, not a reading of it for anyone's
+ * situation. Nothing on an index of schema 8 or 6.
+ */
+function ForceFacts({ force }) {
+  if (force === null) return null;
+  const codes = (values) => values.map((value, index) => <Fragment key={value}>{index === 0 ? '' : COMMON.listSeparator}<code>{value}</code></Fragment>);
+  const dated = (values) => values.map((value, index) => (
+    <Fragment key={value}>{index === 0 ? '' : COMMON.listSeparator}<time dateTime={value}>{value}</time></Fragment>
+  ));
+  return (
+    <section data-force="">
+      <h3>{COPY.forceHeading}</h3>
+      <ul>
+        <li data-force-status={force.statuses.length}>
+          {force.statuses.length === 0
+            ? COPY.forceStatusNone
+            : <Say template={COPY.forceStatus} values={{ status: codes(force.statuses) }} />}
+        </li>
+        <li data-date-role="entry_into_force">
+          {force.entryIntoForce.length === 0
+            ? COPY.forceEntryNone
+            : <Say template={COPY.forceEntry} values={{ date: dated(force.entryIntoForce) }} />}
+        </li>
+        {force.noLongerInForce.length === 0 ? null : (
+          <li data-date-role="no_longer_in_force"><Say template={COPY.forceEnd} values={{ date: dated(force.noLongerInForce) }} /></li>
+        )}
+      </ul>
+      {force.otherForms === 0 ? null : <p>{COPY.forceOtherForms}</p>}
+      <p>{COPY.forceNote}</p>
+    </section>
+  );
+}
+
+/**
  * One dossier view, laid out: the work, its titles, its held states, today (`today`, the date in Luxembourg the answer was
  * given on, or null) and what it does not hold.
  */
@@ -172,6 +208,7 @@ export function DossierView({ view, today = null }) {
       </p>
       <DossierTitles titles={view.titles} />
       <AsPublished asPublished={view.asPublished} />
+      <ForceFacts force={view.force} />
       <p data-history="" id="dossier-states">
         <StatesSpan view={view} />
       </p>
@@ -290,6 +327,14 @@ export function DossierAnswerView({ outcome, onRetry }) {
   if (outcome.state === 'refusal' && outcome.card) {
     return (
       <section data-answer-state="refusal">
+        {/* An act the publisher's catalogue holds and this site holds no version of (R77): its work and its title, in the
+            title's own language, above its record. */}
+        {catalogueRecord(outcome.code, outcome.payload) ? (
+          <>
+            <h2 data-catalogue-record="">{outcome.payload.work_key}</h2>
+            {typeof outcome.payload.title === 'string' ? <p data-catalogue-title=""><span lang={quotationLanguageTag(outcome.payload.title_language)}>{outcome.payload.title}</span></p> : null}
+          </>
+        ) : null}
         <FailureFrame outcome={outcome} onRetry={onRetry}>
           <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
         </FailureFrame>

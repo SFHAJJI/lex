@@ -23,7 +23,8 @@ import {
   readingParameters,
 } from "../scripts/live-reading.mjs";
 import { withoutTextAt } from "../scripts/reading-page-samples.mjs";
-import { NAMES_WITHHELD_REASON, NAMES_WITHHELD_SENTENCE } from "../scripts/live-refusals.mjs";
+import { CATALOGUE_RECORD_SENTENCE, NAMES_WITHHELD_REASON, NAMES_WITHHELD_SENTENCE } from "../scripts/live-refusals.mjs";
+import { catalogueRecord } from "../scripts/refusal-card.mjs";
 
 /** A refusal's card as the screen shows it: one about this service (R60) inside the failure panel, under its line; any other alone. */
 const asShown = (outcome, card) => renderToStaticMarkup(h(FailureFrame, { outcome }, h("lex-card"))).replace("<lex-card></lex-card>", card);
@@ -167,7 +168,9 @@ test("the refusals a reading from this page can meet: cards where the card's rul
       envelope.refusal.helpful_payload = payload;
       const outcome = readingOutcome({ state: "refusal", envelope });
       const names = payload.reason === NAMES_WITHHELD_REASON;
-      assert.equal(outcome.sentence, names ? NAMES_WITHHELD_SENTENCE : LIVE_READING_REFUSAL_SENTENCES[code], code);
+      // R77: an act only the catalogue holds is said in its own sentence on every screen, its record in the card.
+      const record = catalogueRecord(code, payload);
+      assert.equal(outcome.sentence, names ? NAMES_WITHHELD_SENTENCE : record ? CATALOGUE_RECORD_SENTENCE : LIVE_READING_REFUSAL_SENTENCES[code], code);
       assert.equal(outcome.card, true, `${code}: the card's rules accept the platform's payload`);
       assert.doesNotThrow(() => view(outcome), code);
     }

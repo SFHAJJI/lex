@@ -95,6 +95,9 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::AsOfEurope, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::AsOfEuropeOf, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::AsOfEuropePinned, "
+                    // R77: an act only the catalogue holds is refused with its record (V3CorpusMount.CatalogueRecords.cs).
+                    + "method private instance Lex.V3.Api.V3CorpusMount::CatalogueOnlyRefusal, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::CatalogueRecordRefusal, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::DossierEurope, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::EuropeReference, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::EvidenceBundleEurope, "
@@ -115,6 +118,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNamesWithheld, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
+                    // An EU act outside the mounted EU population, refused out of scope (R80; V3CorpusMount.Scope.cs).
+                    + "method private instance Lex.V3.Api.V3CorpusMount::RefuseOutsideEuropePopulation, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseOutsideScope, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefusePageNotInVersion, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseTextless, "

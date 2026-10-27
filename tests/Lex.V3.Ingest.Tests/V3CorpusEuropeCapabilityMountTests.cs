@@ -172,7 +172,8 @@ public sealed class V3CorpusEuropeCapabilityMountTests
                 foreach (var (operation, request) in requests)
                 {
                     var envelope = await EnvelopeAsync(mount, "/api/v3/" + operation, operation, request);
-                    Assert.AreEqual("identifier_unknown", envelope.Refusal?.Code, $"{operation} {identifier}");
+                    // A CELEX the EU population does not hold is out of the corpus's scope (R80); the other absences stay unknown.
+                    Assert.AreEqual(identifier == "32099R9999" ? "out_of_corpus_scope" : "identifier_unknown", envelope.Refusal?.Code, $"{operation} {identifier}");
                     Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher, $"{operation} {identifier}");
                 }
             }
@@ -192,7 +193,7 @@ public sealed class V3CorpusEuropeCapabilityMountTests
             Assert.AreEqual("request_schema_invalid", problem.RootElement.GetProperty("code").GetString());
 
             var dossier = await EnvelopeAsync(mount, "/api/v3/dossier", "dossier", new { identifier = "32099R9999" });
-            Assert.AreEqual("identifier_unknown", dossier.Refusal?.Code);
+            Assert.AreEqual("out_of_corpus_scope", dossier.Refusal?.Code, "an EU act outside the EU population (R80)");
             Assert.AreEqual(PublisherId.EuEurLex, dossier.Context.Publisher);
         }
         finally

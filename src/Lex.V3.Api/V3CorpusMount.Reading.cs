@@ -304,7 +304,8 @@ internal sealed partial class V3CorpusMount
         using var notInVersion = JsonSerializer.SerializeToDocument(new
         {
             requested_anchor = "page=" + pages.Served.ToString(CultureInfo.InvariantCulture),
-            nearest_anchors = pages.Count switch { 0 => Array.Empty<string>(), 1 => new[] { "page=1" }, _ => new[] { "page=1", "page=" + last } },
+            // None cut (a comparison in which nothing moved, R57) still answers its first page, as one page does.
+            nearest_anchors = pages.Count switch { 0 or 1 => new[] { "page=1" }, _ => new[] { "page=1", "page=" + last } },
             do_not_fall_back_to_full_text_search = true,
             requested_page = pages.Served,
             pages = pages.Count,
