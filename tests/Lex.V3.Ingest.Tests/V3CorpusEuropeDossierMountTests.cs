@@ -104,8 +104,10 @@ public sealed class V3CorpusEuropeDossierMountTests
         Assert.AreEqual("eng", english.Result!.Value.GetProperty("requested_language").GetString());
         Assert.AreEqual(1, english.Result.Value.GetProperty("expression_count").GetInt32());
 
+        // An EU act outside the EU population the index holds is out of the corpus's scope, named with its rule (R80).
         var unknown = await EnvelopeAsync(mount, RawTarget, "dossier", new { identifier = "32099R9999" });
-        Assert.AreEqual("identifier_unknown", unknown.Refusal?.Code);
+        Assert.AreEqual("out_of_corpus_scope", unknown.Refusal?.Code);
+        Assert.AreEqual("eu_act_outside_population", unknown.Refusal!.HelpfulPayload.GetProperty("out_of_scope_class").GetString());
         Assert.AreEqual(PublisherId.EuEurLex, unknown.Context.Publisher);
 
         // A hand-edited index where one CELEX names two works (the builder ties each work root to one CELEX

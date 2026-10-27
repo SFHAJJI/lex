@@ -99,6 +99,81 @@ back).
     index holds a file's articles and no state (derive-c: 209, derive-r1: none); Coverage still counts those articles as
     served, which is Coverage's wording and outside this round. The textless forms say "shows" too (the French review's point).
 - **Not done:** R57's side-by-side view and its swap control; R56's gap rows on the reading's version list.
+## Review and repair (#1004): treaties never out of the population, How to read Lex as narrow as index 8 (sole driver, 2026-10-27)
+
+The independent review of #1004 (`writer/truth-and-coverage` at b02c978a) said REPAIR. The one repair round:
+- **F1 (high).** Over derive-c, a held treaty (`12016E`, `CELEX:12016P`, `12012E`) and an article of one (`12016E101`) answered
+  `out_of_corpus_scope`: the index holds a treaty by its "/TXT" part. A sector-1 CELEX is now never read as an act outside the
+  population (`identifier_unknown`, as before this branch), and any act held by its "/TXT" part counts as held. The scope test
+  holds five treaty forms over dossier, resolve and timeline.
+- **F2 (medium).** How to read Lex said Lex names a textless version and why where it holds another version; index 8, which
+  the live release mounts, names none. The sentence is dropped, and the last says "Lex never shows another version's text
+  as that version's" (on index 8 an act held as published answers later dates, labelled as published): only what holds on
+  every index, with or without R77's records.
+- **F3.** The R80 reason names the population only ("The EU population Lex's rule selects is the N acts of its seed list
+  (Decision 84), and X is not one of them."): 12 of derive-c's 82 seed acts hold no wording.
+- **F4.** CODE_RECUEIL is no longer declared "not collected" (run 15 collected its catalogue records with the codes); RCSF and
+  RBCL are admitted and awaiting a run, with no order claimed (O7, the owner's, is open); `admitted_first_awaiting_a_run` is
+  retired, and the rule names no role.
+- **F5.** The select and the checkbox stand in the controls' 44 px rule.
+- **Also said in the PR**: every `out_of_corpus_scope` law page is a 404 in both servers, the out-of-scope list's classes
+  included, and both still render the refusal card.
+- **French**: the one changed form reviewed by one independent reviewer (the supplement "the review of #1004, F2" in the
+  record), its recommended pair taken in both languages, byte for byte.
+- **Counts**: `dotnet build Lex.V3.slnx -c Release` 0 warnings; `Lex.V3.Tests` whole 3,375 (3,369 passed, 0 failed, 6 skipped);
+  the Ingest classes touched with every census class and the legacy replays 194 (191 passed, 0 failed, 3 skipped);
+  `Lex.V3.Ingest.Tests` whole 3,592 (3,547 passed, 0 failed, 45 skipped); `npm run build`, `npm test` 1,459 (1,456 passed,
+  0 failed, 3 skipped); `eng/verify-v3-tree.ps1` 1,776 tracked paths. No legacy row moved.
+
+## Truth and coverage: the six overclaims narrowed, R80, R79, R78/R82/R12 on Coverage, R62 and R65 (sole driver, 2026-10-27)
+
+The audit of 2026-10-27 (`C:\lex-v3\AUDIT-2026-10-27.md`, "Overclaims") found six public sentences that claimed more than the
+code does. Branch `writer/truth-and-coverage`, from v3/integration a0958bb9 (#1001 merged in at the start).
+- **The six overclaims**, each narrowed to what is true, in English and French:
+  - EU dossier and search: the other-languages row no longer says French is not acquired; it says Lex acquires the English and
+    French expressions of EU acts only (Decision 89) and EUR-Lex publishes an act's other language versions where they
+    exist (`V3CorpusMount`).
+  - Developers G3: the code can keep earlier builds by a retention rule; Lex does not keep them yet, the release holds only the
+    build its server mounts, so a version is re-verifiable only while a kept build holds its text (R89; no funding claim).
+  - Evaluation card: above its verdict, a line names the gates it holds (from the card) and what it does not hold: the data
+    gates, answer quality, speed, two systems, and the refusal codes no operation sends (from the refusal census).
+  - Privacy notice: the no-logging test runs on the server's own code before deployment; the hosting is set up from a template
+    with no log store; its settings once deployed are not tested this way. Driver decision (reversible): narrowed rather than
+    pinned in `main.bicep` with a probe check, which needs the managed environment in the template and Azure to test.
+  - How to read Lex: no longer promises that a textless version is named, or why (the review's F2, above); it keeps the
+    reasons a version can lack text and that Lex never shows another version's text as that version's.
+  - Home page: history and comparison are said of a Luxembourg act of which more than one version is held.
+- **R80**: an EU act the mounted EU population does not hold, named by its CELEX (as typed, after "CELEX:", in an EUR-Lex or
+  Publications Office address; sectors 0 to 4; a consolidated version or corrigendum read as its act), answers
+  `out_of_corpus_scope` (class `eu_act_outside_population`): the rule with the number of seed acts the index holds, the act's
+  EUR-Lex page, the Publications Office as who to ask, no list or digest (`V3CorpusMount.Scope.cs`). Only the request's
+  `identifier` is read; a sector-5 document stays `identifier_unknown`; a case stays the list's `eu_case_law`. Every screen
+  says it in its own sentence (`OUTSIDE_EU_POPULATION_SENTENCE`), never "a kind Lex never holds". A law page whose answer is that refusal
+  is a 404, as an unknown work's is, in both servers (`V3WebRoot.AnswersUnknownWork`, `serve-live.mjs`).
+- **R79 (E3)**: the Luxembourg dossier on index 9 carries `force`, the work's and its act as published's own `inForceStatus`,
+  `dateEntryInForce` and `dateNoLongerInForce`, verbatim (`V3CorpusMount.Force.cs`); the page says the status token, "Entry into
+  force" and "End of force" with the publisher's record, and that this is not a reading for anyone's situation (R21 held).
+- **R78, R82, R12**: coverage on index 9 carries `declared_scope`: every recognized Luxembourg class not held (the publisher's
+  codes but CODE, LOI and RGD, with the Mémorial B and communal regulations), each with a closed disposition; the EU languages
+  held of the 24 official ones; when Lex's own observations begin per publisher (the mounted log's first build, or the EU
+  collection's end from the build report, or not stated). Shown in both renderers; R26's EU sentence names no language.
+- **R62**: touch targets of 44 px (links in lists, summaries, controls, the info control). **R65**: a copy button under each
+  citation form, rendered only after the script finds `navigator.clipboard.writeText`; the server renders none.
+- **Not done**: the home page's robots marker per state in the deploy probe (#993's F2): `data/release-checks-ops` owns the
+  probe, and the driver's instruction kept this slice out of `deploy-probe.mjs`. ARGD has no name on Coverage (token only).
+- **Legacy answers**: the EU schema-5 answers recorded again on Linux (WSL Ubuntu 24.04.4, .NET 10.0.400, invariant
+  globalization, UTC) at 81fc8ac1: 15 rows, 3 moved by the other-languages sentence alone. Schema 8 and 6 did not move (the new
+  members are index 9's).
+- **French** (Decision 41): one independent reviewer (Claude, AI reviewer, not the author), the addendum of 2026-10-27 "truth
+  and coverage" and its supplement in `C:\lex-v3\lanes\fr-review\review.md`: 58 forms, 19 changed in French, applied byte for
+  byte; the English changed for truth in three (EUR-Lex publishes the other languages only where they exist).
+- **Counts** (this PC, Windows, no browser, no publisher traffic, no Azure). `dotnet build Lex.V3.slnx -c Release`: 0 warnings,
+  0 errors. `Lex.V3.Tests`, whole: 3,375 (3,369 passed, 0 failed, 6 skipped). `Lex.V3.Ingest.Tests`, whole, once: 3,592 (3,536
+  passed, 11 failed, 45 skipped); the eleven held an unheld EU CELEX to `identifier_unknown` and now hold R80's
+  `out_of_corpus_scope`; then the classes touched or found failing and every census class: 203 (199 passed, 1 failed, 3
+  skipped), that one updated likewise, and the seven EU identifier classes: 52 (51 passed, 0 failed, 1 skipped). `npm run
+  build` (30 state pages); `npm test`: 1,459 (1,456 passed, 0 failed, 3 skipped). `eng/verify-v3-tree.ps1`: 1,776 tracked
+  paths.
 
 ## Review and repair (#998): G2 exact, the change policy's digest, MCP failures, the out-of-scope forms (sole driver, 2026-10-27)
 

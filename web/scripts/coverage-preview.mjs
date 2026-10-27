@@ -333,10 +333,34 @@ function cells(language, periods) {
   }));
 }
 
+/**
+ * What the mount declares beside its counts (R78, R12; R82's languages are null, as on a mount with no EU index, which the
+ * platform's own census is): two Luxembourg classes it does not hold, each with its disposition, and when Lex's own
+ * observations of Legilux begin, on the first build the history's log records.
+ */
+function declaredScope() {
+  return {
+    europe_languages: null,
+    luxembourg_classes_not_held: [
+      { class: 'communal_regulations', disposition: 'out_of_scope' },
+      { class: 'RCSF', disposition: 'admitted_awaiting_a_run' },
+    ],
+    // The history's first build, 2026-08-31T23:00:00Z, is 1 September in Luxembourg.
+    observations_begin: [{ basis: 'first_build_in_log', date: '2026-09-01', publisher: 'lu-legilux' }],
+    rule: DECLARED_SCOPE_RULE,
+  };
+}
+
+/** The platform's rule for what the mount declares, as `V3CorpusMount.DeclaredScopeRule` words it. */
+const DECLARED_SCOPE_RULE =
+  'luxembourg_classes_not_held declares, once per class, each Luxembourg class this mount does not hold, with its disposition; '
+  + 'observations_begin gives, per publisher, when Lex’s own observations held here begin';
+
 function answer({ requestedLanguage, languages, capabilityCells }) {
   return {
     capability_cells: capabilityCells,
     counts_note: COUNTS_NOTE,
+    declared_scope: declaredScope(),
     history: history(),
     languages,
     languages_held: [...LANGUAGES_HELD],

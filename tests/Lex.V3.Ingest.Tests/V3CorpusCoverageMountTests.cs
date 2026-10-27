@@ -581,6 +581,12 @@ public sealed class V3CorpusCoverageMountTests
             "capability_cells[].operation", "capability_cells[].period_from", "capability_cells[].period_to",
             "capability_cells[].population",
             "counts_note",
+            // What the mount declares beside its counts on index 9 (R78, R82, R12): the Luxembourg classes it does not hold, each
+            // with its disposition, and when Lex's own observations begin; no EU index is mounted here, so europe_languages is null.
+            "declared_scope", "declared_scope.europe_languages", "declared_scope.luxembourg_classes_not_held",
+            "declared_scope.luxembourg_classes_not_held[].class", "declared_scope.luxembourg_classes_not_held[].disposition",
+            "declared_scope.observations_begin", "declared_scope.observations_begin[].basis",
+            "declared_scope.observations_begin[].date", "declared_scope.observations_begin[].publisher", "declared_scope.rule",
             "history", "history.history_begins", "history.log_records_builds", "history.note", "history.retention_policy",
             "history.snapshots_in_log", "history.snapshots_with_text", "history.snapshots_with_text[].built_at",
             "history.snapshots_with_text[].observation", "history.snapshots_with_text[].retained_as",
@@ -695,6 +701,52 @@ public sealed class V3CorpusCoverageMountTests
         Assert.IsNotNull(mount);
 
         AssertTransportProblem(await PostAsync(mount, CoverageRawTarget, body), "request_schema_invalid", StatusCodes.Status400BadRequest);
+    }
+
+    /// <summary>
+    /// What coverage declares beside its counts on index 9 (R78, R82, R12): every publisher legal-type code the build recognizes
+    /// but the held families (CODE, LOI, RGD) is declared once, with a disposition of the closed set, beside the two classes the
+    /// publisher types no code for; the EU languages held, of the EU's official ones, from the EU index; and when Lex's own
+    /// observations begin, the Luxembourg log's first build in Luxembourg's calendar, and the EU's not stated without a build report.
+    /// </summary>
+    [TestMethod]
+    public async Task OnIndexNineCoverageDeclaresTheClassesNotHeldTheEuLanguagesHeldAndWhenObservationsBegin()
+    {
+        var recognized = Lex.V3.Contracts.Source.Luxembourg.LuxembourgActClassManifest.RecognizedClassIris
+            .Select(static iri => iri[(iri.LastIndexOf('/') + 1)..])
+            .ToArray();
+        var declared = V3CorpusMount.LuxembourgClassesNotHeld.Select(static row => row.Class).ToArray();
+        CollectionAssert.AllItemsAreUnique(declared);
+        CollectionAssert.AreEquivalent(
+            // CODE_RECUEIL's catalogue records are collected with the codes (the review of #1004, F4), so it is not declared.
+            recognized.Except(new[] { "CODE", "LOI", "RGD", "CODE_RECUEIL" }).ToArray(),
+            declared.Except(new[] { "memorial_b", "communal_regulations" }).ToArray(),
+            "every recognized class but the held families is declared, once");
+        foreach (var row in V3CorpusMount.LuxembourgClassesNotHeld)
+        {
+            CollectionAssert.Contains(V3CorpusMount.LuxembourgClassDispositions.ToArray(), row.Disposition, row.Class);
+        }
+
+        var europe = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = europe;
+        await europe.AddLuxembourgMountAsync();
+        using var mount = await V3CorpusMount.OpenAsync(europe.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var body = (await CoverageAsync(mount)).Result!.Value;
+        var scope = body.GetProperty("declared_scope");
+        CollectionAssert.AreEqual(declared, scope.GetProperty("luxembourg_classes_not_held").EnumerateArray().Select(static row => row.GetProperty("class").GetString()).ToArray());
+        var languages = scope.GetProperty("europe_languages");
+        CollectionAssert.AreEqual(new[] { "eng" }, languages.GetProperty("held").EnumerateArray().Select(static language => language.GetString()).ToArray());
+        Assert.AreEqual(V3CorpusMount.EuropeOfficialLanguages, languages.GetProperty("official").GetInt32());
+        var begins = scope.GetProperty("observations_begin").EnumerateArray().ToArray();
+        Assert.HasCount(2, begins);
+        var firstBuild = DateTimeOffset.Parse(body.GetProperty("history").GetProperty("history_begins").GetString()!, CultureInfo.InvariantCulture);
+        Assert.AreEqual("lu-legilux", begins[0].GetProperty("publisher").GetString());
+        Assert.AreEqual("first_build_in_log", begins[0].GetProperty("basis").GetString());
+        Assert.AreEqual(LuxembourgCalendar.DateAt(firstBuild).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), begins[0].GetProperty("date").GetString());
+        Assert.AreEqual("eu-eurlex", begins[1].GetProperty("publisher").GetString());
+        Assert.AreEqual("not_stated", begins[1].GetProperty("basis").GetString(), "no build report states when the EU half was acquired");
+        Assert.AreEqual(JsonValueKind.Null, begins[1].GetProperty("date").ValueKind);
     }
 
     private static async Task<V3Envelope> CoverageAsync(V3CorpusMount mount, string? language = null)

@@ -210,6 +210,16 @@ const EN = Object.freeze({
     unclearEndDay: "{date} is the end the publisher's catalogue gives for one version, the day before the next begins; whether that day belongs to it is unclear, and this site gives it to neither.",
     invalidInterval: "The version from {date} has an end in the publisher's catalogue, {to}, on or before its own start, so it covers no date; its own link still opens it.",
     chainNote: "These are the dates of the publisher's catalogue as this site read it; a gap in the catalogue is not a gap in the law.",
+    // The act's force, as the publisher records it (R79, E3): its own status token and dates, each said with its role (R21),
+    // never read into whether the act applies to anyone.
+    forceHeading: "The act's force, as the publisher records it",
+    forceStatus: "Status, in the publisher's own words: {status}.",
+    forceStatusNone: "The publisher's record gives no status for this act.",
+    forceEntry: "Entry into force: {date} (the publisher's record).",
+    forceEntryNone: "The publisher's record gives no entry-into-force date for this act.",
+    forceEnd: "End of force: {date} (the publisher's record).",
+    forceOtherForms: "The publisher's record also gives an entry-into-force or end-of-force date in a form that is not a calendar date; it is not shown here.",
+    forceNote: "These are the publisher's own statements about the act as a whole, shown as it gives them. They say nothing of a particular article or version, and Lex does not say whether or how the act applies to anyone's situation.",
     // A state dated by its entry into force (S7a; R21), in the date column, and what that mark means, said once under the table.
     entryIntoForceDate: "no date stated (entry into force: {date})",
     entryIntoForceNote: "The mark “no date stated” means that the act's file states no exact applicability date; the date in brackets is the act's entry into force in the publisher's record, not an applicability date.",
@@ -303,6 +313,11 @@ const EN = Object.freeze({
     citeWithPermalink: "With its permalink",
     citeEvidence: "Evidence form",
     citeNotComposed: "Lex composes no usual citation for this article; its permalink cites it.",
+    // The copy button beside each citation form (R65), which only a browser running the page's script shows.
+    copyCitation: "Copy",
+    copyCitationLabel: "Copy: {form}",
+    citationCopied: "Citation copied.",
+    citationNotCopied: "This browser did not copy the citation; select its text instead.",
     // Reading by page (the plan's item 3.7): a long version's contents, by page, the pages shown, and the links to the pages
     // before and after them, which the page loads in place when it can.
     contents: "Contents",
@@ -534,6 +549,9 @@ const EN = Object.freeze({
     heading: "Evaluation card",
     target: "Run over: {target}",
     machineReadable: "The same card for machines, as JSON",
+    // What the card holds and what it does not (the audit of 2026-10-27, overclaim 3): said above its verdict, whatever it is,
+    // so "every machine gate on this card passes" is never read as every gate Lex has.
+    scope: "This card holds only the machine gates listed below ({gates}). It does not hold the gates on the data (that every count matches the publisher's and that every admitted file yields text), on the quality of answers, on speed, or on two systems deriving the same index, and it tests none of the refusal codes no operation sends ({codes}).",
     clean: "Every machine gate on this card passes, and every shuffled control caught its shuffle.",
     notClean: "{gates}, and {controls}.",
     gatesNotPassing: Object.freeze({
@@ -659,7 +677,7 @@ const EN = Object.freeze({
     title: "Luxembourg and EU law at a date you choose",
     eyebrow: "Search the law",
     heading: "Luxembourg and EU law at a date you choose",
-    intro: "Search the texts this site holds, open a law as it stood on the date you choose, see how each article changed, compare two dates, and export with citations anyone can check against the official source. Where the site does not hold a text or a date, it says so.",
+    intro: "Search the texts this site holds, open a law as it stood on the date you choose, and export with citations anyone can check against the official source. For a Luxembourg act of which the site holds more than one version, see whether each article's wording changed from one version to the next, and which articles differ between the versions of two dates. Where the site does not hold a text or a date, it says so.",
     aboutHeading: "What Lex is and is not",
     coverage: "This site holds {acts} of Luxembourg law, in {versions} with {articles}, as of the index built on {date}.",
     coverageUndated: "This site holds {acts} of Luxembourg law, in {versions} with {articles}; the index it holds records no build date.",
@@ -772,7 +790,7 @@ const EN = Object.freeze({
         heading: "When you read the site",
         request: "Each page you open and each search you send is a request from your browser to this site's server. The request carries your device's IP address, the address of the page and the technical details every browser sends. A search's words travel in the body of the request, never in the request's address; a link that keeps a search holds it in the part after the “#”, which your browser never sends.",
         host: "Microsoft, which hosts the site, carries each request to the server and its answer back to you, and handles the connection data this needs under its own terms.",
-        kept: "The server uses the request to answer it and to count it (see below), and writes nothing of it anywhere: it keeps no access log and no record of what is read or searched, and the hosting is set up with no log store and no monitoring service that would keep requests. This is tested: the server is run with requests carrying marked values (a search phrase, an IP address, a browser's name), and none of them may appear in anything it writes.",
+        kept: "The server uses the request to answer it and to count it (see below), and writes nothing of it anywhere: it keeps no access log and no record of what is read or searched. This is tested on the server's own code, before it is deployed: the server is run with requests carrying marked values (a search phrase, an IP address, a browser's name), and none of them may appear in anything it writes. The hosting is set up from a template that adds no log store and no monitoring service that would keep requests; the hosting's settings, once deployed, are not tested this way.",
         // The per-client limit (R109; V3ClientLimiter): what the server holds of an IP address, where, and for how long.
         limit: "So that no single IP address can overload the server, the server counts the requests that come from each IP address. For this it holds, in its working memory only, a fingerprint of the IP address beside a count of its recent requests. The fingerprint is computed with a secret key that is drawn at random, never written down and replaced every day; the IP address itself is not kept. Neither the fingerprint nor the count is ever written down, and both are forgotten at the latest about two minutes after the last request from that IP address, or when the server restarts. An IP address that sends too many requests at once or in a minute is asked to wait a moment.",
         nothingHeld: "Lex has no accounts and no sign-up, so it never knows who you are. Since it records nothing about a visit, and forgets the count above within minutes, it holds nothing about you that it could later show, correct or erase.",
@@ -987,7 +1005,7 @@ const EN = Object.freeze({
       }),
       textless: Object.freeze({
         heading: "Versions whose text Lex does not hold",
-        text: "Lex can know from the publisher's catalogue that a version exists without holding its text: its file may be a PDF, which Lex does not read; its licence may not allow Lex to show it; or Lex may not have collected it. Lex then names the version and says why it does not hold its text. It never shows another version's text in its place.",
+        text: "Lex can know from the publisher's catalogue that a version exists without holding its text: its file may be a PDF, which Lex does not read; its licence may not allow Lex to show it; or Lex may not have collected it. Lex never shows another version's text as that version's.",
         article: "An article held without text is named apart, under “{withoutText}”, and is never quoted, searched or exported as text.",
         annexes: "An EU annex the publisher provides only as images is never shown as text, searched, quoted or exported; Lex gives its official source.",
       }),
@@ -1175,7 +1193,7 @@ const EN = Object.freeze({
         no_corpus_mounted: "This server holds no law at the moment.",
         no_version_for_date: "No version the index holds covers the date; the payload gives the date its history begins and the nearest dates held before and after it.",
         not_transposable: "Only a directive is transposed, and this instrument is not one; the payload says why.",
-        out_of_corpus_scope: "The instrument is of a kind Lex never holds; the payload names it, its official place, the reason and who to ask, an institution or an official service and never a person.",
+        out_of_corpus_scope: "Lex does not hold the instrument, and the payload says why: it names the instrument, its official place, the reason and who to ask, an institution or an official service and never a person.",
         pinned_digest_mismatch: "The digest a permalink pins is not one Lex holds for that version; the payload gives the current digest and its permalink.",
         profiles_differ: "The two versions were read under different rule profiles, so they are not compared.",
         rate_limited: "Too many requests; the payload says when to ask again.",
@@ -1189,7 +1207,9 @@ const EN = Object.freeze({
         heading: "What Lex never holds",
         text: "An identifier that names one of these is refused with {code} by every operation that takes one, before anything is looked up. The list, {list}, names for each its official place and who to ask, an institution or an official service and never a person; each refusal names the list's digest, {digest}.",
         row: "{instrument}: {reason} For example {examples}. Official place: {official}. Who to ask: {who}.",
-        pending: "Not listed yet: communal regulations, whose official place is each commune's own; the decisions of Luxembourg's courts, which no identifier names exactly; and EU acts outside the EU population, until the EU index states the rule its population follows. Each still answers {code}.",
+        pending: "Not listed yet: communal regulations, whose official place is each commune's own, and the decisions of Luxembourg's courts, which no identifier names exactly. Each still answers {code}.",
+        // R80: an EU act outside the mounted EU population, refused by the mount itself, not by the list.
+        population: "An EU act outside the EU population this site holds, named by its CELEX, is refused with {code} too, though it is on no list: whether an act is outside depends on the EU index the server mounts. The refusal names the rule that population follows, with the number of acts on its seed list, and gives the act's page on EUR-Lex as its official place; it names neither the out-of-scope list nor its digest.",
       }),
       presentationHeading: "Two answers that are not refusals",
       presentation: Object.freeze({
@@ -1252,7 +1272,7 @@ const EN = Object.freeze({
         }),
         G3: Object.freeze({
           name: "Nothing is deleted from the log",
-          text: "Each build's events are the start of the next build's log, row for row. Texts are kept by the retention rule: the build mounted, every build listed as referenced by a published permalink, the last build of each day for {days} days and the first of each month. Every version the log names verifies while a kept build holds its text; one whose text no kept build holds is still named by the log, without its text, and a permalink to it no longer verifies.",
+          text: "Each build's events are the start of the next build's log, row for row. The code can keep earlier builds beside the one a server mounts, by a retention rule: every build listed as referenced by a published permalink, the last build of each day for {days} days and the first of each month. Lex does not keep them yet: the release this site serves holds only the build its server mounts. So a version the log names is re-verifiable only while a kept build holds its text, which today means the mounted build; one whose text no kept build holds is still named by the log, without its text, and a permalink to it no longer verifies.",
         }),
         G4: Object.freeze({
           name: "Answers as one build held them",
@@ -1268,7 +1288,7 @@ const EN = Object.freeze({
       heading: "How the API changes",
       versioned: "Each schema's identity ends in its version, as {example} does, and so does the registry's, {registry}. A change that removes or renames a member, or changes what one means, raises that version; the envelope admits no member it does not list, so a new member of the envelope raises its version too.",
       additive: "An answer's object, and a refusal's payload, may gain members within a version: a program ignores the members it does not know. Within a version of the registry, a payload never loses a field the registry requires of its code.",
-      digest: "Any change to an operation's definition, to a schema the registry names or to a refusal code changes the registry's digest, which every envelope carries: a program that keeps it learns of the change from the first answer after it. A fix to how an operation behaves that leaves its definition as it is keeps the digest, so the digest says when the contract changes, not when an answer does. The out-of-scope list is not part of the registry: every {code} refusal names the list's identity, {scopeList}, and its digest, {scopeListDigest}, which changes with any change to the list.",
+      digest: "Any change to an operation's definition, to a schema the registry names or to a refusal code changes the registry's digest, which every envelope carries: a program that keeps it learns of the change from the first answer after it. A fix to how an operation behaves that leaves its definition as it is keeps the digest, so the digest says when the contract changes, not when an answer does. The out-of-scope list is not part of the registry: every {code} refusal the list decides names the list's identity, {scopeList}, and its digest, {scopeListDigest}, which changes with any change to the list.",
       registryInEnvelope: "One member of the envelope names the registry's version, {member}: a new version of the registry changes the one value that member admits, and so the envelope's schema and its digest, without raising the envelope's own version. A program that holds the envelope's schema takes it again when the registry's version changes, and checks it against the digest the registry names.",
       closed: "The operations and the refusal codes are closed sets, changed only by a decision of the specification. An operation not served from data becomes served without a new version of the registry: its refusal gives way to answers.",
       notice: "There is no period of notice and no deprecation window: a change is published with the release that makes it, on this page and in the schemas it links.",

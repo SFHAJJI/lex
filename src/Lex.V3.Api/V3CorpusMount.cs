@@ -4633,7 +4633,7 @@ internal sealed partial class V3CorpusMount : IDisposable
     [
         ["later_wordings", "no consolidated version is held, so a later wording of the act is not searched and a date is not answered here"],
         ["corrigenda_applied", "corrigenda are recorded by the index and not applied to the wording searched"],
-        ["other_languages", "an expression in a language this index holds no wording in is not searched; French expressions are not acquired (Decision 89)"],
+        ["other_languages", "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act's other language versions where they exist"],
         ["article_text", "no snippet or article text is served; each hit names its provision, which resolve answers"],
     ];
 
@@ -5149,7 +5149,8 @@ internal sealed partial class V3CorpusMount : IDisposable
                 searchable_text_held = searchable.Contains(held.Language, StringComparer.Ordinal),
             })
             .ToArray();
-        using var result = JsonSerializer.SerializeToDocument(new
+        // What the mount declares beside its counts (R78, R82, R12), on index 9.
+        using var result = JsonSerializer.SerializeToDocument(WithDeclaredScope(new
         {
             scope = _textYield is null ? CoverageScope : CoverageScopeWithTextYield,
             counts_note = CoverageCountsNote,
@@ -5207,7 +5208,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                     : row)
                 .Select(static row => new { item = row[0], reason = row[1] })
                 .ToArray(),
-        });
+        }));
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "coverage_report", result.RootElement));
@@ -6339,7 +6340,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         var rows = scope.Select(state => WithCatalogueFacts(DossierStateRow(state, NextDateInLanguage(scope, state), notAdmitted), state)).ToArray();
         var asPublished = AsPublishedOf(states, scope);
 
-        using var result = JsonSerializer.SerializeToDocument(WithCatalogueChain(new
+        // The act's force, as the publisher asserts it (R79), on index 9.
+        using var result = JsonSerializer.SerializeToDocument(WithDossierForce(WithCatalogueChain(new
         {
             scope = DossierScope,
             requested_identifier = identifier,
@@ -6358,7 +6360,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             not_held = NotHeldRows(RulesByInterval ? DossierNotHeldNine : DossierNotHeld, asPublished),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader!.IndexRef.Sha256,
-        }, states[0].WorkKey, requestedLanguage));
+        }, states[0].WorkKey, requestedLanguage), states));
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "work_record", result.RootElement));
@@ -6377,7 +6379,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         ["force_dates", "no entry-into-force, application or end-of-validity date is held; the wording date is none of them"],
         ["document_type", "the publisher's document type is not held for EU works"],
         ["corrigenda", "corrigendum lines are recorded by the index per corrected work root and are not joined to the work here, because the join between a corrected work root and the work's publisher identifier is not established"],
-        ["other_languages", "an expression in a language the index holds no wording in is not listed; French expressions are not acquired (Decision 89)"],
+        ["other_languages", "an expression in a language the index holds no wording in is not listed; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act's other language versions where they exist"],
         ["annexes", EuropeAnnexesNotHeldReason],
     ];
 
@@ -7983,6 +7985,13 @@ internal sealed partial class V3CorpusMount : IDisposable
         string whatWouldAnswer = "an exact identifier present in the mounted corpus")
     {
         var owner = publisher ?? PublisherFor(identifier);
+        // An EU act the mounted EU population does not hold is out of the corpus's scope, named with its rule (R80), whichever
+        // path found it unknown: an identifier that names an EU act by its CELEX is the EU's, as "CELEX:…" is.
+        if (RefuseOutsideEuropePopulation(request, identifier, observedAt) is { } outside)
+        {
+            return outside;
+        }
+
         using var helpful = JsonSerializer.SerializeToDocument(new
         {
             requested_identifier = identifier,

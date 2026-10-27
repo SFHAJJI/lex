@@ -144,7 +144,7 @@ public sealed class V3CorpusEuropeSearchMountTests
         Assert.AreEqual(PublisherId.EuEurLex, french.Context.Publisher);
 
         var unknown = await EnvelopeAsync(mount, RawTarget, "search", new { query = Span, language = "eng", identifier = "32099R9999" });
-        Assert.AreEqual("identifier_unknown", unknown.Refusal?.Code);
+        Assert.AreEqual("out_of_corpus_scope", unknown.Refusal?.Code, "an EU act outside the population the EU index states (R80)");
         Assert.AreEqual(PublisherId.EuEurLex, unknown.Context.Publisher);
 
         var ranked = await EnvelopeAsync(mount, RawTarget, "search", new { query = Span, language = "eng", identifier = Celex, mode = "bm25" });

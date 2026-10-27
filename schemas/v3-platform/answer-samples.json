@@ -1355,6 +1355,127 @@
           }
         ],
         "counts_note": "counts are of rows the index holds; totals.articles and languages[].articles count the articles the index holds, and the corpus can have recorded more articles than the index holds: members.article_outcomes counts what it recorded; a missing publisher date is counted as missing and never dropped; articles_with_searchable_text is what the capability cells measure: each article with searchable text, at its own publisher date where it carries one, else at the date of the state that holds it, and an article with neither is not counted; so it and articles_without_publisher_date are not addends; when a language is requested, requested_language echoes it and only languages and capability_cells are narrowed to it, and every other member, totals included, is the whole mount\u0027s",
+        "declared_scope": {
+          "europe_languages": null,
+          "luxembourg_classes_not_held": [
+            {
+              "class": "Constitution",
+              "disposition": "awaiting_a_run"
+            },
+            {
+              "class": "AGD",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "ARGD",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "RMIN",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "AMIN",
+              "disposition": "admitted_where_regulatory_awaiting_a_run"
+            },
+            {
+              "class": "RCSF",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "RBCL",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "RILR",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "TC",
+              "disposition": "documentation_awaiting_a_run"
+            },
+            {
+              "class": "RECT",
+              "disposition": "corrective_awaiting_a_run"
+            },
+            {
+              "class": "ACC",
+              "disposition": "constitutional_review_awaiting_a_run"
+            },
+            {
+              "class": "memorial_b",
+              "disposition": "out_of_scope"
+            },
+            {
+              "class": "communal_regulations",
+              "disposition": "out_of_scope"
+            },
+            {
+              "class": "A",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "AGC",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "CONV",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "ORD",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "PROT",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "REG",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "RGC",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "RI",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "ST",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "ACCA",
+              "disposition": "out_of_scope"
+            },
+            {
+              "class": "RC",
+              "disposition": "out_of_scope"
+            },
+            {
+              "class": "DIV",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "PA",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "RECUEIL",
+              "disposition": "no_ruling_admits_it"
+            }
+          ],
+          "observations_begin": [
+            {
+              "basis": "first_build_in_log",
+              "date": "2026-10-01",
+              "publisher": "lu-legilux"
+            }
+          ],
+          "rule": "luxembourg_classes_not_held declares, once per class and by the publisher\u0027s legal-type code where it has one, each Luxembourg class this mount does not hold, with its disposition: awaiting_a_run (not admitted or refused by a ruling yet, and a bounded run, once authorised, would collect it), admitted_awaiting_a_run (admitted, and a later run, once authorised, collects it), admitted_where_regulatory_awaiting_a_run (only an act a role rule shows is regulatory), documentation_awaiting_a_run, corrective_awaiting_a_run and constitutional_review_awaiting_a_run (admitted, under that label only, never as statutory text), out_of_scope (not held and not planned), no_ruling_admits_it (not collected, and no ruling admits it yet); the families held are the text yield\u0027s; europe_languages names the languages the EU index holds wording in, of the EU\u0027s official languages; observations_begin gives, per publisher, when Lex\u0027s own observations held here begin: the first build the Luxembourg log records (first_build_in_log), and for the EU the completion of the one acquisition the mount holds, as its build report states it (acquisition_completed), or not_stated with a null date; date is that instant\u0027s calendar date in Luxembourg (the instant itself is history\u0027s first build time, or the EU channel\u0027s newest completed observation in the envelope\u0027s freshness)"
+        },
         "history": {
           "history_begins": "2026-10-01T08:00:00Z",
           "log_records_builds": true,
@@ -1591,6 +1712,127 @@
           }
         ],
         "counts_note": "counts are of rows the index holds; totals.articles and languages[].articles count the articles the index holds, and the corpus can have recorded more articles than the index holds: members.article_outcomes counts what it recorded; a missing publisher date is counted as missing and never dropped; articles_with_searchable_text is what the capability cells measure: each article with searchable text, at its own publisher date where it carries one, else at the date of the state that holds it, and an article with neither is not counted; so it and articles_without_publisher_date are not addends; when a language is requested, requested_language echoes it and only languages and capability_cells are narrowed to it, and every other member, totals included, is the whole mount\u0027s",
+        "declared_scope": {
+          "europe_languages": null,
+          "luxembourg_classes_not_held": [
+            {
+              "class": "Constitution",
+              "disposition": "awaiting_a_run"
+            },
+            {
+              "class": "AGD",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "ARGD",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "RMIN",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "AMIN",
+              "disposition": "admitted_where_regulatory_awaiting_a_run"
+            },
+            {
+              "class": "RCSF",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "RBCL",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "RILR",
+              "disposition": "admitted_awaiting_a_run"
+            },
+            {
+              "class": "TC",
+              "disposition": "documentation_awaiting_a_run"
+            },
+            {
+              "class": "RECT",
+              "disposition": "corrective_awaiting_a_run"
+            },
+            {
+              "class": "ACC",
+              "disposition": "constitutional_review_awaiting_a_run"
+            },
+            {
+              "class": "memorial_b",
+              "disposition": "out_of_scope"
+            },
+            {
+              "class": "communal_regulations",
+              "disposition": "out_of_scope"
+            },
+            {
+              "class": "A",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "AGC",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "CONV",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "ORD",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "PROT",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "REG",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "RGC",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "RI",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "ST",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "ACCA",
+              "disposition": "out_of_scope"
+            },
+            {
+              "class": "RC",
+              "disposition": "out_of_scope"
+            },
+            {
+              "class": "DIV",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "PA",
+              "disposition": "no_ruling_admits_it"
+            },
+            {
+              "class": "RECUEIL",
+              "disposition": "no_ruling_admits_it"
+            }
+          ],
+          "observations_begin": [
+            {
+              "basis": "first_build_in_log",
+              "date": "2026-10-01",
+              "publisher": "lu-legilux"
+            }
+          ],
+          "rule": "luxembourg_classes_not_held declares, once per class and by the publisher\u0027s legal-type code where it has one, each Luxembourg class this mount does not hold, with its disposition: awaiting_a_run (not admitted or refused by a ruling yet, and a bounded run, once authorised, would collect it), admitted_awaiting_a_run (admitted, and a later run, once authorised, collects it), admitted_where_regulatory_awaiting_a_run (only an act a role rule shows is regulatory), documentation_awaiting_a_run, corrective_awaiting_a_run and constitutional_review_awaiting_a_run (admitted, under that label only, never as statutory text), out_of_scope (not held and not planned), no_ruling_admits_it (not collected, and no ruling admits it yet); the families held are the text yield\u0027s; europe_languages names the languages the EU index holds wording in, of the EU\u0027s official languages; observations_begin gives, per publisher, when Lex\u0027s own observations held here begin: the first build the Luxembourg log records (first_build_in_log), and for the EU the completion of the one acquisition the mount holds, as its build report states it (acquisition_completed), or not_stated with a null date; date is that instant\u0027s calendar date in Luxembourg (the instant itself is history\u0027s first build time, or the EU channel\u0027s newest completed observation in the envelope\u0027s freshness)"
+        },
         "history": {
           "history_begins": "2026-10-01T08:00:00Z",
           "log_records_builds": true,
@@ -4788,6 +5030,16 @@
         ],
         "catalogue_chain_rule": "on lex-v3-luxembourg-index/9 the publisher catalogue\u0027s states of this work as this index read it, beside the held states: textless_states names each state of the catalogue in scope whose text this index does not hold, with why (text_status), and none of them is served in another\u0027s place; transitions is the chain of the work\u0027s French states (a state of another language takes its French state\u0027s interval), each from one state to the first state of the next later date, its kind how the first state\u0027s end meets that start (contiguous: the end the publisher states is the next start; derived: no end is stated, so the next start ends it; inclusive_suspected: the stated end is the day before the next start; hole: the stated end is before the next start; overlap: the stated end is after the next start; invalid: the stated end is on or before the state\u0027s own start), or to the next state of the same date (same_date), each span between those two states alone; gaps lists each hole, from the furthest end of the states that begin before it to the next start, which no state covers and nothing bridges; overlaps lists each span two states of different dates both cover, from the later start to the earlier of their ends; same_date lists each group of states of one date; unclear_end_days lists each day a suspected inclusive end gives to neither state; invalid_intervals lists each state whose end is on or before its start, which covers no date and whose permalink still opens it; every date here is the catalogue\u0027s own, and a gap in the catalogue is not a gap in the law",
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
+        "force": {
+          "entry_into_force": [],
+          "in_force_status": [],
+          "no_longer_in_force": [],
+          "rule": "the publisher\u0027s own assertions about this act as a whole, on its work and its act as published (the work IRI followed by /jo), read verbatim from the index\u0027s fact table: in_force_status (jolux:inForceStatus, the publisher\u0027s token, not read), entry_into_force (jolux:dateEntryInForce) and no_longer_in_force (jolux:dateNoLongerInForce), each with its subject, value, datatype and evidence digest; an empty list says only that the index holds no such assertion; a consolidated version\u0027s own dates are its states\u0027 (applicability_date, applicable_to), a different fact; nothing here says whether the act applies to anyone, and status_on reads these dates for one date by a fixed rule",
+          "subjects": [
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo"
+          ]
+        },
         "gaps": [],
         "history_begins": "2024-02-01",
         "index_sha256": "\u003Cvaries-per-run\u003E",
@@ -4985,7 +5237,7 @@
           },
           {
             "item": "other_languages",
-            "reason": "an expression in a language the index holds no wording in is not listed; French expressions are not acquired (Decision 89)"
+            "reason": "an expression in a language the index holds no wording in is not listed; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
           },
           {
             "item": "annexes",
@@ -8207,7 +8459,7 @@
           },
           {
             "item": "other_languages",
-            "reason": "an expression in a language this index holds no wording in is not searched; French expressions are not acquired (Decision 89)"
+            "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
           },
           {
             "item": "article_text",
@@ -8324,7 +8576,7 @@
           },
           {
             "item": "other_languages",
-            "reason": "an expression in a language this index holds no wording in is not searched; French expressions are not acquired (Decision 89)"
+            "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
           },
           {
             "item": "article_text",
@@ -8459,7 +8711,7 @@
           },
           {
             "item": "other_languages",
-            "reason": "an expression in a language this index holds no wording in is not searched; French expressions are not acquired (Decision 89)"
+            "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
           },
           {
             "item": "article_text",
@@ -8557,7 +8809,7 @@
           },
           {
             "item": "other_languages",
-            "reason": "an expression in a language this index holds no wording in is not searched; French expressions are not acquired (Decision 89)"
+            "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
           },
           {
             "item": "article_text",

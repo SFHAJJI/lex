@@ -451,6 +451,11 @@ test("the live server renders a law's address from the API's answer, refuses to 
       const unknown = await fetch(`${origin}/en/lu-legilux/no-such-work`);
       assert.equal(unknown.status, 404, "a work the API does not know is a page that is not there");
       assert.match(await unknown.text(), /dossier identifier_unknown/);
+      // An EU act outside the EU population the API holds (R80) is a page that is not there either.
+      answers.set("/api/v3/dossier", { result: null, refusal: { code: "out_of_corpus_scope" } });
+      const outside = await fetch(`${origin}/en/lu-legilux/no-such-work`);
+      assert.equal(outside.status, 404, "an act the API does not hold is a page that is not there");
+      assert.match(await outside.text(), /dossier out_of_corpus_scope/);
 
       answers.delete("/api/v3/evidence_bundle");
       const fallback = await fetch(`${origin}${permalink}`);
