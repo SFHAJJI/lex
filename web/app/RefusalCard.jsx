@@ -134,7 +134,11 @@ function Payload({ parts, copy }) {
               <dt>{row.key}</dt>
               {/* A declared null is the card's own sentence; any other value is the platform's, in English
                   where it is words, so a page in another language marks it English. */}
-              <dd lang={row.declaredNull ? undefined : ENGLISH_LANG}>{row.declaredNull ? copy.nullSentences[row.key] : row.value}</dd>
+              <dd lang={row.declaredNull ? undefined : ENGLISH_LANG}>
+                {row.declaredNull
+                  ? copy.nullSentences[row.key]
+                  : row.href === undefined ? row.value : <a href={row.href} rel="external">{row.value}</a>}
+              </dd>
             </div>
           ))}
         </dl>

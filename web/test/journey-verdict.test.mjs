@@ -57,6 +57,7 @@ import {
   REAL_MOUNT_EVENTS_VERIFIED,
   ABSENCE_NOTE,
   UNKNOWN_LAW_STEP,
+  UNKNOWN_LAW_WHO_TO_ASK,
   eventsFailures,
   apiJourneyRuns,
   specificationJourneyExpectations,
@@ -1114,7 +1115,7 @@ test("the specification's journeys the eight steps do not walk are held to their
   assert.equal(byJourney.J1.refusalCode, "no_version_for_date");
   assert.equal(byJourney.J2.state, "success");
   assert.equal(byJourney.J2.nothingToCite, true, "a search with no hit cites nothing, and says so");
-  assert.equal(byJourney.J5.refusalCode, "identifier_unknown");
+  assert.equal(byJourney.J5.refusalCode, "out_of_corpus_scope", "a CSSF circular is an instrument Lex never holds (the plan's item 6.10)");
   assert.deepEqual(byJourney.J5.step.body.parameters, { identifier: UNKNOWN_LAW });
 
   // J2's page with no hit is excused from citing only because it says it holds nothing, and it must say that
@@ -1278,12 +1279,12 @@ test("on the EU annex control mount the export composer pins both articles and s
   assert.ok(journeyVerdict({ ...observed, text: observed.text.replace("Save as PDF", "") }, expected).includes('the page does not show "Save as PDF"'), "no PDF offered");
 });
 
-test("on a real mount J5 must refuse identifier_unknown with the absence note whatever the API answers, and J2 says the note only when nothing was found", () => {
+test("on a real mount J5 must refuse out_of_corpus_scope naming who to ask, with the absence note, whatever the API answers, and J2 says the note only when nothing was found", () => {
   const steps = Object.fromEntries(realMountSteps({ corpus: {}, luxembourgIndex: {} }).map(([name, step]) => [name.slice(0, 2), step]));
   const j5 = realMountExpectations(steps.J5);
   assert.equal(steps.J5, UNKNOWN_LAW_STEP);
   for (const envelope of [{ verdict: "refuse", refusal: { code: "identifier_unknown" } }, { verdict: "answer", result: { value: {} } }]) {
-    assert.deepEqual(j5.refine(envelope), { state: "refusal", refusalCode: "identifier_unknown", texts: [ABSENCE_NOTE] },
+    assert.deepEqual(j5.refine(envelope), { state: "refusal", refusalCode: "out_of_corpus_scope", texts: [UNKNOWN_LAW_WHO_TO_ASK, ABSENCE_NOTE] },
       "an answer to a law the corpus does not hold would be the defect, so the page is held to the refusal regardless");
   }
   const j2 = realMountExpectations(steps.J2);
@@ -1356,8 +1357,8 @@ test("a page's expectation is the API's outcome, then the step's own refinement 
   const j5 = { step: UNKNOWN_LAW_STEP, ...realMountExpectations(UNKNOWN_LAW_STEP) };
   const held = expectedForAnswer(j5, { verdict: "answer", result: { value: {} } });
   assert.equal(held.state, "refusal", "a law the corpus does not hold must be refused even when the API answers it");
-  assert.equal(held.refusalCode, "identifier_unknown");
-  assert.deepEqual(held.texts, [ABSENCE_NOTE]);
+  assert.equal(held.refusalCode, "out_of_corpus_scope");
+  assert.deepEqual(held.texts, [UNKNOWN_LAW_WHO_TO_ASK, ABSENCE_NOTE]);
   const j2 = { step: NO_HIT_SEARCH_STEP, ...realMountExpectations(NO_HIT_SEARCH_STEP) };
   assert.deepEqual(expectedForAnswer(j2, answered).texts, [ABSENCE_NOTE], "the refinement sees the envelope the outcome came from");
   assert.equal(expectedForAnswer(j2, { verdict: "answer", result: { value: { hits: [{}] } } }).texts, undefined);

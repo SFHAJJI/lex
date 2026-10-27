@@ -456,8 +456,10 @@ internal sealed partial class V3WebRoot
     /// <paramref name="today"/> (Luxembourg's date, R13), and the text's language it names, and with neither is not rendered;
     /// a dossier asks by the work. An interface language's home page
     /// (<c>/en/</c>, <c>/en/index.html</c>) is rendered from <c>coverage</c>, asked with no parameters, as the page as built
-    /// asks it once loaded: its coverage line and today's date in Luxembourg (R11, R13; <c>web/scripts/live-home.mjs</c>).
-    /// Null for any other path.
+    /// asks it once loaded: its coverage line and today's date in Luxembourg (R11, R13; <c>web/scripts/live-home.mjs</c>). An
+    /// interface language's Developers page (<c>/en/developers.html</c>) is rendered from <c>browse</c> for the first act this
+    /// server holds, one row, which it shows whole as its live examples (the plan's item 8.4: "live examples from the
+    /// release's own data"; <c>web/scripts/developers.mjs</c>). Null for any other path.
     /// </summary>
     /// <remarks>
     /// A reading is read one page at a time (the plan's item 3.7): an address that names an article asks the page that holds
@@ -473,6 +475,11 @@ internal sealed partial class V3WebRoot
             if (string.Equals(path, $"/{home}/", StringComparison.Ordinal) || string.Equals(path, $"/{home}/index.html", StringComparison.Ordinal))
             {
                 return new V3SitePage(home, "home", "coverage", new Dictionary<string, object>(StringComparer.Ordinal));
+            }
+
+            if (string.Equals(path, $"/{home}/developers.html", StringComparison.Ordinal))
+            {
+                return new V3SitePage(home, "developers", "browse", new Dictionary<string, object>(StringComparer.Ordinal) { ["limit"] = 1 });
             }
         }
 

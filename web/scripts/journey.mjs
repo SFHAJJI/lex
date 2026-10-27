@@ -95,6 +95,7 @@ import { Session, findBrowser, launchBrowser } from "./browser-evidence.mjs";
 import { cspValue } from "./csp.mjs";
 import { EXPORT_WATERMARK } from "./export-build.mjs";
 import { EUROPE_TEXT_ACKNOWLEDGEMENT } from "./reading-answer.mjs";
+import { LIVE_DOSSIER_REFUSAL_SENTENCES } from "./live-dossier.mjs";
 import { TMP_MARGIN_MEBIBYTES, tmpMebibytesFor } from "./image-run.mjs";
 import { INTERFACE_LANGUAGES, anchorText, articlePermalink, currentAddress, dateOfQuery, escapeSegment, parseSitePath, sameAddressIn, withDateQuery } from "./permalinks.mjs";
 import { searchFragment } from "./search-address.mjs";
@@ -1574,14 +1575,14 @@ export function realMountSteps(report, held = null) {
  * What a real mount's page is held to beyond the API's outcome, for the specification's journeys:
  * - J1: the date precedes every held state, so the reading must refuse `no_version_for_date`, saying no earlier
  *   state is held, whatever the API answered (another date's text would be the defect);
- * - J5: the law is not held, so the dossier must refuse `identifier_unknown` with the absence note, whatever the
- *   API answered (an answer would be the defect);
+ * - J5: the law is a CSSF circular, which Lex never holds, so the dossier must refuse `out_of_corpus_scope` naming who to
+ *   ask, with the absence note, whatever the API answered (an answer would be the defect);
  * - J2: when the API finds no hit, the page must say that this is not evidence that the law does not exist; a
  *   population that does carry the words answers hits, held like any search.
  */
 export function realMountExpectations(step) {
   if (step === PRE_HISTORY_READING_STEP || step.preHistory === true) return { refine: () => ({ state: "refusal", refusalCode: "no_version_for_date", texts: [NO_EARLIER_STATE] }) };
-  if (step === UNKNOWN_LAW_STEP) return { refine: () => ({ state: "refusal", refusalCode: "identifier_unknown", texts: [ABSENCE_NOTE] }) };
+  if (step === UNKNOWN_LAW_STEP) return { refine: () => ({ state: "refusal", refusalCode: "out_of_corpus_scope", texts: [UNKNOWN_LAW_WHO_TO_ASK, ABSENCE_NOTE] }) };
   if (step === NO_HIT_SEARCH_STEP) return { refine: (envelope) => (expectedFromEnvelope(envelope).nothingToCite ? { texts: [ABSENCE_NOTE] } : {}) };
   return {};
 }
@@ -1852,8 +1853,16 @@ export const NO_HIT_SEARCH_STEP = Object.freeze({
   body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: NO_HIT_PHRASE, language: "fra", mode: "strict" }) }),
 });
 
-/** Journey J5: a law the corpus does not hold, asked for by its name. */
+/**
+ * Journey J5: a law the corpus does not hold, asked for by its name: a CSSF circular, which the out-of-scope list names
+ * (`V3OutOfScope`, the plan's item 6.10), so the dossier refuses it `out_of_corpus_scope` with its official place and who to
+ * ask, an institution and never a person.
+ */
 export const UNKNOWN_LAW = "Circulaire CSSF 20/747";
+
+/** Who to ask about J5's circular, as the out-of-scope list names it, and its official place. */
+export const UNKNOWN_LAW_WHO_TO_ASK = "Commission de surveillance du secteur financier (CSSF)";
+export const UNKNOWN_LAW_OFFICIAL_PLACE = "https://www.cssf.lu/";
 export const UNKNOWN_LAW_STEP = Object.freeze({
   path: "/en/dossier.html",
   cites: true,
@@ -1869,8 +1878,8 @@ export const UNKNOWN_LAW_STEP = Object.freeze({
  *   is held and where the history begins, never another date's text;
  * - J2, a question no held article carries: the search answers with no hit, says what was matched, and that
  *   this is not evidence that the law does not exist;
- * - J5, a law the corpus does not hold: the dossier refuses `identifier_unknown`, with the population this
- *   build searched and the same absence note.
+ * - J5, a law the corpus does not hold: a CSSF circular, which the dossier refuses `out_of_corpus_scope`, naming its
+ *   official place and who to ask (the CSSF, an institution), with the same absence note.
  */
 export function specificationJourneyExpectations() {
   const absence = ABSENCE_NOTE;
@@ -1879,7 +1888,7 @@ export function specificationJourneyExpectations() {
     // The plain no-hit card (the plan's item 4.5): what was searched, that only exact matching ran, the population searched and
     // the publishers' own search pages, above the absence note.
     ["J2, a question no article carries", { step: NO_HIT_SEARCH_STEP, state: "success", nothingToCite: true, texts: ["0 passages with the exact phrase, in 0 acts.", "What was searched", "Text: no article searched contains the phrase exactly as typed.", "Only exact matching ran on the text:", SEARCH_SEARCHED_SAID, "Legilux search, for Luxembourg law", "EUR-Lex advanced search, for EU law", absence] }],
-    ["J5, a law not held", { step: UNKNOWN_LAW_STEP, state: "refusal", refusalCode: "identifier_unknown", texts: ["This build's Luxembourg index holds 1 Luxembourg work, with states dated from 2024-02-01 to 2024-02-01.", absence] }],
+    ["J5, a law not held", { step: UNKNOWN_LAW_STEP, state: "refusal", refusalCode: "out_of_corpus_scope", texts: [LIVE_DOSSIER_REFUSAL_SENTENCES.out_of_corpus_scope, UNKNOWN_LAW_WHO_TO_ASK, UNKNOWN_LAW_OFFICIAL_PLACE, absence] }],
   ];
 }
 

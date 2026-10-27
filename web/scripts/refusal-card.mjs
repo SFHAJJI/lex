@@ -26,7 +26,7 @@
 
 import { TOKENS, mark } from './design-tokens.mjs';
 import { quotedLaw } from './localization.mjs';
-import { handoffUri } from './routes.mjs';
+import { handoffUri, outOfScopeUri } from './routes.mjs';
 import { parseObjectUrl } from './urls.mjs';
 import { isCalendarDate, requireCalendarDate } from './temporal.mjs';
 
@@ -341,7 +341,7 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     // mandate is the floor and this producer happens to stand above it.
     optional: Object.freeze(['rule_profile_sha256s', 'digest_rule']),
     basis:
-      'lex-v3-operation-registry/1: pinned_digest_mismatch carries requested_digest, ' +
+      'lex-v3-operation-registry/2: pinned_digest_mismatch carries requested_digest, ' +
       'current_digest, stable_coordinate, current_hash_pinned_url',
   }),
   ambiguous_version: Object.freeze({
@@ -389,7 +389,7 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     // `evidence_bundle`; a payload that carries neither set in full is held to the registry's.
     alternatives: Object.freeze([Object.freeze(['official_uri', 'gazette_chain'])]),
     basis:
-      'lex-v3-operation-registry/1: text_not_available carries official_identity, ' +
+      'lex-v3-operation-registry/2: text_not_available carries official_identity, ' +
       'official_source, retained_transport_evidence',
   }),
   retrieval_mode_unavailable: Object.freeze({
@@ -401,9 +401,10 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     // threw on the refusal `search` actually produces. It stays renderable when a producer does
     // disclose a fallback; it is no longer demanded from producers that correctly do not.
     keys: Object.freeze(['requested_mode', 'available_modes']),
-    optional: RECOGNISED_KEYS,
+    // An operation served from no data names the data that would serve it (the plan's item 8.6).
+    optional: Object.freeze([...RECOGNISED_KEYS, 'data_needed']),
     basis:
-      'lex-v3-operation-registry/1: retrieval_mode_unavailable carries requested_mode, ' +
+      'lex-v3-operation-registry/2: retrieval_mode_unavailable carries requested_mode, ' +
       'available_modes',
   }),
   identifier_unknown: Object.freeze({
@@ -431,8 +432,16 @@ export const REQUIRED_PAYLOAD = Object.freeze({
       'with the population disclosure"',
   }),
   out_of_corpus_scope: Object.freeze({
-    keys: Object.freeze(['population_disclosure']),
-    basis: '35-ideal-ux: the same population disclosure as the unresolved identifier',
+    // What the platform sends (the registry's version 2, the plan's item 6.10): the four elements 36-ideal-evaluation.md §4
+    // mandates, the instrument asked for, its official place, a one-sentence reason and who to ask (an institution or an
+    // official service, never a person), with the class, the instrument in words and the list's identity and digest.
+    keys: Object.freeze(['requested_identifier', 'official_source', 'reason', 'who_to_ask']),
+    optional: Object.freeze(['out_of_scope_class', 'instrument', 'what_would_answer_detail', 'scope_list', 'scope_list_sha256']),
+    // The preview surfaces' own producers say the population disclosure alone, and are held to that set.
+    alternatives: Object.freeze([Object.freeze(['population_disclosure'])]),
+    basis:
+      'lex-v3-operation-registry/2: out_of_corpus_scope carries requested_identifier, ' +
+      'official_source, reason, who_to_ask',
   }),
 
   // advice_boundary's obligation is not payload keys. The fixed template owes the reader
@@ -503,7 +512,23 @@ function isPresent(value) {
  * structured shapes this module renders itself. Anything else is refused here rather than
  * stringified on screen.
  */
-const STRUCTURED_KEYS = new Map([['ambiguous_version', new Set(['candidates'])]]);
+const STRUCTURED_KEYS = new Map([['ambiguous_version', new Set(['candidates'])], ['out_of_corpus_scope', new Set(['who_to_ask'])]]);
+
+/**
+ * `out_of_corpus_scope`'s official place and who to ask (the registry's version 2): two links to the institution's own site,
+ * on the out-of-scope list's hosts, and who to ask named by its institution, in the role the list gives it. A link the list
+ * does not name is a link nobody checked, so the card refuses it rather than show it.
+ */
+function requireOutOfScope(payload) {
+  outOfScopeUri(own(payload, 'official_source'));
+  const who = own(payload, 'who_to_ask');
+  if (who === null || typeof who !== 'object' || Array.isArray(who)) throw new Error('out_of_corpus_scope names who to ask as an object: its name, link and role');
+  const keys = Object.keys(who).sort();
+  if (JSON.stringify(keys) !== JSON.stringify(['link', 'name', 'role'])) throw new Error(`out_of_corpus_scope's who_to_ask carries ${keys.join(', ')}, not its name, link and role`);
+  if (typeof who.name !== 'string' || who.name.trim().length === 0) throw new Error("out_of_corpus_scope's who_to_ask names no institution");
+  if (who.role !== 'information') throw new Error(`out_of_corpus_scope's who_to_ask has the role ${JSON.stringify(who.role)}, which the list does not give`);
+  outOfScopeUri(who.link);
+}
 
 /**
  * Read a declared payload member, own properties only.
@@ -1213,6 +1238,7 @@ function requirePayload(code, payload) {
 
   if (code === 'ambiguous_version') requireCandidates(payload);
   if (code === 'profiles_differ') requireProfiles(payload);
+  if (code === 'out_of_corpus_scope' && !alternative) requireOutOfScope(payload);
 }
 
 /**
@@ -1324,6 +1350,12 @@ export function payloadParts(code, payload) {
       });
     } else if (key === 'nearest_anchors' && Array.isArray(value)) {
       structured.push({ kind: 'chips', key, className: 'refusal-anchors', values: value });
+    } else if (code === 'out_of_corpus_scope' && key === 'official_source' && typeof value === 'string') {
+      // The official place, as the payload gives it, linked.
+      rows.push({ key, value, href: outOfScopeUri(value) });
+    } else if (code === 'out_of_corpus_scope' && key === 'who_to_ask' && typeof value === 'object') {
+      // Who to ask: the institution by its name, linked to its site.
+      rows.push({ key, value: value.name, href: outOfScopeUri(value.link) });
     } else if (value === null) {
       rows.push({ key, value: NULL_SENTENCE.get(key), declaredNull: true });
     } else {
@@ -1353,9 +1385,9 @@ function renderPayload(code, payload) {
     ? '<dl class="refusal-payload">' +
       parts.rows
         .map(
-          ({ key, value }) =>
+          ({ key, value, href }) =>
             `<div class="strip-row"><dt>${escapeHtml(key)}</dt>` +
-            `<dd>${escapeHtml(value)}</dd></div>`,
+            `<dd>${href === undefined ? escapeHtml(value) : `<a href="${escapeHtml(href)}" rel="external">${escapeHtml(value)}</a>`}</dd></div>`,
         )
         .join('') +
       '</dl>'

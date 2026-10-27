@@ -4,15 +4,23 @@
 // - the operations, the refusal codes with the fields each payload must carry, the verdicts and the registry's digest: the
 //   census's `contract` block (`schemas/v3-platform/envelope-samples.json`), which `V3EnvelopeSamplesTests` reads from the
 //   reviewed registry itself (`V3OperationRegistry.Reviewed`) and holds byte for byte;
-// - which operations this server serves, and the data that would serve each one it does not: the census's coverage answer,
-//   whose operations block the platform computes from its routes (`V3RestRouteBinding.Served`, `V3UnservedOperations`);
+// - which operations this server serves, and, for each one it serves from no data, the typed refusal every request for it
+//   answers inside the envelope and the data that would serve it: the census's coverage answer, whose operations block the
+//   platform computes from its routes (`V3RestRouteBinding.Served`, `V3UnservedOperations`);
+// - each refusal code's payload schema, and the out-of-scope list (what Lex never holds, with each class's official place
+//   and who to ask): the census's `contract` block, from `V3OperationRegistry` and `V3OutOfScope`;
 // - each operation's parameters and the envelope's members: the request schemas and the envelope schema, the very files the
 //   API embeds and checks against the registry's digests when it loads them (`V3PlatformSchemaDocuments`);
 // - the events log's delivery, in the platform's own words: the census of answers (`answer-samples.json`).
 //
-// A few facts live only in the API's code: the MCP protocol version and methods, the request body's ceiling and the
-// transport failures below the envelope. They are named here once, and `reference-pages.test.mjs` holds each to the C# it
-// comes from, so a change there fails the web suite until this page says it.
+// A few facts live only in the API's code: the MCP protocol version, methods and instructions, the request body's ceiling,
+// the transport failures below the envelope, and the replay guarantees with the tests that hold them. They are named here
+// once, and `reference-pages.test.mjs` holds each to the C# it comes from, so a change there fails the web suite until this
+// page says it.
+//
+// The live examples (the plan's item 8.4: "live examples from the release's own data") are not built: both servers render
+// this page, as they render the home page, from their own answer to `browse` for the first act they hold (`sitePageFor`,
+// `ssr-entry.jsx`), so the page shows what the release serving it answers; the page as built says it carries none.
 //
 // The schemas are published beside the pages, byte for byte, under `/schemas/v3-platform/`, each named by its file with
 // `.schema.json` shortened to `.json` (both servers serve one extension per file: `V3WebRoot`'s and `serve-live.mjs`'s
@@ -29,7 +37,54 @@ export const MCP_ENDPOINT = "/mcp";
 export const MCP_PROTOCOL_VERSION = "2025-06-18";
 
 /** The JSON-RPC methods the MCP endpoint answers (`V3McpJsonRpc.HandleAsync`); any other is "Method not found". */
-export const MCP_METHODS = Object.freeze(["initialize", "tools/list", "tools/call"]);
+export const MCP_METHODS = Object.freeze(["initialize", "ping", "tools/list", "tools/call"]);
+
+/**
+ * What the MCP endpoint tells a client at `initialize`, as its `instructions` (the MCP specification, 2025-06-18; the plan's
+ * item 8.5): `V3McpJsonRpc.Instructions`, word for word, in the API's English.
+ */
+export const MCP_INSTRUCTIONS =
+  "Lex answers from the Luxembourg and EU legal texts this server holds, and every tool returns one Lex V3 envelope " +
+  "(lex-v3-envelope/1) as structuredContent, the same envelope the REST route POST /api/v3/{operation} returns. " +
+  "A refusal is an answer, not an error: its verdict is refuse, isError stays false, and its refusal names one code of the " +
+  "registry's closed twenty with a payload saying what was asked, what this server holds and what would answer; read the " +
+  "payload rather than retrying another way. A transport or protocol failure is a JSON-RPC error, never an envelope. " +
+  "A Luxembourg date is the publisher's applicability date; an EU wording date is never an applicability date; the two are " +
+  "never merged. An absence in this server is not evidence that a law does not exist. Every envelope names the registry " +
+  "digest it is bound to (registry_sha256) and its context says how current the data is. Lex shows the published text of " +
+  "the law; it does not say whether or how it applies to anyone's situation and is not legal advice.";
+
+/**
+ * The replay guarantees of `33-product-spec.md`, G1 to G5, in its order, each with the test that holds it on the real
+ * handler (`V3ReplayGuaranteesTests`, which `reference-pages.test.mjs` reads); what the page says each one is, as this server
+ * supports it, is in the chrome table under `developers.replay.guarantees`.
+ */
+export const REPLAY_GUARANTEES = Object.freeze([
+  Object.freeze({ id: "G1", test: "AReplacedPublisherFileIsAFileReplacedEventAndANewVersionIdOnlyWhenItsTextChanged" }),
+  Object.freeze({ id: "G2", test: "EveryServedOperationAnswersTheSameBytesFromTheSameSnapshotFromACopyOfItAndLater" }),
+  Object.freeze({ id: "G3", test: "NothingIsHardDeletedAcrossBuildsEveryEventIsCarriedAndEveryStateTheLogNamesStillVerifies" }),
+  Object.freeze({ id: "G4", test: "EverySnapshotTheLogNamesAnswersAsObservedWhatThatBuildAnsweredBoundedByItsBuildTime" }),
+  Object.freeze({ id: "G5", test: "OneEvidenceBundleAndThePublisherFileAreEnoughToCheckItsTextAndRecomputeItsDerivedDigests" }),
+]);
+
+/**
+ * How many days the retention rule keeps the last build of each day (`V3GenerationRetention.NightlyDays`, S7-A09), which G3
+ * says.
+ */
+export const RETENTION_NIGHTLY_DAYS = 90;
+
+/**
+ * When the registry took its current version, and the version before it (the plan's item 6.10, 2026-10-27): the change
+ * policy's history names both.
+ */
+export const REGISTRY_VERSION_SINCE = "2026-10-27";
+export const PREVIOUS_REGISTRY_SCHEMA = "lex-v3-operation-registry/1";
+
+/** Where the replay guarantees' tests are, in the repository. */
+export const REPLAY_TESTS = "tests/Lex.V3.Ingest.Tests/V3ReplayGuaranteesTests.cs";
+
+/** The request the server renders this page's live examples from (`sitePageFor`): the first act it holds, one row. */
+export const LIVE_EXAMPLE_REQUEST = Object.freeze({ operation_id: "browse", parameters: Object.freeze({ limit: 1 }) });
 
 /** The largest request body the API reads, in bytes (`V3PlatformHost.MaximumRequestBytes`); a larger one answers request_too_large. */
 export const MAXIMUM_REQUEST_BYTES = 1024 * 1024;
@@ -52,7 +107,6 @@ export const TRANSPORT_PROBLEMS = Object.freeze([
   Object.freeze({ code: "unknown_operation", title: "Unknown operation", status: 400 }),
   Object.freeze({ code: "method_not_allowed", title: "Method not allowed", status: 405 }),
   Object.freeze({ code: "unknown_route", title: "Unknown route", status: 404 }),
-  Object.freeze({ code: "operation_not_served", title: "Operation registered and not served", status: 404 }),
   Object.freeze({ code: "internal_response_invalid", title: "Internal response invalid", status: 500 }),
   Object.freeze({ code: "internal_failure", title: "Internal failure", status: 500 }),
 ]);
@@ -73,7 +127,7 @@ export function publishedSchemaPath(file) {
 export function schemaFileFor(schemaId) {
   if (schemaId === "lex-v3-envelope/1") return "envelope.schema.json";
   if (schemaId === "lex-v3-refusal/1") return "refusal.schema.json";
-  const match = /^lex-v3-([a-z_]+)-(request|result)\/1$/.exec(schemaId);
+  const match = /^lex-v3-([a-z_]+)-(request|result|payload)\/1$/.exec(schemaId);
   if (match === null) throw new Error(`${JSON.stringify(schemaId)} names no schema of the platform`);
   return `${match[1].replaceAll("_", "-")}-${match[2]}.schema.json`;
 }
@@ -103,7 +157,7 @@ export function developersModel({ census, answers, schemas }) {
   const coverage = required(census.envelopes.find((entry) => entry.operation === "coverage" && entry.envelope.result !== null), "coverage answer");
   const operationsBlock = required(coverage.envelope.result.value.operations, "operations block in the coverage answer");
   const served = new Set(operationsBlock.served_operations);
-  const notServedData = new Map(operationsBlock.not_served_data.map((row) => [row.operation, row.data_needed]));
+  const notServedData = new Map(operationsBlock.not_served_data.map((row) => [row.operation, row]));
   const registered = contract.operations.map((operation) => operation.operation_id);
   const listed = [...operationsBlock.served_operations, ...operationsBlock.not_served_operations].sort();
   if (JSON.stringify(listed) !== JSON.stringify([...registered].sort())) {
@@ -118,16 +172,24 @@ export function developersModel({ census, answers, schemas }) {
     const requiredNames = new Set(parameters.required ?? []);
     const isServed = served.has(id);
     if (!isServed && !notServedData.has(id)) throw new Error(`${id} is not served and the coverage answer names no data that would serve it`);
+    const unserved = isServed ? null : notServedData.get(id);
+    if (unserved !== null && (typeof unserved.reason !== "string" || typeof unserved.requested_mode !== "string")) {
+      throw new Error(`${id} is not served and the coverage answer names no typed refusal for it`);
+    }
     return {
       id,
       served: isServed,
       rest: `${REST_PREFIX}${id}`,
-      tool: isServed ? id : null,
+      // Every registered operation is a tool, as every one has a REST route: the served ones, and the ones served from no
+      // data, which refuse inside the envelope.
+      tool: id,
       objectTypes: [...operation.result_object_types],
       parameters: Object.entries(parameters.properties ?? {}).map(([name, schema]) => ({ name, required: requiredNames.has(name), schema })),
       requestSchema: request,
       resultSchema: result,
-      dataNeeded: isServed ? null : notServedData.get(id),
+      dataNeeded: unserved?.data_needed ?? null,
+      refusalCode: unserved?.reason ?? null,
+      requestedMode: unserved?.requested_mode ?? null,
     };
   });
 
@@ -144,7 +206,14 @@ export function developersModel({ census, answers, schemas }) {
     operations,
     served: operations.filter((operation) => operation.served).length,
     verdicts: [...contract.verdicts],
-    refusals: contract.refusals.map((refusal) => ({ code: refusal.code, fields: [...refusal.mandatory_payload_fields] })),
+    refusals: contract.refusals.map((refusal) => {
+      const payloadSchema = schemaOf(required(refusal.payload_schema, `payload schema of ${refusal.code}`));
+      if (payloadSchema.sha256 !== refusal.payload_schema_sha256) throw new Error(`${payloadSchema.file} is not the payload schema the registry names for ${refusal.code}`);
+      const declared = byFile.get(payloadSchema.file).json.required ?? [];
+      if (JSON.stringify(declared) !== JSON.stringify(refusal.mandatory_payload_fields)) throw new Error(`${payloadSchema.file} requires ${declared.join(", ")}, not the registry's fields for ${refusal.code}`);
+      return { code: refusal.code, fields: [...refusal.mandatory_payload_fields], payloadSchema };
+    }),
+    outOfScope: outOfScopeOf(required(contract.out_of_scope, "out-of-scope list in the census's contract block")),
     envelope: { schema: envelopeSchema, members: [...envelopeJson.required], contextMembers: Object.keys(context).sort() },
     refusalSchema,
     events: {
@@ -152,6 +221,63 @@ export function developersModel({ census, answers, schemas }) {
       cursorPattern: required(eventsParameters.after?.pattern, "cursor pattern in the events request schema"),
       delivery: required(events.delivery, "delivery statement in the events answer"),
     },
+  };
+}
+
+/** The out-of-scope list as the page lists it: its identity and digest, and each class as the census holds it. */
+function outOfScopeOf(list) {
+  const classes = required(list.classes, "classes in the out-of-scope list");
+  return {
+    schema: required(list.schema, "the out-of-scope list's identity"),
+    sha256: required(list.sha256, "the out-of-scope list's digest"),
+    classes: classes.map((entry) => {
+      const who = required(entry.who_to_ask, `who to ask about ${entry.class}`);
+      if (!/^https:\/\//.test(entry.official_source) || !/^https:\/\//.test(who.link)) throw new Error(`${entry.class}: its official place and who to ask are links`);
+      return {
+        id: entry.class, jurisdiction: entry.jurisdiction, instrument: entry.instrument, reason: entry.reason,
+        officialSource: entry.official_source, whoToAsk: { name: who.name, link: who.link, role: who.role }, examples: [...entry.examples],
+      };
+    }),
+  };
+}
+
+/**
+ * The live examples the page shows, from the answer the server rendered it from (`browse` for the first act it holds,
+ * `LIVE_EXAMPLE_REQUEST`), or null as built: the envelope it was answered with, whole, whether it refused, and, when the
+ * answer names an act, the act, the date of its latest version and its first language, which the next requests ask about.
+ */
+export function liveExamples(envelope) {
+  if (envelope === null || envelope === undefined) return null;
+  if (typeof envelope !== "object" || envelope.operation_id !== LIVE_EXAMPLE_REQUEST.operation_id) throw new Error("the Developers page's live examples are drawn from a browse answer");
+  const work = envelope.result?.value?.works?.[0] ?? null;
+  return {
+    envelope,
+    refused: envelope.refusal !== null && envelope.refusal !== undefined,
+    work: work === null ? null : {
+      identifier: required(work.identifier, "the first act's identifier"),
+      date: work.latest_applicability_date ?? null,
+      language: work.languages?.[0] ?? null,
+    },
+  };
+}
+
+/** The live example's request, with curl at `origin`: `browse` for the first act held. */
+export function liveRestExample(origin) {
+  return `curl -X POST ${origin}${REST_PREFIX}${LIVE_EXAMPLE_REQUEST.operation_id} \\\n  -H 'content-type: application/json' \\\n  -d '${JSON.stringify(LIVE_EXAMPLE_REQUEST)}'`;
+}
+
+/** The answer the live example got, as the page prints it: the envelope, whole, indented. */
+export function liveAnswerText(envelope) {
+  return JSON.stringify(envelope, null, 2);
+}
+
+/** The next requests about the first act held: its dossier over REST, and its text on its latest version's date over MCP. */
+export function liveNextExamples(origin, work) {
+  const dossier = { operation_id: "dossier", parameters: { identifier: work.identifier } };
+  const asOf = { identifier: work.identifier, ...(work.date === null ? {} : { date: work.date }), ...(work.language === null ? {} : { language: work.language }) };
+  return {
+    rest: `curl -X POST ${origin}${REST_PREFIX}dossier \\\n  -H 'content-type: application/json' \\\n  -d '${JSON.stringify(dossier)}'`,
+    mcp: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "as_of", arguments: asOf } }, null, 2),
   };
 }
 

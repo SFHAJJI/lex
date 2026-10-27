@@ -60,7 +60,7 @@ test("each departure from the platform's envelope is refused, with its own reaso
     // The rules the review of #763 found unheld: each is the platform's, and each is refused here.
     ["another version", success, (e) => { e.version = "v4"; }, /unexpected version/],
     ["another object type", success, (e) => { e.object_type = "answer"; }, /unexpected object_type/],
-    ["another registry schema", success, (e) => { e.registry_schema = "lex-v3-operation-registry/2"; }, /unexpected registry_schema/],
+    ["another registry schema", success, (e) => { e.registry_schema = "lex-v3-operation-registry/1"; }, /unexpected registry_schema/],
     ["a request reference that is not opaque", success, (e) => { e.request_ref = "Not Opaque!"; }, /opaque bounded reference/],
     ["a request reference over 128 characters", success, (e) => { e.request_ref = "a".repeat(129); }, /opaque bounded reference/],
     ["an unregistered operation", success, (e) => { e.operation_id = "horoscope"; }, /not a registered one/],
