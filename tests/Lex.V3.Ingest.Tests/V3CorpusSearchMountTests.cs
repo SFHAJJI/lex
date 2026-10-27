@@ -103,7 +103,7 @@ public sealed class V3CorpusSearchMountTests
         StringAssert.Contains(matching, "modification markers and note references are not searched");
         StringAssert.Contains(matching, "canonical decomposition (Unicode NFD) without its combining marks and in lower case");
         StringAssert.Contains(matching, "the ligatures \u0153 and \u00E6, of either case, are written oe and ae");
-        StringAssert.Contains(matching, "so capitals and accents never decide a match and every other character does");
+        StringAssert.Contains(matching, "so capitals, accents, these apostrophes and these spaces never decide a match and every other character does");
         StringAssert.Contains(matching, "nothing is stemmed or expanded");
         StringAssert.Contains(body.GetProperty("hit_unit").GetString(), "one article of one held state, not a provision");
         var lanes = body.GetProperty("lanes").GetString();

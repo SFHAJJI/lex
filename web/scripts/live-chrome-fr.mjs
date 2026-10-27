@@ -413,6 +413,11 @@
 // wording is searched only when its text is held and may be searched, "chaque libellé …, original ou consolidé"),
 // `search.euNotSearched` and `search.euSameWording` ("le même texte"), and the refusal of a date asked of an EU act held in
 // one wording only (no comma before "et l’interroge", G12). `search.euWording` and `search.euHit` were removed.
+// The review of #1005 folded the typographic apostrophes, the no-break spaces and the soft hyphen too, and `search.exactOnly`
+// says so: reviewed by an independent reviewer under the same delegation in the addendum of 2026-10-27 "the matching rule's
+// typographic apostrophes, no-break spaces and soft hyphen" (1 form, changed in French only): "étant lues comme" written out
+// once more (G24), "une espace insécable comme une espace ordinaire", "un trait d’union conditionnel n’étant pas lu" (never
+// "comme rien", G13), and "chacun des autres caractères de l’expression" (G20).
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
 
@@ -531,7 +536,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     runTitlesNotRun: 'Intitulés : non recherchés, un acte ayant été désigné.',
     runText: 'Texte : aucun article interrogé ne contient l’expression, même sans tenir compte des majuscules ni des accents.',
     runTextWords: 'Texte, chacun des mots dans un ordre quelconque : aucun article interrogé ne les contient tous.',
-    exactOnly: 'Seule l’expression a été recherchée dans le texte, sans tenir compte des majuscules ni des accents, œ et æ étant lus oe et ae, les apostrophes typographiques comme l’apostrophe droite, une espace insécable comme une espace et un trait d’union conditionnel comme rien : chacun de ses autres caractères compte, traits d’union et ponctuation compris, et rien n’est réduit à son radical ni étendu. Une recherche moins stricte dans le texte reste désactivée tant que sa propre vérification n’est pas réussie.',
+    exactOnly: 'Seule l’expression a été recherchée dans le texte, sans tenir compte des majuscules ni des accents, œ et æ étant lus oe et ae, les apostrophes typographiques étant lues comme l’apostrophe droite, une espace insécable comme une espace ordinaire, et un trait d’union conditionnel n’étant pas lu : chacun des autres caractères de l’expression compte, traits d’union et ponctuation compris, et rien n’est réduit à son radical ni étendu. Une recherche moins stricte dans le texte reste désactivée tant que sa propre vérification n’est pas réussie.',
     officialSearch: 'Les pages de recherche des éditeurs :',
     officialSites: Object.freeze({
       legilux: 'Recherche sur Legilux, pour le droit luxembourgeois',

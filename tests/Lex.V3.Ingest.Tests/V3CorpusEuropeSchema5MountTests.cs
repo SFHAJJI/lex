@@ -42,8 +42,9 @@ public sealed class V3CorpusEuropeSchema5MountTests
     // rule's text alone) and caaff24d (the review of #1003: diff's request schema gained `page`, so every row moved by the
     // registry digest alone), then 27a36a09 (the two combined, #1003 carrying #1004): the two dossier rows by #1004's sentence
     // alone and the search row by both slices' (#1004's not-held reason, R77's exact-reference rule); no other row moved; then
-    // 222a3cf6 (EU search over the act's time view, folded, with extracts, the audit's gap 5): its one search row alone.
-    private const string RecordedAtCommit = "222a3cf6";
+    // 222a3cf6 (EU search over the act's time view, folded, with extracts, the audit's gap 5): its one search row alone; then
+    // 2c43bde3 (the review of #1005: the apostrophes, no-break spaces and soft hyphen folded): that row's matching sentence alone.
+    private const string RecordedAtCommit = "2c43bde3";
 
     private static byte[] Fixture(string name) =>
         File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuSchema5Mount", name));

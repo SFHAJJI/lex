@@ -173,12 +173,11 @@ public sealed class V3CorpusNamesMountTests
             ("evidence_bundle", new() { ["identifier"] = celex, ["date"] = "2026-01-01" }),
             ("search", new() { ["identifier"] = celex, ["query"] = "data", ["language"] = "eng" }),
             ("resolve", new() { ["identifier"] = celex }),
-            // The review of #1005, F1: the act named by a provision coordinate or by an article identity, which the EU time view
-            // locates to the same act, and which named the act nowhere the gate read.
+            // The review of #1005, F1: the act named by a provision coordinate or by an article identity, which search locates to
+            // the same act (as_of reads a coordinate and no bare article identity), and which named the act nowhere the gate read.
             ("search", new() { ["identifier"] = coordinate, ["query"] = "data", ["language"] = "eng" }),
             ("search", new() { ["identifier"] = fixture.ArticleIdentitySha256, ["query"] = "data", ["language"] = "eng" }),
             ("as_of", new() { ["identifier"] = coordinate, ["date"] = "2026-01-01" }),
-            ("as_of", new() { ["identifier"] = fixture.ArticleIdentitySha256, ["date"] = "2026-01-01" }),
         };
         Dictionary<string, V3Envelope> before;
         using (var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None))

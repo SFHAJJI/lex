@@ -4,14 +4,36 @@ Updated 2026-10-27. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Review and repair (#1005): R92 on every EU search, J2's walk, the apostrophes and no-break spaces folded (sole driver, 2026-10-27)
+
+The independent review of #1005 (writer/search-quality at 8968fb5a) said REPAIR, and CI's journeys failed J2. One round:
+- **F1 (high, R92, latent).** An EU search, or an EU `as_of`, reached by a provision coordinate (`…#lex-provision=001`) or
+  an article identity named its act only under `seed_celex`, which the names gate did not read, so a withheld act's text was
+  served (reproduced: 79 hits with their text, where the CELEX gave `text_withheld`). The gate now reads `seed_celex` and
+  `original_work_id`, and `SearchEuropeTime` and `SearchEurope` refuse a withheld act with `RefuseNamesWithheld` before any
+  text is read. `AnEuActTheRecordWithholdsIsTextWithheldOnEveryOperationThatWouldShowItsText` asks search and `as_of` by the
+  coordinate and by the article identity too (`as_of` by the coordinate: it reads no bare article identity; 9 requests,
+  each answered before the record and `text_withheld` after).
+- **CI's journeys, J2.** The walk expected "…with capitals and accents ignored:", which the reviewed final no longer says;
+  it now reads `runText` and `exactOnly` from the table, and `live-search.test.mjs` holds every J2 sentence to the rendered
+  no-hit card.
+- **The driver's decision: fold these too** (one unit for one, or one dropped, so the offsets stay exact): ’ ‘ ʼ to ', the
+  no-break spaces U+00A0, U+202F and U+2007 to a space, the soft hyphen U+00AD dropped (a match never takes it along). On
+  derive-r1 "l'article" is in 1,517 texts and "l’article" in 9,246; the soft hyphen appears 441 times, 438 inside a word.
+  `TextFolding.Rule`, `text-folding.mjs` and `exactOnly` (EN and FR) say so; the French reviewed by an independent reviewer
+  (1 form, changed in French only: "étant lues comme", "une espace ordinaire", "n’étant pas lu", "chacun des autres
+  caractères de l’expression"), its final applied byte for byte and its addendum appended to the review record.
+- **Records**: the samples rendered again; the schema-8 and EU /5 base answers recorded again on Linux at 2c43bde3 (the
+  three search rows by their `matching` sentence alone).
+
 ## Search with capitals and accents ignored, and EU search over the consolidated wordings (sole driver, 2026-10-27)
 
 The audit of 2026-10-27, gaps 3 and 5; the plan's item 4.4; R59, R21, R107. `writer/search-quality`.
 - **One folding** (`TextFolding`, Contracts; `TextFolding.Rule` is the sentence every answer's `matching` carries): each
   letter or digit to its canonical decomposition (NFD) without its combining marks, lowered by the invariant case map, by
   the title folding's ICU-derived table (the same with or without the image's missing language data); a combining mark
-  alone dropped; œ and æ written oe and ae; every other character kept (punctuation, ’ and ', every kind of space; a symbol
-  is not decomposed, so ≠ is not =). `FoldedText` maps each folded unit to the original's, so a match is marked on the text's
+  alone dropped; œ and æ written oe and ae; every other character kept (punctuation, ’ and ', every kind of space, until
+  the repair above folded the apostrophes and no-break spaces; a symbol is not decomposed, so ≠ is not =). `FoldedText` maps each folded unit to the original's, so a match is marked on the text's
   own characters (a letter with its marks, a ligature whole) and the extract's byte range is unchanged in kind.
 - **Luxembourg** (driver decision, reversible): folded at query and match time over the indexes already built (/9, /8,
   /6), no derive. The reader holds a folded copy per searchable language (`LuxembourgIndexReader.Search.cs`,
@@ -42,8 +64,8 @@ The audit of 2026-10-27, gaps 3 and 5; the plan's item 4.4; R59, R21, R107. `wri
   article is shown once per text, not once; a wording is searched only when held and admitted); finals applied byte for
   byte, addendum appended to `C:\lex-v3\lanes\fr-review\review.md`.
 - **Not done**: exact-accent matches ranked first (no ranker; the order is still the stated one); quotation marks not
-  stripped; ’ and ', and a no-break space and a space, stay different (measured on /9: "l'article" 9,168 passages,
-  "l’article" 23,940): folding them is a change to the documented rule, for the owner's or the next slice's decision.
+  stripped; ’ and ', and a no-break space and a space, stayed different (measured on /9: "l'article" 9,168 passages,
+  "l’article" 23,940): the repair above folds them, by the driver's decision.
 - **Records and tests**: integration at b3896074 (#1003 carrying #1004) merged in (222a3cf6): the EU not-held rows keep
   #1004's other-languages sentence, its `article_text` row dropped (the extracts serve the text). The schema-8 and EU /5 base
   answers recorded again on Linux (WSL Ubuntu 24.04.4, .NET 10.0.11, invariant, UTC) at 222a3cf6: the two schema-8 searches

@@ -33,6 +33,8 @@ test("the search pages say what the matching is, and no form the French review r
   assert.doesNotMatch(fr.euUndated, /qui le contient|n’a pas modifié le texte/);
   assert.doesNotMatch(fr.euDated, /que cette date désigne|daté de ce jour/);
   assert.doesNotMatch(fr.exactOnly, /correspondance exacte|ramené à une forme commune/);
+  assert.doesNotMatch(fr.exactOnly, /comme rien|typographiques comme l’apostrophe|chacun de ses autres caractères/,
+    "the French review of the repair (#1005): the forms it refused");
   const refusal = REFUSALS_FR.sentences[LIVE_SEARCH_REFUSAL_SENTENCES.retrieval_mode_unavailable];
   assert.equal(typeof refusal, "string", "the EU date refusal is said in French");
   assert.doesNotMatch(refusal, /, et l’interroge/);

@@ -109,7 +109,8 @@ public sealed class V3CorpusLegacySchema8MountTests
     /// Coverage counts it, in place of catalogue_cc_by_not_acquired), its body receipt as retained_transport_evidence, its
     /// disposition members and its rules' text; no other member moved. Recorded again at 222a3cf6 (search with capitals and
     /// accents ignored, the plan's item 4.4, over #1003): the two schema-8 searches by their matching, lanes and extract
-    /// sentences alone, no hit moved; no other row moved. The answers are those
+    /// sentences alone, no hit moved; no other row moved. Recorded again at 2c43bde3 (the review of #1005: the apostrophes, the
+    /// no-break spaces and the soft hyphen folded too): the same two searches by their matching sentence alone. The answers are those
     /// production sends: recorded on Linux, as the release image
     /// runs (globalization-invariant, UTC; the language library changes no byte), and every system is held to them. Resolve
     /// of a rooted path was the one answer Windows sent otherwise, until a rooted path was read as an identifier on every
@@ -121,7 +122,7 @@ public sealed class V3CorpusLegacySchema8MountTests
         using var recorded = JsonDocument.Parse(Fixture("base-answers.json"));
         var root = recorded.RootElement;
         Assert.AreEqual("3b7913ec", root.GetProperty("written_at_commit").GetString());
-        Assert.AreEqual("222a3cf6", root.GetProperty("recorded_at_commit").GetString());
+        Assert.AreEqual("2c43bde3", root.GetProperty("recorded_at_commit").GetString());
         Assert.AreEqual(IndexFileSha256, root.GetProperty("index_sha256").GetString());
         Assert.AreEqual(StateSha256, root.GetProperty("state_sha256").GetString());
 
