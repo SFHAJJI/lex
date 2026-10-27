@@ -15,11 +15,11 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 - Down 3 minutes on 27 October (01:10 to 01:13 UTC): a redeployment switched off the live version by mistake. The
   deployment script is fixed so it never switches off a version it did not make.
 - Today Luxembourg has 1,730 acts as first published, no codes; EU text covers 511 of 1,170 versions.
-- The codes (121,000 articles) were rebuilt on Azure on 26 October after two fixes found on real data (a date written
-  20220101, and a code's title given each article's date): two builds agreed byte for byte. Their quality gates pass
-  for the EU and for search, but the Luxembourg date check does not yet: the check itself still assumes one version
-  per act. It is being rewritten to the publisher's own start and end dates, and any reader fault it finds fixed,
-  before a second release carries the codes. The index step now runs on this PC first, in about ten minutes.
+- The codes (121,000 articles) were rebuilt on Azure on 26 October; two builds agreed byte for byte. Their gates pass
+  for the EU and for search; the Luxembourg date check, which still assumes one version per act, is being rewritten to
+  the publisher's own dates, and any reader fault it finds fixed, before a second release carries the codes.
+- Fixed on 27 October: reading a PDF no longer depends on the fonts installed on the machine, so a build on this PC
+  and one on Azure give the same files. Nothing the site shows changes, and the Azure build of the codes stands.
 
 ## The plan
 
@@ -28,8 +28,8 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 - Decided by you on 19 October: texts may be 30 days old before pages warn and a release is refused; the site names
   no one and gives no contact, so no e-mail is kept; accessibility is "non-conformant" until an audit. The EU texts
   date from 5 October, so from 4 November the site warns until they are collected again.
-- The domain's name servers are Azure's since your switch on 18 October: keep the payment method valid. The full plan
-  is C:\lex-v3\PLAN-2026-10-14.md.
+- The domain's name servers are on Azure since 18 October: keep the payment method valid.
+  The full plan is C:\lex-v3\PLAN-2026-10-14.md.
 
 ## What waits on you
 

@@ -517,7 +517,7 @@ public sealed class EuAnnexEvidenceBinder
         {
             throw;
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not PdfHostFontIsolationException)
         {
             return Refused(EuAnnexEvidenceBindingRefusal.PdfUnreadable, exception.GetType().Name);
         }
@@ -645,7 +645,7 @@ public sealed class EuAnnexEvidenceBinder
         byte[] pdfBytes,
         CancellationToken cancellationToken)
     {
-        using var document = PdfDocument.Open(pdfBytes);
+        using var document = HostFontFreePdf.Open(pdfBytes);
         return ReadPageLabels(document, cancellationToken);
     }
 

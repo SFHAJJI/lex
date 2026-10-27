@@ -8,7 +8,6 @@ using Lex.V3.Contracts.Derivation;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Contracts.Source.Http;
-using UglyToad.PdfPig;
 
 namespace Lex.V3.Ingest.Europe;
 
@@ -270,7 +269,7 @@ public sealed class EuBoundAnnexBodyClassifier
 
         try
         {
-            using var document = PdfDocument.Open(pdfBytes.ToArray());
+            using var document = HostFontFreePdf.Open(pdfBytes.ToArray());
             var members = new List<EuBoundAnnexBodyMemberClassification>(binding.Members.Count);
             foreach (var member in binding.Members)
             {
@@ -311,7 +310,7 @@ public sealed class EuBoundAnnexBodyClassifier
         {
             throw;
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not PdfHostFontIsolationException)
         {
             return Refused(EuBoundAnnexBodyClassificationRefusal.PdfUnreadable,
                 exception.GetType().Name);
