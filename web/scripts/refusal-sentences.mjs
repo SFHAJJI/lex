@@ -21,7 +21,7 @@ import * as reading from './live-reading.mjs';
 import * as history from './live-history.mjs';
 import * as compare from './live-compare.mjs';
 import * as radar from './live-radar.mjs';
-import { NAMES_WITHHELD_SENTENCE, historyBeginsHint, nearestAnchorsHint, noCorpusMountedSentence } from './live-refusals.mjs';
+import { NAMES_WITHHELD_SENTENCE, OUTSIDE_EU_POPULATION_SENTENCE, historyBeginsHint, nearestAnchorsHint, noCorpusMountedSentence } from './live-refusals.mjs';
 import { LIVE_CHROME, entriesOf } from './live-chrome.mjs';
 import { REFUSALS_FR } from './live-chrome-fr.mjs';
 
@@ -82,6 +82,8 @@ export function servedRefusalSentences() {
       }
       // R92: a work the names record withholds is said in one sentence on every screen that asks about one work.
       for (const id of NAMING_THE_INDEX) add(NAMES_WITHHELD_SENTENCE, id, 'text_withheld');
+      // R80: an EU act outside the EU population is said in one sentence on every screen that asks about one work.
+      for (const id of NAMING_THE_INDEX) add(OUTSIDE_EU_POPULATION_SENTENCE, id, 'out_of_corpus_scope');
     }
   }
   return [...rows.values()].map((row) => Object.freeze({ sentence: row.sentence, uses: Object.freeze(row.uses) }));

@@ -934,22 +934,23 @@ blockquote.law {
   min-inline-size: 0;
 }
 
-/* WCAG 2.2 SC 2.5.8, target size minimum: 24 by 24 CSS pixels.
-   A link in a sentence takes the inline exception; a link in a list is a target somebody has
-   to hit, and every one of them was 21 px tall because line-height was setting their height.
-   Lighthouse found three of these; the browser run now measures all of them. */
+/* Touch targets of at least 44 by 44 CSS pixels (the specification of record's R62, above WCAG 2.2 SC 2.5.8's 24, which the
+   browser run measures). A link in a sentence takes the inline exception; a link in a list is a target somebody has to hit,
+   and every one of them was 21 px tall because line-height was setting their height. Lighthouse found three of these. The
+   content is centred in the taller box where the browser supports align-content on a block, and stays at the top elsewhere. */
 li > a,
 summary,
 .verify-cluster a {
   display: inline-block;
-  min-block-size: 24px;
-  min-inline-size: 24px;
+  min-block-size: 44px;
+  min-inline-size: 44px;
   padding-block: 0.15rem;
+  align-content: center;
 }
 
 /* Controls.
  *
- * WCAG 2.2 target size (minimum), 2.5.8, is AA and asks for 24 by 24 CSS pixels. Nothing in this
+ * WCAG 2.2 target size (minimum), 2.5.8, is AA and asks for 24 by 24 CSS pixels, and R62 asks for 44. Nothing in this
  * package had ever put a control on a built page, so there was no control sizing at all and every
  * button, chip and input rendered 21 pixels tall on the first screen that did. The browser gate
  * measures this, which is how it was found rather than shipped.
@@ -962,8 +963,8 @@ button,
 input[type='text'],
 input[type='search'],
 input[type='date'] {
-  min-block-size: 24px;
-  min-inline-size: 24px;
+  min-block-size: 44px;
+  min-inline-size: 44px;
   padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
   font: inherit;
   line-height: 1.2;
@@ -1592,7 +1593,7 @@ main > * {
 .check-official {
   display: inline-flex;
   align-items: center;
-  min-block-size: 24px;
+  min-block-size: 44px;
   padding-block: var(--space-1, 0.25rem);
   padding-inline: var(--space-2, 0.5rem);
   margin-inline-start: calc(-1 * var(--space-2, 0.5rem));
@@ -1867,10 +1868,12 @@ main > * {
 }
 
 /* A banner's info control (R48; GuideLink.jsx): a small link to How to read Lex, marked by the information sign, which a
-   screen reader does not read (the link's name says where it leads). Alone on its line, it keeps the 24 pixel target. */
+   screen reader does not read (the link's name says where it leads). Alone on its line, it keeps the 44 pixel target (R62). */
 .info-control {
   display: inline-block;
-  min-block-size: 24px;
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  align-content: center;
   padding-block: 0.15rem;
   font-size: 0.85rem;
 }
@@ -1888,6 +1891,16 @@ main > * {
    the text, every digest, source and permalink, the citation forms, and the footer's lines (what Lex is not, which texts
    are authentic, where the texts come from) with how current the answer is. Black on white in either colour scheme, the
    page's full width, no poster layout, long digests and addresses wrapped inside the page. */
+/* The copy button under a citation form (R65; PinnedReading.jsx): only a browser running the page's script shows it, on its
+   own line, with the status that says the copy is done. */
+.copy-citation-row {
+  margin-inline-start: 0;
+}
+
+.copy-citation-status {
+  font-size: 0.9rem;
+}
+
 @media print {
   :root,
   body {
@@ -1910,6 +1923,7 @@ main > * {
   [data-pager],
   details[data-contents],
   .info-control,
+  .copy-citation-row,
   [data-guide-note],
   .home-links,
   .site-footer .reference-nav,

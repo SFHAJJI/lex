@@ -924,6 +924,70 @@ export function readTextYield(value) {
  * it was guarding against is the one the dossier's two renderers had, and the repair is the one
  * `readProvenance` made -- one validator, two layouts.
  */
+/** The dispositions a Luxembourg class this site does not hold may have (R78; `V3CorpusMount.LuxembourgClassDispositions`). */
+export const CLASS_DISPOSITIONS = Object.freeze([
+  'awaiting_a_run', 'admitted_awaiting_a_run', 'admitted_where_regulatory_awaiting_a_run', 'admitted_first_awaiting_a_run',
+  'documentation_awaiting_a_run', 'corrective_awaiting_a_run', 'constitutional_review_awaiting_a_run', 'out_of_scope',
+  'no_ruling_admits_it',
+]);
+
+/** What dates when Lex's own observations of a publisher begin (R12): its log's first build, or its one collection's end. */
+export const OBSERVATION_BASES = Object.freeze(['first_build_in_log', 'acquisition_completed', 'not_stated']);
+
+/**
+ * What the mount declares beside its counts (R78, R82, R12; the platform's `declared_scope`, index 9 only), or null on an
+ * answer that carries none: each Luxembourg class it does not hold, once, with its disposition; how many of the EU's official
+ * languages its EU index holds wording in, or null without an EU index; and, per publisher, the date Lex's own observations
+ * held here begin, with what dates it. A date is exactly a calendar date with its instant, or both are null and the basis says
+ * it is not stated; the EU's held languages are a distinct list no longer than the official one.
+ */
+export function readDeclaredScope(value) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new Error('declared_scope is an object');
+  const where = 'declared_scope';
+  const classes = requireList(requireOwn(value, 'luxembourg_classes_not_held', where), 'declared_scope.luxembourg_classes_not_held')
+    .map((row, index) => {
+      const at = `declared_scope.luxembourg_classes_not_held[${index}]`;
+      const disposition = requireOwn(row, 'disposition', at);
+      if (!CLASS_DISPOSITIONS.includes(disposition)) throw new Error(`${at} has the disposition ${JSON.stringify(disposition)}, which is not one of ${CLASS_DISPOSITIONS.join(', ')}`);
+      return Object.freeze({ class: requireText(requireOwn(row, 'class', at), `${at}.class`), disposition });
+    });
+  requireDistinct(classes.map((row) => row.class), 'the Luxembourg classes not held');
+  const languagesValue = requireOwn(value, 'europe_languages', where);
+  let europeLanguages = null;
+  if (languagesValue !== null) {
+    const held = requireList(requireOwn(languagesValue, 'held', 'declared_scope.europe_languages'), 'declared_scope.europe_languages.held')
+      .map((language, index) => requireText(language, `declared_scope.europe_languages.held[${index}]`));
+    requireDistinct(held, 'the EU languages held');
+    const official = requireCount(requireOwn(languagesValue, 'official', 'declared_scope.europe_languages'), 'declared_scope.europe_languages.official');
+    if (held.length > official) throw new Error(`the EU index holds wording in ${held.length} languages, more than the ${official} official ones`);
+    europeLanguages = Object.freeze({ held: Object.freeze(held), official });
+  }
+  const begins = requireList(requireOwn(value, 'observations_begin', where), 'declared_scope.observations_begin').map((row, index) => {
+    const at = `declared_scope.observations_begin[${index}]`;
+    const publisher = requireOwn(row, 'publisher', at);
+    if (!['lu-legilux', 'eu-eurlex'].includes(publisher)) throw new Error(`${at} is for ${JSON.stringify(publisher)}, which is no publisher this site holds`);
+    const basis = requireOwn(row, 'basis', at);
+    if (!OBSERVATION_BASES.includes(basis)) throw new Error(`${at} has the basis ${JSON.stringify(basis)}, which is not one of ${OBSERVATION_BASES.join(', ')}`);
+    const date = requireOwn(row, 'date', at);
+    const instant = requireOwn(row, 'at', at);
+    if ((basis === 'not_stated') !== (date === null) || (date === null) !== (instant === null)) {
+      throw new Error(`${at} states a date and an instant exactly when its basis is stated`);
+    }
+    if (date !== null) {
+      requireDate(date, `${at}.date`);
+      requireInstant(instant, `${at}.at`);
+    }
+    return Object.freeze({ publisher, date, basis });
+  });
+  requireDistinct(begins.map((row) => row.publisher), 'the publishers whose observations begin');
+  return Object.freeze({
+    classes: Object.freeze(classes),
+    europeLanguages,
+    observationsBegin: Object.freeze(begins),
+    rule: requireText(requireOwn(value, 'rule', where), 'declared_scope.rule'),
+  });
+}
+
 export function readCoverage(answer) {
   refuseRetiredShapes(answer);
 
@@ -1012,6 +1076,8 @@ export function readCoverage(answer) {
     history: readHistory(requireOwn(answer, 'history', where)),
     capabilityCells: readCells(requireOwn(answer, 'capability_cells', where)),
     notHeld: notHeldRows,
+    // What the mount declares beside its counts (R78, R82, R12), on index 9; null on an index of schema 8 or 6.
+    declaredScope: Object.hasOwn(answer, 'declared_scope') ? readDeclaredScope(answer.declared_scope) : null,
   };
 }
 
@@ -1299,7 +1365,8 @@ export const COVERAGE_COPY = Object.freeze({
   textYieldListLast: '{items} and {last}',
   textYieldListNext: '{items}, {item}',
   textYieldLuxembourg: 'This site holds the {families} that Legilux publishes: text for {versionsWithText} of the {versions} versions its catalogue lists and for {worksWithText} of its {works} acts, {articles} articles in all.',
-  textYieldEurope: 'This site holds acts of the European Union in English and French: text for {versionsWithText} of the {versions} wordings the Publications Office lists for the acts this site selected, {articles} articles in all.',
+  // The languages are said by the declared scope's own sentence (R82), from the data, never here.
+  textYieldEurope: 'This site holds acts of the European Union that its population rule selects: text for {versionsWithText} of the {versions} wordings the Publications Office lists for them, {articles} articles in all.',
   noTextYield: 'This mount’s build report states no text yield per class, so this page shows none.',
   noTextYieldReasons: 'No version or file is counted without text here.',
   noAnnexOutcomes: Object.freeze({
@@ -1311,7 +1378,68 @@ export const COVERAGE_COPY = Object.freeze({
     'eu-eurlex': 'The corpus records no file format for EU files, so a PDF or HTML file with no text served is counted with the admitted files with no article served, under its own reason.',
   }),
   notRecorded: 'not recorded',
+  // What the mount declares beside its counts (R12, R82, R78): when Lex's own observations begin, how many of the EU's official
+  // languages it holds, and each Luxembourg class it does not hold with what is decided for it.
+  declaredHeading: 'Since when Lex observes, and what it does not collect',
+  publisherSites: Object.freeze({ 'lu-legilux': 'Legilux', 'eu-eurlex': 'EUR-Lex' }),
+  observationsBegin: Object.freeze({
+    first_build_in_log: '{publisher}: Lex’s own observations begin with the first build its log records, on {date}.',
+    acquisition_completed: '{publisher}: Lex’s own observations begin with the one collection this site holds, completed on {date}.',
+    not_stated: '{publisher}: this site does not state when Lex’s own observations begin.',
+  }),
+  europeLanguages: 'Lex holds EU acts in {count} of the EU’s {official} official languages ({languages}); EUR-Lex publishes them in the others.',
+  classesCaption: 'Luxembourg classes this site does not hold, and what is decided for each',
+  classColumns: Object.freeze({ scopeClass: 'class', scopeDisposition: 'what is decided' }),
+  classNames: Object.freeze({
+    Constitution: 'the Constitution',
+    AGD: 'grand-ducal orders',
+    RMIN: 'ministerial regulations',
+    AMIN: 'ministerial orders',
+    RCSF: 'regulations of the CSSF',
+    RBCL: 'regulations of the Banque centrale du Luxembourg',
+    RILR: 'regulations of the Institut Luxembourgeois de Régulation',
+    TC: 'coordinated texts',
+    RECT: 'rectifications',
+    ACC: 'judgments of the Constitutional Court',
+    memorial_b: 'administrative publications of the Mémorial B',
+    communal_regulations: 'communal regulations',
+  }),
+  classDispositions: Object.freeze({
+    awaiting_a_run: 'not collected: a bounded collection run the owner authorises would add it',
+    admitted_awaiting_a_run: 'admitted, and not collected yet: a later run the owner authorises adds it',
+    admitted_first_awaiting_a_run: 'admitted, and not collected yet: among the first classes a later run the owner authorises adds',
+    admitted_where_regulatory_awaiting_a_run: 'admitted only where a rule shows the act is regulatory, and not collected yet',
+    documentation_awaiting_a_run: 'admitted as documentation, never as the text of the law, and not collected yet',
+    corrective_awaiting_a_run: 'admitted as corrective material, under that label only, and not collected yet',
+    constitutional_review_awaiting_a_run: 'admitted as constitutional review, never as statutory text, and not collected yet',
+    out_of_scope: 'not held, and not planned',
+    no_ruling_admits_it: 'not collected: no ruling admits this class yet',
+  }),
+  classesHeld: 'The classes this site holds are counted, class by class, in the text yield above.',
 });
+
+/**
+ * R12's sentences, one per publisher, in the order the answer gives them: when Lex's own observations held here begin, and
+ * what dates it, or that the site does not state it.
+ */
+export function observationSentences(declared, copy = COVERAGE_COPY) {
+  return declared.observationsBegin.map((row) => fill(copy.observationsBegin[row.basis], {
+    publisher: copy.publisherSites[row.publisher] ?? row.publisher,
+    date: row.date ?? '',
+  }));
+}
+
+/** R82's sentence: how many of the EU's official languages the EU index holds wording in, which, or null with no EU index. */
+export function europeLanguagesSentence(declared, copy = COVERAGE_COPY) {
+  const languages = declared.europeLanguages;
+  if (languages === null) return null;
+  return fill(copy.europeLanguages, { count: languages.held.length, official: languages.official, languages: languages.held.join(', ') });
+}
+
+/** A Luxembourg class's name in the copy, or null for a class the copy does not name (its token is shown either way). */
+export function scopeClassLabel(row, copy = COVERAGE_COPY) {
+  return Object.hasOwn(copy.classNames, row.class) ? copy.classNames[row.class] : null;
+}
 
 /** Each table's columns, in order, as keys of `COVERAGE_COPY.columns`. */
 export const COVERAGE_COLUMNS = Object.freeze({
@@ -1563,6 +1691,33 @@ function textYieldSection(view) {
   );
 }
 
+/**
+ * What the mount declares beside its counts (R12, R82, R78), or nothing on an answer that carries none: when Lex's own
+ * observations begin, per publisher; how many of the EU's official languages it holds; and each Luxembourg class it does not
+ * hold, by its name where the copy has one and always its token, with what is decided for it; then the platform's rule.
+ */
+function declaredScopeSection(view) {
+  const declared = view.declaredScope;
+  if (declared === null) return '';
+  const languages = europeLanguagesSentence(declared);
+  return (
+    `<section class="coverage-block"><h2>${escapeHtml(COVERAGE_COPY.declaredHeading)}</h2>`
+    + observationSentences(declared).map((sentence) => `<p class="coverage-held" data-observations-begin="">${escapeHtml(sentence)}</p>`).join('')
+    + (languages === null ? '' : `<p class="coverage-held" data-europe-languages="">${escapeHtml(languages)}</p>`)
+    + table({
+      caption: COVERAGE_COPY.classesCaption,
+      head: [COVERAGE_COPY.classColumns.scopeClass, COVERAGE_COPY.classColumns.scopeDisposition],
+      rows: declared.classes.map((scopeRow) => {
+        const label = scopeClassLabel(scopeRow);
+        return `<tr><td>${label === null ? code(scopeRow.class) : `${escapeHtml(label)} ${code(scopeRow.class)}`}</td>`
+          + `<td>${escapeHtml(COVERAGE_COPY.classDispositions[scopeRow.disposition])}</td></tr>`;
+      }).join(''),
+    })
+    + `<p class="coverage-note">${escapeHtml(COVERAGE_COPY.classesHeld)}</p>`
+    + `<p class="coverage-note">${escapeHtml(declared.rule)}</p></section>`
+  );
+}
+
 /** The page. Every rule is in readCoverage; this decides only how the result looks. */
 export function renderCoverage(answer) {
   const view = readCoverage(answer);
@@ -1601,6 +1756,7 @@ export function renderCoverage(answer) {
       }) + `<p class="coverage-note">${escapeHtml(STATE_RANGE_NOTE)}</p>`)
     + '</section>'
     + textYieldSection(view)
+    + declaredScopeSection(view)
     + `<section class="coverage-block"><h2>${escapeHtml(COVERAGE_COPY.headings.recorded)}</h2>`
     + table({
       caption: COVERAGE_COPY.captions.outcomes,

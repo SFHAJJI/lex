@@ -53,9 +53,12 @@ import {
   COVERAGE_COPY,
   NOT_STATED,
   capabilityAbsence,
+  europeLanguagesSentence,
   gapsSentence,
   narrowedNote,
+  observationSentences,
   readCoverage,
+  scopeClassLabel,
   servedSentence,
   textYieldAnnexRows,
   textYieldClassLabel,
@@ -288,6 +291,38 @@ function TextYield({ view, copy }) {
   );
 }
 
+/**
+ * What the mount declares beside its counts (R12, R82, R78), or nothing on an answer that carries none: the sentences and the
+ * table `coverage.mjs` decides, as the string renderer lays them out.
+ */
+function DeclaredScope({ view, copy }) {
+  const declared = view.declaredScope;
+  if (declared === null) return null;
+  const languages = europeLanguagesSentence(declared, copy);
+  return (
+    <section className="coverage-block">
+      <h2>{copy.declaredHeading}</h2>
+      {observationSentences(declared, copy).map((sentence) => (
+        <p className="coverage-held" data-observations-begin="" key={sentence}>{sentence}</p>
+      ))}
+      {languages === null ? null : <p className="coverage-held" data-europe-languages="">{languages}</p>}
+      <FacetTable caption={copy.classesCaption} head={[copy.classColumns.scopeClass, copy.classColumns.scopeDisposition]} copy={copy}>
+        {declared.classes.map((row) => {
+          const label = scopeClassLabel(row, copy);
+          return (
+            <tr key={row.class}>
+              <td>{label === null ? <Evidence value={row.class} /> : <>{label}{' '}<Evidence value={row.class} /></>}</td>
+              <td>{copy.classDispositions[row.disposition]}</td>
+            </tr>
+          );
+        })}
+      </FacetTable>
+      <p className="coverage-note">{copy.classesHeld}</p>
+      <p className="coverage-note" lang={ENGLISH_LANG}>{declared.rule}</p>
+    </section>
+  );
+}
+
 /** A table's column headings, in its order, in the copy's words. */
 function heads(table, copy) {
   return COVERAGE_COLUMNS[table].map((key) => copy.columns[key]);
@@ -345,6 +380,7 @@ export function Coverage({ answer, copy = COVERAGE_COPY }) {
         )}
       </section>
       <TextYield view={view} copy={copy} />
+      <DeclaredScope view={view} copy={copy} />
       <section className="coverage-block">
         <h2>{copy.headings.recorded}</h2>
         <FacetTable caption={copy.captions.outcomes} head={heads('outcomes', copy)} copy={copy}>

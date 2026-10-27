@@ -436,7 +436,8 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     // mandates, the instrument asked for, its official place, a one-sentence reason and who to ask (an institution or an
     // official service, never a person), with the class, the instrument in words and the list's identity and digest.
     keys: Object.freeze(['requested_identifier', 'official_source', 'reason', 'who_to_ask']),
-    optional: Object.freeze(['out_of_scope_class', 'instrument', 'what_would_answer_detail', 'scope_list', 'scope_list_sha256']),
+    // An EU act outside the EU population (R80) carries the number of seed acts its rule names, and no list or digest.
+    optional: Object.freeze(['out_of_scope_class', 'instrument', 'what_would_answer_detail', 'scope_list', 'scope_list_sha256', 'population_seed_acts']),
     // The preview surfaces' own producers say the population disclosure alone, and are held to that set.
     alternatives: Object.freeze([Object.freeze(['population_disclosure'])]),
     basis:

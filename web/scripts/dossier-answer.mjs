@@ -110,6 +110,43 @@ function readCatalogueChain(answer, workKey, heldDigests) {
 
 const DIGEST = /^[0-9a-f]{64}$/;
 
+/**
+ * The act's force as the publisher records it (R79, E3; the platform's `force`, index 9 only), or null on an answer that names
+ * none (an index of schema 8 or 6): the publisher's status tokens and its entry-into-force and no-longer-in-force dates, each a
+ * fact on the work or its act as published (`subjects`), read as sent and never into a reading for a date. A status is the
+ * token the publisher gives (its IRI's last segment), and a date is shown only when it is exactly a calendar date; a fact in
+ * another form is counted apart, so it is never dropped in silence.
+ */
+function readForce(answer, workIri) {
+  if (!Object.hasOwn(answer, 'force')) return null;
+  const force = answer.force;
+  const where = 'force';
+  const subjects = requireTexts(requireOwn(force, 'subjects', where), 'force.subjects');
+  if (subjects.length !== 2 || subjects[0] !== workIri || subjects[1] !== `${workIri}/jo`) {
+    throw new Error(`force.subjects are ${subjects.join(', ')}, not the work and its act as published`);
+  }
+  const facts = (key) => requireList(requireOwn(force, key, where), `force.${key}`).map((fact, index) => {
+    const at = `force.${key}[${index}]`;
+    const subject = requireText(requireOwn(fact, 'subject_iri', at), `${at}.subject_iri`);
+    if (!subjects.includes(subject)) throw new Error(`${at} is asserted on ${subject}, which is not one of the force's subjects`);
+    requireDigest(requireOwn(fact, 'evidence_sha256', at), `${at}.evidence_sha256`);
+    return requireText(requireOwn(fact, 'value', at), `${at}.value`);
+  });
+  const once = (values) => Object.freeze([...new Set(values)].sort());
+  const dates = (values) => once(values.filter((value) => isCalendarDate(value)));
+  const statuses = facts('in_force_status');
+  const entries = facts('entry_into_force');
+  const ends = facts('no_longer_in_force');
+  return Object.freeze({
+    statuses: once(statuses.map((value) => value.replace(/\/+$/, '').split('/').pop())),
+    entryIntoForce: dates(entries),
+    noLongerInForce: dates(ends),
+    // Facts whose value is not exactly a calendar date (a dateTime, a year and month): held, and not said as a date here.
+    otherForms: entries.filter((value) => !isCalendarDate(value)).length + ends.filter((value) => !isCalendarDate(value)).length,
+    rule: requireText(requireOwn(force, 'rule', where), 'force.rule'),
+  });
+}
+
 function requireOwn(object, key, where) {
   if (object === null || typeof object !== 'object' || !Object.hasOwn(object, key)) {
     throw new Error(`${where} does not carry ${key}`);
@@ -310,6 +347,8 @@ export function readDossier(answer) {
     asPublished: readAsPublished(answer, { states, workIri, notHeld }),
     // Index 9's catalogue chain (S7b), or null on an index of schema 8 or 6.
     chain: readCatalogueChain(answer, workKey, seen),
+    // Index 9's force facts of the act (R79), or null on an index of schema 8 or 6.
+    force: readForce(answer, workIri),
     scope: requireText(requireOwn(answer, 'scope', where), 'scope'),
     articlesNotAdmittedNote: requireText(requireOwn(answer, 'articles_not_admitted_note', where), 'articles_not_admitted_note'),
     corpusSha256: requireDigest(requireOwn(answer, 'corpus_sha256', where), 'corpus_sha256'),

@@ -45,6 +45,12 @@ export const HANDOFF_HOSTS = Object.freeze(['handoff.invalid']);
  */
 export const OUT_OF_SCOPE_HOSTS = Object.freeze(['www.cssf.lu', 'cnpd.public.lu', 'curia.europa.eu', 'www.lbr.lu']);
 
+/**
+ * The official place, and who to ask, of an EU act outside the EU population the server holds (R80; `V3CorpusMount.Scope.cs`):
+ * the act's page on EUR-Lex and EUR-Lex itself. It is no class of the list: the mount decides it, so it is named apart.
+ */
+export const EU_POPULATION_HOST = 'eur-lex.europa.eu';
+
 /** The preview surfaces' synthetic official place, which RFC 2606 reserves so that it can never resolve (as `handoff.invalid`). */
 export const SYNTHETIC_OUT_OF_SCOPE_HOST = 'out-of-scope.invalid';
 
@@ -214,7 +220,7 @@ export function handoffUri(uri) {
 
 /** The official place, or who to ask, an out_of_corpus_scope refusal names: an institution's own site on the list's hosts. */
 export function outOfScopeUri(uri) {
-  return checkedUri(uri, [...OUT_OF_SCOPE_HOSTS, SYNTHETIC_OUT_OF_SCOPE_HOST], 'an official place');
+  return checkedUri(uri, [...OUT_OF_SCOPE_HOSTS, EU_POPULATION_HOST, SYNTHETIC_OUT_OF_SCOPE_HOST], 'an official place');
 }
 
 /**

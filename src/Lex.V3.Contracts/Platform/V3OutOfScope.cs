@@ -45,9 +45,10 @@ public sealed record V3OutOfScopeClass(
 /// <para>
 /// Not listed yet, each for a stated reason: communal regulations (no single official place is published for them, each
 /// commune publishes its own, so the entry waits for R42's list); Luxembourg court decisions (no identifier form names one
-/// exactly, and the Constitutional Court's decisions are admitted later as their own class, R78); EU acts outside the EU
-/// population (R80: the EU index does not yet state the rule its population follows, so an unheld EU act still answers
-/// <c>identifier_unknown</c>).
+/// exactly, and the Constitutional Court's decisions are admitted later as their own class, R78). EU acts outside the EU
+/// population are not a class of this list: whether an act is outside it depends on the mounted EU index, so the mount refuses
+/// one <c>out_of_corpus_scope</c> itself, naming its population rule and EUR-Lex (R80; <c>RefuseOutsideEuropePopulation</c>),
+/// with no list identity or digest.
 /// </para>
 /// </remarks>
 public static class V3OutOfScope

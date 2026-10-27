@@ -581,6 +581,12 @@ public sealed class V3CorpusCoverageMountTests
             "capability_cells[].operation", "capability_cells[].period_from", "capability_cells[].period_to",
             "capability_cells[].population",
             "counts_note",
+            // What the mount declares beside its counts on index 9 (R78, R82, R12): the Luxembourg classes it does not hold, each
+            // with its disposition, and when Lex's own observations begin; no EU index is mounted here, so europe_languages is null.
+            "declared_scope", "declared_scope.europe_languages", "declared_scope.luxembourg_classes_not_held",
+            "declared_scope.luxembourg_classes_not_held[].class", "declared_scope.luxembourg_classes_not_held[].disposition",
+            "declared_scope.observations_begin", "declared_scope.observations_begin[].at", "declared_scope.observations_begin[].basis",
+            "declared_scope.observations_begin[].date", "declared_scope.observations_begin[].publisher", "declared_scope.rule",
             "history", "history.history_begins", "history.log_records_builds", "history.note", "history.retention_policy",
             "history.snapshots_in_log", "history.snapshots_with_text", "history.snapshots_with_text[].built_at",
             "history.snapshots_with_text[].observation", "history.snapshots_with_text[].retained_as",

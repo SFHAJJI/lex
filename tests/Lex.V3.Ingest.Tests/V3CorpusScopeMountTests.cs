@@ -144,6 +144,76 @@ public sealed class V3CorpusScopeMountTests
     }
 
     /// <summary>
+    /// R80: an EU act the mounted EU population does not hold answers <c>out_of_corpus_scope</c>, naming the rule (with the count of
+    /// seed acts the index holds) and the act's page on EUR-Lex, over REST and MCP alike, in every spelling of its CELEX; a version or
+    /// corrigendum of a held act, a document of a sector that holds no acts and a case of the EU courts are not refused by the rule.
+    /// </summary>
+    [TestMethod]
+    public async Task AnEuActOutsideTheEuPopulationIsRefusedOutOfScopeNamingTheRuleAndEurLex()
+    {
+        var europe = await EuropeMountedFixture.CreateAsync();
+        await using var cleanup = europe;
+        using var mount = await V3CorpusMount.OpenAsync(europe.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        foreach (var identifier in new[]
+                 {
+                     "32019R1150", "CELEX:32019R1150", "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32019R1150",
+                     "http://publications.europa.eu/resource/celex/32019R1150", "02019R1150-20200712", "32019R1150R(01)",
+                 })
+        {
+            foreach (var operation in new[] { "dossier", "resolve", "timeline", "as_of" })
+            {
+                var parameters = operation == "as_of"
+                    ? (object)new { identifier, date = "2024-01-01" }
+                    : new { identifier };
+                var (rest, structured) = await BothAsync(mount, operation, parameters);
+                var what = $"{operation} {identifier}";
+                Assert.AreEqual(V3Verdicts.Refuse, rest.GetProperty("verdict").GetString(), what);
+                var refusal = rest.GetProperty("refusal");
+                Assert.AreEqual("out_of_corpus_scope", refusal.GetProperty("code").GetString(), what);
+                var payload = refusal.GetProperty("helpful_payload");
+                Assert.AreEqual(identifier, payload.GetProperty("requested_identifier").GetString(), what);
+                Assert.AreEqual("eu_act_outside_population", payload.GetProperty("out_of_scope_class").GetString(), what);
+                Assert.AreEqual(1, payload.GetProperty("population_seed_acts").GetInt32(), what);
+                Assert.AreEqual(
+                    "Lex holds the EU acts its population rule selects, the 1 act of its seed list (Decision 84), each with its original wording and the consolidated versions EUR-Lex lists of it, and 32019R1150 is not one of them.",
+                    payload.GetProperty("reason").GetString(), what);
+                Assert.AreEqual("https://eur-lex.europa.eu/legal-content/AUTO/?uri=CELEX:32019R1150", payload.GetProperty("official_source").GetString(), what);
+                var who = payload.GetProperty("who_to_ask");
+                Assert.AreEqual("Publications Office of the European Union (EUR-Lex)", who.GetProperty("name").GetString(), what);
+                Assert.AreEqual("https://eur-lex.europa.eu/", who.GetProperty("link").GetString(), what);
+                Assert.AreEqual("information", who.GetProperty("role").GetString(), what);
+                Assert.IsFalse(payload.GetProperty("asserts_absence_of_law").GetBoolean(), what);
+                Assert.IsFalse(payload.TryGetProperty("scope_list", out _), $"{what}: the rule is no class of the list");
+                Assert.AreEqual("eu-eurlex", rest.GetProperty("context").GetProperty("publisher").GetString(), what);
+                Assert.AreEqual(JsonSerializer.Serialize(rest), JsonSerializer.Serialize(structured), $"{what}: REST and MCP answered different envelopes");
+            }
+        }
+
+        // The held act, a consolidated version of it that is not held, and a corrigendum of it: never outside the population.
+        foreach (var held in new[] { "32016R0679", "02016R0679-20990101", "32016R0679R(09)" })
+        {
+            var (rest, _) = await BothAsync(mount, "dossier", new { identifier = held });
+            var code = rest.TryGetProperty("refusal", out var refusal) && refusal.ValueKind == JsonValueKind.Object
+                ? refusal.GetProperty("code").GetString()
+                : null;
+            Assert.AreNotEqual("out_of_corpus_scope", code, held);
+        }
+
+        // A document of a sector that holds no acts (a Commission proposal) stays unknown; a case is the list's, not the rule's.
+        var (proposal, _) = await BothAsync(mount, "dossier", new { identifier = "52020PC0825" });
+        Assert.AreEqual("identifier_unknown", proposal.GetProperty("refusal").GetProperty("code").GetString());
+        var (judgment, _) = await BothAsync(mount, "dossier", new { identifier = "62012CJ0131" });
+        Assert.AreEqual("eu_case_law", judgment.GetProperty("refusal").GetProperty("helpful_payload").GetProperty("out_of_scope_class").GetString());
+
+        // Only an identifier is read: words that cite an act name no CELEX.
+        Assert.IsNull(V3CorpusMount.EuropeActCelexOf("Regulation (EU) 2019/1150"));
+        Assert.AreEqual(("32019R1150", "32019R1150"), V3CorpusMount.EuropeActCelexOf("CELEX:32019R1150"));
+        Assert.AreEqual(("02019R1150-20200712", "32019R1150"), V3CorpusMount.EuropeActCelexOf("02019R1150-20200712"));
+    }
+
+    /// <summary>
     /// The parameters of a request for <paramref name="operation"/> naming <paramref name="identifier"/>, with every other parameter
     /// its request schema requires, or null when the operation takes no identifier.
     /// </summary>
