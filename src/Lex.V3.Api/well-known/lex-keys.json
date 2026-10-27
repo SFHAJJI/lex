@@ -1,0 +1,27 @@
+{
+  "schema": "lex-v3-keys/1",
+  "site": "https://law.soufien.lu",
+  "updated": "2026-10-27",
+  "key_id_rule": "A key_id is sha256: and the SHA-256 of the key's SubjectPublicKeyInfo, DER-encoded, in lower-case hexadecimal.",
+  "verification": "A release is Lex's when the signature in its release-manifest.sig.json verifies over the bytes of its release-manifest.json under a key of this set, the manifest names that key's identity as its signer, and the key was active on the release's date. Its lex-v3-image.sig.json verifies under the same key over a payload that names the image's manifest digest. Verify against this set, never only against the key a release carries inside itself.",
+  "verifier": "node web/scripts/deploy-probe.mjs --release <release directory> --public-key <the key, as a PEM file> --signer lex-v3-release, from the public repository",
+  "rotation": "Each key is replaced within a year of its valid_from date, and at once on any suspicion of compromise. A replaced or compromised key stays listed, with its status and the date it stopped being used.",
+  "keys": [
+    {
+      "key_id": "sha256:c4e97ce0ca912c9c30488bb220512b759efdbd4187aab0c9fc1f36135c674c05",
+      "identity": "lex-v3-release",
+      "role": "release",
+      "signs": [
+        "the bytes of release-manifest.json, in release-manifest.sig.json",
+        "a payload naming the release image's manifest digest, in lex-v3-image.sig.json"
+      ],
+      "algorithm": "ECDSA over P-256 (prime256v1) with SHA-256",
+      "status": "active",
+      "valid_from": "2026-10-13",
+      "valid_until": "2027-10-13",
+      "custody": "The private key is held in Azure Key Vault.",
+      "note": "Releases signed before 2026-10-26 name this same key's signer under an earlier label.",
+      "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEw99hh60XO1wmZ0tJqIyjjppQd9L6\nT7s8oCgH42r6PUtKzBXKXJnRWp3ggP1hxgJjg9+uA0A3Fw5xNRFJEmyoVg==\n-----END PUBLIC KEY-----\n"
+    }
+  ]
+}

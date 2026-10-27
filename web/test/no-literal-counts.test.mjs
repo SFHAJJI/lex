@@ -19,8 +19,9 @@ import test from "node:test";
 import {
   LIVE_CONTRACT, renderLiveComparePage, renderLiveCoveragePage, renderLiveDossierPage, renderLiveExportPage, renderLiveHistoryPage,
   renderLiveHomePage, renderLiveMaintenancePage, renderLiveNotFoundPage, renderLiveRadarPage, renderLiveReadingPage, renderLiveSearchPage,
-  SearchAnswerView, renderLiveLegalPage,
+  SearchAnswerView, renderLiveLegalPage, renderLiveReferencePage,
 } from "../.react-build/app.mjs";
+import { readDevelopersContracts } from "../scripts/developers-contracts.mjs";
 import { LIVE_CHROME, REFUSAL_TRANSLATIONS, entriesOf } from "../scripts/live-chrome.mjs";
 import { servedRefusalSentences } from "../scripts/refusal-sentences.mjs";
 import { homeFacts } from "../scripts/live-home.mjs";
@@ -103,7 +104,8 @@ test("the interface tables say a number only where the allowlist names it: a cit
   }
 });
 
-test("no live page, as built or rendered from the census answers, says a pack figure", () => {
+test("no live page, as built or rendered from the census answers, says a pack figure", async () => {
+  const developers = await readDevelopersContracts();
   const coverage = census.envelopes.find((entry) => entry.operation === "coverage" && entry.envelope.result !== null).envelope;
   const reading = census.envelopes.find((entry) => entry.operation === "evidence_bundle" && entry.envelope.result !== null).envelope;
   const pages = {
@@ -121,6 +123,9 @@ test("no live page, as built or rendered from the census answers, says a pack fi
     "404": renderLiveNotFoundPage(),
     maintenance: renderLiveMaintenancePage(),
     ...Object.fromEntries(["legalNotice", "privacy", "terms", "accessibility", "cookies"].map((key) => [key, renderLiveLegalPage(key)])),
+    // The three reference pages, the Developers page generated from the contracts, whose counts it says as served fields.
+    ...Object.fromEntries(["help", "guide"].map((key) => [key, renderLiveReferencePage(key)])),
+    developers: renderLiveReferencePage("developers", { developers }),
   };
   for (const [name, html] of Object.entries(pages)) {
     // What a reader is shown: the text and the human-read attributes, without the scripts and the head's machine links.

@@ -68,6 +68,14 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Api.SyntheticIndexResolver: constructor private instance "
                     + "Lex.V3.Api.SyntheticIndexResolver::.ctor, "
                     + "method public static Lex.V3.Api.SyntheticIndexResolver::Open",
+                "Lex.V3.Api.V3ClientLimiter: constructor internal instance "
+                    + "Lex.V3.Api.V3ClientLimiter::.ctor, "
+                    + "constructor private static Lex.V3.Api.V3ClientLimiter::.cctor",
+                "Lex.V3.Api.V3ClientLimiter+Admission: constructor internal instance "
+                    + "Lex.V3.Api.V3ClientLimiter+Admission::.ctor, "
+                    + "method internal instance Lex.V3.Api.V3ClientLimiter::AdmitApi, "
+                    + "method internal instance Lex.V3.Api.V3ClientLimiter::AdmitRender, "
+                    + "method private instance Lex.V3.Api.V3ApiHandler::AdmitRender",
                 "Lex.V3.Api.V3CorpusMount: constructor private instance "
                     + "Lex.V3.Api.V3CorpusMount::.ctor, "
                     + "constructor private static Lex.V3.Api.V3CorpusMount::.cctor, "
@@ -78,6 +86,7 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Api.V3PlatformOperationOutcome: constructor private instance "
                     + "Lex.V3.Api.V3PlatformOperationOutcome::.ctor, "
                     + "method internal static Lex.V3.Api.V3ApiHandler::ExecuteFor, "
+                    + "method internal static Lex.V3.Api.V3ApiHandler::RateLimitedOutcome, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::AnchorNotInVersion, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::AsOfEurope, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::AsOfEuropeOf, "
@@ -153,7 +162,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Api.V3CorpusMount::Verify, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Refused, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Success, "
-                    + "24 compiler-generated",
+                    + "26 compiler-generated",
                 "Lex.V3.Api.V3PlatformSchemaDocuments: constructor private instance "
                     + "Lex.V3.Api.V3PlatformSchemaDocuments::.ctor, "
                     + "constructor private static Lex.V3.Api.V3PlatformSchemaDocuments::.cctor, "

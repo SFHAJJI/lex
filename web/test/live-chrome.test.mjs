@@ -27,13 +27,17 @@ import {
   renderLiveTermsPage,
   renderLiveAccessibilityPage,
   renderLiveCookiesPage,
+  renderLiveDevelopersPage,
+  renderLiveGuidePage,
+  renderLiveHelpPage,
 } from "../.react-build/app.mjs";
+import { readDevelopersContracts } from "../scripts/developers-contracts.mjs";
 import { LIVE_CHROME, REFUSAL_TRANSLATIONS, countedEntry, entriesOf, fillCounted, fillParts, fillText, liveChrome } from "../scripts/live-chrome.mjs";
 import { REVIEWED_CHROME_LOCALES } from "../scripts/locale-unavailable.mjs";
 import { CHROME_REVIEWS, isReviewed, provenanceOf } from "../scripts/localization.mjs";
 
-/** The one entry whose spaces are its content: what stands between the items of a list said in one line. */
-const SEPARATORS = new Set(["common.listSeparator"]);
+/** The entries whose spaces are their content: what stands between the items of a list, or of a list of codes, said in one line. */
+const SEPARATORS = new Set(["common.listSeparator", "developers.codeSeparator"]);
 
 const PAGES = {
   home: renderLiveHomePage,
@@ -54,17 +58,22 @@ const PAGES = {
   terms: renderLiveTermsPage,
   accessibility: renderLiveAccessibilityPage,
   cookies: renderLiveCookiesPage,
+  // The three reference pages every footer links (Get help, How to read Lex, Developers: `reference-pages.mjs`).
+  help: renderLiveHelpPage,
+  guide: renderLiveGuidePage,
+  developers: () => renderLiveDevelopersPage({ developers: DEVELOPERS }),
 };
+const DEVELOPERS = await readDevelopersContracts();
 
-/** The legal pages, which ask nothing and carry no form. */
-const LEGAL = new Set(["legalNotice", "privacy", "terms", "accessibility", "cookies"]);
+/** The legal pages and the reference pages, which ask nothing and carry no form. */
+const LEGAL = new Set(["legalNotice", "privacy", "terms", "accessibility", "cookies", "help", "guide", "developers"]);
 
 // React escapes an apostrophe in text; the table holds the text itself.
 const escaped = (text) => text.replaceAll("&", "&amp;").replaceAll("'", "&#x27;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
 
 test("every live page renders its chrome from the table", () => {
   const copy = liveChrome("en");
-  assert.deepEqual(Object.keys(copy).filter((key) => !["form", "common", "shell", "site", "freshness", "card", "refusalCard", "coverageAnswer", "failure", "citation", "legal"].includes(key)).sort(), Object.keys(PAGES).sort(), "one entry per live page, the forms, the page shell, the site around it and its freshness strip, the evaluation and refusal cards, the coverage answer, the failure panel, what the screens share, the citation generator's words, and what the legal pages share");
+  assert.deepEqual(Object.keys(copy).filter((key) => !["form", "common", "shell", "site", "freshness", "card", "refusalCard", "coverageAnswer", "failure", "citation", "legal", "reference"].includes(key)).sort(), Object.keys(PAGES).sort(), "one entry per live page, the forms, the page shell, the site around it and its freshness strip, the evaluation and refusal cards, the coverage answer, the failure panel, what the screens share, the citation generator's words, what the legal pages share and what the reference pages share");
   for (const [key, render] of Object.entries(PAGES)) {
     const html = render();
     const entry = copy[key];
