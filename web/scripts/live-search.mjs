@@ -10,16 +10,18 @@
 //
 // The request carries the query, the language, the work identifier, if any, and the date, if any, and
 // nothing else about the reader: the client sends no cookie and no referrer, and this file stores
-// nothing. The query is sent as typed, never trimmed or folded, because the platform matches it byte
-// for byte; so is the identifier, as the dossier screen sends it. An EU work is searched only within
-// it: the platform serves no search across EU works, so an EU answer comes from naming the work.
+// nothing. The query is sent as typed, never trimmed or folded: the platform folds it, with the text, by
+// its own rule (capitals and accents ignored, the plan's item 4.4), and marks each match on the text's own
+// spelling; so is the identifier, as the dossier screen sends it. An EU act is searched only within it:
+// the platform serves no search across EU acts, so an EU answer comes from naming the act.
 //
 // The date is the platform's own `date` parameter, the one date mechanism a search has: with it, each
 // Luxembourg work contributes the version that applies on that date (or, named, is answered as `as_of`
-// answers it), and the answer echoes it as `requested_date`, which the page prints. The home page's
+// answers it), and an EU act the one wording that date selects, as `as_of` selects it (the audit of
+// 2026-10-27, gap 5); the answer echoes it as `requested_date`, which the page prints. The home page's
 // date field starts at today, the calendar date in Luxembourg (R13; `todayInLuxembourg`, by the coded
-// rule of `temporal.mjs`); the search page's starts empty, because an EU act is searched in the one
-// wording held and the platform refuses it a date (`retrieval_mode_unavailable`), which the page says.
+// rule of `temporal.mjs`); the search page's starts empty, so a search names a date only when the reader
+// writes one, and an undated search reads every version (or, for an EU act, every wording) held.
 //
 // Exact references first (the plan's item 4.2): the platform reads the query as an exact reference before any word is
 // searched (an ELI, a CELEX, a Mémorial citation, a permalink, a citation of an article of an act at a date), and a
@@ -30,9 +32,10 @@
 // context names its publisher, `LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES`), so the page says what it read. A
 // reference that may name several acts lists each (`candidates`), linked when this site holds it, and opens none.
 //
-// Only exact matching runs (the plan's item 4.5; the specification of record's R90): the platform's relaxed lane (every
+// Only the phrase is matched (the plan's item 4.5; the specification of record's R90): the platform's relaxed lane (every
 // word of the phrase, in any order) serves the public only once its own check has passed, so every search from this
-// page asks the strict lane alone (`mode: "strict"`, `SEARCH_MODE`), and the no-hit card says that only exact matching ran.
+// page asks the strict lane alone (`mode: "strict"`, `SEARCH_MODE`), and the no-hit card says that only the phrase was
+// matched, with capitals and accents ignored.
 // The platform still serves the relaxed lane to a caller who asks for it, and says so in every answer.
 
 import { askV3 } from "./v3-client.mjs";
@@ -45,8 +48,8 @@ import { permalinkHref } from "./permalinks.mjs";
 import { isCalendarDate, luxembourgDateOrNull, todayInLuxembourg } from "./temporal.mjs";
 
 /**
- * The one lane this page asks for: the phrase exactly as typed. The relaxed lane stays off until its check passes (R90), and
- * the page says so where a search finds nothing.
+ * The one lane this page asks for: the phrase, capitals and accents aside. The relaxed lane stays off until its check passes
+ * (R90), and the page says so where a search finds nothing.
  */
 export const SEARCH_MODE = "strict";
 
@@ -91,8 +94,21 @@ export const LIVE_SEARCH_REFUSAL_SENTENCES = Object.freeze({
   // A named Luxembourg work and a date are `as_of`'s question, and these are its refusals, said as the reading says them.
   no_version_for_date: "No state of this work that this index holds applies on that date.",
   ambiguous_version: "Several states of this work apply on that date, and none is chosen.",
-  // An EU work and a date: the search reads the one wording held, and the platform refuses it a date.
-  retrieval_mode_unavailable: "An EU act is searched in the wording this server holds, not at a date: leave the date empty to search it.",
+  // An EU act this server holds in one wording, with no census to date it, and a date: the platform refuses it the date.
+  retrieval_mode_unavailable: "This server holds this EU act in one wording only, and searches it with no date: leave the date empty to search it.",
+});
+
+/**
+ * The same refusals of a search within an EU act (the refusal's context names eu-eurlex): with a date, the time view's
+ * refusals, said as the reading says them for an EU act (an EU date is the date of a wording, never an applicability date);
+ * the others as above.
+ */
+export const LIVE_SEARCH_EUROPE_REFUSAL_SENTENCES = Object.freeze({
+  ...LIVE_SEARCH_REFUSAL_SENTENCES,
+  language_not_available: LIVE_READING_EUROPE_REFUSAL_SENTENCES.language_not_available,
+  no_version_for_date: LIVE_READING_EUROPE_REFUSAL_SENTENCES.no_version_for_date,
+  ambiguous_version: LIVE_READING_EUROPE_REFUSAL_SENTENCES.ambiguous_version,
+  text_not_available: LIVE_READING_EUROPE_REFUSAL_SENTENCES.text_not_available,
 });
 
 /**
@@ -353,7 +369,9 @@ export function searchOutcome(asked) {
     } catch (error) {
       return { state: "invalid_envelope", ...englishStatement(invalidAnswerSentence(error.message)) };
     }
-    const table = recognition === null ? LIVE_SEARCH_REFUSAL_SENTENCES : referenceTableFor(asked.envelope.context, code, recognition, payload?.reason ?? null);
+    const table = recognition !== null
+      ? referenceTableFor(asked.envelope.context, code, recognition, payload?.reason ?? null)
+      : asked.envelope.context?.publisher === "eu-eurlex" ? LIVE_SEARCH_EUROPE_REFUSAL_SENTENCES : LIVE_SEARCH_REFUSAL_SENTENCES;
     const sentence = code === "no_corpus_mounted"
       ? noCorpusMountedSentence(payload)
       : tableRefusalSentence(table, code, unexpectedRefusalSentence, payload);

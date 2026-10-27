@@ -17,14 +17,18 @@
 // and what was searched, every count the answer's and dated by the index's build (R11).
 //
 // A search with no passage shows the plain no-hit card (the plan's item 4.5; R59, R90): which searches ran (the exact
-// reference, the titles, the text), that only exact matching ran and what that means, the population searched, the
-// publishers' own search pages as links (nothing here requests them), and the absence note.
+// reference, the titles, the text), that only the phrase was matched, with capitals and accents ignored (the plan's item
+// 4.4), and what that means, the population searched, the publishers' own search pages as links (nothing here requests
+// them), and the absence note.
 //
-// An EU answer (one named EU work, `view.publisher` "eu-eurlex") is laid out with its own words: the
-// one wording the hits are in, its date and its permalink, said once above the hits; each hit's
-// heading, CELEX and wording date, never called a version or an applicability date, since the date
-// is the one the publisher's Formex package gives the act (the answer's `date_semantics`, shown as
-// sent); and what the search does not cover, as the answer lists it.
+// An EU answer (one named EU act, `view.publisher` "eu-eurlex"; the audit of 2026-10-27, gap 5) is laid out with its own
+// words, wording by wording: the acknowledgement and the authenticity statement every EU text served carries (Decision 95),
+// what was searched (the wordings, with no date or at the date asked) and what was not; then each wording with hits, headed
+// by its date in its role, as the reading heads it (R21: the original wording by the act's Formex date, a consolidated
+// wording by the publisher's consolidation date, and the dates it answers), never called a version or an applicability
+// date; under it each passage, the article's heading linked to the reading at that wording, its extract quoted with the
+// matched words marked, and, where an undated search showed an unchanged article once, how many other wordings hold the
+// same text; and what the search does not cover, as the answer lists it.
 //
 // The form's controls carry no `name`: a submit the browser performs itself (before the bundle has
 // hydrated the page, or without it) then sends nothing, so the phrase never reaches a query string, the
@@ -172,34 +176,99 @@ function AmbiguousWorks({ works, date }) {
   );
 }
 
-function EuropeHit({ hit }) {
-  // The heading is the publisher's text, marked in the language of the wording it is in.
+/** The act an EU answer is of, as its headings name it: the act whose census was searched, else the wording's own CELEX. */
+function europeAct(view) {
+  return view.seedCelex ?? view.wordings[0]?.celex ?? view.identifier;
+}
+
+/**
+ * One EU passage: the article's heading, the publisher's text marked in the wording's language, linked to the reading at that
+ * wording (the provision's permalink, which pins it), its extract, and, when an undated search showed the article's text once,
+ * how many other wordings searched hold the same text (said, not dropped). A relaxed hit says its lane.
+ */
+function EuropePassage({ hit }) {
   return (
     <li data-lane={hit.lane}>
-      <a href={permalinkHref(hit.permalink, CHROME_LOCALE)}>
-        <Say
-          template={COPY.euHit}
-          values={{ heading: <strong lang={quotationLanguageTag(hit.language)}>{hit.heading}</strong>, celex: hit.celex, date: hit.wordingDate }}
-        />
-      </a>{' '}
-      <span className="badge">{COPY.lane[hit.lane]}</span>
+      <a href={permalinkHref(hit.permalink, CHROME_LOCALE)}><strong lang={quotationLanguageTag(hit.language)}>{hit.heading}</strong></a>
+      {hit.lane === 'relaxed' ? <>{' '}<span className="badge">{COPY.lane.relaxed}</span></> : null}
+      <Extract extract={hit.extract} language={hit.language} />
+      {hit.sameWording.length > 0 ? (
+        <p className="note" data-same-wording={hit.sameWording.length}>{fillCounted(COPY.euSameWording, hit.sameWording.length)}</p>
+      ) : null}
     </li>
   );
 }
 
-/** The one wording an EU answer's hits are in, said once above them, with what its date means. */
-function EuropeWording({ view }) {
-  const { wording } = view;
-  if (wording === null) return null;
+/**
+ * An EU answer's passages, wording by wording (R21): each wording with hits on the page once, headed by its date in its role
+ * as the reading heads it, the dates it answers, its permalink, then its passages in the page's order.
+ */
+function EuropeWordings({ view }) {
+  const reading = liveChrome().reading;
+  const act = europeAct(view);
+  return (
+    <ol className="acts" data-wordings={view.wordings.length}>
+      {view.wordings
+        .map((wording) => ({ wording, hits: view.hits.filter((hit) => hit.publisherExpressionIri === wording.publisherExpressionIri) }))
+        .filter(({ hits }) => hits.length > 0)
+        .map(({ wording, hits }) => (
+          <li key={wording.publisherExpressionIri} data-wording={wording.wordingDate ?? ''} data-wording-kind={wording.kind}>
+            <h2 className="act-title">
+              <Say
+                template={wording.kind === 'consolidated_version' ? reading.europeConsolidatedHeading : reading.europeOriginalHeading}
+                values={{ celex: act, language: view.language, date: wording.wordingDate }}
+              />
+            </h2>
+            <p className="act-facts" data-wording-holds="">
+              {wording.nextDate === null
+                ? reading.europeLatest
+                : <Say template={reading.europeHoldsUntil} values={{ date: wording.wordingDate, next: wording.nextDate }} />}
+            </p>
+            {wording.permalink === null ? null : <p><Permalink value={wording.permalink} /></p>}
+            <ol className="passages">
+              {hits.map((hit) => <EuropePassage key={hit.articleIdentitySha256} hit={hit} />)}
+            </ol>
+          </li>
+        ))}
+    </ol>
+  );
+}
+
+/**
+ * What an EU search's lanes matched against, every count the answer's (R11): its wordings and their articles of searchable
+ * text, at the date asked or with none; and, when there are any, the wordings of the act it did not search.
+ */
+function EuropeSearched({ view }) {
+  const { searched } = view;
+  const notSearched = searched.withheldByRights + (searched.notSearched === null
+    ? 0
+    : searched.notSearched.withoutText + searched.notSearched.differentTexts + searched.notSearched.withoutUsableDate);
   return (
     <>
-      <p data-pinned-wording={wording.wordingSha256}>
-        <Say
-          template={COPY.euWording}
-          values={{ celex: wording.celex, language: view.language, date: wording.wordingDate, permalink: <Permalink value={wording.permalink} /> }}
-        />
+      <p data-searched={searched.wordings}>
+        {fillText(COPY.euSearched, {
+          wordings: fillCounted(COPY.euWordings, searched.wordings),
+          celex: europeAct(view),
+          language: languageName(view.language),
+          articles: fillCounted(liveChrome().home.articles, searched.articles),
+        })}
       </p>
-      <p data-date-semantics="" lang={ENGLISH_LANG}>{asSentence(view.dateSemantics)}</p>
+      {view.seedCelex === null ? null : (
+        <p data-searched-on={view.date ?? ''}>
+          {view.date === null ? COPY.euUndated : <Say template={COPY.euDated} values={{ date: view.date }} />}
+        </p>
+      )}
+      {notSearched > 0 ? <p data-not-searched={notSearched}>{fillCounted(COPY.euNotSearched, notSearched)}</p> : null}
+    </>
+  );
+}
+
+/** The acknowledgement and the authenticity statement every EU text served carries (Decision 95), as the platform words them. */
+function EuropeStatements({ view }) {
+  return (
+    <>
+      <p data-acknowledgement="" lang={ENGLISH_LANG}>{view.acknowledgement}</p>
+      <p data-authenticity="" lang={ENGLISH_LANG}>{view.authenticity}</p>
     </>
   );
 }
@@ -289,7 +358,7 @@ function ActGroups({ view }) {
 
 /**
  * The date a Luxembourg search was asked at, as its answer echoes it (R13: printed), or that none was: then every held
- * version was searched. An EU answer names no date; its wording's date is said with the wording (`EuropeWording`).
+ * version was searched. An EU answer says its own, with what it searched (`EuropeSearched`).
  */
 function SearchedOn({ view }) {
   if (view.publisher === 'eu-eurlex') return null;
@@ -303,6 +372,23 @@ function SearchedOn({ view }) {
 /** What a search found: in the strict lane alone, its passages and acts; otherwise both lanes' counts, as before. */
 function Found({ view }) {
   const { population } = view;
+  if (view.mode === 'strict' && view.publisher === 'eu-eurlex') {
+    // An EU act's passages are counted by the wordings they are in, never as acts: one act, several wordings.
+    return (
+      <p data-population="">
+        <Say
+          template={COPY.euFound}
+          values={{
+            query: view.query,
+            language: languageName(view.language),
+            passages: fillCounted(COPY.passages, population.strictHits),
+            wordings: fillCounted(COPY.euWordings, view.wordings.filter((wording) => wording.hits > 0).length),
+            celex: europeAct(view),
+          }}
+        />
+      </p>
+    );
+  }
   if (view.mode === 'strict') {
     return (
       <p data-population="">
@@ -382,7 +468,7 @@ function NoHitCard({ view, today = null }) {
     one_work: countedEntry(COPY.runTitlesMatched, 1),
     several_candidates: countedEntry(COPY.runTitlesMatched, view.workResolution.candidates?.length ?? 2),
   }[resolution];
-  // Titles are matched with case and accents folded, unlike the text: said where the ladder ran over titles held.
+  // Titles are matched with capitals and accents ignored, as the text is: said where the ladder ran over titles held.
   const titlesFolded = ['no_title_match', 'one_work', 'several_candidates'].includes(resolution);
   return (
     <section className="no-hit-card" data-no-hit-card="">
@@ -398,7 +484,7 @@ function NoHitCard({ view, today = null }) {
         {view.population.relaxedHits === null ? null : <li data-search-run="every-word">{COPY.runTextWords}</li>}
       </ul>
       {view.population.relaxedHits === null ? <p data-exact-only="">{COPY.exactOnly}</p> : null}
-      {europe ? null : <Searched view={view} today={today} />}
+      {europe ? <EuropeSearched view={view} /> : <Searched view={view} today={today} />}
       <div className="official-search" data-official-search="">
         <p>{COPY.officialSearch}</p>
         <ul>
@@ -426,12 +512,14 @@ export function SearchResultsView({ view, onNextPage, today = null }) {
   return (
     <>
       {resolutionOnTop === null ? null : <SearchWorkResolution resolution={resolutionOnTop} />}
+      {/* EU text stands below Decision 95's acknowledgement and authenticity statement, as on the reading screen. */}
+      {europe && view.hits.length > 0 ? <EuropeStatements view={view} /> : null}
       <Found view={view} />
       {/* What was searched: above the passages, or inside the no-hit card, which says it among what ran. */}
-      {europe || view.hits.length === 0 ? null : <Searched view={view} today={today} />}
+      {view.hits.length === 0 ? null : europe ? <EuropeSearched view={view} /> : <Searched view={view} today={today} />}
       <SearchedOn view={view} />
       {view.referenceReason === 'title_not_held' && view.hits.length > 0 ? <p data-searched-as-words="title_not_held">{COPY.titleNotHeld}</p> : null}
-      {europe ? <EuropeWording view={view} /> : <AmbiguousWorks works={view.ambiguousWorks} date={view.date} />}
+      {europe ? null : <AmbiguousWorks works={view.ambiguousWorks} date={view.date} />}
       {view.hits.length === 0 ? (
         view.searchableTextHeld ? <NoHitCard view={view} today={today} /> : (
           <>
@@ -444,11 +532,7 @@ export function SearchResultsView({ view, onNextPage, today = null }) {
       ) : (
         <>
           <p lang={ENGLISH_LANG}>{asSentence(view.pageIs)} {asSentence(view.hitUnit)}</p>
-          {europe ? (
-            <ol className="hits">
-              {view.hits.map((hit) => <EuropeHit key={hit.articleIdentitySha256} hit={hit} />)}
-            </ol>
-          ) : <ActGroups view={view} />}
+          {europe ? <EuropeWordings view={view} /> : <ActGroups view={view} />}
         </>
       )}
       {europe ? <NotCovered rows={view.notHeld} /> : null}

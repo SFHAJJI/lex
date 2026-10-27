@@ -105,6 +105,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::EvidenceBundleEuropeOf, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::EvidenceBundleEuropePinned, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::LocateEuropeSeed, "
+                    // EU search over the act's time view (the audit of 2026-10-27, gap 5; V3CorpusMount.EuropeSearch.cs).
+                    + "method private instance Lex.V3.Api.V3CorpusMount::LocateEuropeSeedForSearch, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::LocateEuropeSeedForTime, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::LocateEuropeWork, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::LuxembourgReference, "
@@ -115,6 +117,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseAmbiguousVersion, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseArticleNotInVersion, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseEuropeLanguage, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::RefuseEuropeSearchMode, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNamesWithheld, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
@@ -134,6 +137,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUnlessWorkStates, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RouteEuropeSearch, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::SearchEurope, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::SearchEuropeTime, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::SearchEuropeWordings, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::SearchReference, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::SelectEuropeAt, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::SitePathReference, "
@@ -322,6 +327,9 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Contracts.Evaluation.RetrievalMetrics::ReciprocalRank, "
                     + "5 compiler-generated",
+                // A text and its fold, made by the fold alone (the plan's item 4.4; TextFolding).
+                "Lex.V3.Contracts.Index.FoldedText: constructor internal instance Lex.V3.Contracts.Index.FoldedText::.ctor, "
+                    + "method public static Lex.V3.Contracts.Index.TextFolding::Folded",
                 "Lex.V3.Contracts.Index.V3IndexCapabilityManifest: by-ref-method public static "
                     + "Lex.V3.Contracts.Index.V3IndexCapabilityManifest::TryCreate, "
                     + "by-ref-method public static "

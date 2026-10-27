@@ -4,6 +4,79 @@ Updated 2026-10-27. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Review and repair (#1005): R92 on every EU search, J2's walk, the apostrophes and no-break spaces folded (sole driver, 2026-10-27)
+
+The independent review of #1005 (writer/search-quality at 8968fb5a) said REPAIR, and CI's journeys failed J2. One round:
+- **F1 (high, R92, latent).** An EU search, or an EU `as_of`, reached by a provision coordinate (`…#lex-provision=001`) or
+  an article identity named its act only under `seed_celex`, which the names gate did not read, so a withheld act's text was
+  served (reproduced: 79 hits with their text, where the CELEX gave `text_withheld`). The gate now reads `seed_celex` and
+  `original_work_id`, and `SearchEuropeTime` and `SearchEurope` refuse a withheld act with `RefuseNamesWithheld` before any
+  text is read. `AnEuActTheRecordWithholdsIsTextWithheldOnEveryOperationThatWouldShowItsText` asks search and `as_of` by the
+  coordinate and by the article identity too (`as_of` by the coordinate: it reads no bare article identity; 9 requests,
+  each answered before the record and `text_withheld` after).
+- **CI's journeys, J2.** The walk expected "…with capitals and accents ignored:", which the reviewed final no longer says;
+  it now reads `runText` and `exactOnly` from the table, and `live-search.test.mjs` holds every J2 sentence to the rendered
+  no-hit card.
+- **The driver's decision: fold these too** (one unit for one, or one dropped, so the offsets stay exact): ’ ‘ ʼ to ', the
+  no-break spaces U+00A0, U+202F and U+2007 to a space, the soft hyphen U+00AD dropped (a match never takes it along). On
+  derive-r1 "l'article" is in 1,517 texts and "l’article" in 9,246; the soft hyphen appears 441 times, 438 inside a word.
+  `TextFolding.Rule`, `text-folding.mjs` and `exactOnly` (EN and FR) say so; the French reviewed by an independent reviewer
+  (1 form, changed in French only: "étant lues comme", "une espace ordinaire", "n’étant pas lu", "chacun des autres
+  caractères de l’expression"), its final applied byte for byte and its addendum appended to the review record.
+- **Records**: the samples rendered again; the schema-8 and EU /5 base answers recorded again on Linux at 2c43bde3 (the
+  three search rows by their `matching` sentence alone).
+
+## Search with capitals and accents ignored, and EU search over the consolidated wordings (sole driver, 2026-10-27)
+
+The audit of 2026-10-27, gaps 3 and 5; the plan's item 4.4; R59, R21, R107. `writer/search-quality`.
+- **One folding** (`TextFolding`, Contracts; `TextFolding.Rule` is the sentence every answer's `matching` carries): each
+  letter or digit to its canonical decomposition (NFD) without its combining marks, lowered by the invariant case map, by
+  the title folding's ICU-derived table (the same with or without the image's missing language data); a combining mark
+  alone dropped; œ and æ written oe and ae; every other character kept (punctuation, ’ and ', every kind of space, until
+  the repair above folded the apostrophes and no-break spaces; a symbol is not decomposed, so ≠ is not =). `FoldedText` maps each folded unit to the original's, so a match is marked on the text's
+  own characters (a letter with its marks, a ligature whole) and the extract's byte range is unchanged in kind.
+- **Luxembourg** (driver decision, reversible): folded at query and match time over the indexes already built (/9, /8,
+  /6), no derive. The reader holds a folded copy per searchable language (`LuxembourgIndexReader.Search.cs`,
+  `FoldedSearchTexts`: every state's article once, each distinct text folded once, UTF-8), read at `Warm` by
+  `LuxembourgIndexQueries.SearchTexts` (its plan held by `LuxembourgIndexQueryPlanTests`), replacing the SQL `instr` scan.
+  No index change is needed for the next derive: a folded column would add about 90 MB to /9's file for no latency gain.
+- **EU** (`V3CorpusMount.EuropeSearch.cs`): over the act's census, with no date every wording whose text is held and the
+  rights rule admits, an article's text once under the latest wording that holds it (`same_wording` names the others,
+  `fold` counts); with a date the one wording `as_of` selects, with its refusals; each hit dated by its wording's role and
+  `next_date` (R21), its extract, its provision permalink; the answer under Decision 95's acknowledgement and authenticity
+  statement, with `wordings`, `searched`, `rights_rule`. An EU index with no census: the one original wording, folded, with
+  extracts; a date refused as before. The rows of a wording (no text) are cached per expression; texts are read once per
+  distinct digest and not kept. Not held, said in `not_held`: EU titles and OJ references (a derive would add them from the
+  census's work facts, so an EU act could be found by its title and an undated search across EU acts served).
+- **Measured, read-only, in place** (SQLite `immutable=1`, nothing copied or written; a harness running the reader's queries
+  and fold, this PC shared with another agent's build):
+  - `derive-r1` LU /9 (137,614 French articles, 29,374 distinct texts): the folded copy 26.9 MB, 51.7 MiB held, built in
+    5.3 s at start; a search 5 to 11 ms median (p95 at most 31 ms), against 3.9 to 6.3 s for the `instr` scan it replaces.
+    "conge", "Congé" and "CONGÉ" now find the 2,399 passages "congé" finds (were 2, 11 and 0); "reglement grand-ducal"
+    5,099 (was 0); "oeuvre" 2,391 (was 767).
+  - `derive-c` LU /8 (live; 7,877 articles): 7.6 MiB, 1.0 s at start; 2 to 4 ms against about 240 ms; "conge" 139 (was 0).
+  - `derive-r1` EU /6: the GDPR's three wordings, 2 to 8 ms (44 ms the first time); the CRR's 55 French wordings (38,683
+    articles, 1,585 distinct texts), 594 ms the first time (its rows read) and 46 ms after; a dated search 19 to 22 ms.
+- **Copy** (EN and FR): the search page's intro, counts, lane, no-hit card (`runText`, `exactOnly`), the Developers line,
+  the EU results' new entries (`euFound`, `euWordings`, `euSearched`, `euDated`, `euUndated`, `euNotSearched`,
+  `euSameWording`; `euWording` and `euHit` removed; the wordings headed by the reading's headings), and the EU date refusal.
+  The French reviewed by an independent reviewer (Claude, AI reviewer), 19 forms, 3 changed, `euUndated` in English too (an
+  article is shown once per text, not once; a wording is searched only when held and admitted); finals applied byte for
+  byte, addendum appended to `C:\lex-v3\lanes\fr-review\review.md`.
+- **Not done**: exact-accent matches ranked first (no ranker; the order is still the stated one); quotation marks not
+  stripped; ’ and ', and a no-break space and a space, stayed different (measured on /9: "l'article" 9,168 passages,
+  "l’article" 23,940): the repair above folds them, by the driver's decision.
+- **Records and tests**: integration at b3896074 (#1003 carrying #1004) merged in (222a3cf6): the EU not-held rows keep
+  #1004's other-languages sentence, its `article_text` row dropped (the extracts serve the text). The schema-8 and EU /5 base
+  answers recorded again on Linux (WSL Ubuntu 24.04.4, .NET 10.0.11, invariant, UTC) at 222a3cf6: the two schema-8 searches
+  by their matching, lanes and extract sentences alone (no hit moved), the EU /5 search row by the time view's answer, no
+  other row; Windows replays them. The answer and envelope samples rendered from the handler (new: the phrase in capitals
+  without accents; an EU act's two wordings with no date, and at a date) and verified without the switches; the refusal
+  payloads did not move. `dotnet build Lex.V3.slnx -c Release`: 0 warnings, 0 errors; `Lex.V3.Tests`: 3,385, 3,379 passed,
+  6 skipped; `Lex.V3.Ingest.Tests`, the touched classes, every census class and `PublicRequestRecordingTests` (and the
+  gates, samples, legacy, EU search and time-view classes): 276, 272 passed, 4 skipped (recorders and the mount to evaluate);
+  `npm run build` then `npm test`: 1,486, 1,483 passed, 3 skipped (browser); `eng/verify-v3-tree.ps1`: 1,799 tracked paths.
+  New tests: `TextFoldingTests` (Lex.V3.Tests), `V3CorpusEuropeTimeSearchTests` (4), `web/test/text-folding.test.mjs`.
 ## The combine's two layout failures in CI's journeys (sole driver, 2026-10-27)
 
 CI's journeys at dfb8d82f failed two layout checks, both from #1004's changes:

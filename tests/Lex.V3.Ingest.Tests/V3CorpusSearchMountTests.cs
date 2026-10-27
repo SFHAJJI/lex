@@ -18,7 +18,7 @@ namespace Lex.V3.Ingest.Tests;
 /// mounted index can serve, resolver first. The lanes are sets and the relaxed set contains the strict
 /// set: with no mode an article matching both is served once, as strict, and relaxed never outranks
 /// strict; with a mode the answer is that lane's whole set and the other lane is null, not zero. The
-/// answer says it is an order and not a rank, that matching is byte-exact, that a page is the first
+/// answer says it is an order and not a rank, that matching folds capitals and accents and nothing else, that a page is the first
 /// hits and not the best, and what a hit counts; a mode the index cannot serve is refused and never
 /// ignored; the query is bounded before any data is read; a named work on a date refuses as
 /// <c>as_of</c> refuses, and across works an ambiguous work is listed and hides nothing.
@@ -90,7 +90,7 @@ public sealed class V3CorpusSearchMountTests
         Assert.AreEqual(1, hits.Count(hit => hit.GetProperty("publisher_id").GetString() == both), "Served once, never again as relaxed.");
 
         // What the answer says about itself, held against wording written here and not against the
-        // constants that produce it: an order and not a rank, byte-exact, what a hit is, what a lane is.
+        // constants that produce it: an order and not a rank, folded, what a hit is, what a lane is.
         var ranking = body.GetProperty("ranking").GetString();
         StringAssert.StartsWith(ranking, "none;");
         StringAssert.Contains(ranking, "strict lane before relaxed lane");
@@ -98,12 +98,13 @@ public sealed class V3CorpusSearchMountTests
         StringAssert.Contains(ranking, "no BM25 ranker");
         StringAssert.Contains(ranking, "not the best hits");
         var matching = body.GetProperty("matching").GetString();
-        StringAssert.Contains(matching, "byte-exact substring");
-        StringAssert.Contains(matching, "the article's searchable text");
+        StringAssert.StartsWith(matching, "substring of the article's searchable text");
         StringAssert.Contains(matching, "text and reference tokens");
         StringAssert.Contains(matching, "modification markers and note references are not searched");
-        StringAssert.Contains(matching, "case and diacritics are significant");
-        StringAssert.Contains(matching, "nothing is folded, stemmed or expanded");
+        StringAssert.Contains(matching, "canonical decomposition (Unicode NFD) without its combining marks and in lower case");
+        StringAssert.Contains(matching, "the ligatures \u0153 and \u00E6, of either case, are written oe and ae");
+        StringAssert.Contains(matching, "so capitals, accents, these apostrophes and these spaces never decide a match and every other character does");
+        StringAssert.Contains(matching, "nothing is stemmed or expanded");
         StringAssert.Contains(body.GetProperty("hit_unit").GetString(), "one article of one held state, not a provision");
         var lanes = body.GetProperty("lanes").GetString();
         StringAssert.Contains(lanes, "the relaxed set contains the strict set");
@@ -203,7 +204,7 @@ public sealed class V3CorpusSearchMountTests
     }
 
     [TestMethod]
-    public async Task MatchingIsByteExactAndNoHitIsAnAnswer()
+    public async Task MatchingFoldsCapitalsAndAccentsOnlyAndNoHitIsAnAnswer()
     {
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
@@ -211,10 +212,14 @@ public sealed class V3CorpusSearchMountTests
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
 
-        // Case is significant and nothing is folded: the capitalised phrase is in no article.
-        var capitalised = await SearchAsync(mount, "Garantie Locative");
-        Assert.AreEqual(V3Verdicts.Answer, capitalised.Verdict, "No hit is an answer, never a refusal.");
-        var body = capitalised.Result!.Value;
+        // Capitals do not decide a match: the capitalised phrase finds what the phrase finds.
+        var capitalised = (await SearchAsync(mount, "Garantie Locative")).Result!.Value;
+        Assert.AreEqual(2, capitalised.GetProperty("hits").GetArrayLength(), "the phrase in capitals finds the articles the phrase does");
+
+        // Every other character does: a phrase no article holds, even folded, is no hit, and no hit is an answer.
+        var nowhere = await SearchAsync(mount, "Garantie-Locative");
+        Assert.AreEqual(V3Verdicts.Answer, nowhere.Verdict, "No hit is an answer, never a refusal.");
+        var body = nowhere.Result!.Value;
         Assert.AreEqual(0, body.GetProperty("hits").GetArrayLength());
         Assert.AreEqual(0, body.GetProperty("population").GetProperty("strict_hits").GetInt32());
         Assert.AreEqual(0, body.GetProperty("population").GetProperty("relaxed_hits").GetInt32());
@@ -244,22 +249,42 @@ public sealed class V3CorpusSearchMountTests
     }
 
     [TestMethod]
-    public async Task DiacriticsAreSignificantInBothDirections()
+    public async Task CapitalsAndAccentsDoNotDecideAMatchInEitherDirection()
     {
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
-        var ids = await SetTextsAsync(fixture, fixture.ExpressionIri, "Le montant égal est dû.", "Le montant egal est du.", Neither);
+        // The plan's item 4.4: "Congé", "congé", "conge" and the capitals find one another; a decomposed accent and the
+        // ligature œ fold as their letters do; the apostrophes and the no-break spaces fold too (the review of #1005), and a
+        // hyphen still counts.
+        var ids = await SetTextsAsync(fixture, fixture.ExpressionIri,
+            "Le cong\u00E9 parental est d\u00FB \u00E0 l\u2019\u0153uvre.",
+            "Le conge\u0301 parental, CONG\u00C9 PARENTAL, est du a l'oeuvre.",
+            "Le compte-rendu du 6\u00A0septembre.");
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
 
-        static string[] PublisherIds(JsonElement body) =>
-            body.GetProperty("hits").EnumerateArray().Select(static hit => hit.GetProperty("publisher_id").GetString()!).ToArray();
+        // The strict lane alone, as the site asks it: the relaxed lane finds "compte" and "rendu" apart in "compte-rendu".
+        async Task<string[]> Found(string query) =>
+            (await SearchAsync(mount, query, mode: "strict")).Result!.Value.GetProperty("hits").EnumerateArray()
+                .Select(static hit => hit.GetProperty("publisher_id").GetString()!).Order(StringComparer.Ordinal).ToArray();
 
-        // The accented spelling finds the accented text only, and the plain spelling the plain text only.
-        CollectionAssert.AreEqual(new[] { ids[0] }, PublisherIds((await SearchAsync(mount, "égal")).Result!.Value));
-        CollectionAssert.AreEqual(new[] { ids[1] }, PublisherIds((await SearchAsync(mount, "egal")).Result!.Value));
-        CollectionAssert.AreEqual(new[] { ids[0] }, PublisherIds((await SearchAsync(mount, "dû")).Result!.Value));
-        CollectionAssert.AreEqual(Array.Empty<string>(), PublisherIds((await SearchAsync(mount, "Égal")).Result!.Value));
+        var accented = new[] { ids[0], ids[1] }.Order(StringComparer.Ordinal).ToArray();
+        foreach (var query in new[] { "cong\u00E9 parental", "Cong\u00E9 parental", "conge parental", "CONGE PARENTAL", "conge\u0301 parental", "est d\u00FB \u00E0 l", "EST DU A L" })
+        {
+            CollectionAssert.AreEqual(accented, await Found(query), query);
+        }
+
+        CollectionAssert.AreEqual(accented, await Found("\u0152UVRE"), "the ligature folds as oe, in capitals too");
+        CollectionAssert.AreEqual(accented, await Found("oeuvre"));
+        // The review of #1005: a typographic apostrophe is the straight one, a no-break space a space, a soft hyphen nothing.
+        CollectionAssert.AreEqual(accented, await Found("l\u2019oeuvre"), "a typographic apostrophe finds the straight one too");
+        CollectionAssert.AreEqual(accented, await Found("l'\u0153uvre"));
+        CollectionAssert.AreEqual(new[] { ids[2] }, await Found("compte-rendu"));
+        CollectionAssert.AreEqual(Array.Empty<string>(), await Found("compte rendu"), "a hyphen is not folded away");
+        CollectionAssert.AreEqual(new[] { ids[2] }, await Found("6 septembre"), "a no-break space is read as a space");
+        CollectionAssert.AreEqual(new[] { ids[2] }, await Found("6\u00A0SEPTEMBRE"));
+        CollectionAssert.AreEqual(new[] { ids[2] }, await Found("compte-ren\u00ADdu"), "a soft hyphen is nothing");
+        CollectionAssert.AreEqual(Array.Empty<string>(), await Found("\u0301"), "a combining mark alone folds to nothing, which matches nothing");
     }
 
     [TestMethod]

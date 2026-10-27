@@ -3347,7 +3347,7 @@ public static partial class LuxembourgIndexBuilder
 }
 
 /// <summary>A verified read-only mount of one exact Luxembourg index.</summary>
-public sealed class LuxembourgIndexReader : IDisposable
+public sealed partial class LuxembourgIndexReader : IDisposable
 {
     private readonly string _path;
     private readonly SqliteConnection _connection;
@@ -3886,12 +3886,13 @@ public sealed class LuxembourgIndexReader : IDisposable
 
     /// <summary>
     /// The articles of held states, in one language, whose searchable text contains every one of
-    /// <paramref name="needles"/> as a byte-exact substring, each paired with every state that holds
-    /// it, in work key, publisher date, article identity and state digest order. With a work key, only
-    /// that work's states. Nothing is ranked, folded or selected here: which lane a hit belongs to and
-    /// which state applies on a date are the caller's rules. The result is null when the capability
-    /// manifest measured no searchable text in that language, which is the index saying it cannot
-    /// answer, as distinct from an empty list, which is no hit.
+    /// <paramref name="needles"/> once both are folded (<see cref="TextFolding"/>: capitals and accents ignored, every other
+    /// character as it is), each paired with every state that holds it, in work key, publisher date, article identity and
+    /// state digest order. With a work key, only that work's states. Nothing is ranked or selected here: which lane a hit
+    /// belongs to and which state applies on a date are the caller's rules. The texts are matched in the reader's folded copy
+    /// of the language's searchable text (<see cref="SearchTextsOf"/>), read once; a needle that folds to nothing matches
+    /// nothing. The result is null when the capability manifest measured no searchable text in that language, which is the
+    /// index saying it cannot answer, as distinct from an empty list, which is no hit.
     /// </summary>
     public IReadOnlyList<LuxembourgIndexSearchHit>? SearchStateArticles(
         string language, IReadOnlyList<string> needles, string? workKey)
@@ -3903,66 +3904,12 @@ public sealed class LuxembourgIndexReader : IDisposable
             throw new ArgumentException("A search needs at least one non-empty needle.", nameof(needles));
         }
 
-        if (!_capabilityManifest.Cells.Any(cell =>
-                string.Equals(cell.Operation, "search", StringComparison.Ordinal) &&
-                string.Equals(cell.Column, "articles", StringComparison.Ordinal) &&
-                string.Equals(cell.Field, "searchable_text", StringComparison.Ordinal) &&
-                string.Equals(cell.Language, language, StringComparison.Ordinal)))
+        if (!SearchableLanguages().Contains(language, StringComparer.Ordinal))
         {
             return null;
         }
 
-        // The scan has its own read-only connection on the same immutable file and does not take the
-        // reader's gate. A search reads every article of a language, and holding the one shared
-        // connection for that long would stall every other operation on the mount behind it, which a
-        // one-character query would be the cheapest way to do. The path is the reader's private copy,
-        // the file whose bytes were hashed and verified when the reader was opened (both open routes
-        // copy to a private temporary path and hash that copy), so this connection reads what the shared
-        // one reads; a local process able to rewrite that file could alter either, which is no wider
-        // than it was.
-        {
-            using var connection = LuxembourgIndexBuilder.OpenForServing(_path);
-            using var command = connection.CreateCommand();
-            command.CommandText =
-                "SELECT s.work_key, s.applicability_date, s.state_sha256, a.article_identity_sha256, a.publisher_id, a.publisher_wid " +
-                // The state of an article is found by exact element of the state's identity list, as the
-                // sibling queries do, and not by a substring of the JSON text: the join no longer rests on
-                // every value in the column being a 64-character digest (which OpenAndVerify does require).
-                // json_each yields one row per element, so this is one row per article only while no state
-                // lists an identity twice and no article sits in two states. The index cannot be opened
-                // otherwise: ValidateStates refuses a list that is not its own Distinct().Order(), a list
-                // that is not exactly the expression's articles (whose identity is the articles table's
-                // PRIMARY KEY), and an article claimed by two states. There is deliberately no DISTINCT
-                // here: it would turn a broken invariant into a plausible answer, and the refusal at open
-                // is the loud form. The refusals are pinned in LuxembourgIndexBuilderTests.
-                "FROM states s, json_each(s.article_identities_json) j " +
-                "JOIN articles a ON a.article_identity_sha256 = j.value AND a.language = s.language " +
-                "WHERE a.language=$language" +
-                string.Concat(needles.Select(static (_, index) => $" AND instr(a.searchable_text,$needle{index})>0")) +
-                (workKey is null ? string.Empty : " AND s.work_key=$work") +
-                " ORDER BY s.work_key, s.applicability_date, a.article_identity_sha256, s.state_sha256";
-            command.Parameters.AddWithValue("$language", language);
-            for (var index = 0; index < needles.Count; index++)
-            {
-                command.Parameters.AddWithValue($"$needle{index}", needles[index]);
-            }
-
-            if (workKey is not null)
-            {
-                command.Parameters.AddWithValue("$work", workKey);
-            }
-
-            var hits = new List<LuxembourgIndexSearchHit>();
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
-            {
-                hits.Add(new LuxembourgIndexSearchHit(
-                    reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-                    reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5)));
-            }
-
-            return hits;
-        }
+        return SearchTextsOf(language).Find(needles, workKey);
     }
 
     /// <summary>

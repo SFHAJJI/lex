@@ -62,6 +62,13 @@ public static class TitleFolding
         return builder.ToString();
     }
 
+    /// <summary>
+    /// The fold of one letter or digit by <see cref="Folds"/> (its canonical decomposition, the non-spacing marks dropped and the
+    /// rest lowered), or null when its fold is itself or it is no letter or digit: the per-letter table <see cref="TextFolding"/>
+    /// folds searched text with.
+    /// </summary>
+    internal static string? FoldOf(char character) => Folds.GetValueOrDefault(character);
+
     private static void Append(StringBuilder builder, ref bool pendingSpace, char character)
     {
         if (char.IsLetterOrDigit(character))

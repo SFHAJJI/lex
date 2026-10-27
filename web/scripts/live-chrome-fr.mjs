@@ -401,6 +401,23 @@
 // In the repair of #1004, the same delegation's supplement "the review of #1004, F2" took the reviewer's pair for
 // `guide.sections.textless.text`: its middle sentence dropped, and "Lex ne présente jamais le texte d’une autre version comme celui
 // de cette version" (a version as published answers later dates on index 8, under its label).
+// Search with capitals and accents ignored, and EU search over the consolidated wordings (the audit of 2026-10-27, gaps 3
+// and 5; the plan's item 4.4): 19 forms reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the
+// same delegation, in the addendum of 2026-10-27 "search with capitals and accents ignored, and EU search over the
+// consolidated wordings" (16 approved as drafted, 3 changed, the English too in 1): `search.intro`, `search.population`,
+// `search.lane.strict`, `search.found`, `search.runText` and `search.exactOnly` ("sans tenir compte des majuscules ni des
+// accents", never "en ignorant"; "œ et æ étant lus oe et ae"; "l’expression", "exacte" kept only where a match is exact),
+// `developers.operations.descriptions.search`, the new EU entries `search.euFound`, `search.euWordings`, `search.euSearched`,
+// `search.euDated` ("que la date retient", never "désigne"; "le dernier qui porte cette date ou une date antérieure", never
+// "daté de ce jour"), `search.euUndated` (changed in both languages: an article's text, not the article, is shown once, and a
+// wording is searched only when its text is held and may be searched, "chaque libellé …, original ou consolidé"),
+// `search.euNotSearched` and `search.euSameWording` ("le même texte"), and the refusal of a date asked of an EU act held in
+// one wording only (no comma before "et l’interroge", G12). `search.euWording` and `search.euHit` were removed.
+// The review of #1005 folded the typographic apostrophes, the no-break spaces and the soft hyphen too, and `search.exactOnly`
+// says so: reviewed by an independent reviewer under the same delegation in the addendum of 2026-10-27 "the matching rule's
+// typographic apostrophes, no-break spaces and soft hyphen" (1 form, changed in French only): "étant lues comme" written out
+// once more (G24), "une espace insécable comme une espace ordinaire", "un trait d’union conditionnel n’étant pas lu" (never
+// "comme rien", G13), and "chacun des autres caractères de l’expression" (G20).
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
 
@@ -416,14 +433,14 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Recherche',
     eyebrow: 'Recherche',
     heading: 'Rechercher dans le texte détenu',
-    intro: 'Trouve les actes dont l’intitulé correspond à l’expression et, dans le texte que ce serveur détient et qu’il est autorisé à interroger, les articles qui la contiennent exactement telle que saisie : un texte que ses droits ne permettent pas de communiquer n’entre pas dans la recherche. L’expression est envoyée à ce serveur dans le corps de la requête, jamais dans l’adresse de la requête ; cette page ne conserve la recherche que dans sa propre adresse, après « # », dans une partie que le navigateur n’envoie jamais, de sorte qu’un lien vers cette adresse partage la recherche.',
+    intro: 'Trouve les actes dont l’intitulé correspond à l’expression et, dans le texte que ce serveur détient et qu’il est autorisé à interroger, les articles qui la contiennent, sans tenir compte des majuscules ni des accents : un texte que ses droits ne permettent pas de communiquer n’entre pas dans la recherche. L’expression est envoyée à ce serveur dans le corps de la requête, jamais dans l’adresse de la requête ; cette page ne conserve la recherche que dans sa propre adresse, après « # », dans une partie que le navigateur n’envoie jamais, de sorte qu’un lien vers cette adresse partage la recherche.',
     idle: 'Saisissez une expression pour rechercher dans le texte des articles que ce serveur détient et qu’il est autorisé à interroger.',
     population: Object.freeze({
-      one: '« {query} » en {language} : {strict} avec l’expression exacte, {relaxed} avec chacun des mots, dans {works} acte.',
-      other: '« {query} » en {language} : {strict} avec l’expression exacte, {relaxed} avec chacun des mots, dans {works} actes.',
+      one: '« {query} » en {language} : {strict} avec l’expression, {relaxed} avec chacun des mots, dans {works} acte.',
+      other: '« {query} » en {language} : {strict} avec l’expression, {relaxed} avec chacun des mots, dans {works} actes.',
     }),
     notCounted: 'non compté',
-    lane: Object.freeze({ strict: 'expression exacte', relaxed: 'chacun des mots' }),
+    lane: Object.freeze({ strict: 'expression', relaxed: 'chacun des mots' }),
     titleExact: 'L’expression est l’intitulé d’un acte : {title}',
     titleStarts: 'L’expression est le début de l’intitulé d’un acte : {title}',
     titleWords: 'Chacun des mots de l’expression figure dans l’intitulé d’un acte : {title}',
@@ -442,8 +459,22 @@ export const LIVE_CHROME_FR = Object.freeze({
     noHit: 'Aucun article du texte que ce serveur détient et qu’il est autorisé à interroger ne contient « {query} ».',
     noText: 'Cet index ne contient aucun texte interrogeable en {language} ; il contient du texte en {languages}.',
     nextPage: 'Page suivante',
-    euWording: 'Chaque résultat se trouve dans le libellé original de {celex} que ce serveur détient en {language}, daté du {date} et épinglé par son empreinte : {permalink}',
-    euHit: '{heading} de {celex}, libellé du {date}',
+    euFound: '« {query} » en {language} : {passages} avec l’expression, dans {wordings} de {celex}.',
+    euWordings: Object.freeze({
+      one: '{count} libellé',
+      other: '{count} libellés',
+    }),
+    euSearched: 'Recherche effectuée dans {wordings} de {celex} en {language}, comptant {articles} au texte interrogeable.',
+    euDated: 'Recherche au {date} : le seul libellé de cet acte de l’UE que la date retient, soit le dernier qui porte cette date ou une date antérieure.',
+    euUndated: 'Recherche sans date : chaque libellé de cet acte de l’UE, original ou consolidé, dont ce site détient le texte et qu’il est autorisé à interroger ; lorsque plusieurs de ces libellés contiennent le même texte d’un article, ce texte n’est affiché qu’une fois, sous le dernier d’entre eux.',
+    euNotSearched: Object.freeze({
+      one: '{count} autre libellé de cet acte n’a pas été interrogé : son texte n’est pas détenu ici ou ses droits ne permettent pas de le communiquer, deux textes différents portent sa date, ou l’éditeur ne lui donne aucune date exploitable.',
+      other: '{count} autres libellés de cet acte n’ont pas été interrogés : leur texte n’est pas détenu ici ou leurs droits ne permettent pas de le communiquer, deux textes différents portent leur date, ou l’éditeur ne leur donne aucune date exploitable.',
+    }),
+    euSameWording: Object.freeze({
+      one: 'Le même texte figure dans {count} autre libellé interrogé par ce site.',
+      other: 'Le même texte figure dans {count} autres libellés interrogés par ce site.',
+    }),
     notHeldHeading: 'Ce que cette recherche ne couvre pas',
     placeholder: 'Rechercher par intitulé, numéro, ELI ou CELEX, ou par des mots du texte',
     dated: 'Seuls des actes luxembourgeois ont été interrogés. Pour chacun, la version dont les dates de l’éditeur couvrent le {date} a été interrogée ; un acte sans une telle version, ou pour lequel ce site ne détient pas le texte de cette version, ne l’a pas été. Un acte détenu uniquement tel que publié est interrogé tel que publié, et peut avoir été modifié depuis.',
@@ -464,7 +495,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     titleNotHeld: 'Ce site ne détient aucun acte sous l’intitulé que cite l’expression ; ses mots ont donc été recherchés.',
     candidateNotHeld: '{act} (ce site n’en détient aucune version)',
     catalogueNamesIt: 'Les données de l’éditeur désignent cet acte ({works}), et ce site n’en détient aucune version.',
-    found: '« {query} » en {language} : {passages} avec l’expression exacte, dans {acts}.',
+    found: '« {query} » en {language} : {passages} avec l’expression, dans {acts}.',
     passages: Object.freeze({
       one: '{count} passage',
       other: '{count} passages',
@@ -503,9 +534,9 @@ export const LIVE_CHROME_FR = Object.freeze({
     }),
     titleMatching: 'Les intitulés sont comparés sans tenir compte des majuscules ni des accents.',
     runTitlesNotRun: 'Intitulés : non recherchés, un acte ayant été désigné.',
-    runText: 'Texte : aucun article interrogé ne contient l’expression exactement telle que saisie.',
+    runText: 'Texte : aucun article interrogé ne contient l’expression, même sans tenir compte des majuscules ni des accents.',
     runTextWords: 'Texte, chacun des mots dans un ordre quelconque : aucun article interrogé ne les contient tous.',
-    exactOnly: 'Le texte n’a été interrogé que par correspondance exacte : les majuscules, les accents et chacun des autres caractères de l’expression comptent, et rien n’est ramené à une forme commune, réduit à son radical ni étendu. Une recherche moins stricte dans le texte reste désactivée tant que sa propre vérification n’est pas réussie.',
+    exactOnly: 'Seule l’expression a été recherchée dans le texte, sans tenir compte des majuscules ni des accents, œ et æ étant lus oe et ae, les apostrophes typographiques étant lues comme l’apostrophe droite, une espace insécable comme une espace ordinaire, et un trait d’union conditionnel n’étant pas lu : chacun des autres caractères de l’expression compte, traits d’union et ponctuation compris, et rien n’est réduit à son radical ni étendu. Une recherche moins stricte dans le texte reste désactivée tant que sa propre vérification n’est pas réussie.',
     officialSearch: 'Les pages de recherche des éditeurs :',
     officialSites: Object.freeze({
       legilux: 'Recherche sur Legilux, pour le droit luxembourgeois',
@@ -1636,7 +1667,7 @@ export const LIVE_CHROME_FR = Object.freeze({
         provenance: 'Les sources, les profils de règles et les empreintes sur lesquels repose une version luxembourgeoise.',
         relations: 'Les références d’un acte luxembourgeois dans les deux sens, en une seule liste ordonnée et paginée.',
         resolve: 'L’acte et l’expression que désigne un identifiant luxembourgeois ou un permalien épinglé.',
-        search: 'Une référence exacte ouvre son acte ; toute autre expression est recherchée dans le texte des articles luxembourgeois dont les droits le permettent, ou dans le texte d’un acte de l’UE désigné par son identifiant.',
+        search: 'Une référence exacte ouvre son acte ; toute autre expression est recherchée, sans tenir compte des majuscules ni des accents, dans le texte des articles luxembourgeois dont les droits le permettent, ou dans les libellés d’un acte de l’UE désigné par son identifiant.',
         status_on: 'Les propres énoncés de l’éditeur sur l’entrée en vigueur d’un acte luxembourgeois et sur sa fin, mot pour mot, à côté de la version applicable à une date.',
         timeline: 'Chaque version détenue d’un acte luxembourgeois, dans l’ordre d’applicabilité de l’éditeur ; pour un acte de l’UE, chaque libellé découvert, dans l’ordre des dates.',
         transposition: 'Les liens entre les directives de l’UE et les actes luxembourgeois qui les transposent, tels que chaque éditeur les affirme.',
@@ -1984,8 +2015,8 @@ export const REFUSALS_FR = Object.freeze({
       'Cet index ne contient aucun acte sous cet identifiant.',
     'That identifier names more than one held work or expression, so none is searched.':
       'Cet identifiant désigne plusieurs actes ou expressions détenus ; la recherche ne porte donc sur aucun d’eux.',
-    'An EU act is searched in the wording this server holds, not at a date: leave the date empty to search it.':
-      'Un acte de l’UE est interrogé dans le libellé que ce serveur détient, et non à une date : laissez la date vide pour l’interroger.',
+    'This server holds this EU act in one wording only, and searches it with no date: leave the date empty to search it.':
+      'Ce serveur ne détient cet acte de l’UE que dans un seul libellé et l’interroge sans date : laissez la date vide pour l’interroger.',
     'This work is not held in the language asked for.':
       'Cet acte n’est pas détenu dans la langue demandée.',
     'That identifier names more than one held work, so no dossier is chosen.':

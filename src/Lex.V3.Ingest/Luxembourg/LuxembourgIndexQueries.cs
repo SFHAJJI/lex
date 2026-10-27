@@ -174,6 +174,23 @@ internal static class LuxembourgIndexQueries
         ORDER BY s.state_sha256, m.outcome, m.rights_disposition
         """;
 
+    /// <summary>
+    /// Every article of one language with the state that holds it and its searchable text: the one pass the search's folded
+    /// copy of the text is read from (<c>LuxembourgIndexReader.SearchTextsOf</c>), once per language. A state's article is found
+    /// by exact element of its identity list, so this is one row per article only while no state lists an identity twice and no
+    /// article sits in two states, which the index cannot be opened without (<c>ValidateStates</c>); there is deliberately no
+    /// DISTINCT, which would turn a broken invariant into a plausible answer. No order is asked: the reader orders the rows
+    /// itself, and SQLite would otherwise sort every text with them. Written with <c>CROSS JOIN</c>, as
+    /// <see cref="StateTextSources"/> is, so each state's identities lead to each article by primary key.
+    /// </summary>
+    internal const string SearchTexts = """
+        SELECT s.work_key, s.applicability_date, s.state_sha256, a.article_identity_sha256, a.publisher_id, a.publisher_wid,
+               a.searchable_text
+        FROM states s CROSS JOIN json_each(s.article_identities_json) j
+        CROSS JOIN articles a ON a.article_identity_sha256 = j.value AND a.language = s.language
+        WHERE s.language = $language
+        """;
+
     internal const string ArticleIds = """
         SELECT DISTINCT a.publisher_id
         FROM states s, json_each(s.article_identities_json) j

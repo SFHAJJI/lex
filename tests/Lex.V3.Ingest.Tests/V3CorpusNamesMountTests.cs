@@ -162,6 +162,8 @@ public sealed class V3CorpusNamesMountTests
             states = rows.Select(static row => row.State).ToArray();
         }
 
+        var coordinate = $"{fixture.PublisherExpressionId}#lex-provision={Uri.EscapeDataString(fixture.PublisherProvisionIdentifier)}";
+
         // A record withholding the act (as if it were a restrictive measure), bound to this mount.
         var requests = new (string Operation, Dictionary<string, object> Parameters)[]
         {
@@ -171,6 +173,11 @@ public sealed class V3CorpusNamesMountTests
             ("evidence_bundle", new() { ["identifier"] = celex, ["date"] = "2026-01-01" }),
             ("search", new() { ["identifier"] = celex, ["query"] = "data", ["language"] = "eng" }),
             ("resolve", new() { ["identifier"] = celex }),
+            // The review of #1005, F1: the act named by a provision coordinate or by an article identity, which search locates to
+            // the same act (as_of reads a coordinate and no bare article identity), and which named the act nowhere the gate read.
+            ("search", new() { ["identifier"] = coordinate, ["query"] = "data", ["language"] = "eng" }),
+            ("search", new() { ["identifier"] = fixture.ArticleIdentitySha256, ["query"] = "data", ["language"] = "eng" }),
+            ("as_of", new() { ["identifier"] = coordinate, ["date"] = "2026-01-01" }),
         };
         Dictionary<string, V3Envelope> before;
         using (var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None))
@@ -402,7 +409,9 @@ public sealed class V3CorpusNamesMountTests
         var answers = new Dictionary<string, V3Envelope>(StringComparer.Ordinal);
         foreach (var (operation, parameters) in requests)
         {
-            answers[operation] = await AskAsync(mount, operation, parameters);
+            // Keyed by the operation and the identifier asked, so one operation asked by two identifiers is two answers.
+            answers[parameters.TryGetValue("identifier", out var identifier) ? $"{operation} {identifier}" : operation] =
+                await AskAsync(mount, operation, parameters);
         }
 
         return answers;

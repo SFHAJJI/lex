@@ -37,16 +37,17 @@ const EN = Object.freeze({
     title: "Search",
     eyebrow: "Search",
     heading: "Search the held text",
-    // Only exact matching runs (the plan's item 4.5, R90): the relaxed lane is off until its check passes, so the page no
-    // longer says it finds "every word of it".
-    intro: "Finds the acts whose title matches the phrase and, in the text this server holds and may search, the articles that contain it exactly as typed: text its rights withhold is not searched. The phrase goes to this server in the body of the request, never in the request's address; this page keeps the search only in its own address, in the part after “#”, which the browser never sends, so a link to that address shares the search.",
+    // Only the phrase is matched (the plan's item 4.5, R90): the relaxed lane is off until its check passes, so the page no
+    // longer says it finds "every word of it"; capitals and accents are ignored (the plan's item 4.4), so it no longer says
+    // "exactly as typed".
+    intro: "Finds the acts whose title matches the phrase and, in the text this server holds and may search, the articles that contain it, with capitals and accents ignored: text its rights withhold is not searched. The phrase goes to this server in the body of the request, never in the request's address; this page keeps the search only in its own address, in the part after “#”, which the browser never sends, so a link to that address shares the search.",
     idle: "Type a phrase to search the article text this server holds and may search.",
     population: Object.freeze({
-      one: "“{query}” in {language}: {strict} with the exact phrase, {relaxed} with every word, in {works} work.",
-      other: "“{query}” in {language}: {strict} with the exact phrase, {relaxed} with every word, in {works} works.",
+      one: "“{query}” in {language}: {strict} with the phrase, {relaxed} with every word, in {works} work.",
+      other: "“{query}” in {language}: {strict} with the phrase, {relaxed} with every word, in {works} works.",
     }),
     notCounted: "not counted",
-    lane: Object.freeze({ strict: "exact phrase", relaxed: "every word" }),
+    lane: Object.freeze({ strict: "phrase", relaxed: "every word" }),
     // The title ladder's answer, on top (the plan's item 4.3): the act whose title the phrase is, begins or holds every word
     // of, linked to its dossier; several acts are counted and listed, the first few shown and the rest one step away. The
     // title stands last, after a colon, with no final sign of its own: most of the publisher's titles end with a full stop,
@@ -69,8 +70,25 @@ const EN = Object.freeze({
     noHit: "No article of the text this server holds and may search contains “{query}”.",
     noText: "This index holds no searchable text in {language}; it holds text in {languages}.",
     nextPage: "Next page",
-    euWording: "Every hit is in the original wording of {celex} this server holds in {language}, dated {date} and pinned by its digest: {permalink}",
-    euHit: "{heading} of {celex}, wording of {date}",
+    // An EU act's search (the audit of 2026-10-27, gap 5): its passages counted by the wordings they are in, what was
+    // searched, with no date or at the date asked, the wordings not searched, and the other wordings that hold a passage's
+    // text when an undated search showed it once. Each wording is headed as the reading heads it (`reading.europe…`).
+    euFound: "“{query}” in {language}: {passages} with the phrase, in {wordings} of {celex}.",
+    euWordings: Object.freeze({
+      one: "{count} wording",
+      other: "{count} wordings",
+    }),
+    euSearched: "Searched: {wordings} of {celex} in {language}, with {articles} of searchable text.",
+    euDated: "Searched at {date}: the one wording of this EU act that date selects, the latest dated on or before it.",
+    euUndated: "Searched with no date: each wording of this EU act, original or consolidated, whose text this site holds and may search; where several of them hold the same text of an article, that text is shown once, under the latest of them.",
+    euNotSearched: Object.freeze({
+      one: "{count} other wording of this act was not searched: its text is not held here or its rights withhold it, two different texts carry its date, or the publisher gives it no usable date.",
+      other: "{count} other wordings of this act were not searched: their text is not held here or their rights withhold it, two different texts carry their date, or the publisher gives them no usable date.",
+    }),
+    euSameWording: Object.freeze({
+      one: "The same text is in {count} other wording this site searched.",
+      other: "The same text is in {count} other wordings this site searched.",
+    }),
     notHeldHeading: "What this search does not cover",
     // The one box's placeholder, word for word the specification of record's (R52).
     placeholder: "Search by title, number, ELI or CELEX, or words from the text",
@@ -107,7 +125,7 @@ const EN = Object.freeze({
     // Results by act (the plan's item 4.3; R59, R21, R11): what was found, counted from the answer; what was searched, every
     // count the answer's and dated by the index's build; each act once, with its passages below it, each version dated in the
     // publisher's words ("applicable from", R21), and an act held only as first published said so, as the reading says it.
-    found: "“{query}” in {language}: {passages} with the exact phrase, in {acts}.",
+    found: "“{query}” in {language}: {passages} with the phrase, in {acts}.",
     passages: Object.freeze({
       one: "{count} passage",
       other: "{count} passages",
@@ -150,13 +168,13 @@ const EN = Object.freeze({
       one: "Titles: the phrase matches the title shown above.",
       other: "Titles: the phrase matches the titles shown above.",
     }),
-    // How the titles were matched, said under the titles line when the ladder ran: unlike the text, case and accents are
+    // How the titles were matched, said under the titles line when the ladder ran: as the text is, with case and accents
     // ignored (the French review of this slice, its point 4).
     titleMatching: "Titles are matched with capitals and accents ignored.",
     runTitlesNotRun: "Titles: not searched, since a work was named.",
-    runText: "Text: no article searched contains the phrase exactly as typed.",
+    runText: "Text: no article searched contains the phrase, even with capitals and accents ignored.",
     runTextWords: "Text, every word in any order: no article searched contains them all.",
-    exactOnly: "Only exact matching ran on the text: capitals, accents and every other character of the phrase count, and nothing is folded, stemmed or expanded. A looser search of the text stays off until its own check has passed.",
+    exactOnly: "Only the phrase was matched in the text, with capitals and accents ignored, œ and æ read as oe and ae, the typographic apostrophes as the straight one, a no-break space as a space and a soft hyphen as nothing: every other character of it counts, hyphens and punctuation included, and nothing is stemmed or expanded. A looser search of the text stays off until its own check has passed.",
     officialSearch: "The publishers' own search pages:",
     officialSites: Object.freeze({
       legilux: "Legilux search, for Luxembourg law",
@@ -1128,7 +1146,7 @@ const EN = Object.freeze({
         provenance: "The sources, rule profiles and digests behind a Luxembourg version.",
         relations: "The references of a Luxembourg act in both directions, as one ordered and paged list.",
         resolve: "The act and the expression that a Luxembourg identifier or a pinned permalink names.",
-        search: "An exact reference opens its act; any other phrase is searched in the Luxembourg article text whose rights allow it, or in the text of one EU act named by its identifier.",
+        search: "An exact reference opens its act; any other phrase is searched, with capitals and accents ignored, in the Luxembourg article text whose rights allow it, or in the wordings of one EU act named by its identifier.",
         status_on: "The publisher's own statements on a Luxembourg act's entry into force and its end, word for word, beside the version applicable on a date.",
         timeline: "Every version of a Luxembourg act held, in the publisher's order of applicability; for an EU act, every wording discovered, in order of date.",
         transposition: "The links between EU directives and the Luxembourg acts that transpose them, as each publisher asserts them.",
