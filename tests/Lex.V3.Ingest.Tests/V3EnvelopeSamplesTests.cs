@@ -50,6 +50,8 @@ public sealed class V3EnvelopeSamplesTests
     {
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
+        // The build report a derive writes beside its mount states the text yield per class (R86(4)), which coverage serves.
+        await V3TextYieldTests.WriteYieldReportAsync(fixture);
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
 
@@ -115,6 +117,8 @@ public sealed class V3EnvelopeSamplesTests
         // with the original's Formex package dated 2013-06-26, a fixture's date (the day CRD IV and the CRR bear), so its bundle
         // says the dated authenticity sentence. The page that holds its last article, so the census carries one short page.
         JsonObject datedBefore;
+        JsonObject europeSearchAll;
+        JsonObject europeSearchOn;
         var (datedRoot, datedDirectory) = await V3CorpusEuropeTimeViewTests.OriginalDatedMountAsync("20130626",
             new EuFirstMountAcquisitionTests.ConsolidatedWorkSpec(
                 V3CorpusEuropeTimeViewBranchTests.WorkB, V3CorpusEuropeTimeViewTests.ConsolidationDate, V3CorpusEuropeTimeViewBranchTests.Designated,
@@ -131,16 +135,46 @@ public sealed class V3EnvelopeSamplesTests
                 probe["result"]!["value"]!["index_sha256"]!.GetValue<string>(),
                 datedMount, "evidence_bundle", scenario, parameters);
             WithFixed(datedBefore["envelope"]!, "body_receipt_sha256", FixedReceiptDigest);
+
+            // EU search over the act's time view (the audit of 2026-10-27, gap 5), on the same mount: with no date, both wordings
+            // read and each unchanged article served once, under the consolidation, the original named beside it; with a date,
+            // the one wording that date selects, pinned.
+            europeSearchAll = await CaptureAsync(
+                probe["context"]!["snapshot"]!["snapshot_sha256"]!.GetValue<string>(),
+                probe["result"]!["value"]!["index_sha256"]!.GetValue<string>(),
+                datedMount, "search", "an EU act's original wording and its consolidated version, no date, the strict lane alone: each article's text once, under the latest wording that holds it, each hit dated by its wording's role",
+                new { query = "joint controllers", language = "eng", identifier = V3CorpusEuropeTimeViewTests.GdprSeed, mode = "strict" });
+            europeSearchOn = await CaptureAsync(
+                probe["context"]!["snapshot"]!["snapshot_sha256"]!.GetValue<string>(),
+                probe["result"]!["value"]!["index_sha256"]!.GetValue<string>(),
+                datedMount, "search", "the same EU act at a date before its consolidation, the strict lane alone: the one wording the date selects, pinned",
+                new { query = "Joint Controllers", language = "eng", identifier = V3CorpusEuropeTimeViewTests.GdprSeed, mode = "strict", date = "2020-01-01" });
         }
         finally
         {
             Directory.Delete(datedRoot, recursive: true);
         }
 
+        // An act the publisher's catalogue holds and the index holds no version of (R77; the audit of 2026-10-27, gap 1): the
+        // fixture's day with a second act its catalogue names, licensed licenceSCL, which every page says from its record.
+        var catalogued = await MountedFixture.CreateAsync();
+        await using var cleanupCatalogued = catalogued;
+        await V3CorpusCatalogueRecordMountTests.AddCatalogueActAsync(catalogued);
+        using var cataloguedMount = await V3CorpusMount.OpenAsync(catalogued.Directory, CancellationToken.None);
+        Assert.IsNotNull(cataloguedMount);
+        const string catalogueAddress = "/lu-legilux/" + V3CorpusCatalogueRecordMountTests.Key;
+
         var envelopes = new JsonArray
         {
             await CaptureAsync(fixture, mount, "coverage", "the whole mount: an answer", new { }),
             await CaptureAsync(fixture, mount, "ask", "any question: the contained assistant's card under the point verdict", new { question = "Can I be fired while on sick leave?" }),
+            // The request the Developers page shows the served release's own answer to (the plan's item 8.4: live examples from the
+            // release's own data): the first held work, one row.
+            await CaptureAsync(fixture, mount, "browse", "the first held work, one row: the answer the Developers page is rendered from", new { limit = 1 }),
+            // An operation served from no data refuses with its typed reason inside the envelope (the plan's item 8.6).
+            await CaptureAsync(fixture, mount, "concepts", "an operation served from no data: a refusal naming the mode asked, the modes served and the data that would serve it", new { identifier = $"/lu-legilux/{fixture.WorkKey}" }),
+            // An instrument the out-of-scope list names (the plan's item 6.10; J5).
+            await CaptureAsync(fixture, mount, "dossier", "a CSSF circular asked for by its name (J5): a refusal naming its official place and who to ask", new { identifier = "Circulaire CSSF 20/747" }),
             await CaptureAsync(fixture, null, "coverage", "no corpus mounted: a refusal", new { }),
             await CaptureAsync(fixture, mount, "search", "a language the mount holds no text in: a refusal with a payload", new { query = "loyer", language = "deu" }),
             await CaptureAsync(fixture, mount, "search", "a phrase the held text carries: an answer with hits in both lanes", new { query = "assemblée générale", language = "fra" }),
@@ -148,6 +182,9 @@ public sealed class V3EnvelopeSamplesTests
             // As the site asks every search (the plan's items 4.3 and 4.5): the strict lane alone, with hits and without.
             await CaptureAsync(fixture, mount, "search", "the phrase as the site asks it, the strict lane alone: an answer with its passages by act, each with its extract", new { query = "assemblée générale", language = "fra", mode = "strict" }),
             await CaptureAsync(fixture, mount, "search", "a word no held article carries, the strict lane alone: the answer the no-hit card is drawn from", new { query = "zéphyr", language = "fra", mode = "strict" }),
+            // Capitals and accents never decide a match (the plan's item 4.4): the phrase in capitals and without its accents finds
+            // the passages the phrase finds, each extract marking the text's own spelling.
+            await CaptureAsync(fixture, mount, "search", "the phrase in capitals and without its accents, the strict lane alone: the passages the phrase finds, each marked as the text spells it", new { query = "ASSEMBLEE GENERALE", language = "fra", mode = "strict" }),
             await CaptureAsync(europe.CorpusSha256, europe.IndexSha256, europeMount, "search", "one EU work by its CELEX, a phrase its held wording carries: an answer whose hits carry the pinned wording's provision permalink", new { query = "joint controllers", language = "eng", identifier = "32016R0679" }),
             await CaptureAsync(europe.CorpusSha256, europe.IndexSha256, europeMount, "search", "one EU work in a language it is not held in: a refusal with a payload", new { query = "joint controllers", language = "fra", identifier = "32016R0679" }),
             await CaptureAsync(europe.CorpusSha256, europe.IndexSha256, europeMount, "search", "the EU work as the site asks it, the strict lane alone: an answer whose hits are the phrase's", new { query = "joint controllers", language = "eng", identifier = "32016R0679", mode = "strict" }),
@@ -155,6 +192,9 @@ public sealed class V3EnvelopeSamplesTests
             await CaptureAsync(europe.CorpusSha256, europe.IndexSha256, europeMount, "search", "an EU identifier the EU index does not hold: a refusal with a payload", new { query = "joint controllers", language = "eng", identifier = "32099R9999" }),
             await CaptureAsync(fixture, mount, "dossier", "the work, in the language it is held in: an answer", new { identifier = $"/lu-legilux/{fixture.WorkKey}", language = "fra" }),
             await CaptureAsync(fixture, mount, "dossier", "a work the index does not hold: a refusal with a payload", new { identifier = "/lu-legilux/no-such-work" }),
+            await CaptureAsync(catalogued, cataloguedMount, "dossier", "an act the publisher's catalogue holds and the index holds no version of (R77): a refusal with its record", new { identifier = catalogueAddress }),
+            await CaptureAsync(catalogued, cataloguedMount, "evidence_bundle", "the same act read at its address in French: a refusal with its record", new { identifier = catalogueAddress, date = catalogued.ApplicabilityDate, language = "fra" }),
+            await CaptureAsync(catalogued, cataloguedMount, "search", "a reference naming the same act by the address this site gives it: a refusal with its record and what was recognised", new { query = catalogueAddress, language = "fra" }),
             await CaptureAsync(fixture, mount, "dossier", "a language the work is not held in: a refusal with a payload", new { identifier = $"/lu-legilux/{fixture.WorkKey}", language = "deu" }),
             await CaptureAsync(fixture, mount, "dossier", "an EU identifier on a mount without the EU index: a refusal with a payload", new { identifier = "32016R0679" }),
             await CaptureAsync(europe.CorpusSha256, europe.IndexSha256, europeMount, "dossier", "one EU work by its CELEX: an answer whose expression carries its pinned wording", new { identifier = "32016R0679" }),
@@ -177,6 +217,8 @@ public sealed class V3EnvelopeSamplesTests
             laterNotHeld,
             laterNotHeldPastLast,
             datedBefore,
+            europeSearchAll,
+            europeSearchOn,
             // A citation's evidence form is verified by both its hashes (R65): the version's, in its permalink, and the text's.
             await CaptureAsync(fixture, mount, "verify", "an article's permalink: digest_matches, with the article's text digest", new { identifier = fixture.Permalink + "/art_15" }),
             laterNotHeldVerified,
@@ -242,7 +284,16 @@ public sealed class V3EnvelopeSamplesTests
             {
                 ["code"] = code,
                 ["mandatory_payload_fields"] = new JsonArray(registry.MandatoryPayloadFields(code).Select(static field => (JsonNode)field).ToArray()),
+                ["payload_schema"] = registry.RefusalPayloadSchema(code),
+                ["payload_schema_sha256"] = registry.RefusalPayloadSchemaSha256(code),
             }).ToArray()),
+            // The checked-in list of what Lex never holds (the plan's item 6.10), whose digest every out_of_corpus_scope names.
+            ["out_of_scope"] = new JsonObject
+            {
+                ["schema"] = V3OutOfScope.Schema,
+                ["sha256"] = V3OutOfScope.Sha256,
+                ["classes"] = JsonNode.Parse(V3OutOfScope.CanonicalUtf8())!["classes"]!.DeepClone(),
+            },
         };
     }
 

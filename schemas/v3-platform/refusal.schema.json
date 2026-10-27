@@ -8,7 +8,29 @@
       "const": "lex-v3-refusal/1"
     },
     "code": {
-      "type": "string"
+      "type": "string",
+      "enum": [
+        "advice_boundary",
+        "ambiguous_identifier",
+        "ambiguous_version",
+        "anchor_not_in_version",
+        "derivation_refused",
+        "format_not_available",
+        "identifier_unknown",
+        "language_not_available",
+        "no_corpus_mounted",
+        "no_version_for_date",
+        "not_transposable",
+        "out_of_corpus_scope",
+        "pinned_digest_mismatch",
+        "profiles_differ",
+        "rate_limited",
+        "retrieval_mode_unavailable",
+        "snapshot_unknown",
+        "text_not_available",
+        "text_withheld",
+        "upstream_unreachable"
+      ]
     },
     "helpful_payload": {
       "type": "object",

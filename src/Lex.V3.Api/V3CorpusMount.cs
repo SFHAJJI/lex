@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Facts;
+using Lex.V3.Contracts.Index;
 using Lex.V3.Contracts.Platform;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest;
@@ -46,22 +47,28 @@ internal sealed partial class V3CorpusMount : IDisposable
     // (V3CorpusMount.Freshness.cs).
     private readonly MountFreshness _freshness;
 
+    // The works R92's measurement withholds, from the names record beside the mount (V3CorpusMount.Names.cs); none without one.
+    private readonly NamesWithheld _names;
+
     private V3CorpusMount(
         LuxembourgIndexReader? reader,
         EuropeIndexReader? europeReader,
         LexCorpus6MountView corpus,
         BuildReportFacts report,
         V3RetentionDecision? generations = null,
-        IReadOnlyList<GenerationReader>? generationReaders = null)
+        IReadOnlyList<GenerationReader>? generationReaders = null,
+        NamesWithheld? names = null)
     {
         if (reader is null && europeReader is null)
             throw new ArgumentException("A V3 corpus mount requires at least one publisher index.");
+        _names = names ?? new NamesWithheld([], null);
         _reader = reader;
         _europeReader = europeReader;
         _corpus = corpus ?? throw new ArgumentNullException(nameof(corpus));
         _generations = generations;
         _generationReaders = generationReaders ?? [];
         _freshness = FreshnessOf(reader, europeReader, report ?? throw new ArgumentNullException(nameof(report)));
+        _textYield = report.TextYield;
     }
 
     /// <summary>
@@ -160,7 +167,12 @@ internal sealed partial class V3CorpusMount : IDisposable
             // The build report beside the mount, held to the artifacts just verified: what it says of each channel's newest
             // completed acquisition and of the commit that built the index (R87, R23); a report naming others refuses the mount.
             var report = await ReadBuildReportAsync(directory, corpus.ArtifactRef, reader, europeReader, cancellationToken).ConfigureAwait(false);
-            return new V3CorpusMount(reader, europeReader, corpus, report, generations, generationReaders);
+            HoldTextYield(report.TextYield, reader, europeReader, corpus);
+
+            // The names record beside the mount (R92), held to the corpus and indexes just verified: a record of another build, or
+            // one that breaks a rule, refuses the mount, like every other check here (V3CorpusMount.Names.cs).
+            var names = await ReadNamesRecordAsync(directory, corpus.ArtifactRef.Sha256, reader, europeReader, cancellationToken).ConfigureAwait(false);
+            return new V3CorpusMount(reader, europeReader, corpus, report, generations, generationReaders, names);
         }
         catch
         {
@@ -285,10 +297,11 @@ internal sealed partial class V3CorpusMount : IDisposable
         {
             if (LooksLikeIdentifier(identifier))
             {
-                return Unknown(request, identifier, observedAt);
+                // R77: an act the catalogue holds and this index holds no version of is answered with its record.
+                return CatalogueOnlyRefusal(request, identifier, observedAt) ?? Unknown(request, identifier, observedAt);
             }
 
-            var workResolution = _reader?.ResolveWorkTitle(identifier);
+            var workResolution = _reader is null ? null : TitleLadder(identifier);
             if (workResolution is null)
             {
                 using var unavailable = JsonSerializer.SerializeToDocument(new
@@ -1117,11 +1130,69 @@ internal sealed partial class V3CorpusMount : IDisposable
             new V3PlatformOperationResult(request, "provenance_chain", result.RootElement));
     }
 
-    /// <summary>The one rights disposition under which a member's text enters a bundle: both channels agreed CC BY in the same run.</summary>
+    /// <summary>The rights disposition under which a member's text enters a bundle under policy /1: both channels agreed CC BY in the same run.</summary>
     private static readonly string EvidenceBundleAdmittingRightsDisposition =
         ContractWire.NameOf(LuxembourgRightsChannelDisposition.AgreedSameRunCcBy);
 
+    /// <summary>The two-channel agreement as in-file reading /2 reads the file's own block in a re-derivation (policy A).</summary>
+    private static readonly string RederivedAgreementDisposition =
+        ContractWire.NameOf(LuxembourgRightsChannelDisposition.AgreedCcByRederived);
+
     private static readonly string AcquiredOutcomeToken = ContractWire.NameOf(LexCorpus6OutcomeKind.Acquired);
+
+    /// <summary>
+    /// Whether <paramref name="rightsDisposition"/> (a member's wire token) is one the mounted corpus's admission policy admits
+    /// (its header's policy; none: policy /1, agreed_same_run_cc_by alone).
+    /// </summary>
+    private bool AdmitsRights(string? rightsDisposition) =>
+        rightsDisposition is not null &&
+        LuxembourgRightsAdmissionPolicies.AdmittingDispositions(_corpus.LuxembourgRightsAdmissionPolicy)
+            .Any(disposition => string.Equals(ContractWire.NameOf(disposition), rightsDisposition, StringComparison.Ordinal));
+
+    /// <summary>
+    /// The rights disposition a bundle says its text was served under: <c>agreed_same_run_cc_by</c> when every source is that
+    /// (every policy /1 bundle, byte for byte as before); <c>agreed_cc_by_rederived</c> when any source is, since a
+    /// re-derivation keeps an acquisition admission only once reading /2 agrees with it, so every source's two channels say CC
+    /// BY under reading /2. Each source still names its own.
+    /// </summary>
+    private static string BundleRightsDisposition(IEnumerable<string?> sourceDispositions)
+    {
+        var dispositions = sourceDispositions.ToArray();
+        // A source admitted on the catalogue alone names the bundle's disposition: the weakest evidence any of its text rests on.
+        var singleChannel = dispositions
+            .Where(static disposition => disposition is not null && SingleChannelTokens.Contains(disposition, StringComparer.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .FirstOrDefault();
+        return singleChannel
+            ?? (dispositions.Any(static disposition => string.Equals(disposition, RederivedAgreementDisposition, StringComparison.Ordinal))
+                ? RederivedAgreementDisposition
+                : EvidenceBundleAdmittingRightsDisposition);
+    }
+
+    private static readonly string[] SingleChannelTokens = Enum.GetValues<LuxembourgRightsChannelDisposition>()
+        .Where(LuxembourgRightsChannelResolution.IsSingleChannel)
+        .Select(static disposition => ContractWire.NameOf(disposition))
+        .ToArray();
+
+    /// <summary>
+    /// The bundle's rights rule under the mounted corpus's policy: policy /1's sentence, verbatim, or policy A's, with the
+    /// single-channel sentence when one of the owner's rulings is on.
+    /// </summary>
+    private string LuxembourgBundleRightsRule => (RulesByInterval
+        ? (PolicyAdmitsRederived ? EvidenceBundleRightsRuleNineA : EvidenceBundleRightsRuleNine)
+        : (PolicyAdmitsRederived ? EvidenceBundleRightsRuleA : EvidenceBundleRightsRule))
+        + (LuxembourgRightsAdmissionPolicies.AdmitsSingleChannel(_corpus.LuxembourgRightsAdmissionPolicy) ? EvidenceBundleSingleChannelRule : "");
+
+    /// <summary>The sentence a corpus under one of the owner's rulings adds to its rights rule.</summary>
+    internal const string EvidenceBundleSingleChannelRule =
+        "; under the owner's ruling the corpus's admission policy names, a file that does not state its own licence for itself " +
+        "(sparql_cc_by_in_file_names_other_identity, sparql_cc_by_in_file_silent or sparql_cc_by_in_file_own_block_empty, as the " +
+        "policy names them) is served on the publisher's SPARQL declaration of exactly CC BY 4.0 for that file alone, bound to " +
+        "the retained licence page that holds it; each such source carries rights_disclosure with that page's observation date, " +
+        "and the bundle's rights_disposition is then the single-channel one";
+
+    private bool PolicyAdmitsRederived => LuxembourgRightsAdmissionPolicies.Admits(
+        _corpus.LuxembourgRightsAdmissionPolicy, LuxembourgRightsChannelDisposition.AgreedCcByRederived);
 
     internal const string EvidenceBundleScope =
         "the evidence a reader needs to quote a Luxembourg state: for the state selected as as_of selects it, the hash-pinned permalink and stable " +
@@ -1143,10 +1214,31 @@ internal sealed partial class V3CorpusMount : IDisposable
 
     /// <summary>The rights rule on lex-v3-luxembourg-index/9, whose catalogue states without text cover their own intervals (S7a).</summary>
     internal const string EvidenceBundleRightsRuleNine =
-        EvidenceBundleRightsRule + "; on lex-v3-luxembourg-index/9 a state of the publisher's catalogue whose text this index does not " +
+        EvidenceBundleRightsRule + EvidenceBundleRightsRuleNineTail;
+
+    private const string EvidenceBundleRightsRuleNineTail =
+        "; on lex-v3-luxembourg-index/9 a state of the publisher's catalogue whose text this index does not " +
         "hold covers its own interval: a date in it refuses text_withheld when its rights withhold its text (text_status withheld_rights) " +
         "and text_not_available otherwise (a PDF, a derivation gap, a misfiled file, a state not acquired), naming the state, and no " +
         "other state's text is served in its place";
+
+    /// <summary>
+    /// The rights rule of a corpus whose admission policy is A (Release 2): the same two-channel rule, with the agreement
+    /// in-file reading /2 reads from the file's own block in a re-derivation from custody.
+    /// </summary>
+    internal const string EvidenceBundleRightsRuleA =
+        "rights are enforced when the bundle is composed, before any text is read: every corpus member the state's articles come from must have " +
+        "been acquired with its two rights channels agreeing CC BY 4.0 for the file itself: in the same run (rights_disposition " +
+        "agreed_same_run_cc_by), or as the in-file reading /2 of a re-derivation from the acquisition's custody reads the file's own " +
+        "block for that file, with nothing in the file or the publisher's catalogue disagreeing (rights_disposition agreed_cc_by_rederived), " +
+        "the corpus's admission policy " + LuxembourgRightsAdmissionPolicies.PolicyAName + "; a bundle says agreed_cc_by_rederived when " +
+        "any of its sources is, and each source names its own; under any other outcome or " +
+        "rights disposition the bundle refuses text_withheld and names the official identity, the official link and the retained body digest, so a " +
+        "derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state none of whose articles holds text refuses " +
+        "text_not_available";
+
+    /// <summary>Policy A's rights rule on lex-v3-luxembourg-index/9.</summary>
+    internal const string EvidenceBundleRightsRuleNineA = EvidenceBundleRightsRuleA + EvidenceBundleRightsRuleNineTail;
 
     internal static readonly string[][] EvidenceBundleNotHeld =
     [
@@ -1293,7 +1385,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             sourcesByState[state.StateSha256] = sources;
             var blocking = sources.FirstOrDefault(source =>
                 !string.Equals(source.Outcome, AcquiredOutcomeToken, StringComparison.Ordinal)
-                || !string.Equals(source.RightsDisposition, EvidenceBundleAdmittingRightsDisposition, StringComparison.Ordinal));
+                || !AdmitsRights(source.RightsDisposition));
             if (sources.Count == 0 || blocking is not null)
             {
                 var member = blocking is null ? null : MemberOf(blocking.ObjectRefSha256);
@@ -1308,7 +1400,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                     language = state.Language,
                     source_outcome = blocking?.Outcome,
                     rights_disposition = blocking?.RightsDisposition,
-                    rule = EvidenceBundleRightsRule,
+                    rule = PolicyAdmitsRederived ? EvidenceBundleRightsRuleA : EvidenceBundleRightsRule,
                 });
                 return V3PlatformOperationOutcome.Refused(
                     Context("refusal", observedAt),
@@ -1452,8 +1544,9 @@ internal sealed partial class V3CorpusMount : IDisposable
             requested_article = asked.Article,
             publisher = "lu-legilux",
             work_key = states[0].WorkKey,
-            rights_rule = RulesByInterval ? EvidenceBundleRightsRuleNine : EvidenceBundleRightsRule,
-            rights_disposition = EvidenceBundleAdmittingRightsDisposition,
+            rights_rule = LuxembourgBundleRightsRule,
+            rights_disposition = BundleRightsDisposition(sourcesByState.Values.SelectMany(static sources => sources)
+                .Select(static source => source.RightsDisposition)),
             page_rule = LuxembourgReadingPageRule,
             states = bundles,
             as_published = AsPublishedAnswer(asPublished),
@@ -2830,6 +2923,8 @@ internal sealed partial class V3CorpusMount : IDisposable
                         ? state
                         : throw new InvalidDataException("An article of the index belongs to no state."),
                     Edge: edge))
+                // R92: an article of a work the names record withholds is not quoted here (its label is its text), as cited_by.
+                .Where(entry => !CitingWithheld(entry.State))
                 .OrderBy(static entry => entry.State.ApplicabilityDate, StringComparer.Ordinal)
                 .ThenBy(static entry => entry.State.WorkKey, StringComparer.Ordinal)
                 .ThenBy(static entry => entry.State.Language, StringComparer.Ordinal)
@@ -3038,6 +3133,8 @@ internal sealed partial class V3CorpusMount : IDisposable
                     ? state
                     : throw new InvalidDataException("An article of the index belongs to no state."),
                 Edge: edge))
+            // R92: an article of a work the names record withholds is not quoted here (its label is its text).
+            .Where(entry => !CitingWithheld(entry.State))
             .OrderBy(static entry => entry.State.ApplicabilityDate, StringComparer.Ordinal)
             .ThenBy(static entry => entry.State.WorkKey, StringComparer.Ordinal)
             .ThenBy(static entry => entry.State.Language, StringComparer.Ordinal)
@@ -3148,6 +3245,32 @@ internal sealed partial class V3CorpusMount : IDisposable
     private object SourceRow(LuxembourgIndexStateSource source)
     {
         var member = MemberOf(source.ObjectRefSha256);
+        // A body admitted on the publisher's catalogue alone (one of the owner's rulings) says so, with its licence page's
+        // observation date (LU-DATA-DESIGN v2 §1.2, the L5 single-channel disclosure); every other row is as it always was.
+        if (member?.LuxembourgRights?.RightsDisclosure is { } disclosure)
+        {
+            return new
+            {
+                object_ref_sha256 = source.ObjectRefSha256,
+                body_sha256 = member.BodySha256,
+                body_byte_length = member.BodyByteLength,
+                body_receipt_sha256 = member.BodyReceiptSha256,
+                outcome = source.Outcome,
+                rights_disposition = source.RightsDisposition,
+                rights_disclosure = new
+                {
+                    code = disclosure.Code,
+                    licence_page_sha256 = disclosure.LicencePage.Sha256,
+                    licence_page_observed_on = disclosure.ObservedAt[..10],
+                    licence_page_observed_live = disclosure.ObservedLive,
+                },
+                gaps = source.Gaps,
+                article_outcomes = source.ArticleOutcomes
+                    .Select(static row => new { disposition = row.Key, outcomes = row.Value })
+                    .ToArray(),
+            };
+        }
+
         return new
         {
             object_ref_sha256 = source.ObjectRefSha256,
@@ -3304,8 +3427,10 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// ambiguity or a profile mismatch in any served language refuses the whole answer, the first found in
     /// language order when both apply, while a language with no state at a bound is listed as not
     /// compared; both bounds are resolved before a language is classified, so a missing bound never masks
-    /// an ambiguity on the other. No text is diffed, no legal effect is
-    /// asserted: a changed article is a changed digest, and the note says so.
+    /// an ambiguity on the other. No text is diffed here and no legal effect is
+    /// asserted: a changed article is a changed digest, and the note says so; each changed, added or removed article carries
+    /// its served text on each side where that state's rights admit it (<see cref="DiffTextRule"/>, R57), from which a page
+    /// shows the wording that changed.
     /// </summary>
     public V3PlatformOperationOutcome Diff(
         V3PlatformOperationRequest request,
@@ -3331,6 +3456,9 @@ internal sealed partial class V3CorpusMount : IDisposable
             }
         }
 
+        // The page of the wording asked (R57's texts, cut as a reading's pages are; the review of #1003, F4): the first by default.
+        var textPage = DiffTextPageOf(request.Parameters);
+
         if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_diff", requestedLanguage,
                 out var states, out var availableLanguages) is { } refused)
         {
@@ -3346,7 +3474,9 @@ internal sealed partial class V3CorpusMount : IDisposable
         // Each language compared, held until every language is classified: a same-state note says what the work is held as
         // (an act held only as published names the facts between the dates), which is known once the compared states are.
         var compared = new List<(string Language, LuxembourgIndexResolvedState From, string? FromNext,
-            LuxembourgIndexResolvedState To, string? ToNext, bool OnlyStateHeld, (IReadOnlyList<object> Articles, object Counts)? Rows)>();
+            LuxembourgIndexResolvedState To, string? ToNext, bool OnlyStateHeld, (IReadOnlyList<object> Articles, object Counts, object? TextPage)? Rows)>();
+        (ReadingPages Pages, string Language)? pastLast = null;
+        var pageServed = false;
         var notCompared = new List<object>();
         (string Bound, string Date, string[] Candidates)? ambiguous = null;
         (string Language, LuxembourgIndexResolvedState From, LuxembourgIndexResolvedState To)? profilesDiffer = null;
@@ -3395,9 +3525,20 @@ internal sealed partial class V3CorpusMount : IDisposable
                 continue;
             }
 
-            var (articles, counts, _) = CompareArticles(
-                _reader!.ResolveStateArticles(from.StateSha256), _reader.ResolveStateArticles(to.StateSha256));
-            compared.Add((language, from, fromNext, to, toNext, ofLanguage.Length == 1, (articles, counts)));
+            // The wording of what changed (R57), from each side's text as served, where its rights admit it (evidence_bundle's rule).
+            var (articles, counts, _, pages) = CompareArticles(
+                _reader!.ResolveStateArticles(from.StateSha256), _reader.ResolveStateArticles(to.StateSha256),
+                texts: true, fromAdmitted: SearchAdmits(from.StateSha256), toAdmitted: SearchAdmits(to.StateSha256), textPage: textPage);
+            if (pages is not null && pages.PastLast)
+            {
+                pastLast ??= (pages, language);
+            }
+            else if (pages is not null)
+            {
+                pageServed = true;
+            }
+
+            compared.Add((language, from, fromNext, to, toNext, ofLanguage.Length == 1, (articles, counts, DiffTextPageMember(pages))));
         }
 
         // One rule for refusals, the one as_of follows: an ambiguity or a profile mismatch in any served
@@ -3421,6 +3562,14 @@ internal sealed partial class V3CorpusMount : IDisposable
         if (ambiguous is { } ambiguity)
         {
             return RefuseAmbiguousVersion(request, observedAt, ambiguity.Date, ambiguity.Candidates, ambiguity.Bound);
+        }
+
+        // A page of the wording past the last of every comparison is refused as a reading's page is, naming the pages of the first
+        // language whose wording moved (none where nothing moved, or the two dates name one state).
+        if (textPage > 1 && !pageServed && compared.Count > 0)
+        {
+            var (beyond, ofLanguage) = pastLast ?? (CutReadingPages([], new ReadingPageAsked(textPage, null, false))!, compared[0].Language);
+            return RefusePageNotInVersion(request, observedAt, PublisherId.LuLegilux, beyond, ofLanguage);
         }
 
         if (compared.Count == 0)
@@ -3451,6 +3600,8 @@ internal sealed partial class V3CorpusMount : IDisposable
                     : between.Note(entry.From.ApplicabilityDate, entry.OnlyStateHeld, DatedByEntryIntoForce(entry.From)),
             articles = (object?)entry.Rows?.Articles,
             counts = entry.Rows?.Counts,
+            // The page of the wording this answer carries (R57; the review of #1003, F4), or null when no article moved.
+            text_page = entry.Rows?.TextPage,
         }).ToArray();
 
         using var result = JsonSerializer.SerializeToDocument(new
@@ -3468,6 +3619,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             articles_not_admitted_note = ArticlesNotAdmittedNote,
             available_languages = availableLanguages,
             wording_rule = WordingRule,
+            text_rule = DiffTextRule,
             validity_conflict_rule = ValidityConflictRule,
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader!.IndexRef.Sha256,
@@ -3495,25 +3647,121 @@ internal sealed partial class V3CorpusMount : IDisposable
             : cover.Reason ?? "no state covers the date";
     }
 
+    internal const string DiffTextRule =
+        "R57: each entry of a changed, added or removed article on the page of the wording served carries the article's text as " +
+        "evidence_bundle serves it (text, and text_sha256, the SHA-256 of its UTF-8 bytes) when that side's state's rights admit its " +
+        "text, and null for both when they do not, so a reader can show the wording that changed; the changed, added and removed " +
+        "articles are cut into pages as a reading's are, in the rows' order, each page at most 50 articles and 98,304 bytes of " +
+        "their texts (UTF-8, both sides), an article whose texts alone pass that bound being a page of its own; page asks one (the " +
+        "first by default), text_page names it, its count and its first and last ids (null where nothing moved), and a page past " +
+        "the last of every comparison " +
+        "is refused anchor_not_in_version, as a reading's is; an article on another page, and an unchanged one, carries no text; " +
+        "the text is the publisher's as served, and every article's status is still decided by the wording digests alone";
+
+    /// <summary>
+    /// The page of a comparison's wording asked (<c>page</c>, a whole number from 1 to <see cref="MaximumReadingPage"/>, as the
+    /// request schema checks it), or the first.
+    /// </summary>
+    private static int DiffTextPageOf(JsonElement parameters)
+    {
+        if (!parameters.TryGetProperty("page", out var value))
+        {
+            return 1;
+        }
+
+        if (value.ValueKind != JsonValueKind.Number || !value.TryGetInt32(out var page) || page < 1 || page > MaximumReadingPage)
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The operation request's 'page' is not a whole page number from 1.");
+        }
+
+        return page;
+    }
+
+    /// <summary>
+    /// A comparison's <c>text_page</c>: the page of the wording served, the count of pages, and the publisher ids of the first
+    /// and last articles on it; null with no changed, added or removed article, or for a page past the last.
+    /// </summary>
+    private static object? DiffTextPageMember(ReadingPages? pages)
+    {
+        if (pages is null || pages.PastLast)
+        {
+            return null;
+        }
+
+        var (first, last) = pages.ServedBounds;
+        return new
+        {
+            page = pages.Served,
+            pages = pages.Count,
+            first = pages.Entries[first].PublisherId,
+            last = pages.Entries[last].PublisherId,
+        };
+    }
+
     /// <summary>
     /// Article-level comparison of two states by publisher-minted id: present in both with the same
     /// wording digests is unchanged, with different digests changed; only in the later state added;
     /// only in the earlier removed. An id minted twice in one state compares as its ordered digests.
+    /// With <paramref name="texts"/> (<c>diff</c>, R57), each entry of a row that is not unchanged carries its served text
+    /// when <paramref name="fromAdmitted"/> or <paramref name="toAdmitted"/> says that side's rights admit it, else nulls
+    /// (<see cref="DiffTextRule"/>).
     /// </summary>
-    private static (IReadOnlyList<object> Articles, object Counts, bool Differs) CompareArticles(
-        IReadOnlyList<LuxembourgIndexStateArticle> from, IReadOnlyList<LuxembourgIndexStateArticle> to)
+    private static (IReadOnlyList<object> Articles, object Counts, bool Differs, ReadingPages? TextPages) CompareArticles(
+        IReadOnlyList<LuxembourgIndexStateArticle> from, IReadOnlyList<LuxembourgIndexStateArticle> to,
+        bool texts = false, bool fromAdmitted = false, bool toAdmitted = false, int textPage = 1)
     {
         static Dictionary<string, LuxembourgIndexStateArticle[]> ById(IReadOnlyList<LuxembourgIndexStateArticle> articles) =>
             articles.GroupBy(static article => article.PublisherId, StringComparer.Ordinal)
                 .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
-        static object[] Side(LuxembourgIndexStateArticle[]? side) =>
+        static object Entry(LuxembourgIndexStateArticle article) =>
+            new { article_identity_sha256 = article.ArticleIdentitySha256, wording_sha256 = article.WordingSha256 };
+        static object EntryWithText(LuxembourgIndexStateArticle article, bool admitted) => new
+        {
+            article_identity_sha256 = article.ArticleIdentitySha256,
+            wording_sha256 = article.WordingSha256,
+            text = admitted ? article.Text : null,
+            text_sha256 = admitted ? Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(article.Text))) : null,
+        };
+        object[] Side(LuxembourgIndexStateArticle[]? side, bool withText, bool admitted) =>
             side is null
                 ? []
-                : side.Select(static article => (object)new { article_identity_sha256 = article.ArticleIdentitySha256, wording_sha256 = article.WordingSha256 }).ToArray();
+                : side.Select(article => withText ? EntryWithText(article, admitted) : Entry(article)).ToArray();
 
         var left = ById(from);
         var right = ById(to);
-        var ids = left.Keys.Concat(right.Keys).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
+        var ids = left.Keys.Concat(right.Keys).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+
+        // The articles that moved, cut into pages by their texts' weight (R57; the review of #1003, F4): only the page asked
+        // carries texts.
+        ReadingPages? pages = null;
+        var onPage = new HashSet<string>(StringComparer.Ordinal);
+        if (texts)
+        {
+            static long Weight(LuxembourgIndexStateArticle[]? side, bool admitted) =>
+                side is null || !admitted ? 0 : side.Sum(static article => (long)Encoding.UTF8.GetByteCount(article.Text));
+            bool Moved(string id) =>
+                !left.TryGetValue(id, out var before) || !right.TryGetValue(id, out var after) ||
+                !before.Select(static a => a.WordingSha256).SequenceEqual(after.Select(static a => a.WordingSha256), StringComparer.Ordinal);
+            var moved = ids.Where(Moved)
+                .Select(id => new ReadingEntry(id, null, true, Weight(left.GetValueOrDefault(id), fromAdmitted) + Weight(right.GetValueOrDefault(id), toAdmitted)))
+                .ToArray();
+            // With no article moved there is no page; a page past the first is still asked past the last.
+            if (moved.Length > 0 || textPage > 1)
+            {
+                pages = CutReadingPages(moved, new ReadingPageAsked(textPage, null, false));
+                if (pages is not null && !pages.PastLast)
+                {
+                    var (first, last) = pages.ServedBounds;
+                    for (var position = first; position <= last; position++)
+                    {
+                        onPage.Add(moved[position].PublisherId);
+                    }
+                }
+            }
+        }
+
         var rows = new List<object>();
         int unchanged = 0, changed = 0, added = 0, removed = 0;
         foreach (var id in ids)
@@ -3538,10 +3786,11 @@ internal sealed partial class V3CorpusMount : IDisposable
                 status = "changed"; changed++;
             }
 
-            rows.Add(new { publisher_id = id, status, from = Side(before), to = Side(after) });
+            var withText = texts && status != "unchanged" && onPage.Contains(id);
+            rows.Add(new { publisher_id = id, status, from = Side(before, withText, fromAdmitted), to = Side(after, withText, toAdmitted) });
         }
 
-        return (rows, new { unchanged, changed, added, removed }, changed + added + removed > 0);
+        return (rows, new { unchanged, changed, added, removed }, changed + added + removed > 0, pages);
     }
 
     /// <summary>The ceiling on the rows one <c>in_force_on</c> answer carries.</summary>
@@ -3930,14 +4179,14 @@ internal sealed partial class V3CorpusMount : IDisposable
     public const int SearchMaxTerms = 32;
 
     internal const string SearchMatching =
-        "byte-exact substring of the article's searchable text, which is its text and reference tokens as the index holds them " +
-        "(modification markers and note references are not searched); case and diacritics are significant; " +
-        "nothing is folded, stemmed or expanded";
+        "substring of the article's searchable text, which is its text and reference tokens as the index holds them " +
+        "(modification markers and note references are not searched); " + TextFolding.Rule + "; nothing is stemmed or expanded";
 
     internal const string SearchLanes =
-        "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, " +
-        "so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, " +
-        "each article once; with a mode it is that lane's whole set. A lane not asked for is null in the population, not zero";
+        "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in " +
+        "any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer " +
+        "is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane's whole " +
+        "set. A lane not asked for is null in the population, not zero";
 
     internal const string SearchPageIs = "the first hits in the stated order, not the best hits";
 
@@ -3962,8 +4211,8 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// (lane R1): one work is a card ahead of every hit, several candidates are listed and none is
     /// picked. With a work named the resolver is not run and the answer says so
     /// (<c>not_run_identifier_given</c>). Then the strict lane,
-    /// the query as typed as a substring of an article's text, and the relaxed lane, every
-    /// whitespace-separated term as a substring in any order. The lanes are sets and the relaxed set
+    /// the query as a substring of an article's text once both are folded (<c>TextFolding</c>: capitals and
+    /// accents ignored), and the relaxed lane, every whitespace-separated term so in any order. The lanes are sets and the relaxed set
     /// contains the strict set. With no <c>mode</c> the answer is the strict hits and then only the
     /// relaxed hits strict did not serve, so an article matching both is served once, as strict, and
     /// every strict hit precedes every relaxed hit: relaxed never outranks strict. With a <c>mode</c>
@@ -3971,7 +4220,7 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// it is null in the population.
     /// <para>
     /// The index holds no FTS table and no ranker. What is served is an order and not a rank, no score
-    /// is served, and every answer says so, says that matching is byte-exact, and says that a page is
+    /// is served, and every answer says so, says how matching folds capitals and accents (<c>TextFolding</c>), and says that a page is
     /// the first hits in the stated order and not the best ones. A requested <c>mode</c> other than the
     /// two lanes is refused <c>retrieval_mode_unavailable</c> naming the modes held, never ignored. The
     /// query is bounded (<see cref="SearchMaxQueryCharacters"/> characters, <see cref="SearchMaxTerms"/>
@@ -4143,7 +4392,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         // Both paths above have established that a Luxembourg index is mounted; this says so to the
         // compiler, which the unconditional call it replaces used to.
         ArgumentNullException.ThrowIfNull(_reader);
-        var titles = identifier is null ? _reader.ResolveWorkTitle(query) : null;
+        var titles = identifier is null ? TitleLadder(query) : null;
         var titleOutcome = titles is null ? "not_run_identifier_given"
             : !titles.Available ? "no_titles_held"
             : titles.Candidates.Count == 0 ? "no_title_match"
@@ -4164,7 +4413,7 @@ internal sealed partial class V3CorpusMount : IDisposable
 
         // The lanes are sets and the relaxed set contains the strict set, so a lane is scanned only when
         // it is asked for. With no mode the relaxed lane adds only what strict did not serve; when the
-        // query is one word exactly as typed that is nothing, and the second scan is not paid.
+        // query is one word, its only term, that is nothing, and the second scan is not paid.
         var wantStrict = mode is null || string.Equals(mode, "strict", StringComparison.Ordinal);
         var wantRelaxed = mode is null || string.Equals(mode, "relaxed", StringComparison.Ordinal);
         var relaxedIsStrict = terms.Length == 1 && string.Equals(terms[0], query, StringComparison.Ordinal);
@@ -4186,8 +4435,9 @@ internal sealed partial class V3CorpusMount : IDisposable
         // Rights before any hit is served (SearchRightsRule): a state whose text its rights did not admit is not matched, so
         // no answer says which of its articles hold a word. The rule is evidence_bundle's, applied per state.
         // The decision is evidence_bundle's, read once for every state with the population the answer counts (SearchAdmits).
-        strict = strict.Where(hit => SearchAdmits(hit.StateSha256)).ToArray();
-        relaxed = relaxed.Where(hit => SearchAdmits(hit.StateSha256)).ToArray();
+        // R92 likewise: a state of a work the names record withholds is never matched (V3CorpusMount.Names.cs).
+        strict = strict.Where(hit => SearchAdmits(hit.StateSha256) && SearchMatchesUnderR92(hit.WorkKey, hit.StateSha256)).ToArray();
+        relaxed = relaxed.Where(hit => SearchAdmits(hit.StateSha256) && SearchMatchesUnderR92(hit.WorkKey, hit.StateSha256)).ToArray();
 
         var ambiguousWorks = new List<object>();
         if (requestedDate is not null)
@@ -4363,18 +4613,31 @@ internal sealed partial class V3CorpusMount : IDisposable
     }
 
     internal const string EuropeSearchScope =
+        "one EU act named by the identifier (its CELEX, a work or expression IRI of the act or of one of its consolidated versions, or one of " +
+        "their provisions), in the language asked: with no date, every wording of it whose text this index holds and the rights rule admits " +
+        "(rights_rule), the original wording and each consolidated version the publisher dated; with a date, the one wording that date " +
+        "selects (selection_rule), as as_of selects it; a search across EU acts is not served";
+
+    /// <summary><see cref="EuropeSearchScope"/> on an EU index that holds no census of the act: its one original wording.</summary>
+    internal const string EuropeSearchOriginalScope =
         "one EU work named by the identifier (its CELEX, work or expression IRI, or one of its provisions), in the one held wording of its " +
-        "expression in the language asked; a search across EU works is not served";
+        "expression in the language asked; this index holds no census of the act, so no consolidated version is searched and a date is not " +
+        "answered; a search across EU works is not served";
 
     internal const string EuropeSearchRanking =
-        "none; strict lane before relaxed lane, then the publisher's article id and article identity. " +
+        "none; strict lane before relaxed lane, then the wording's date, its expression, the publisher's article id and article identity. " +
         "This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits";
 
     internal const string EuropeSearchMatching =
-        "byte-exact substring of the article's searchable text as the EU index holds it; case and diacritics are significant; " +
-        "nothing is folded, stemmed or expanded";
+        "substring of the article's searchable text as the EU index holds it; " + TextFolding.Rule + "; nothing is stemmed or expanded";
 
     internal const string EuropeSearchHitUnit =
+        "a hit is one article of one wording of the act, dated by that wording's role (wording_date and kind: an original wording by the " +
+        "act's Formex date, a consolidated version by the publisher's consolidation date, holding until next_date); with no date, an article's " +
+        "text is one hit, under the latest wording that holds it (fold)";
+
+    /// <summary><see cref="EuropeSearchHitUnit"/> on an EU index that holds no census of the act.</summary>
+    internal const string EuropeSearchOriginalHitUnit =
         "a hit is one article of the one wording this index holds of the expression; no other wording of the act is held";
 
     internal const string EuropeWordingDateSemantics =
@@ -4385,15 +4648,25 @@ internal sealed partial class V3CorpusMount : IDisposable
 
     internal static readonly string[][] EuropeSearchNotHeld =
     [
-        ["later_wordings", "no consolidated version is held, so a later wording of the act is not searched and a date is not answered here"],
+        ["unplaced_versions", "a version the publisher gives no usable date is not searched; timeline lists it, and searched counts it"],
         ["corrigenda_applied", "corrigenda are recorded by the index and not applied to the wording searched"],
-        ["other_languages", "an expression in a language this index holds no wording in is not searched; French expressions are not acquired (Decision 89)"],
-        ["article_text", "no snippet or article text is served; each hit names its provision, which resolve answers"],
+        ["other_languages", "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act's other language versions where they exist"],
+        ["titles", "no title or Official Journal reference of an EU act is held by the EU index, so an EU act is searched only when named by its identifier, and a search that names no work searches Luxembourg law alone"],
+    ];
+
+    /// <summary><see cref="EuropeSearchNotHeld"/> on an EU index that holds no census of the act.</summary>
+    internal static readonly string[][] EuropeSearchOriginalNotHeld =
+    [
+        ["later_wordings", "this index holds no census of the act, so no consolidated version is searched and a date is not answered here"],
+        ["corrigenda_applied", "corrigenda are recorded by the index and not applied to the wording searched"],
+        ["other_languages", "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act's other language versions where they exist"],
+        ["titles", "no title or Official Journal reference of an EU act is held by the EU index, so an EU act is searched only when named by its identifier, and a search that names no work searches Luxembourg law alone"],
     ];
 
     /// <summary>
-    /// Where a named work is an EU work, <c>search</c> answers from the EU index (<see cref="SearchEurope"/>)
-    /// or refuses with EU context; otherwise the Luxembourg path runs unchanged (null).
+    /// Where a named work is an EU act, <c>search</c> answers from the EU index: over the act's time view when the EU census holds
+    /// it (<see cref="SearchEuropeTime"/>), else in its one original wording (<see cref="SearchEurope"/>); or refuses with EU
+    /// context; otherwise the Luxembourg path runs unchanged (null).
     /// </summary>
     private V3PlatformOperationOutcome? RouteEuropeSearch(
         V3PlatformOperationRequest request,
@@ -4407,6 +4680,16 @@ internal sealed partial class V3CorpusMount : IDisposable
         int limit,
         DateTimeOffset observedAt)
     {
+        if (LocateEuropeSeedForSearch(request, identifier, observedAt, out var seed) is { } refusedSeed)
+        {
+            return refusedSeed;
+        }
+
+        if (seed is not null)
+        {
+            return SearchEuropeTime(request, identifier, seed, language, query, terms, requestedDate, mode, after, limit, observedAt);
+        }
+
         if (LocateEuropeWork(request, identifier, observedAt, out var europe) is { } refused)
         {
             return refused;
@@ -4474,15 +4757,13 @@ internal sealed partial class V3CorpusMount : IDisposable
     }
 
     /// <summary>
-    /// EU <c>search</c> in one work (lane R2): the two lexical lanes of the Luxembourg search over the one
-    /// held wording of the work's expression in the language asked, with its refusals. A language the work
-    /// holds no expression in is <c>language_not_available</c>; two expressions in it are
-    /// <c>ambiguous_identifier</c>, never one of them; a date is refused <c>retrieval_mode_unavailable</c>:
-    /// the search reads the original wording only, and the wording that answers a date is <c>as_of</c>'s
-    /// question, which the EU time view answers (V3CorpusMount.EuropeTime.cs); searching that wording at a
-    /// date is not built yet; a mode other than the two lanes is refused as the Luxembourg search refuses it. Each hit names its
-    /// article, the Formex act date of the wording (<c>wording_date</c>, with its meaning in the answer,
-    /// never an applicability date), and the provision coordinate <c>resolve</c> answers; no text is served.
+    /// EU <c>search</c> in one work on an EU index that holds no census of it (lane R2): the lanes over the one held wording of
+    /// the work's expression in the language asked, through <see cref="SearchEuropeWordings"/>. A language the work holds no
+    /// expression in is <c>language_not_available</c>; two expressions in it are <c>ambiguous_identifier</c>, never one of them;
+    /// a date is refused <c>retrieval_mode_unavailable</c>, since no other wording of the act is held to select; a mode other
+    /// than the two lanes is refused as the Luxembourg search refuses it. Each hit names its article, the Formex act date of the
+    /// wording (<c>wording_date</c>, never an applicability date), the provision coordinate <c>resolve</c> answers, its
+    /// permalink and its extract.
     /// </summary>
     private V3PlatformOperationOutcome SearchEurope(
         V3PlatformOperationRequest request,
@@ -4528,132 +4809,39 @@ internal sealed partial class V3CorpusMount : IDisposable
                 new V3PlatformOperationRefusal(request, "ambiguous_identifier", ambiguous.RootElement));
         }
 
-        if (requestedDate is not null || (mode is not null && !SearchModes.Contains(mode, StringComparer.Ordinal)))
+        if (requestedDate is not null)
         {
-            using var unavailableMode = JsonSerializer.SerializeToDocument(requestedDate is not null
-                ? new { requested_mode = "r6_as_of", available_modes = new[] { "r2_provision_discovery" } }
-                : new { requested_mode = mode!, available_modes = SearchModes });
+            using var unavailableMode = JsonSerializer.SerializeToDocument(
+                new { requested_mode = "r6_as_of", available_modes = new[] { "r2_provision_discovery" } });
             return V3PlatformOperationOutcome.Refused(
                 Context("refusal", observedAt, PublisherId.EuEurLex),
                 new V3PlatformOperationRefusal(request, "retrieval_mode_unavailable", unavailableMode.RootElement));
         }
 
-        var expression = expressions[0];
-        var wording = EuropeWordingOf(expression);
-        var wantStrict = mode is null || string.Equals(mode, "strict", StringComparison.Ordinal);
-        var wantRelaxed = mode is null || string.Equals(mode, "relaxed", StringComparison.Ordinal);
-        var relaxedIsStrict = terms.Length == 1 && string.Equals(terms[0], query, StringComparison.Ordinal);
-        var strictFound = wantStrict ? _europeReader.SearchExpressionArticles(language, [query], expression) : null;
-        var relaxedFound = wantRelaxed && (mode is not null || !relaxedIsStrict)
-            ? _europeReader.SearchExpressionArticles(language, terms, expression)
-            : null;
-        var measured = wantStrict ? strictFound is not null : relaxedFound is not null;
-        IReadOnlyList<EuropeIndexSearchHit> strict = wantStrict ? strictFound ?? [] : [];
-        var strictKeys = strict.Select(static hit => hit.ArticleIdentitySha256).ToHashSet(StringComparer.Ordinal);
-        IReadOnlyList<EuropeIndexSearchHit> relaxed = !wantRelaxed
-            ? []
-            : mode is null
-                ? (relaxedFound ?? []).Where(hit => !strictKeys.Contains(hit.ArticleIdentitySha256)).ToArray()
-                : relaxedFound ?? [];
-        var all = strict.Select(static hit => (Lane: "strict", Hit: hit))
-            .Concat(relaxed.Select(static hit => (Lane: "relaxed", Hit: hit)))
-            .ToArray();
-        static string Cursor((string Lane, EuropeIndexSearchHit Hit) entry) => $"{entry.Lane}.{entry.Hit.ArticleIdentitySha256}";
-        var start = 0;
-        if (after is not null)
+        if (mode is not null && !SearchModes.Contains(mode, StringComparer.Ordinal))
         {
-            var index = Array.FindIndex(all, entry => string.Equals(Cursor(entry), after, StringComparison.Ordinal));
-            if (index < 0)
-            {
-                throw new V3TransportFailureException(
-                    V3TransportFailureKind.RequestSchemaInvalid,
-                    "The operation request's 'after' names no hit of this query; a cursor is the continue_after of the same query, scope and index.");
-            }
-
-            start = index + 1;
+            return RefuseEuropeSearchMode(request, mode, observedAt);
         }
 
-        var page = all.Skip(start).Take(limit).ToArray();
-        var truncated = start + page.Length < all.Length;
-        var searchSeed = EuropeSeedsOf(resolved[0].PublisherWorkId) is [var heldSeed] ? heldSeed : null;
-        using var result = JsonSerializer.SerializeToDocument(new
+        var expression = expressions[0];
+        var workId = resolved.First(candidate => string.Equals(candidate.PublisherExpressionId, expression, StringComparison.Ordinal)).PublisherWorkId;
+        var held = _europeReader.ResolveWorkExpressions(workId)
+            .FirstOrDefault(candidate => string.Equals(candidate.PublisherExpressionId, expression, StringComparison.Ordinal));
+        var wording = EuropeWordingOf(expression);
+        var celex = wording?.Celex ?? held?.PublisherWorkCelex;
+        // R92 before any text is read (the review of #1005, F1), by the act's CELEX, its work or its expression.
+        if ((WithheldEurope(celex) ?? WithheldEurope(workId) ?? WithheldEurope(expression)) is { } withheld)
         {
-            requested_query = query,
-            requested_language = language,
-            requested_date = (string?)null,
-            requested_identifier = identifier,
-            requested_mode = mode,
-            requested_after = after,
-            publisher = "eu-eurlex",
-            scope = EuropeSearchScope,
-            ranking = EuropeSearchRanking,
-            matching = EuropeSearchMatching,
-            hit_unit = EuropeSearchHitUnit,
-            lanes = SearchLanes,
-            date_semantics = EuropeWordingDateSemantics,
-            consolidations_held = searchSeed is not null && EuropeConsolidationsHeld(EuropeTimelineOf(searchSeed)),
-            text_served = false,
-            searchable_text_held_for_language = measured,
-            searchable_languages = _europeReader.SearchableLanguages(),
-            modes_held = SearchModes,
-            modes_not_held = new[] { "bm25", "semantic" },
-            reference = ReferenceNotRead("not_run_identifier_given"),
-            lanes_run = true,
-            work_resolution = new
-            {
-                retrieval_lane = "r1_work_discovery",
-                outcome = "not_run_identifier_given",
-                work = (object?)null,
-                candidates = (object?)null,
-            },
-            terms,
-            population = new
-            {
-                scope = new { identifier, language, date = (string?)null, mode },
-                strict_hits = wantStrict ? (int?)strict.Count : null,
-                relaxed_hits = wantRelaxed ? (int?)relaxed.Count : null,
-                distinct_publisher_articles = all.Select(static entry => entry.Hit.PublisherIdentifier).Distinct(StringComparer.Ordinal).Count(),
-                works_with_hits = all.Select(static entry => entry.Hit.PublisherWorkId).Distinct(StringComparer.Ordinal).Count(),
-            },
-            ambiguous_works = Array.Empty<object>(),
-            limit,
-            truncated,
-            continue_after = truncated ? Cursor(page[^1]) : null,
-            page_is = SearchPageIs,
-            // The one held wording the hits are in, pinned (the EU permalink grammar), or null when it holds no single
-            // wording date to pin; each hit's permalink is it with the provision as a last segment.
-            pinned_wording = wording is not { } held ? null : new
-            {
-                wording_date = held.WordingDate,
-                wording_sha256 = held.Sha256,
-                permalink = held.Permalink,
-                digest_rule = EuropeWordingDigestRule,
-            },
-            hits = page.Select(entry => new
-            {
-                lane = entry.Lane,
-                match_reasons = new[] { entry.Lane == "strict" ? "exact_phrase" : "all_terms" },
-                publisher_work_id = entry.Hit.PublisherWorkId,
-                celex = entry.Hit.PublisherWorkCelex,
-                publisher_expression_id = entry.Hit.PublisherExpressionId,
-                language = entry.Hit.Language,
-                wording_date = entry.Hit.WordingDate,
-                article_identity_sha256 = entry.Hit.ArticleIdentitySha256,
-                publisher_id = entry.Hit.PublisherIdentifier,
-                heading = entry.Hit.Heading,
-                // The provision coordinate EU resolve answers; the text is not served here.
-                resolve = new { identifier = entry.Hit.ProvisionCoordinate },
-                // The hash-pinned provision permalink verify checks (null when the wording has no single date).
-                permalink = wording is { } pinned ? EuropeProvisionPermalink(pinned.Permalink, entry.Hit.PublisherIdentifier) : null,
-            }).ToArray(),
-            not_held = EuropeNotHeldRows(EuropeSearchNotHeld, searchSeed,
-                "consolidated versions of this act are held and answered by timeline, as_of and evidence_bundle; this search reads the original wording only, and a date is not answered here"),
-            corpus_sha256 = _corpus.ArtifactRef.Sha256,
-            index_sha256 = _europeReader.IndexRef.Sha256,
-        });
-        return V3PlatformOperationOutcome.Success(
-            Context("success", observedAt, PublisherId.EuEurLex),
-            new V3PlatformOperationResult(request, "quote", result.RootElement));
+            return RefuseNamesWithheld(request, withheld, null, observedAt);
+        }
+
+        var searched = new EuropeSearchWording(expression, language, wording?.WordingDate, "original_wording", workId, celex,
+            NextDate: null, NextTextHeld: null, EuropeArticleRowsOf(expression), wording?.Sha256, wording?.Permalink);
+        var authenticity = EuropeAuthenticityOf(celex is null
+            ? Array.Empty<string>()
+            : EuropeActDatesOf(workId, celex, held?.WordingDates ?? Array.Empty<string>()));
+        return SearchEuropeWordings(request, identifier, language, query, terms, requestedDate: null, mode, after, limit, observedAt,
+            [searched], census: null, authenticity);
     }
 
     internal const string CoverageScope =
@@ -4678,17 +4866,17 @@ internal sealed partial class V3CorpusMount : IDisposable
         "the outcomes of members that are not acquired are not counted";
 
     internal const string CoverageOperationsNote =
-        "served_operations are the routes this mount answers and not_served_operations are registered with no route on it; " +
-        "a request for an unserved operation answers the transport failure operation_not_served (HTTP 404, below the envelope), " +
-        "which tells it apart from a path nothing names (unknown_route); not_served_data names, for each unserved operation, " +
+        "served_operations are the operations this mount answers from its data and not_served_operations are registered and " +
+        "served from no data; every registered operation has a route over REST and MCP, and a request for an unserved one answers " +
+        "inside a normal envelope with the typed refusal its row of not_served_data gives (reason: retrieval_mode_unavailable, " +
+        "naming the requested mode and the modes this server serves), never a transport failure; not_served_data names, for each, " +
         "the data that would serve it, none of which the ingest produces";
 
     /// <summary>
-    /// The data that would serve each registered operation this mount has no route for (the driver decision in STATUS:
-    /// they keep the transport failure <c>operation_not_served</c>, and the platform says, per operation, which data
-    /// would serve it). The data are the specification's own (<c>33-product-spec.md</c>: the publication-time view, the
-    /// bitemporal replay, the EuroVoc concepts and the transposition bridge). A served operation never appears here, and
-    /// an unserved one without an entry fails the coverage tests.
+    /// The data that would serve each registered operation this mount serves from no data, which answers its typed refusal
+    /// inside a normal envelope (the plan's item 8.6). The data are the specification's own (<c>33-product-spec.md</c>: the
+    /// publication-time view, the EuroVoc concepts and the transposition bridge). A served operation never appears here, and an
+    /// unserved one without an entry fails the coverage tests.
     /// </summary>
     internal static readonly IReadOnlyDictionary<string, string> NotServedDataNeeded =
         V3UnservedOperations.Rows.ToDictionary(static row => row.Operation, static row => row.DataNeeded, StringComparer.Ordinal);
@@ -4712,6 +4900,8 @@ internal sealed partial class V3CorpusMount : IDisposable
             .Select(static operation => new
             {
                 operation,
+                reason = Lex.V3.Contracts.Index.V3UnservedOperation.RetrievalModeUnavailable,
+                requested_mode = V3UnservedOperations.RequestedMode(operation),
                 data_needed = NotServedDataNeeded.TryGetValue(operation, out var needed)
                     ? needed
                     : throw new InvalidOperationException($"The unserved operation {operation} states no data that would serve it."),
@@ -4736,9 +4926,12 @@ internal sealed partial class V3CorpusMount : IDisposable
             not_served_operations = notServed,
             not_served_data = notServedData,
             note = CoverageOperationsNote,
+            // An operation served from no data is listed above, with its reason, for every identifier; a manifest written since
+            // 2026-10-27 states it with the same reason, and it is not repeated here.
             refused_for_eu = _europeReader.NotServed
-                .Where(static row => string.Equals(
-                    row.Reason, Lex.V3.Contracts.Index.V3UnservedOperation.RetrievalModeUnavailable, StringComparison.Ordinal))
+                .Where(row => string.Equals(
+                    row.Reason, Lex.V3.Contracts.Index.V3UnservedOperation.RetrievalModeUnavailable, StringComparison.Ordinal) &&
+                    !notServed.Contains(row.Operation, StringComparer.Ordinal))
                 .Select(static row => new { operation = row.Operation, reason = row.Reason, data_needed = row.DataNeeded })
                 .ToArray(),
             refused_for_eu_note = CoverageEuropeRefusedNote,
@@ -4898,9 +5091,10 @@ internal sealed partial class V3CorpusMount : IDisposable
                 searchable_text_held = searchable.Contains(held.Language, StringComparer.Ordinal),
             })
             .ToArray();
-        using var result = JsonSerializer.SerializeToDocument(new
+        // What the mount declares beside its counts (R78, R82, R12), on index 9.
+        using var result = JsonSerializer.SerializeToDocument(WithDeclaredScope(new
         {
-            scope = CoverageScope,
+            scope = _textYield is null ? CoverageScope : CoverageScopeWithTextYield,
             counts_note = CoverageCountsNote,
             requested_language = language,
             mounted = new
@@ -4945,14 +5139,18 @@ internal sealed partial class V3CorpusMount : IDisposable
                 })
                 .ToArray(),
             operations = CoverageOperations(registered, served),
+            // The build's text yield per class (R86(4)), from its report, or null with the reason; never narrowed by language.
+            text_yield = TextYieldBlock(),
+            text_yield_note = _textYield is null ? TextYieldAbsentNote : TextYieldNote,
             not_held = CoverageNotHeld
-                .Select(row => row[0] != "build_time_and_currency" ? row
+                .Select(row => row[0] == "publisher_universe" && _textYield is not null ? CoveragePublisherUniverseWithTextYield
+                    : row[0] != "build_time_and_currency" ? row
                     : !_reader.RecordsBuilds ? CoverageLegacyBuildTimeRow
                     : _reader.RecordsCatalogueStates ? CoverageBuildTimeRowNine
                     : row)
                 .Select(static row => new { item = row[0], reason = row[1] })
                 .ToArray(),
-        });
+        }));
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "coverage_report", result.RootElement));
@@ -5847,7 +6045,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             }
             else
             {
-                var (_, compared, differs) = CompareArticles(
+                var (_, compared, differs, _) = CompareArticles(
                     _reader!.ResolveStateArticles(baselines[0].StateSha256), _reader.ResolveStateArticles(state.StateSha256));
                 wordingChanged = differs;
                 counts = compared;
@@ -6084,7 +6282,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         var rows = scope.Select(state => WithCatalogueFacts(DossierStateRow(state, NextDateInLanguage(scope, state), notAdmitted), state)).ToArray();
         var asPublished = AsPublishedOf(states, scope);
 
-        using var result = JsonSerializer.SerializeToDocument(WithCatalogueChain(new
+        // The act's force, as the publisher asserts it (R79), on index 9.
+        using var result = JsonSerializer.SerializeToDocument(WithDossierForce(WithCatalogueChain(new
         {
             scope = DossierScope,
             requested_identifier = identifier,
@@ -6103,7 +6302,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             not_held = NotHeldRows(RulesByInterval ? DossierNotHeldNine : DossierNotHeld, asPublished),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader!.IndexRef.Sha256,
-        }, states[0].WorkKey, requestedLanguage));
+        }, states[0].WorkKey, requestedLanguage), states));
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "work_record", result.RootElement));
@@ -6122,7 +6321,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         ["force_dates", "no entry-into-force, application or end-of-validity date is held; the wording date is none of them"],
         ["document_type", "the publisher's document type is not held for EU works"],
         ["corrigenda", "corrigendum lines are recorded by the index per corrected work root and are not joined to the work here, because the join between a corrected work root and the work's publisher identifier is not established"],
-        ["other_languages", "an expression in a language the index holds no wording in is not listed; French expressions are not acquired (Decision 89)"],
+        ["other_languages", "an expression in a language the index holds no wording in is not listed; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act's other language versions where they exist"],
         ["annexes", EuropeAnnexesNotHeldReason],
     ];
 
@@ -6909,9 +7108,11 @@ internal sealed partial class V3CorpusMount : IDisposable
         var located = _reader.ResolveWorkStates(workIdentifier);
         if (located.Count == 0)
         {
+            // R77: an act the publisher's catalogue holds and this index holds no version of answers text_not_available with its
+            // record, never identifier_unknown (V3CorpusMount.CatalogueRecords.cs).
             return IsEuropeanUnionShaped(identifier)
                 ? ModeUnavailable(request, observedAt, PublisherId.EuEurLex, requestedMode)
-                : Unknown(request, identifier, observedAt, PublisherId.LuLegilux,
+                : CatalogueOnlyRefusal(request, identifier, observedAt) ?? Unknown(request, identifier, observedAt, PublisherId.LuLegilux,
                     isStableWorkCoordinate || IsLuxembourgShaped(identifier)
                         ? "a Luxembourg work identifier present in the mounted index"
                         : ShapelessIdentifierWhatWouldAnswer);
@@ -7347,7 +7548,55 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// the wording is one expression in one language, and its digest pins that language's articles.
     /// </summary>
     private static string EuropePermalink(string celex, string wordingDate, string wordingSha256, string language) =>
-        $"/{EuropePermalinkPublisher}/{celex}/{wordingDate}--{wordingSha256}/{language}";
+        $"/{EuropePermalinkPublisher}/{EuropeWorkSegment(celex)}/{wordingDate}--{wordingSha256}/{language}";
+
+    /// <summary>
+    /// A CELEX as the one path segment R64's <c>{work}</c> is: unchanged unless it carries a solidus, which RFC 3986 writes
+    /// <c>%2F</c> inside a segment. The Treaties' and the Charter's CELEX numbers carry one (<c>12016E/TXT</c>, served from
+    /// main-body profile /5 on); every other CELEX this index holds has none, so its addresses keep their bytes.
+    /// </summary>
+    internal static string EuropeWorkSegment(string celex) => celex.Replace("/", "%2F", StringComparison.Ordinal);
+
+    /// <summary>An EU act's address, <c>/eu-eurlex/{celex}</c>, its CELEX as one segment (<see cref="EuropeWorkSegment"/>).</summary>
+    internal static string EuropeActAddress(string celex) => $"/{EuropePermalinkPublisher}/{EuropeWorkSegment(celex)}";
+
+    /// <summary>
+    /// The CELEX a path segment names, or null: letters, digits and <c>( ) _ - .</c>, as before, and a solidus written
+    /// <c>%2F</c> (or <c>%2f</c>), the only escape a CELEX segment takes (<see cref="EuropeWorkSegment"/>).
+    /// </summary>
+    internal static string? EuropeCelexOfSegment(string segment)
+    {
+        if (segment.Length == 0)
+        {
+            return null;
+        }
+
+        var celex = new StringBuilder(segment.Length);
+        for (var index = 0; index < segment.Length; index++)
+        {
+            var character = segment[index];
+            if (character == '%')
+            {
+                if (index + 2 >= segment.Length || segment[index + 1] != '2' || segment[index + 2] is not ('F' or 'f'))
+                {
+                    return null;
+                }
+
+                celex.Append('/');
+                index += 2;
+            }
+            else if (char.IsAsciiLetterOrDigit(character) || character is '(' or ')' or '_' or '-' or '.')
+            {
+                celex.Append(character);
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        return celex.ToString();
+    }
 
     /// <summary>
     /// The EU stable coordinate, <c>/eu-eurlex/{celex}/{language}/{wording date}</c>, of a wording's permalink
@@ -7380,13 +7629,12 @@ internal sealed partial class V3CorpusMount : IDisposable
     {
         celex = language = wordingDate = requestedDigest = string.Empty;
         provision = null;
-        if (PermalinkSegments(value, EuropePermalinkPublisher) is not { } pin ||
-            !pin.Work.All(static character => char.IsAsciiLetterOrDigit(character) || character is '(' or ')' or '_' or '-' or '.'))
+        if (PermalinkSegments(value, EuropePermalinkPublisher) is not { } pin || EuropeCelexOfSegment(pin.Work) is not { } work)
         {
             return false;
         }
 
-        (celex, wordingDate, requestedDigest, language, provision) = (pin.Work, pin.Date, pin.Digest, pin.Language, pin.Anchor);
+        (celex, wordingDate, requestedDigest, language, provision) = (work, pin.Date, pin.Digest, pin.Language, pin.Anchor);
         return true;
     }
 
@@ -7679,6 +7927,13 @@ internal sealed partial class V3CorpusMount : IDisposable
         string whatWouldAnswer = "an exact identifier present in the mounted corpus")
     {
         var owner = publisher ?? PublisherFor(identifier);
+        // An EU act the mounted EU population does not hold is out of the corpus's scope, named with its rule (R80), whichever
+        // path found it unknown: an identifier that names an EU act by its CELEX is the EU's, as "CELEX:…" is.
+        if (RefuseOutsideEuropePopulation(request, identifier, observedAt) is { } outside)
+        {
+            return outside;
+        }
+
         using var helpful = JsonSerializer.SerializeToDocument(new
         {
             requested_identifier = identifier,
@@ -7746,6 +8001,12 @@ internal sealed partial class V3CorpusMount : IDisposable
         return string.Equals(uri.Host, EuropeanUnionPublisherDomain, StringComparison.OrdinalIgnoreCase) ||
                uri.Host.EndsWith("." + EuropeanUnionPublisherDomain, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// The context of a refusal the server gives before the mount is asked anything (<c>rate_limited</c>,
+    /// <see cref="V3ClientLimiter"/>): this mount's snapshot, freshness and commits, as every refusal of it names them.
+    /// </summary>
+    internal V3EnvelopeContext RefusalContext(DateTimeOffset observedAt) => Context("refusal", observedAt);
 
     private V3EnvelopeContext Context(
         string status,

@@ -1,8 +1,924 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-26. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-27. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## Review and repair (#1005): R92 on every EU search, J2's walk, the apostrophes and no-break spaces folded (sole driver, 2026-10-27)
+
+The independent review of #1005 (writer/search-quality at 8968fb5a) said REPAIR, and CI's journeys failed J2. One round:
+- **F1 (high, R92, latent).** An EU search, or an EU `as_of`, reached by a provision coordinate (`…#lex-provision=001`) or
+  an article identity named its act only under `seed_celex`, which the names gate did not read, so a withheld act's text was
+  served (reproduced: 79 hits with their text, where the CELEX gave `text_withheld`). The gate now reads `seed_celex` and
+  `original_work_id`, and `SearchEuropeTime` and `SearchEurope` refuse a withheld act with `RefuseNamesWithheld` before any
+  text is read. `AnEuActTheRecordWithholdsIsTextWithheldOnEveryOperationThatWouldShowItsText` asks search and `as_of` by the
+  coordinate and by the article identity too (`as_of` by the coordinate: it reads no bare article identity; 9 requests,
+  each answered before the record and `text_withheld` after).
+- **CI's journeys, J2.** The walk expected "…with capitals and accents ignored:", which the reviewed final no longer says;
+  it now reads `runText` and `exactOnly` from the table, and `live-search.test.mjs` holds every J2 sentence to the rendered
+  no-hit card.
+- **The driver's decision: fold these too** (one unit for one, or one dropped, so the offsets stay exact): ’ ‘ ʼ to ', the
+  no-break spaces U+00A0, U+202F and U+2007 to a space, the soft hyphen U+00AD dropped (a match never takes it along). On
+  derive-r1 "l'article" is in 1,517 texts and "l’article" in 9,246; the soft hyphen appears 441 times, 438 inside a word.
+  `TextFolding.Rule`, `text-folding.mjs` and `exactOnly` (EN and FR) say so; the French reviewed by an independent reviewer
+  (1 form, changed in French only: "étant lues comme", "une espace ordinaire", "n’étant pas lu", "chacun des autres
+  caractères de l’expression"), its final applied byte for byte and its addendum appended to the review record.
+- **Records**: the samples rendered again; the schema-8 and EU /5 base answers recorded again on Linux at 2c43bde3 (the
+  three search rows by their `matching` sentence alone).
+
+## Search with capitals and accents ignored, and EU search over the consolidated wordings (sole driver, 2026-10-27)
+
+The audit of 2026-10-27, gaps 3 and 5; the plan's item 4.4; R59, R21, R107. `writer/search-quality`.
+- **One folding** (`TextFolding`, Contracts; `TextFolding.Rule` is the sentence every answer's `matching` carries): each
+  letter or digit to its canonical decomposition (NFD) without its combining marks, lowered by the invariant case map, by
+  the title folding's ICU-derived table (the same with or without the image's missing language data); a combining mark
+  alone dropped; œ and æ written oe and ae; every other character kept (punctuation, ’ and ', every kind of space, until
+  the repair above folded the apostrophes and no-break spaces; a symbol is not decomposed, so ≠ is not =). `FoldedText` maps each folded unit to the original's, so a match is marked on the text's
+  own characters (a letter with its marks, a ligature whole) and the extract's byte range is unchanged in kind.
+- **Luxembourg** (driver decision, reversible): folded at query and match time over the indexes already built (/9, /8,
+  /6), no derive. The reader holds a folded copy per searchable language (`LuxembourgIndexReader.Search.cs`,
+  `FoldedSearchTexts`: every state's article once, each distinct text folded once, UTF-8), read at `Warm` by
+  `LuxembourgIndexQueries.SearchTexts` (its plan held by `LuxembourgIndexQueryPlanTests`), replacing the SQL `instr` scan.
+  No index change is needed for the next derive: a folded column would add about 90 MB to /9's file for no latency gain.
+- **EU** (`V3CorpusMount.EuropeSearch.cs`): over the act's census, with no date every wording whose text is held and the
+  rights rule admits, an article's text once under the latest wording that holds it (`same_wording` names the others,
+  `fold` counts); with a date the one wording `as_of` selects, with its refusals; each hit dated by its wording's role and
+  `next_date` (R21), its extract, its provision permalink; the answer under Decision 95's acknowledgement and authenticity
+  statement, with `wordings`, `searched`, `rights_rule`. An EU index with no census: the one original wording, folded, with
+  extracts; a date refused as before. The rows of a wording (no text) are cached per expression; texts are read once per
+  distinct digest and not kept. Not held, said in `not_held`: EU titles and OJ references (a derive would add them from the
+  census's work facts, so an EU act could be found by its title and an undated search across EU acts served).
+- **Measured, read-only, in place** (SQLite `immutable=1`, nothing copied or written; a harness running the reader's queries
+  and fold, this PC shared with another agent's build):
+  - `derive-r1` LU /9 (137,614 French articles, 29,374 distinct texts): the folded copy 26.9 MB, 51.7 MiB held, built in
+    5.3 s at start; a search 5 to 11 ms median (p95 at most 31 ms), against 3.9 to 6.3 s for the `instr` scan it replaces.
+    "conge", "Congé" and "CONGÉ" now find the 2,399 passages "congé" finds (were 2, 11 and 0); "reglement grand-ducal"
+    5,099 (was 0); "oeuvre" 2,391 (was 767).
+  - `derive-c` LU /8 (live; 7,877 articles): 7.6 MiB, 1.0 s at start; 2 to 4 ms against about 240 ms; "conge" 139 (was 0).
+  - `derive-r1` EU /6: the GDPR's three wordings, 2 to 8 ms (44 ms the first time); the CRR's 55 French wordings (38,683
+    articles, 1,585 distinct texts), 594 ms the first time (its rows read) and 46 ms after; a dated search 19 to 22 ms.
+- **Copy** (EN and FR): the search page's intro, counts, lane, no-hit card (`runText`, `exactOnly`), the Developers line,
+  the EU results' new entries (`euFound`, `euWordings`, `euSearched`, `euDated`, `euUndated`, `euNotSearched`,
+  `euSameWording`; `euWording` and `euHit` removed; the wordings headed by the reading's headings), and the EU date refusal.
+  The French reviewed by an independent reviewer (Claude, AI reviewer), 19 forms, 3 changed, `euUndated` in English too (an
+  article is shown once per text, not once; a wording is searched only when held and admitted); finals applied byte for
+  byte, addendum appended to `C:\lex-v3\lanes\fr-review\review.md`.
+- **Not done**: exact-accent matches ranked first (no ranker; the order is still the stated one); quotation marks not
+  stripped; ’ and ', and a no-break space and a space, stayed different (measured on /9: "l'article" 9,168 passages,
+  "l’article" 23,940): the repair above folds them, by the driver's decision.
+- **Records and tests**: integration at b3896074 (#1003 carrying #1004) merged in (222a3cf6): the EU not-held rows keep
+  #1004's other-languages sentence, its `article_text` row dropped (the extracts serve the text). The schema-8 and EU /5 base
+  answers recorded again on Linux (WSL Ubuntu 24.04.4, .NET 10.0.11, invariant, UTC) at 222a3cf6: the two schema-8 searches
+  by their matching, lanes and extract sentences alone (no hit moved), the EU /5 search row by the time view's answer, no
+  other row; Windows replays them. The answer and envelope samples rendered from the handler (new: the phrase in capitals
+  without accents; an EU act's two wordings with no date, and at a date) and verified without the switches; the refusal
+  payloads did not move. `dotnet build Lex.V3.slnx -c Release`: 0 warnings, 0 errors; `Lex.V3.Tests`: 3,385, 3,379 passed,
+  6 skipped; `Lex.V3.Ingest.Tests`, the touched classes, every census class and `PublicRequestRecordingTests` (and the
+  gates, samples, legacy, EU search and time-view classes): 276, 272 passed, 4 skipped (recorders and the mount to evaluate);
+  `npm run build` then `npm test`: 1,486, 1,483 passed, 3 skipped (browser); `eng/verify-v3-tree.ps1`: 1,799 tracked paths.
+  New tests: `TextFoldingTests` (Lex.V3.Tests), `V3CorpusEuropeTimeSearchTests` (4), `web/test/text-folding.test.mjs`.
+## The combine's two layout failures in CI's journeys (sole driver, 2026-10-27)
+
+CI's journeys at dfb8d82f failed two layout checks, both from #1004's changes:
+- **Coverage at 320 CSS pixels** scrolled sideways (main at 331 px in a 305 px window): the declared scope's rule names its
+  disposition tokens in plain text, and an auto grid column took the longest as its floor. Each `.coverage-block` is now one
+  `minmax(0, 1fr)` column, and the platform's sentences (`.coverage-scope`, `.coverage-note`, `.coverage-held`) wrap
+  anywhere; tables still scroll inside their own regions.
+- **The home page's sentence under the box** ended at 720 px, below the first 640 (with and without a mount), once the menu's
+  and the languages' links grew to 44 px. On a phone the targets stay 44 px and the rest gives way: the tagline steps out (the
+  heading says the same), the header's and main's gaps and padding close, the menu's words step down to 0.8rem with a 0.5rem
+  gap so its links take two rows rather than three, the labels' and the form's gaps narrow, and the sentence's line height is
+  1.4.
+- No browser here: the fix is reasoned from the walk's measurement (320 by 640, `REFLOW`, `FIRST_SCREEN` in `journey.mjs`), and
+  `print-view.test.mjs` holds the rules (the coverage column and wrapping; the phone rules, and that no phone rule sizes a
+  target). `npm run build`; `npm test`: 1,482 (1,479 passed, 0 failed, 3 skipped); `eng/verify-v3-tree.ps1`: 1,790 tracked
+  paths. CI's journeys measure the result.
+
+## R77's records of the acts only the catalogue holds, and R57's wording on Compare (sole driver, 2026-10-27)
+
+The audit of 2026-10-27 (`C:\lex-v3\AUDIT-2026-10-27.md`), gaps 1 and 2, as one pull request (`writer/catalogue-and-compare`,
+on v3/integration a0958bb9, #1001's names record included; v3/integration 404bfc9a, #1002, merged before it was handed
+back).
+- **R77.** An act the Luxembourg catalogue holds and the index holds no version of answered `identifier_unknown`, with no
+  record. It now answers `text_not_available`, the code R77 names (no registry change), with its record read from the
+  catalogue's facts the index already holds (`work_facts`; `V3CorpusMount.CatalogueRecords.cs`): its identity and the address
+  this site gives it (`/lu-legilux/{key}`, as the index would mint it), its type, its dates by role (dateDocument,
+  publicationDate, dateEntryInForce, dateNoLongerInForce, each the publisher's, R21), its status in the publisher's word
+  (the act's `inForceStatus`, never a consolidation's), its Mémorial issue, historicalLegalId, official PDF, title, its
+  versions, and why no text of each is shown, by the reason Coverage counts it under (one rule, `V3TextYield.HeldFile` and
+  `CatalogueNotHeldReason`): for a version whose file the corpus holds, that file's bucket (`file_withheld` with its rights
+  disposition, `file_pdf_only`, `file_no_article_served` with its dispositions, `file_articles_no_state`), and for one of which
+  no file is held, what the catalogue states (`catalogue_licence_scl`, `catalogue_cc_by_not_acquired`, …), never why the
+  acquisition did not fetch it; and the publisher's own word for its type and status (`document_type_codes`,
+  `in_force_status_codes`, the last segment of each authority IRI), which a page says. Every per-work operation (the dossier,
+  reading and the rest), `resolve` and search's exact reference (a reference, or this site's address of the act) answer it;
+  it needs no new derive and reads index /9 and /8 alike.
+  - **R92 first:** an act the names record withholds answers `text_withheld` (`names_private_individuals`) with no title and
+    no record, as every answer about it does (a test measures a catalogue act whose title grants naturalisation).
+  - **Screens:** every screen says one sentence (`CATALOGUE_RECORD_SENTENCE`), and the card says why no text is held and each
+    fact by its role, in English and French (`refusal-card.mjs`, `catalogueRecord`); the dossier shows the act and its title
+    in its language, and links the record's page.
+  - **Measured, read-only** (after the repair, by the act as published's reason, else the first version's): derive-r1, 22,049
+    acts gain a record: 16,330 `catalogue_licence_scl`, 5,673 `file_withheld` (each `typed_quarantine_in_file_reading_rejected`),
+    34 `file_no_article_served`, 10 `catalogue_cc_by_not_acquired`, 2 `catalogue_no_expression`; R92's record withholds 974 of
+    the catalogue's acts (STATUS-DATA). derive-c, 22,891: 16,330, 5,675 `file_withheld`, 665 `file_no_article_served`, 209
+    `file_articles_no_state`, 10, 2. Of derive-r1's, 22,040 state their dates, status and issue, 19,679 a historical
+    identifier, 6,467 an end of force.
+- **R57.** `diff` carries the served text of each changed, added or removed article, where that side's rights admit it, and
+  null otherwise (`text_rule`; the digests still decide the status). The compare page shows each change inline, word by
+  word (`word-diff.mjs`): the text deleted struck through, the text inserted underlined, each also said in hidden words,
+  a jump list and the previous and next change; the digests, permalinks and date roles stay. A comparison has its own
+  address (`/{lang}/compare.html?work=/lu-legilux/{key}&from=…&to=…[&language=…]`), which both servers render from `diff`
+  (`SitePageFor`/`sitePageFor`, one table), so it reads without JavaScript. EU diff, article_history and changes_in_period
+  stay typed refusals.
+  - **Driver decision (reversible), the compare form and R109:** the first draft named the form's controls and made it a GET
+    so a submit with no script would ask the comparison's address; the web suite's R109 hold ("no word a reader types
+    reaches an address a server could record") refused it, and the decision is reversed. The form's controls carry no name,
+    as every form's do. Once a comparison is asked, the screen writes its address into the page's query only when its work
+    is this site's address of an act, in any form the API reads as one (`/lu-legilux/{key}`, under an interface language
+    or this origin, written as `/lu-legilux/{key}`: `compareQueryOf`), with the two dates and the language: a law's address,
+    never a word, pinned in `request-addresses.test.mjs`. The server renders a comparison's address for such a work alone.
+    The page's introduction says so (the French review's supplement).
+- **Pins moved.** The envelope, answer and refusal-payload samples re-rendered (`V3_RENDER_*`) and verified without: three
+  new envelopes (the record by the dossier, reading and search), the payload census samples the record, the two-state
+  diff carries its texts. The legacy base answers recorded again on Linux at ee44bf68 (9 of 53 rows, each by R77 or R57
+  alone), at a9179b39 (the five schema-6 records by their two code members alone) and at caaff24d (the repair: all 38
+  legacy rows and the 15 EU schema-5 rows by the registry digest, since diff's request schema gained `page`; the schema-8
+  diff by its `text_page`; the five schema-6 records by F1's reason); Windows replays the same bytes.
+- **French** (Decision 41): the 32 new or changed forms were reviewed by an independent reviewer (Claude, AI reviewer, not the
+  author) in the addendum of 2026-10-27 "R77's catalogue records and R57's compare wording" (`C:\lex-v3\lanes\fr-review\review.md`):
+  20 approved, 12 changed in French and 8 of them in English too, 5 blocking and each a truth finding (a compared side is named
+  by its date's label, since the page does not order its dates; a comparison shown whole keeps the beginning and end its
+  texts share; a licence reason names the XML and PDF files it reads, never every file; an entry into force is a labelled
+  line, since two records carry two dates). Every final applied byte for byte and read back (0 differ); the English taken:
+  the blocking finals, the recommended ones of 17 to 19 and the optional one of the intro. Not taken (reversible): ordering
+  the two dates, setting the status token apart, a spoken end marker. Its supplement (the intro after R109, and the English
+  "This article's wording", since "wording of" is the EU's) changed the intro in French with its recommended English, and its
+  blocking point was taken by the preferred fix (every form of an act's site address written as the bare one). Its
+  supplement 2 (the repair) reviewed 13 forms: 8 approved, 5 changed in French, 2 blocking in English ("The wording of the
+  changes" spoke the EU's "wording of": "The wording that changed"); every final applied byte for byte, the optional English
+  of A4 and A7 taken, and on its advice `refusalCard.textless` and `textlessNamed` say "shows" too.
+- **For the data lane** (the review's point 3): 12,040 of the 16,330 expressions whose XML and PDF files are licenceSCL also
+  carry an HTML or DOCX file under CC BY 4.0 in the catalogue. Whether Lex could admit those files is a question for R83 and
+  the data lane; nothing here claims it.
+- **Counts** (this PC, one heavy step at a time, after the repair, at c3c838c3 over v3/integration 404bfc9a): `dotnet build
+  Lex.V3.slnx -c Release`, 0 warnings. Lex.V3.Tests, whole: 3,375, 3,369 pass, 6 skip. Lex.V3.Ingest.Tests, every mount class
+  (`V3Corpus*`), the text yield, the three sample censuses, the machine gates, the EU predicate census, PublicRequestRecording,
+  the index builder and #1002's release checks: 639, 634 pass, 5 skip (28 min). `npm run build`; `npm test`: 1,473, 1,470
+  pass, 3 skip (the real-browser tests). `eng/verify-v3-tree.ps1`: 1,788 tracked paths verified. (Before the repair, at
+  6d4c4c02: 3,375; 632; 1,471.)
+- **Review and repair (#1003, one round; the review by the other model family).**
+  - **F1 (truth):** the record said "not acquired" of acts whose file the corpus holds (derive-r1: 5,707 of them). The mount now
+    reads the corpus's held Luxembourg files by work once, and the record gives such a version its file's bucket with its
+    disposition, by the rule Coverage counts it with (`V3TextYield.HeldFile`, shared), and the held file's body receipt as
+    `retained_transport_evidence`; `catalogue_*` reasons stay for versions of which no file is held. `what_would_answer`:
+    `expanded_official_scope` for `catalogue_cc_by_not_acquired` alone, `new_official_observation` otherwise. A test holds the
+    record and Coverage equal over every case (`V3TextYieldTests`), one the schema-6 fixture's act (acquired, its four
+    articles held and no state: `file_articles_no_state`, as Coverage counts it with text). The card and the census sentence
+    say "shows none of its text", not "holds".
+  - **F2 (performance):** an address with no work's shape (`/lu-legilux/rgd`, a year, a day) is `identifier_unknown` before any
+    read of the catalogue (`IsWorkShape`, R92's `LuxembourgWorkIriOf`), by the record and by the exact reference's catalogue
+    names; a counter proves no range is read.
+  - **F3 (truth):** a work with no act as published (a code) has empty act-level lists; `CatalogueRecordRule` says so.
+  - **F4:** `diff`'s texts are cut into pages as a reading's (50 articles, 98,304 bytes of both sides' texts): `page` asks one
+    (the request schema gained it, so the registry digest is `627879b6…`, was `befb867f…`; the envelope test's pin moved with it), `text_page` names it, and a page past the last is `anchor_not_in_version` (with no page cut,
+    its nearest anchor is `page=1`). Compare names the page by its first and last article, links the pages around it
+    (`page=N` in the comparison's address, which both servers render; a button where the comparison has no address), and says
+    of a change on another page that its wording is there.
+  - **Driver decisions (reversible):** `file_articles_no_state` is the record's name for Coverage's `files_with_text` where the
+    index holds a file's articles and no state (derive-c: 209, derive-r1: none); Coverage still counts those articles as
+    served, which is Coverage's wording and outside this round. The textless forms say "shows" too (the French review's point).
+- **Carries #1004** (`writer/truth-and-coverage` at 85b0e595, merged at 27a36a09; its sections follow): both slices' meaning
+  kept (R80's `out_of_corpus_scope` for an EU act outside the population, a treaty never; its 404 law pages with the card;
+  R77's records and R57's paged diff), each refusal its own sentence (R92, then R77, then R80), both reviews' French byte for
+  byte, #1004's narrowed How to read Lex kept (R77 does not make its removed promise true; a narrower sentence for acts Lex
+  holds no version of would need R92's exception and new French: not added, a reversible driver decision). Samples
+  re-rendered (equal to the merge); on Linux at 27a36a09 the 38 legacy rows equal caaff24d's, and 3 EU schema-5 rows move,
+  each by a slice. Counts at 04e18046: build 0 warnings; Lex.V3.Tests 3,375 (3,369 pass, 6 skip); Lex.V3.Ingest.Tests whole
+  3,611 (3,566 pass, 45 skip, 61 min); `npm test` 1,480 (1,477 pass, 3 skip); verify-v3-tree 1,790 paths.
+- **Not done:** R57's side-by-side view and its swap control; R56's gap rows on the reading's version list.
+## Review and repair (#1004): treaties never out of the population, How to read Lex as narrow as index 8 (sole driver, 2026-10-27)
+
+The independent review of #1004 (`writer/truth-and-coverage` at b02c978a) said REPAIR. The one repair round:
+- **F1 (high).** Over derive-c, a held treaty (`12016E`, `CELEX:12016P`, `12012E`) and an article of one (`12016E101`) answered
+  `out_of_corpus_scope`: the index holds a treaty by its "/TXT" part. A sector-1 CELEX is now never read as an act outside the
+  population (`identifier_unknown`, as before this branch), and any act held by its "/TXT" part counts as held. The scope test
+  holds five treaty forms over dossier, resolve and timeline.
+- **F2 (medium).** How to read Lex said Lex names a textless version and why where it holds another version; index 8, which
+  the live release mounts, names none. The sentence is dropped, and the last says "Lex never shows another version's text
+  as that version's" (on index 8 an act held as published answers later dates, labelled as published): only what holds on
+  every index, with or without R77's records.
+- **F3.** The R80 reason names the population only ("The EU population Lex's rule selects is the N acts of its seed list
+  (Decision 84), and X is not one of them."): 12 of derive-c's 82 seed acts hold no wording.
+- **F4.** CODE_RECUEIL is no longer declared "not collected" (run 15 collected its catalogue records with the codes); RCSF and
+  RBCL are admitted and awaiting a run, with no order claimed (O7, the owner's, is open); `admitted_first_awaiting_a_run` is
+  retired, and the rule names no role.
+- **F5.** The select and the checkbox stand in the controls' 44 px rule.
+- **Also said in the PR**: every `out_of_corpus_scope` law page is a 404 in both servers, the out-of-scope list's classes
+  included, and both still render the refusal card.
+- **French**: the one changed form reviewed by one independent reviewer (the supplement "the review of #1004, F2" in the
+  record), its recommended pair taken in both languages, byte for byte.
+- **Counts**: `dotnet build Lex.V3.slnx -c Release` 0 warnings; `Lex.V3.Tests` whole 3,375 (3,369 passed, 0 failed, 6 skipped);
+  the Ingest classes touched with every census class and the legacy replays 194 (191 passed, 0 failed, 3 skipped);
+  `Lex.V3.Ingest.Tests` whole 3,592 (3,547 passed, 0 failed, 45 skipped); `npm run build`, `npm test` 1,459 (1,456 passed,
+  0 failed, 3 skipped); `eng/verify-v3-tree.ps1` 1,776 tracked paths. No legacy row moved.
+
+## Truth and coverage: the six overclaims narrowed, R80, R79, R78/R82/R12 on Coverage, R62 and R65 (sole driver, 2026-10-27)
+
+The audit of 2026-10-27 (`C:\lex-v3\AUDIT-2026-10-27.md`, "Overclaims") found six public sentences that claimed more than the
+code does. Branch `writer/truth-and-coverage`, from v3/integration a0958bb9 (#1001 merged in at the start).
+- **The six overclaims**, each narrowed to what is true, in English and French:
+  - EU dossier and search: the other-languages row no longer says French is not acquired; it says Lex acquires the English and
+    French expressions of EU acts only (Decision 89) and EUR-Lex publishes an act's other language versions where they
+    exist (`V3CorpusMount`).
+  - Developers G3: the code can keep earlier builds by a retention rule; Lex does not keep them yet, the release holds only the
+    build its server mounts, so a version is re-verifiable only while a kept build holds its text (R89; no funding claim).
+  - Evaluation card: above its verdict, a line names the gates it holds (from the card) and what it does not hold: the data
+    gates, answer quality, speed, two systems, and the refusal codes no operation sends (from the refusal census).
+  - Privacy notice: the no-logging test runs on the server's own code before deployment; the hosting is set up from a template
+    with no log store; its settings once deployed are not tested this way. Driver decision (reversible): narrowed rather than
+    pinned in `main.bicep` with a probe check, which needs the managed environment in the template and Azure to test.
+  - How to read Lex: no longer promises that a textless version is named, or why (the review's F2, above); it keeps the
+    reasons a version can lack text and that Lex never shows another version's text as that version's.
+  - Home page: history and comparison are said of a Luxembourg act of which more than one version is held.
+- **R80**: an EU act the mounted EU population does not hold, named by its CELEX (as typed, after "CELEX:", in an EUR-Lex or
+  Publications Office address; sectors 0 to 4; a consolidated version or corrigendum read as its act), answers
+  `out_of_corpus_scope` (class `eu_act_outside_population`): the rule with the number of seed acts the index holds, the act's
+  EUR-Lex page, the Publications Office as who to ask, no list or digest (`V3CorpusMount.Scope.cs`). Only the request's
+  `identifier` is read; a sector-5 document stays `identifier_unknown`; a case stays the list's `eu_case_law`. Every screen
+  says it in its own sentence (`OUTSIDE_EU_POPULATION_SENTENCE`), never "a kind Lex never holds". A law page whose answer is that refusal
+  is a 404, as an unknown work's is, in both servers (`V3WebRoot.AnswersUnknownWork`, `serve-live.mjs`).
+- **R79 (E3)**: the Luxembourg dossier on index 9 carries `force`, the work's and its act as published's own `inForceStatus`,
+  `dateEntryInForce` and `dateNoLongerInForce`, verbatim (`V3CorpusMount.Force.cs`); the page says the status token, "Entry into
+  force" and "End of force" with the publisher's record, and that this is not a reading for anyone's situation (R21 held).
+- **R78, R82, R12**: coverage on index 9 carries `declared_scope`: every recognized Luxembourg class not held (the publisher's
+  codes but CODE, LOI and RGD, with the Mémorial B and communal regulations), each with a closed disposition; the EU languages
+  held of the 24 official ones; when Lex's own observations begin per publisher (the mounted log's first build, or the EU
+  collection's end from the build report, or not stated). Shown in both renderers; R26's EU sentence names no language.
+- **R62**: touch targets of 44 px (links in lists, summaries, controls, the info control). **R65**: a copy button under each
+  citation form, rendered only after the script finds `navigator.clipboard.writeText`; the server renders none.
+- **Not done**: the home page's robots marker per state in the deploy probe (#993's F2): `data/release-checks-ops` owns the
+  probe, and the driver's instruction kept this slice out of `deploy-probe.mjs`. ARGD has no name on Coverage (token only).
+- **Legacy answers**: the EU schema-5 answers recorded again on Linux (WSL Ubuntu 24.04.4, .NET 10.0.400, invariant
+  globalization, UTC) at 81fc8ac1: 15 rows, 3 moved by the other-languages sentence alone. Schema 8 and 6 did not move (the new
+  members are index 9's).
+- **French** (Decision 41): one independent reviewer (Claude, AI reviewer, not the author), the addendum of 2026-10-27 "truth
+  and coverage" and its supplement in `C:\lex-v3\lanes\fr-review\review.md`: 58 forms, 19 changed in French, applied byte for
+  byte; the English changed for truth in three (EUR-Lex publishes the other languages only where they exist).
+- **Counts** (this PC, Windows, no browser, no publisher traffic, no Azure). `dotnet build Lex.V3.slnx -c Release`: 0 warnings,
+  0 errors. `Lex.V3.Tests`, whole: 3,375 (3,369 passed, 0 failed, 6 skipped). `Lex.V3.Ingest.Tests`, whole, once: 3,592 (3,536
+  passed, 11 failed, 45 skipped); the eleven held an unheld EU CELEX to `identifier_unknown` and now hold R80's
+  `out_of_corpus_scope`; then the classes touched or found failing and every census class: 203 (199 passed, 1 failed, 3
+  skipped), that one updated likewise, and the seven EU identifier classes: 52 (51 passed, 0 failed, 1 skipped). `npm run
+  build` (30 state pages); `npm test`: 1,459 (1,456 passed, 0 failed, 3 skipped). `eng/verify-v3-tree.ps1`: 1,776 tracked
+  paths.
+
+## Review and repair (#998): G2 exact, the change policy's digest, MCP failures, the out-of-scope forms (sole driver, 2026-10-27)
+
+The review of #998 (`writer/api-gaps` at 0bb59e65, the other model family, Decision 95) said REPAIR, with its scripts in the
+driver's scratch folder (`g2.ps1`, `oos.ps1`, `validate.ps1`, `legacy_diff.py`). The one repair round, and v3/integration at
+05965f14 (#997: the screens' gaps, the deploy safeguards, the maintenance revision) merged in, both sides kept (the transport
+failures hold #997's `ServiceInMaintenance` and not the retired `OperationNotServed`; the owner's brief is integration's).
+- **F1 (medium), G2 overclaimed.** It said the same request gives the same bytes apart from `observed_at` and `request_ref`,
+  but each channel's `age_days` and `stale` and the envelope's `stale` count to the moment asked, and a search that reads an
+  exact reference naming no date reads it at today in Luxembourg, so the date, the version it selects and the readable
+  address or permalink move with the day. G2 now names each of these, says a server built from the same commit
+  (`serving_runtime_source_commit`), and that a request past its client's limit is refused `rate_limited`. Its test,
+  `EveryServedOperationAnswersTheSameBytesFromTheSameSnapshotFromACopyOfItAndLater`, now runs on a mount whose build report
+  dates its channel (20 days old at the first answer, 50 a month later, past the maximum) with a version whose date falls
+  between the two answers' days, adds the undated reference and the home page box's date, copies the build report with the
+  mount, and holds the members that move a month later to exactly the set G2 names.
+- **F2 (low), the change policy.** "Any change to an operation" is now "an operation's definition"; a fix to how an
+  operation behaves that leaves its definition as it is keeps the digest; the out-of-scope list is not part of the registry,
+  and every `out_of_corpus_scope` refusal names its identity and digest (`scope_list`, `scope_list_sha256`).
+- **F3 (low), MCP.** The instructions said every failure is a JSON-RPC error; an HTTP request the endpoint refuses or cannot
+  answer (not a POST, a body over the limit, a failure of the server's, maintenance) is an HTTP status with a problem
+  document. They now say both. An answer the server's own schema refuses on the way out was JSON-RPC -32602 "Invalid params"; it is now
+  -32603 "Internal error" (`V3TransportResponse.IsServerFailure`: a kind REST answers 5xx), and a request its schema refuses
+  stays -32602 (`V3McpJsonRpcTests`).
+- **F4 (low), out-of-scope forms that slipped through.** An identifier is read as typed: the dashes U+2010 to U+2015 and the
+  minus sign as the hyphen, a "CELEX:" before it or an EUR-Lex address as the CELEX it names, a closing full stop dropped.
+  Recognised now: "Circ. CSSF", "telle que modifiée" / "as amended", CSSF-CPDI circulars, IML circulars (the CSSF's
+  predecessor, published by the CSSF; the class's instrument and reason say so), "CSSF-Rundschreiben", "Délibération n° …
+  de la CNPD", case names after the number, joined cases, "affaires jointes", a curia case address. Driver decisions: a
+  numbered "Délibération n° 36FR/2021" that does not name the CNPD stays unrefused (the list names the issuing body, and a
+  commune numbers its délibérations too); "C-1/16", which the review's script listed among held forms, is a Court of Justice
+  case number and is refused as `eu_case_law`; a RESA reference is `RESA_{year}_{number}`, so "resa" and "RESA 2016" are no
+  longer refused, and "RESA" alone (the recueil) still is. Every form of the review's script is in `V3OutOfScopeTests`, both
+  ways; nothing held is refused. The list's digest moved (`d473256c…`), so the envelope and refusal censuses are
+  re-rendered; the registry's digest did not, so no legacy answer moved (replays unchanged).
+- **F5 (optional), the real validator.** `V3PlatformHostTests` holds the published payload schemas themselves refusing a
+  payload that breaks its code's schema (who to ask in words, an http official place, no reason, `retry_after` 0, not
+  retryable, no modes) over REST (500 `internal_response_invalid`, no envelope) and MCP (the host's failure), and passing the
+  payload as produced.
+- **French** (Decision 41): the two changed French forms (G2, `developers.changes.digest`) are drafts; one independent
+  reviewer (Claude, AI reviewer, not the author) is reviewing them, and its finals and addendum are still to be applied and
+  appended to `C:\lex-v3\lanes\fr-review\review.md`.
+
+## The API's gaps: every operation routed, a schema per refusal payload, what Lex never holds, MCP ping, and the Developers page's guarantees and live examples (sole driver, 2026-10-27)
+
+The owner's order of 2026-10-27 (finish V3 to the specification of record within 72 hours, at high quality): the plan's items
+8.6, 6.10, 8.5 and 8.4, as one web pull request (`writer/api-gaps`, on v3/integration with `writer/help-and-developers`
+merged at its start, since the Developers page it extends is that branch's, and v3/integration at 473a9fae, #995, the
+per-client limit, merged before it was handed back: both sides kept).
+- **8.6, the three operations served from no data** (`concepts`, `knowable_on`, `transposition`). The specification of record,
+  §3, API and MCP: "All 27 registered operations are served, or refuse with the typed reason their capability manifest
+  states." Each now has a REST route and an MCP tool (`V3RestRouteBinding.Refusing`; `Routed` is the 27) and answers a
+  request inside a normal envelope with `retrieval_mode_unavailable` (an identifier the out-of-scope list names is refused
+  out of scope first, and a request past its client's limit `rate_limited`): `requested_mode` (`r5_concepts`, `r6_knowable_on`,
+  `r4_transposition`, the lanes of `34-ideal-architecture.md` §3), `available_modes` (the modes of the same lane this
+  server serves) and `data_needed` (`V3UnservedOperations`). Attribution follows the identifier when one is named. With no
+  corpus mounted they refuse `no_corpus_mounted`, as every operation does.
+  - The transport failure `operation_not_served` is retired (`V3TransportFailureKind`): no registered name is a failure below
+    the envelope; a path nothing names is `unknown_route`, as before.
+  - Both index builders state the three with the new reason in every capability manifest they write; a manifest written
+    before still reads (`V3UnservedOperation.OperationNotServed` is kept for reading). `coverage` names each with its
+    `reason` and `requested_mode` beside `data_needed`, and its note says so; `refused_for_eu` leaves them out, since the
+    rows above state them for every identifier.
+- **6.10, the refusal registry completed.** The registry is raised to `lex-v3-operation-registry/2`:
+  - each refusal code names its payload's schema, `lex-v3-{code}-payload/1`, and that schema's digest, which the registry's
+    digest covers. The 20 schemas are generated from the registry (each requires exactly the code's mandated fields, in
+    the registry's order, typed as every producer sends them, read from a survey of the 100 constructions in
+    `src/Lex.V3.Api`; the four codes no operation produces say so in a `$comment`), published beside the envelope schemas
+    (`/schemas/v3-platform/{code}-payload.json`), and embedded in the API, which checks each digest at load and validates
+    every refusal's payload against its code's schema before it leaves (`V3PlatformSchemaDocuments.ValidateRefusal`). The
+    refusal schema lists the 20 codes. The refusal census holds every payload it observes to the published file too.
+    `rate_limited` (#995's per-client limit) is typed as the limit sends it: `retry_after` a whole number of seconds from 1,
+    `retryable` true; the three operations served from no data are limited alike (the census drives all 27).
+  - `out_of_corpus_scope` carries the four elements `36-ideal-evaluation.md` §4 mandates: `requested_identifier`,
+    `official_source`, `reason` (one sentence) and `who_to_ask` (`{name, link, role}`, an institution or an official
+    service and never a person: the owner's decision of 2026-10-19), with `out_of_scope_class`, `instrument`,
+    `what_would_answer` (`expanded_official_scope`), `asserts_absence_of_law: false` and the list's identity and digest.
+  - The out-of-scope list (`V3OutOfScope`, `lex-v3-out-of-scope/1`, published in the census's contract block and on the
+    Developers page): CSSF circulars (the CSSF), CNPD decisions and opinions (the CNPD), EU court decisions by ECLI, sector-6
+    CELEX or case number (the Court of Justice), and RESA publications (Luxembourg Business Registers), each matched whole
+    by exact patterns, so a held act whose title names one of these bodies, or a CSSF regulation (admitted by R78), is
+    never refused. Every operation that takes an identifier refuses such an identifier before the mount is read
+    (`V3ApiHandler.ExecuteFor`), over REST and MCP alike. J5 ("Circulaire CSSF 20/747") now refuses
+    `out_of_corpus_scope` naming the CSSF, and the dossier page's card shows the official place and who to ask as links on
+    the list's hosts only (`OUT_OF_SCOPE_HOSTS`, held to the census).
+  - Not listed yet, each said on the Developers page: communal regulations (no single official place; each commune
+    publishes its own, so the entry waits for R42's list, N2); Luxembourg court decisions (no identifier names one exactly,
+    and the Constitutional Court's are admitted later as ACC, R78); EU acts outside the EU population (R80: the EU index does
+    not state its population's rule, so an unheld EU act still answers `identifier_unknown`). The official places go to the
+    lawyer with the other named places (O4).
+- **8.5, MCP basics.** `ping` answers an empty result; `initialize` carries `instructions` (the MCP specification,
+  2025-06-18): every tool answers one envelope, a refusal is an answer and not an error (`isError` false), the two clocks
+  are never merged, an absence is not evidence that a law does not exist, nothing here is advice. Every registered
+  operation is a tool (27).
+- **8.4, the Developers page.** New parts: live examples; replay guarantees G1 to G5 as this server supports each, with the
+  `V3ReplayGuaranteesTests` method that holds it (G4 says no observation time is held, so `knowable_on` is not served; G5 says
+  what an answer does not let a reader recompute on index /9); how the API changes (versioned identities, additive
+  members, the registry digest, closed sets, no notice period, the registry's version history). The refusals part links
+  each code's payload schema with its digest and lists what Lex never holds; the access part quotes the MCP instructions;
+  each operation served from no data names its refusal and mode; every operation is an MCP tool.
+  - Live examples from the release's own data: both servers render the Developers page, as they render the home page,
+    from their own answer to `browse` with `limit` 1 (`V3WebRoot.SitePageFor`, `sitePageFor`, the site's table), and the
+    page shows that request, the answer whole, and the next requests about the first act held (its dossier over REST, its
+    text on its latest version's date over MCP). The renderer is handed the contracts as data at build time
+    (`__LEX_DEVELOPERS__`), since it reads nothing. The page as built says it carries none; a render that fails serves it
+    as built.
+- **Pins moved, and why.** Every envelope names the registry: the registry digest is
+  `befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7` (was `80dc8e29…`).
+  - The four censuses were re-rendered with `V3_RENDER_*` and verified without it: `envelope-samples.json` (49 envelopes,
+    three new: browse for the first act, `concepts` refused, J5's circular refused; the contract block gains each code's
+    payload schema and the out-of-scope list), `refusal-payload-samples.json` (`out_of_corpus_scope` produced, by four
+    operations; `retrieval_mode_unavailable` by three more; with #995's `rate_limited`, 16 codes produced and 4 not), `answer-samples.json` (the registry
+    digest, coverage's rows) and the 20 schema files (`V3_RENDER_PLATFORM_SCHEMAS`, 76 documents).
+  - **The legacy base answers moved, recorded on Linux only**: the schema-8, schema-6 and EU /5 answers, in WSL (Ubuntu
+    24.04.4, .NET 10.0.11, `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1`, `TZ=UTC`), with the gated recorders, from an archive of
+    9b28c5c3. A script checked all 53 rows (29, 9, 15): the same request, trace and status, and each body equal to the
+    fixture's once the registry identity is put back, coverage's operations note and `not_served_data` aside;
+    `refused_for_eu` did not move. Recorded again at 320c0f20, after the merge of #995 (the `rate_limited` payload schema
+    moved the digest once more): every row by the registry digest alone. Windows replays the same bytes (12 of 12).
+- **Tests.** New: `V3OutOfScopeTests` (3: every class's examples and J5, nothing held refused, institutions and links),
+  `V3CorpusScopeMountTests` (3: the three refusing operations over REST and MCP with identical envelopes, on a Luxembourg and
+  an EU-only mount; the circular refused by all 23 operations that take an identifier, identically over both), and in
+  `V3PlatformSchemaTests` each payload schema held to the registry. Changed: `V3PlatformHostTests` (every registered name
+  routed, the three refusing inside an envelope, `operation_not_served` retired), `V3McpJsonRpcTests` (instructions, ping,
+  27 tools), `V3McpHttpEndpointTests` (all 27 tool calls identical to REST), the coverage, census, builder and vocabulary
+  pins. Web: `reference-pages.test.mjs` (payload schemas and digests, the out-of-scope list, the instructions and the replay
+  tests held to the C#, the live examples), `live-ssr.test.mjs` (the built renderer renders the page from browse), the
+  coverage page's two new columns, J5's expectations, the card's out-of-scope payload. The refusal gates (the fixture card's
+  and the mount's) gain the circular, its twin (a CSSF regulation, `identifier_unknown`) and an operation served from no data.
+- **Counts** (this PC, targeted, as the lane's rules ask; CI runs the whole suites and the journeys). `dotnet build Lex.V3.slnx
+  -c Release`: 0 warnings. Lex.V3.Tests, 131 of the classes this slice touches (registry, schemas, out-of-scope list, host,
+  envelope JSON, every census, capability manifests, web root, the limiter, host answers): 131 pass. Lex.V3.Ingest.Tests:
+  94 (scope, MCP, coverage, the limit, public request recording, locator, ask, as published, EU capability, both refusal
+  gates and the card, the partition and vocabulary pins), the three censuses (7) and the legacy replays (12, the two
+  recorders skipped): all pass. `npm run build`; `npm test`: 1,400 tests, 1,396 pass, 3 skip (the real-browser tests, CI
+  only) and 1 fails here alone, `image-run.test.mjs`'s mount table, which spawns `awk`, absent from this PC's PATH (it fails
+  so on writer/probe-search-engines too; CI's Linux has it). `eng/verify-v3-tree.ps1`: 1,737 tracked paths.
+- **Driver decisions (reversible).**
+  - `retrieval_mode_unavailable` is the typed reason for an operation served from no data, not a new code: the registry's
+    set of 20 is closed (the launch contract's refusal line), and the code already means "this mode is not served here, these
+    are", as it does for an EU identifier.
+  - The out-of-scope check runs before the mount for every operation, so the same instrument gets the same refusal
+    wherever it is asked; `search`'s text query is not matched (only its `identifier`), so a phrase is never refused.
+  - Who to ask is the institution that issues and publishes the instrument (role `information`), not an adviser: R42's
+    handoff list of advisers still waits for a person (N2).
+  - The live examples are rendered by the server at request time rather than built into the release, so the page always
+    shows what the serving release answers.
+- **For the owner** (not asked, recorded): the four official places and institutions are public bodies' own sites, named
+  from the driver's knowledge, with no site contacted; the lawyer's read (O4) covers them with the other named places.
+- **French** (Decision 41): one independent reviewer (Claude, AI reviewer, not the author) under the owner's delegation, in
+  the addendum of 2026-10-27 "the API's gaps" and its supplement, appended to `C:\lex-v3\lanes\fr-review\review.md` with the
+  driver's note: 45 forms reviewed, 29 changed (the English too in 13), applied byte for byte. Its blocking points, both
+  languages: G1 and G3 verify an earlier version only while a kept build holds its text, a replaced file is recorded whether
+  or not its text changed, a referenced build is one listed as referenced (no permalink names a build), nothing is deleted
+  "from the log"; G5 recomputes the version's own digest from the answers since S7a (the test's summary, which said
+  otherwise, is fixed); in French, an operation without data is "non servie faute de données", never "servie sans
+  données". Outside the forms, the MCP instructions now say a Luxembourg state's date is its applicability date or, by its
+  date role, the act's entry into force, never an applicability date; and the change policy gains a form for the
+  registry's version inside the envelope (`registry_schema`), which a new registry version changes without raising the
+  envelope's own. `reference-pages.test.mjs`'s last test pins the review's points beside the C# they describe. Only the
+  dossier has a sentence of its own for `out_of_corpus_scope`; another page names the code.
+
+## Review and repair (writer/screens-gaps): the traffic read before a redeployment, the maintenance page styled, no copy left behind (sole driver, 2026-10-27)
+
+The review of `writer/screens-gaps` at be1c6c22 (the other model family, Decision 95) said REPAIR, with its reproductions in
+the driver's scratch folder (`rev/`). The one repair round, and v3/integration at 473a9fae (#995: the per-client limit, the
+key set, the host headers, the monitor and the runbook) merged in, both sides kept.
+- **F1 (high): the printed pre-build line promoted the candidate.** It named the new candidate as `-LiveRevision`, and the
+  template keeps `-LiveRevision` at all the traffic: run before the promotion, it moved every reader to the unprobed
+  candidate.
+  - Every redeployment, the maintenance revision's included, now reads the app's traffic (and its latest revision, for the
+    entry a first deployment leaves) before anything in Azure changes, and goes ahead only when `-LiveRevision` holds 100
+    per cent; split traffic or a read that fails stops it with nothing changed.
+  - The pre-build line names the revision serving as it is printed and says it is run after the promotion, naming the
+    revision that serves then. "which keeps all the traffic" is said plainly.
+  - And the gap before this pull request: on the open site (no address rule) a deployment without `-Public` would restrict
+    it again. It is refused before any change ("The site is open: every deployment says -Public"), and a redeployment whose
+    rules cannot be read is refused too.
+  - Tests (`deploy-run`): the reviewer's case refused with no Azure write; the pre-build after the promotion goes ahead; split
+    traffic, a failed read, the latest-revision entry, a first deployment and a plan run; the open site refused. `deploy-kit`
+    holds the read before the image copy and the template.
+- **F2 (medium): in maintenance the stylesheet and fonts answered the maintenance page.** The maintenance revision now serves
+  the web root's files that are no page (any extension but `.html`) as always, so the page shows styled; and it sets the
+  host's security headers on every answer, as #995's API does. `V3WebRootMaintenanceTests` serves `/styles.css` and a font;
+  the probe's `MAINTENANCE_PROBES` asks both and holds them to the release image's bytes.
+- **F3 (low-medium): `startApi` left its two temporary directories when the copy failed.** The setup is wrapped, so both go on
+  any failure. The example searches' derivation links the mount into place (a junction on Windows, a symbolic link
+  elsewhere) rather than copying 2.5 GB: Node's removal unlinks a link and never follows it (checked on this machine). The
+  journeys keep copying. Test: the reviewer's case and a failure after the link was made leave nothing, the mount whole.
+- **F4 (low): the R92 test asserted nothing** (its fixture lacked `short_titles`, the reading was refused). With a valid
+  fixture it shows the generator would name the person from the title, and that exactly one example is derived, holding no
+  title word.
+- **F5 (low): the bundles depended on the build's day.** The examples are derived on the release's source date (the commit's
+  time in Luxembourg, `examplesDay`), the reading asked and the citation composed on that day, never by the API's clock; two
+  derivations on one day give one record, byte for byte (tested with two API clocks).
+- **The open question (driver decision, reversible):** only an act the release's indexing record admits (R92) is featured;
+  with no record, none. The journeys give a fixture mount a record of its one act (the test suite's own, naming no one).
+- **CI's journeys on #997 (run 40452673971): the J7 walk failed, every schema link 404.** The walk asked the API's origin
+  for the schemas; in the journeys whose pages the live server serves, the API holds no web root, while the page's own
+  origin served every schema (the API-served runs passed). J7 now follows a link on the page's origin. The build, the
+  release image and both servers held the schemas all along; the image probe and the deploy probe now also hold every
+  schema a Developers page links to the image's own bytes (`schemaLinkFailures`), and `developers-schemas.test.mjs` holds
+  the built directory to every linked schema, byte for byte the repository's, through the live server, with the CI fault
+  reproduced.
+- **#995 merged in**: `deploy-probe.mjs` reads both `--maintenance` and `--search-engines`; the probe's example searches go
+  through `fetchWithinLimit` (the per-client limit); `V3TransportResponse` keeps both `service_in_maintenance` and the host
+  headers; STATUS-WEB keeps both sides; OWNER-BRIEF keeps v3/integration's lines.
+- **Measured** (Windows, no browser, no Azure, no publisher traffic): `dotnet build Lex.V3.slnx -c Release` once after the
+  merge and the C# repair, 0 warnings, 0 errors (a second, incremental, changed nothing); targeted `node --test`, after the
+  merge: 28 files (the examples, journeys' verdicts and walks, every deploy and image probe, the home page, the chrome
+  tables and scans, the reference and legal pages, and #995's runbook, monitor, limit and client tests), 300 tests, 300
+  passed; 18 files of the page renderers, 192 tests, 190 passed, 2 skipped (the real-browser tests, CI's);
+  `deploy/validate.ps1` clean; `eng/verify-v3-tree.ps1` 1,725 tracked paths; disk above 5 GB throughout. Not run here: the
+  whole `npm test`, the dotnet test suites, the journeys and the image rehearsal (CI's).
+
+## The screens' last gaps: example searches, breadcrumbs, info controls, a print view, the maintenance revision, J6 and J7 (sole driver, 2026-10-27)
+
+The owner's order of 2026-10-27 (finish V3 to the specification of record within 72 hours, at high quality): the gaps the
+audit of the site against §3 found (the section below, "The L lines, against what the site serves"), closed as one web pull
+request (`writer/screens-gaps`, from `v3/integration` with `writer/help-and-developers` merged in first, so the reference
+pages exist).
+
+- **R47, example searches that land on served text** (`home-examples.mjs`, `home-examples-run.mjs`, `LiveHome.jsx`). Derived
+  at build from the mounted corpus through the API's own answers, never typed into copy, by a fixed rule:
+  - the mount `coverage` counts, whose Luxembourg index's digest the record carries;
+  - the Luxembourg acts the release's indexing record admits (R92's measurement), in its order (at most 24), each read on the
+    derivation's day (`evidence_bundle`): the release's source date, or the journeys' day; with no record, none (the review's
+    repair, below);
+  - in each, the first article quoted with text whose usual citation the site's generator composes (`citationForms`, R65),
+    the act named by its type and date alone, never by its title, since a title can name a person (R92);
+  - that citation asked as the search page asks a search its address holds (strict lane, the text's language, no date), and
+    kept only when the exact-reference phase opens Reading at that very article (`usualVerdict` "matches");
+  - one per act, at most 3.
+
+  The record (`lex-v3-home-examples/1`) is compiled into the bundles by `build-live.mjs` (`__LEX_HOME_EXAMPLES__`), so the
+  page both servers render and the page the browser hydrates say the same; the coverage line now carries the index's digest,
+  and the home page lists the examples under it only over that index (never over another mount or none). Each is a link to
+  the search page with the search in its address (R109), in its text's language (`lang`). A build handed no record (the web
+  suite's, CI's web job) shows none.
+  - The journeys derive the record over their mount before they build the pages (an extra start of the API), the home step
+    must list exactly it over the mount and none over no mount, and on the fixture mount the derivation must find one.
+  - The release (`image-rehearsal.mjs`) publishes the API once more, starts it over the release's mount, derives the record,
+    builds both images with it and reports it; the probes (`servedPageFailures`, the image's and the deploy probe's) ask each
+    example a home page lists of the revision itself and hold it to the article the page names, and with the rehearsal's
+    record to exactly its examples.
+- **R48, breadcrumbs** (`breadcrumbs.mjs`, `Breadcrumbs.jsx`) on the dossier and reading screens, in the record's order:
+  publisher (the law it publishes), act (work key or CELEX, a link to its dossier), the article the address names when the
+  version shown holds it, and the version, said by its date's role (R21: a state applying from its date, an act as
+  published dated by its entry into force; an EU wording by its own date). The page's own crumb is current and no link; a
+  reading of several versions names none; a page with no answer has none.
+- **R48, How to read Lex from each banner's info control** (`GuideLink.jsx`): the staleness banner and the freshness strip
+  (to "How current Lex is"), the as-published label and the EU acknowledgement and authenticity statement (to "As
+  published, and consolidated") each end with a link to that section, its name its visible words and the section's heading.
+- **R62, a clean print view of Reading** (the stylesheet's one `@media print` block): the chrome goes (skip link, menu,
+  languages, forms, buttons, pager, contents, info controls, the home page's links, the footer's menus); the text, every
+  digest, source and permalink, the citation forms, the version headings with their dates by role, the banners, the
+  breadcrumbs and the footer's lines (what Lex is not, which texts are authentic, where the texts come from) and how current
+  the answer is stay; black on white in either scheme, full width, digests wrapped.
+- **R60, the maintenance page during deployments** (a subagent's slice, reviewed and merged): the release's own signed image
+  is the maintenance revision, with no hosting change.
+  - The API: `LEX_V3_MAINTENANCE=on` (exactly) opens no preview and no mount and serves only the built maintenance page:
+    every page request 503 with `Retry-After: 300` and a page's headers, in the path's language or the negotiated one; the
+    readiness 204 only with a page in each language; everything else the new transport problem `service_in_maintenance`
+    (503), which the Developers page lists (`V3WebRoot.Maintenance.cs`; the 404 page and it share one choice of page).
+  - The template's `maintenance` flag: that switch, all three probes on `/health/ready`, and the revision at weight 0 under
+    the label `maintenance` beside the live one; release revisions carry `LEX_V3_MAINTENANCE=off`.
+  - The kit: `deploy.ps1 -Maintenance` builds it from a verified release beside `-LiveRevision` (refused without one),
+    probes it (`deploy-probe.mjs --maintenance`: readiness, each page's status, headers and bytes against the image's own
+    page, the API's problem, no cookie), deactivates it and keeps it (an inactive revision bills nothing), and prints the
+    traffic moves that switch it on and off, never run: they are the owner's, as a promotion is (R108 pre-authorises the
+    page once O17 is adopted). Every deployment's closing lines print the command that pre-builds its release's one.
+- **R53, journeys J6 and J7 walk Get help and the Developers page** (`journey.mjs` `WALKS`, `runWalk`): from the home page, by
+  pointer and by keyboard (Tab to the link, Enter, every stop showing its focus), over the fixture mount and a real mount.
+  - J6: the reader's question typed into the box and sent (one request, dated today), the sentence under the box that says
+    what Lex is not, then Get help, which says R50's sentence, sends the reader to a lawyer or another adviser of their
+    choice and to the official texts, and asks nothing (no script, no form, no request to the API, noindex).
+  - J7: the Developers page, which asks nothing, held to the API (`developersPageFailures`): its operations and which are
+    served against the coverage answer, every schema it links served as JSON, and its REST example and MCP tools/call
+    message, sent as printed, one envelope (`envelopeIdentityFailures`).
+- **French** (Decision 41): one independent reviewer (Claude, AI reviewer, not the author) under the owner's
+  delegation, in the addendum of 2026-10-27 of `C:\lex-v3\lanes\fr-review\review.md` ("breadcrumbs, the banners' info
+  controls and the home page's example searches"): 11 forms reviewed, 1 changed (`home.examplesIntro`: "Chaque exemple lance
+  la recherche d’un article …, désigné par sa citation usuelle"), 10 approved, nothing blocking. Its optional pair for
+  `breadcrumbs.stateEntryIntoForce` ("(publisher)" / "(éditeur)", as the heading says it) is taken, and its material point
+  outside the forms too: on the examples' path the search page does not go to the act by itself, so `search.opensReading`
+  and `search.opensDossier` now say "This reference opens the reading: {link}" / "Cette référence ouvre la lecture : {link}"
+  (and the dossier), never "Opening" / "Ouverture". The thirteen finals are applied byte for byte (checked by a script),
+  pinned by `breadcrumbs.test.mjs`, and named with the new vocabulary in the header comment of `live-chrome-fr.mjs`; the
+  addendum is appended with the driver's note.
+- **Tests** (new: `breadcrumbs`, `print-view`, `home-examples`, `journey-walks`, `deploy-probe-maintenance`, and C#
+  `V3WebRootMaintenanceTests`; changed: `freshness`, `date-speech`, `live-chrome`, `live-home`, `journey-verdict`,
+  `deploy-kit`, `deploy-run`, `ClosedVocabularyCensusTests`). Measured (Windows, no browser, no publisher traffic, no Azure):
+  - the final targeted run, 38 files (the new and changed ones, and every file that renders the pages, the journeys' verdicts
+    and the deploy and image probes): 420 tests, 418 passed, 0 failed, 2 skipped (the real-browser tests, CI's);
+  - before the French finals, three batches of 44 files the changes reach (search, reading, dossier, history, compare, radar,
+    export, coverage, a11y, tokens, render, network gate and the rest; some also in the final run): 479 tests, 0 failed,
+    1 skipped;
+  - the maintenance slice's own: deploy-kit 17, deploy-run 19, deploy-probe 16, deploy-probe-maintenance 3, no-browser-probes
+    11, reference-pages 9; `deploy/validate.ps1` clean (`bicep build` matches `main.json`, `bicep lint` clean);
+  - `npm run build`: 30 state pages; `eng/verify-v3-tree.ps1`: 1,706 tracked paths.
+- **Not run here** (the owner's order: the PC's disk and memory are scarce): the whole `npm test`; any `dotnet` (the C# of
+  the maintenance revision was not compiled here: CI builds and tests it); the journeys and the image rehearsal (no browser
+  and no release run on this machine).
+- **Driver decisions** (reversible):
+  - The examples are usual citations of an article, the form the exact-reference phase is built to open, so each lands on
+    the article's text; never a title (R92) and never a word list typed into copy. Luxembourg only: no answer lists the EU
+    acts an index holds.
+  - An example is a link to the search page with its search in the address; that page shows the reference's link and does
+    not go there by itself (the rule for a search read from an address, so Back never loops).
+  - The release derives the examples by starting the API over its mount once more: about a minute, with the mount linked
+    into place, not copied, and its indexes copied into the API's own temporary folder while it runs (about 2.3 GB for the
+    population), removed when it closes.
+  - Only an act the release's indexing record admits is featured, and with no record none is: an act whose text may name a
+    person is never on the home page (the review's open question, decided here).
+  - The maintenance page is served by a maintenance revision of the same app from the release's own image (the plan's item
+    10.14's "pre-built maintenance revision"), not by a static host: no new resource and no cost while it is inactive.
+  - Release revisions carry `LEX_V3_MAINTENANCE=off` explicitly, so the template's environment stays one list.
+- **Not yet**:
+  - The live site shows the breadcrumbs, info controls and print view from the next release, and the maintenance revision
+    is pre-built from it too (`-Maintenance`). The example searches need more: no release served yet carries an indexing
+    record (R92's measurement, the plan's item 1.11, writes it; every release from `data/names-r92` on carries one), so until
+    one is served the home page shows none.
+  - The Developers page's sentence on failures below the envelope ("a request the server cannot read or route") covers a
+    maintenance revision's 503 only loosely; its wording waits for a French review of its own.
+  - The JavaScript live server (`serve-live.mjs`, the journeys' and development's) has no maintenance mode; only the API,
+    which production runs, has one.
+
+## Review and repair (#995): the runbook's blocks stop at a failed step, renders hold a place, the ingress checked by hand (sole driver, 2026-10-27)
+
+The one repair round of #995 (`writer/platform-ops` at ef99b6cc), after its one review: REPAIR, five findings. Each was
+reproduced first.
+- **F1 (medium), the runbook's blocks.** As written, the promotion lines (`traffic set`, then `revision deactivate $live`)
+  ran on after a failed traffic move: PowerShell does not stop when a native command fails, the pattern of 2026-10-27.
+  Reproduced with the reviewer's `promote-block.ps1` and its made-up `az`: the deactivation ran. The rollback read
+  "Healthy" once instead of waiting.
+  - **Repair** (`docs/INCIDENT-RUNBOOK.md`, section 3): every block that changes something is one `& { ... }` with an
+    `if ($LASTEXITCODE -ne 0) { ...; return }` after each command, so pasted whole it stops at the first failure and says
+    so. Moving traffic (a rollback, a forward move, a promotion) is three blocks: activate; wait until the target is active,
+    running and healthy (ten minutes at most, every 15 seconds), move all traffic, and read it back through `ingress traffic
+    show`; deactivate the revision left only when the read traffic is 100 per cent on the target and none on it. The
+    deployment block stops when the revision serving now cannot be read.
+  - **Test** (`web/test/runbook-blocks.test.mjs`, 9): the marked blocks are pasted into pwsh under a made-up `az` that holds
+    the app's traffic, with the test's clock: a failed traffic move switches nothing off (the reviewer's repro); the normal
+    promotion's order (three reads while the target warms, two waits, the move, the read-back, one deactivation); a target
+    never healthy moves no traffic; a move that does not take is caught by the read-back; an unreadable revision or traffic
+    stops its block; a failed activation stops; the deployment block passes `-LiveRevision`; the first half of the
+    two-address check. A mutation that drops the read-back guard fails four of them. The reviewer's repro, re-run against
+    the new blocks with its made-up `az`: "Moving the traffic ... failed: stop here" and "nothing deactivated", where the
+    old lines ran the deactivation.
+- **F2 (low-medium), server-rendered pages bypassed the concurrency cap.** `AdmitRender` took a token and no place, so a
+  client could run any number of renders at once.
+  - **Repair:** a render holds one of the client's four in-flight places while the mount is asked and the page rendered
+    (`V3ClientLimiter.AdmitRender` returns an admission; `V3WebRoot.TryServeAsync` holds it, then gives it back). With four
+    requests being answered, the page is served as built; a render in flight leaves three places for API requests.
+  - **Tests:** `V3ClientLimiterTests.ARenderHoldsOneOfTheClientsFourPlaces…` and
+    `V3HostAnswerTests.APageIsServedAsBuiltWhileTheClientHasFourRequestsBeingAnswered`; the census pins the two new doors.
+  - **Text:** unchanged. The Developers page's "at most four being answered at once" and "past it [the budget], a page is
+    sent as built; no page is refused" stay true, and so does the privacy notice; OPERATING.md says renders hold a place.
+- **F3, the platform assumption.** No test of this pull request can see Container Apps' ingress, so whether it forwards
+  each reader's own address is an assumption, now said plainly in OPERATING.md ("What the tests do not prove"), and checked
+  by hand before each promotion: the runbook's two-address check spends one address's minute at the candidate's own
+  address (a 429 must come; none means the limit counts no one), then asks once from a second address within the minute
+  (a 200 must come; a 429 means one bucket for the whole site). The coordinator runs it against the candidate.
+- **F4, the integration.** v3/integration at 81782325 merged in (#992 deploy-live-safe, #993 the probe's search engines,
+  #994 the PDF door): OWNER-BRIEF.md and this file joined by hand, both kept. The runbook and OPERATING.md no longer say the
+  deploy fix is unmerged; they give the revision name `ca-lex-v3--<the release's suffix>-<8 hex digits of its settings>`,
+  and the kit's rules since #992 and #993 (a revision that exists is activated and probed by hand, a redeployment names
+  `-LiveRevision`, `--search-engines` goes to the probe), with the by-hand probe's command.
+- **F5:** `V3ClientLimitTests` now proves the mount is not asked: the mount is disposed before the refusals, which still
+  come over REST and MCP, while another client's admitted request, which asks the disposed mount, is not answered.
+  `V3MachineGatesTests`' summary of `ProducedCodes` is back on its method.
+- **Counts** (this PC, at the repaired head; no browser, no publisher traffic, nothing sent to Azure):
+  `dotnet build Lex.V3.slnx -c Release` 0 warnings; Lex.V3.Tests 3,348 (3,342 passed, 6 skipped); `V3ClientLimitTests` and
+  `PublicRequestRecordingTests` 14 passed; `npm run build` and `npm test` (Git Bash) 1,398 (1,395 passed, 3 skipped, the
+  browser tests CI runs); `eng/verify-v3-tree.ps1` 1,713 tracked paths.
+
+## The per-client limit, the key set, the headers on every answer, the outside monitor and the runbook (sole driver, 2026-10-27)
+
+The specification of record's platform and "running it" lines (R109, R46, R116, the shell line and the plan's item 10.7,
+R107, R108, R8, R114), on `writer/platform-ops`, from v3/integration at db0a7b53. The site is open since 2026-10-27 01:10
+UTC.
+- **The per-client limit** (R109, R46; `src/Lex.V3.Api/V3ClientLimiter.cs`; driver decisions, reversible):
+  - **Budgets.** The API (`/api/v3/*` served routes and `/mcp`): 60 requests a minute, a bucket of 60 refilled at one a
+    second (R109's number; "re-sized by the load test"), and at most 4 of a client's requests answered at once (R109's
+    concurrency cap, on every operation: on one vCPU each is a costly one, and a page asks one at a time). The pages the
+    server renders from its own answer: 300 a minute (R46: well above), past which the page is served as built and asks
+    for itself, so no page is ever refused. Every other file of the site, readiness, the key set and unknown routes are
+    not counted.
+  - **The refusal.** Past the API budget a well-formed request is answered with the typed refusal `rate_limited`
+    (`{"retry_after":1,"retryable":true}`), in the mounted corpus's refusal context, before the mount is asked: REST
+    with status 429 and `Retry-After`; MCP's tool call with the same envelope in a JSON-RPC result, status 200 (the
+    dispatcher's rule) and `Retry-After`. A malformed request keeps its own transport problem. The web client reads a 429
+    envelope only when it is that refusal, which the failure panel shows with its retry (`v3-client.mjs`).
+  - **The client.** The connection's address; when the peer is inside the host's network (loopback, private, shared
+    100.64/10, link-local: Container Apps' ingress), the last address of `X-Forwarded-For`, the one the ingress appended;
+    with none, no client and no count (the platform's probes, the journeys, a release's image run: so no release probe or
+    journey meets the limit). An IPv6 address counts by its /64. On the live host the TCP peer is the ingress, so keying on
+    the connection alone would have made one bucket for every reader.
+  - **What is held.** 16 bytes of HMAC-SHA-256 of the address under a 32-byte key drawn at random per process and replaced
+    each UTC day (every entry dropped with it), beside the counts; the address itself is not kept; nothing is written. A
+    sweep each minute forgets every entry whose buckets have filled again, so none outlives its client's last request by
+    more than about two minutes. At most 100,000 entries; past that a new client is answered without one.
+  - **The census of S4-A11** (`PublicRequestRecordingTests`): the address and the forwarded header are read in one place,
+    `V3ApiHandler.ClientOf`, handed whole to the limit, and counted by a test of their own; the rules see through that one
+    expression and nothing else. The behavioural test now runs every scenario directly and through the ingress, and past
+    the limit to the 429, and finds no marked value anywhere.
+  - **The refusal census:** `rate_limited` moves from `not_produced` to `produced`, by every served operation (24); five
+    codes stay unproduced. The refusal gate's set gains one case, a client past its minute (19 cases; the evaluation card
+    re-rendered).
+  - **The probes:** the deploy probe asks a candidate through the ingress from one address and can ask about a hundred
+    times in seconds (the accented-title check), so its API requests (`askOperation`, `verify`, a step's own request) go
+    through `within-limit.mjs`: a 429 is waited out as its Retry-After says, then that origin is paced at two seconds a
+    request; a local server is never waited for.
+- **The privacy notice** (EN and FR): `privacy.intro` ("records nothing"), `reading.kept`, the new `reading.limit` (what
+  is held, where, how long) and `reading.nothingHeld` ("later"); the French reviewed by an independent reviewer in the
+  addendum of 2026-10-27 of `C:\lex-v3\lanes\fr-review\review.md` (4 forms, 2 changed, with two English changes taken);
+  `LEGAL_TEXTS_UPDATED` is 2026-10-27. Points for the lawyer's read (O4): the fingerprint is pseudonymised personal data;
+  the notice states no legal basis for it (the usual candidate art. 6(1)(f)); its first retention period is stated; an
+  IPv6 /64 shares one count.
+- **The key set** (R116): `src/Lex.V3.Api/well-known/lex-keys.json` (schema `lex-v3-keys/1`), embedded in the server
+  and served at `/.well-known/lex-keys.json`, GET and HEAD; the release key, identity `lex-v3-release`, role `release`,
+  status `active`, valid from 2026-10-13 to 2027-10-13, key id the SHA-256 of its SubjectPublicKeyInfo
+  (`c4e97ce0…`), its PEM committed beside it (`lex-v3-release.pem`, the key release 1 is signed with). No second signer's
+  key exists yet (O16).
+- **Headers on every answer** (`V3HostHeaders`): before, on https://law.soufien.lu, the pages carried HSTS,
+  `Referrer-Policy`, `nosniff` and their CSP with `frame-ancestors 'none'`, but readiness and the API's answers carried
+  only `nosniff` and `no-store` (read on 2026-10-27). Now every answer carries HSTS, `Referrer-Policy: no-referrer`,
+  `nosniff` and, when it is no page, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`; a transport
+  problem sets them again after its reset. A page keeps its own reviewed policy.
+- **The outside monitor** (R107): `.github/workflows/v3-monitor.yml`, every five minutes on GitHub's runners, runs
+  `web/scripts/site-monitor.mjs`: readiness 204, the French home page with its CSP and HSTS, one dated reading page
+  (the GDPR in French at 2024-01-01, answer state `success`), `coverage` answered and not stale, and the certificate
+  trusted and at least 21 days from its end; a failed check is asked again a minute later, and two failures fail the run
+  and open or add to one issue (the run's own token, no secret), closed once the site answers. Run once from this PC
+  against the live site: all five ok (certificate to 2027-04-18). It acts only once its file is on the default branch
+  (`main`), the owner's choice.
+- **The documents:** `docs/INCIDENT-RUNBOOK.md` (R108: classes, the first five minutes, rollback, forward, reactivating a
+  live revision, redeploying, blocking a client, the known failure modes with the incident of 2026-10-27, the breach
+  procedure, the cost ceiling's command) and `docs/OPERATING.md` (R8: who decides, the review rule, standing
+  authorisations, the platform, the domain and certificate, how a refresh and a release are made, the deploy kit's rules,
+  freshness and the 30 days, monitoring, money, what is not done). The tree's allowlist admits `docs/*.md` by name and the
+  monitor's workflow.
+- **The cost ceiling** (R114): the command is in the runbook, for the owner: an action group whose receiver is the Owner
+  role, then `az consumption budget create-with-rg` over `rg-lex-v3`, 150 EUR a month (the plan's N1), alerts at 50, 80
+  and 100 per cent to the Owner role, no e-mail address (the classic `create` takes no notifications); the JSON form of
+  its notifications was parsed by the CLI's own argument code offline, and nothing was sent to Azure.
+- **Tests:** `V3ClientLimiterTests` (10), `V3HostAnswerTests` (7), `V3ClientLimitTests` (1), the recording census's new
+  count test and its ingress and limit paths, the refusal census and gate set, the Lex.V3.Tests census pins (two guarded
+  types, two registries); web `within-limit.test.mjs` (3), `site-monitor.test.mjs` (6), `v3-client.test.mjs`'s 429 case,
+  `legal-pages.test.mjs`'s pinned privacy forms and their evidence.
+- **Combined with `writer/help-and-developers`** (the merge of 3d8e6f7b; one web pull request): the two 2026-10-27 sections
+  of this file and the owner's brief joined by hand, everything else merged clean. The Developers page now says the limit
+  as the server enforces it (R46: `developers.limits.rate` and the new `.pages`, their figures from `CLIENT_LIMIT` in
+  `developers.mjs`, which `reference-pages.test.mjs` holds to `V3ClientLimiter`'s constants and the 429 of
+  `HandleRateLimitedAsync`), its `anonymous` line says what the limit counts in memory, and its citing part names the key
+  set (`developers.citing.keys`; its address as printed text, since the API serves it and the pages' own server does not);
+  the French of those four forms, and of `developers.access.same`, which the review found contradicted by the 429 and which
+  now says it, reviewed in the addendum of 2026-10-27 on the Developers page's limits and the key set (3 changed, the English
+  with them: a release of Lex is a "mise en production"; "reconnu à", "refusée avec"; past the limit only an operation is
+  refused, over MCP a tool call).
+  The operating page stays a repository document (`docs/OPERATING.md`): R8 asks for a numbered page, not a public one, and
+  a link from the site to the repository would print its owner's account name, which the decision of 2026-10-19 keeps off
+  the pages (a driver decision, reversible).
+- **Counts** (this PC, Windows, no browser, no publisher traffic, nothing sent to Azure; at the combined head):
+  `dotnet build Lex.V3.slnx -c Release` 0 warnings; Lex.V3.Tests 3,346 (3,340 passed, 6 skipped); the Ingest classes this
+  touches with the censuses and the samples (Census, envelope and answer samples, MCP, `PublicRequestRecordingTests`, the
+  refusal census, `V3ClientLimitTests`, `V3MachineGatesTests`) 57 passed; the refusal census and the evaluation card
+  rendered with their variables and verified without; `npm run build` and `npm test` 1,380 (1,377 passed, 3 skipped: the
+  browser tests, run in CI), from Git Bash (from PowerShell the image run's awk test cannot find awk on that PATH);
+  `eng/verify-v3-tree.ps1` 1,709 tracked paths; the monitor run once against https://law.soufien.lu, five checks ok.
+- **Not done here:** a reviewed sentence for
+  `rate_limited` on each screen (the panel says the code today); latency, error-rate and restart alerts; the load test
+  that re-sizes the limit.
+
+## Get help, How to read Lex and Developers: the launch set's three missing screens (sole driver, 2026-10-27)
+
+The owner's order of 2026-10-27 (finish V3 to the ideal specification within 72 hours, at high quality): the screens the
+specification of record's launch set names (§3, Screens; R42, R46, R48, R50, R55) and the site did not serve, built as one
+web pull request (`writer/help-and-developers`). Each page is in French and English, under its language (R61), complete
+from the server and readable with no script (R67), never indexed, its footer's freshness strip saying it carries no answer,
+as the legal pages are (`scripts/reference-pages.mjs`, `app/ReferencePages.jsx`).
+- **Get help** (`/{fr,en}/help.html`, R42, R50). What Lex is, R50's sentence word for word, and that for what a text means
+  for a reader they should ask a lawyer or another adviser of their choice; what Lex does not do (apply the law, compute a
+  deadline, predict, consolidate, hold case law, choose between versions or fill a gap, keep a record of readers); how to
+  read an answer when Lex cannot give the one asked for (the plain sentence first, then what would answer and the official
+  link; an answer about what Lex holds, never about the law; a service failure in R60's words); where the official texts
+  are (the authenticity line, legilux.public.lu and eur-lex.europa.eu as links); that Lex names no adviser yet, since R42's
+  list must first be checked by a person (N2); and, by the owner's decision of 2026-10-19, that Lex has no contact channel
+  (no e-mail address, form, telephone or postal address, and no person), so it receives and keeps no message, the privacy
+  notice naming where to complain about personal data.
+- **How to read Lex** (`/{fr,en}/how-to-read.html`, R48, R21, R24, R58, R64, R65, R87). The two kinds of date (from when a
+  text is applicable, in the publisher's words, a Luxembourg version's "applicable from … (publisher)" and an EU act's
+  wordings; and when it was published and collected), never merged; each date with its role; as published and
+  consolidated, with the authenticity line and the as-published label; versions without text and image-only annexes; gaps;
+  two versions for one date; how current Lex is; permalinks, readable addresses and the three citation forms; the keyboard
+  (no shortcuts of its own; the skip link). Then a glossary of the site's own words: each term is an entry of the chrome
+  table named by its path (`GLOSSARY`), said as the page that prints it says it, a template's term its words before its
+  first value, sorted in each language's order.
+- **Developers** (`/{fr,en}/developers.html`, R46, R55; the plan's item 8.4). Generated from the contracts, never by hand
+  (`scripts/developers.mjs`): the census's `contract` block, which `V3EnvelopeSamplesTests` reads from the reviewed
+  registry (the operations, the refusal codes with the fields each payload must carry, the verdicts, the registry's
+  digest); the census's coverage answer (which operations this server serves, and the data that would serve the three it
+  does not); the request schemas (each operation's parameters) and the envelope schema (its members). REST and MCP and
+  that both give one envelope; examples (curl, a tools/call message, an MCP client's configuration); every operation with
+  its REST path, its MCP tool, its parameters, its answer's objects and its two schemas, linked and with their digests;
+  the envelope, its context and the verdicts; the refusal codes, the two presentation results and the failures below the
+  envelope; quoting and citing; the limits as they are (no key, no account, nothing recorded; the request body's ceiling;
+  paging; the per-client limit as `writer/platform-ops` enforces it, since the two branches were combined; no availability promised); the events log (polling by
+  cursor, at least once, no webhooks, the platform's own delivery statement); and the schemas. The facts only the API's
+  code holds (the MCP protocol version and methods, the request ceiling, the transport failures) are named once in
+  `developers.mjs` and held to the C# by `reference-pages.test.mjs`.
+- **The schemas, published.** Every file of `schemas/v3-platform/*.schema.json` is published beside the pages, byte for
+  byte, at `/schemas/v3-platform/{name}.json` (one extension per file, as both servers' path rules require), and the
+  Developers page links each with its SHA-256, which the API checks against the registry's when it loads it.
+- **Links.** Every page's footer has a "Help and reference" menu of the three, the current one marked; the home page links
+  Changes, Trust and Coverage, Developers and Get help (§3, Shell and home); Get help links How to read Lex and the
+  Developers page. The site's table (`site-paths.json`) names the six pages as files, which both servers serve
+  (`V3WebRootTests`, `legal-pages.test.mjs`, `reference-pages.test.mjs`).
+- **Tests** (`test/reference-pages.test.mjs`, 9 cases): the pages built in both languages with the site around them, no
+  script, no form, never indexed, language links to the same page, the French saying none of the English's words; every
+  internal link they hold served by the live server (pages and schemas, a schema's bytes); every footer's menu and the
+  home page's links; the Developers page in sync with the registry (the C#'s `RequiredOperationIds`,
+  `RequiredRefusalCodes`, `MandatoryRefusalPayloadFields` and `V3RestRouteBinding.Served` parsed and compared with the
+  census, the chrome table and the rendered page; an operation, or a refusal code, the page has no words for fails the
+  render); the API facts held to the C#; the glossary's terms the table's entries; R21's guard over every form and every
+  rendered page in both languages; Get help's no-contact statement and no contact; every count the page says the
+  contracts'; and the forms the French review pinned, beside the C# they describe. Changed tests: `live-chrome`, `live-home`, `legal-pages`, `freshness`, `no-literal-counts` (the new pages and
+  sections), `V3WebRootTests` (16 file rows). Mutation: the `verify` description taken out of the English table failed 5 of
+  the first 8 cases (the page refuses to render an operation it has no words for).
+- **French** (Decision 41): one independent reviewer (Claude, AI reviewer, not the author) under the owner's delegation,
+  in the addendum of 2026-10-27 of `C:\lex-v3\lanes\fr-review\review.md` ("the three reference pages, Get help, How to read
+  Lex and its glossary, and Developers"): 242 forms reviewed, 59 changed (the English too in 31), 183 approved. Its blocking
+  points, both languages: a Luxembourg version's end day ("until the day before the end date Legilux gives it", the end the
+  publisher states being the first day not covered, `[from, to)`), and "never chooses between two versions", which holds only
+  when their texts differ, since the platform serves one of several held with one text (`SameWording`). Its recommended
+  points made twelve other forms say only what the code does (an article held without text is named apart; a permalink says
+  first when it shows another text; the freshness strip is a region a screen reader names; the staleness banner stands only
+  on a page with an answer; any other REST method gets a failure below the envelope; a refusal's code and payload follow its
+  sentence). The finals are applied byte for byte (checked against the reviewer's own file), with its point 6's English for
+  `developers.operations.notServed`; its point 8's tests are the ninth case of `reference-pages.test.mjs`; the 242 forms and
+  the new vocabulary rows (conseiller, ce déploiement, Streamable HTTP, "sert de réponse pour", "intervalle sans version")
+  are named in the header comment of `live-chrome-fr.mjs`; the addendum is appended with the driver's note.
+- **Driver decisions** (reversible): the pages stand under each language as every page does (R61), so R55's "/developers"
+  is `/{lang}/developers.html`, with no unprefixed redirect; the three are never indexed, as the legal pages are, until a
+  release's switch is extended to them; the header menu is unchanged (the home page holds the audience entry points, R47,
+  and every footer the three), which keeps the keyboard journeys' path to each form as it is; Get help names no adviser
+  until R42's list is checked by a person; the Developers page says the rate limit as the server enforces it (since the combination with
+  `writer/platform-ops`, above).
+- **The L lines, against what the site serves** (the specification of record's §3 and the plan's "On opening day"): what each L line that names a screen, a page or an address asks, and
+  whether the site serves it after this pull request. Each "missing" was looked for in `web/app`, `web/scripts`,
+  `src/Lex.V3.Api` and `deploy/`, and is not there.
+  - Served, each with its page: Search as the home page (one box, today's date, what Lex is and is not, the dated coverage
+    line, the links §3 names), the Work dossier, Reading with its date, Provision history, Compare, Changes, Trust and
+    Coverage, the Export composer, Developers, Get help, How to read Lex, the five legal pages, the 404 page and the
+    failure panels, the German and Luxembourgish page, the freshness strip and staleness banner, robots.txt and the
+    sitemap (with the switch), the evaluation card's JSON, `/api/v3` and `/mcp`, and now the published schemas.
+  - Missing on the home page: example searches (R47; no answer names a title or a text a search would land on, so none is
+    shown, `LiveHome.jsx`). Closed by the screens' gaps slice (`writer/screens-gaps`, the section at the top): derived from the mount through the API's answers.
+  - Missing in the shell: breadcrumbs (publisher, act, article, version; R48); a print view of Reading (R62's fifth item,
+    33 §7 rule 9; the stylesheet has no print rules); the maintenance page during a deployment (R60; built, not wired into
+    the deploy kit). Closed by the screens' gaps slice (`writer/screens-gaps`, the section at the top): all three.
+  - Missing in How to read Lex's reach: a link from each banner's info control (R48); the guide is linked from every
+    footer, and no banner has an info control yet. Closed by the screens' gaps slice (`writer/screens-gaps`, the section at the top).
+  - Missing in Get help: R42's versioned handoff list by theme (advisers, "where to complain"), and the help block on the
+    dossier and reading pages of acts in high-stakes themes (R50). Both need the list a person writes and checks (N2).
+  - Missing on Developers (the plan's item 8.4): replay guarantees G1 to G5 as supported, live examples from the
+    release's own data, and a stated change policy beyond the schemas' versioned identities and the registry digest; the
+    try-it console moves with O1. (Closed by `writer/api-gaps`, at the top of this file, but for the console.)
+  - Missing in the API the page describes (each one the Developers page says as it is): a typed refusal inside a normal answer for the three unserved operations
+    (`concepts`, `knowable_on`, `transposition` answer the transport failure `operation_not_served`; the plan's item 8.6);
+    a published schema for each refusal code's payload (the plan's item 6.10; `refusal.schema.json` holds an open
+    payload, and the mandatory fields are the registry's, now listed on the page); "out of scope" with its reason and who
+    to ask, and the list of what Lex never holds (6.10, J5); MCP `ping` and server instructions (8.5); the per-client rate
+    limiter (R109), which `writer/platform-ops` builds: when the two branches are combined, `developers.limits.rate` (which
+    says no per-client limit is applied) must say the limit as that branch enforces it, in both languages, reviewed (done
+    in the combination, above). (The typed refusal, the payload schemas, the out-of-scope list, ping and the instructions:
+    closed by `writer/api-gaps`, at the top of this file.)
+  - Missing addresses: `/.well-known/lex-keys.json`, the published key set (R116; served since the combination); `/.well-known/security.txt` with a
+    disclosure policy (R74), which the owner's decision of 2026-10-19 (no contact of any kind) leaves to the owner; a page
+    "Operating Lex after launch" with the hosting statement and the monthly ceiling (R8, R113, R114; `docs/OPERATING.md`
+    since the combination, a repository document); R55's unprefixed
+    `/developers` (the page stands under each language, R61).
+  - Missing in the journeys: J6 through Get help and J7 through the Developers page (R53); the CI journeys walk neither
+    page yet. Closed by the screens' gaps slice (`writer/screens-gaps`, the section at the top).
+  - Not audited by this slice, and each the subject of its own L line: the dossier's relation tabs (R29), the inline diff
+    (R57), Changes' export, density notice and watch scope (R54), Coverage's text yield per class, attribution rate and
+    retention rule (R86, R29, R89), Reading's notices and in-act links (R17, R68, R71, R72).
+- **Measured** (Windows, no browser, no publisher traffic, no Azure):
+  - `npm test` (Git Bash), on 7808a5fa: 1,368 (1,365 passed, 0 failed, 3 skipped); before the French finals, 1,367 (1,364
+    passed, 0 failed, 3 skipped). `node --test test/reference-pages.test.mjs`: 9 of 9.
+  - `npm run build`: 30 state pages (the preview build, which this slice does not change), before the French finals.
+  - `dotnet build Lex.V3.slnx -c Release`: 0 warnings, 0 errors; `Lex.V3.Tests` (Release): 3,329 (3,323 passed, 0 failed, 6
+    skipped), on the tree of 95935ef7, whose C# (`V3WebRootTests`, the site-paths table) has not changed since.
+  - `eng/verify-v3-tree.ps1`: 1,694 tracked paths.
+  - Not run here: the Ingest suite and the journeys, which CI runs (no browser on this machine).
+- **Follow-ups the review named** (driver points of the addendum): show a reading's `same_text_states` (the other versions
+  held with the same text) under the text, so the guide's same-text sentence can say more; R28's collapsed details on the
+  refusal card, open by default only on Developers (the card shows its code and payload inline today; the review gives the
+  forms to use once it is built).
+- **For the owner** (not asked, recorded): the site's host name carries a first name, which the Developers page prints in
+  its examples and every page in its head links (the decision of 2026-10-19 names no person in the pages' words); Get help
+  narrows "how each article changed" to Luxembourg acts, where `home.intro` still says it generally; the lawyer's read (O4)
+  of "un avocat ou un autre conseiller de votre choix" and of R50's "conseil juridique".
+
+## The live revision deactivated by a redeployment, 01:10 to 01:13 UTC, and the fix (sole driver, 2026-10-27)
+
+- **What happened.** The site (the container app `ca-lex-v3`), open to everyone, served release
+  `v3-20261026T180319Z-8958ec5fa63f` as the revision `ca-lex-v3--v3-20261026t180319z-8958ec5fa63f`, at 100 per cent. The
+  driver deployed the same release again with `-Public -SearchEngines indexed -LiveRevision <that revision> -Apply`, to
+  change only `LEX_V3_SEARCH_ENGINES` (O27). The change of setting did not deploy.
+- **The cause: two defects in `deploy/deploy.ps1`.**
+  - It named the revision from the release alone. The new revision took the live one's suffix, and Azure refused the
+    deployment: "revision with suffix ... already exists".
+  - Its failure step then deactivated the revision with the candidate's name without asking whether this deployment had
+    made it. That revision was the live one.
+- **The outage.** The site was down for about three minutes, 01:10 to 01:13 UTC, until the driver activated the revision
+  again (`C:\lex-v3\release-20261026\deploy-public.log`).
+- **The fix: each deployment makes its own revision.** The suffix is the release's version followed by 8 hex digits of a
+  SHA-256 over the image, `searchEngines`, `openToPublic`, the allowed ranges and `deploy/main.bicep`. The incident's
+  command now names `ca-lex-v3--v3-20261026t180319z-8958ec5fa63f-54d663c3` (52 characters; at this template).
+- **Azure's naming limits.** The suffix has lower-case letters, digits and '-', a letter first, no '--', and at most 64
+  characters (the Container Apps documentation, "Revisions"). The whole name is at most 63, one DNS label, since the probe
+  asks the revision's own address. A name that cannot be formed is refused, and the plan prints the name.
+- **The fix: nothing deactivated that the deployment did not create.** The app's revisions, inactive ones too, are read
+  before anything in Azure changes.
+  - A name the app holds, or -LiveRevision's, is refused there with nothing changed. A failed read stops a redeployment.
+  - Every deactivation (failed deployment, candidate failed or never ready, failed probe) goes through one guard. It acts
+    only on a revision absent from that read. If the revisions were not read (a first deployment), it deactivates
+    nothing, says so, and names `-Remove`.
+- **Tests.** `deploy-run.test.mjs`'s made-up Azure CLI now holds revisions as Azure does. Six new run tests cover the
+  incident's command, the suffix rules, a collision refused with no Azure write, a failed deployment named as the live
+  revision, the probe and provisioning failures, and the normal new-release path. `deploy-kit.test.mjs` gains a rule that
+  the guard's is the only deactivation outside `-Remove`.
+- **The tests fail on the old script.** With db0a7b53's script put back, the five defect run tests fail and the other
+  eight pass, the normal-path test among them. Three kit rules fail: the new one and the two rewritten for the guard. The
+  incident test replays the production log's line: "the deployment failed: deactivate the candidate
+  ca-lex-v3--v3-20261026t180319z-8958ec5fa63f".
+- **Counts.**
+  - The web build is clean. `npm test` runs 1,366 tests (1,359 before): 1,363 pass, 0 fail, and 3 skip, the
+    real-browser tests that run only in CI.
+  - The deploy files all pass: deploy-kit 16, deploy-run 13, deploy-probe 16, no-browser-probes 11.
+  - `eng/verify-v3-tree.ps1` verifies 1,689 tracked paths. `deploy/validate.ps1` is clean.
+- **Driver decisions (reversible).**
+  - A digest rather than an `-r2` counter: a plan run asks Azure nothing and still prints the exact name.
+  - The template is in the digest, so a template change on the same release can still deploy.
+  - The same release with the same settings and template is refused before any change; a revision that exists is
+    activated by hand.
 
 ## Release 1 on the private copy, and the opening that waits on the owner's command (sole driver, 2026-10-26)
 
@@ -854,7 +1770,8 @@ deployment supports, every detail only the owner can give a marked placeholder i
     DNS zone (Azure DNS in `rg-lex-v3` since the owner's switch of 2026-10-18) is Microsoft's, as the host is, and answers
     resolvers, not readers, so it is not named apart.
   - Search engines (O27, answered yes on 2026-10-18): the privacy notice says what the code does, that an act's page is opened
-    to them only once the release's indexing record lists the act (`search-engines.mjs`: R92's check; none is listed yet), and
+    to them only once the release's indexing record lists the act (`search-engines.mjs`: R92's check, which every release
+    runs since `data/names-r92`), and
     no more; when R92's measurement ships, its section on named people names the check.
 - **Not in this slice** (next): the sources and licences page (R70, Reg53); the security contact (`/.well-known/security.txt`,
   R74) and "Report a problem with this page" (R74, O29); the mailbox's provider in the privacy notice (once the owner names the
@@ -987,8 +1904,8 @@ indexing (O27) as recommended ("yes yes go with what you recommend"), and the op
   Azure nothing.
 - **Search engines by deployment.** The template takes `searchEngines` (`kept-out`, the default, or `indexed`) and sets
   `LEX_V3_SEARCH_ENGINES` for the API; `deploy.ps1 -SearchEngines indexed` sets it. It is set at the opening. Law pages
-  still open only for the works the release's indexing record lists (R92); no record exists yet, so at first only the
-  home and Coverage pages are indexable.
+  still open only for the works the release's indexing record lists (R92), which every release carries since
+  `data/names-r92`; a release before it opens only the home and Coverage pages.
 - `deploy-kit.test.mjs` pins both: the parameter and its default, the variable the API reads, the domains read back and
   passed on, and the binding's DNS wait, CNAME validation and plan-only default.
 - The review of #988 found that one failed read of the app's domains would have passed "none" to the template and
@@ -1676,9 +2593,22 @@ the site stays out.
   (`readIndexingRecord`, `V3WebRoot.ReadIndexingRecord`, held to 4 admitted and 15 refused records). With the site indexed,
   each server asks its API once (the API at startup, `V3ApiHandler.AnswerAtStartup`; the live server on its first need) the
   `dossier` of every listed work, and a work it does not answer is dropped, never opened nor listed (`searchEngineFacts`,
-  `V3WebRoot.SearchEngineFacts`; review of #976, F5). No release carries a record yet, so with the switch on no law's page
-  would be opened and the sitemap would list only the home pages and Trust and Coverage: indexing waits on O28's
-  measurement, as the plan's risk 14 says ("indexing (O27) only after O28"). The markup names no person (below).
+  `V3WebRoot.SearchEngineFacts`; review of #976, F5). Since `data/names-r92` (STATUS-DATA.md, R92) every release measures its
+  own mount and carries the record beside it in its image: over derive-r1 it lists 2,642 works (2,572 Luxembourg, 70 EU; the
+  sitemap would hold 10,711 addresses in one part), and the names record beside it withholds 974 acts the catalogue names
+  only by a title; no served act names a private individual by the measurement. A work the names record withholds is never
+  listed (the release checks the two records together), and its dossier answers `text_withheld`, which `SearchEngineFacts`
+  drops in any case. The markup names no person (below).
+- **R92 on the screens** (`data/names-r92`): a refusal `text_withheld` whose payload's `reason` is `names_private_individuals`
+  is said on every screen that asks about one work (search, dossier, reading and export, provision history, compare, radar)
+  in one sentence, `NAMES_WITHHELD_SENTENCE` (`live-refusals.mjs`, `tableRefusalSentence` reading the payload): "According to
+  Lex's check, this act names private individuals, so Lex shows neither its text nor its titles: read it at the publisher,
+  by following the official link." / "D’après la vérification de Lex, cet acte nomme des personnes privées ; Lex n’en
+  communique donc ni le texte ni les intitulés : lisez-le chez l’éditeur, en suivant le lien officiel." No person and no
+  contact; the card below gives the official link and the digests. French (Decision 41): one form reviewed by an independent
+  reviewer (Claude, AI reviewer, not the author) in the addendum of 2026-10-27 "R92: an act that names private individuals" of
+  `C:\lex-v3\lanes\fr-review\review.md`, changed in both languages ("personnes privées", the term fixed on 2026-10-18 for
+  this check; the claim tied to the check; the link the act's), applied byte for byte and named in `live-chrome-fr.mjs`.
 - **The sitemap** (`sitemapFiles`, `V3WebRoot.SitemapFiles`, byte for byte one table), with the site indexed: an index at
   `/sitemap.xml` naming its parts `/sitemap-1.xml` on, each at most the protocol's 50,000 addresses and 50 MiB (review of
   #976, F3: the population already lists about 29,000), built once, at `V3WebRoot.Open` and on the live server's first need
@@ -2626,7 +3556,9 @@ unserved is shown) and R61 (French and English under `/fr/` and `/en/`) hold on 
   - The maintenance page is built and tested, and nothing serves it. During a deployment Azure keeps the live revision
     serving while the candidate is probed (multiple revision mode), so there is no gap for it to fill except a first
     deployment or a planned outage. Putting a page in front of the app for those needs a front door or a static host,
-    which is a hosting change with a cost: the owner's decision, not taken here.
+    which is a hosting change with a cost: the owner's decision, not taken here. (Superseded on 2026-10-27: the release's
+    own image serves it as a maintenance revision of the same app, with no hosting change; the screens' gaps section at
+    the top.)
   - A `/de/` or `/lb/` path nothing claims gets the 404 page in the language Accept-Language picks between French and
     English, not a `localization_unavailable` page.
   - The retry is pressed in a browser for the search screen only (the journeys' "search retried"). The other screens'
@@ -6174,10 +7106,12 @@ The plan's item 3.6, what is left after the switch, the sitemap and the markup (
 1. The owner's O27, asked in the pull request: when it is answered yes, the deploy kit sets `LEX_V3_SEARCH_ENGINES=indexed` on
    the container app (a parameter of `deploy/main.bicep`, its default kept out), and the deploy probe's journeys say
    `searchEngines: "indexed"`.
-2. The indexing record, R92's outcome: the data lane's measurement of the classes of acts that name private individuals (the
+2. Done in `data/names-r92` (STATUS-DATA.md, R92). The indexing record, R92's outcome: the data lane's measurement of the
+   classes of acts that name private individuals (the
    plan's item 1.11, O28) writes `v3-corpus/indexing-record.json` beside the mount it measured, listing each work found to name
    none and the text languages its readable address answers a reading in; until then no law's page is opened.
-3. The objection contact R92 and R49 ask for, in the privacy notice's section for people named in acts (O5).
+3. The objection contact R92 and R49 ask for: not built. The owner's order of 2026-10-19 gives no contact channel, so R92
+   points an act that names private individuals to the publisher instead (`data/names-r92`, STATUS-DATA.md).
 4. Each article's readable address in the sitemap, once reading by article (3.7) gives an article a page of its own (the
    sitemap index past 50,000 addresses was done in the review of #976).
 
@@ -6504,7 +7438,7 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   `annexes_not_served`. Every one is served as `text_not_available`, whatever its disposition, and linked to its
   expression's official source. No annex text is served even where the publisher's PDF has a text layer; that
   waits until annexes are indexed as units of their own, with their own rights rule and citations.
-- The six refusal codes no operation produces at launch (the refusal census's `not_produced` list),
+- The six refusal codes no operation produced at launch (five since 2026-10-27; the refusal census's `not_produced` list),
   each unreachable by construction, decided under that delegation (2026-10-02). The launch contract's
   refusal line holds them in the closed registry with their payloads; the refusal case set measures the
   fourteen produced codes.
@@ -6519,11 +7453,11 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   - `out_of_corpus_scope`: an identifier neither index holds answers `identifier_unknown`, naming this
     service's own `search` as the way forward (`official_search_actions`); a list of publishers known to
     be out of scope (a CSSF circular, a court decision) would produce it, and none is kept at launch.
-  - `rate_limited`: the one-server host applies no per-client limit at launch, since it keeps no IP
-    address or user agent (the launch contract's privacy line). Cost under abuse is bounded by one
-    replica per revision (`minReplicas` and `maxReplicas` 1 in `deploy/main.bicep`); the kit runs in
-    multiple-revision mode, so each active revision runs its own replica. A per-client limit that needs
-    no identifying record is follow-on work.
+  - `rate_limited`: **reversed on 2026-10-27** (R109 reverses it by name): the per-client limit ships, in memory, keyed by
+    a keyed hash of the address, and every served operation produces `rate_limited` past it (the section "The per-client
+    limit, the key set, the headers on every answer, the outside monitor and the runbook", above). The decision it
+    replaces: no per-client limit at launch, since the host kept no IP address or user agent, with cost under abuse
+    bounded by one replica per revision. Five codes stay unproduced.
   - `upstream_unreachable`: serving never contacts a publisher: the API holds no HTTP client, and the
     only publisher client (`RoutedHttpAcquisitionSession`) is built by acquisition, which the API never
     references; a mount is served from its own files, so no upstream can be unreachable at request time.
@@ -6716,7 +7650,8 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
     screen already names.
   - The 404 table is its own file beside `site-paths.json` (`not-found.json`), held by both servers' tests.
   - The maintenance page is built into the release (`maintenance/{language}.html`) and served by nothing: wiring it in
-    front of the app is a hosting change with a cost, the owner's.
+    front of the app is a hosting change with a cost, the owner's. (Superseded on 2026-10-27 by the maintenance revision:
+    the screens' gaps section at the top.)
 
 ## Waiting on others
 

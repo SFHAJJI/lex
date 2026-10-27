@@ -30,7 +30,8 @@ internal sealed partial class V3CorpusMount
         "date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search's " +
         "date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU " +
         "act's name or a type and date that names no act the indexes or the publisher's catalogue hold is refused " +
-        "identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with " +
+        "identifier_unknown, with no list; one act the publisher's catalogue holds and the indexes hold no version of is refused " +
+        "text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with " +
         "every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name " +
         "none of that day's acts, open nothing on their own: a title is searched as words, and the day's acts are listed; a date " +
         "in a date's shape that names no calendar day opens nothing; a query that is no reference is searched as words";
@@ -175,7 +176,7 @@ internal sealed partial class V3CorpusMount
     /// <summary>
     /// Reads, once, what the phase reads on its first reference of a kind, so that no request pays it and none waits behind it:
     /// the EU census's identifiers (every seed act's CELEXes, works and expressions) and the catalogue's Mémorial issues and
-    /// historical identifiers. The server calls it once the mount is open; an act's own EU timeline is still read on its first
+    /// historical identifiers; and the search's population and its folded copy of the Luxembourg text. The server calls it once the mount is open; an act's own EU timeline is still read on its first
     /// use, as every time-view answer reads it.
     /// </summary>
     internal void Warm()
@@ -191,6 +192,9 @@ internal sealed partial class V3CorpusMount
 
             // What every search counts and the rights decision it applies per state (V3CorpusMount.SearchResults.cs).
             _ = SearchPopulationOf();
+
+            // The search's folded copy of the searchable text, which every full-text search matches in (the plan's item 4.4).
+            _reader.WarmSearch();
         }
     }
 
@@ -288,7 +292,7 @@ internal sealed partial class V3CorpusMount
             {
                 // A title: the title ladder's exact and prefix tiers only, among the acts the index holds a version of; a title
                 // that only shares words with an act's, or that names no held act, is no reference.
-                var resolution = _reader.ResolveWorkTitle(reference.Act.Title!);
+                var resolution = TitleLadder(reference.Act.Title!);
                 var matched = resolution.Candidates
                     .Where(static candidate => candidate.MatchReason is "exact_normalized_title" or "prefix")
                     .ToArray();
@@ -327,7 +331,7 @@ internal sealed partial class V3CorpusMount
         (act.WorkKey is null ? [] : TitlesOfWork(act.WorkKey).Select(static title => title.Title)).Concat(CatalogueTitles(act.WorkIri));
 
     /// <summary>The titles (and short titles) the publisher's catalogue states of a work's versions and expressions, French first.</summary>
-    private IReadOnlyList<string> CatalogueTitles(string workIri) =>
+    private IReadOnlyList<string> CatalogueTitles(string workIri) => TitlesWithheld(null, workIri) ? [] :
         _reader!.ResolveFactsUnder(workIri + "/")
             .Where(static fact => fact.Predicate is "title" or "titleShort" && string.Equals(fact.ObjectKind, "literal", StringComparison.Ordinal))
             .OrderBy(static fact => fact.SubjectIri.EndsWith("/fr", StringComparison.Ordinal) ? 0 : 1)
@@ -339,7 +343,7 @@ internal sealed partial class V3CorpusMount
 
     /// <summary>
     /// A reference to a Luxembourg act, once located: one held act opens (at the article and date, or its dossier); one act the
-    /// catalogue names and the index holds no version of is <c>identifier_unknown</c> naming it; several are
+    /// catalogue names and the index holds no version of is <c>text_not_available</c> with its record (R77), naming it; several are
     /// <c>ambiguous_identifier</c> with every one, each marked held or not, and none is chosen; none is <c>identifier_unknown</c>.
     /// </summary>
     private V3PlatformOperationOutcome LuxembourgReference(
@@ -382,8 +386,10 @@ internal sealed partial class V3CorpusMount
         recognition = recognition with { Work = act.WorkKey, Title = act.Title, TitleLanguage = act.TitleLanguage };
         if (!act.Held)
         {
-            // The catalogue names this act, and the index holds no version of it: said, with the act the catalogue names.
-            return WithRecognition(request, Unknown(request, query, observedAt, PublisherId.LuLegilux,
+            // The catalogue names this act, and the index holds no version of it: its record (R77, text_not_available, or R92's
+            // text_withheld), with the act the catalogue names; identifier_unknown only when the catalogue names no version of it.
+            var record = CatalogueOnlyWorkOf(act.WorkIri) is { } catalogued ? CatalogueRecordRefusal(request, catalogued, observedAt) : null;
+            return WithRecognition(request, record ?? Unknown(request, query, observedAt, PublisherId.LuLegilux,
                 "an act this index holds a version of: the publisher's catalogue names this one, and no version of it is held" + ReferenceNotHeld),
                 recognition with { CatalogueWorks = [act.WorkIri] });
         }
@@ -623,9 +629,12 @@ internal sealed partial class V3CorpusMount
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-    /// <summary>Whether the publisher's catalogue states anything of a work, or of a version or expression of it.</summary>
+    /// <summary>
+    /// Whether the publisher's catalogue states anything of a work, or of a version or expression of it. An IRI with no work's
+    /// shape (a whole act type, a year) names none and reads no range of the catalogue (the review of #1003, F2).
+    /// </summary>
     private bool CatalogueNames(string workIri) =>
-        _reader!.ResolveFacts([workIri]).Count > 0 || _reader.ResolveSubjectsUnder(workIri + "/").Count > 0;
+        IsWorkShape(workIri) && (_reader!.ResolveFacts([workIri]).Count > 0 || _reader.ResolveSubjectsUnder(workIri + "/").Count > 0);
 
     /// <summary>
     /// The catalogue's subjects of one Mémorial issue (by its IRI) or of one historical legal identifier, from the fact table
@@ -661,6 +670,12 @@ internal sealed partial class V3CorpusMount
     /// <summary>A held work's titles, French first, then the rest in language order: what a recognition and a candidate name it by.</summary>
     private IReadOnlyList<LuxembourgIndexWorkTitle> TitlesOfWork(string workKey)
     {
+        // R92: a withheld work's titles are never served nor matched (V3CorpusMount.Names.cs).
+        if (TitlesWithheld(workKey, null))
+        {
+            return [];
+        }
+
         var expressions = _reader!.ResolveWorkStates(workKey).Select(static state => state.ExpressionIri)
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         return _reader.ResolveWorkTitles(expressions)
@@ -719,7 +734,7 @@ internal sealed partial class V3CorpusMount
         }
 
         var act = seed ?? celex;
-        recognition = recognition with { Work = act, HeldAct = "/eu-eurlex/" + act };
+        recognition = recognition with { Work = act, HeldAct = EuropeActAddress(act) };
 
         // A consolidated CELEX names its version's date (02016R0679-20160504); a second date that disagrees opens nothing.
         var versionDate = pinnedDate ?? (celex.Length > 11 && celex[0] == '0' && celex[^9] == '-' && IsEightDigitDay(celex[^8..]) ? DayOf(celex[^8..]) : null);
@@ -735,7 +750,7 @@ internal sealed partial class V3CorpusMount
                 page = "dossier",
                 address_kind = "dossier",
                 publisher = "eu-eurlex",
-                address = "/eu-eurlex/" + act,
+                address = EuropeActAddress(act),
                 work = act,
                 language = (string?)null,
                 state_date = (string?)null,
@@ -845,7 +860,7 @@ internal sealed partial class V3CorpusMount
             provision = opened[0];
         }
 
-        var target = readable ? $"/eu-eurlex/{act}/{textLanguage}" : permalink;
+        var target = readable ? $"{EuropeActAddress(act)}/{textLanguage}" : permalink;
         return ReferenceAnswer(request, query, language, requestedDate, mode, observedAt, recognition, new
         {
             page = "reading",
@@ -899,14 +914,14 @@ internal sealed partial class V3CorpusMount
             // An act's address (/eu-eurlex/{celex}), and the EU stable coordinate (/eu-eurlex/{celex}/{lng}/{date}).
             if (segments.Length == 3 && segments[2].Length > 0)
             {
-                return EuropeReference(request, query, language, requestedDate, mode, reference, segments[2], observedAt);
+                return EuropeReference(request, query, language, requestedDate, mode, reference, EuropeCelexOfSegment(segments[2]) ?? segments[2], observedAt);
             }
 
             if (segments.Length == 5 && segments[3].Length == 3 && segments[3].All(char.IsAsciiLetterLower) &&
                 DateOnly.TryParseExact(segments[4], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
                     System.Globalization.DateTimeStyles.None, out _))
             {
-                return EuropeReference(request, query, language, requestedDate, mode, reference, segments[2], observedAt,
+                return EuropeReference(request, query, language, requestedDate, mode, reference, EuropeCelexOfSegment(segments[2]) ?? segments[2], observedAt,
                     pinnedLanguage: segments[3], pinnedDate: segments[4]);
             }
 
@@ -914,7 +929,7 @@ internal sealed partial class V3CorpusMount
             if (segments.Length is 4 or 5 && segments[2].Length > 0 && segments[3].Length == 3 && segments[3].All(char.IsAsciiLetterLower) &&
                 (segments.Length == 4 || IsAnchorSegment(segments[4])))
             {
-                return EuropeReference(request, query, language, requestedDate, mode, reference, segments[2], observedAt,
+                return EuropeReference(request, query, language, requestedDate, mode, reference, EuropeCelexOfSegment(segments[2]) ?? segments[2], observedAt,
                     pinnedLanguage: segments[3], heldProvision: segments.Length == 5 ? Uri.UnescapeDataString(segments[4]) : null, reading: true);
             }
 
@@ -959,6 +974,12 @@ internal sealed partial class V3CorpusMount
             var articleId = segments.Length == 5 ? Uri.UnescapeDataString(segments[4]) : null;
             return OpenLuxembourgWork(request, query, language, requestedDate, mode, recognition with { Work = segments[2] }, segments[2],
                 null, segments[3], null, observedAt, heldArticleId: articleId, reading: true);
+        }
+
+        // The address this site gives an act the catalogue holds and the index holds no version of (R77): its record.
+        if (TryParseStableWorkCoordinate(address, out _) && CatalogueOnlyWorkOf(address) is { } catalogued)
+        {
+            return WithRecognition(request, CatalogueRecordRefusal(request, catalogued, observedAt), recognition with { CatalogueWorks = [catalogued] });
         }
 
         return WithRecognition(request, Unknown(request, query, observedAt, PublisherId.LuLegilux,

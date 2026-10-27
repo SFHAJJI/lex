@@ -34,15 +34,19 @@ function Test-V3TrackedPath {
 
     return (
         $normalized -ceq '.github/workflows/v3-ci.yml' -or
+        # The outside monitor of the public site (R107): scheduled, no secret (docs/INCIDENT-RUNBOOK.md).
+        $normalized -ceq '.github/workflows/v3-monitor.yml' -or
         $normalized -ceq '.github/workflows/dual-review.yml' -or
+        # Operating the site after launch (R8) and its incident runbook (R108): top-level documents, by name only.
+        $normalized -cmatch '^docs/[A-Z0-9-]+\.md$' -or
         $normalized -ceq '.github/scripts/dual_review.py' -or
         $normalized -ceq '.github/scripts/test_dual_review.py' -or
         $normalized -cmatch '^eng/verify-v3-[a-z0-9-]+\.ps1$' -or
         $normalized -ceq 'eng/test-fast.ps1' -or
         $normalized -ceq 'eng/verify-mounted-corpus.ps1' -or
         $normalized -ceq 'eng/verify-s0-05-preview.ps1' -or
-        # The credential-free deployment kit (the owner's go-live): its template, the template's build, and two scripts.
-        $normalized -cmatch '^deploy/(?:main\.bicep|main\.json|deploy\.ps1|private-copy\.ps1|validate\.ps1|bind-domain\.ps1)$' -or
+        # The credential-free deployment kit (the owner's go-live): its template, the template's build, and its scripts.
+        $normalized -cmatch '^deploy/(?:main\.bicep|main\.json|deploy\.ps1|private-copy\.ps1|validate\.ps1|bind-domain\.ps1|backup-release\.ps1)$' -or
         $normalized -cmatch '^schemas/v3-[a-z0-9-]+/[a-z0-9-]+\.schema\.json$' -or
         # The four censuses: real payloads, real answers and whole envelopes the platform sends, and the evaluation card the
         # machine gates print; not schemas, so each is admitted by its exact path and nothing else in that directory is.
@@ -127,6 +131,9 @@ $requiredV3Paths = @(
     '.github/scripts/dual_review.py',
     '.github/scripts/test_dual_review.py',
     '.github/workflows/dual-review.yml',
+    '.github/workflows/v3-monitor.yml',
+    'docs/OPERATING.md',
+    'docs/INCIDENT-RUNBOOK.md',
     'schemas/v3-facts/facts-common.schema.json',
     'schemas/v3-facts/publisher-relation.schema.json',
     'schemas/v3-facts/derived-inverse-relation.schema.json',
@@ -157,6 +164,10 @@ $pathMutations = @(
     'tests/Lex.Tests/LegacyTests.cs',
     '.github/workflows/deploy.yml',
     '.github/workflows/dual-review-copy.yml',
+    '.github/workflows/v3-monitor-copy.yml',
+    'docs/nested/OPERATING.md',
+    'docs/operating.md',
+    'docs/OPERATING.txt',
     '.github/scripts/dual-review.py',
     '.github/scripts/nested/dual_review.py',
     '.github/scripts/dual_review.ps1',

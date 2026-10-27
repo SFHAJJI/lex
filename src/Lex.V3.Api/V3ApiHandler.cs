@@ -17,6 +17,7 @@ internal sealed class V3ApiHandler
     private readonly Func<DateTimeOffset> _utcNow;
     private readonly V3CorpusMount? _corpusMount;
     private readonly V3WebRoot? _webRoot;
+    private readonly V3ClientLimiter _limiter;
 
     public V3ApiHandler(SyntheticApiState syntheticState, Func<DateTimeOffset> utcNow)
         : this(syntheticState, new V3PlatformHost(), utcNow, null)
@@ -34,18 +35,21 @@ internal sealed class V3ApiHandler
     /// <param name="syntheticState">The synthetic preview, in a test build or the S0-05 image; null in the one-server image,
     /// which ships no preview (plan 0.7): that server answers its readiness from its mount, and any path nothing claims as
     /// an unknown route.</param>
+    /// <param name="limiter">The per-client limit (R109; <see cref="V3ClientLimiter"/>): one of its own when not given.</param>
     internal V3ApiHandler(
         SyntheticApiState? syntheticState,
         V3PlatformHost host,
         Func<DateTimeOffset> utcNow,
         V3CorpusMount? corpusMount,
-        V3WebRoot? webRoot = null)
+        V3WebRoot? webRoot = null,
+        V3ClientLimiter? limiter = null)
     {
         _syntheticState = syntheticState;
         _host = host ?? throw new ArgumentNullException(nameof(host));
         _utcNow = utcNow ?? throw new ArgumentNullException(nameof(utcNow));
         _corpusMount = corpusMount;
         _webRoot = webRoot;
+        _limiter = limiter ?? new V3ClientLimiter();
     }
 
     internal static RequestDelegate CreateRequestDelegate(
@@ -90,54 +94,139 @@ internal sealed class V3ApiHandler
     public async Task HandleAsync(HttpContext context, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+        // Every answer carries the host's security headers; a page replaces the policy with its own (V3HostHeaders).
+        V3HostHeaders.Apply(context.Response);
         var rawTarget = context.Features.Get<IHttpRequestFeature>()?.RawTarget ?? string.Empty;
-        var binding = V3RestRouteBinding.Served.FirstOrDefault(served => served.Claims(rawTarget));
-        if (binding is not null)
+        // Every registered operation has a route (the specification of record, §3: "All 27 registered operations are served, or
+        // refuse with the typed reason their capability manifest states"): the served ones answer from the mount, and the ones
+        // served from no data refuse inside a normal envelope (V3RestRouteBinding.Refusing).
+        var binding = V3RestRouteBinding.Routed.FirstOrDefault(routed => routed.Claims(rawTarget));
+        if (binding is not null || string.Equals(rawTarget, McpRawTarget, StringComparison.Ordinal))
         {
-            if (_corpusMount is not null)
+            // An operation, over REST or MCP: counted against its client's limit (R109), and holding one of the client's
+            // in-flight places until it is answered.
+            using var admission = _limiter.AdmitApi(ClientOf(context));
+            if (binding is null)
             {
-                await V3ResolveRestRoute.HandleOutcomeAsync(
-                        binding,
-                        context,
-                        _host,
-                        RequestReference(context.TraceIdentifier),
-                        ExecuteFor(_corpusMount, _utcNow, binding.OperationId),
-                        cancellationToken)
-                    .ConfigureAwait(false);
-                return;
+                await HandleMcpAsync(context, admission, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await HandleRouteAsync(binding, context, admission, cancellationToken).ConfigureAwait(false);
             }
 
-            await V3ResolveRestRoute.HandleRefusalAsync(
+            return;
+        }
+
+        await HandleOtherAsync(context, rawTarget, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The client a request comes from, as the limit knows it (<see cref="V3ClientLimiter.ClientOf"/>): the one place this
+    /// server reads the connection's address and the address the platform's ingress forwards, each handed whole to the limit's
+    /// keyed hash and kept nowhere (S4-A11; <c>PublicRequestRecordingTests</c> counts this read).
+    /// </summary>
+    private V3ClientLimiter.Client? ClientOf(HttpContext context) =>
+        _limiter.ClientOf(context.Connection.RemoteIpAddress, context.Request.Headers[V3ClientLimiter.ForwardedForHeader].ToString());
+
+    /// <summary>
+    /// One page render's place for the request's client (<see cref="V3ClientLimiter.AdmitRender"/>), held until it is disposed,
+    /// or null when the client's render budget or in-flight places are spent, and the page is then served as built.
+    /// </summary>
+    private V3ClientLimiter.Admission? AdmitRender(HttpContext context)
+    {
+        var admission = _limiter.AdmitRender(ClientOf(context));
+        if (admission.Admitted)
+        {
+            return admission;
+        }
+
+        admission.Dispose();
+        return null;
+    }
+
+    /// <summary>
+    /// The outcome of an operation request over its client's limit (R109): the typed refusal <c>rate_limited</c>, with the wait
+    /// and <c>retryable</c>, in the mounted corpus's refusal context, or with no corpus mounted the unmounted one; the same
+    /// over REST and MCP. Nothing is asked of the mount.
+    /// </summary>
+    internal static V3PlatformOperationOutcome RateLimitedOutcome(
+        V3CorpusMount? corpusMount,
+        Func<DateTimeOffset> utcNow,
+        V3PlatformOperationRequest request,
+        int retryAfterSeconds)
+    {
+        ArgumentNullException.ThrowIfNull(utcNow);
+        return V3PlatformOperationOutcome.Refused(
+            corpusMount?.RefusalContext(utcNow()) ?? UnmountedLuxembourgContext(utcNow),
+            RateLimited(request, retryAfterSeconds));
+    }
+
+    /// <summary>The refusal <c>rate_limited</c>: the seconds to wait, as <c>Retry-After</c> says them, and that it may be retried.</summary>
+    internal static V3PlatformOperationRefusal RateLimited(V3PlatformOperationRequest request, int retryAfterSeconds)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(retryAfterSeconds);
+        using var helpful = JsonDocument.Parse(
+            "{\"retry_after\":" + retryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture) + ",\"retryable\":true}");
+        return new V3PlatformOperationRefusal(
+            request,
+            "rate_limited",
+            helpful.RootElement);
+    }
+
+    /// <summary>A served REST route's request: answered, or over its client's limit refused <c>rate_limited</c> with 429.</summary>
+    private async Task HandleRouteAsync(
+        V3RestRouteBinding binding,
+        HttpContext context,
+        V3ClientLimiter.Admission admission,
+        CancellationToken cancellationToken)
+    {
+        if (!admission.Admitted)
+        {
+            await V3ResolveRestRoute.HandleRateLimitedAsync(
                     binding,
                     context,
                     _host,
                     RequestReference(context.TraceIdentifier),
-                    UnmountedLuxembourgContext(),
-                    static request => NoCorpusMounted(request),
+                    request => RateLimitedOutcome(_corpusMount, _utcNow, request, admission.RetryAfterSeconds),
+                    admission.RetryAfterSeconds,
                     cancellationToken)
                 .ConfigureAwait(false);
             return;
         }
 
-        if (string.Equals(rawTarget, McpRawTarget, StringComparison.Ordinal))
+        if (_corpusMount is not null)
         {
-            await HandleMcpAsync(context, cancellationToken).ConfigureAwait(false);
+            await V3ResolveRestRoute.HandleOutcomeAsync(
+                    binding,
+                    context,
+                    _host,
+                    RequestReference(context.TraceIdentifier),
+                    ExecuteFor(_corpusMount, _utcNow, binding.OperationId),
+                    cancellationToken)
+                .ConfigureAwait(false);
             return;
         }
+
+        await V3ResolveRestRoute.HandleRefusalAsync(
+                binding,
+                context,
+                _host,
+                RequestReference(context.TraceIdentifier),
+                UnmountedLuxembourgContext(),
+                static request => NoCorpusMounted(request),
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>Every request that is no operation: the API's unknown routes, readiness, the key set, the pages and the preview.</summary>
+    private async Task HandleOtherAsync(HttpContext context, string rawTarget, CancellationToken cancellationToken)
+    {
         if (rawTarget.StartsWith("/api/v3/", StringComparison.Ordinal))
         {
-            // A registered operation this mount has no route for is a typed answer of its own
-            // (operation_not_served), so a client cannot take it for a path nothing names; the path
-            // segment is compared with the reviewed registry's ids exactly, and a query or a trailing
-            // segment keeps it a path nothing names, as the served routes' own claim does.
-            var operationId = rawTarget["/api/v3/".Length..];
-            var registeredAndNotServed =
-                V3OperationRegistry.Reviewed.Operations.Any(operation => string.Equals(operation.OperationId, operationId, StringComparison.Ordinal)) &&
-                !V3RestRouteBinding.Served.Any(served => string.Equals(served.OperationId, operationId, StringComparison.Ordinal));
-            await V3TransportResponse.WriteAsync(
-                    context.Response,
-                    registeredAndNotServed ? V3TransportFailureKind.OperationNotServed : V3TransportFailureKind.UnknownRoute,
-                    cancellationToken)
+            // Every registered operation is routed above, so a path here names nothing: a typo, a case variant or a trailing
+            // segment, which is the unknown route.
+            await V3TransportResponse.WriteAsync(context.Response, V3TransportFailureKind.UnknownRoute, cancellationToken)
                 .ConfigureAwait(false);
             return;
         }
@@ -148,11 +237,18 @@ internal sealed class V3ApiHandler
             return;
         }
 
+        // The published key set (R116), from the bytes the repository holds, with or without pages or a corpus.
+        if (await V3KeySet.TryServeAsync(context, rawTarget, cancellationToken).ConfigureAwait(false))
+        {
+            return;
+        }
+
         // The live pages, when this server holds them: only the files its web root recorded, and a law's
         // address (V3WebRoot.PageForSitePath) served the page that reads it; every other path goes on to the 404 page
         // below, the synthetic routes, or with no preview the unknown route. A readable address asks for today in Luxembourg
-        // (R13), by this server's clock.
-        if (_webRoot is not null && await _webRoot.TryServeAsync(context, rawTarget, cancellationToken, AnswerFor(context), LuxembourgToday).ConfigureAwait(false))
+        // (R13), by this server's clock. A page rendered from the API's own answer is counted against its client's render
+        // budget (R46, V3ClientLimiter), and over it is served as built; no other file is counted.
+        if (_webRoot is not null && await _webRoot.TryServeAsync(context, rawTarget, cancellationToken, AnswerFor(context), LuxembourgToday, () => AdmitRender(context)).ConfigureAwait(false))
         {
             return;
         }
@@ -217,11 +313,11 @@ internal sealed class V3ApiHandler
     internal const string McpRawTarget = "/mcp";
 
     /// <summary>
-    /// The one dispatch from a served operation id to the mount's method, used by the REST routes and
+    /// The one dispatch from a routed operation id to the mount's method, used by the REST routes and
     /// by every MCP tool call, so the two transports cannot run different code for one operation
     /// (LAUNCH-CONTRACT: REST and MCP derive identical envelopes). Only ids in
-    /// <see cref="V3RestRouteBinding.Served"/> are dispatched; any other id is a programming error
-    /// here, never a fall-through to resolve.
+    /// <see cref="V3RestRouteBinding.Routed"/> are dispatched (the served ones and the ones served from no data, which refuse);
+    /// any other id is a programming error here, never a fall-through to resolve.
     /// </summary>
     internal static Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> ExecuteFor(
         V3CorpusMount corpusMount,
@@ -230,33 +326,44 @@ internal sealed class V3ApiHandler
     {
         ArgumentNullException.ThrowIfNull(corpusMount);
         ArgumentNullException.ThrowIfNull(utcNow);
-        return operationId switch
+        Func<V3PlatformOperationRequest, DateTimeOffset, V3PlatformOperationOutcome> operation = operationId switch
         {
-            "resolve" => request => corpusMount.Resolve(request, utcNow()),
-            "as_of" => request => corpusMount.AsOf(request, utcNow()),
-            "timeline" => request => corpusMount.Timeline(request, utcNow()),
-            "article_history" => request => corpusMount.ArticleHistory(request, utcNow()),
-            "diff" => request => corpusMount.Diff(request, utcNow()),
-            "changes_in_period" => request => corpusMount.ChangesInPeriod(request, utcNow()),
-            "in_force_on" => request => corpusMount.InForceOn(request, utcNow()),
-            "search" => request => corpusMount.Search(request, utcNow()),
-            "coverage" => request => corpusMount.Coverage(request, utcNow()),
-            "provenance" => request => corpusMount.Provenance(request, utcNow()),
-            "dossier" => request => corpusMount.Dossier(request, utcNow()),
-            "citation" => request => corpusMount.Citation(request, utcNow()),
-            "cited_by" => request => corpusMount.CitedBy(request, utcNow()),
-            "verify" => request => corpusMount.Verify(request, utcNow()),
-            "relations" => request => corpusMount.Relations(request, utcNow()),
-            "evidence_bundle" => request => corpusMount.EvidenceBundle(request, utcNow()),
-            "classification" => request => corpusMount.Classification(request, utcNow()),
-            "manifestation" => request => corpusMount.Manifestation(request, utcNow()),
-            "status_on" => request => corpusMount.StatusOn(request, utcNow()),
-            "browse" => request => corpusMount.Browse(request, utcNow()),
-            "ask" => request => corpusMount.Ask(request, utcNow()),
-            "events" => request => corpusMount.Events(request, utcNow()),
-            "answer_drift" => request => corpusMount.AnswerDrift(request, utcNow()),
-            "as_observed" => request => corpusMount.AsObserved(request, utcNow()),
-            _ => throw new ArgumentOutOfRangeException(nameof(operationId), operationId, "Not a served operation."),
+            "resolve" => corpusMount.Resolve,
+            "as_of" => corpusMount.AsOf,
+            "timeline" => corpusMount.Timeline,
+            "article_history" => corpusMount.ArticleHistory,
+            "diff" => corpusMount.Diff,
+            "changes_in_period" => corpusMount.ChangesInPeriod,
+            "in_force_on" => corpusMount.InForceOn,
+            "search" => corpusMount.Search,
+            "coverage" => corpusMount.Coverage,
+            "provenance" => corpusMount.Provenance,
+            "dossier" => corpusMount.Dossier,
+            "citation" => corpusMount.Citation,
+            "cited_by" => corpusMount.CitedBy,
+            "verify" => corpusMount.Verify,
+            "relations" => corpusMount.Relations,
+            "evidence_bundle" => corpusMount.EvidenceBundle,
+            "classification" => corpusMount.Classification,
+            "manifestation" => corpusMount.Manifestation,
+            "status_on" => corpusMount.StatusOn,
+            "browse" => corpusMount.Browse,
+            "ask" => corpusMount.Ask,
+            "events" => corpusMount.Events,
+            "answer_drift" => corpusMount.AnswerDrift,
+            "as_observed" => corpusMount.AsObserved,
+            "concepts" or "knowable_on" or "transposition" => corpusMount.Unserved,
+            _ => throw new ArgumentOutOfRangeException(nameof(operationId), operationId, "Not a routed operation."),
+        };
+
+        // An identifier the out-of-scope list names (V3OutOfScope) is refused out_of_corpus_scope by every operation that takes
+        // one, before the mount is read, so its official place and who to ask are said the same way everywhere. Then every
+        // answer passes the names record (R92, V3CorpusMount.Names.cs) on its way out, on both transports and for the server's
+        // own pages: an answer about a work it withholds is text_withheld.
+        return request =>
+        {
+            var now = utcNow();
+            return corpusMount.WithNamesWithheld(request, corpusMount.RefuseOutOfScope(request, now) ?? operation(request, now), now);
         };
     }
 
@@ -267,7 +374,12 @@ internal sealed class V3ApiHandler
     /// GET is 405). The body ceiling is the platform's; a larger request is 413 before parsing. No
     /// request header is read (S4-A11).
     /// </summary>
-    private async Task HandleMcpAsync(HttpContext context, CancellationToken cancellationToken)
+    /// <remarks>
+    /// Over its client's limit (R109), a request is read and answered as any other, but a tool call answers the typed refusal
+    /// <c>rate_limited</c> in a JSON-RPC result, as REST answers it, and the answer carries <c>Retry-After</c>; the status
+    /// stays the dispatcher's.
+    /// </remarks>
+    private async Task HandleMcpAsync(HttpContext context, V3ClientLimiter.Admission admission, CancellationToken cancellationToken)
     {
         // Every answer of the endpoint, transport failures included, names the one protocol version served.
         static void NameProtocolVersion(Microsoft.AspNetCore.Http.HttpResponse response) =>
@@ -298,7 +410,8 @@ internal sealed class V3ApiHandler
         try
         {
             answer = await V3McpJsonRpc.HandleAsync(
-                    body, _host, _corpusMount, _utcNow, RequestReference(context.TraceIdentifier), cancellationToken)
+                    body, _host, _corpusMount, _utcNow, RequestReference(context.TraceIdentifier), cancellationToken,
+                    admission.Admitted ? null : admission.RetryAfterSeconds)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -310,6 +423,11 @@ internal sealed class V3ApiHandler
             await V3TransportResponse.WriteAsync(context.Response, V3TransportFailureKind.InternalFailure, NameProtocolVersion, cancellationToken)
                 .ConfigureAwait(false);
             return;
+        }
+
+        if (!admission.Admitted)
+        {
+            context.Response.Headers.RetryAfter = admission.RetryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
         if (answer is null)

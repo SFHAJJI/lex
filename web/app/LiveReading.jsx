@@ -66,6 +66,9 @@ import { readingAddressShown, readingPinOf, readsAnotherDay, todayAt } from '../
 import { writeLawPageLinks } from './head-links.mjs';
 import { replacePageAddress } from './page-address.mjs';
 import { TodayHint, useLuxembourgToday } from './Today.jsx';
+import { GuideLink } from './GuideLink.jsx';
+import { Breadcrumbs } from './Breadcrumbs.jsx';
+import { readingCrumbs } from '../scripts/breadcrumbs.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -407,6 +410,11 @@ export function ReadingView({ view, paging = {}, onNext = null, readableFor = nu
           <Say template={COPY.rightsIn} values={{ rights: view.rightsDisposition, date: view.date, language: view.language }} />
         )}
       </p>
+      {(view.disclosures ?? []).map((disclosure) => (
+        <p key={`${disclosure.code} ${disclosure.observedOn}`} data-rights-disclosure={disclosure.code}>
+          <Say template={COPY.disclosure[disclosure.code]} values={{ date: disclosure.observedOn }} />
+        </p>
+      ))}
       <AsPublished asPublished={view.asPublished} />
       {view.states.map((state) => (
         <StateReading key={state.stateSha256} state={state} workKey={view.workKey} paging={paging[state.stateSha256] ?? null} onNext={onNext} readable={readableFor?.(state) ?? null} />
@@ -519,6 +527,8 @@ export function EuropeReadingView({ view, paging = {}, onNext = null, readableFo
     <>
       <p data-acknowledgement="" lang={ENGLISH_LANG}>{view.acknowledgement}</p>
       <p data-authenticity="" lang={ENGLISH_LANG}>{view.authenticity}</p>
+      {/* The statement's info control (R48): which texts are authentic, in How to read Lex's section on texts as published and consolidated. */}
+      <p data-guide-note=""><GuideLink section="versions" /></p>
       {/* The act's dates lead the reading, before its wordings, each said with its role: none of them is a wording's date. */}
       <EuropeForceDates forceDates={view.forceDates ?? null} notWording />
       {view.wordings.map((wording) => (
@@ -785,8 +795,14 @@ export function LiveReading({ contract, fetchImpl, initial = null }) {
   // At an act's readable address, a page's links go to that address's pages (`?page=N`), not to the permalink's; at one that
   // keeps another date than today, to the permalink's, the version it shows (today's address shows another).
   const readableFor = pinned && pin.kind === 'current' && !readsAnotherDay(pin, outcome) ? (version) => (version.language === pin.language ? pin.act : null) : null;
+  // Where the reading shown stands (R48): its publisher, its act, the article its address names and the version it pins, or
+  // the one version shown; none until a reading is shown.
+  const crumbs = shown.state === 'success'
+    ? readingCrumbs(shown.view, { permalink: pinned && pin.kind === 'state' ? pin.permalink : null, article: pinned ? anchorText(pin.anchor) : null })
+    : [];
   return (
     <div>
+      <Breadcrumbs crumbs={crumbs} />
       <ReadingForm key={pin === null ? 'blank' : pin.address} initial={pin?.form ?? null} onAsk={ask} today={todayAt(outcome.context?.freshness?.observed_at)} />
       {/* What Lex is not, above the text it shows (the specification of record's R50: Reading says it). */}
       <p className="not-advice" data-not-advice="">{liveChrome().site.notAdvice}</p>

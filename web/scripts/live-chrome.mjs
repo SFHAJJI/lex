@@ -37,16 +37,17 @@ const EN = Object.freeze({
     title: "Search",
     eyebrow: "Search",
     heading: "Search the held text",
-    // Only exact matching runs (the plan's item 4.5, R90): the relaxed lane is off until its check passes, so the page no
-    // longer says it finds "every word of it".
-    intro: "Finds the acts whose title matches the phrase and, in the text this server holds and may search, the articles that contain it exactly as typed: text its rights withhold is not searched. The phrase goes to this server in the body of the request, never in the request's address; this page keeps the search only in its own address, in the part after “#”, which the browser never sends, so a link to that address shares the search.",
+    // Only the phrase is matched (the plan's item 4.5, R90): the relaxed lane is off until its check passes, so the page no
+    // longer says it finds "every word of it"; capitals and accents are ignored (the plan's item 4.4), so it no longer says
+    // "exactly as typed".
+    intro: "Finds the acts whose title matches the phrase and, in the text this server holds and may search, the articles that contain it, with capitals and accents ignored: text its rights withhold is not searched. The phrase goes to this server in the body of the request, never in the request's address; this page keeps the search only in its own address, in the part after “#”, which the browser never sends, so a link to that address shares the search.",
     idle: "Type a phrase to search the article text this server holds and may search.",
     population: Object.freeze({
-      one: "“{query}” in {language}: {strict} with the exact phrase, {relaxed} with every word, in {works} work.",
-      other: "“{query}” in {language}: {strict} with the exact phrase, {relaxed} with every word, in {works} works.",
+      one: "“{query}” in {language}: {strict} with the phrase, {relaxed} with every word, in {works} work.",
+      other: "“{query}” in {language}: {strict} with the phrase, {relaxed} with every word, in {works} works.",
     }),
     notCounted: "not counted",
-    lane: Object.freeze({ strict: "exact phrase", relaxed: "every word" }),
+    lane: Object.freeze({ strict: "phrase", relaxed: "every word" }),
     // The title ladder's answer, on top (the plan's item 4.3): the act whose title the phrase is, begins or holds every word
     // of, linked to its dossier; several acts are counted and listed, the first few shown and the rest one step away. The
     // title stands last, after a colon, with no final sign of its own: most of the publisher's titles end with a full stop,
@@ -69,8 +70,25 @@ const EN = Object.freeze({
     noHit: "No article of the text this server holds and may search contains “{query}”.",
     noText: "This index holds no searchable text in {language}; it holds text in {languages}.",
     nextPage: "Next page",
-    euWording: "Every hit is in the original wording of {celex} this server holds in {language}, dated {date} and pinned by its digest: {permalink}",
-    euHit: "{heading} of {celex}, wording of {date}",
+    // An EU act's search (the audit of 2026-10-27, gap 5): its passages counted by the wordings they are in, what was
+    // searched, with no date or at the date asked, the wordings not searched, and the other wordings that hold a passage's
+    // text when an undated search showed it once. Each wording is headed as the reading heads it (`reading.europe…`).
+    euFound: "“{query}” in {language}: {passages} with the phrase, in {wordings} of {celex}.",
+    euWordings: Object.freeze({
+      one: "{count} wording",
+      other: "{count} wordings",
+    }),
+    euSearched: "Searched: {wordings} of {celex} in {language}, with {articles} of searchable text.",
+    euDated: "Searched at {date}: the one wording of this EU act that date selects, the latest dated on or before it.",
+    euUndated: "Searched with no date: each wording of this EU act, original or consolidated, whose text this site holds and may search; where several of them hold the same text of an article, that text is shown once, under the latest of them.",
+    euNotSearched: Object.freeze({
+      one: "{count} other wording of this act was not searched: its text is not held here or its rights withhold it, two different texts carry its date, or the publisher gives it no usable date.",
+      other: "{count} other wordings of this act were not searched: their text is not held here or their rights withhold it, two different texts carry their date, or the publisher gives them no usable date.",
+    }),
+    euSameWording: Object.freeze({
+      one: "The same text is in {count} other wording this site searched.",
+      other: "The same text is in {count} other wordings this site searched.",
+    }),
     notHeldHeading: "What this search does not cover",
     // The one box's placeholder, word for word the specification of record's (R52).
     placeholder: "Search by title, number, ELI or CELEX, or words from the text",
@@ -94,8 +112,8 @@ const EN = Object.freeze({
     recognisedArticleDate: "Recognised: {act}, article {article}, at {date}.",
     recognisedToday: "No date was given: the date read is today in Luxembourg, {date}.",
     recognisedSearchDate: "The reference names no date: the date read is the search's, {date}.",
-    opensReading: "Opening the reading: {link}",
-    opensDossier: "Opening the dossier: {link}",
+    opensReading: "This reference opens the reading: {link}",
+    opensDossier: "This reference opens the dossier: {link}",
     notOpenedDate: "“{date}” names no day of the calendar, so nothing was opened and no word was searched.",
     notOpenedTwoDates: "The reference names two dates that disagree, so nothing was opened and no word was searched.",
     // The review of #974: a citation by a title this site holds no act under is searched as words, and the page says so; the
@@ -107,7 +125,7 @@ const EN = Object.freeze({
     // Results by act (the plan's item 4.3; R59, R21, R11): what was found, counted from the answer; what was searched, every
     // count the answer's and dated by the index's build; each act once, with its passages below it, each version dated in the
     // publisher's words ("applicable from", R21), and an act held only as first published said so, as the reading says it.
-    found: "“{query}” in {language}: {passages} with the exact phrase, in {acts}.",
+    found: "“{query}” in {language}: {passages} with the phrase, in {acts}.",
     passages: Object.freeze({
       one: "{count} passage",
       other: "{count} passages",
@@ -150,13 +168,13 @@ const EN = Object.freeze({
       one: "Titles: the phrase matches the title shown above.",
       other: "Titles: the phrase matches the titles shown above.",
     }),
-    // How the titles were matched, said under the titles line when the ladder ran: unlike the text, case and accents are
+    // How the titles were matched, said under the titles line when the ladder ran: as the text is, with case and accents
     // ignored (the French review of this slice, its point 4).
     titleMatching: "Titles are matched with capitals and accents ignored.",
     runTitlesNotRun: "Titles: not searched, since a work was named.",
-    runText: "Text: no article searched contains the phrase exactly as typed.",
+    runText: "Text: no article searched contains the phrase, even with capitals and accents ignored.",
     runTextWords: "Text, every word in any order: no article searched contains them all.",
-    exactOnly: "Only exact matching ran on the text: capitals, accents and every other character of the phrase count, and nothing is folded, stemmed or expanded. A looser search of the text stays off until its own check has passed.",
+    exactOnly: "Only the phrase was matched in the text, with capitals and accents ignored, œ and æ read as oe and ae, the typographic apostrophes as the straight one, a no-break space as a space and a soft hyphen as nothing: every other character of it counts, hyphens and punctuation included, and nothing is stemmed or expanded. A looser search of the text stays off until its own check has passed.",
     officialSearch: "The publishers' own search pages:",
     officialSites: Object.freeze({
       legilux: "Legilux search, for Luxembourg law",
@@ -210,6 +228,16 @@ const EN = Object.freeze({
     unclearEndDay: "{date} is the end the publisher's catalogue gives for one version, the day before the next begins; whether that day belongs to it is unclear, and this site gives it to neither.",
     invalidInterval: "The version from {date} has an end in the publisher's catalogue, {to}, on or before its own start, so it covers no date; its own link still opens it.",
     chainNote: "These are the dates of the publisher's catalogue as this site read it; a gap in the catalogue is not a gap in the law.",
+    // The act's force, as the publisher records it (R79, E3): its own status token and dates, each said with its role (R21),
+    // never read into whether the act applies to anyone.
+    forceHeading: "The act's force, as the publisher records it",
+    forceStatus: "Status, in the publisher's own words: {status}.",
+    forceStatusNone: "The publisher's record gives no status for this act.",
+    forceEntry: "Entry into force: {date} (the publisher's record).",
+    forceEntryNone: "The publisher's record gives no entry-into-force date for this act.",
+    forceEnd: "End of force: {date} (the publisher's record).",
+    forceOtherForms: "The publisher's record also gives an entry-into-force or end-of-force date in a form that is not a calendar date; it is not shown here.",
+    forceNote: "These are the publisher's own statements about the act as a whole, shown as it gives them. They say nothing of a particular article or version, and Lex does not say whether or how the act applies to anyone's situation.",
     // A state dated by its entry into force (S7a; R21), in the date column, and what that mark means, said once under the table.
     entryIntoForceDate: "no date stated (entry into force: {date})",
     entryIntoForceNote: "The mark “no date stated” means that the act's file states no exact applicability date; the date in brackets is the act's entry into force in the publisher's record, not an applicability date.",
@@ -241,6 +269,13 @@ const EN = Object.freeze({
     idle: "Type a work identifier and a date to read its text on that date.",
     rights: "Text served under {rights}. Read on {date}.",
     rightsIn: "Text served under {rights}. Read on {date} in {language}.",
+    // The L5 single-channel disclosure (LU-DATA-DESIGN v2 §1.2, §5): a text served on the publisher's catalogue alone, under
+    // one of the owner's rulings, says so beside the text with the date its licence page was observed. Drafts the owner revises.
+    disclosure: Object.freeze({
+      lu_rights_publisher_catalogue_only_file_silent: "This file does not state its own licence. It is served on the publisher's catalogue alone, which declares CC BY 4.0 for this file, as observed on {date}.",
+      lu_rights_publisher_catalogue_only_own_block_empty: "This file's own metadata names it but states no licence. It is served on the publisher's catalogue alone, which declares CC BY 4.0 for this file, as observed on {date}.",
+      lu_rights_publisher_catalogue_only_file_names_other_identity: "This file's licence statement names another publication, not this file. It is served on the publisher's catalogue alone, which declares CC BY 4.0 for this file, as observed on {date}.",
+    }),
     stateHeading: "{work}, {language}, the state applying from {from}",
     stateHeadingNext: "{work}, {language}, the state applying from {from} (the next state held applies from {next})",
     // A state dated by its entry into force (index 9's date_role, S7a; R21): never said as applying from that date.
@@ -296,6 +331,11 @@ const EN = Object.freeze({
     citeWithPermalink: "With its permalink",
     citeEvidence: "Evidence form",
     citeNotComposed: "Lex composes no usual citation for this article; its permalink cites it.",
+    // The copy button beside each citation form (R65), which only a browser running the page's script shows.
+    copyCitation: "Copy",
+    copyCitationLabel: "Copy: {form}",
+    citationCopied: "Citation copied.",
+    citationNotCopied: "This browser did not copy the citation; select its text instead.",
     // Reading by page (the plan's item 3.7): a long version's contents, by page, the pages shown, and the links to the pages
     // before and after them, which the page loads in place when it can.
     contents: "Contents",
@@ -383,7 +423,8 @@ const EN = Object.freeze({
     title: "Compare",
     eyebrow: "Compare",
     heading: "Two states, article by article",
-    intro: "The states of one Luxembourg work applicable on two dates, compared by the publisher's article ids and wording, with nothing said about legal effect. The identifier and the dates go to this server in the request and nowhere else, and this page keeps nothing.",
+    // R57 (the audit of 2026-10-27, gap 2): the wording that changed is shown, and a comparison has an address of its own.
+    intro: "The states of one Luxembourg work applicable on two dates, compared by the publisher's article ids and wording, with nothing said about legal effect; the wording that changed is shown, the text deleted struck through and the text inserted underlined. The identifier and the dates go to this server in the request; when the act is named by its address on this site, they are also written into this page's address, so that the comparison can be shared and read without JavaScript; this page keeps nothing.",
     idle: "Type a work identifier and two dates to compare the states applicable on them.",
     summary: "{work}: {from} against {to}.",
     summaryIn: "{work}: {from} against {to} in {language}.",
@@ -420,6 +461,31 @@ const EN = Object.freeze({
     }),
     bound: Object.freeze({ from: "from", to: "to" }),
     notCompared: "{language} is not compared: {reason} ({bound} date).",
+    // A changed article's wording, inline (R57): what a screen reader, or a reader without the page's styles, hears around
+    // each deletion and insertion, which the eye sees struck through and underlined.
+    deletedStart: "[deleted:",
+    deletedEnd: "]",
+    insertedStart: "[inserted:",
+    insertedEnd: "]",
+    // R57's jump list, and the links from each change to the previous and the next.
+    jumpHeading: "The changes",
+    jumpItem: "{article}: {status}",
+    previousChange: "Previous change",
+    nextChange: "Next change",
+    // A side whose text this site does not serve (its rights did not admit it): the digests stand, and no wording is shown.
+    wordingNotServed: Object.freeze({
+      from: "This article's wording is not shown: this site does not serve the text of the version at the from date.",
+      to: "This article's wording is not shown: this site does not serve the text of the version at the to date.",
+      both: "This article's wording is not shown: this site serves the text of neither version.",
+    }),
+    wordingWhole: "This article changed too much to be compared word by word here: apart from any beginning or end its two texts share, its text at the from date is shown deleted and its text at the to date inserted, each in one piece.",
+    // The wording of the changes in pages (the review of #1003, F4: at most 50 articles and 96 KiB a page, as a reading's), the
+    // page shown by its first and last article, and the links to the pages before and after it.
+    wordingPage: "The wording that changed is shown in pages; this is page {page} of {pages}: {first} to {last}.",
+    wordingPageOne: "The wording that changed is shown in pages; this is page {page} of {pages}: {first} only.",
+    wordingOtherPage: "This article's wording is on another page of this comparison.",
+    previousPage: "Previous page of the wording",
+    nextPage: "Next page of the wording",
   }),
   radar: Object.freeze({
     title: "Radar",
@@ -501,6 +567,9 @@ const EN = Object.freeze({
     heading: "Evaluation card",
     target: "Run over: {target}",
     machineReadable: "The same card for machines, as JSON",
+    // What the card holds and what it does not (the audit of 2026-10-27, overclaim 3): said above its verdict, whatever it is,
+    // so "every machine gate on this card passes" is never read as every gate Lex has.
+    scope: "This card holds only the machine gates listed below ({gates}). It does not hold the gates on the data (that every count matches the publisher's and that every admitted file yields text), on the quality of answers, on speed, or on two systems deriving the same index, and it tests none of the refusal codes no operation sends ({codes}).",
     clean: "Every machine gate on this card passes, and every shuffled control caught its shuffle.",
     notClean: "{gates}, and {controls}.",
     gatesNotPassing: Object.freeze({
@@ -574,6 +643,21 @@ const EN = Object.freeze({
     authenticity: "Consolidated texts have no legal effect: the authentic texts are those published in the Journal officiel du Grand-Duché de Luxembourg (Mémorial A) and in the Official Journal of the European Union.",
     sources: "The texts come from Legilux and from the Publications Office of the European Union, as this site holds them; every quote names its official source.",
   }),
+  // The breadcrumbs of a law's pages (the specification of record's R48: "breadcrumbs (publisher, act, article, version)";
+  // `breadcrumbs.mjs`): the menu's name, the law each publisher publishes, and a version said by its date's role (R21): a
+  // Luxembourg state as applying from its date, or the act as published dated by its entry into force, never as applying
+  // from it; an EU wording by its own date, never with a Luxembourg word. The act and the article are the page's own codes.
+  breadcrumbs: Object.freeze({
+    label: "Breadcrumb",
+    publishers: Object.freeze({
+      "lu-legilux": "Luxembourg law",
+      "eu-eurlex": "EU law",
+    }),
+    state: "State applying from {date}",
+    stateEntryIntoForce: "Act as published, dated by its entry into force on {date} (publisher)",
+    europeOriginal: "Original wording of {date}",
+    europeConsolidated: "Consolidated wording of {date}",
+  }),
   // How current the law this site holds is, and the commits behind an answer (the specification of record's R87 and R23;
   // the plan's items 6.1 and 6.5; `freshness.mjs`, `Freshness.jsx`): the strip in every page's footer and the staleness
   // banner under its header, each said from the server's answer and nothing else. Every date is the server's, in
@@ -611,7 +695,7 @@ const EN = Object.freeze({
     title: "Luxembourg and EU law at a date you choose",
     eyebrow: "Search the law",
     heading: "Luxembourg and EU law at a date you choose",
-    intro: "Search the texts this site holds, open a law as it stood on the date you choose, see how each article changed, compare two dates, and export with citations anyone can check against the official source. Where the site does not hold a text or a date, it says so.",
+    intro: "Search the texts this site holds, open a law as it stood on the date you choose, and export with citations anyone can check against the official source. For a Luxembourg act of which the site holds more than one version, see whether each article's wording changed from one version to the next, and which articles differ between the versions of two dates. Where the site does not hold a text or a date, it says so.",
     aboutHeading: "What Lex is and is not",
     coverage: "This site holds {acts} of Luxembourg law, in {versions} with {articles}, as of the index built on {date}.",
     coverageUndated: "This site holds {acts} of Luxembourg law, in {versions} with {articles}; the index it holds records no build date.",
@@ -630,6 +714,11 @@ const EN = Object.freeze({
       other: "{count} articles",
     }),
     links: "Elsewhere on this site",
+    // The example searches (R47; `home-examples.mjs`): each a usual citation of an article this site holds, derived from the
+    // mount at build and kept only when searching it opens that article's text; the citations themselves are data, said in
+    // their text's language.
+    examplesHeading: "Example searches",
+    examplesIntro: "Each searches for an article this site holds, cited as it is usually written, and leads to its text.",
   }),
   // A service failure on a screen, panel by panel (the specification of record's R60; `live-failure.mjs`): its line, word
   // for word the specification's, above what the screen says of the failure; the retry, which asks the same request again;
@@ -713,14 +802,16 @@ const EN = Object.freeze({
     title: "Privacy notice",
     eyebrow: "About this site",
     heading: "Privacy notice",
-    intro: "What happens to your data when you read Lex: it asks you for none, sets no cookie and keeps nothing about you.",
+    intro: "What happens to your data when you read Lex: it asks you for none, sets no cookie and records nothing about you.",
     sections: Object.freeze({
       reading: Object.freeze({
         heading: "When you read the site",
         request: "Each page you open and each search you send is a request from your browser to this site's server. The request carries your device's IP address, the address of the page and the technical details every browser sends. A search's words travel in the body of the request, never in the request's address; a link that keeps a search holds it in the part after the “#”, which your browser never sends.",
         host: "Microsoft, which hosts the site, carries each request to the server and its answer back to you, and handles the connection data this needs under its own terms.",
-        kept: "The server uses the request only to answer it, and keeps nothing of it once it has answered: it writes no access log and no record of what is read or searched, and the hosting is set up with no log store and no monitoring service that would keep requests. This is tested: the server is run with requests carrying marked values (a search phrase, an address, a browser's name), and none of them may appear in anything it writes.",
-        nothingHeld: "Lex has no accounts and no sign-up, so it never knows who you are. Since it keeps nothing about a visit, it holds nothing about you that it could show, correct or erase.",
+        kept: "The server uses the request to answer it and to count it (see below), and writes nothing of it anywhere: it keeps no access log and no record of what is read or searched. This is tested on the server's own code, before it is deployed: the server is run with requests carrying marked values (a search phrase, an IP address, a browser's name), and none of them may appear in anything it writes. The hosting is set up from a template that adds no log store and no monitoring service that would keep requests; the hosting's settings, once deployed, are not tested this way.",
+        // The per-client limit (R109; V3ClientLimiter): what the server holds of an IP address, where, and for how long.
+        limit: "So that no single IP address can overload the server, the server counts the requests that come from each IP address. For this it holds, in its working memory only, a fingerprint of the IP address beside a count of its recent requests. The fingerprint is computed with a secret key that is drawn at random, never written down and replaced every day; the IP address itself is not kept. Neither the fingerprint nor the count is ever written down, and both are forgotten at the latest about two minutes after the last request from that IP address, or when the server restarts. An IP address that sends too many requests at once or in a minute is asked to wait a moment.",
+        nothingHeld: "Lex has no accounts and no sign-up, so it never knows who you are. Since it records nothing about a visit, and forgets the count above within minutes, it holds nothing about you that it could later show, correct or erase.",
       }),
       nothingElse: Object.freeze({
         heading: "No cookies, no trackers, no other sites",
@@ -826,6 +917,410 @@ const EN = Object.freeze({
       }),
     }),
   }),
+  // The three reference pages (the specification of record's launch set: Developers, Get help, How to read Lex; R42, R46,
+  // R48, R50, R55; `reference-pages.mjs`), and what they share (`reference`: the footer's menu of them). Like the legal pages,
+  // each page's `sections` are its parts in order, a part's `heading` then its paragraphs, a `list` being one list. A
+  // paragraph's placeholders are values the page fills: the footer's statements (`notAdvice`, `authenticity`), the failure
+  // line (`failureLine`), links to other pages (`developersPage`, `guidePage`, `privacyPage`, `termsPage`), the publishers'
+  // sites (`legiluxSite`, `eurlexSite`), and other entries of this table, said as they are said where they stand (`skip`,
+  // `cite`, `conventional`, `withPermalink`, `evidence`, `freshnessHeading`, `staleHeading`, `asPublishedLabel`,
+  // `noDateMark`, `withoutText`). Get help names no person and gives no contact, by the owner's decision of 2026-10-19, and
+  // says so. The Developers page's sections are laid out by the page from the contracts (`developers.mjs`); its placeholders
+  // are code (an operation, a member, a path) or a count the contracts give. The glossary's terms are entries of this table
+  // (`GLOSSARY`); its `terms` are their definitions.
+  reference: Object.freeze({
+    menu: "Help and reference",
+    contents: "On this page",
+    inline: Object.freeze({
+      guide: "How to read Lex",
+      developers: "Developers page",
+    }),
+    // A banner's info control (R48: the guide "linked from each banner's info control"; `GuideLink.jsx`): a link to the
+    // section of How to read Lex that explains the banner, whose name holds that section's heading.
+    info: "How to read this",
+    infoNamed: "How to read this: {section}",
+  }),
+  help: Object.freeze({
+    title: "Get help",
+    eyebrow: "Help",
+    heading: "Get help",
+    intro: "What Lex can and cannot do for you, how to read its answer when it cannot give the one you asked for, and where the official texts are.",
+    sections: Object.freeze({
+      what: Object.freeze({
+        heading: "What Lex is",
+        text: "Lex shows the Luxembourg and EU law it holds as the publishers published it: a text as it stood on the date you choose, how each article of a Luxembourg act changed, and a citation anyone can check against the official source.",
+        notAdvice: "{notAdvice}",
+        adviser: "For what a text means for you, or what you should do, ask a lawyer or another adviser of your choice.",
+      }),
+      not: Object.freeze({
+        heading: "What Lex does not do",
+        list: Object.freeze({
+          apply: "It does not apply the law to anyone's situation, compute a deadline or an amount, or say who is right.",
+          effect: "It does not say what a change means in effect, predict a decision or draft a text.",
+          consolidation: "It makes no consolidation of its own: every consolidated text it shows is the publisher's.",
+          caseLaw: "It holds no case law and no court decisions.",
+          choose: "It never chooses between two versions for you when the publisher's dates leave both possible and their texts differ, and never fills a gap between versions.",
+          record: "It keeps no record of who reads it or of what is searched.",
+        }),
+      }),
+      refusals: Object.freeze({
+        heading: "When Lex cannot answer",
+        text: "When Lex cannot give the answer you asked for, it says why, in one plain sentence first: for example, that it holds no version of the act for the date you chose, that two versions cover that date and the publisher does not say which one applies, or that the licence of a file keeps its text off the site. Then it says what would answer instead, such as the nearest dates it holds, and gives the official link.",
+        absence: "Such an answer is about what Lex holds, never about the law: a text missing from Lex may exist at the publisher.",
+        failure: "When the site itself fails, it says so in other words: “{failureLine}” Try again, or go to the official sites below.",
+        details: "After the sentence come the refusal's code and its details, for programs; the {developersPage} lists every code.",
+      }),
+      official: Object.freeze({
+        heading: "Where the official texts are",
+        authenticity: "{authenticity}",
+        check: "Every article Lex quotes names its official source, so that it can be checked there:",
+        list: Object.freeze({
+          legilux: "{legiluxSite}, for Luxembourg law: the Journal officiel du Grand-Duché de Luxembourg and the consolidated texts",
+          eurlex: "{eurlexSite}, for EU law: the Official Journal of the European Union",
+        }),
+      }),
+      advice: Object.freeze({
+        heading: "Who can advise you",
+        text: "Lex names no adviser: a list of who can advise you, by subject, must first be checked by a person, and has not been yet.",
+      }),
+      contact: Object.freeze({
+        heading: "No contact",
+        text: "Lex has no contact channel: no e-mail address, no form, no telephone number and no postal address, and it names no person. No one can be reached through Lex, to ask about the law or about the site, or to report a problem, so Lex receives no message and keeps none.",
+        complaint: "To complain about how this site handles personal data, the {privacyPage} names the authority to turn to.",
+      }),
+      guide: Object.freeze({
+        heading: "Reading Lex",
+        text: "The page {guidePage} explains the dates Lex shows, what a version is and the words it uses, with a glossary.",
+      }),
+    }),
+  }),
+  guide: Object.freeze({
+    title: "How to read Lex",
+    eyebrow: "Guide",
+    heading: "How to read Lex",
+    intro: "What the dates on Lex mean, what a version is, how Lex says what it holds and what it does not, and the words it uses, with a glossary.",
+    sections: Object.freeze({
+      clocks: Object.freeze({
+        heading: "Two kinds of date",
+        text: "Lex keeps two kinds of date apart, and never merges them, in what it writes or in what a screen reader hears.",
+        luxembourg: "The first kind says, from the publisher's dates, which text answers a date. A Luxembourg version is “applicable from” the date Legilux states for it, until the day before the end date Legilux gives it or, where it gives none, until the day before the next version begins; “(publisher)” after a date marks it as the publisher's date, never one Lex worked out.",
+        europe: "For an EU act, Lex shows wordings: the original wording, which carries the act's date in the publisher's Formex package, and each consolidated wording, which carries the publisher's consolidation date. A wording answers every date from its own to the day before the next one's, and that is all Lex says of it: a consolidated wording is documentation, not a statement that the act bound anyone on that date.",
+        second: "The second kind says when a text was published, and when Lex collected it. A publication date is the publisher's; the index's build date and each publisher's last complete collection, at the foot of a page that has an answer from the server, are Lex's own. Neither says from when a text is applicable.",
+        never: "Lex says no more of a period than the publisher's dates say: it never claims that a text bound anyone from one date to another.",
+      }),
+      roles: Object.freeze({
+        heading: "Each date with what it is",
+        text: "The publisher's record can give an act several dates: its entry into force, its application, the end of its validity, a deadline, its signature. Lex shows each one as a separate value, under its own name, and never gives one as another.",
+        entryIntoForce: "When the file of an act as first published states no date from which it is applicable, Lex dates it by its entry into force in the publisher's record and says so, with the mark “{noDateMark}”.",
+        calendar: "Dates are always calendar dates, never relative ones such as “yesterday”.",
+      }),
+      versions: Object.freeze({
+        heading: "As published, and consolidated",
+        published: "An act as published is the act as the official journal published it. A consolidated version is a text of the act with the changes later acts made to it, as of a date, put together by the publisher.",
+        authenticity: "{authenticity}",
+        asPublished: "Where Lex holds a Luxembourg act only as first published, it labels it “{asPublishedLabel}”: later acts may have changed it, and Lex holds no version with those changes.",
+        languages: "When the publisher has issued an act in another language beside French, Lex shows each of the publisher's language versions it holds, and says so when the publisher's record does not state which one is authentic.",
+      }),
+      textless: Object.freeze({
+        heading: "Versions whose text Lex does not hold",
+        text: "Lex can know from the publisher's catalogue that a version exists without holding its text: its file may be a PDF, which Lex does not read; its licence may not allow Lex to show it; or Lex may not have collected it. Lex never shows another version's text as that version's.",
+        article: "An article held without text is named apart, under “{withoutText}”, and is never quoted, searched or exported as text.",
+        annexes: "An EU annex the publisher provides only as images is never shown as text, searched, quoted or exported; Lex gives its official source.",
+      }),
+      gaps: Object.freeze({
+        heading: "Gaps",
+        text: "When the publisher's catalogue lists no version for some dates between two versions, Lex shows the gap as it is: it does not stretch the version before it over those dates, and an unchanged wording on either side of a gap says nothing of them.",
+        law: "A gap in the catalogue is not a gap in the law, and an absence on Lex is an absence in what Lex holds: when Lex holds no text for a date, that is not evidence that the act or the law did not exist.",
+      }),
+      ambiguity: Object.freeze({
+        heading: "Two versions for one date",
+        text: "The publisher's dates can make two versions cover the same date without saying which one applies. When their texts differ, or Lex does not hold the text of each, Lex chooses neither: it shows both, each with its dates and its link, and you choose which one to read. When it holds the text of each and it is the same, it can show that text once, as the text of the act as published or of the version that begins last.",
+      }),
+      freshness: Object.freeze({
+        heading: "How current Lex is",
+        text: "At the foot of every page, in the part a screen reader names “{freshnessHeading}”, a page that has an answer from the server says when the index Lex answers from was built and, for each publisher, when Lex last finished collecting its texts. A text the publisher published after that is not on Lex yet.",
+        stale: "When a publisher's last complete collection is older than Lex allows, a banner says so under the header of every page that has an answer from the server: “{staleHeading}”. The publisher may have published changes since; check its official site.",
+        lag: "Until Lex has measured how long a publisher's new texts take to reach it, each publisher's line says that the lag is not yet measured.",
+      }),
+      links: Object.freeze({
+        heading: "Permalinks and citations",
+        permalink: "A permalink names one version for good: its address holds the publisher, the act, the version's date and the digest of its text, the language and the article; for an EU act, it names one wording in the same way. It shows that text, and says above it when a newer version is applicable or a later wording is held. If Lex serves another text for that date, or no longer holds that one, it says so first, and shows the text it serves or links the one it holds.",
+        readable: "An act's readable address, with no date and no digest, follows the act: it opens the version, or for an EU act the wording, that answers today's date in Luxembourg.",
+        cite: "Under a quoted article, “{cite}” gives it in three forms: “{conventional}”, as it is usually written; “{withPermalink}”, the same followed by the permalink; and “{evidence}”, with the identifiers, dates and digest that let anyone check the quotation. In a document, cite the official text by its official reference.",
+        digest: "A digest is a fingerprint of an exact text: if one character changes, the digest changes. Lex computes one over each text it quotes, so that a quotation can be checked character for character.",
+      }),
+      keyboard: Object.freeze({
+        heading: "With a keyboard",
+        text: "Lex has no keyboard shortcuts of its own, so no key does anything you did not ask for. Tab moves to the next link, field or button, and Shift and Tab to the one before; Enter follows a link or sends a form.",
+        skip: "The first link on every page, “{skip}”, leads past the menus straight to the content.",
+      }),
+    }),
+    glossary: Object.freeze({
+      heading: "Glossary",
+      intro: "The words Lex uses, as its pages print them, and what each one means.",
+      terms: Object.freeze({
+        appliesFrom: "In a dossier's table of versions: the date from which the publisher states a Luxembourg version is applicable. It is Legilux's date, never one Lex works out.",
+        versionApplicable: "How a search result, a reading or a citation names a Luxembourg version: by the date from which the publisher states it is applicable, “(publisher)” marking the date as the publisher's.",
+        asPublished: "Lex holds this Luxembourg act only as the official journal first published it: later acts may have changed it, and Lex holds no consolidated version with their changes.",
+        entryIntoForce: "The date the publisher's record gives for an act to enter into force. It is a date of its own, not the date from which a version is applicable, and Lex never gives one as the other.",
+        application: "Of an EU act: the date the publisher's record gives for the act, or a part of it, to apply.",
+        endOfValidity: "Of an EU act: the date the publisher's record gives for the act, or a part of it, to cease to have effect.",
+        wordingDate: "Of an EU act: the date that the wording shown carries, the act's own date for the original wording and the publisher's consolidation date for a consolidated one.",
+        wordingChanged: "Between two versions of a Luxembourg act: the article's text differs from the version before. Lex says nothing of what the change means.",
+        wordingUnchanged: "Between two versions of a Luxembourg act: the article's text is the same as in the version before.",
+        catalogue: "On a dossier: what the publisher's catalogue says between an act's versions, such as a gap, two versions on one date, or a version whose text Lex does not hold.",
+        withoutText: "Lex knows the article from the publisher's record but does not hold its text, or may not show it. It is listed apart and never quoted, and an export records it as excluded, with the reason.",
+        notAdmitted: "On a dossier: how many articles of a version Lex records without admitting them as text it quotes; the note under the table, from the server, says what the count covers.",
+        absence: "Under a refusal: what would turn it into an answer, such as a corrected identifier, or a text the publisher publishes later.",
+        permalink: "An address that names one version, or one EU act's wording, for good: the publisher, the act, the date and digest of that version or wording, the language and the article. It shows that text or, if not, says first why.",
+        usualCitation: "An article's citation as it is usually written, with the date of its version, or of its EU wording, when that text is not known to be the one that answers today.",
+        withPermalink: "The usual citation, followed by the permalink of the text quoted.",
+        evidenceForm: "The citation with what it takes to check it: the act's identifier, its dates, the official journal's reference where Lex holds it, the digest of the text quoted and which text is authentic.",
+        textDigest: "A fingerprint of an article's exact text: if one character changes, the digest changes, so that anyone can check that a quotation is the text Lex served.",
+        today: "Today's date in Luxembourg, which Lex reads a text at when you give no date.",
+        dossier: "What Lex holds for one act: a Luxembourg act's titles and versions, or an EU act's expressions, with the publisher's dates, and what Lex does not hold.",
+        changes: "The page that lists the Luxembourg versions dated in a window of dates, each with the version it follows and whether the wording changed.",
+        coverage: "The page that says what Lex holds and what it lacks, as counted in its index, and how its quality checks went.",
+        freshness: "At the foot of every page that has an answer from the server: when the index was built, and when each publisher's texts were last collected.",
+        stale: "A banner shown under the header of every page that has an answer from the server when a publisher's texts were last collected longer ago than Lex allows.",
+        indexCommit: "The revision of Lex's code that built the index an answer comes from.",
+        serviceCommit: "The revision of Lex's code that served the answer.",
+      }),
+    }),
+  }),
+  developers: Object.freeze({
+    title: "Developers",
+    eyebrow: "Developers",
+    heading: "The Lex API, for programs and AI agents",
+    // Between the codes of a list said in one line (the MCP methods, an answer's objects, a payload's fields, the events).
+    codeSeparator: ", ",
+    intro: "The answers this site's pages show come from one API, and the same answers are open to any program, over REST and over MCP, at this site's own address. It is free and anonymous: there is no key, no account and no paid plan. This page is generated from the operation registry and the schemas this release checks every request and answer against, so it lists what the server does.",
+    access: Object.freeze({
+      heading: "Two ways in, one answer",
+      rest: "REST: {request}, with a JSON body that names the operation and its parameters, {body}. The path takes no query, and any other method gets only a failure below the envelope.",
+      mcp: "MCP: JSON-RPC messages sent by POST to {endpoint}, over the Streamable HTTP transport, protocol version {version}. The server answers {methods}; every registered operation is a tool of the same name, whose input schema is the {parameters} member of the operation's request schema.",
+      instructions: "Its answer to {initialize} carries {instructions}, which a client may hand its model, and {ping} is answered with an empty result. The instructions, as the server sends them:",
+      same: "Both give the same envelope for the same request: a tool call is turned into the REST request document and answered by the same code, and its result carries the envelope as its structured content. A refusal is an answer, not an error: REST sends it as a successful HTTP answer, and MCP as a tool result with {isError}; only the refusal of a request past its client's limit has another status over REST, given below.",
+      restExample: "For example, the coverage report, asked with curl:",
+      mcpExample: "The same over MCP, as a tools/call message:",
+      client: "A client that speaks Streamable HTTP is given the address {endpoint}; one that reads its servers from a JSON file, for example:",
+    }),
+    operations: Object.freeze({
+      heading: "The operations",
+      summary: Object.freeze({
+        one: "The registry lists {count} operation; this server serves {served} of them. Each gives its REST path, its MCP tool, its parameters as its request schema states them, the objects its answer carries, and its two schemas.",
+        other: "The registry lists {count} operations; this server serves {served} of them. Each gives its REST path, its MCP tool, its parameters as its request schema states them, the objects its answer carries, and its two schemas.",
+      }),
+      europe: "For an EU identifier, some served operations refuse with {code}, naming the modes available; when an EU index is mounted, the coverage answer's {member} lists them.",
+      rest: "REST",
+      tool: "MCP tool",
+      parameters: "Parameters",
+      noParameters: "none",
+      required: "required",
+      optional: "optional",
+      objects: "Answer carries",
+      schemas: "Schemas",
+      requestSchema: "request",
+      resultSchema: "answer",
+      notServed: "Not served from data: a request to it is answered inside the envelope with the refusal {code}, naming the mode asked, {mode}, and the modes this server serves; the data that would serve it: {data}.",
+      descriptions: Object.freeze({
+        answer_drift: "The past dated answers that a later publisher revision invalidated, found from the event log.",
+        article_history: "One article of a Luxembourg act through the versions held: whether its wording changed from one to the next, and which versions do not carry it.",
+        as_observed: "The version of a Luxembourg act applicable on a date as one build of the event log held it, with that build's time as an upper bound on when it was observed.",
+        as_of: "The version of a Luxembourg act applicable on a date, with its articles; for an EU act, the wording that answers the date.",
+        ask: "The assistant, which is off: every question receives the presentation result that says so, naming the operations that answer from the law Lex holds. No model writes an answer.",
+        browse: "The Luxembourg acts held, as one ordered and paged list, with their identifiers, languages, version dates and the publisher's document types.",
+        changes_in_period: "The Luxembourg versions whose applicability begins in a period, for one act or across the index.",
+        citation: "The references the publisher wrote in the text of a Luxembourg version's articles.",
+        cited_by: "The references, in any Luxembourg version held, whose target is a given act.",
+        classification: "The publisher's typed facts about a Luxembourg act, as the publisher states them: document type, legal value, responsible body, historical identifiers, publication and document dates.",
+        concepts: "The concepts the Publications Office attaches to EU acts: EuroVoc descriptors, directory codes and subject matters.",
+        coverage: "What this server holds and serves, counted from its index, and what it does not hold.",
+        diff: "The article-by-article difference between the versions of a Luxembourg act applicable on two dates.",
+        dossier: "An act's record as the index holds it: a Luxembourg act's titles and versions, or an EU act's expressions.",
+        events: "The event log of what each build of the index found, polled by cursor and delivered at least once.",
+        evidence_bundle: "What quoting a version needs, a page at a time: each article's text with its digests, the version's permalink, sources and official identities, under the rights rule; for an EU act, the same for the wording that answers the date.",
+        in_force_on: "The Luxembourg acts with a version applicable on a date.",
+        knowable_on: "What a reader could have known on a date: each version's publication beside the time Lex observed it.",
+        manifestation: "The publisher's manifestations of a Luxembourg act's expressions, with their formats and files, the one Lex retained marked with its digest.",
+        provenance: "The sources, rule profiles and digests behind a Luxembourg version.",
+        relations: "The references of a Luxembourg act in both directions, as one ordered and paged list.",
+        resolve: "The act and the expression that a Luxembourg identifier or a pinned permalink names.",
+        search: "An exact reference opens its act; any other phrase is searched, with capitals and accents ignored, in the Luxembourg article text whose rights allow it, or in the wordings of one EU act named by its identifier.",
+        status_on: "The publisher's own statements on a Luxembourg act's entry into force and its end, word for word, beside the version applicable on a date.",
+        timeline: "Every version of a Luxembourg act held, in the publisher's order of applicability; for an EU act, every wording discovered, in order of date.",
+        transposition: "The links between EU directives and the Luxembourg acts that transpose them, as each publisher asserts them.",
+        verify: "Checks a pinned permalink against the digest the index holds, or gives the current digests to pin.",
+      }),
+    }),
+    envelope: Object.freeze({
+      heading: "The envelope",
+      text: "Every answer, over REST and over MCP, is one envelope, {schema}, with these members:",
+      members: Object.freeze({
+        schema: "The envelope's schema identity.",
+        version: "The platform's version.",
+        object_type: "The object's type: an envelope.",
+        request_ref: "An opaque reference to this one request, for the client's own use.",
+        operation_id: "The operation that answered.",
+        registry_schema: "The operation registry's schema identity.",
+        registry_sha256: "The digest of the operation registry this server runs.",
+        context: "What the answer was given from, below.",
+        verdict: "What kind of answer this is, below.",
+        result: "The answer's object, with its own schema and type, or null when the operation refuses.",
+        refusal: "The refusal, with its code and payload, or null when the operation answers.",
+      }),
+      contextText: "Its {context} says what the answer was given from:",
+      context: Object.freeze({
+        commits: "The revisions of Lex's code that built the index, {builder} (“{builderLabel}”), and that serve the answer, {runtime} (“{runtimeLabel}”).",
+        freshness: "How current the data is: when the index was built, each publisher's newest complete collection with its age and lag, the maximum age allowed, and whether the data is older than that.",
+        jurisdiction: "The jurisdiction of the law answered: Luxembourg or the EU.",
+        provisional: "Whether the answer is provisional; this server always sends {value}.",
+        publisher: "The publisher whose law is answered.",
+        snapshot: "The corpus snapshot the index was derived from, by its identity and digest.",
+        status: "Whether the operation answered or refused.",
+        timeline_semantics: "How the answer's dates are to be read: {luxembourg} for Luxembourg, the dates from which the publisher states its versions are applicable; {europe} for the EU, the dates of the publisher's wordings.",
+      }),
+      verdictText: "Its {verdict} is one of the registry's closed set:",
+      verdicts: Object.freeze({
+        answer: "The operation answered.",
+        answer_with_enrichment: "Reserved for the assistant, which is off; this server sends it for no answer.",
+        point: "The answer points elsewhere: what {ask} gives, since the assistant is off.",
+        clarify: "Reserved for the assistant, which is off; this server sends it for no answer.",
+        refuse: "The operation refused, with a typed refusal.",
+        split: "Reserved for the assistant, which is off; this server sends it for no answer.",
+      }),
+      registry: "{member} is {digest} for this release: the digest of the registry, which covers every operation, every schema's digest and every refusal code with the fields its payload must carry, so it changes whenever any of them changes. Each schema's identity ends in its version.",
+    }),
+    refusals: Object.freeze({
+      heading: "Refusals",
+      text: Object.freeze({
+        one: "When an operation cannot answer, it refuses with a code of the registry, which holds {count}, never with an empty answer: the envelope's verdict is {refuse}, its result is null, and its refusal, {schema}, carries the code and a payload. The registry fixes the fields each code's payload must carry; a payload may carry more.",
+        other: "When an operation cannot answer, it refuses with one of {count} codes, never with an empty answer: the envelope's verdict is {refuse}, its result is null, and its refusal, {schema}, carries the code and a payload. The registry fixes the fields each code's payload must carry; a payload may carry more.",
+      }),
+      pages: "On this site's pages, a refusal's plain sentence comes first, and its code and payload follow it.",
+      fields: "Its payload carries {fields}, and is held to {schema}.",
+      codes: Object.freeze({
+        advice_boundary: "The question asks for advice: Lex shows the text, and does not apply it to anyone's situation.",
+        ambiguous_identifier: "The identifier names more than one act; the candidates are listed, and none is chosen.",
+        ambiguous_version: "More than one version covers the date and the publisher does not say which applies; each candidate is listed, and none is chosen.",
+        anchor_not_in_version: "The index holds no article with that identifier in the version; the nearest article identifiers are given, and no text search is run in its place.",
+        derivation_refused: "Lex will not derive what was asked from the text it holds; the payload says what and why.",
+        format_not_available: "The format asked for is not offered for this answer; the formats offered are listed.",
+        identifier_unknown: "No act the index holds has that identifier; the payload gives the official search and what would answer.",
+        language_not_available: "The text is not held in that language; the languages held are listed.",
+        no_corpus_mounted: "This server holds no law at the moment.",
+        no_version_for_date: "No version the index holds covers the date; the payload gives the date its history begins and the nearest dates held before and after it.",
+        not_transposable: "Only a directive is transposed, and this instrument is not one; the payload says why.",
+        out_of_corpus_scope: "Lex does not hold the instrument, and the payload says why: it names the instrument, its official place, the reason and who to ask, an institution or an official service and never a person.",
+        pinned_digest_mismatch: "The digest a permalink pins is not one Lex holds for that version; the payload gives the current digest and its permalink.",
+        profiles_differ: "The two versions were read under different rule profiles, so they are not compared.",
+        rate_limited: "Too many requests; the payload says when to ask again.",
+        retrieval_mode_unavailable: "The operation is not served in the mode asked: for an EU identifier, or not at all when no data serves it; the modes available are listed.",
+        snapshot_unknown: "The snapshot or the log the request names is not one this server holds; the payload says what would answer.",
+        text_not_available: "The publisher's file holds no text Lex can read, such as an annex given only as images; its official identity and source are given.",
+        text_withheld: "The licence of the text does not allow Lex to show it; its official link and digest are given.",
+        upstream_unreachable: "A source Lex depends on could not be reached; the payload says whether to ask again.",
+      }),
+      outOfScope: Object.freeze({
+        heading: "What Lex never holds",
+        text: "An identifier that names one of these is refused with {code} by every operation that takes one, before anything is looked up. The list, {list}, names for each its official place and who to ask, an institution or an official service and never a person; each refusal names the list's digest, {digest}.",
+        row: "{instrument}: {reason} For example {examples}. Official place: {official}. Who to ask: {who}.",
+        pending: "Not listed yet: communal regulations, whose official place is each commune's own, and the decisions of Luxembourg's courts, which no identifier names exactly. Each still answers {code}.",
+        // R80: an EU act outside the mounted EU population, refused by the mount itself, not by the list.
+        population: "An EU act outside the EU population this site holds, named by its CELEX, is refused with {code} too, though it is on no list: whether an act is outside depends on the EU index the server mounts. The refusal names the rule that population follows, with the number of acts on its seed list, and gives the act's page on EUR-Lex as its official place; it names neither the out-of-scope list nor its digest.",
+      }),
+      presentationHeading: "Two answers that are not refusals",
+      presentation: Object.freeze({
+        assistant_v3_unavailable: "{code}: what {ask} answers to every question, since the assistant is off; it names the operations that answer from the law Lex holds.",
+        localization_unavailable: "{code}: the page a reader in German or Luxembourgish is shown, since only French and English are reviewed; it links the pages in both.",
+      }),
+      transportHeading: "Failures below the envelope",
+      transport: "A request the server cannot read or route gets no envelope: it is answered with a problem document, {schema}, with an HTTP status and one of these codes. Unlike a refusal, it is not an answer about the law.",
+      transportRow: "{code}, HTTP {status}: {title}",
+    }),
+    examples: Object.freeze({
+      heading: "Asked of this server now",
+      built: "When this server serves this page, it renders it from its own answer to {request}, which asks for the first act it holds, and shows that answer here whole, with the requests a program could send next about that act. This copy was served as built, without them; the examples above ask for the coverage report.",
+      live: "As it served this page, this server answered this request from the law it holds:",
+      answer: "Its answer, whole:",
+      next: "{identifier}, the first act it holds, asked for its dossier over REST, then over MCP for its text on {date}, its latest version's date:",
+      nextUndated: "{identifier}, the first act it holds, asked for its dossier over REST, then over MCP for its text:",
+      refused: "It refused, inside the envelope: a refusal is an answer, read as any other.",
+      none: "It holds no act to ask about.",
+    }),
+    citing: Object.freeze({
+      heading: "Quoting and citing",
+      quote: "Every quoted article carries {text}, the digest of its text; {body}, the digest of the publisher's file it was read from; {source}, its official source; and {permalink}, which pins the publisher, the act, the date and digest of the version or EU wording, the language and the article: {shape}.",
+      verify: "{verify} checks a permalink's digest against the one the index holds, from what this server holds: it never asks the publisher.",
+      // The published key set (R116; `V3KeySet`).
+      keys: "Each release of Lex is signed. The keys that sign releases, each with its identity, role, validity and status, are published at {keySet}: check a release's signatures against that set, never only against the key the release carries.",
+      forms: "On the reading page, an article is cited in three forms, “{conventional}”, “{withPermalink}” and “{evidence}”, and an export carries all three. In a document, cite the official text by its official reference.",
+    }),
+    limits: Object.freeze({
+      heading: "Limits",
+      anonymous: "There is no key and no account, and the server keeps no record of a request; for the per-client limit below, it counts requests in its working memory alone: see the {privacyPage}.",
+      size: "A request body is at most {bytes} bytes; a larger one is answered with {code}.",
+      paging: "Lists are paged: {limit} sets a page's size, within the bounds each request schema states, and {after} continues from where the last page stopped.",
+      // The per-client limit (R109, R46): its figures are the server's (`CLIENT_LIMIT`, held to `V3ClientLimiter`).
+      rate: "Each client, known by its IP address, may send {perMinute} API requests a minute, REST and MCP together, with at most {atOnce} being answered at once. Past either limit, a request to an operation (over MCP, a tool call) is refused with {code}, which carries {retryAfter}, the seconds to wait before asking again, as the {retryAfterHeader} header does; over REST its status is {status}. The service is small: send one request at a time and poll gently.",
+      pages: "The pages the server renders itself have a budget of their own, {renders} a minute for each client; past it, a page is sent as built, and the browser then asks the API for its answer. No page is refused.",
+      availability: "Nothing is promised about availability: see the {termsPage}.",
+    }),
+    events: Object.freeze({
+      heading: "Following changes",
+      text: "{events} reads the log of what each build of the index found: when a log begins, one {first} event for each version held, then each later build's comparison events, each dated by its build, never by when it was observed. Poll it with {after}, the cursor the last answer gave as {nextAfter}, and {limit}, and filter it with {event}.",
+      atLeastOnce: "Delivery is at least once: the same cursor can answer the same events again, so a client keeps the last cursor and skips the events it has seen, by {seq} within {logId}. There are no webhooks and no push: poll.",
+      names: "The events a log may hold:",
+      cursor: "A cursor matches {pattern}.",
+      drift: "{drift} lists the past dated answers that a later publisher revision invalidated, found from the log's revising events.",
+      platform: "The events answer states its own delivery, as the server sends it:",
+    }),
+    replay: Object.freeze({
+      heading: "Replay guarantees",
+      text: "What a program can rely on when it asks again: the guarantees the specification names {first} to {last}, each as this server supports it today. Each is held by a test of {tests}, named beside it, which runs the real API on test mounts.",
+      test: "Test: {test}.",
+      guarantees: Object.freeze({
+        G1: Object.freeze({
+          name: "Versions are never rewritten",
+          text: "A version is named by the digest of its text. When a later build reads a publisher's file that has been replaced, the log records it as {fileReplaced}; the version stays the same when the text is unchanged, and a new version is named only when the text changed. A permalink to the earlier version still verifies while a kept build holds its text, naming the version that replaced it.",
+        }),
+        G2: Object.freeze({
+          name: "The same request, the same bytes",
+          text: "On a server built from the same commit ({servingCommit}), every served operation answers the same request, asked of the same snapshot, with the same canonical bytes, asked again later or of a byte copy of the mount, apart from what belongs to the request or to the moment it is answered. The request's own members are {observedAt} and {requestRef}. The moment's are each channel's data age and whether it is past the maximum, {ageDays} and {channelStale}, and the envelope's {stale}, counted to the server's answer; and, when a search reads an exact reference that names no date, the date it is read at, today in Luxembourg ({recognisedDate}) if the search names none either, the version, or for an EU act the wording, that date selects, and the address the answer opens, the act's readable address or the permalink of that version or wording: a search date that is today's is no date given. A request past its client's limit is refused with {rateLimited} instead. The release is signed as a whole; an answer carries no signature of its own.",
+        }),
+        G3: Object.freeze({
+          name: "Nothing is deleted from the log",
+          text: "Each build's events are the start of the next build's log, row for row. The code can keep earlier builds beside the one a server mounts, by a retention rule: every build listed as referenced by a published permalink, the last build of each day for {days} days and the first of each month. Lex does not keep them yet: the release this site serves holds only the build its server mounts. So a version the log names is re-verifiable only while a kept build holds its text, which today means the mounted build; one whose text no kept build holds is still named by the log, without its text, and a permalink to it no longer verifies.",
+        }),
+        G4: Object.freeze({
+          name: "Answers as one build held them",
+          text: "{asObserved} answers what one build of the log held, named by its index digest, bounded by that build's time, which is an upper bound on when its texts were observed. No observation time is held, so a time is refused, and {knowableOn}, which needs one, is not served.",
+        }),
+        G5: Object.freeze({
+          name: "Checked without Lex",
+          text: "The answers of {bundle} for a version, page by page, and the publisher's file are enough to check each article's text and to recompute the file's digest, each text digest, the digest of the article identities and the version's own digest, from the derivations {provenance} publishes. Each article's identity, the wording digest, the rule-profile digests and the receipt are not recomputable: the wording digest reads a token stream the answer does not carry, and the others' derivations are not published.",
+        }),
+      }),
+    }),
+    changes: Object.freeze({
+      heading: "How the API changes",
+      versioned: "Each schema's identity ends in its version, as {example} does, and so does the registry's, {registry}. A change that removes or renames a member, or changes what one means, raises that version; the envelope admits no member it does not list, so a new member of the envelope raises its version too.",
+      additive: "An answer's object, and a refusal's payload, may gain members within a version: a program ignores the members it does not know. Within a version of the registry, a payload never loses a field the registry requires of its code.",
+      digest: "Any change to an operation's definition, to a schema the registry names or to a refusal code changes the registry's digest, which every envelope carries: a program that keeps it learns of the change from the first answer after it. A fix to how an operation behaves that leaves its definition as it is keeps the digest, so the digest says when the contract changes, not when an answer does. The out-of-scope list is not part of the registry: every {code} refusal the list decides names the list's identity, {scopeList}, and its digest, {scopeListDigest}, which changes with any change to the list.",
+      registryInEnvelope: "One member of the envelope names the registry's version, {member}: a new version of the registry changes the one value that member admits, and so the envelope's schema and its digest, without raising the envelope's own version. A program that holds the envelope's schema takes it again when the registry's version changes, and checks it against the digest the registry names.",
+      closed: "The operations and the refusal codes are closed sets, changed only by a decision of the specification. An operation not served from data becomes served without a new version of the registry: its refusal gives way to answers.",
+      notice: "There is no period of notice and no deprecation window: a change is published with the release that makes it, on this page and in the schemas it links.",
+      history: "Since {date}, the registry, {registry}, names each refusal code's payload schema and gives {code} its reason and who to ask; {previous} named neither.",
+    }),
+    schemas: Object.freeze({
+      heading: "The schemas",
+      text: "Each schema is a JSON Schema document ({dialect}), served here byte for byte as the server holds it, with the digest of its bytes; when the server loads a schema, it checks that digest against the one the registry names.",
+      envelope: "The envelope: {link}",
+      refusal: "The refusal: {link}",
+      payloads: "Each refusal code's payload: one schema per code, linked beside its code under the refusals.",
+      digest: "digest {digest}",
+    }),
+  }),
   common: Object.freeze({
     loading: "Asking this server.",
     languageNames: Object.freeze({ fra: "French", deu: "German", eng: "English" }),
@@ -847,6 +1342,12 @@ const EN = Object.freeze({
     europeAnnexes: Object.freeze({
       one: "{count} annex of the {language} wording is not served as text, and is never searched, quoted or exported: {reason}. Official source {source}.",
       other: "{count} annexes of the {language} wording are not served as text, and are never searched, quoted or exported: {reason}. Official source {source}.",
+    }),
+    // The items published with a consolidated EU Treaty (its Protocols, Annexes, Declarations and tables of equivalences), never
+    // served as text, beside the Treaty's own articles (`europe-annexes.mjs`, `treaty_part_not_served`; review of #996, F2).
+    europeTreatyParts: Object.freeze({
+      one: "{count} item published with the {language} wording of the Treaty (a Protocol, Annex, Declaration or table of equivalences) is not served as text, and is never searched, quoted or exported: {reason}. Official source {source}.",
+      other: "{count} items published with the {language} wording of the Treaty (Protocols, Annexes, Declarations or tables of equivalences) are not served as text, and are never searched, quoted or exported: {reason}. Official source {source}.",
     }),
     // The EU act's dates as the publisher records them in its dated statements (the plan's item 2.1; R79's E1, R21: each date a
     // value of its own, said with its role; `europe-force-dates.mjs`), where the act is read or its dossier shown: the act's

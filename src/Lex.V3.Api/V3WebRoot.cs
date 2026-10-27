@@ -63,6 +63,7 @@ internal sealed partial class V3WebRoot
     private readonly IReadOnlyDictionary<string, string> _files;
     private readonly V3PageRenderer? _renderer;
     private readonly IReadOnlyDictionary<string, string> _notFoundPages;
+    private readonly IReadOnlyDictionary<string, string> _maintenancePages;
     private readonly IndexingRecord? _indexingRecord;
     private readonly byte[] _robots;
     private readonly IReadOnlyDictionary<string, byte[]>? _sitemap;
@@ -72,6 +73,7 @@ internal sealed partial class V3WebRoot
         string contentSecurityPolicy,
         V3PageRenderer? renderer,
         IReadOnlyDictionary<string, string> notFoundPages,
+        IReadOnlyDictionary<string, string> maintenancePages,
         string searchEngines,
         IndexingRecord? indexingRecord,
         string? lastmod)
@@ -80,6 +82,7 @@ internal sealed partial class V3WebRoot
         ContentSecurityPolicy = contentSecurityPolicy;
         _renderer = renderer;
         _notFoundPages = notFoundPages;
+        _maintenancePages = maintenancePages;
         SearchEngines = searchEngines;
         _indexingRecord = indexingRecord;
         // robots.txt and, with the site indexed, the sitemap's files, built once for the root's life (review of #976, F4).
@@ -126,6 +129,7 @@ internal sealed partial class V3WebRoot
         var root = Path.GetFullPath(directory);
         var files = new Dictionary<string, string>(StringComparer.Ordinal);
         var notFound = new Dictionary<string, string>(StringComparer.Ordinal);
+        var maintenance = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
         {
             var relative = Path.GetRelativePath(root, file).Replace('\\', '/');
@@ -140,8 +144,9 @@ internal sealed partial class V3WebRoot
             }
 
             // The pages' server renderer is run (V3PageRenderer), never served; the 404 pages answer a page request nothing
-            // claims, and the maintenance pages are the deploy kit's: none is served at its own address (V3WebRoot.NotFound.cs).
-            if (relative.StartsWith("ssr/", StringComparison.Ordinal) || IsUnservedPage(relative, file, notFound))
+            // claims, and the maintenance pages every page request of a maintenance revision: none is served at its own address
+            // (V3WebRoot.NotFound.cs, V3WebRoot.Maintenance.cs).
+            if (relative.StartsWith("ssr/", StringComparison.Ordinal) || IsUnservedPage(relative, file, notFound, maintenance))
             {
                 continue;
             }
@@ -169,6 +174,7 @@ internal sealed partial class V3WebRoot
             $"{System.Net.WebUtility.HtmlDecode(policy.Groups["policy"].Value)}; {FrameAncestors}",
             V3PageRenderer.Open(Path.Combine(root, "ssr")),
             notFound,
+            maintenance,
             SearchEnginesState(searchEngines),
             indexingRecord,
             lastmod);
@@ -179,13 +185,17 @@ internal sealed partial class V3WebRoot
     /// interface language (<see cref="PageForSitePath"/>), the page that reads it; answers the root and a law's address
     /// with no language with a redirect to the reader's language (<see cref="RedirectFor"/>); and returns true. Returns
     /// false, touching nothing, for any other path. The query string is not part of the path; a redirect keeps it.
+    /// <paramref name="mayRender"/> is asked once, only before a page would be rendered from the API's answer: null serves the
+    /// page as built (the client's render budget or its in-flight places, <see cref="V3ClientLimiter"/>), and what it gives is
+    /// held while the answer is asked and the page rendered, then disposed; with none, every page may be rendered.
     /// </summary>
     internal async Task<bool> TryServeAsync(
         HttpContext context,
         string rawTarget,
         CancellationToken cancellationToken,
         Func<V3SitePage, CancellationToken, byte[]?>? answer = null,
-        Func<string?>? today = null)
+        Func<string?>? today = null,
+        Func<IDisposable?>? mayRender = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         var queryAt = rawTarget.IndexOf('?', StringComparison.Ordinal);
@@ -264,9 +274,29 @@ internal sealed partial class V3WebRoot
 
         // A law's address under a language, rendered from the API's own answer when there is one (R67). A readable address asks
         // for today in Luxembourg (R13), which the caller's clock says; with no clock its page is served as built.
-        if (answer is not null && _renderer is not null && SitePageFor(path, today?.Invoke(), queryAt < 0 ? null : rawTarget[queryAt..]) is { } sitePage &&
-            answer(sitePage, cancellationToken) is { } envelope &&
-            await _renderer.RenderAsync(sitePage.Language, sitePage.Kind, Encoding.UTF8.GetString(envelope), path, cancellationToken).ConfigureAwait(false) is { } html)
+        // The render holds the client's place from asking the answer to the page rendered (V3ClientLimiter.AdmitRender); with
+        // no place given, the page is served as built.
+        byte[]? envelope = null;
+        string? html = null;
+        if (answer is not null && _renderer is not null && SitePageFor(path, today?.Invoke(), queryAt < 0 ? null : rawTarget[queryAt..]) is { } sitePage)
+        {
+            var place = mayRender?.Invoke();
+            try
+            {
+                if ((mayRender is null || place is not null) && (envelope = answer(sitePage, cancellationToken)) is not null)
+                {
+                    // A comparison is rendered at its address with its query, which names what it compares (R57).
+                    var rendered = string.Equals(sitePage.Kind, "compare", StringComparison.Ordinal) && queryAt >= 0 ? path + rawTarget[queryAt..] : path;
+                    html = await _renderer.RenderAsync(sitePage.Language, sitePage.Kind, Encoding.UTF8.GetString(envelope), rendered, cancellationToken).ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                place?.Dispose();
+            }
+        }
+
+        if (envelope is not null && html is not null)
         {
             var page = Encoding.UTF8.GetBytes(ForSearchEngines(response, html, path));
             response.StatusCode = AnswersUnknownWork(envelope) ? StatusCodes.Status404NotFound : StatusCodes.Status200OK;
@@ -374,11 +404,12 @@ internal sealed partial class V3WebRoot
     /// <c>%2E%2E</c> as an article, which the live server and a browser resolve away). A readable address's article is never
     /// a calendar date, with or without a digest after it: <c>/eu-eurlex/{celex}/{lng}/{date}</c> is an EU stable coordinate
     /// and <c>/eu-eurlex/{celex}/{lng}/{date}--{sha256}</c> the EU permalink shape before R64 (<see cref="MovedFor"/>), so
-    /// neither shape names an article. A <c>#</c> (a position inside an article) never reaches a server. The end is
-    /// <c>\z</c>, not <c>$</c>, which in .NET also matches before a final newline.
+    /// neither shape names an article. A <c>{celex}</c> is one segment, a solidus written <c>%2F</c> (the Treaties' and the
+    /// Charter's <c>12016E%2FTXT</c>; <see cref="V3CorpusMount.EuropeWorkSegment"/>). A <c>#</c> (a position inside an
+    /// article) never reaches a server. The end is <c>\z</c>, not <c>$</c>, which in .NET also matches before a final newline.
     /// </summary>
     private static readonly Regex SitePath = new(
-        "^/(?:(?<locale>fr|en)/)?(?<law>lu-legilux/(?<work>[a-z0-9][a-z0-9_-]*)|eu-eurlex/(?<celex>[0-9A-Za-z][0-9A-Za-z()._-]*))" +
+        "^/(?:(?<locale>fr|en)/)?(?<law>lu-legilux/(?<work>[a-z0-9][a-z0-9_-]*)|eu-eurlex/(?<celex>[0-9A-Za-z](?:[0-9A-Za-z()._-]|%2[Ff])*))" +
         "(?:(?<pin>/(?<date>[0-9]{4}-[0-9]{2}-[0-9]{2})--(?<digest>[0-9a-f]{64})/(?<lng>[a-z]{3})" +
         "(?:/(?!(?:\\.|%2[eE]){1,2}\\z)(?:[0-9A-Za-z._~!$&'()*+,;=:@-]|%[0-9A-Fa-f]{2})+)?)" +
         "|(?<current>/(?<currentLng>[a-z]{3})" +
@@ -393,7 +424,7 @@ internal sealed partial class V3WebRoot
     /// alone: it is not matched, and is answered as any address this root does not hold.
     /// </summary>
     private static readonly Regex EuropeWordingBeforeR64 = new(
-        "^/(?:(?<locale>fr|en)/)?eu-eurlex/(?<celex>[0-9A-Za-z][0-9A-Za-z()._-]*)/(?<lng>[a-z]{3})/(?<pin>[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9a-f]{64})\\z",
+        "^/(?:(?<locale>fr|en)/)?eu-eurlex/(?<celex>[0-9A-Za-z](?:[0-9A-Za-z()._-]|%2[Ff])*)/(?<lng>[a-z]{3})/(?<pin>[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9a-f]{64})\\z",
         RegexOptions.CultureInvariant,
         TimeSpan.FromMilliseconds(100));
 
@@ -456,8 +487,10 @@ internal sealed partial class V3WebRoot
     /// <paramref name="today"/> (Luxembourg's date, R13), and the text's language it names, and with neither is not rendered;
     /// a dossier asks by the work. An interface language's home page
     /// (<c>/en/</c>, <c>/en/index.html</c>) is rendered from <c>coverage</c>, asked with no parameters, as the page as built
-    /// asks it once loaded: its coverage line and today's date in Luxembourg (R11, R13; <c>web/scripts/live-home.mjs</c>).
-    /// Null for any other path.
+    /// asks it once loaded: its coverage line and today's date in Luxembourg (R11, R13; <c>web/scripts/live-home.mjs</c>). An
+    /// interface language's Developers page (<c>/en/developers.html</c>) is rendered from <c>browse</c> for the first act this
+    /// server holds, one row, which it shows whole as its live examples (the plan's item 8.4: "live examples from the
+    /// release's own data"; <c>web/scripts/developers.mjs</c>). Null for any other path.
     /// </summary>
     /// <remarks>
     /// A reading is read one page at a time (the plan's item 3.7): an address that names an article asks the page that holds
@@ -474,6 +507,18 @@ internal sealed partial class V3WebRoot
             {
                 return new V3SitePage(home, "home", "coverage", new Dictionary<string, object>(StringComparer.Ordinal));
             }
+
+            if (string.Equals(path, $"/{home}/developers.html", StringComparison.Ordinal))
+            {
+                return new V3SitePage(home, "developers", "browse", new Dictionary<string, object>(StringComparer.Ordinal) { ["limit"] = 1 });
+            }
+
+            // A comparison's address (R57; the audit of 2026-10-27, gap 2): the compare page with the work and the two dates its
+            // query names, rendered from diff, so its wording is read without JavaScript.
+            if (string.Equals(path, $"/{home}/compare.html", StringComparison.Ordinal))
+            {
+                return CompareOfQuery(query) is { } compare ? new V3SitePage(home, "compare", "diff", compare) : null;
+            }
         }
 
         var match = SiteMatch(path);
@@ -483,7 +528,7 @@ internal sealed partial class V3WebRoot
         }
 
         var language = match.Groups["locale"].Value;
-        var work = match.Groups["work"].Success ? "/lu-legilux/" + match.Groups["work"].Value : match.Groups["celex"].Value;
+        var work = match.Groups["work"].Success ? "/lu-legilux/" + match.Groups["work"].Value : V3CorpusMount.EuropeCelexOfSegment(match.Groups["celex"].Value)!;
         if (match.Groups["pin"].Success)
         {
             var date = match.Groups["date"].Value;
@@ -653,7 +698,141 @@ internal sealed partial class V3WebRoot
 
     private static readonly Regex CalendarDate = new("^[0-9]{4}-[0-9]{2}-[0-9]{2}\\z", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
 
-    /// <summary>Whether an envelope is the refusal of a work the API does not know: its page is a 404, as an absent page is.</summary>
+    /// <summary>The text languages the compare page's form offers besides any (<c>COMPARE_LANGUAGES</c>, <c>live-compare.mjs</c>).</summary>
+    private static readonly string[] CompareLanguages = ["deu", "eng", "fra"];
+
+    /// <summary>
+    /// The comparison a compare page's query names (<c>?work=/lu-legilux/{work}&amp;from=yyyy-mm-dd&amp;to=yyyy-mm-dd[&amp;language=fra]</c>,
+    /// as the compare screen writes it into its own address once it has asked it; R57), as the request the page would send
+    /// (<c>diff</c>'s <c>identifier</c>, <c>date_from</c>, <c>date_to</c> and <c>language</c>), or null: each of <c>work</c>,
+    /// <c>from</c> and <c>to</c> once and <c>language</c> at most once, a value form-decoded (<c>+</c> a space, <c>%HH</c> UTF-8
+    /// bytes; a malformed escape or bytes that are not UTF-8 name nothing); the work this site's address of a Luxembourg act
+    /// (<c>/lu-legilux/{work key}</c>), never words (R109: no word a reader types reaches an address a server could record); two
+    /// calendar dates; a language the form offers, or none (empty); and <c>page</c>, at most once, the page of the wording asked
+    /// (<c>diff</c>'s <c>page</c>, the review of #1003, F4), a whole number from 2 written without a leading zero. Any other name
+    /// is ignored. As <c>compareOfQuery</c> in <c>web/scripts/permalinks.mjs</c> (a test holds the two to one table).
+    /// </summary>
+    internal static Dictionary<string, object>? CompareOfQuery(string? query)
+    {
+        if (query is null || query.Length < 2 || query[0] != '?')
+        {
+            return null;
+        }
+
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var part in query[1..].Split('&'))
+        {
+            var equals = part.IndexOf('=', StringComparison.Ordinal);
+            var name = equals < 0 ? part : part[..equals];
+            if (name is not ("work" or "from" or "to" or "language" or "page"))
+            {
+                continue;
+            }
+
+            if (values.ContainsKey(name) || FormDecoded(equals < 0 ? string.Empty : part[(equals + 1)..]) is not { } value)
+            {
+                return null;
+            }
+
+            values[name] = value;
+        }
+
+        if (!values.TryGetValue("work", out var work) || !values.TryGetValue("from", out var from) || !values.TryGetValue("to", out var to) ||
+            !CompareWork.IsMatch(work) || !IsCalendarDate(from) || !IsCalendarDate(to))
+        {
+            return null;
+        }
+
+        var parameters = new Dictionary<string, object>(StringComparer.Ordinal) { ["identifier"] = work, ["date_from"] = from, ["date_to"] = to };
+        if (values.TryGetValue("language", out var language) && language.Length > 0)
+        {
+            if (!CompareLanguages.Contains(language, StringComparer.Ordinal))
+            {
+                return null;
+            }
+
+            parameters["language"] = language;
+        }
+
+        if (values.TryGetValue("page", out var pageText))
+        {
+            if (!ComparePage.IsMatch(pageText))
+            {
+                return null;
+            }
+
+            var page = int.Parse(pageText, System.Globalization.CultureInfo.InvariantCulture);
+            if (page < 2 || page > 100_000)
+            {
+                return null;
+            }
+
+            parameters["page"] = page;
+        }
+
+        return parameters;
+    }
+
+    /// <summary>A comparison's page as its address writes it: a whole number, no leading zero (checked from 2 to the schema's maximum).</summary>
+    private static readonly Regex ComparePage = new("^[1-9][0-9]{0,5}\\z", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+
+    /// <summary>A comparison's work: this site's address of a Luxembourg act, a work key's characters and nothing else.</summary>
+    private static readonly Regex CompareWork = new("^/lu-legilux/[a-z0-9][a-z0-9_-]{0,511}\\z", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+
+    private static bool IsCalendarDate(string value) =>
+        CalendarDate.IsMatch(value) &&
+        DateOnly.TryParseExact(value, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _);
+
+    /// <summary>
+    /// A query value form-decoded as a browser's <c>URLSearchParams</c> reads a well-formed one: <c>+</c> a space, each
+    /// <c>%HH</c> a byte, the bytes UTF-8; null for a malformed escape, a character outside ASCII written raw, or bytes that are
+    /// not UTF-8, which name nothing here.
+    /// </summary>
+    private static string? FormDecoded(string raw)
+    {
+        var bytes = new List<byte>(raw.Length);
+        for (var index = 0; index < raw.Length; index++)
+        {
+            var character = raw[index];
+            if (character == '%')
+            {
+                if (index + 2 >= raw.Length || !Uri.IsHexDigit(raw[index + 1]) || !Uri.IsHexDigit(raw[index + 2]))
+                {
+                    return null;
+                }
+
+                bytes.Add((byte)Convert.ToInt32(raw.Substring(index + 1, 2), 16));
+                index += 2;
+            }
+            else if (character == '+')
+            {
+                bytes.Add((byte)' ');
+            }
+            else if (character < 0x80)
+            {
+                bytes.Add((byte)character);
+            }
+            else
+            {
+                // A browser escapes every character outside ASCII in a query; one written raw names nothing here.
+                return null;
+            }
+        }
+
+        try
+        {
+            return new UTF8Encoding(false, true).GetString(bytes.ToArray());
+        }
+        catch (DecoderFallbackException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Whether an envelope is the refusal of a work the API does not know or does not hold (<c>identifier_unknown</c>, or
+    /// <c>out_of_corpus_scope</c>: an EU act outside the EU population, R80): its page is a 404, as an absent page is.
+    /// </summary>
     private static bool AnswersUnknownWork(byte[] envelope)
     {
         try
@@ -662,7 +841,7 @@ internal sealed partial class V3WebRoot
             return document.RootElement.TryGetProperty("refusal", out var refusal) &&
                 refusal.ValueKind == JsonValueKind.Object &&
                 refusal.TryGetProperty("code", out var code) &&
-                string.Equals(code.GetString(), "identifier_unknown", StringComparison.Ordinal);
+                code.GetString() is "identifier_unknown" or "out_of_corpus_scope";
         }
         catch (JsonException)
         {

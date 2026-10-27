@@ -68,22 +68,26 @@ export function invalidAnswerSentence(reason) {
 
 /**
  * The request parameters for one comparison, checked before anything is sent: an identifier that is
- * not blank, sent as typed; two calendar dates written yyyy-mm-dd; and a language only when one is
- * chosen. Nothing else is sent.
+ * not blank, sent as typed; two calendar dates written yyyy-mm-dd; a language only when one is
+ * chosen; and the page of the wording (the review of #1003, F4) only from the second. Nothing else is sent.
  */
-export function compareParameters({ identifier, dateFrom, dateTo, language = "" }) {
+export function compareParameters({ identifier, dateFrom, dateTo, language = "", page = null }) {
   if (typeof identifier !== "string" || identifier.trim().length === 0) {
     throw new Error("a comparison needs the identifier of a work");
   }
   if (!isCalendarDate(dateFrom) || !isCalendarDate(dateTo)) {
     throw new Error("a comparison needs two calendar dates, written yyyy-mm-dd");
   }
+  if (page !== null && !(Number.isInteger(page) && page >= 1 && page <= 100000)) {
+    throw new Error("a page of a comparison's wording is a whole number from 1");
+  }
   const parameters = { identifier, date_from: dateFrom, date_to: dateTo };
-  if (language === "") return parameters;
+  const paged = page !== null && page >= 2 ? { page } : {};
+  if (language === "") return { ...parameters, ...paged };
   if (!COMPARE_LANGUAGES.some((offered) => offered.code === language)) {
     throw new Error(`${JSON.stringify(language)} is not a language this form offers`);
   }
-  return { ...parameters, language };
+  return { ...parameters, language, ...paged };
 }
 
 /** What an absence whose card cannot be shown still carries: the date the held history begins. */
@@ -110,7 +114,7 @@ export function compareOutcome(asked) {
     const { code, helpful_payload: payload } = asked.envelope.refusal;
     const sentence = code === "no_corpus_mounted"
       ? noCorpusMountedSentence(payload)
-      : tableRefusalSentence(LIVE_COMPARE_REFUSAL_SENTENCES, code, unexpectedRefusalSentence);
+      : tableRefusalSentence(LIVE_COMPARE_REFUSAL_SENTENCES, code, unexpectedRefusalSentence, payload);
     try {
       validateRefusal({ code, sentence, payload });
     } catch (error) {
@@ -174,6 +178,10 @@ export function createCompareSession({ contract, fetchImpl, onOutcome }) {
     },
     retry() {
       return last !== null && session.ask(last);
+    },
+    // Another page of the last comparison's wording (the review of #1003, F4), for a comparison with no address of its own.
+    askPage(page) {
+      return last !== null && session.ask({ ...last, page });
     },
     cancel() {
       controller?.abort();

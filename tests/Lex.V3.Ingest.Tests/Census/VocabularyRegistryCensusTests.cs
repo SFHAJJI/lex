@@ -79,6 +79,8 @@ public sealed class VocabularyRegistryCensusTests
                     + "const SourceDdl, const SourceSchema, const StatesDdl, static readonly StatesFullDdl, "
                     + "const StatesSchema, const TypeOfDateIri",
                 "Lex.V3.Ingest.LexCorpus6Builder: Domain=13, const Schema",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgInFileRightsReader: const ReadingTwoProfileName, "
+                    + "const ReadingTwoProfileText, static property ReadingTwoProfileSha256",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder: StatePredicates=8, "
                     + "const ArticleDateBasic, const ArticleDateExtended, const ArticleDateNone, "
                     + "const ArticleDateNotRead, const BoundaryDerived, const BoundaryHalfOpen, "
@@ -102,7 +104,7 @@ public sealed class VocabularyRegistryCensusTests
                     + "const ArticleIds, const CatalogueStatesOfWork, const CitationsTo, const EventCount, "
                     + "const EventLog, const EventsAfter, const EventsOfNameAfter, const HeldWorks, "
                     + "const HeldWorksNine, const IntervalsOfWork, const MemberOutcomes, const Observations, "
-                    + "const ObservationsNine, const RevisingEventsAfter, const StateArticles, const StateArticlesNine, "
+                    + "const ObservationsNine, const RevisingEventsAfter, const SearchTexts, const StateArticles, const StateArticlesNine, "
                     + "const StateCitations, const StateColumnsNine, const StateDocumentOutcomes, "
                     + "const StateSources, const StateTextSources, const StatesOfExpressions, const StatesOfExpressionsNine, "
                     + "const SubjectFacts, const SubjectFactsUnder, const WorkEventsUpTo, const WorkRecords, "
@@ -111,13 +113,31 @@ public sealed class VocabularyRegistryCensusTests
                     + "AdministrativeMemorialPrefix, const ExpectedResourceHost, "
                     + "const LegislativeMemorialPrefix, const RuleProfile, "
                     + "static property RuleProfileSha256",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgRederivation: ImplementedRuleSets=1, "
-                    + "const NoPublisherSession, const Release1RuleSet, const RightsAsAcquired",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgRederivation: ImplementedRuleSets=2, "
+                    + "const InFileEvidenceTwoSchema, const NoPublisherSession, "
+                    + "const Release1RuleSet, const Release2RuleSet, const RightsAsAcquired, "
+                    + "const RightsReResolved",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgReferralDateComposition: const HasOpinion, "
                     + "const IriKind, const ReferralDate",
+                "Lex.V3.Ingest.Names.IndexingRecord: const FileName, const Schema",
+                "Lex.V3.Ingest.Names.NamesMeasurement: const EuropeIndexFile, const EuropeSchema, "
+                    + "const LuxembourgIndexFile, const LuxembourgSchema, const MeasurementFileName, "
+                    + "const MeasurementSchema",
+                "Lex.V3.Ingest.Names.NamesRecord: const EuropePublisher, const FileName, "
+                    + "const LuxembourgPublisher, const Rule, const Schema",
+                "Lex.V3.Ingest.Names.PrivateIndividuals: Classes=11, NamingClasses=9, Particulars=5, "
+                    + "ReasonCodes=7, const BirthDateCode, const BirthLabelSignal, const BirthPlaceCode, "
+                    + "const CapitalToken, const ClassCode, const DomicileCode, const EuropeGeneral, "
+                    + "const EuropeRestrictiveMeasures, const EuropeTextNamesPerson, const Honorific, "
+                    + "const IdentityDocumentCode, const Lower, const LuxembourgCivilStatusOfNamedPerson, "
+                    + "const LuxembourgGeneral, const LuxembourgGrantToNamedPerson, const LuxembourgNaturalisation, "
+                    + "const LuxembourgNobility, const LuxembourgPropertyOfNamedPerson, "
+                    + "const LuxembourgTextNamesPerson, const LuxembourgTitleNamesPerson, const MeasureVersion, "
+                    + "const MonthsEnglish, const MonthsFrench, const NameToken, const NationalNumberCode, "
+                    + "const Office, const OldHonorific, const PersonNamedCode, const Reason, const Upper",
                 "Lex.V3.Ingest.V3CorpusMountWriter: GenerationFiles=6, "
                     + "const GenerationsDirectoryName, const ReportFileName, "
-                    + "const RetentionFileName",
+                    + "const ReportSchema, const RetentionFileName",
                 "Lex.V3.Ingest.V3GenerationRetention: const MonthlyKeeper, const Nightly, "
                     + "const PolicyId, const Referenced",
                 "Lex.V3.Ingest.V3OfflineMount: const RederivationSchema, const Schema",

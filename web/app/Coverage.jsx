@@ -51,11 +51,22 @@ import { ENGLISH_LANG, fillText } from '../scripts/live-chrome.mjs';
 import {
   COVERAGE_COLUMNS,
   COVERAGE_COPY,
+  NOT_STATED,
   capabilityAbsence,
+  europeLanguagesSentence,
   gapsSentence,
   narrowedNote,
+  publisherSiteLabel,
   readCoverage,
+  scopeClassLabel,
   servedSentence,
+  textYieldAnnexRows,
+  textYieldClassLabel,
+  textYieldClassRows,
+  textYieldPublishersWithoutAnnexes,
+  textYieldPublishersWithoutFileFormat,
+  textYieldReasonRows,
+  textYieldSentences,
   unservedCapabilities,
   unservedCapabilityNote,
 } from '../scripts/coverage.mjs';
@@ -195,6 +206,130 @@ function History({ history, copy }) {
   );
 }
 
+/** A class's cell: its name where the copy has one, and always its tokens as the data sends them. */
+function ClassCell({ row, copy }) {
+  const label = textYieldClassLabel(row, copy);
+  const tokens = row.family === null
+    ? <Evidence value={row.publisher} />
+    : <Spaced values={[row.publisher, `${row.family}/${row.kind}`]} />;
+  return label === null ? tokens : <>{label}{' '}{tokens}</>;
+}
+
+/**
+ * The text yield per class (R86(4)): R26's sentence, the classes with each publisher's own row, why a
+ * version or a file has no text, the annex counts and the platform's note; for a mount whose build
+ * reported none, the sentence saying so and the note. Every row and sentence is decided in
+ * `coverage.mjs`, as the string renderer's are.
+ */
+function TextYield({ view, copy }) {
+  const textYield = view.textYield;
+  if (textYield === null) {
+    return (
+      <section className="coverage-block">
+        <h2>{copy.headings.textYield}</h2>
+        <p className="coverage-held">{copy.noTextYield}</p>
+        <p className="coverage-note" lang={ENGLISH_LANG}>{view.textYieldNote}</p>
+      </section>
+    );
+  }
+  const reasons = textYieldReasonRows(textYield);
+  const annexes = textYieldAnnexRows(textYield);
+  const keyOf = (row) => [row.publisher, row.family, row.kind, row.outcome, row.reason].join('\u0000');
+  return (
+    <section className="coverage-block">
+      <h2>{copy.headings.textYield}</h2>
+      {textYieldSentences(textYield, copy).map((sentence) => (
+        <p className="coverage-held" data-text-yield-sentence="" key={sentence}>{sentence}</p>
+      ))}
+      <dl className="coverage-facts">
+        <Row label={copy.facts.textYieldBlock}><Evidence value={textYield.schema} /></Row>
+      </dl>
+      <FacetTable caption={copy.captions.yieldClasses} head={heads('yieldClasses', copy)} copy={copy}>
+        {textYieldClassRows(textYield).map((row) => (
+          <tr key={keyOf(row)}>
+            <td><ClassCell row={row} copy={copy} /></td>
+            {row.cells.map((value, index) => (
+              <td key={COVERAGE_COLUMNS.yieldClasses[index + 1]}>{value === null ? copy.notRecorded : value}</td>
+            ))}
+          </tr>
+        ))}
+      </FacetTable>
+      {reasons.length === 0 ? (
+        <p className="coverage-note">{copy.noTextYieldReasons}</p>
+      ) : (
+        <FacetTable caption={copy.captions.yieldReasons} head={heads('yieldReasons', copy)} copy={copy}>
+          {reasons.map((reason) => (
+            <tr key={keyOf(reason)}>
+              <td><ClassCell row={reason} copy={copy} /></td>
+              <td>{copy.textYieldOutcomes[reason.outcome]}</td>
+              <td>{reason.reason === null ? <span className="coverage-not-stated">{NOT_STATED}</span> : <Evidence value={reason.reason} />}</td>
+              <td>{reason.count}</td>
+            </tr>
+          ))}
+        </FacetTable>
+      )}
+      {annexes.length === 0 ? null : (
+        <FacetTable caption={copy.captions.yieldAnnexes} head={heads('yieldAnnexes', copy)} copy={copy}>
+          {annexes.map((annex) => (
+            <tr key={keyOf(annex)}>
+              <td><ClassCell row={annex} copy={copy} /></td>
+              {annex.cells.map((value, index) => (
+                <td key={COVERAGE_COLUMNS.yieldAnnexes[index + 1]}>{value}</td>
+              ))}
+            </tr>
+          ))}
+        </FacetTable>
+      )}
+      {textYieldPublishersWithoutFileFormat(textYield).map((publisher) => (
+        <p className="coverage-note" key={`format-${publisher}`}>{copy.noFileFormat[publisher]}</p>
+      ))}
+      {textYieldPublishersWithoutAnnexes(textYield).map((publisher) => (
+        <p className="coverage-note" key={publisher}>{copy.noAnnexOutcomes[publisher]}</p>
+      ))}
+      <p className="coverage-note" lang={ENGLISH_LANG}>{view.textYieldNote}</p>
+    </section>
+  );
+}
+
+/**
+ * What the mount declares beside its counts (R12, R82, R78), or nothing on an answer that carries none: the sentences and the
+ * table `coverage.mjs` decides, as the string renderer lays them out.
+ */
+function DeclaredScope({ view, copy }) {
+  const declared = view.declaredScope;
+  if (declared === null) return null;
+  const languages = europeLanguagesSentence(declared, copy);
+  const columns = copy.observationColumns;
+  return (
+    <section className="coverage-block">
+      <h2>{copy.declaredHeading}</h2>
+      <FacetTable caption={copy.observationsCaption} head={[columns.publisher, columns.begins, columns.basis]} copy={copy}>
+        {declared.observationsBegin.map((begins) => (
+          <tr key={begins.publisher}>
+            <td>{publisherSiteLabel(begins.publisher, copy)}{' '}<Evidence value={begins.publisher} /></td>
+            <td>{begins.date === null ? <span className="coverage-not-stated">{NOT_STATED}</span> : begins.date}</td>
+            <td>{copy.observationBases[begins.basis]}{' '}<Evidence value={begins.basis} /></td>
+          </tr>
+        ))}
+      </FacetTable>
+      {languages === null ? null : <p className="coverage-held" data-europe-languages="">{languages}</p>}
+      <FacetTable caption={copy.classesCaption} head={[copy.classColumns.scopeClass, copy.classColumns.scopeDisposition]} copy={copy}>
+        {declared.classes.map((row) => {
+          const label = scopeClassLabel(row, copy);
+          return (
+            <tr key={row.class}>
+              <td>{label === null ? <Evidence value={row.class} /> : <>{label}{' '}<Evidence value={row.class} /></>}</td>
+              <td>{copy.classDispositions[row.disposition]}{' '}<Evidence value={row.disposition} /></td>
+            </tr>
+          );
+        })}
+      </FacetTable>
+      <p className="coverage-note">{copy.classesHeld}</p>
+      <p className="coverage-note" lang={ENGLISH_LANG}>{declared.rule}</p>
+    </section>
+  );
+}
+
 /** A table's column headings, in its order, in the copy's words. */
 function heads(table, copy) {
   return COVERAGE_COLUMNS[table].map((key) => copy.columns[key]);
@@ -251,6 +386,8 @@ export function Coverage({ answer, copy = COVERAGE_COPY }) {
           <p className="coverage-note">{copy.stateRange}</p>
         )}
       </section>
+      <TextYield view={view} copy={copy} />
+      <DeclaredScope view={view} copy={copy} />
       <section className="coverage-block">
         <h2>{copy.headings.recorded}</h2>
         <FacetTable caption={copy.captions.outcomes} head={heads('outcomes', copy)} copy={copy}>
@@ -309,6 +446,8 @@ export function Coverage({ answer, copy = COVERAGE_COPY }) {
             {view.operations.notServedData.map((row) => (
               <tr key={row.operation}>
                 <td><Evidence value={row.operation} /></td>
+                <td><Evidence value={row.reason} /></td>
+                <td><Evidence value={row.requestedMode} /></td>
                 <td lang={ENGLISH_LANG}>{row.dataNeeded}</td>
               </tr>
             ))}

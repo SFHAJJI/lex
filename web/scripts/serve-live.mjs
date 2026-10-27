@@ -149,7 +149,8 @@ async function renderSitePage(page, pathname, apiOrigin, renderer, deadlineMs) {
   } catch {
     return null;
   }
-  return { status: code === "identifier_unknown" ? 404 : 200, html };
+  // A work the API does not know, or an act it does not hold (an EU act outside the EU population, R80), is a page that is not there.
+  return { status: code === "identifier_unknown" || code === "out_of_corpus_scope" ? 404 : 200, html };
 }
 
 /**
@@ -393,7 +394,9 @@ export function createLiveServer({
       if (page !== null) {
         let rendered = null;
         try {
-          rendered = await renderSitePage(page, url.pathname, apiOrigin, await rendererFor(page.language), apiDeadlineMs);
+          // A comparison is rendered at its address with its query, which names what it compares (R57).
+          const at = page.kind === "compare" ? url.pathname + url.search : url.pathname;
+          rendered = await renderSitePage(page, at, apiOrigin, await rendererFor(page.language), apiDeadlineMs);
         } catch {
           rendered = null;
         }

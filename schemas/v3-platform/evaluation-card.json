@@ -145,20 +145,20 @@
     {
       "set": "refusal",
       "arm": "the served operations",
-      "cases": 18,
-      "cases_sha256": "dbe197e014d09cb9fa9a69c13e30877f06fd072975a2792cfb987d39c423d0fc",
+      "cases": 22,
+      "cases_sha256": "81e9ba04b256566225fe68bedc9faebc1c476976cc8e5c7a315eaed75b38e7ef",
       "gates": [
         {
           "gate": "verdict_exact_match",
           "verdict": "pass",
           "value": 1,
           "threshold": 1,
-          "n": 18,
+          "n": 22,
           "wilson_95": [
-            0.8241,
+            0.8513,
             1
           ],
-          "rule_of_three_failure_upper_95": 0.1667
+          "rule_of_three_failure_upper_95": 0.1364
         }
       ]
     },
@@ -286,10 +286,10 @@
       "set": "refusal",
       "arm": "the served operations",
       "verdict": "caught_the_shuffle",
-      "reason": "exact match fell to 0, within the base-rate ceiling 0.1667",
+      "reason": "exact match fell to 0, within the base-rate ceiling 0.1364",
       "seed": 20260930,
-      "cases": 18,
-      "cases_sha256": "dbe197e014d09cb9fa9a69c13e30877f06fd072975a2792cfb987d39c423d0fc"
+      "cases": 22,
+      "cases_sha256": "81e9ba04b256566225fe68bedc9faebc1c476976cc8e5c7a315eaed75b38e7ef"
     },
     {
       "control": "qrels_shuffle",

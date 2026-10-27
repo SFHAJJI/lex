@@ -232,7 +232,7 @@ public sealed class V3WebRootTests
             File.WriteAllText(Path.Combine(directory, page), $"<!doctype html><p>{page}</p>");
         }
 
-        // The pages the table names as files (the five legal pages, in both languages), as the build writes them.
+        // The pages the table names as files (the five legal pages and the three reference pages, in both languages), as the build writes them.
         using (var files = SiteTable())
         {
             foreach (var row in files.RootElement.GetProperty("paths").EnumerateArray().Where(static row => row.TryGetProperty("file", out _)))
@@ -247,7 +247,7 @@ public sealed class V3WebRootTests
             var root = V3WebRoot.Open(directory)!;
             using var table = SiteTable();
             var rows = table.RootElement.GetProperty("paths").EnumerateArray().ToArray();
-            Assert.AreEqual(10, rows.Count(static row => row.TryGetProperty("file", out _)), "the five legal pages, in both languages");
+            Assert.AreEqual(16, rows.Count(static row => row.TryGetProperty("file", out _)), "the five legal pages and the three reference pages, in both languages");
             Assert.IsGreaterThan(70, rows.Length, "the table web/scripts/permalinks.mjs is held to");
             Assert.IsGreaterThanOrEqualTo(3, rows.Count(row => row.GetProperty("moved").ValueKind != JsonValueKind.Null), "the shape before R64, moved");
             foreach (var row in rows)
@@ -499,6 +499,11 @@ public sealed class V3WebRootTests
                 (_, _) => "{\"result\":null,\"refusal\":{\"code\":\"identifier_unknown\"}}"u8.ToArray()));
             Assert.AreEqual(StatusCodes.Status404NotFound, unknown.Response.StatusCode, "a work the API does not know is a page that is not there");
             Assert.AreEqual("<!doctype html><p>dossier identifier_unknown /en/lu-legilux/no-such-work</p>", Body(unknown));
+            // An act the API does not hold (an EU act outside the EU population, R80) is a page that is not there either.
+            var outside = Request("GET", "/en/lu-legilux/no-such-work");
+            Assert.IsTrue(await root.TryServeAsync(outside, "/en/lu-legilux/no-such-work", CancellationToken.None,
+                (_, _) => "{\"result\":null,\"refusal\":{\"code\":\"out_of_corpus_scope\"}}"u8.ToArray()));
+            Assert.AreEqual(StatusCodes.Status404NotFound, outside.Response.StatusCode, "an act the API does not hold is a page that is not there");
 
             foreach (var (what, answer) in new (string, Func<V3SitePage, CancellationToken, byte[]?>?)[]
             {
@@ -619,7 +624,8 @@ public sealed class V3WebRootTests
             await handler.HandleAsync(api, CancellationToken.None);
             Assert.AreEqual(StatusCodes.Status200OK, api.Response.StatusCode, "the API route is the API's");
             StringAssert.Contains(Body(api), "no_corpus_mounted");
-            Assert.AreEqual(0, api.Response.Headers.ContentSecurityPolicy.Count, "an API answer is not a page");
+            // An API answer is not a page: the host's policy for answers that are none, never the page's (V3HostHeaders).
+            Assert.AreEqual(V3HostHeaders.MachineContentSecurityPolicy, api.Response.Headers.ContentSecurityPolicy.ToString(), "an API answer is not a page");
 
             var elsewhere = Request("GET", "/nothing-here.html");
             await handler.HandleAsync(elsewhere, CancellationToken.None);

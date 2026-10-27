@@ -6,9 +6,11 @@
 // (`OfficialSites`). It asks nothing and ships no script, so it reads the same whatever is or is not running behind it, and
 // its footer's freshness strip says it carries no answer (`answers` false).
 //
-// Built into `dist-live/maintenance/{language}.html`, once per interface language, by `scripts/build-live.mjs`; neither
-// server serves it (`scripts/not-found.mjs`, `V3WebRoot.NotFound.cs`). Wiring it in front of a deployment is the deploy
-// kit's, and not yet done (STATUS-WEB.md).
+// Built into `dist-live/maintenance/{language}.html`, once per interface language, by `scripts/build-live.mjs`, and never
+// served at its own address (`scripts/not-found.mjs`, `V3WebRoot.NotFound.cs`). The release's maintenance revision, the same
+// image started with `LEX_V3_MAINTENANCE=on`, answers every page request with it, status 503 and `Retry-After`
+// (`V3WebRoot.Maintenance.cs`); the deploy kit pre-builds that revision, probes it and keeps it inactive, and prints the
+// traffic moves that switch it on and off (`deploy/deploy.ps1 -Maintenance`).
 
 import { Document } from './Document.jsx';
 import { liveChrome } from '../scripts/live-chrome.mjs';

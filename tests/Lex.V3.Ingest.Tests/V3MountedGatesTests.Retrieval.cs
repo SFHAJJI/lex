@@ -1,6 +1,7 @@
 using System.Globalization;
 using Lex.V3.Api;
 using Lex.V3.Contracts.Evaluation;
+using Lex.V3.Contracts.Index;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 using Microsoft.Data.Sqlite;
@@ -10,15 +11,17 @@ using static Lex.V3.Ingest.Tests.V3CorpusResolveMountTests;
 namespace Lex.V3.Ingest.Tests;
 
 /// <summary>
-/// The retrieval set over a mount, judged by the search's own stated matching (<c>SearchMatching</c>: a byte-exact
-/// substring of an article's searchable text, nothing folded) computed from the mount's index: a word held by a few
+/// The retrieval set over a mount, judged by the search's own stated matching (<c>SearchMatching</c>: a substring of an
+/// article's searchable text once both are folded by <c>TextFolding</c>, capitals and accents ignored) computed from the
+/// mount's index: a word held by a few
 /// articles is judged to find exactly those (work and publisher article id), which all must rank within the first ten;
 /// a string held nowhere must find nothing, as must a word scoped to a work that does not hold it; and an article
 /// permalink must be accepted under its own work and anchor, and one naming an anchor its state lacks refused. The
 /// judgments are the corpus's own truth about its text, so 1.0 is the path's exactness, not a quality claim.
-/// An EU index gives its own cases the same way (<c>EuropeSearchMatching</c> is the same byte-exact substring): a word
+/// An EU index gives its own cases the same way (<c>EuropeSearchMatching</c> is the same folded substring): a word
 /// held by a few provisions of one work in one language, searched with that work as its scope (EU search is served in
-/// one work), and strings that work holds nowhere. And, since EU <c>verify</c> is served over the EU permalink grammar (#850),
+/// one work) and, where the index holds the act's census, at its original wording's date, which selects that wording alone
+/// (an undated search reads every consolidated version too), and strings that work holds nowhere. And, since EU <c>verify</c> is served over the EU permalink grammar (#850),
 /// exact cases: three provisions of the work's one wording, each pinned by the digest recomputed by the stated rule, judged
 /// to resolve to exactly that provision, and a provision the wording does not hold, judged to find nothing.
 /// </summary>
@@ -48,6 +51,7 @@ public sealed partial class V3MountedGatesTests
 
         using var connection = LuxembourgIndexBuilder.Open(Path.Combine(mountDirectory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly);
         var language = held[0].Timeline.Language;
+        var articles = HeldArticles(connection, language);
 
         // Words of the sampled states' articles, each judged to find every (work, article) of the language whose
         // text holds it, when that is between one and five.
@@ -75,7 +79,7 @@ public sealed partial class V3MountedGatesTests
 
             // Between one and five articles, and hits (one per article per state) within the answer's one page, so
             // every judged article is on it.
-            var found = Holding(connection, language, word, workKey: null, out var hits);
+            var found = Holding(articles, word, workKey: null, out var hits);
             if (found.Count is < 1 or > MaxJudgedPerWord || hits > V3CorpusMount.SearchMaxHits)
             {
                 continue;
@@ -92,17 +96,17 @@ public sealed partial class V3MountedGatesTests
         var otherWork = held.Where(value => value.Timeline.Language == language).Select(static value => value.Timeline.WorkKey).Distinct(StringComparer.Ordinal).ToArray();
         foreach (var (word, work) in workOfWord.Take(2))
         {
-            var ofWork = Holding(connection, language, word, work, out _);
+            var ofWork = Holding(articles, word, work, out _);
             requests[$"scoped-{word}"] = new(EvaluationCaseKind.Retrieval, "search", new { query = word, language, identifier = $"/lu-legilux/{work}" },
                 ofWork.Select(static pair => new JudgedAnchor(pair.Work, pair.Anchor, JudgedAnchor.SupportingGrade)).ToArray());
-            var elsewhere = otherWork.FirstOrDefault(candidate => candidate != work && Holding(connection, language, word, candidate, out _).Count == 0);
+            var elsewhere = otherWork.FirstOrDefault(candidate => candidate != work && Holding(articles, word, candidate, out _).Count == 0);
             if (elsewhere is not null)
             {
                 requests[$"scoped-elsewhere-{word}"] = new(EvaluationCaseKind.Retrieval, "search", new { query = word, language, identifier = $"/lu-legilux/{elsewhere}" }, []);
             }
         }
 
-        foreach (var nothing in NoHitStrings.Where(value => Holding(connection, language, value, workKey: null, out _).Count == 0))
+        foreach (var nothing in NoHitStrings.Where(value => Holding(articles, value, workKey: null, out _).Count == 0))
         {
             requests[$"no-hit-{nothing}"] = new(EvaluationCaseKind.Retrieval, "search", new { query = nothing, language }, []);
         }
@@ -167,6 +171,18 @@ public sealed partial class V3MountedGatesTests
                 (words[at], words[other]) = (words[other], words[at]);
             }
 
+            // Where the EU index holds the act's census, the original wording's one date selects it alone (EuropeSearchScope).
+            var quoted = celex.Replace("'", "''", StringComparison.Ordinal);
+            var originalDates = Rows(connection, $"SELECT DISTINCT wording_date FROM articles WHERE publisher_work_celex = '{quoted}' AND language = '{language}'");
+            var census = HasStatesTable(connection) && Rows(connection, $"SELECT seed_celex FROM states WHERE seed_celex = '{quoted}' LIMIT 1").Count > 0;
+            if (census && originalDates.Count != 1)
+            {
+                continue;
+            }
+
+            object Scoped(string query) => census
+                ? new { query, language, identifier = celex, date = originalDates[0][0] }
+                : new { query, language, identifier = celex };
             var taken = 0;
             foreach (var word in words)
             {
@@ -181,14 +197,14 @@ public sealed partial class V3MountedGatesTests
                     continue;
                 }
 
-                requests[$"eu-word-{celex}-{language}-{word}"] = new(EvaluationCaseKind.Retrieval, "search", new { query = word, language, identifier = celex },
+                requests[$"eu-word-{celex}-{language}-{word}"] = new(EvaluationCaseKind.Retrieval, "search", Scoped(word),
                     found.Select(provision => new JudgedAnchor(celex, provision, JudgedAnchor.SupportingGrade)).ToArray());
                 taken++;
             }
 
             foreach (var nothing in NoHitStrings.Where(value => EuropeHolding(connection, celex, language, value).Count == 0))
             {
-                requests[$"eu-no-hit-{celex}-{language}-{nothing}"] = new(EvaluationCaseKind.Retrieval, "search", new { query = nothing, language, identifier = celex }, []);
+                requests[$"eu-no-hit-{celex}-{language}-{nothing}"] = new(EvaluationCaseKind.Retrieval, "search", Scoped(nothing), []);
             }
 
             var quotedCelex = celex.Replace("'", "''", StringComparison.Ordinal);
@@ -237,22 +253,25 @@ public sealed partial class V3MountedGatesTests
         return sample;
     }
 
-    /// <summary>The provisions of one EU work in one language whose searchable text holds a string, by the EU search's own order.</summary>
+    /// <summary>
+    /// The provisions of one EU work in one language whose searchable text holds a string once both are folded (TextFolding),
+    /// by the EU search's own order.
+    /// </summary>
     private static List<string> EuropeHolding(SqliteConnection connection, string celex, string language, string text)
     {
         using var command = connection.CreateCommand();
         command.CommandText =
-            "SELECT publisher_identifier FROM articles WHERE publisher_work_celex = $celex AND language = $language AND instr(searchable_text, $text) > 0 " +
+            "SELECT publisher_identifier, searchable_text FROM articles WHERE publisher_work_celex = $celex AND language = $language " +
             "ORDER BY publisher_identifier, article_identity_sha256";
         command.Parameters.AddWithValue("$celex", celex);
         command.Parameters.AddWithValue("$language", language);
-        command.Parameters.AddWithValue("$text", text);
+        var needle = TextFolding.Fold(text);
         using var reader = command.ExecuteReader();
         var found = new List<string>();
         while (reader.Read())
         {
             var provision = reader.GetString(0);
-            if (!found.Contains(provision, StringComparer.Ordinal))
+            if (TextFolding.Folded(reader.GetString(1)).Contains(needle) && !found.Contains(provision, StringComparer.Ordinal))
             {
                 found.Add(provision);
             }
@@ -265,27 +284,46 @@ public sealed partial class V3MountedGatesTests
     /// The (work, article) pairs of one language whose searchable text holds a string, by the search's own order, and
     /// the hits the search would count (one per article per state).
     /// </summary>
-    private static List<(string Work, string Anchor)> Holding(SqliteConnection connection, string language, string text, string? workKey, out int hits)
+    /// <summary>One article of a held state, in the search's order, with its folded searchable text.</summary>
+    private sealed record HeldArticle(string Work, string Anchor, string Folded);
+
+    /// <summary>Every article of a held state in one language, in the search's order, its text folded once (TextFolding).</summary>
+    private static List<HeldArticle> HeldArticles(SqliteConnection connection, string language)
     {
         using var command = connection.CreateCommand();
         command.CommandText =
-            "SELECT s.work_key, a.publisher_id FROM articles a JOIN states s ON s.expression_iri = a.expression_iri AND s.language = a.language " +
-            "WHERE a.language = $language AND instr(a.searchable_text, $text) > 0" + (workKey is null ? "" : " AND s.work_key = $work") +
-            " ORDER BY s.work_key, s.applicability_date, a.article_identity_sha256, s.state_sha256";
+            "SELECT s.work_key, a.publisher_id, a.searchable_text FROM articles a JOIN states s ON s.expression_iri = a.expression_iri AND s.language = a.language " +
+            "WHERE a.language = $language ORDER BY s.work_key, s.applicability_date, a.article_identity_sha256, s.state_sha256";
         command.Parameters.AddWithValue("$language", language);
-        command.Parameters.AddWithValue("$text", text);
-        if (workKey is not null)
-        {
-            command.Parameters.AddWithValue("$work", workKey);
-        }
-
         using var reader = command.ExecuteReader();
-        var found = new List<(string Work, string Anchor)>();
-        hits = 0;
+        var held = new List<HeldArticle>();
         while (reader.Read())
         {
+            held.Add(new HeldArticle(reader.GetString(0), reader.GetString(1), TextFolding.Fold(reader.GetString(2))));
+        }
+
+        return held;
+    }
+
+    /// <summary>
+    /// The (work, article) pairs of one language whose searchable text holds a string once both are folded, by the search's
+    /// own order, and the hits the search would count (one per article per state).
+    /// </summary>
+    private static List<(string Work, string Anchor)> Holding(IReadOnlyList<HeldArticle> articles, string text, string? workKey, out int hits)
+    {
+        var needle = TextFolding.Fold(text);
+        var found = new List<(string Work, string Anchor)>();
+        hits = 0;
+        foreach (var article in articles)
+        {
+            if ((workKey is not null && !string.Equals(article.Work, workKey, StringComparison.Ordinal)) ||
+                !TextFolding.CanMatch(needle) || !article.Folded.Contains(needle, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             hits++;
-            var pair = (reader.GetString(0), reader.GetString(1));
+            var pair = (article.Work, article.Anchor);
             if (!found.Contains(pair))
             {
                 found.Add(pair);

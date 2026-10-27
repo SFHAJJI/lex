@@ -1,41 +1,40 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-26 at 23:10 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-27 at 12:45 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 ## Where V3 stands
 
-- Merged on 26 October, in three pull requests, each reviewed and green: the web (today's date, the search kept in
-  its link, the legal pages naming no one, the EU authenticity line, how current the law is on every page); the data
-  (which version answers a date, each date said for what it is, the gaps between versions, an EU act's own dates).
-- Released on 26 October: a signed release of that code, rebuilt identically, every quality gate passed, no cookie,
-  nothing kept about readers. It serves law.soufien.lu since 21:00 UTC, still open only to your addresses.
-- The site opens to everyone with one command that you run (below): the driver's safety system will not let it
-  remove the address rules itself. The legal pages were checked first and are ready.
-- Today Luxembourg has 1,730 acts as first published, no codes; EU text covers 511 of 1,170 versions.
-- The codes (121,000 articles) were rebuilt on Azure on 26 October after two fixes found on real data (a date written
-  20220101, and a code's title given each article's date): two builds agreed byte for byte. Their quality gates pass
-  for the EU and for search, but the Luxembourg date check does not yet: the check itself still assumes one version
-  per act. It is being rewritten to the publisher's own start and end dates, and any reader fault it finds fixed,
-  before a second release carries the codes. The index step now runs on this PC first, in about ten minutes.
+- law.soufien.lu is open to everyone since 27 October 01:08 UTC and indexed by search engines since 04:35 UTC. It
+  serves the first release (26 October). Down 3 minutes at 01:10 UTC; the deployment script is fixed.
+- Merged on 27 October, waiting for the next release: the EU Treaties, the Charter and 17,850 more EU articles; the
+  Luxembourg consolidations (451 files, about 14,400 articles) that our own reader wrongly refused; the text yield per
+  class on Coverage; typed answers for everything the programming interface refuses; acts that name private people
+  kept out (974 old Luxembourg acts, mostly naturalisations: Lex points to the publisher); checks that compare each
+  release with the one serving and refuse an unexplained loss; backups of each release.
+- The new data was rebuilt on Azure on 27 October (08:48 to 11:55 UTC): both builds identical, 29 of 30 quality
+  checks pass. The one that fails is the Luxembourg date check, whose rewrite you stopped at 02:00 UTC.
+- In review: records for 22,049 Luxembourg acts Lex holds no text for (dates, status, official link, why), and
+  Compare showing the changed words. In progress: six sentences on the site that said more than Lex does.
 
 ## The plan
 
-- Decided by you on 18 October: build on Azure, paid after the credits end; open to the public once V3 is finished;
-  search engines may index it; the EU wording as recommended.
-- Decided by you on 19 October: texts may be 30 days old before pages warn and a release is refused; the site names
-  no one and gives no contact, so no e-mail is kept; accessibility is "non-conformant" until an audit. The EU texts
-  date from 5 October, so from 4 November the site warns until they are collected again.
-- The domain's name servers are Azure's since your switch on 18 October: keep the payment method valid. The full plan
-  is C:\lex-v3\PLAN-2026-10-14.md.
+- Decided by you on 18 October: build on Azure; open once finished; search engines may index it.
+- Decided by you on 19 October: texts may be 30 days old before pages warn; the site names no one and gives no
+  contact; accessibility "non-conformant" until an audit. The EU texts date from 5 October, so from 4 November
+  every page warns and no new release can be promoted until they are collected again.
+- On 27 October you asked for V3 finished to the specification within 72 hours (to 30 October 01:35 UTC).
+- Next: a release of the new code. With your yes on the date check, it carries the new data too; without it, it
+  carries the first release's data, already checked, so the corrections go live either way.
 
 ## What waits on you
 
-- Now: open the site. In PowerShell on this PC:
-  pwsh -File C:\lex-v3\worktrees\claude-release\deploy\deploy.ps1 -Subscription <your subscription> -ResourceGroup
-  rg-lex-v3 -AppName ca-lex-v3 -Open   (the full line is in the driver's message of 26 October)
-- Before 4 November: a new collection of the EU texts, which the driver runs once the codes are in.
-- Before 12 November: your 175.70 EUR of credits end. Then the site (about 26 EUR a month), the storage (under 0.50 EUR
-  a month) and each rebuild (5 to 8 EUR) are billed to your payment method.
-- Your choice, not done before the opening: a lawyer's read of the legal texts, an accessibility audit, user tests.
+- The Luxembourg date check: "continue the gates". Without it the new data cannot be released.
+- Two collection runs from the publishers: an EU refresh (needed before 4 November) and the Constitution.
+- Rulings L2, L1 and L1b on the Luxembourg licences (each adds texts; all three add about 85,000 articles).
+- One sentence for the privacy notice: "An act the check finds to name private persons is not reproduced: Lex
+  points to its publisher."
+- The monthly cost ceiling (one block in docs/INCIDENT-RUNBOOK.md) and making v3 the default branch, so the outside
+  check of the site runs.
+- Your choice, not done: a lawyer's read, an accessibility audit, user tests.

@@ -11,7 +11,10 @@
 //   `frame-ancestors 'none'`, HSTS, `Referrer-Policy: no-referrer`, `nosniff`);
 // - the 404 page (R60): an address nothing claims answers 404 with the release image's own French 404 page, byte for
 //   byte, carrying the same security headers, for a reader who names no language;
-// - the card: the evaluation card at its stable route is the release's card, byte for byte, as JSON;
+// - the card: the evaluation card at its stable route is the release's card, byte for byte, as JSON; and the release's
+//   signed card is an input to promotion (R104, O20): a gate not passing, a control that missed its shuffle, or a card run
+//   over another mount than the release's refuses promotion, as the data's age does (`cardPromotionFailures`; exit 3 with
+//   `--promotion-check`);
 // - the API: `coverage` answers from the mount the release names, by its corpus digest;
 // - the server: its readiness route answers 204 (it holds the law), and the synthetic preview's route is unknown to it;
 // - the clock (plan 0.8): the instant `coverage` was answered at is within a minute of this probe's own, so the date the
@@ -28,6 +31,10 @@
 //   holds none of them. `--opening` with no `--release` is the opening's own check (`deploy.ps1 -Open`): the site's served
 //   legal pages, each 200, without a cookie and showing none of those, or the site is not opened (`openingFailures`);
 // - no cookie: neither the home page nor a legal page sets one (the cookies page says no page does);
+// - the Developers pages' schema links (R46, R55): each schema they link, the image's own file, served as JSON byte for
+//   byte (`schemaLinkFailures`);
+// - the home page's example searches (R47): each one a home page lists, asked of the revision as the search page asks it,
+//   opens the article the page says it opens (`homeExampleFailures`);
 // - the browser probes (`--browser`): the journey's real-mount steps through a browser against the revision, each
 //   page held to what the API answers its request, its hydration, console, paint and security headers, and every
 //   citation verified. Privacy cannot be observed on a remote revision (its process and files are not ours to watch),
@@ -35,6 +42,11 @@
 //   release was probed (its report's `privacy`; a release made with `--no-probe` was not).
 //   Without `--browser` no browser is looked for or started (`findBrowser` is never called), and the probe says that no
 //   page of the revision was walked in a browser (`NOT_WALKED_NOTE`); `deploy.ps1` runs it so unless `-BrowserProbe`.
+// - the release's maintenance revision (`--maintenance`, `deploy.ps1 -Maintenance`; R60, R108, R115; the plan's item 10.14),
+//   instead of all the above: the release read back as above, then the revision's readiness 204, each page asked
+//   (`MAINTENANCE_PROBES`, the root among them) 503 with Retry-After, a page's headers, no cookie and the release image's own
+//   maintenance page in its language, byte for byte, and the API's coverage 503 with the problem `service_in_maintenance`
+//   (`maintenanceFailures`). HTTP only: it never walks a page in a browser.
 // It sends no request anywhere but the origin it is given, and writes nothing but a temporary copy of the release's
 // mount report, removed when it ends.
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -43,15 +55,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findBrowser } from "./browser-evidence.mjs";
 import { cspValue } from "./csp.mjs";
-import { CARD_ROUTE } from "./evaluation-card.mjs";
+import { CARD_ROUTE, readEvaluationCard } from "./evaluation-card.mjs";
 import { layerTar, readLayout, readOciImage, readTar, servedPaths, serverFailures, v2RouteFailures } from "./image-rehearsal.mjs";
 import { invokedDirectly } from "./invoked-directly.mjs";
 import { askOperation, heldLuxembourgWorkFromAnswers, realMountRuns } from "./journey.mjs";
 import { ASSETS, RELEASE_MANIFEST, releaseFailures } from "./release-assets.mjs";
 import { readLargeFile } from "./large-bytes.mjs";
 import { HOME_FACTS_ID, readHomeFactsValue } from "./live-home.mjs";
-import { KEPT_OUT_META, NEVER_INDEXED_META } from "./search-engines.mjs";
+import { INDEXED, KEPT_OUT, KEPT_OUT_META, NEVER_INDEXED_META } from "./search-engines.mjs";
 import { LEGAL_PAGE_PATHS, builtLegalPageFailures, openingFailures } from "./legal-pages.mjs";
+import { MAINTENANCE_DIRECTORY } from "./not-found.mjs";
+import { INTERFACE_LANGUAGES } from "./permalinks.mjs";
 import { luxembourgDate, luxembourgOffset, luxembourgSummerTimeEnds, luxembourgSummerTimeStarts } from "./temporal.mjs";
 
 const LIVE_PREFIX = "app/v3-web/";
@@ -163,6 +177,37 @@ export function homePageFailures(served, built, { renderer = null, coverage = nu
   return failures;
 }
 
+/** The published schemas a Developers page links, in its bytes' order, each once: `/schemas/v3-platform/{name}.json`. */
+export function linkedSchemas(html) {
+  return [...new Set([...String(html).matchAll(/<a href="(\/schemas\/v3-platform\/[a-z0-9-]+\.json)" data-schema="/g)].map(([, path]) => path))];
+}
+
+/**
+ * The schemas the release image's Developers pages link (`en/developers.html`, `fr/developers.html`; R46, R55;
+ * `developers.mjs`), as failures: each must be a file of the image (`web`, its live page files), and the revision at `origin`
+ * must serve it 200 as JSON with those bytes. An image whose Developers page links a schema it does not hold, or a revision
+ * that does not serve one, fails; an image with no Developers page links none. `fetchImpl` stands for `fetch`.
+ */
+export async function schemaLinkFailures(origin, web, { fetchImpl = fetch } = {}) {
+  const files = new Map(web);
+  const paths = new Set(["fr", "en"].flatMap((language) => (files.has(`${language}/developers.html`) ? linkedSchemas(files.get(`${language}/developers.html`).toString("utf8")) : [])));
+  const failures = [];
+  for (const path of paths) {
+    const held = files.get(path.slice(1));
+    if (held === undefined) {
+      failures.push(`the release image's Developers page links ${path}, which the image does not hold`);
+      continue;
+    }
+    const answer = await fetchImpl(`${origin}${path}`, { redirect: "manual" });
+    const bytes = Buffer.from(await answer.arrayBuffer());
+    const type = answer.headers.get("content-type") ?? "";
+    if (answer.status !== 200 || !type.startsWith("application/json") || !bytes.equals(held)) {
+      failures.push(`GET ${path} answered ${answer.status} ${type}${answer.status === 200 ? ", not the image's own schema, byte for byte" : ""}: the Developers page's link to it does not work`);
+    }
+  }
+  return failures;
+}
+
 /** An address nothing claims, asked of a revision for its 404 page (R60): a page request, under no law's address. */
 export const NOT_FOUND_PROBE = "/fr/no-such-page";
 
@@ -190,7 +235,9 @@ export async function revisionFailures(origin, options) {
   const served = servedPaths(options.web);
   if (!served.has("/fr/")) return failures;
   failures.push(...await serverFailures(origin));
-  failures.push(...await v2RouteFailures(origin, { v3Files: served }));
+  // robots.txt and the sitemap are held to the deployment's own switch (deploy.ps1 -SearchEngines): a revision opened to
+  // search engines serves V3's indexed robots.txt and its sitemap index, one kept out neither (the probe of 27 October).
+  failures.push(...await v2RouteFailures(origin, { v3Files: served, searchEngines: options.searchEngines ?? KEPT_OUT }));
   return failures;
 }
 
@@ -201,7 +248,7 @@ export async function revisionFailures(origin, options) {
  * the card at its stable route, coverage from the release's corpus, the clock and an accented title. Every one is an HTTP
  * request; none needs a browser.
  */
-export async function servedPageFailures(origin, { web, card, corpusSha256, notes = [], promotion = [], now = Date.now, ask = askOperation, opening = false }) {
+export async function servedPageFailures(origin, { web, card, corpusSha256, notes = [], promotion = [], now = Date.now, ask = askOperation, opening = false, homeExamples = undefined, mountReport = null }) {
   const failures = [];
   const served = servedPaths(web);
   if (!served.has("/fr/")) return ["the release image holds no live page at /fr/, so the revision has nothing to be held to"];
@@ -246,6 +293,9 @@ export async function servedPageFailures(origin, { web, card, corpusSha256, note
   } else if (!cardBytes.equals(card)) {
     failures.push(`GET ${CARD_ROUTE} is not the release's evaluation card, byte for byte`);
   }
+  // The release's signed card is an input to promotion (R104, O20): a gate that did not pass, or a control that did not catch
+  // its shuffle, refuses promotion, as the data's age does.
+  promotion.push(...cardPromotionFailures(card, { mountReport }));
 
   const asked = now();
   const coverage = await fetch(`${origin}/api/v3/coverage`, {
@@ -284,6 +334,14 @@ export async function servedPageFailures(origin, { web, card, corpusSha256, note
   if (page.status === 200) {
     failures.push(...homePageFailures(body, served.get("/fr/"), { renderer: new Map(web).get("ssr/fr.js") ?? null, coverage: envelope }));
   }
+  // The schemas the Developers pages link (R46, R55): each the image's own file, served by this revision as JSON, byte for
+  // byte (the first CI run of the J7 walk, #997, found a link that answered 404 where the page was served without them).
+  failures.push(...await schemaLinkFailures(origin, web));
+  // The home page's example searches (R47; `home-examples-run.mjs`): each one a home page lists, asked of this revision as
+  // the search page asks it, must open the article the page says it opens; with the record the build carried
+  // (`homeExamples`, the release rehearsal's), the page must list exactly its examples. Each home page the image holds.
+  const { homeExampleFailures } = await import("./home-examples-run.mjs");
+  failures.push(...await homeExampleFailures(origin, { expected: homeExamples, languages: ["fr", "en"].filter((language) => served.has(`/${language}/`)) }));
   failures.push(...await legalPageFailures(origin, web, { policy, notes, opening }));
   return failures;
 }
@@ -312,6 +370,41 @@ export async function legalPageFailures(origin, web, { policy = `${cspValue()}; 
   if (unready.length > 0) {
     if (opening) failures.push(...unready.map((failure) => `the legal pages are not ready to publish, so the site may not open: ${failure}`));
     else notes.push(`the legal pages are not ready to publish, so the site may not open (deploy.ps1 -Open and -Public refuse it): ${unready.join("; ")}`);
+  }
+  return failures;
+}
+
+/**
+ * Why promotion refuses a release for its evaluation card (the specification of record's R104; O20, the owner's yes): the
+ * release's signed card, `card` (bytes), must read by the page's rules, every machine gate on it must pass (a gate that failed
+ * or was not measured refuses), every shuffled control must have caught its shuffle, and, when the release's mount report
+ * (`mountReport`, bytes) names a corpus file, the card must say it was run over that very file (the exact tuple). Each failure
+ * names the gate, the control or the target. Empty when the card is all pass. Not a probe failure: a revision with a card that
+ * does not pass still answers as its release holds; `deploy.ps1` prints no promotion command while any of these stands.
+ */
+export function cardPromotionFailures(card, { mountReport = null } = {}) {
+  let view;
+  let parsed;
+  try {
+    parsed = JSON.parse(Buffer.from(card).toString("utf8"));
+    view = readEvaluationCard(parsed);
+  } catch (error) {
+    return [`the release's evaluation card does not read, so it cannot be shown to pass: ${error.message}`];
+  }
+  const failures = [
+    ...view.gatesNotPassing.map((gate) => `the evaluation card's ${gate.set} set (${gate.arm}) gate ${gate.gate} is ${gate.verdict}, not pass`),
+    ...view.controlsNotCaught.map((control) => `the evaluation card's ${control.set} set (${control.arm}) control ${control.control} is ${control.verdict}, not caught_the_shuffle`),
+  ];
+  if (mountReport !== null) {
+    let corpusFile = null;
+    try {
+      corpusFile = (JSON.parse(Buffer.from(mountReport).toString("utf8")).files ?? []).find((file) => file.Name === "lex-corpus-6.json")?.Sha256 ?? null;
+    } catch {
+      failures.push("the release's mount report is not JSON, so the card cannot be held to the release's mount");
+    }
+    if (corpusFile !== null && !String(parsed.target ?? "").includes(corpusFile)) {
+      failures.push(`the evaluation card was run over ${JSON.stringify(parsed.target)}, not over this release's mount (its corpus file sha256:${corpusFile})`);
+    }
   }
   return failures;
 }
@@ -513,11 +606,13 @@ export function remoteRevision(origin) {
  * build report they read, and the Luxembourg work they ask for chosen from the revision's own answers (`held`; the
  * revision's index is not at hand). Failures, each prefixed with its step; empty when every step passes.
  */
-export async function browserFailures(origin, releaseDirectory, { browser, runs = realMountRuns, held = heldLuxembourgWorkFromAnswers }) {
+export async function browserFailures(origin, releaseDirectory, { browser, runs = realMountRuns, held = heldLuxembourgWorkFromAnswers, searchEngines = KEPT_OUT }) {
   const work = await mkdtemp(join(tmpdir(), "lex-deploy-browser-"));
   try {
     await writeFile(join(work, "build-report.json"), await readFile(join(releaseDirectory, ASSETS.mountReport)));
-    const results = await runs(null, work, { servedByApi: true, keyboard: false, startServer: async () => remoteRevision(origin) }, browser, null,
+    // The walk holds each page's robots elements and X-Robots-Tag to the deployment's own switch (`journey.mjs`, its
+    // `expected.searchEngines`), as the HTTP probe holds robots.txt and the sitemap (the review of #993, its F1).
+    const results = await runs(null, work, { servedByApi: true, keyboard: false, searchEngines, startServer: async () => remoteRevision(origin) }, browser, null,
       { held: await held(origin) });
     return results.flatMap(([label, { failures }]) => failures.map((failure) => `${label}: ${failure}`));
   } finally {
@@ -530,18 +625,138 @@ export async function browserFailures(origin, releaseDirectory, { browser, runs 
  * identity's key (`publicKeyPem`), and as signed by the release signer `identity` when one is named, then the revision
  * held to what the release holds. Failures, empty when both hold; what the probe says but does not hold goes to `notes`.
  */
-export async function deployedReleaseFailures(origin, releaseDirectory, { publicKeyPem, identity = null, notes = [], promotion = [], opening = false }) {
+export async function deployedReleaseFailures(origin, releaseDirectory, { publicKeyPem, identity = null, notes = [], promotion = [], opening = false, searchEngines = KEPT_OUT }) {
   const release = await releaseFailures(releaseDirectory, { publicKeyPem, identity });
   if (release.length > 0) return release.map((failure) => `the release does not read back: ${failure}`);
   const manifest = JSON.parse(await readFile(join(releaseDirectory, RELEASE_MANIFEST), "utf8"));
   return revisionFailures(origin, {
     web: liveFilesOf(await readLargeFile(join(releaseDirectory, ASSETS.image))),
     card: await readFile(join(releaseDirectory, ASSETS.card)),
+    mountReport: await readFile(join(releaseDirectory, ASSETS.mountReport)),
     corpusSha256: manifest.corpus.sha256,
     notes,
     promotion,
     opening,
+    searchEngines,
   });
+}
+
+/**
+ * What a maintenance revision is asked for (R60): the pages, each with the interface language its maintenance page must be
+ * in (both languages' homes, another page, and the root for a reader whose browser prefers English, whose answer depends on
+ * that preference: `acceptLanguage`, and then `Vary: Accept-Language`); and the files the maintenance page loads, the
+ * stylesheet and a font, each the release image's own file (`file`), served as always, so the page shows styled (the
+ * review of writer/screens-gaps, F2).
+ */
+export const MAINTENANCE_PROBES = Object.freeze([
+  Object.freeze({ path: "/fr/", language: "fr", acceptLanguage: null }),
+  Object.freeze({ path: "/en/", language: "en", acceptLanguage: null }),
+  Object.freeze({ path: "/en/search.html", language: "en", acceptLanguage: null }),
+  Object.freeze({ path: "/", language: "en", acceptLanguage: "en" }),
+  Object.freeze({ path: "/styles.css", file: "styles.css", type: "text/css" }),
+  Object.freeze({ path: "/fonts/inter-400-latin.woff2", file: "fonts/inter-400-latin.woff2", type: "font/woff2" }),
+]);
+
+/** A `Retry-After` given in seconds, as the maintenance revision gives it. */
+const RETRY_SECONDS = /^[1-9][0-9]*$/;
+
+/**
+ * What a maintenance revision must answer at `origin` (R60, R108, R115; `deploy.ps1 -Maintenance`), as failures (empty when
+ * it holds); `web` is the release image's live page files, whose `maintenance/{language}.html` each page must be, byte for
+ * byte. Its readiness answers 204, never cached (it holds a maintenance page in each interface language); each of
+ * `MAINTENANCE_PROBES` answers 503 as HTML with Retry-After in seconds, the page's security headers (the CSP with
+ * `frame-ancestors 'none'`, HSTS, `Referrer-Policy: no-referrer`, `nosniff`), `no-store`, `X-Robots-Tag: noindex`, no
+ * cookie, and the maintenance page in its language; the API's coverage answers 503 `application/problem+json` with the code
+ * `service_in_maintenance` and Retry-After, and no cookie. Every one is an HTTP request; none needs a browser.
+ */
+export async function maintenanceFailures(origin, { web }) {
+  const files = new Map(web);
+  const pages = new Map(INTERFACE_LANGUAGES.map((language) => [language, files.get(`${MAINTENANCE_DIRECTORY}/${language}.html`)]));
+  const missing = [...pages].filter(([, page]) => page === undefined).map(([language]) => `${MAINTENANCE_DIRECTORY}/${language}.html`);
+  if (missing.length > 0) {
+    return missing.map((page) => `the release image holds no maintenance page ${page}, so the revision's pages cannot be held to it`);
+  }
+
+  const failures = [];
+  const cookie = (said, answer) => {
+    if (answer.headers.get("set-cookie") !== null) failures.push(`${said} sets a cookie, which the cookies page says no page does`);
+  };
+  const ready = await fetch(`${origin}/health/ready`, { redirect: "manual" });
+  const readyBytes = Buffer.from(await ready.arrayBuffer());
+  if (ready.status !== 204) {
+    failures.push(`GET /health/ready answered ${ready.status} (${readyBytes.length} bytes), not 204: the revision does not hold a maintenance page in each language`);
+  }
+  if (ready.headers.get("cache-control") !== "no-store") failures.push(`GET /health/ready may be cached (${ready.headers.get("cache-control")})`);
+  cookie("GET /health/ready", ready);
+
+  const policy = `${cspValue()}; frame-ancestors 'none'`;
+  for (const { path, file, type } of MAINTENANCE_PROBES.filter((probe) => probe.file !== undefined)) {
+    // A file the maintenance page loads: the release image's own, served as always (200, its type, no Retry-After).
+    const held = files.get(file);
+    if (held === undefined) {
+      failures.push(`the release image holds no ${file}, which the maintenance page loads`);
+      continue;
+    }
+    const answer = await fetch(`${origin}${path}`, { redirect: "manual" });
+    const bytes = Buffer.from(await answer.arrayBuffer());
+    const said = `GET ${path}`;
+    if (answer.status !== 200) failures.push(`${said} answered ${answer.status}, not 200: the maintenance page would show unstyled`);
+    if (!(answer.headers.get("content-type") ?? "").startsWith(type)) failures.push(`${said} answered ${answer.headers.get("content-type")}, not ${type}`);
+    if (!bytes.equals(held)) failures.push(`${said} answered a body that is not the release image's own ${file}, byte for byte`);
+    if (answer.headers.get("x-content-type-options") !== "nosniff") failures.push(`${said} carries no nosniff`);
+    cookie(said, answer);
+  }
+  for (const { path, language, acceptLanguage } of MAINTENANCE_PROBES.filter((probe) => probe.file === undefined)) {
+    const answer = await fetch(`${origin}${path}`, { redirect: "manual", headers: acceptLanguage === null ? {} : { "accept-language": acceptLanguage } });
+    const bytes = Buffer.from(await answer.arrayBuffer());
+    const said = `GET ${path}${acceptLanguage === null ? "" : ` (Accept-Language: ${acceptLanguage})`}`;
+    const header = (name) => answer.headers.get(name);
+    if (answer.status !== 503) failures.push(`${said} answered ${answer.status}, not 503`);
+    if (!(header("content-type") ?? "").startsWith("text/html")) failures.push(`${said} answered ${header("content-type")}, not a page`);
+    if (!bytes.equals(pages.get(language))) {
+      failures.push(`${said} answered a body that is not the release image's own maintenance page (${MAINTENANCE_DIRECTORY}/${language}.html), byte for byte`);
+    }
+    if (!RETRY_SECONDS.test(header("retry-after") ?? "")) failures.push(`${said} carries Retry-After ${header("retry-after")}, not a number of seconds`);
+    if (header("cache-control") !== "no-store") failures.push(`${said} may be cached (${header("cache-control")})`);
+    if (header("x-robots-tag") !== "noindex") failures.push(`${said} carries X-Robots-Tag ${header("x-robots-tag")}, not noindex`);
+    if (header("content-security-policy") !== policy) failures.push(`${said} carries the CSP ${header("content-security-policy")}, not ${policy}`);
+    if (!/^max-age=\d+/.test(header("strict-transport-security") ?? "")) failures.push(`${said} carries no HSTS`);
+    if (header("referrer-policy") !== "no-referrer") failures.push(`${said} carries Referrer-Policy ${header("referrer-policy")}, not no-referrer`);
+    if (header("x-content-type-options") !== "nosniff") failures.push(`${said} carries no nosniff`);
+    if (acceptLanguage !== null && header("vary") !== "Accept-Language") failures.push(`${said} varies by ${header("vary")}, not Accept-Language`);
+    cookie(said, answer);
+  }
+
+  const coverage = await fetch(`${origin}/api/v3/coverage`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ operation_id: "coverage", parameters: {} }),
+    redirect: "manual",
+  });
+  const type = coverage.headers.get("content-type") ?? "";
+  let problem = null;
+  try {
+    problem = JSON.parse(await coverage.text());
+  } catch {
+    problem = null;
+  }
+  if (coverage.status !== 503 || !type.startsWith("application/problem+json") || problem?.code !== "service_in_maintenance") {
+    failures.push(`POST /api/v3/coverage answered ${coverage.status} ${type}${typeof problem?.code === "string" ? ` (${problem.code})` : ""}, not 503 application/problem+json with the code service_in_maintenance: the revision is not in maintenance`);
+  }
+  if (!RETRY_SECONDS.test(coverage.headers.get("retry-after") ?? "")) failures.push(`POST /api/v3/coverage carries Retry-After ${coverage.headers.get("retry-after")}, not a number of seconds`);
+  cookie("POST /api/v3/coverage", coverage);
+  return failures;
+}
+
+/**
+ * The probe of a maintenance revision deployed from the release at `releaseDirectory`: the release read back under the
+ * signing identity's key (`publicKeyPem`), and as signed by the release signer `identity` when one is named, then the
+ * revision held to the release image's maintenance pages (`maintenanceFailures`). Failures, empty when both hold.
+ */
+export async function maintenanceReleaseFailures(origin, releaseDirectory, { publicKeyPem, identity = null }) {
+  const release = await releaseFailures(releaseDirectory, { publicKeyPem, identity });
+  if (release.length > 0) return release.map((failure) => `the release does not read back: ${failure}`);
+  return maintenanceFailures(origin, { web: liveFilesOf(await readLargeFile(join(releaseDirectory, ASSETS.image))) });
 }
 
 if (invokedDirectly(import.meta.url, process.argv[1])) {
@@ -558,8 +773,12 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
   const opening = argv.includes("--opening");
   // With --promotion-check, a revision that passes its probe while promotion refuses its data exits 3 (deploy.ps1).
   const promotionCheck = argv.includes("--promotion-check");
+  // The release's maintenance revision (deploy.ps1 -Maintenance): its maintenance pages and nothing else, over HTTP only.
+  const maintenance = argv.includes("--maintenance");
+  // The deployment's search-engine switch (deploy.ps1 -SearchEngines), exactly as the API reads it; kept out unless said.
+  const searchEngines = argv.includes("--search-engines") ? value("--search-engines") : KEPT_OUT;
   // The opening's own check (deploy.ps1 -Open): the site's served legal pages, and nothing else; it fails closed.
-  if (opening && release === null && publicKey === null && origin !== null && /^https?:\/\//.test(origin) && !withBrowser) {
+  if (opening && release === null && publicKey === null && origin !== null && /^https?:\/\//.test(origin) && !withBrowser && !maintenance) {
     const failures = await openingFailures(origin.replace(/\/+$/, ""));
     for (const failure of failures) console.error(`- ${failure}`);
     console.log(failures.length === 0
@@ -567,10 +786,13 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
       : `${failures.length} reason(s) the site may not open`);
     process.exit(failures.length === 0 ? 0 : 1);
   }
-  if (release === null || publicKey === null || (origin !== null && !/^https?:\/\//.test(origin)) || (argv.includes("--signer") && !identity)) {
-    console.error("usage: node scripts/deploy-probe.mjs --release <release directory> --public-key <signing identity's public key, PEM> [--signer <the release signer's identity>] [--origin <the candidate revision's URL> [--browser] [--opening] [--promotion-check]]");
+  if (release === null || publicKey === null || (origin !== null && !/^https?:\/\//.test(origin)) || (argv.includes("--signer") && !identity)
+    || (maintenance && (origin === null || withBrowser || opening || promotionCheck))
+    || (searchEngines !== KEPT_OUT && searchEngines !== INDEXED)) {
+    console.error("usage: node scripts/deploy-probe.mjs --release <release directory> --public-key <signing identity's public key, PEM> [--signer <the release signer's identity>] [--origin <the candidate revision's URL> [--browser] [--opening] [--promotion-check] [--search-engines kept-out|indexed]]");
+    console.error("       node scripts/deploy-probe.mjs --maintenance --origin <the maintenance revision's URL> --release <release directory> --public-key <PEM> [--signer <identity>]: the release's maintenance revision, over HTTP only");
     console.error("       node scripts/deploy-probe.mjs --opening --origin <the site's URL>: the opening's check of the served legal pages alone");
-    console.error("       with --promotion-check, a revision that answers as its release holds while promotion refuses its data's age exits 3");
+    console.error("       with --promotion-check, a revision that answers as its release holds while promotion refuses its data's age or its evaluation card exits 3");
     console.error("       with --signer, the release must be signed by that release signer, never a rehearsal");
     console.error("       without --origin, only the release is read back (deploy.ps1 does this before it touches Azure)");
     process.exit(2);
@@ -585,12 +807,20 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
     process.exit(failures.length === 0 ? 0 : 1);
   }
   const target = origin.replace(/\/+$/, "");
+  if (maintenance) {
+    const failures = await maintenanceReleaseFailures(target, release, { publicKeyPem, identity });
+    for (const failure of failures) console.error(`- ${failure}`);
+    console.log(failures.length === 0
+      ? `the maintenance revision at ${origin} answers as the release holds: ready, each page asked the release's maintenance page with 503 and Retry-After, and the API the problem service_in_maintenance, over HTTP only (no page walked in a browser)`
+      : `${failures.length} probe failure(s)`);
+    process.exit(failures.length === 0 ? 0 : 1);
+  }
   const notes = [];
   const promotion = [];
-  const failures = await deployedReleaseFailures(target, release, { publicKeyPem, identity, notes, promotion, opening });
+  const failures = await deployedReleaseFailures(target, release, { publicKeyPem, identity, notes, promotion, opening, searchEngines });
   for (const note of notes) console.log(note);
   if (failures.length === 0 && withBrowser) {
-    failures.push(...await browserFailures(target, release, { browser: await findBrowser() }));
+    failures.push(...await browserFailures(target, release, { browser: await findBrowser(), searchEngines }));
     console.log(REMOTE_PRIVACY_NOTE);
   }
   if (!withBrowser) console.log(NOT_WALKED_NOTE);
@@ -598,8 +828,9 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
   console.log(failures.length === 0
     ? `the revision at ${origin} answers as the release holds${withBrowser ? ", in the browser too" : ", over HTTP only (no page walked in a browser)"}`
     : `${failures.length} probe failure(s)`);
-  // The data's age at promotion (R87, O11): said whatever the probe found, and with --promotion-check its exit says it.
-  for (const refusal of promotion) console.log(`promotion refuses the data: ${refusal}`);
-  if (promotion.length === 0) console.log("the data's age allows promotion: every publisher channel's newest completed collection is within the maximum data age");
+  // The data's age (R87, O11) and the evaluation card (R104, O20) at promotion: said whatever the probe found, and with
+  // --promotion-check its exit says it.
+  for (const refusal of promotion) console.log(`promotion refuses the release: ${refusal}`);
+  if (promotion.length === 0) console.log("the data's age and the evaluation card allow promotion: every publisher channel's newest completed collection is within the maximum data age, and every gate on the release's card passes");
   process.exit(failures.length > 0 ? 1 : promotionCheck && promotion.length > 0 ? 3 : 0);
 }

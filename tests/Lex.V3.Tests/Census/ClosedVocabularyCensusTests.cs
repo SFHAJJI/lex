@@ -61,7 +61,7 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Api.V3TransportFailureKind: MalformedJson, DuplicateJsonMember, "
                     + "TrailingJsonContent, RequestTooLarge, RequestTooDeep, ParametersNotObject, "
                     + "RequestSchemaInvalid, UnknownOperation, MethodNotAllowed, UnknownRoute, "
-                    + "InternalResponseInvalid, InternalFailure, OperationNotServed",
+                    + "InternalResponseInvalid, InternalFailure, ServiceInMaintenance",
                 "Lex.V3.Artifacts.ArtifactAdmissionFailureCode: HeaderTooLarge, MalformedHeader, "
                     + "DuplicateMember, UnknownMember, PreviewSchemaForbidden, "
                     + "SyntheticFlagForbidden, SyntheticEvidenceForbidden, SyntheticSourceForbidden, "
@@ -567,6 +567,9 @@ public sealed class ClosedVocabularyCensusTests
                     + "WemiTupleTypedQuarantine, WemiRootMismatch, BodyNotRetained",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyOutcome: Admitted, "
                     + "Rejected, TypedGap",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgInFileRightsReadingTwoStatus: Bound, "
+                    + "OwnBlockEmpty, Unbound, Silent, NotApplicable, MalformedXml, RootRejected, "
+                    + "AmbiguousBinding, InvalidLicenceIri",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgLiteralDisposition: Accepted, "
                     + "TypedQuarantine",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgLiteralReason: "
@@ -646,7 +649,10 @@ public sealed class ClosedVocabularyCensusTests
                     + "Multiple, Conflict, AgreedSameRunCcBy, NonAdmittingLicenceScl, "
                     + "TypedQuarantineUnruledLicence, SecondChannelPending, "
                     + "TypedQuarantineUnrepresentableLicenceShape, "
-                    + "TypedQuarantineInFileReadingRejected",
+                    + "TypedQuarantineInFileReadingRejected, AgreedCcByRederived, "
+                    + "SparqlCcByInFileNamesOtherIdentity, SparqlCcByInFileSilent, "
+                    + "SparqlCcByInFileOwnBlockEmpty, SparqlCcByInFileNotApplicable, "
+                    + "TypedQuarantineInFileIdentityUnknown",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgSelectorCardinality: Missing, Single, "
                     + "Multiple",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgTypedRoleKind: NotApplicable, "

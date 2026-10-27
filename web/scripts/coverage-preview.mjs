@@ -47,9 +47,70 @@ const CORPUS = 'c0'.repeat(32);
 const INDEX = 'd1'.repeat(32);
 const REGISTRY = 'e2'.repeat(32);
 
+// The scope of a mount whose build reported its text yield (`V3CorpusMount.CoverageScopeWithTextYield`), as the captured
+// answer's mount does: the catalogue's versions are then counted too.
 const SCOPE =
-  'the mounted Luxembourg corpus and index: what this mount holds and recorded as missing, and '
-  + 'nothing about what the publisher holds';
+  'the mounted Luxembourg corpus and index: what this mount holds and recorded as missing, and of what the publisher '
+  + "holds nothing but text_yield's count of the versions its catalogue lists, as this mount holds the catalogue's facts";
+
+// The platform's own sentence, to the character (`V3CorpusMount.TextYieldNote`).
+const TEXT_YIELD_NOTE =
+  "the build's report of the text yield per class, read from the build report beside this mount and held to it when the mount opened: "
+  + 'per publisher and per class of act (a Luxembourg family and state kind; an EU content class), versions counts the versions the catalogue lists '
+  + "(Luxembourg: the catalogue states of the class, as the index holds the catalogue's facts, and every state of which a file is held; EU: the census's "
+  + 'versions, one per original wording and one per consolidation date of each seed) and versions_with_text those with an article served here; '
+  + 'versions_not_held counts each catalogue state of which this mount holds no file, by what the catalogue says of it, and is null where the index cannot '
+  + 'tell (EU); files counts the publisher files this mount holds, each in exactly one of files_with_text, files_withheld (by the rights disposition, '
+  + 'verbatim; pdf counts the PDF files among them), files_pdf_only (an admitted PDF from which no text is served; null where the corpus records no '
+  + 'file format: EU) and files_parse_failed (an admitted file from which no article is served and that is not counted as PDF only, by the '
+  + "derivation's own dispositions, verbatim, joined with +; for the EU, a file with no Formex main body, a PDF or HTML one among them, is counted here "
+  + "by its own disposition, such as formex_main_body_not_eligible); articles counts the articles served; works counts distinct acts, so a "
+  + "publisher's works are not the sum of its classes', while its "
+  + "versions, files and articles are; annexes counts the annex outcomes the corpus recorded on the class's files: image_only those of "
+  + 'annex_text_not_available, with_text those served as text (none: no annex is served as an article) and failed every other, by disposition, and is '
+  + 'null where the corpus records no annex outcome (Luxembourg)';
+
+// The yield the build reported, in the shape the captured answer carries (one Luxembourg class, every list empty and no
+// annex outcome), with synthetic figures that hold to the rest of this answer as the producer holds a report to its mount:
+// its articles are the 240 the index holds and its files the 12 members acquired. Twelve files with text hold eleven of
+// the class's thirty versions (one version is held in two languages) and ten of its fourteen acts.
+const TEXT_YIELD = Object.freeze({
+  publishers: Object.freeze([
+    Object.freeze({
+      articles: 240,
+      classes: Object.freeze([
+        Object.freeze({
+          annexes: null,
+          articles: 240,
+          family: 'loi',
+          files: 12,
+          files_parse_failed: Object.freeze([]),
+          files_pdf_only: 0,
+          files_with_text: 12,
+          files_withheld: Object.freeze([]),
+          kind: 'consolidation',
+          versions: 30,
+          versions_not_held: Object.freeze([]),
+          versions_with_text: 11,
+          works: 14,
+          works_with_text: 10,
+        }),
+      ]),
+      files: 12,
+      files_with_text: 12,
+      publisher: 'lu-legilux',
+      versions: 30,
+      versions_with_text: 11,
+      works: 14,
+      works_with_text: 10,
+    }),
+  ]),
+  schema: 'lex-v3-text-yield/1',
+});
+
+function textYield() {
+  return structuredClone(TEXT_YIELD);
+}
 
 const COUNTS_NOTE =
   'counts are of rows the index holds; totals.articles and languages[].articles count the '
@@ -85,11 +146,11 @@ const ARTICLE_OUTCOMES = Object.freeze([
 ]);
 
 const OPERATIONS_NOTE =
-  'served_operations are the routes this mount answers and not_served_operations are registered '
-  + 'with no route on it; a request for an unserved operation answers the transport failure '
-  + 'operation_not_served (HTTP 404, below the envelope), which tells it apart from a path nothing '
-  + 'names (unknown_route); not_served_data names, for each unserved operation, the data that would '
-  + 'serve it, none of which the ingest produces';
+  'served_operations are the operations this mount answers from its data and not_served_operations are registered and '
+  + 'served from no data; every registered operation has a route over REST and MCP, and a request for an unserved one answers '
+  + 'inside a normal envelope with the typed refusal its row of not_served_data gives (reason: retrieval_mode_unavailable, '
+  + 'naming the requested mode and the modes this server serves), never a transport failure; not_served_data names, for each, '
+  + 'the data that would serve it, none of which the ingest produces';
 
 const SERVED = Object.freeze([
   'answer_drift', 'article_history', 'as_observed', 'as_of', 'ask', 'browse', 'changes_in_period',
@@ -108,6 +169,8 @@ const NOT_SERVED_DATA = Object.freeze([
     data_needed: 'the concept data attached to EU works: EuroVoc descriptors, EU directory codes and '
       + 'subject matters as the Publications Office records them; the EU index holds none of them',
     operation: 'concepts',
+    reason: 'retrieval_mode_unavailable',
+    requested_mode: 'r5_concepts',
   }),
   Object.freeze({
     data_needed: 'each held state\'s publication date beside its observation time (observed_from), so a '
@@ -115,12 +178,16 @@ const NOT_SERVED_DATA = Object.freeze([
       + "valid-from date; the observation times need each Luxembourg body's capture time in the "
       + "corpus, which no build records yet: a build's time bounds observation only from above",
     operation: 'knowable_on',
+    reason: 'retrieval_mode_unavailable',
+    requested_mode: 'r6_knowable_on',
   }),
   Object.freeze({
     data_needed: 'the transposition links: Legilux\'s transposes and draftTransposes assertions and the '
       + 'Publications Office\'s national implementing measures for Luxembourg, each kept as its '
       + 'publisher asserts it and never merged; neither is acquired',
     operation: 'transposition',
+    reason: 'retrieval_mode_unavailable',
+    requested_mode: 'r4_transposition',
   }),
 ]);
 
@@ -169,8 +236,10 @@ function history() {
 const NOT_HELD = Object.freeze([
   Object.freeze({
     item: 'publisher_universe',
-    reason: 'how many acts the publisher holds, or how many of them this mount lacks: the mount '
-      + 'records only what was admitted',
+    // The row of a mount whose build reported its text yield (`V3CorpusMount.CoveragePublisherUniverseWithTextYield`).
+    reason: 'how many acts the publisher holds outside the families whose catalogue facts this mount holds: text_yield counts '
+      + 'the versions and acts the catalogue lists in those families, and the EU versions the census found for the seeds '
+      + 'acquired, and nothing here counts any other',
   }),
   Object.freeze({
     item: 'never_consolidated_acts',
@@ -264,10 +333,34 @@ function cells(language, periods) {
   }));
 }
 
+/**
+ * What the mount declares beside its counts (R78, R12; R82's languages are null, as on a mount with no EU index, which the
+ * platform's own census is): two Luxembourg classes it does not hold, each with its disposition, and when Lex's own
+ * observations of Legilux begin, on the first build the history's log records.
+ */
+function declaredScope() {
+  return {
+    europe_languages: null,
+    luxembourg_classes_not_held: [
+      { class: 'communal_regulations', disposition: 'out_of_scope' },
+      { class: 'RCSF', disposition: 'admitted_awaiting_a_run' },
+    ],
+    // The history's first build, 2026-08-31T23:00:00Z, is 1 September in Luxembourg.
+    observations_begin: [{ basis: 'first_build_in_log', date: '2026-09-01', publisher: 'lu-legilux' }],
+    rule: DECLARED_SCOPE_RULE,
+  };
+}
+
+/** The platform's rule for what the mount declares, as `V3CorpusMount.DeclaredScopeRule` words it. */
+const DECLARED_SCOPE_RULE =
+  'luxembourg_classes_not_held declares, once per class, each Luxembourg class this mount does not hold, with its disposition; '
+  + 'observations_begin gives, per publisher, when Lex’s own observations held here begin';
+
 function answer({ requestedLanguage, languages, capabilityCells }) {
   return {
     capability_cells: capabilityCells,
     counts_note: COUNTS_NOTE,
+    declared_scope: declaredScope(),
     history: history(),
     languages,
     languages_held: [...LANGUAGES_HELD],
@@ -298,6 +391,8 @@ function answer({ requestedLanguage, languages, capabilityCells }) {
     },
     requested_language: requestedLanguage,
     scope: SCOPE,
+    text_yield: textYield(),
+    text_yield_note: TEXT_YIELD_NOTE,
     totals: { ...TOTALS },
   };
 }

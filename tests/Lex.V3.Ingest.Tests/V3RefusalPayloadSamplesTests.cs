@@ -45,12 +45,23 @@ public sealed class V3RefusalPayloadSamplesTests
         await ObserveLuxembourgAsync(census);
         await ObserveOneStateAsync(census);
         await ObserveRightsAsync(census);
+        await ObserveNamesAsync(census);
         await ObserveUnmountedAsync(census);
         await ObserveReferenceListsAsync(census);
         await ObserveEuropeReferencesAsync(census);
         await ObserveOutsideNamedVersionAsync(census);
+        await ObserveScopeAsync(census);
+        await ObserveRateLimitedAsync(census);
         Assert.IsEmpty(census.Problems, "Scenarios that did not yield the refusal they name:\n" + string.Join("\n", census.Problems));
         var observed = census.Observed;
+
+        // Each payload is held, independently of the copy the API embeds, to its code's published schema (the plan's item 6.10;
+        // 36-ideal-evaluation.md §4: "Payload completeness: JSON-schema per refusal type; 100 percent").
+        var schemaFailures = observed
+            .Where(static observation => !PublishedPayloadSchema(observation.Code).Evaluate(observation.Payload).IsValid)
+            .Select(static observation => $"{observation.Operation} / {observation.Scenario}: {observation.Code}")
+            .ToArray();
+        Assert.IsEmpty(schemaFailures, "Payloads their code's published schema refuses:\n" + string.Join("\n", schemaFailures));
 
         var registryCodes = V3OperationRegistry.Reviewed.RefusalCodes.Order(StringComparer.Ordinal).ToArray();
         Assert.AreEqual(20, registryCodes.Length);
@@ -333,6 +344,30 @@ public sealed class V3RefusalPayloadSamplesTests
             await DriveAsync(observed, mount, "evidence_bundle", "a state whose articles hold no text",
                 new { identifier = $"/lu-legilux/{empty.WorkKey}", date = empty.ApplicabilityDate, language = "fra" }, "text_not_available");
         }
+
+        // R77: an act the publisher's catalogue holds, licensed licenceSCL, and the index holds no version of: its record.
+        var catalogued = await MountedFixture.CreateAsync();
+        await using var cleanupCatalogued = catalogued;
+        await V3CorpusCatalogueRecordMountTests.AddCatalogueActAsync(catalogued);
+        using (var mount = await V3CorpusMount.OpenAsync(catalogued.Directory, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount);
+            await DriveAsync(observed, mount, "dossier", "an act the publisher's catalogue holds and the index holds no version of (R77)",
+                new { identifier = "/lu-legilux/" + V3CorpusCatalogueRecordMountTests.Key }, "text_not_available");
+        }
+    }
+
+    private static async Task ObserveNamesAsync(Census observed)
+    {
+        // R92: an act whose served text names a person (synthetic, V3CorpusNamesMountTests), measured, with the names record
+        // beside its mount: its bundle is text_withheld for the names it holds, with its identity and hashes.
+        var fixture = await MountedFixture.CreateAsync(await V3CorpusNamesMountTests.ActNamingAPersonAsync());
+        await using var cleanup = fixture;
+        Lex.V3.Ingest.Names.NamesMeasurement.WriteFiles(Lex.V3.Ingest.Names.NamesMeasurement.Measure(fixture.Directory), fixture.Directory);
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        await DriveAsync(observed, mount, "evidence_bundle", "an act the names record withholds (R92)",
+            new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate, language = "fra" }, "text_withheld");
     }
 
     private static async Task ObserveUnmountedAsync(Census observed)
@@ -423,7 +458,116 @@ public sealed class V3RefusalPayloadSamplesTests
         }
     }
 
-    /// <summary>Drives one served operation through the real handler and records the refusal, which must be the one named.</summary>
+    /// <summary>A clock that does not move, so a client's minute of tokens stays spent while the census asks.</summary>
+    private sealed class StoppedClock : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => ObservedAt;
+    }
+
+    private static async Task ObserveRateLimitedAsync(Census observed)
+    {
+        // The per-client limit (R109): one client's minute of API requests spent, every served operation then answers
+        // rate_limited before the mount is asked, with 429 and Retry-After over REST. One handler and one limit for the whole
+        // scenario, from one address outside the host.
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var handler = new V3ApiHandler(SyntheticApiState.Unavailable, new V3PlatformHost(), static () => ObservedAt, mount, null,
+            new V3ClientLimiter(new StoppedClock(), static () => new byte[32]));
+        for (var index = 0; index < V3ClientLimiter.ApiPerMinute; index++)
+        {
+            var spent = await PostAsync(handler, "/api/v3/coverage", JsonSerializer.Serialize(new { operation_id = "coverage", parameters = new { } }));
+            Assert.AreEqual(StatusCodes.Status200OK, spent.Response.StatusCode, $"request {index + 1} of the client's minute");
+        }
+
+        var work = $"/lu-legilux/{fixture.WorkKey}";
+        var date = fixture.ApplicabilityDate;
+        foreach (var (operation, parameters) in new (string, object)[]
+        {
+            ("resolve", new { identifier = work }),
+            ("as_of", new { identifier = work, date }),
+            ("as_observed", new { identifier = work, date }),
+            ("timeline", new { identifier = work }),
+            ("article_history", new { identifier = work, anchor = "art_1" }),
+            ("diff", new { identifier = work, date_from = date, date_to = date }),
+            ("changes_in_period", new { date_from = date, date_to = date }),
+            ("in_force_on", new { date }),
+            ("search", new { query = "loyer", language = "fra" }),
+            ("coverage", new { }),
+            ("provenance", new { identifier = work, date }),
+            ("dossier", new { identifier = work }),
+            ("citation", new { identifier = work, date }),
+            ("cited_by", new { identifier = work }),
+            ("verify", new { identifier = work }),
+            ("relations", new { identifier = work }),
+            ("evidence_bundle", new { identifier = work, date }),
+            ("classification", new { identifier = work }),
+            ("manifestation", new { identifier = work }),
+            ("status_on", new { identifier = work, date }),
+            ("browse", new { }),
+            ("ask", new { question = "Can I be fired while on sick leave?" }),
+            ("events", new { }),
+            ("answer_drift", new { }),
+            // The three served from no data are limited alike: a request over the limit never reaches their refusal.
+            ("concepts", new { identifier = work }),
+            ("knowable_on", new { identifier = work, date }),
+            ("transposition", new { identifier = work }),
+        })
+        {
+            var label = $"{operation} / the client's minute of requests spent";
+            var context = await PostAsync(handler, "/api/v3/" + operation, JsonSerializer.Serialize(new { operation_id = operation, parameters }));
+            if (context.Response.StatusCode != StatusCodes.Status429TooManyRequests ||
+                !string.Equals(context.Response.Headers.RetryAfter.ToString(), "1", StringComparison.Ordinal))
+            {
+                observed.Problems.Add($"{label}: expected 429 with Retry-After 1 and got HTTP {context.Response.StatusCode}, Retry-After '{context.Response.Headers.RetryAfter}': {Encoding.UTF8.GetString(ResponseBytes(context))}");
+                continue;
+            }
+
+            var envelope = V3EnvelopeJson.ParseAndVerify(ResponseBytes(context), V3OperationRegistry.Reviewed);
+            if (envelope.Refusal is null || !string.Equals(envelope.Refusal.Code, "rate_limited", StringComparison.Ordinal))
+            {
+                observed.Problems.Add($"{label}: expected the refusal rate_limited and got {envelope.Refusal?.Code ?? envelope.Verdict}");
+                continue;
+            }
+
+            observed.Observed.Add(new Observation(operation, "the client's minute of requests spent", "rate_limited", envelope.Refusal.HelpfulPayload.Clone()));
+        }
+
+        CollectionAssert.AreEquivalent(
+            V3RestRouteBinding.Routed.Select(static binding => binding.OperationId).ToArray(),
+            observed.Observed.Where(static o => o.Code == "rate_limited").Select(static o => o.Operation).ToArray(),
+            "every routed operation is limited alike");
+    }
+
+    /// <summary>
+    /// The two refusals given before the mount is read: the three operations served from no data, each refusing
+    /// <c>retrieval_mode_unavailable</c> (the plan's item 8.6), and the instruments the out-of-scope list names, refused
+    /// <c>out_of_corpus_scope</c> with their official place and who to ask (the plan's item 6.10; J5's circular).
+    /// </summary>
+    private static async Task ObserveScopeAsync(Census observed)
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var work = $"/lu-legilux/{fixture.WorkKey}";
+        await DriveAsync(observed, mount, "concepts", "an operation served from no data, asked of a held work", new { identifier = work }, "retrieval_mode_unavailable");
+        await DriveAsync(observed, mount, "knowable_on", "an operation served from no data, asked of a held work on its date", new { identifier = work, date = fixture.ApplicabilityDate }, "retrieval_mode_unavailable");
+        await DriveAsync(observed, mount, "transposition", "an operation served from no data, asked of a held work", new { identifier = work }, "retrieval_mode_unavailable");
+        await DriveAsync(observed, mount, "dossier", "a CSSF circular asked for by its name (J5)", new { identifier = "Circulaire CSSF 20/747" }, "out_of_corpus_scope");
+        await DriveAsync(observed, mount, "resolve", "a decision of the Court of Justice by its ECLI", new { identifier = "ECLI:EU:C:2014:317" }, "out_of_corpus_scope");
+        await DriveAsync(observed, mount, "as_of", "a CNPD decision on a date", new { identifier = "Délibération CNPD n° 12/2023", date = fixture.ApplicabilityDate }, "out_of_corpus_scope");
+        await DriveAsync(observed, mount, "timeline", "a RESA publication", new { identifier = "RESA_2020_123.456" }, "out_of_corpus_scope");
+    }
+
+    /// <summary>A refusal code's payload schema as published (<c>schemas/v3-platform/{code}-payload.schema.json</c>), read from the file.</summary>
+    private static Json.Schema.JsonSchema PublishedPayloadSchema(string code) =>
+        Json.Schema.JsonSchema.FromText(
+            File.ReadAllText(Path.Combine(RepositoryRoot(), "schemas", "v3-platform", $"{code.Replace('_', '-')}-payload.schema.json")),
+            new Json.Schema.BuildOptions { Dialect = Json.Schema.Dialect.Draft202012, SchemaRegistry = new Json.Schema.SchemaRegistry() });
+
+    /// <summary>Drives one routed operation through the real handler and records the refusal, which must be the one named.</summary>
     private static async Task DriveAsync(
         Census census, V3CorpusMount mount, string operation, string scenario, object parameters, string expectedCode)
     {
@@ -539,7 +683,11 @@ public sealed class V3RefusalPayloadSamplesTests
         return directory?.FullName ?? throw new InvalidOperationException("Repository root not found.");
     }
 
-    private static async Task<DefaultHttpContext> PostAsync(V3CorpusMount mount, string rawTarget, string body)
+    private static Task<DefaultHttpContext> PostAsync(V3CorpusMount mount, string rawTarget, string body) =>
+        PostAsync(new V3ApiHandler(SyntheticApiState.Unavailable, new V3PlatformHost(), static () => ObservedAt, mount), rawTarget, body);
+
+    /// <summary>One POST through <paramref name="handler"/>, from an address outside the host, which the per-client limit counts.</summary>
+    private static async Task<DefaultHttpContext> PostAsync(V3ApiHandler handler, string rawTarget, string body)
     {
         var bytes = Encoding.UTF8.GetBytes(body);
         var context = new DefaultHttpContext();
@@ -547,9 +695,9 @@ public sealed class V3RefusalPayloadSamplesTests
         context.Request.Method = HttpMethods.Post;
         context.Request.Body = new MemoryStream(bytes);
         context.Request.ContentLength = bytes.Length;
+        context.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.77");
         context.Features.Get<IHttpRequestFeature>()!.RawTarget = rawTarget;
         context.Response.Body = new MemoryStream();
-        var handler = new V3ApiHandler(SyntheticApiState.Unavailable, new V3PlatformHost(), static () => ObservedAt, mount);
         await handler.HandleAsync(context, CancellationToken.None);
         return context;
     }

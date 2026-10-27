@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "7690208800319421721"
+      "templateHash": "16746143461888110290"
     }
   },
   "parameters": {
@@ -91,6 +91,13 @@
       "metadata": {
         "description": "The custom domains bound to the app, as Azure holds them (name, bindingType, certificateId): deploy.ps1 reads them back and passes them on every deployment, so a redeployment keeps the binding. Empty until law.soufien.lu is bound (deploy/bind-domain.ps1)."
       }
+    },
+    "maintenance": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "True for the release's maintenance revision (deploy.ps1 -Maintenance; R60, R108, R115): the same image with LEX_V3_MAINTENANCE=on, serving only the maintenance page, deployed with no traffic beside the live revision, which keeps 100 per cent."
+      }
     }
   },
   "variables": {
@@ -107,6 +114,66 @@
       }
     ],
     "firstDeployment": "[empty(parameters('liveRevision'))]",
+    "releaseProbes": [
+      {
+        "type": "Startup",
+        "httpGet": {
+          "path": "/",
+          "port": 8080
+        },
+        "initialDelaySeconds": 10,
+        "periodSeconds": 30,
+        "failureThreshold": 10
+      },
+      {
+        "type": "Liveness",
+        "httpGet": {
+          "path": "/",
+          "port": 8080
+        },
+        "initialDelaySeconds": 10,
+        "periodSeconds": 30
+      },
+      {
+        "type": "Readiness",
+        "httpGet": {
+          "path": "/health/ready",
+          "port": 8080
+        },
+        "initialDelaySeconds": 5,
+        "periodSeconds": 10
+      }
+    ],
+    "maintenanceProbes": [
+      {
+        "type": "Startup",
+        "httpGet": {
+          "path": "/health/ready",
+          "port": 8080
+        },
+        "initialDelaySeconds": 2,
+        "periodSeconds": 5,
+        "failureThreshold": 10
+      },
+      {
+        "type": "Liveness",
+        "httpGet": {
+          "path": "/health/ready",
+          "port": 8080
+        },
+        "initialDelaySeconds": 2,
+        "periodSeconds": 30
+      },
+      {
+        "type": "Readiness",
+        "httpGet": {
+          "path": "/health/ready",
+          "port": 8080
+        },
+        "initialDelaySeconds": 2,
+        "periodSeconds": 10
+      }
+    ],
     "admitNoOne": [
       {
         "name": "private-copy-closed",
@@ -137,7 +204,7 @@
             "targetPort": 8080,
             "transport": "http",
             "allowInsecure": false,
-            "traffic": "[if(variables('firstDeployment'), createArray(createObject('latestRevision', true(), 'weight', 100, 'label', 'candidate')), createArray(createObject('revisionName', parameters('liveRevision'), 'weight', 100), createObject('latestRevision', true(), 'weight', 0, 'label', 'candidate')))]",
+            "traffic": "[if(parameters('maintenance'), createArray(createObject('revisionName', parameters('liveRevision'), 'weight', 100), createObject('latestRevision', true(), 'weight', 0, 'label', 'maintenance')), if(variables('firstDeployment'), createArray(createObject('latestRevision', true(), 'weight', 100, 'label', 'candidate')), createArray(createObject('revisionName', parameters('liveRevision'), 'weight', 100), createObject('latestRevision', true(), 'weight', 0, 'label', 'candidate'))))]",
             "ipSecurityRestrictions": "[if(parameters('openToPublic'), createArray(), if(empty(parameters('allowedSourceCidrs')), variables('admitNoOne'), variables('allowedOnly')))]",
             "customDomains": "[parameters('customDomains')]"
           },
@@ -170,38 +237,13 @@
                 {
                   "name": "LEX_V3_SEARCH_ENGINES",
                   "value": "[parameters('searchEngines')]"
-                }
-              ],
-              "probes": [
-                {
-                  "type": "Startup",
-                  "httpGet": {
-                    "path": "/",
-                    "port": 8080
-                  },
-                  "initialDelaySeconds": 10,
-                  "periodSeconds": 30,
-                  "failureThreshold": 10
                 },
                 {
-                  "type": "Liveness",
-                  "httpGet": {
-                    "path": "/",
-                    "port": 8080
-                  },
-                  "initialDelaySeconds": 10,
-                  "periodSeconds": 30
-                },
-                {
-                  "type": "Readiness",
-                  "httpGet": {
-                    "path": "/health/ready",
-                    "port": 8080
-                  },
-                  "initialDelaySeconds": 5,
-                  "periodSeconds": 10
+                  "name": "LEX_V3_MAINTENANCE",
+                  "value": "[if(parameters('maintenance'), 'on', 'off')]"
                 }
               ],
+              "probes": "[if(parameters('maintenance'), variables('maintenanceProbes'), variables('releaseProbes'))]",
               "volumeMounts": [
                 {
                   "volumeName": "tmp",

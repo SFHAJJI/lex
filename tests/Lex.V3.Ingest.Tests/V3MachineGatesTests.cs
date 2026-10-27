@@ -6,6 +6,8 @@ using Lex.V3.Contracts;
 using Lex.V3.Contracts.Evaluation;
 using Lex.V3.Contracts.Platform;
 using Lex.V3.Ingest.Europe;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Data.Sqlite;
 using static Lex.V3.Ingest.Tests.V3CorpusClassificationMountTests;
 using static Lex.V3.Ingest.Tests.V3CorpusResolveMountTests;
@@ -295,15 +297,26 @@ public sealed class V3MachineGatesTests
             ["eu-work-no-eu-index"] = (mount, "search", new { query = "x", language = "eng", identifier = "32016R0679" }, "no_corpus_mounted"),
             ["rights-not-agreed"] = (withheldMount, "evidence_bundle", new { identifier = $"/lu-legilux/{withheld.WorkKey}", date = withheld.ApplicabilityDate, language = "fra" }, "text_withheld"),
             ["no-text-held"] = (emptyMount, "evidence_bundle", new { identifier = $"/lu-legilux/{empty.WorkKey}", date = empty.ApplicabilityDate, language = "fra" }, "text_not_available"),
+            // An instrument Lex never holds (the out-of-scope list, the plan's item 6.10; J5), and its minimal twin: a regulator's
+            // regulation, which R78 admits, is no out-of-scope instrument, so this mount, which does not hold it, finds it unknown.
+            ["cssf-circular"] = (mount, "dossier", new { identifier = "Circulaire CSSF 20/747" }, "out_of_corpus_scope"),
+            ["cssf-regulation"] = (mount, "dossier", new { identifier = "Règlement CSSF n° 12-02" }, "identifier_unknown"),
+            // An operation served from no data refuses with its typed reason, inside the envelope (the plan's item 8.6).
+            ["served-from-no-data"] = (mount, "knowable_on", new { identifier = work, date }, "retrieval_mode_unavailable"),
             ["a-held-state"] = (mount, "as_of", new { identifier = work, date, language = "fra" }, "answer"),
             ["the-held-permalink"] = (mount, "verify", new { identifier = permalink, language = "fra" }, "answer"),
             ["coverage"] = (mount, "coverage", new { }, "answer"),
+            // The per-client limit (R109): one client past its minute of API requests is refused before the mount is asked.
+            [PastItsMinute] = (mount, "as_of", new { identifier = work, date, language = "fra" }, "rate_limited"),
         };
         var cases = requests.Select(static pair => new VerdictCase(pair.Key, pair.Value.Gold)).ToArray();
         VerdictArm arm = caseId =>
         {
             var (target, operation, parameters, _) = requests[caseId];
-            var envelope = EnvelopeAsync(target, "/api/v3/" + operation, operation, parameters).GetAwaiter().GetResult();
+            var envelope = (string.Equals(caseId, PastItsMinute, StringComparison.Ordinal)
+                    ? PastItsMinuteAsync(target, operation, parameters)
+                    : EnvelopeAsync(target, "/api/v3/" + operation, operation, parameters))
+                .GetAwaiter().GetResult();
             return envelope.Refusal?.Code ?? "answer";
         };
 
@@ -466,6 +479,47 @@ public sealed class V3MachineGatesTests
         }
 
         return directory?.FullName ?? throw new InvalidOperationException("The repository root holds Lex.V3.slnx.");
+    }
+
+    /// <summary>The refusal set's case of a client past its minute of API requests (R109).</summary>
+    private const string PastItsMinute = "a-client-past-its-minute";
+
+    /// <summary>A clock that does not move, so one client's minute of tokens stays spent while the case asks.</summary>
+    private sealed class StoppedClock : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => ObservedAt;
+    }
+
+    /// <summary>
+    /// What one client is answered once it has spent its minute of API requests (R109; V3ClientLimiter): sixty answered from
+    /// one address outside the host, then the request asked, through one handler and its limit, with 429 and Retry-After.
+    /// </summary>
+    private static async Task<V3Envelope> PastItsMinuteAsync(V3CorpusMount mount, string operation, object parameters)
+    {
+        var handler = new V3ApiHandler(SyntheticApiState.Unavailable, new V3PlatformHost(), static () => ObservedAt, mount, null,
+            new V3ClientLimiter(new StoppedClock(), static () => new byte[32]));
+        async Task<DefaultHttpContext> AskAsync(string asked, object with)
+        {
+            var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { operation_id = asked, parameters = with }));
+            var context = new DefaultHttpContext { TraceIdentifier = "machine-gates-limit" };
+            context.Request.Method = HttpMethods.Post;
+            context.Request.Body = new MemoryStream(bytes);
+            context.Request.ContentLength = bytes.Length;
+            context.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.77");
+            context.Features.Get<IHttpRequestFeature>()!.RawTarget = "/api/v3/" + asked;
+            context.Response.Body = new MemoryStream();
+            await handler.HandleAsync(context, CancellationToken.None);
+            return context;
+        }
+
+        for (var index = 0; index < V3ClientLimiter.ApiPerMinute; index++)
+        {
+            Assert.AreEqual(StatusCodes.Status200OK, (await AskAsync("coverage", new { })).Response.StatusCode);
+        }
+
+        var limited = await AskAsync(operation, parameters);
+        Assert.AreEqual(StatusCodes.Status429TooManyRequests, limited.Response.StatusCode);
+        return V3EnvelopeJson.ParseAndVerify(ResponseBytes(limited), V3OperationRegistry.Reviewed);
     }
 
     /// <summary>The codes the refusal census records as produced by the served operations.</summary>

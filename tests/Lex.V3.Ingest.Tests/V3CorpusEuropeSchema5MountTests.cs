@@ -20,7 +20,9 @@ namespace Lex.V3.Ingest.Tests;
 /// without force dates sends, whole envelope for whole envelope: no <c>force_dates</c> member, and the not-held row that says
 /// no force date is held. A later change that moves one of those answers on purpose records them again at its base: the
 /// answers were recorded again at v3/integration e504d188 (#989 gives every answer its freshness and commits context), by
-/// that code with this class alone added, on Linux, the files unchanged.
+/// that code with this class alone added, on Linux, the files unchanged; and again at 9b28c5c3 (the API's gaps, the plan's
+/// items 6.10 and 8.6), on Linux, each row moving by its registry identity alone and coverage by its operations note and rows; and
+/// again at 81fc8ac1 (truth and coverage), on Linux, three rows moving by the other-languages sentence alone.
 /// </summary>
 [TestClass]
 public sealed class V3CorpusEuropeSchema5MountTests
@@ -31,8 +33,18 @@ public sealed class V3CorpusEuropeSchema5MountTests
     private const string CorpusFileSha256 = "7665cc484a2808c89313b2a6f7e5ef8cdf2e995dc363090958d63a564648753d";
     private const string Act = "32016R0679";
 
-    // The base the answers were last recorded at: the code without force dates, as the integration branch holds it.
-    private const string RecordedAtCommit = "e504d188";
+    // The commit the answers were last recorded at, on Linux: e504d188, the code without force dates, then 9b28c5c3 (the API's
+    // gaps, 2026-10-27), where every row moved by its registry identity alone (lex-v3-operation-registry/2 and its digest) and
+    // coverage by its operations note and rows too, then 320c0f20 (over #995: the registry digest alone), then 81fc8ac1 (truth and
+    // coverage, 2026-10-27: the three EU dossier and search rows by their other-languages sentence alone, which no longer says
+    // French is not acquired) and, on its own branch, ee44bf68 (R77 and R57, writer/catalogue-and-compare: the exact-reference
+    // rule now names the record of an act only the catalogue holds, so the one search answer with a reference moved by that
+    // rule's text alone) and caaff24d (the review of #1003: diff's request schema gained `page`, so every row moved by the
+    // registry digest alone), then 27a36a09 (the two combined, #1003 carrying #1004): the two dossier rows by #1004's sentence
+    // alone and the search row by both slices' (#1004's not-held reason, R77's exact-reference rule); no other row moved; then
+    // 222a3cf6 (EU search over the act's time view, folded, with extracts, the audit's gap 5): its one search row alone; then
+    // 2c43bde3 (the review of #1005: the apostrophes, no-break spaces and soft hyphen folded): that row's matching sentence alone.
+    private const string RecordedAtCommit = "2c43bde3";
 
     private static byte[] Fixture(string name) =>
         File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuSchema5Mount", name));
@@ -85,7 +97,7 @@ public sealed class V3CorpusEuropeSchema5MountTests
 
     /// <summary>
     /// Every recorded request, asked again of the same committed files, answers the same bytes. The answers were recorded at
-    /// the base (24118293 on Windows, again at e504d188 on Linux); nothing in an EU answer reads the system (paths, culture or
+    /// the base (24118293 on Windows, again at e504d188, 9b28c5c3, 320c0f20, 81fc8ac1, ee44bf68, caaff24d and 27a36a09 on Linux); nothing in an EU answer reads the system (paths, culture or
     /// clock: the handler answers at one fixed observation time), and every system is held to them.
     /// </summary>
     [TestMethod]

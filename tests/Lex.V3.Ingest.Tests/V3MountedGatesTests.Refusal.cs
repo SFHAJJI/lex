@@ -52,6 +52,10 @@ public sealed partial class V3MountedGatesTests
         var requests = new SortedDictionary<string, RefusalRequest>(StringComparer.Ordinal)
         {
             ["coverage"] = new("coverage", new { }, hasLuxembourgIndex ? "answer" : "no_corpus_mounted"),
+            // What no data of the mount decides, so every mount gives it: an instrument the out-of-scope list names, refused before
+            // the mount is read (the plan's item 6.10; J5), and an operation served from no data (8.6), refused with its typed reason.
+            ["cssf-circular"] = new("dossier", new { identifier = "Circulaire CSSF 20/747" }, "out_of_corpus_scope"),
+            ["served-from-no-data"] = new("concepts", new { }, "retrieval_mode_unavailable"),
         };
         var notProduced = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var hasEuropeIndex = File.Exists(Path.Combine(mountDirectory, V3CorpusMount.EuropeIndexFileName));
@@ -289,7 +293,11 @@ public sealed partial class V3MountedGatesTests
         const string NotHeld = "32099R9999";
         if (Scalar(connection, $"SELECT publisher_work_celex FROM articles WHERE publisher_work_celex = '{NotHeld}' LIMIT 1") is null)
         {
-            requests["eu-unknown-celex"] = new("search", new { query = word, language, identifier = NotHeld }, "identifier_unknown");
+            // An EU act outside the population an EU index states (its census of seed acts) is out of the corpus's scope (R80);
+            // an index that states no population (no states table, or none in it) still answers it unknown.
+            var statesPopulation = Scalar(connection, "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'states'") is not null &&
+                                   Scalar(connection, "SELECT seed_celex FROM states LIMIT 1") is not null;
+            requests["eu-unknown-celex"] = new("search", new { query = word, language, identifier = NotHeld }, statesPopulation ? "out_of_corpus_scope" : "identifier_unknown");
         }
 
         var held = Rows(connection, $"SELECT DISTINCT language FROM articles WHERE publisher_work_celex = '{celex.Replace("'", "''", StringComparison.Ordinal)}'").Select(static row => row[0]).ToHashSet(StringComparer.Ordinal);
@@ -299,10 +307,14 @@ public sealed partial class V3MountedGatesTests
             requests["eu-language-not-held"] = new("search", new { query = word, language = absent, identifier = celex }, "language_not_available");
         }
 
-        requests["eu-dated-search"] = new("search", new { query = word, language, identifier = celex, date = "2020-01-01" }, "retrieval_mode_unavailable");
+        // A dated EU search reads the wording the date selects, as as_of does, where the EU index holds the act's census: a date
+        // before every EU act is as_of's no_version_for_date; without a census no wording can be selected, and a date is refused.
+        var quotedCelex = celex.Replace("'", "''", StringComparison.Ordinal);
+        requests["eu-dated-search"] = HasStatesTable(connection) && Scalar(connection, $"SELECT seed_celex FROM states WHERE seed_celex = '{quotedCelex}' LIMIT 1") is not null
+            ? new("search", new { query = word, language, identifier = celex, date = "1900-01-01" }, "no_version_for_date")
+            : new("search", new { query = word, language, identifier = celex, date = "2020-01-01" }, "retrieval_mode_unavailable");
         requests["eu-in-force-on"] = new("in_force_on", new { identifier = celex, date = "2020-01-01", language }, "retrieval_mode_unavailable");
 
-        var quotedCelex = celex.Replace("'", "''", StringComparison.Ordinal);
         var quotedLanguage = language.Replace("'", "''", StringComparison.Ordinal);
         var wordings = Rows(connection, $"SELECT DISTINCT publisher_work_id, publisher_expression_id, wording_date FROM articles WHERE publisher_work_celex = '{quotedCelex}' AND language = '{quotedLanguage}'");
         if (wordings.Count != 1)
@@ -439,7 +451,7 @@ public sealed partial class V3MountedGatesTests
         CollectionAssert.AreEquivalent(
             new[] { "text_withheld", "text_not_available" }, derived.NotProduced.Keys.ToArray(),
             "one mount cannot hold a withheld licence and text beside them; every other produced code is derived: " + string.Join("; ", derived.NotProduced.Select(static pair => pair.Key + " (" + pair.Value + ")")));
-        Assert.AreEqual(16, set.CaseCount, "the fixture machine gates' 18 less the two codes another mount holds");
+        Assert.AreEqual(18, set.CaseCount, "the fixture machine gates' 22 less the two codes another mount holds, the regulation's twin, which is the fixture's own, and the limit's case, which needs a handler of its own");
     }
 
     [TestMethod]
@@ -496,7 +508,8 @@ public sealed partial class V3MountedGatesTests
         CollectionAssert.IsSubsetOf(
             new[] { "eu-search-held", "eu-unknown-celex", "eu-language-not-held", "eu-dated-search", "eu-in-force-on", "eu-pinned-provision", "eu-pinned-digest-not-held", "eu-provision-not-held" },
             derived.Requests.Keys.ToArray());
-        foreach (var code in new[] { "identifier_unknown", "language_not_available", "retrieval_mode_unavailable", "pinned_digest_mismatch", "anchor_not_in_version" })
+        // An unheld CELEX is out of the population the fixture's EU index states (R80), so out_of_corpus_scope is the EU's here.
+        foreach (var code in new[] { "out_of_corpus_scope", "language_not_available", "retrieval_mode_unavailable", "pinned_digest_mismatch", "anchor_not_in_version" })
         {
             Assert.IsFalse(derived.NotProduced.ContainsKey(code), $"{code} is produced by an EU request");
         }

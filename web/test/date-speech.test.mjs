@@ -81,7 +81,10 @@ const EUROPE_DATE_FIELDS = new Set(["wording_date", "wording_dates", "pinned_wor
  * refusal card's declared nulls and its offered wordings), and the EU export's.
  */
 const EUROPE_ENTRIES = new Set([
-  "search.euWording", "search.euHit", "search.notHeldHeading", "dossier.euExpressions.one", "dossier.euExpressions.other",
+  "search.notHeldHeading", "dossier.euExpressions.one", "dossier.euExpressions.other",
+  // An EU act's search (the audit of 2026-10-27, gap 5): its passages by wording, what it searched, and with which date.
+  "search.euFound", "search.euWordings.one", "search.euWordings.other", "search.euSearched", "search.euDated", "search.euUndated",
+  "search.euNotSearched.one", "search.euNotSearched.other", "search.euSameWording.one", "search.euSameWording.other",
   "dossier.wordingDate", "reading.europeWordingHeading", "reading.europeOriginalHeading", "reading.europeConsolidatedHeading",
   "reading.europeHoldsUntil", "reading.europeLatest", "reading.europeCounts.one", "reading.europeCounts.other",
   "export.europeRights", "export.europeItem", "export.europeExcluded",
@@ -90,10 +93,14 @@ const EUROPE_ENTRIES = new Set([
   "refusalCard.europeNotes.ambiguous_version",
   "reading.europeSameDateWorks.one", "reading.europeSameDateWorks.other", "reading.europeUnplaced.one", "reading.europeUnplaced.other",
   "common.europeAnnexes.one", "common.europeAnnexes.other",
+  // The Treaties' items left out, by the wording they are published with (the review of #996, F2).
+  "common.europeTreatyParts.one", "common.europeTreatyParts.other",
   "reading.europePinReplaced", "reading.europePinNotHeld", "reading.europeWholeAct", "reading.europeNewerWording",
   "reading.europeLaterWordingNotHeld",
   // A page past an EU wording's last (the review of #978, F2).
   "reading.europePageNotHeld.one", "reading.europePageNotHeld.other",
+  // An EU reading's breadcrumb for its wording, by its own date (R48, `breadcrumbs.mjs`), and the law the EU publishes.
+  "breadcrumbs.europeOriginal", "breadcrumbs.europeConsolidated", "breadcrumbs.publishers.eu-eurlex",
   // The citation generator's EU words (`citation.mjs`): an EU act's name and the date it is cited at, the wording's line of
   // the evidence form, the Official Journal reference no index holds, and the EU's authenticity statement.
   "citation.europe.article", "citation.europe.acts.R", "citation.europe.acts.L", "citation.europe.acts.D",
@@ -298,8 +305,9 @@ test("the speech test fails a screen that borrows the other publisher's date wor
   const envelope = census.envelopes.find((entry) => entry.operation === "search" && entry.scenario.startsWith("one EU work by its CELEX")).envelope;
   const outcome = searchOutcome({ state: "success", envelope });
   const markup = renderToStaticMarkup(h(SearchAnswerView, { outcome, onNextPage: () => {} }));
-  const borrowed = markup.replaceAll(", wording of ", ", version of ");
-  assert.notEqual(borrowed, markup, "the EU hit row says 'wording of'");
+  // An EU search heads its passages by their wording, as the reading heads it (the audit of 2026-10-27, gap 5).
+  const borrowed = markup.replaceAll("the original wording of ", "the original version of ");
+  assert.notEqual(borrowed, markup, "the EU wording's heading says 'the original wording of'");
   assert.match(interfaceText(borrowed, envelope), LUXEMBOURG_DATE_WORDS, "an EU hit called a version is caught");
 });
 

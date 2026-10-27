@@ -29,9 +29,28 @@
 // puts it on no disk at all.
 // The evaluation card is the machine gates run over the mount the image carries (ruling 2), derived from the
 // mount by `V3MountedGatesTests` (`--platform-card` takes the platform's fixture card instead).
+// R92's measurement (the plan's item 1.11) runs over the same mount, read-only: `Lex.V3.Tool names-records` (the release's
+// bound tool from custody, else published from this checkout) writes the indexing record and the names record into the work
+// directory, never into the mount, and both are published beside the mount in the image (`app/v3-corpus/`), where the API
+// reads them (`names-records.mjs`): the records must hold together (no withheld work offered to search engines), the image
+// must hold them byte for byte, and the probes hold the running image to them (a withheld work's dossier is text_withheld for
+// R92; an act the catalogue names only by a title is named without it).
+// The home page's example searches (R47) are derived over the same mount through the API's own answers, the API published
+// from this checkout and started over the mount for that alone (`home-examples-run.mjs`), among the acts the release's own
+// indexing record admits, and built into both images' pages; the probes hold the image's home pages to them, each example
+// asked of the image's own API.
+// Before anything is built, the release path's checks run over the mount (`release-checks.mjs`, `Lex.V3.Tool release-checks`,
+// read-only): R86(2), every admitted consolidation file that yields no text listed by identity and typed outcome, and, with
+// the release serving now (`--serving-release <its directory> --serving-mount <its mount>`, the mount held to that release's
+// signed mount report), R106's release-over-release comparison, every lost or changed served identity or text digest listed
+// and explained by a typed reason (the data's, or the release's own `--release-explanations`). A check that refuses stops the
+// release with each item named. A release signed by the release signer must name the release serving now; a rehearsal may
+// leave it out.
 // Last, the release assets are published into a versioned directory (the image, its signature, the
-// evaluation card the image serves at its stable route `/evaluation-card.json`, which the probes fetch, the mount's report, and a signed release manifest naming each by
-// hash), read back and verified (`release-assets.mjs`).
+// evaluation card the image serves at its stable route `/evaluation-card.json`, which the probes fetch, the mount's report, R92's
+// two records and the measurement's counts, the checks' reports, the explanations, R88's manifest diff against the release
+// serving now as JSON and as a page, and a signed release manifest naming each by hash), read back and verified
+// (`release-assets.mjs`).
 // The image is reproducible: each build restores and compiles every project afresh in its own directory,
 // the SDK's time stamps are replaced by the source date (`image-reproducible.mjs`), and a second build
 // from scratch must give the same manifest digest (`--no-reproduce` skips it). The image then runs in
@@ -50,12 +69,13 @@
 import { spawnSync } from "node:child_process";
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { readLargeFile, sha256Hex } from "./large-bytes.mjs";
+import { luxembourgDate } from "./temporal.mjs";
 import { pageForSitePath, redirectFor } from "./permalinks.mjs";
 import { INDEXED, KEPT_OUT, ROBOTS_PATH, SITEMAP_INDEX_HEAD, SITEMAP_PATH, robotsTxt } from "./search-engines.mjs";
 import { UNSERVED_DIRECTORIES } from "./not-found.mjs";
@@ -143,7 +163,7 @@ async function filesUnder(root) {
  * are the directories the image was built from, as `[path, bytes]` lists; `report` is the mount's
  * build report.
  */
-export function imageFailures(image, { web, mount, report }) {
+export function imageFailures(image, { web, mount, report, records = null }) {
   const failures = [];
   const { config } = image;
   if (config.os !== "linux" || config.architecture !== "amd64") failures.push(`the image is ${config.os}/${config.architecture}, not linux/amd64`);
@@ -161,7 +181,13 @@ export function imageFailures(image, { web, mount, report }) {
   if (!app) return [...failures, "the image has no layer"];
   const files = new Map(readTar(layerTar(app)).filter((entry) => entry.type === "file").map((entry) => [entry.path, entry.bytes]));
   if (!files.has("app/Lex.V3.Api.dll")) failures.push("the app layer holds no app/Lex.V3.Api.dll");
-  for (const [label, prefix, list] of [["live page file", "app/v3-web/", web], ["mount file", "app/v3-corpus/", mount]]) {
+  // R92's two records, written beside the mount by the release's measurement (`measureNames`), when it carries them.
+  const checked = [["live page file", "app/v3-web/", web], ["mount file", "app/v3-corpus/", mount]];
+  if (records !== null) {
+    if (records.length !== 2) failures.push(`the release's measurement gave ${records.length} records, not the indexing record and the names record`);
+    checked.push(["R92 record", "app/v3-corpus/", records]);
+  }
+  for (const [label, prefix, list] of checked) {
     if (list.length === 0) failures.push(`no ${label} was given to check`);
     for (const [path, bytes] of list) {
       const held = files.get(`${prefix}${path}`);
@@ -469,18 +495,19 @@ const ARTIFACTS = join(repository, "artifacts", "image-rehearsal");
  * the checkout are mapped (a directory per build outside it gave each build its own assemblies). The
  * SDK's image is then made reproducible (`reproducibleImage`). Answers `{ webRoot, archive, image }`.
  */
-async function buildImage({ into, mountPath, epoch, card, log }) {
+async function buildImage({ into, mountPath, records = null, epoch, card, examples = null, log }) {
   log("building the live pages");
   const { buildLive } = await import("./build-live.mjs");
   const webRoot = join(into, "v3-web");
-  await buildLive(pathToFileURL(`${webRoot}/`), { card, buildTag: "image-rehearsal" });
+  await buildLive(pathToFileURL(`${webRoot}/`), { card, examples, buildTag: "image-rehearsal" });
 
   log("building the image (dotnet publish -t:PublishContainer)");
   const sdkArchive = join(into, "sdk-image.tar");
   await rm(ARTIFACTS, { recursive: true, force: true });
   run("dotnet", ["publish", join(repository, "src", "Lex.V3.Api", "Lex.V3.Api.csproj"), "-c", "Release", "-r", "linux-x64", "--self-contained", "false",
     "-p:UseArtifactsOutput=true", `-p:ArtifactsPath=${ARTIFACTS}`, "-p:ContinuousIntegrationBuild=true",
-    `-p:LexImageWebRoot=${webRoot}`, `-p:LexImageMount=${mountPath}`, `-p:ContainerArchiveOutputPath=${sdkArchive}`,
+    `-p:LexImageWebRoot=${webRoot}`, `-p:LexImageMount=${mountPath}`, ...(records === null ? [] : [`-p:LexImageMountRecords=${records}`]),
+    `-p:ContainerArchiveOutputPath=${sdkArchive}`,
     "-p:ContainerRepository=lex-v3-rehearsal", "-p:ContainerImageTag=rehearsal", "-t:PublishContainer", "-m:1", "-nodeReuse:false", "-v", "q"]);
   spawnSync("dotnet", ["build-server", "shutdown"], { encoding: "utf8" });
   await rm(ARTIFACTS, { recursive: true, force: true });
@@ -522,6 +549,127 @@ export async function mountReport(mountPath) {
 }
 
 /**
+ * R92's measurement over the mount the image carries (the plan's item 1.11): `Lex.V3.Tool names-records`, read-only over the
+ * mount and writing only into `into/records`, never into the mount, with `tool` (the release's bound `Lex.V3.Tool.dll` from
+ * custody) or else the tool published from this checkout. Answers `{ directory, files, indexingText, namesText, withheld,
+ * measurement }`: the two records the image carries beside the mount (`LexImageMountRecords`) and the measurement's counts.
+ * Throws when the mount already holds either record (the release carries its own measurement, never one it did not make) or
+ * when the two records do not hold together (`recordsFailures`).
+ */
+/** The release signer whose release is serving now, and its public key in this checkout, unless the command names others. */
+export const SERVING_SIGNER = "lex-v3-release";
+export const SERVING_PUBLIC_KEY = join(repository, "src", "Lex.V3.Api", "well-known", "lex-v3-release.pem");
+
+/**
+ * Why the release path's checks cannot run as asked, as failures (empty when they can): the release serving now and its mount
+ * go together; a release the release signer signs (`signed`) names them (R106: every release after the opening is compared
+ * with the one serving); the explanations explain changes from the release serving now, so they need it; and the journey's
+ * fixture mount is never compared with a release.
+ */
+export function releaseCheckOptionFailures({ signed, mountKind, servingRelease = null, servingMount = null, explanations = null }) {
+  const failures = [];
+  if ((servingRelease === null) !== (servingMount === null)) failures.push("--serving-release and --serving-mount go together: the release serving now and the mount it serves");
+  if (signed && servingRelease === null && mountKind !== "fixture") {
+    failures.push("a release signed by the release signer is compared with the release serving now (R106): name it with --serving-release <its directory> --serving-mount <its mount>");
+  }
+  if (explanations !== null && servingRelease === null) failures.push("--release-explanations explain changes from the release serving now, which --serving-release names");
+  if (mountKind === "fixture" && servingRelease !== null) failures.push("the journey's fixture mount is never compared with a release");
+  return failures;
+}
+
+/**
+ * The release path's checks over the mount (`release-checks.mjs`), before anything is built: R86(2) always on a real mount, and
+ * with the release serving now, read back under its signer's key, R106 against its mount, under the release's explanations
+ * (which must name it). Throws with each refusing item named. Answers `{ serving, explanationsBytes, comparison, consolidation,
+ * summary }`; on the fixture mount nothing runs.
+ */
+async function releaseChecks({ mountPath, mountKind, signed, runner, servingRelease, servingMount, servingPublicKey, servingSigner, explanations, into, log }) {
+  const optionFailures = releaseCheckOptionFailures({ signed, mountKind, servingRelease, servingMount, explanations });
+  if (optionFailures.length > 0) throw new Error(optionFailures.join("; "));
+  if (mountKind === "fixture") return { serving: null, explanationsBytes: null, comparison: null, consolidation: null, summary: "not run: the journey's fixture mount" };
+  const checks = await import("./release-checks.mjs");
+  let serving = null;
+  let servingReport = null;
+  if (servingRelease !== null) {
+    const directory = resolve(servingRelease);
+    const read = await checks.servingReleaseFailures(directory, { publicKeyPem: await readFile(servingPublicKey ?? SERVING_PUBLIC_KEY, "utf8"), identity: servingSigner ?? SERVING_SIGNER });
+    if (read.failures.length > 0) throw new Error(`the release serving now does not read back:\n- ${read.failures.join("\n- ")}`);
+    serving = { ...read, directory, manifestSha256: sha256(await readFile(join(directory, "release-manifest.json"))) };
+    await mkdir(into, { recursive: true });
+    servingReport = join(into, "serving-mount-report.json");
+    await writeFile(servingReport, read.mountReport);
+  }
+  let explanationsBytes = null;
+  if (explanations !== null) {
+    explanationsBytes = await readFile(resolve(explanations));
+    const failures = checks.explanationsFailures(explanationsBytes, serving.manifest.version);
+    if (failures.length > 0) throw new Error(failures.join("; "));
+  }
+  log(serving === null
+    ? "listing the admitted consolidations without text (R86(2); Lex.V3.Tool release-checks), with no release serving now to compare with"
+    : `comparing the mount with the release serving now, ${serving.manifest.version} (R106), and listing the admitted consolidations without text (R86(2)); Lex.V3.Tool release-checks`);
+  const measured = await checks.runReleaseChecks({
+    runner, mountPath, into, servingMount: serving === null ? null : resolve(servingMount), servingReport, explanations: explanations === null ? null : resolve(explanations),
+  });
+  const failures = checks.releaseCheckFailures(measured);
+  if (failures.length > 0) throw new Error(`the release path's checks refuse this release:\n- ${failures.join("\n- ")}`);
+  const verdict = (bytes) => (bytes === null ? null : JSON.parse(bytes.toString("utf8")));
+  const comparison = verdict(measured.comparison);
+  const consolidation = verdict(measured.consolidation);
+  return {
+    serving, explanationsBytes, comparison: measured.comparison, consolidation: measured.consolidation,
+    summary: {
+      serving: serving === null ? "none named (a rehearsal)" : serving.manifest.version,
+      explanationsSha256: explanationsBytes === null ? null : sha256(explanationsBytes),
+      comparison: comparison === null ? null : { verdict: comparison.verdict, listed: comparison.items_listed, unexplained: comparison.unexplained, classes: comparison.classes },
+      consolidationText: { verdict: consolidation.verdict, publishers: consolidation.publishers },
+    },
+  };
+}
+
+/** Lex.V3.Tool published from this checkout into `into`, for the measurements that run over the mount; answers its DLL. */
+function publishTool(into, log) {
+  log("publishing the measurement tool from this checkout (Lex.V3.Tool)");
+  run("dotnet", ["publish", join(repository, "src", "Lex.V3.Tool", "Lex.V3.Tool.csproj"), "-c", "Release", "-o", into, "-m:1", "-nodeReuse:false", "-v", "q"]);
+  spawnSync("dotnet", ["build-server", "shutdown"], { encoding: "utf8" });
+  return join(into, "Lex.V3.Tool.dll");
+}
+
+async function measureNames({ mountPath, into, tool = null, log }) {
+  const { INDEXING_RECORD_FILE, NAMES_MEASUREMENT_FILE, NAMES_RECORD_FILE, readNamesRecord, recordsFailures } = await import("./names-records.mjs");
+  for (const name of [INDEXING_RECORD_FILE, NAMES_RECORD_FILE]) {
+    if (existsSync(join(mountPath, name))) throw new Error(`the mount already holds ${name}: the release carries the records of its own measurement, not one beside the mount`);
+  }
+  let runner = tool;
+  if (runner === null) {
+    log("publishing the measurement tool from this checkout (Lex.V3.Tool)");
+    const output = join(into, "tool");
+    run("dotnet", ["publish", join(repository, "src", "Lex.V3.Tool", "Lex.V3.Tool.csproj"), "-c", "Release", "-o", output, "-m:1", "-nodeReuse:false", "-v", "q"]);
+    spawnSync("dotnet", ["build-server", "shutdown"], { encoding: "utf8" });
+    runner = join(output, "Lex.V3.Tool.dll");
+  }
+  log("measuring which works name private individuals (R92), read-only over the mount (Lex.V3.Tool names-records)");
+  const directory = join(into, "records");
+  run("dotnet", [runner, "names-records", "--mount", mountPath, "--out", directory]);
+  if (tool === null) await rm(join(into, "tool"), { recursive: true, force: true });
+  const indexing = await readFile(join(directory, INDEXING_RECORD_FILE));
+  const names = await readFile(join(directory, NAMES_RECORD_FILE));
+  const indexingText = indexing.toString("utf8");
+  const namesText = names.toString("utf8");
+  const failures = recordsFailures({ indexingText, namesText });
+  if (failures.length > 0) throw new Error(`R92's records do not hold:\n- ${failures.join("\n- ")}`);
+  return {
+    directory,
+    files: [[INDEXING_RECORD_FILE, indexing], [NAMES_RECORD_FILE, names]],
+    indexingText,
+    namesText,
+    withheld: readNamesRecord(namesText).works,
+    measurementFile: [NAMES_MEASUREMENT_FILE, await readFile(join(directory, NAMES_MEASUREMENT_FILE))],
+    measurement: JSON.parse(await readFile(join(directory, NAMES_MEASUREMENT_FILE), "utf8")),
+  };
+}
+
+/**
  * The evaluation card over the mount the image carries (ruling 2: the launch card carries machine gates run
  * over the real mounted corpus): the temporal, refusal and retrieval sets derived from the mount
  * (`V3MountedGatesTests`), run through the real handler and rendered as the card, built in its own artifacts
@@ -538,6 +686,38 @@ async function mountedCard({ mountPath, into, log }) {
   spawnSync("dotnet", ["build-server", "shutdown"], { encoding: "utf8" });
   if (!existsSync(output)) throw new Error("the machine gates over the mount wrote no card");
   return readFile(output);
+}
+
+/**
+ * The day a release derives its home page's example searches on: its source's date in Luxembourg (the commit's time, or
+ * SOURCE_DATE_EPOCH), never the build's clock, so two builds of one commit over one mount carry the same record (the review
+ * of writer/screens-gaps, F5).
+ */
+export function examplesDay(source) {
+  return luxembourgDate(new Date(source.epoch * 1000).toISOString());
+}
+
+/**
+ * The home page's example searches over the mount the image carries (R47; `home-examples.mjs`): the API published from this
+ * checkout into its own directory, started over the mount as the journeys start it (the mount linked, not copied), asked
+ * through its own answers on the source's day (`examplesDay`), among the acts the indexing record beside the mount admits
+ * (none without one), and closed; the directory is removed whatever happens. The record, or null when the mount counts no
+ * corpus.
+ */
+async function mountHomeExamples({ mountPath, into, source, indexingText = undefined, log }) {
+  log("deriving the home page's example searches over the mount, through the API's own answers (home-examples-run.mjs)");
+  const output = join(into, "api");
+  try {
+    run("dotnet", ["publish", join(repository, "src", "Lex.V3.Api", "Lex.V3.Api.csproj"), "-c", "Release", "-o", output, "-m:1", "-nodeReuse:false", "-v", "q"]);
+    spawnSync("dotnet", ["build-server", "shutdown"], { encoding: "utf8" });
+    const { homeExamplesOverMount } = await import("./home-examples-run.mjs");
+    // Among the acts the release's own indexing record admits (R92), which stands beside the mount in the image, not in it.
+    const { readIndexingRecord } = await import("./search-engines.mjs");
+    const indexingRecord = indexingText === undefined ? undefined : readIndexingRecord(indexingText);
+    return await homeExamplesOverMount({ apiOutput: output, mount: mountPath, today: examplesDay(source), indexingRecord, log: (line) => log(`  ${line}`) });
+  } finally {
+    await rm(into, { recursive: true, force: true });
+  }
 }
 
 /** What a report says in place of the browser's walk on a machine where no browser may run (the owner's order of 2026-10-16). */
@@ -620,7 +800,8 @@ export async function recordedRequests(origin, during) {
  *   `/fr/`, the home page as built or as the release's renderer renders the image's own coverage answer, its security
  *   headers (CSP with `frame-ancestors 'none'`, HSTS, `Referrer-Policy`, `nosniff`), the 404 page byte for byte, the card
  *   at its stable route, coverage from the mount's corpus, the clock, and an accented title found as typed; and, beside
- *   them and never a failure, what promotion would say of the data's age (`servedPages.promotion`, `dataAgeFailures`);
+ *   them and never a failure, what promotion would say of the data's age and of the release's card (`servedPages.promotion`,
+ *   `dataAgeFailures`, `cardPromotionFailures`);
  * - V2's routes (`v2RouteFailures`), the server's readiness and no synthetic preview (`serverFailures`), and the card's
  *   bytes at its route;
  * - privacy, as far as it shows: what the container recorded once it first answered (nothing on its output, no file on its
@@ -630,7 +811,7 @@ export async function recordedRequests(origin, during) {
  * (`findBrowser` is never called), the report says `browserProbes: "skipped: --no-browser"`, and `stepsNotWalked` names
  * each page step a walk would have reported, so no report reads as browser-probed when it was not.
  */
-export async function probeImage({ startServer, mountPath, mountKind, web, card, corpusSha256, browser, log = () => {} }) {
+export async function probeImage({ startServer, mountPath, mountKind, web, card, corpusSha256, browser, homeExamples = undefined, names = null, log = () => {} }) {
   browserNamed(browser, "probeImage");
   const { apiJourneyRuns, processRecordFailures, REAL_MOUNT_EVENTS_VERIFIED } = await import("./journey.mjs");
   const { servedPageFailures } = await import("./deploy-probe.mjs");
@@ -647,7 +828,8 @@ export async function probeImage({ startServer, mountPath, mountKind, web, card,
       const notes = [];
       // What promotion would say of the data's age (R87, O11), recorded beside the probes and never one of their failures.
       const promotion = [];
-      const servedPages = { failures: await servedPageFailures(server.origin, { web, card, corpusSha256, notes, promotion }), notes, promotion };
+      // The home pages' example searches (R47) are held among them: when the rehearsal derived them, exactly the build's.
+      const servedPages = { failures: await servedPageFailures(server.origin, { web, card, corpusSha256, notes, promotion, homeExamples }), notes, promotion };
       const v2Routes = { routesAsked: V2_ROUTES.length, routeFailures: await v2RouteFailures(server.origin, { v3Files: servedPaths(web) }) };
       // Ready with its mount, and no synthetic preview (plan 0.7).
       const serverAnswers = { failures: await serverFailures(server.origin) };
@@ -657,10 +839,14 @@ export async function probeImage({ startServer, mountPath, mountKind, web, card,
       const cardRoute = { route: CARD_ROUTE, status: answer.status, contentType: answer.headers.get("content-type"), sha256: sha256(bytes), isTheReleaseCard: bytes.equals(card) };
       cardRoute.failures = answer.status !== 200 || !bytes.equals(card) || !/^application\/json/.test(cardRoute.contentType ?? "")
         ? [`the image does not serve the card at ${CARD_ROUTE}: ${JSON.stringify(cardRoute)}`] : [];
-      return { journeys, servedPages, v2Routes, serverAnswers, cardRoute };
+      // R92: the works the release's names record withholds, as the image answers them (`names-records.mjs`).
+      const { namesProbeFailures } = await import("./names-records.mjs");
+      const namesAnswers = names === null ? null : { withheld: names.length, failures: await namesProbeFailures(server.origin, { works: names }) };
+      return { journeys, servedPages, v2Routes, serverAnswers, cardRoute, namesAnswers };
     });
     report.probes = value.journeys.map(([label, failures]) => ({ step: `${label}, with the ${mountKind} mount`, state: "api", failures, paintedElements: 0, citationsVerified: 0 }));
     Object.assign(report, { servedPages: value.servedPages, v2Routes: value.v2Routes, server: value.serverAnswers, cardRoute: value.cardRoute });
+    if (value.namesAnswers !== null) report.namesAnswers = value.namesAnswers;
     // What the container recorded once it first answered, all these probes long.
     const output = server.output();
     const recorded = { startup: output.slice(0, server.outputAtStart), output: output.slice(server.outputAtStart), fileEvents: await server.fileWatch.stop(), changedFiles: await server.changedFiles() };
@@ -688,7 +874,7 @@ export async function probeImage({ startServer, mountPath, mountKind, web, card,
   const { fixtureMountRuns, realMountRuns } = await import("./journey.mjs");
   const { findBrowser } = await import("./browser-evidence.mjs");
   const found = await findBrowser();
-  const options = { servedByApi: true, keyboard: false, startServer };
+  const options = { servedByApi: true, keyboard: false, startServer, homeExamples };
   const runs = mountKind === "fixture"
     ? await fixtureMountRuns(null, mountPath, options, found, null)
     : await realMountRuns(null, mountPath, options, found, null, { apiRuns: async () => [] });
@@ -707,12 +893,16 @@ export function probeFailures(report) {
     ...report.v2Routes.routeFailures.map((failure) => `V2's routes: ${failure}`),
     ...report.server.failures.map((failure) => `the server: ${failure}`),
     ...report.cardRoute.failures,
+    ...(report.namesAnswers?.failures ?? []).map((failure) => `R92: ${failure}`),
     ...report.privacy.failures.map((failure) => `privacy: ${failure}`),
   ];
 }
 
 /** The rehearsal, end to end. Returns its report; throws on the first step that fails. */
-export async function rehearse({ mount, keep = false, probe = true, browser, reproduce = true, platformCard = false, signer = null, log = () => {} }) {
+export async function rehearse({
+  mount, keep = false, probe = true, browser, reproduce = true, platformCard = false, signer = null, tool = null,
+  servingRelease = null, servingMount = null, servingPublicKey = null, servingSigner = null, explanations = null, log = () => {},
+}) {
   browserNamed(browser, "the rehearsal");
   const mountPath = resolve(mount);
   const { kind: mountKind, report, bytes: mountBytes } = await mountReport(mountPath);
@@ -721,7 +911,21 @@ export async function rehearse({ mount, keep = false, probe = true, browser, rep
   const source = sourceDate();
   const result = { mount: mountPath, mountKind, corpusSha256: report.corpus?.Sha256 ?? null, source };
   let container = null;
+  // Asked before the work directory is made: a release that cannot be checked as asked is not started.
+  const optionFailures = releaseCheckOptionFailures({ signed: signer !== null && !signer.rehearsal, mountKind, servingRelease, servingMount, explanations });
+  if (optionFailures.length > 0) {
+    await rm(work, { recursive: true, force: true });
+    throw new Error(optionFailures.join("; "));
+  }
   try {
+    // The measurement tool, published once from this checkout unless the release's bound tool is given (from custody).
+    const runner = tool ?? publishTool(join(work, "tool"), log);
+    // The release path's checks over the mount, before anything is built (R106, R86(2); `release-checks.mjs`).
+    const checks = await releaseChecks({
+      mountPath, mountKind, signed: signer !== null && !signer.rehearsal, runner, servingRelease, servingMount, servingPublicKey, servingSigner, explanations,
+      into: join(work, "checks"), log,
+    });
+    result.releaseChecks = checks.summary;
     // The evaluation card the Trust and Coverage page carries and the release carries beside the image: the machine
     // gates run over this mount (ruling 2), or with `--platform-card` the platform's fixture card. Inside the try, so
     // a gate that fails still has the work directory removed.
@@ -737,7 +941,19 @@ export async function rehearse({ mount, keep = false, probe = true, browser, rep
       sets: cardView.sets.map((set) => ({ set: set.set, arm: set.arm, cases: set.cases, gates: set.gates.map((gate) => `${gate.gate}: ${gate.verdict}`) })),
       controls: cardView.controls.map((control) => `${control.set}, ${control.arm}: ${control.verdict}`),
     };
-    let { webRoot, archive, image } = await buildImage({ into: join(work, "first"), mountPath, epoch: source.epoch, card, log });
+    // R92's measurement over this mount (the plan's item 1.11): its two records go beside the mount in both images.
+    const names = await measureNames({ mountPath, into: join(work, "names"), tool: runner, log });
+    result.names = {
+      withheld: names.withheld.length,
+      withheldHeld: names.withheld.filter((work) => work.work_key !== null || work.celex !== null).length,
+      indexed: JSON.parse(names.indexingText).works.length,
+      measurement: names.measurement,
+      files: names.files.map(([name, bytes]) => ({ name, bytes: bytes.length, sha256: sha256(bytes) })),
+    };
+    // The home page's example searches over this mount (R47), derived once for both images, among the acts R92 admits.
+    const homeExamples = await mountHomeExamples({ mountPath, into: join(work, "examples"), source, indexingText: names.indexingText, log });
+    result.homeExamples = homeExamples === null ? null : { indexSha256: homeExamples.index_sha256, derivedOn: homeExamples.derived_on, examples: homeExamples.examples };
+    let { webRoot, archive, image } = await buildImage({ into: join(work, "first"), mountPath, records: names.directory, epoch: source.epoch, card, examples: homeExamples, log });
     result.archiveBytes = (await stat(archive)).size;
 
     log("verifying the image");
@@ -751,7 +967,7 @@ export async function rehearse({ mount, keep = false, probe = true, browser, rep
     // as soon as it is compared: an async function keeps a dead local reachable across its later awaits, and holding both
     // took the image step to about 11.8 GB resident for the population image (the review of #951).
     let corpus = await filesUnder(mountPath);
-    const failures = imageFailures(image, { web, mount: corpus, report });
+    const failures = imageFailures(image, { web, mount: corpus, report, records: names.files });
     const mountFilesVerified = corpus.length;
     corpus = null;
     Object.assign(result, {
@@ -783,7 +999,7 @@ export async function rehearse({ mount, keep = false, probe = true, browser, rep
     if (reproduce) {
       // Reproducible: a second build, from scratch in its own directory, must give the same image.
       log("building the image a second time, from scratch, to check it is reproducible");
-      let second = await buildImage({ into: join(work, "second"), mountPath, epoch: source.epoch, card, log });
+      let second = await buildImage({ into: join(work, "second"), mountPath, records: names.directory, epoch: source.epoch, card, examples: homeExamples, log });
       const differences = reproductionFailures(image, second.image);
       result.reproduced = { manifestDigest: second.image.manifestDigest, identical: differences.length === 0 };
       second = null;
@@ -814,7 +1030,7 @@ export async function rehearse({ mount, keep = false, probe = true, browser, rep
       const deadlineMs = 90_000 + Math.ceil(((tmpMebibytes - TMP_MARGIN_MEBIBYTES) / 1024) * 60_000);
       const { v2Routes, ...probed } = await probeImage({
         startServer: () => startImage({ run: container, config: image.config, tmpMebibytes, deadlineMs }),
-        mountPath, mountKind, web, card: servedCard, corpusSha256: report.corpus?.Sha256 ?? null, browser, log,
+        mountPath, mountKind, web, card: servedCard, corpusSha256: report.corpus?.Sha256 ?? null, browser, homeExamples, names: names.withheld, log,
       });
       Object.assign(result, probed);
       Object.assign(result.v2Absent, v2Routes);
@@ -825,12 +1041,27 @@ export async function rehearse({ mount, keep = false, probe = true, browser, rep
     }
 
     log("publishing the release assets, reading them back and verifying them");
-    const { ASSETS, imageSignatureAsset, publishRelease, releaseFailures, releaseVersion } = await import("./release-assets.mjs");
+    const { ASSETS, imageSignatureAsset, publishRelease, releaseFailures, releaseManifestOf, releaseVersion } = await import("./release-assets.mjs");
+    const { COMPARISON_FILE, CONSOLIDATION_TEXT_FILE, EXPLANATIONS_FILE, MANIFEST_DIFF_FILE, MANIFEST_DIFF_PAGE, manifestDiff } = await import("./release-checks.mjs");
     const version = releaseVersion(source, { rehearsal: by.rehearsal });
-    const published = await publishRelease(join(work, "release"), {
-      version, source, manifestDigest: image.manifestDigest, corpusSha256: report.corpus?.Sha256 ?? null, signer: by,
-      assets: [[ASSETS.image, await readLargeFile(archive)], [ASSETS.imageSignature, imageSignatureAsset(signed)], [ASSETS.card, servedCard], [ASSETS.mountReport, mountBytes]],
-    });
+    const releaseOf = { version, source, manifestDigest: image.manifestDigest, corpusSha256: report.corpus?.Sha256 ?? null, signer: by };
+    const assets = [[ASSETS.image, await readLargeFile(archive)], [ASSETS.imageSignature, imageSignatureAsset(signed)], [ASSETS.card, servedCard], [ASSETS.mountReport, mountBytes],
+      // R92's two records and the measurement's counts beside them: identifiers, classes, reason codes and counts only.
+      ...names.files, names.measurementFile,
+      // The release path's checks and the reasons they were given (R106, R86(2)).
+      ...(checks.consolidation === null ? [] : [[CONSOLIDATION_TEXT_FILE, checks.consolidation]]),
+      ...(checks.comparison === null ? [] : [[COMPARISON_FILE, checks.comparison]]),
+      ...(checks.explanationsBytes === null ? [] : [[EXPLANATIONS_FILE, checks.explanationsBytes]])];
+    if (checks.serving !== null) {
+      // R88: the release serving now against this one, over every asset above, as JSON and as a page.
+      const diff = manifestDiff({
+        serving: { manifest: checks.serving.manifest, mountReport: checks.serving.mountReport, manifestSha256: checks.serving.manifestSha256 },
+        candidate: { manifest: releaseManifestOf({ ...releaseOf, assets }), mountReport: mountBytes },
+      });
+      assets.push([MANIFEST_DIFF_FILE, diff.json], [MANIFEST_DIFF_PAGE, diff.page]);
+      result.manifestDiff = { drops: diff.document.drops_beyond_ten_percent, assets: diff.document.assets.map(({ name, change }) => `${name}: ${change}`) };
+    }
+    const published = await publishRelease(join(work, "release"), { ...releaseOf, assets });
     // A release signer's release is read back as that signer's; a rehearsal names no release signer to hold it to.
     const readBack = await releaseFailures(published.directory, { publicKeyPem: by.publicKeyPem, identity: by.rehearsal ? null : by.identity });
     result.release = { version, manifestSha256: published.manifestSha256, assets: (await readdir(published.directory)).sort(), readBackFailures: readBack };
@@ -866,7 +1097,8 @@ export async function rehearseFromCustody({ tool, custody, checkpoint, custodyEn
   try {
     const derived = await deriveTwice({ runner: ["dotnet", resolve(tool)], custody: resolve(custody), checkpoint: resolve(checkpoint), custodyEncoding, into, log });
     log(`the two derivations agree on ${derived.files.length} files`);
-    const result = await rehearse({ mount: derived.mount, log, ...options });
+    // R92's measurement runs with the same bound tool that derived the mount.
+    const result = await rehearse({ mount: derived.mount, log, tool: resolve(tool), ...options });
     const { mount: _derivedMount, ...evidence } = derived;
     return {
       derivation: {
@@ -911,6 +1143,22 @@ export function commandOptions(argv) {
     browser: !argv.includes("--no-browser"),
     reproduce: !argv.includes("--no-reproduce"),
     platformCard: argv.includes("--platform-card"),
+  };
+}
+
+/**
+ * The release command's options for the release serving now and the release's explanations (`--serving-release`,
+ * `--serving-mount`, `--serving-public-key`, `--serving-signer`, `--release-explanations`), as `rehearse` takes them; each
+ * is null when not given.
+ */
+export function servingCommandOptions(argv) {
+  const value = (name) => { const at = argv.indexOf(name); return at < 0 || at + 1 >= argv.length ? null : argv[at + 1]; };
+  return {
+    servingRelease: value("--serving-release"),
+    servingMount: value("--serving-mount"),
+    servingPublicKey: value("--serving-public-key"),
+    servingSigner: value("--serving-signer"),
+    explanations: value("--release-explanations"),
   };
 }
 
@@ -961,6 +1209,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       process.exit(2);
     }
   }
+  // The release serving now and the release's explanations (R106, R88), as `rehearse` takes them.
+  Object.assign(options, servingCommandOptions(argv));
   const custody = value("--custody");
   const run = custody !== null
     ? (value("--checkpoint") && value("--tool")
@@ -968,7 +1218,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       : null)
     : value("--mount") !== null ? rehearse({ mount: value("--mount"), ...options }) : null;
   if (run === null) {
-    console.error("usage: node scripts/image-rehearsal.mjs (--mount <v3-corpus directory or journey fixture mount> | --custody <custody directory> --checkpoint <mount-inputs.json> --tool <this commit's CI runtime artifact runtime/Lex.V3.Tool.dll> [--custody-encoding raw|brotli] [--allow-unbound-tool]) [--signing-key <PEM file, or - for standard input> --signer <identity>] [--keep] [--no-reproduce] [--no-probe | --no-browser] [--platform-card]");
+    console.error("usage: node scripts/image-rehearsal.mjs (--mount <v3-corpus directory or journey fixture mount> | --custody <custody directory> --checkpoint <mount-inputs.json> --tool <this commit's CI runtime artifact runtime/Lex.V3.Tool.dll> [--custody-encoding raw|brotli] [--allow-unbound-tool]) [--signing-key <PEM file, or - for standard input> --signer <identity>] [--serving-release <the serving release's directory> --serving-mount <its mount> [--serving-public-key <PEM>] [--serving-signer <identity>] [--release-explanations <file>]] [--keep] [--no-reproduce] [--no-probe | --no-browser] [--platform-card]");
     process.exit(2);
   }
   run.then(

@@ -33,6 +33,14 @@
 // marks and lists the deleted wording apart, under a label, never inside the text. A note whose reference the publisher
 // wrote without a marker is `unmarked`, with no marker.
 //
+// A text served on the publisher's catalogue alone (one of the owner's rulings L1, L1b or L2: a single-channel admission,
+// `reading-answer.mjs`, `DISCLOSED_RIGHTS_DISPOSITIONS`) carries its rights disclosure into every export as onto its page:
+// each item read from such a source carries `rights_disclosure` (the code, the licence page's digest, the date it was observed
+// and whether live, and the platform's English sentence, the reading page's L5 sentence), and the export as a whole lists the
+// bundle's disclosures once each (`rights_disclosures`); the CSV says it in a last column, `rights_disclosure`, and the PDF in a
+// paragraph beside the rights rule and on each item. An export of a text with no disclosure keeps its JSON and PDF byte for
+// byte; its CSV gains the last column, empty (the review of #1002).
+//
 // An EU reading (`readEuropeEvidenceBundle`) is composed by `composeEuropeExport` into a model of its
 // own (`lex-v3-export-eu/1`), never through the Luxembourg one: an EU article is dated by its wording,
 // whose date is never an applicability date, and its text is served with Decision 95's acknowledgement
@@ -50,6 +58,7 @@ import { citationForms } from './citation.mjs';
 import { WATERMARK_PREVIEW } from './export-composer.mjs';
 import { EUROPE_ANNEX_SERVED_AS } from './europe-annexes.mjs';
 import { articlePermalink } from './permalinks.mjs';
+import { LIVE_CHROME, fillText } from './live-chrome.mjs';
 
 export const EXPORT_SCHEMA = 'lex-v3-export/1';
 export const EUROPE_EXPORT_SCHEMA = 'lex-v3-export-eu/1';
@@ -77,7 +86,37 @@ export const CSV_COLUMNS = Object.freeze([
   'observed_at', 'rights_rule', 'corpus_sha256', 'index_sha256', 'registry_sha256',
   'segments',
   'date_role',
+  'rights_disclosure',
 ]);
+
+/**
+ * A rights disclosure as an export carries it (`readDisclosure`'s view, `reading-answer.mjs`): its code, the licence page it
+ * rests on and when that page was observed, and the platform's English sentence for it, the reading page's (the L5 single-channel
+ * disclosure; drafts the owner revises). Null for null.
+ */
+export function exportDisclosure(disclosure) {
+  if (disclosure === null || disclosure === undefined) return null;
+  const template = LIVE_CHROME.en.reading.disclosure[disclosure.code];
+  if (typeof template !== 'string') throw new Error(`no sentence says the rights disclosure ${disclosure.code}`);
+  return Object.freeze({
+    code: disclosure.code,
+    licencePageSha256: disclosure.licencePageSha256,
+    observedOn: disclosure.observedOn,
+    observedLive: disclosure.observedLive,
+    sentence: fillText(template, { date: disclosure.observedOn }),
+  });
+}
+
+/** A disclosure as the JSON and the CSV write it: snake_case. */
+export function disclosureJson(disclosure) {
+  return {
+    code: disclosure.code,
+    licence_page_sha256: disclosure.licencePageSha256,
+    licence_page_observed_on: disclosure.observedOn,
+    licence_page_observed_live: disclosure.observedLive,
+    sentence: disclosure.sentence,
+  };
+}
 
 /**
  * What an export says of an act held only as first published, from the reading's view (`readAsPublished`): the
@@ -156,6 +195,9 @@ export function composeExport({ view, pinned, observedAt }) {
   const items = [];
   const excluded = [];
   for (const state of view.states) {
+    // The disclosure of the source each article is read from, by its body (a single-channel admission's; null otherwise).
+    const disclosureOf = new Map((state.sources ?? []).filter((source) => source.bodySha256 !== null)
+      .map((source) => [source.bodySha256, exportDisclosure(source.disclosure ?? null)]));
     for (const article of state.articles) {
       if (!wanted.delete(`${state.stateSha256}#${article.publisherId}`)) continue;
       items.push(Object.freeze({
@@ -180,6 +222,7 @@ export function composeExport({ view, pinned, observedAt }) {
         validityConflict: article.validityConflict,
         notes: article.notes,
         segments: article.segments ?? null,
+        rightsDisclosure: disclosureOf.get(article.bodySha256) ?? null,
       }));
     }
     for (const entry of state.articlesWithoutText) {
@@ -211,6 +254,8 @@ export function composeExport({ view, pinned, observedAt }) {
     date: view.date,
     rightsDisposition: view.rightsDisposition,
     rightsRule: view.rightsRule,
+    // Every disclosure the bundle's text rests on, once each (the reading page says the same sentences).
+    rightsDisclosures: Object.freeze((view.disclosures ?? []).map(exportDisclosure)),
     asPublished: asPublishedOf(view),
     verifiedBy: Object.freeze({ corpusSha256: view.corpusSha256, indexSha256: view.indexSha256, registrySha256: view.registrySha256 }),
     items: Object.freeze(items),
@@ -319,6 +364,8 @@ export function exportJson(model) {
     requested_date: model.date,
     rights_disposition: model.rightsDisposition,
     rights_rule: model.rightsRule,
+    // Only where the text rests on the publisher's catalogue alone, so every other export's JSON is byte for byte what it was.
+    ...((model.rightsDisclosures ?? []).length === 0 ? {} : { rights_disclosures: model.rightsDisclosures.map(disclosureJson) }),
     as_published: model.asPublished === null ? null : {
       label: model.asPublished.label,
       later_versions: model.asPublished.laterVersions,
@@ -346,6 +393,7 @@ export function exportJson(model) {
       body_sha256: item.bodySha256,
       official_source: item.officialSource,
       rights_disposition: item.rightsDisposition,
+      ...(item.rightsDisclosure === null || item.rightsDisclosure === undefined ? {} : { rights_disclosure: disclosureJson(item.rightsDisclosure) }),
       article_valid_from: item.articleValidFrom,
       validity_conflict: item.validityConflict,
       notes: item.notes.map(noteJson),
@@ -476,6 +524,7 @@ export function exportCsv(model) {
       ...provenance,
       item.segments === null ? '' : JSON.stringify(segmentsJson(item.segments)),
       item.dateRole ?? '',
+      item.rightsDisclosure === null || item.rightsDisclosure === undefined ? '' : JSON.stringify(disclosureJson(item.rightsDisclosure)),
     ]),
     ...model.excluded.map((entry) => [
       entry.workKey, entry.language, entry.appliesFrom, entry.publisherId, `excluded: ${entry.reason}`, entry.citation, ...citationsCsv(entry.citations), entry.statePermalink,
@@ -484,6 +533,7 @@ export function exportCsv(model) {
       ...provenance,
       '',
       entry.dateRole ?? '',
+      '',
     ]),
   ];
   return [CSV_COLUMNS, ...rows].map((row) => row.map(csvField).join(',')).join('\r\n') + '\r\n';

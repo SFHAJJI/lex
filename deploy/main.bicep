@@ -14,6 +14,11 @@ targetScope = 'resourceGroup'
 // ranges deploy.ps1 names (the operator's, and a reviewer's while a review runs), and a deployment that names none admits
 // no one. Only the owner's opening (deploy.ps1 -Open, then -Public on every later deployment) admits everyone. (The plan's
 // item 0.5: the first version applied the list on a first deployment only, so a second deployment opened the copy.)
+//
+// A release's maintenance revision (deploy.ps1 -Maintenance; R60, R108, R115; the plan's item 10.14) is the same image with
+// LEX_V3_MAINTENANCE=on: it mounts nothing and serves only the maintenance page. It arrives as the `maintenance` label with
+// no traffic beside the live revision, which keeps 100 per cent, is probed and kept inactive, and is switched on by moving
+// the traffic to it (the owner's move, as a promotion is). It is never a first deployment.
 
 @description('Azure region of the app; the managed environment\'s by default.')
 param location string = resourceGroup().location
@@ -55,7 +60,80 @@ param searchEngines string = 'kept-out'
 @description('The custom domains bound to the app, as Azure holds them (name, bindingType, certificateId): deploy.ps1 reads them back and passes them on every deployment, so a redeployment keeps the binding. Empty until law.soufien.lu is bound (deploy/bind-domain.ps1).')
 param customDomains array = []
 
+@description('True for the release\'s maintenance revision (deploy.ps1 -Maintenance; R60, R108, R115): the same image with LEX_V3_MAINTENANCE=on, serving only the maintenance page, deployed with no traffic beside the live revision, which keeps 100 per cent.')
+param maintenance bool = false
+
 var firstDeployment = empty(liveRevision)
+
+// A revision that holds the law: the API listens only once its mount is open and verified (32 s on one core over the
+// population mount), so a startup probe gives it about four and a half minutes (restarted at the tenth failure, 10 + 9 x
+// 30 s) before the liveness probe, which would otherwise restart it, begins. Ready only while it holds the law: the API
+// answers 503 at /health/ready when no corpus is mounted (plan 0.7), so a replica whose mount was refused takes no traffic,
+// and monitoring can ask the same route.
+var releaseProbes = [
+  {
+    type: 'Startup'
+    httpGet: {
+      path: '/'
+      port: 8080
+    }
+    initialDelaySeconds: 10
+    periodSeconds: 30
+    failureThreshold: 10
+  }
+  {
+    type: 'Liveness'
+    httpGet: {
+      path: '/'
+      port: 8080
+    }
+    initialDelaySeconds: 10
+    periodSeconds: 30
+  }
+  {
+    type: 'Readiness'
+    httpGet: {
+      path: '/health/ready'
+      port: 8080
+    }
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  }
+]
+
+// A maintenance revision mounts nothing, so it listens within seconds; every page of it, `/` included, answers 503 (the
+// maintenance page), so all three probes ask its readiness, which is 204 only while it holds a maintenance page in each
+// interface language: one without them is never ready, and its deployment fails.
+var maintenanceProbes = [
+  {
+    type: 'Startup'
+    httpGet: {
+      path: '/health/ready'
+      port: 8080
+    }
+    initialDelaySeconds: 2
+    periodSeconds: 5
+    failureThreshold: 10
+  }
+  {
+    type: 'Liveness'
+    httpGet: {
+      path: '/health/ready'
+      port: 8080
+    }
+    initialDelaySeconds: 2
+    periodSeconds: 30
+  }
+  {
+    type: 'Readiness'
+    httpGet: {
+      path: '/health/ready'
+      port: 8080
+    }
+    initialDelaySeconds: 2
+    periodSeconds: 10
+  }
+]
 
 // Every address range named, each admitted; ingress refuses every other address.
 var allowedOnly = [
@@ -96,15 +174,10 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
         targetPort: 8080
         transport: 'http'
         allowInsecure: false
-        traffic: firstDeployment
+        // A maintenance revision takes no traffic as it deploys, whatever else is named: with no live revision the template
+        // names an empty one and Azure refuses the deployment (deploy.ps1 refuses it first, before anything changes).
+        traffic: maintenance
           ? [
-              {
-                latestRevision: true
-                weight: 100
-                label: 'candidate'
-              }
-            ]
-          : [
               {
                 revisionName: liveRevision
                 weight: 100
@@ -112,9 +185,28 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
               {
                 latestRevision: true
                 weight: 0
-                label: 'candidate'
+                label: 'maintenance'
               }
             ]
+          : (firstDeployment
+              ? [
+                  {
+                    latestRevision: true
+                    weight: 100
+                    label: 'candidate'
+                  }
+                ]
+              : [
+                  {
+                    revisionName: liveRevision
+                    weight: 100
+                  }
+                  {
+                    latestRevision: true
+                    weight: 0
+                    label: 'candidate'
+                  }
+                ])
         ipSecurityRestrictions: openToPublic ? [] : (empty(allowedSourceCidrs) ? admitNoOne : allowedOnly)
         customDomains: customDomains
       }
@@ -154,42 +246,14 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
               name: 'LEX_V3_SEARCH_ENGINES'
               value: searchEngines
             }
-          ]
-          // The API listens only once its mount is open and verified (32 s on one core over the population mount), so a
-          // startup probe gives it about four and a half minutes (restarted at the tenth failure, 10 + 9 x 30 s) before the
-          // liveness probe, which would otherwise restart it, begins.
-          probes: [
+            // The maintenance revision (R60): only the exact value `on` makes the API mount nothing and serve the maintenance
+            // page alone (V3WebRoot.Maintenance.cs); every other revision says `off`.
             {
-              type: 'Startup'
-              httpGet: {
-                path: '/'
-                port: 8080
-              }
-              initialDelaySeconds: 10
-              periodSeconds: 30
-              failureThreshold: 10
-            }
-            {
-              type: 'Liveness'
-              httpGet: {
-                path: '/'
-                port: 8080
-              }
-              initialDelaySeconds: 10
-              periodSeconds: 30
-            }
-            // Ready only while it holds the law: the API answers 503 here when no corpus is mounted (plan 0.7), so a replica
-            // whose mount was refused takes no traffic, and monitoring can ask the same route.
-            {
-              type: 'Readiness'
-              httpGet: {
-                path: '/health/ready'
-                port: 8080
-              }
-              initialDelaySeconds: 5
-              periodSeconds: 10
+              name: 'LEX_V3_MAINTENANCE'
+              value: maintenance ? 'on' : 'off'
             }
           ]
+          probes: maintenance ? maintenanceProbes : releaseProbes
           // Mounting a corpus verifies its index into a private temporary file, so the container needs a writable,
           // private /tmp (the image run's finding, PR #825); nothing else of its filesystem is written.
           volumeMounts: [

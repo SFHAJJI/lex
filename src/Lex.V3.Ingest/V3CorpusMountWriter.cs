@@ -145,7 +145,13 @@ public static class V3CorpusMountWriter
                     .ConfigureAwait(false);
                 kept = [];
             }
-            var report = RenderReport(build, written, kept, derivationInputUtc);
+            // The text yield per class (R86(4)), counted from what was just written: the corpus's members and the two index files
+            // in their places, so the report says what the mount holds.
+            var textYield = V3TextYield.FromMount(
+                build.Corpus!.VerifiedSet.Set.Members,
+                Path.Combine(target, V3FirstMountBuildResult.LuxembourgIndexFileName),
+                Path.Combine(target, V3FirstMountBuildResult.EuropeIndexFileName));
+            var report = RenderReport(build, written, kept, derivationInputUtc, textYield);
             await File.WriteAllBytesAsync(reportTemporary, report, cancellationToken).ConfigureAwait(false);
             File.Move(reportTemporary, reportPath, overwrite: true);
             return new V3CorpusMountWrite(target, written, reportPath, Sha256(report))
@@ -375,14 +381,21 @@ public static class V3CorpusMountWriter
     private static object Generation(V3Generation generation) =>
         new { index_sha256 = generation.IndexSha256, observation = generation.Observation, built_at = generation.BuiltAt };
 
+    /// <summary>
+    /// The report's schema. /2 adds <c>textYield</c>, the text yield per class (<see cref="V3TextYield"/>), after every member
+    /// /1 wrote; a report of /1 carries none, and the API answers its mount's coverage with no yield.
+    /// </summary>
+    public const string ReportSchema = "lex-v3-first-mount-report/2";
+
     private static byte[] RenderReport(
         V3FirstMountBuildResult build,
         IReadOnlyList<V3CorpusMountWrittenFile> written,
-        IReadOnlyList<V3RetainedGeneration> generations, DateTimeOffset? derivationInputUtc)
+        IReadOnlyList<V3RetainedGeneration> generations, DateTimeOffset? derivationInputUtc,
+        V3TextYield textYield)
     {
         var report = new
         {
-            schema = "lex-v3-first-mount-report/1",
+            schema = ReportSchema,
             writtenUtc = derivationInputUtc is null ? DateTimeOffset.UtcNow : (DateTimeOffset?)null,
             derivationInputUtc,
             corpus = Reference(build.Corpus!.ArtifactRef),
@@ -401,11 +414,6 @@ public static class V3CorpusMountWriter
         var options = new JsonSerializerOptions { WriteIndented = true };
         var resumption = Resumption(build.EuropeResumption, build.LuxembourgResumption);
         var derivation = Derivation(build.LuxembourgDerivation, build.LuxembourgResumption);
-        if (resumption is null && derivation is null)
-        {
-            return JsonSerializer.SerializeToUtf8Bytes(report, options);
-        }
-
         var node = JsonSerializer.SerializeToNode(report, options)!.AsObject();
         if (resumption is not null)
         {
@@ -417,6 +425,8 @@ public static class V3CorpusMountWriter
             node["derivation"] = JsonSerializer.SerializeToNode(derivation, options);
         }
 
+        // Last, in its own schema's snake_case, which the coverage answer serves verbatim.
+        node["textYield"] = JsonSerializer.SerializeToNode(textYield, V3TextYield.JsonOptions);
         return JsonSerializer.SerializeToUtf8Bytes(node, options);
     }
 

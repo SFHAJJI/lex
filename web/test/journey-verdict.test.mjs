@@ -57,6 +57,7 @@ import {
   REAL_MOUNT_EVENTS_VERIFIED,
   ABSENCE_NOTE,
   UNKNOWN_LAW_STEP,
+  UNKNOWN_LAW_WHO_TO_ASK,
   eventsFailures,
   apiJourneyRuns,
   specificationJourneyExpectations,
@@ -249,8 +250,11 @@ test("the home page's run passes when it arrived rendered, dated today in Luxemb
   assert.deepEqual(journeyVerdict(across, HOME), []);
   assert.equal(todayInLuxembourgAt(Date.parse("2026-10-24T22:30:00Z")), "2026-10-25", "the coded rule: 23:30 in summer time is 00:30 on the 25th");
   assert.deepEqual(frontDoorOf('<p class="coverage-line" data-coverage-line="counted">x</p><input type="text" data-search-date="" aria-describedby="search-today" value="2026-10-16"/>'
-    + '<script type="application/json" id="lex-home-facts">{}</script>'), { coverageLine: "counted", dateField: "2026-10-16", facts: true });
-  assert.deepEqual(frontDoorOf("<p>nothing</p>"), { coverageLine: null, dateField: null, facts: false });
+    + '<script type="application/json" id="lex-home-facts">{}</script>'), { coverageLine: "counted", dateField: "2026-10-16", facts: true, examples: [] });
+  assert.deepEqual(frontDoorOf("<p>nothing</p>"), { coverageLine: null, dateField: null, facts: false, examples: [] });
+  // The example searches it lists (R47), each link's address and the article it opens.
+  assert.deepEqual(frontDoorOf('<li><a href="/en/search.html#q=x&amp;lang=fra" data-home-example="/lu-legilux/a/fra/art_1er" lang="fr">x</a></li>').examples,
+    [{ href: "/en/search.html#q=x&lang=fra", opens: "/lu-legilux/a/fra/art_1er" }]);
   assert.equal(NOT_ADVICE_SAID, "Lex shows the published text of the law. It does not tell you whether or how it applies to your situation and is not legal advice.");
 });
 
@@ -651,7 +655,8 @@ test("a compare run types the identifier and two dates and is held to all three 
     { url: `${ORIGIN}/en/compare.html`, method: "GET", headers: {} },
     { url: `${ORIGIN}/api/v3/diff`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(JOURNEY_STEPS.compare.body) },
   ];
-  observed.location = `${ORIGIN}/en/compare.html`;
+  // The page writes the comparison's own address (R57): this site's address of the act and the two dates, nothing else.
+  observed.location = `${ORIGIN}/en/compare.html?work=%2Flu-legilux%2Floi-1991-08-10-n3&from=${READING_DATE}&to=${READING_DATE}`;
   observed.text = `Both dates select the one text held, the act as published, applicable from ${READING_DATE} (publisher); later versions are not held.`;
   const expected = { origin: ORIGIN, step: JOURNEY_STEPS.compare, state: "success", texts: [`Both dates select the one text held, the act as published, applicable from ${READING_DATE} (publisher); later versions are not held.`] };
   assert.deepEqual(journeyVerdict(observed, expected), []);
@@ -963,6 +968,17 @@ test("a page ends at its own address with what it writes there: a search after #
   for (const step of [JOURNEY_STEPS.permalink, JOURNEY_STEPS.dossier, JOURNEY_STEPS.reading, JOURNEY_STEPS.coverage]) {
     assert.deepEqual(endAddressesOf(step, ["2026-10-18"]), [step.path], step.path);
   }
+  // A comparison ends at its own address (R57), held exactly: this site's address of the act and the two dates, nothing else
+  // (R109: never a word typed); a work typed in another form leaves the address as it was.
+  assert.deepEqual(endAddressesOf(JOURNEY_STEPS.compare, ["2026-10-18"]),
+    [`/en/compare.html?work=%2Flu-legilux%2Floi-1991-08-10-n3&from=${READING_DATE}&to=${READING_DATE}`]);
+  const held = journeyStepsFor({ identifier: "/lu-legilux/rgd-2017-12-13-a1050", date: "2018-01-01", anchor: "art_2", language: "deu" });
+  assert.deepEqual(endAddressesOf(held.compare, ["2026-10-18"]), ["/en/compare.html?work=%2Flu-legilux%2Frgd-2017-12-13-a1050&from=2018-01-01&to=2018-01-01"]);
+  const named = { ...JOURNEY_STEPS.compare, body: { ...JOURNEY_STEPS.compare.body, parameters: { ...JOURNEY_STEPS.compare.body.parameters, identifier: "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3" } } };
+  assert.deepEqual(endAddressesOf(named, ["2026-10-18"]), ["/en/compare.html"], "an ELI is never written into the address");
+  const ended = { ...goodSearch(), location: `${ORIGIN}/en/compare.html` };
+  assert.ok(journeyVerdict(ended, { ...addressExpectations()[0][1], step: JOURNEY_STEPS.compare }).some((failure) => /the page ended at .*compare\.html, not at .*\?work=%2Flu-legilux%2Floi-1991-08-10-n3&from=2024-02-01&to=2024-02-01$/.test(failure)),
+    "the bare page is no longer where a comparison ends");
   // The kept search's run is one request, its body the fragment's search, ending where it began.
   const [[name, expected]] = addressExpectations();
   assert.equal(name, "a search kept in the address");
@@ -1114,7 +1130,7 @@ test("the specification's journeys the eight steps do not walk are held to their
   assert.equal(byJourney.J1.refusalCode, "no_version_for_date");
   assert.equal(byJourney.J2.state, "success");
   assert.equal(byJourney.J2.nothingToCite, true, "a search with no hit cites nothing, and says so");
-  assert.equal(byJourney.J5.refusalCode, "identifier_unknown");
+  assert.equal(byJourney.J5.refusalCode, "out_of_corpus_scope", "a CSSF circular is an instrument Lex never holds (the plan's item 6.10)");
   assert.deepEqual(byJourney.J5.step.body.parameters, { identifier: UNKNOWN_LAW });
 
   // J2's page with no hit is excused from citing only because it says it holds nothing, and it must say that
@@ -1278,12 +1294,12 @@ test("on the EU annex control mount the export composer pins both articles and s
   assert.ok(journeyVerdict({ ...observed, text: observed.text.replace("Save as PDF", "") }, expected).includes('the page does not show "Save as PDF"'), "no PDF offered");
 });
 
-test("on a real mount J5 must refuse identifier_unknown with the absence note whatever the API answers, and J2 says the note only when nothing was found", () => {
+test("on a real mount J5 must refuse out_of_corpus_scope naming who to ask, with the absence note, whatever the API answers, and J2 says the note only when nothing was found", () => {
   const steps = Object.fromEntries(realMountSteps({ corpus: {}, luxembourgIndex: {} }).map(([name, step]) => [name.slice(0, 2), step]));
   const j5 = realMountExpectations(steps.J5);
   assert.equal(steps.J5, UNKNOWN_LAW_STEP);
   for (const envelope of [{ verdict: "refuse", refusal: { code: "identifier_unknown" } }, { verdict: "answer", result: { value: {} } }]) {
-    assert.deepEqual(j5.refine(envelope), { state: "refusal", refusalCode: "identifier_unknown", texts: [ABSENCE_NOTE] },
+    assert.deepEqual(j5.refine(envelope), { state: "refusal", refusalCode: "out_of_corpus_scope", texts: [UNKNOWN_LAW_WHO_TO_ASK, ABSENCE_NOTE] },
       "an answer to a law the corpus does not hold would be the defect, so the page is held to the refusal regardless");
   }
   const j2 = realMountExpectations(steps.J2);
@@ -1356,8 +1372,8 @@ test("a page's expectation is the API's outcome, then the step's own refinement 
   const j5 = { step: UNKNOWN_LAW_STEP, ...realMountExpectations(UNKNOWN_LAW_STEP) };
   const held = expectedForAnswer(j5, { verdict: "answer", result: { value: {} } });
   assert.equal(held.state, "refusal", "a law the corpus does not hold must be refused even when the API answers it");
-  assert.equal(held.refusalCode, "identifier_unknown");
-  assert.deepEqual(held.texts, [ABSENCE_NOTE]);
+  assert.equal(held.refusalCode, "out_of_corpus_scope");
+  assert.deepEqual(held.texts, [UNKNOWN_LAW_WHO_TO_ASK, ABSENCE_NOTE]);
   const j2 = { step: NO_HIT_SEARCH_STEP, ...realMountExpectations(NO_HIT_SEARCH_STEP) };
   assert.deepEqual(expectedForAnswer(j2, answered).texts, [ABSENCE_NOTE], "the refinement sees the envelope the outcome came from");
   assert.equal(expectedForAnswer(j2, { verdict: "answer", result: { value: { hits: [{}] } } }).texts, undefined);

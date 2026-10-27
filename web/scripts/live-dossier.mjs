@@ -30,13 +30,15 @@ export const DOSSIER_LANGUAGES = Object.freeze([
 /**
  * The one sentence per refusal code a request from this page can meet besides `no_corpus_mounted`,
  * whose sentence names the missing index from its payload (`noCorpusMountedSentence`): a work the
- * index does not hold, a language the work is not held in, or an identifier that names more than one
- * held work. Any other code gets a sentence that names it.
+ * index does not hold, a language the work is not held in, an identifier that names more than one
+ * held work, or an instrument Lex never holds (the out-of-scope list, the plan's item 6.10; J5), whose
+ * card then names its official place and who to ask. Any other code gets a sentence that names it.
  */
 export const LIVE_DOSSIER_REFUSAL_SENTENCES = Object.freeze({
   identifier_unknown: "This index holds no work under that identifier.",
   language_not_available: "This work is not held in the language asked for.",
   ambiguous_identifier: "That identifier names more than one held work, so no dossier is chosen.",
+  out_of_corpus_scope: "Lex never holds this kind of instrument: where it is published, and who to ask, follow.",
 });
 
 export const LIVE_DOSSIER_IDLE = liveChrome().dossier.idle;
@@ -100,7 +102,7 @@ export function dossierOutcome(asked) {
     const { code, helpful_payload: payload } = asked.envelope.refusal;
     const sentence = code === "no_corpus_mounted"
       ? noCorpusMountedSentence(payload)
-      : tableRefusalSentence(LIVE_DOSSIER_REFUSAL_SENTENCES, code, unexpectedRefusalSentence);
+      : tableRefusalSentence(LIVE_DOSSIER_REFUSAL_SENTENCES, code, unexpectedRefusalSentence, payload);
     try {
       validateRefusal({ code, sentence, payload });
     } catch (error) {

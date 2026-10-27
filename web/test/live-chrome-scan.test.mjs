@@ -130,7 +130,9 @@ const legalPages = (app) => ({
   accessibility: app.renderLiveAccessibilityPage, cookies: app.renderLiveCookiesPage,
 });
 const LEGAL_DATA = [CNPD_SITE.text, EURLEX_ACKNOWLEDGEMENT, ACCESSIBILITY_LAW];
-const dataOfPage = (name, app) => (name === "coverage" ? dataOf(withoutVerdicts(app.CENSUS_EVALUATION_CARD))
+/** The refusal codes no operation sends, which the evaluation card's scope names from the refusal census (`not_produced`). */
+const UNSENT_CODES = JSON.parse(await readFile(new URL("../schemas/v3-platform/refusal-payload-samples.json", web), "utf8")).not_produced;
+const dataOfPage = (name, app) => (name === "coverage" ? dataOf(withoutVerdicts(app.CENSUS_EVALUATION_CARD), UNSENT_CODES)
   : Object.hasOwn(legalPages(app), name) ? dataOf(LEGAL_DATA) : []);
 
 /**

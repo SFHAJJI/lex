@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-ambiguous_identifier-payload/1",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "requested_identifier": {
+      "type": "string"
+    },
+    "candidates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "requested_identifier",
+    "candidates"
+  ]
+}

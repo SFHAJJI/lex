@@ -970,6 +970,54 @@ public sealed class LuxembourgQueryExecutionResult
             Refusal, DocumentCheckpointRef, checkpoint) { AcquisitionCheckpointRef = AcquisitionCheckpointRef };
     }
 
+    /// <summary>
+    /// R1's door for re-bound rights (LU-DATA-DESIGN v2 §2.2, R1 with rights, step 6): this delivered run, every field and
+    /// checkpoint copied, carrying <paramref name="population"/>, which <see cref="LuxembourgHeldBodyDerivationPopulation.WithRederivedRights"/>
+    /// made from this run's own population (the same corpus record set object and members). Stage 3 reads rights from the
+    /// run's population, so the population alone is not enough.
+    /// </summary>
+    internal LuxembourgQueryExecutionResult WithHeldBodyDerivationPopulation(LuxembourgHeldBodyDerivationPopulation population)
+    {
+        ArgumentNullException.ThrowIfNull(population);
+        if (Refusal is not null || HeldBodyDerivationPopulation is not { } own ||
+            !ReferenceEquals(population.CorpusRecordSet, own.CorpusRecordSet) ||
+            !ReferenceEquals(population.CorpusRecordSet, CorpusRecordSet) ||
+            population.Inputs.Count != own.Inputs.Count ||
+            population.Inputs.Zip(own.Inputs).Any(static pair => !ReferenceEquals(pair.First.CorpusRecord, pair.Second.CorpusRecord) ||
+                !ReferenceEquals(pair.First.Receipt, pair.Second.Receipt) ||
+                !ReferenceEquals(pair.First.SelectedWemiCandidate, pair.Second.SelectedWemiCandidate)))
+        {
+            throw new ArgumentException(
+                "A delivered run carries a re-bound population only of its own members and record set.", nameof(population));
+        }
+
+        return new(
+            Topology,
+            FamilyOutcomes,
+            RelationFamilyAcquisitions,
+            ResolvedRelations,
+            LocalInboundRelations,
+            TypedAssertions,
+            ResourceObservationSubjects,
+            ResourceObservationExclusions,
+            ScopeManifestReceipt,
+            ScopeManifestCanonicalSha256,
+            Completion,
+            DocumentAcquisitionOutcomesByOrdinal,
+            CorpusRecordSetRef,
+            CorpusRecordSetReceipt,
+            CorpusRecordSet,
+            ObservedObjectIdentitySetRef,
+            ObservedObjectIdentitySetReceipt,
+            ObservedObjectIdentitySet,
+            population,
+            GazetteBodySetsByOrdinal,
+            GazetteListingFetchRefusalsByOrdinal,
+            GazetteListingsWithContradictoryLegalValueByOrdinal,
+            PopulationLedger,
+            Refusal, DocumentCheckpointRef, GazetteCheckpointRef) { AcquisitionCheckpointRef = AcquisitionCheckpointRef };
+    }
+
     internal LuxembourgQueryExecutionResult WithAcquisitionCheckpoint(SourceArtifactRef checkpoint)
     {
         ArgumentNullException.ThrowIfNull(checkpoint);

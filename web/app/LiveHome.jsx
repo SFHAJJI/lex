@@ -6,12 +6,14 @@
 // - what Lex is and is not: the site's introduction, under its own heading;
 // - the coverage line (R11): every count the coverage answer's, said "as of the index built on" its build's date
 //   (`live-home.mjs`), and today beside it when the index is older (R13: "When the index is older, both dates are shown");
-// - links to the site's served pages that a reader starts from: Changes, and Trust and Coverage. Developers and Get help
-//   have no live page yet, so nothing links to them (R52: nothing unserved is shown).
+// - the example searches (R47; the plan's item 4.1, "example searches that land on served text"): the usual citations of
+//   articles the mounted corpus holds, derived at build through the API's own answers and kept only when searching one opens
+//   that article's text (`home-examples.mjs`), each a link to the search page with the search in its address (R109); shown
+//   only over the index they were derived from, so never over another mount or none;
+// - links to the site's served pages that a reader starts from: Changes, Trust and Coverage, Developers and Get help, the
+//   specification of record's list (§3, Shell and home), each by the name its own page gives it.
 //
-// No example searches: the coverage answer and the browse answer name no title and no text (browse names a work by its
-// identifiers only), so no example could be shown to land on text this server holds without a literal the mount may not
-// hold (R11). They come when an answer serves them (STATUS-WEB.md). No assistant, chip or toggle either (R52).
+// No example is a literal: a build handed none (the web suite's) shows none. No assistant, chip or toggle either (R52).
 //
 // `facts`, when the server rendered the page from its coverage answer, are today and the coverage line it said; the
 // browser hydrates the same tree from them, so nothing is asked as the page loads. With none (the page as built), the
@@ -21,9 +23,12 @@ import { useEffect, useState } from 'react';
 
 import { LiveSearch } from './LiveSearch.jsx';
 import { UNMOUNTED_SENTENCE, startHomeCoverage } from '../scripts/live-home.mjs';
-import { fillCounted, fillText, liveChrome, livePath, refusalSentence } from '../scripts/live-chrome.mjs';
+import { CHROME_LOCALE, fillCounted, fillText, liveChrome, livePath, refusalSentence } from '../scripts/live-chrome.mjs';
+import { referencePage } from '../scripts/reference-pages.mjs';
 import { indexOlderThanToday } from '../scripts/live-search.mjs';
 import { useLuxembourgToday } from './Today.jsx';
+import { HOME_EXAMPLES, exampleHref, examplesShown } from '../scripts/home-examples.mjs';
+import { citationLang } from '../scripts/citation.mjs';
 
 const COPY = liveChrome().home;
 
@@ -49,6 +54,28 @@ export function CoverageLine({ line, today = null }) {
   );
 }
 
+/**
+ * The example searches for the coverage line shown (`examplesShown`): each the citation itself, in its text's language, a
+ * link to the search page with that search in its address, and nothing when there is none to show.
+ */
+export function HomeExamples({ line, record = HOME_EXAMPLES }) {
+  const examples = examplesShown(line, record);
+  if (examples.length === 0) return null;
+  return (
+    <section className="home-examples" aria-labelledby="home-examples-heading" data-home-examples={examples.length}>
+      <h2 id="home-examples-heading">{COPY.examplesHeading}</h2>
+      <p>{COPY.examplesIntro}</p>
+      <ul>
+        {examples.map((example) => (
+          <li key={example.query}>
+            <a href={exampleHref(example, CHROME_LOCALE)} data-home-example={example.opens} lang={citationLang(example.language)}>{example.query}</a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** The site's served pages a reader starts from, by the names their own pages give them. */
 export function HomeLinks() {
   return (
@@ -56,13 +83,18 @@ export function HomeLinks() {
       <ul>
         <li><a href={livePath('radar.html')}>{liveChrome().site.radar}</a></li>
         <li><a href={livePath('coverage.html')}>{liveChrome().coverage.title}</a></li>
+        <li><a href={livePath(referencePage('developers').file)}>{liveChrome().developers.title}</a></li>
+        <li><a href={livePath(referencePage('help').file)}>{liveChrome().help.title}</a></li>
       </ul>
     </nav>
   );
 }
 
-/** The home page's screen. `contract` and `fetchImpl` must be stable for the screen's life. */
-export function LiveHome({ contract, fetchImpl, facts = null }) {
+/**
+ * The home page's screen. `contract` and `fetchImpl` must be stable for the screen's life; `examples`, the record of example
+ * searches, is the one this bundle was compiled with unless a test hands another.
+ */
+export function LiveHome({ contract, fetchImpl, facts = null, examples = HOME_EXAMPLES }) {
   const [line, setLine] = useState(facts?.coverage ?? null);
   // Today in Luxembourg: the server's, when it rendered the page from its answer, else this browser's clock once hydrated.
   const today = useLuxembourgToday(facts?.today ?? null);
@@ -76,6 +108,7 @@ export function LiveHome({ contract, fetchImpl, facts = null }) {
         <p>{COPY.intro}</p>
       </section>
       <CoverageLine line={line} today={today} />
+      <HomeExamples line={line} record={examples} />
       <HomeLinks />
     </>
   );

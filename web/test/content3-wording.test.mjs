@@ -209,9 +209,10 @@ test("the exports carry the segments, and the deleted wording is never the text 
 
   const rows = exportCsv(model).split("\r\n").filter((line) => line.length > 0);
   assert.ok(rows[0].split(",").includes("segments"));
-  // Segments keeps its place, after every column before it; the date's role is appended after it (the review of #987).
-  assert.deepEqual(CSV_COLUMNS.slice(-2), ["segments", "date_role"], "every column before the date's role keeps its place");
-  assert.deepEqual(CSV_COLUMNS.slice(-7, -2), ["observed_at", "rights_rule", "corpus_sha256", "index_sha256", "registry_sha256"]);
+  // Segments keeps its place, after every column before it; the date's role is appended after it (the review of #987), and the
+  // rights disclosure after that (a single-channel admission's, the exports' copy of the L5 sentence).
+  assert.deepEqual(CSV_COLUMNS.slice(-3), ["segments", "date_role", "rights_disclosure"], "every column before the date's role keeps its place");
+  assert.deepEqual(CSV_COLUMNS.slice(-8, -3), ["observed_at", "rights_rule", "corpus_sha256", "index_sha256", "registry_sha256"]);
   const csv = exportCsv(model);
   assert.ok(csv.includes(DELETED), "the CSV carries the deleted wording, in its segments");
   assert.equal(csv.split(DELETED).length - 1, 1, "once, in the segments cell, never in the text cell");

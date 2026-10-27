@@ -28,6 +28,7 @@ import { basename, join } from "node:path";
 import { REHEARSAL_IDENTITY, imageSignatureFailures, layerTar, readLayout, readOciImage, readTar, rehearsalSigner } from "./image-rehearsal.mjs";
 import { CARD_ROUTE, readEvaluationCard } from "./evaluation-card.mjs";
 import { readLargeFile, sha256Hex } from "./large-bytes.mjs";
+import { publishedCheckFailures } from "./release-checks.mjs";
 
 // In pieces: one update over 2 GiB is refused, and the population image's app layer is 2.5 GB (large-bytes.mjs).
 const sha256 = (bytes) => sha256Hex(bytes);
@@ -59,6 +60,24 @@ export function imageSignatureAsset({ payload, signature, publicKeyPem }) {
 }
 
 /**
+ * The release manifest a release is published under (`publishRelease`): the schema and kind its signer gives it, its version
+ * and source, the image's manifest digest, the corpus digest, and each asset by name, size and SHA-256, in name order. The
+ * release command computes it before publishing, to diff it against the release serving now (R88, `release-checks.mjs`).
+ */
+export function releaseManifestOf({ version, source, manifestDigest, corpusSha256, assets, signer }) {
+  return {
+    schema: signer.rehearsal ? RELEASE_SCHEMA : SIGNED_RELEASE_SCHEMA,
+    version,
+    rehearsal: signer.rehearsal,
+    signer: signer.identity,
+    source,
+    image: { manifest_digest: manifestDigest },
+    corpus: { sha256: corpusSha256 },
+    assets: [...assets].sort(([a], [b]) => (a < b ? -1 : 1)).map(([name, bytes]) => ({ name, size: bytes.length, sha256: sha256(bytes) })),
+  };
+}
+
+/**
  * Publishes a release into `root/<version>/`: each asset, the release manifest naming them, and its
  * signature by `signer` (`rehearsalSigner` or `releaseSigner`; a bare `key`, `{ privateKey, publicKeyPem }`,
  * is the rehearsal's). Refuses a version already published. Answers `{ directory, manifestSha256 }`.
@@ -68,21 +87,8 @@ export async function publishRelease(root, { version, source, manifestDigest, co
   const directory = join(root, version);
   if (existsSync(directory)) throw new Error(`release ${version} is already published, and a published version is never overwritten`);
   await mkdir(directory, { recursive: true });
-  const listed = [];
-  for (const [name, bytes] of [...assets].sort(([a], [b]) => (a < b ? -1 : 1))) {
-    await writeFile(join(directory, name), bytes);
-    listed.push({ name, size: bytes.length, sha256: sha256(bytes) });
-  }
-  const manifest = Buffer.from(`${JSON.stringify({
-    schema: signer.rehearsal ? RELEASE_SCHEMA : SIGNED_RELEASE_SCHEMA,
-    version,
-    rehearsal: signer.rehearsal,
-    signer: signer.identity,
-    source,
-    image: { manifest_digest: manifestDigest },
-    corpus: { sha256: corpusSha256 },
-    assets: listed,
-  }, null, 2)}\n`, "utf8");
+  for (const [name, bytes] of assets) await writeFile(join(directory, name), bytes);
+  const manifest = Buffer.from(`${JSON.stringify(releaseManifestOf({ version, source, manifestDigest, corpusSha256, assets, signer }), null, 2)}\n`, "utf8");
   await writeFile(join(directory, RELEASE_MANIFEST), manifest);
   await writeFile(join(directory, RELEASE_SIGNATURE), `${JSON.stringify({
     signature: sign("sha256", manifest, signer.privateKey).toString("base64"),
@@ -169,5 +175,8 @@ export async function releaseFailures(directory, { publicKeyPem, identity = null
     try { readEvaluationCard(JSON.parse(card.toString("utf8"))); } catch (error) { failures.push(`the evaluation card does not read: ${error.message}`); }
     if (servedCard !== undefined && !servedCard.equals(card)) failures.push(`the release's card is not the card the image serves at ${CARD_ROUTE}`);
   }
+  // The release path's checks it carries (R106, R86(2), R88; `release-checks.mjs`): none may refuse it, and the manifest diff
+  // must describe this very manifest.
+  failures.push(...publishedCheckFailures(held, manifest));
   return failures;
 }

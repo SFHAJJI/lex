@@ -54,8 +54,26 @@ import { isCalendarDate } from './temporal.mjs';
  * with a letter or digit, as every key the publisher's catalogue yields does. A key the API refuses opens no page.
  */
 const WORK = '[a-z0-9][a-z0-9_-]*';
-/** A CELEX number as the API mints it (sector, year, type, number, and an optional suffix such as (01) or -20160504). */
-const CELEX = '[0-9A-Za-z][0-9A-Za-z()._-]*';
+/**
+ * A CELEX number as the API mints it (sector, year, type, number, and an optional suffix such as (01) or -20160504), as one
+ * path segment: a solidus is written `%2F` (the Treaties' and the Charter's `12016E/TXT` is `12016E%2FTXT`,
+ * `europeWorkSegment`), and a lower-case `%2f` reads the same.
+ */
+const CELEX = '[0-9A-Za-z](?:[0-9A-Za-z()._-]|%2[Ff])*';
+
+/**
+ * A CELEX as the one path segment R64's `{work}` is (the API's `EuropeWorkSegment`): unchanged unless it carries a solidus,
+ * which RFC 3986 writes `%2F` inside a segment. Every CELEX with none keeps its bytes, and a segment already written so is
+ * left as it is.
+ */
+export function europeWorkSegment(celex) {
+  return String(celex).replaceAll('/', '%2F');
+}
+
+/** The CELEX a path segment names (`CELEX`), its `%2F` read as the solidus it writes (the API's `EuropeCelexOfSegment`). */
+export function europeCelexOfSegment(segment) {
+  return segment.replace(/%2[Ff]/g, '/');
+}
 /** A pin: the date, `--` and the digest. */
 const PIN = '([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9a-f]{64})';
 /** The text's language: the publisher's three lower-case letters. */
@@ -108,7 +126,7 @@ export function luxembourgPermalink({ workKey, date, stateSha256, language }) {
 
 /** An EU wording's permalink, as the API mints it: the CELEX, the wording date, the wording digest and its language. */
 export function europePermalink({ celex, date, wordingSha256, language }) {
-  return `/eu-eurlex/${celex}/${date}--${wordingSha256}/${language}`;
+  return `/eu-eurlex/${europeWorkSegment(celex)}/${date}--${wordingSha256}/${language}`;
 }
 
 /** An article's (or provision's) permalink, as the API mints it: its state's (or wording's), and the id as a segment. */
@@ -122,7 +140,7 @@ export function articlePermalink(permalink, publisherId) {
  * act, the article escaped as a permalink's is.
  */
 export function currentAddress({ publisher, work, language, publisherId = null }) {
-  const act = `/${publisher === 'eu-eurlex' ? 'eu-eurlex' : 'lu-legilux'}/${work}/${language}`;
+  const act = publisher === 'eu-eurlex' ? `/eu-eurlex/${europeWorkSegment(work)}/${language}` : `/lu-legilux/${work}/${language}`;
   return publisherId === null ? act : articlePermalink(act, publisherId);
 }
 
@@ -184,7 +202,7 @@ export function parseSitePath(pathname) {
     return Object.freeze({
       kind: 'state',
       publisher,
-      identifier: publisher === 'lu-legilux' ? `/lu-legilux/${work}` : work,
+      identifier: publisher === 'lu-legilux' ? `/lu-legilux/${work}` : europeCelexOfSegment(work),
       date,
       digest,
       language,
@@ -197,7 +215,8 @@ export function parseSitePath(pathname) {
   for (const [publisher, pattern] of [['lu-legilux', PERMALINK_PATTERNS.luxembourgCurrent], ['eu-eurlex', PERMALINK_PATTERNS.europeCurrent]]) {
     const match = pattern.exec(path);
     if (match === null) continue;
-    const [, work, language, anchor = null] = match;
+    const [, segment, language, anchor = null] = match;
+    const work = publisher === 'eu-eurlex' ? europeCelexOfSegment(segment) : segment;
     // A consolidated version's readable address names no page here: it has moved to its act's (`movedFor`).
     if (publisher === 'eu-eurlex' && CONSOLIDATED_CELEX.test(work)) return null;
     return Object.freeze({
@@ -214,7 +233,7 @@ export function parseSitePath(pathname) {
   }
   if (PERMALINK_PATTERNS.luxembourgWork.test(path)) return Object.freeze({ kind: 'work', publisher: 'lu-legilux', identifier: path, locale });
   const match = PERMALINK_PATTERNS.europeWork.exec(path);
-  if (match) return Object.freeze({ kind: 'work', publisher: 'eu-eurlex', identifier: match[1], locale });
+  if (match) return Object.freeze({ kind: 'work', publisher: 'eu-eurlex', identifier: europeCelexOfSegment(match[1]), locale });
   return null;
 }
 
@@ -302,11 +321,21 @@ export function readingPageAddress(base, number, date = null) {
  * (Luxembourg's date, R13, which the server's clock gives), and the text's language it names, and with neither it is not
  * rendered (the page as built asks for itself); a dossier asks by the work. An
  * interface language's home page (`/en/`, `/en/index.html`) is rendered from `coverage`, asked with no parameters, as the
- * page as built asks it once loaded (`live-home.mjs`). Null for any other path.
+ * page as built asks it once loaded (`live-home.mjs`), and its Developers page (`/en/developers.html`) from `browse` for the
+ * first act held, one row, which it shows as its live examples (`developers.mjs`). Null for any other path.
  */
 export function sitePageFor(pathname, { today = null, search = '' } = {}) {
   const home = INTERFACE_LANGUAGES.find((language) => pathname === `/${language}/` || pathname === `/${language}/index.html`);
   if (home !== undefined) return Object.freeze({ language: home, kind: 'home', operation: 'coverage', parameters: Object.freeze({}) });
+  // The Developers page, rendered from browse for the first act held, which it shows as its live examples (`developers.mjs`).
+  const developers = INTERFACE_LANGUAGES.find((language) => pathname === `/${language}/developers.html`);
+  if (developers !== undefined) return Object.freeze({ language: developers, kind: 'developers', operation: 'browse', parameters: Object.freeze({ limit: 1 }) });
+  // A comparison's address (R57): the compare page with the work and the two dates its query names, rendered from diff.
+  const compare = INTERFACE_LANGUAGES.find((language) => pathname === `/${language}/compare.html`);
+  if (compare !== undefined) {
+    const parameters = compareOfQuery(search);
+    return parameters === null ? null : Object.freeze({ language: compare, kind: 'compare', operation: 'diff', parameters });
+  }
   const named = parseSitePath(pathname);
   if (named === null || named.locale === null) return null;
   if (named.kind === 'work') {
@@ -315,6 +344,98 @@ export function sitePageFor(pathname, { today = null, search = '' } = {}) {
   const parameters = readingRequestFor(named, dateOfQuery(search) ?? today, pageOfQuery(search));
   if (parameters === null) return null;
   return Object.freeze({ language: named.locale, kind: 'reading', operation: 'evidence_bundle', parameters });
+}
+
+/** The text languages the compare page's form offers besides any (`COMPARE_LANGUAGES`, `live-compare.mjs`). */
+const COMPARE_QUERY_LANGUAGES = Object.freeze(['deu', 'eng', 'fra']);
+
+/**
+ * A query value form-decoded as `URLSearchParams` reads a well-formed one: `+` a space, each `%HH` a byte, the bytes UTF-8;
+ * null for a malformed escape, a character outside ASCII written raw, or bytes that are not UTF-8 (`V3WebRoot.FormDecoded`).
+ */
+function formDecoded(raw) {
+  if (/[^\x00-\x7f]/.test(raw) || /%(?![0-9A-Fa-f]{2})/.test(raw)) return null;
+  try {
+    return decodeURIComponent(raw.replace(/\+/g, ' '));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A comparison's work as its address may name it: this site's address of a Luxembourg act (`/lu-legilux/{work key}`), a work
+ * key's characters and nothing else, never words (R109: no word a reader types reaches an address a server could record).
+ */
+const COMPARE_WORK = /^\/lu-legilux\/[a-z0-9][a-z0-9_-]{0,511}$/;
+
+/**
+ * The comparison a compare page's query names (`?work=/lu-legilux/{work}&from=yyyy-mm-dd&to=yyyy-mm-dd[&language=fra]`, as the
+ * compare screen writes it into its own address once it has asked it; R57), as the request the page would send (`diff`'s
+ * `identifier`, `date_from`, `date_to` and `language`), or null: each of `work`, `from` and `to` once and `language` at most
+ * once, each value form-decoded; the work this site's address of a Luxembourg act (`COMPARE_WORK`), never words; two calendar
+ * dates; a language the form offers, or none (empty); and `page`, at most once, the page of the wording asked (`diff`'s `page`,
+ * the review of #1003, F4), a whole number from 2 written without a leading zero (the first page is the address without it).
+ * Any other name is ignored. As `V3WebRoot.CompareOfQuery` (a test holds the two to one table).
+ */
+export function compareOfQuery(search) {
+  if (typeof search !== 'string' || search.length < 2 || search[0] !== '?') return null;
+  const values = new Map();
+  for (const part of search.slice(1).split('&')) {
+    const equals = part.indexOf('=');
+    const name = equals < 0 ? part : part.slice(0, equals);
+    if (!['work', 'from', 'to', 'language', 'page'].includes(name)) continue;
+    const value = formDecoded(equals < 0 ? '' : part.slice(equals + 1));
+    if (values.has(name) || value === null) return null;
+    values.set(name, value);
+  }
+  const work = values.get('work');
+  const from = values.get('from');
+  const to = values.get('to');
+  if (typeof work !== 'string' || !COMPARE_WORK.test(work)) return null;
+  if (!isCalendarDate(from) || !isCalendarDate(to)) return null;
+  const language = values.get('language') ?? '';
+  if (language !== '' && !COMPARE_QUERY_LANGUAGES.includes(language)) return null;
+  const pageText = values.get('page');
+  const page = pageText === undefined ? null : comparePageOf(pageText);
+  if (pageText !== undefined && page === null) return null;
+  return Object.freeze({ identifier: work, date_from: from, date_to: to, ...(language === '' ? {} : { language }), ...(page === null ? {} : { page }) });
+}
+
+/** The greatest page a request may name (`diff`'s request schema, as a reading's). */
+const MAXIMUM_COMPARE_PAGE = 100000;
+
+/** A comparison's page as its address writes it: a whole number from 2 to the schema's maximum, no leading zero; else null. */
+function comparePageOf(text) {
+  if (!/^[1-9][0-9]{0,5}$/.test(text)) return null;
+  const page = Number(text);
+  return page >= 2 && page <= MAXIMUM_COMPARE_PAGE ? page : null;
+}
+
+/**
+ * This site's address of a Luxembourg act in each form the API reads as one (`V3CorpusMount.TryParseStableWorkCoordinate`):
+ * `/lu-legilux/{key}`, under an interface language (`/fr/lu-legilux/{key}`), and either under this origin
+ * (`https://law.soufien.lu/…`), as a reader pastes it from the browser's bar; written as `/lu-legilux/{key}`, or null.
+ */
+export function compareWorkOf(identifier) {
+  if (typeof identifier !== 'string') return null;
+  const origin = 'https://law.soufien.lu';
+  const path = (identifier.startsWith(`${origin}/`) ? identifier.slice(origin.length) : identifier).replace(/^\/(?:en|fr)(?=\/lu-legilux\/)/, '');
+  return COMPARE_WORK.test(path) ? path : null;
+}
+
+/**
+ * The query a comparison writes into the compare page's own address once it is asked (`?work=/lu-legilux/{key}&from=…&to=…
+ * [&language=…][&page=N]`), so it can be shared and read without JavaScript, or null when its work is no address of this site
+ * of an act (`compareWorkOf`): words a reader typed never reach an address (R109), and the address is then left as it is. The
+ * page of the wording (the review of #1003, F4) is written from the second; the first is the address without it.
+ */
+export function compareQueryOf({ identifier, dateFrom, dateTo, language = '', page = null }) {
+  const work = compareWorkOf(identifier);
+  if (work === null || !isCalendarDate(dateFrom) || !isCalendarDate(dateTo)) return null;
+  if (language !== '' && !COMPARE_QUERY_LANGUAGES.includes(language)) return null;
+  const paged = Number.isInteger(page) && page >= 2 && page <= MAXIMUM_COMPARE_PAGE;
+  const query = new URLSearchParams({ work, from: dateFrom, to: dateTo, ...(language === '' ? {} : { language }), ...(paged ? { page: String(page) } : {}) });
+  return `?${query.toString()}`;
 }
 
 /**

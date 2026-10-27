@@ -3,6 +3,7 @@ using System.Text.Json;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Platform;
 using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Ingest;
 using Lex.V3.Ingest.Europe;
 using Lex.V3.Ingest.Luxembourg;
 
@@ -39,6 +40,12 @@ internal sealed partial class V3CorpusMount
         string? IndexBuilderSourceCommit)
     {
         internal static BuildReportFacts None { get; } = new(null, null, null);
+
+        /// <summary>
+        /// The text yield per class the report states (<c>textYield</c>, report /2), read and held to its own arithmetic; null
+        /// when the report states none (a report of /1, or no report).
+        /// </summary>
+        internal V3TextYield? TextYield { get; init; }
     }
 
     /// <summary>What this mount's answers say of its freshness and its index's commit (R87, R23).</summary>
@@ -128,7 +135,12 @@ internal sealed partial class V3CorpusMount
             return new BuildReportFacts(
                 luxembourgIndex is null ? null : CatalogedAt(root, "luxembourg"),
                 europeIndex is null ? null : CatalogedAt(root, "europe"),
-                V3Commits.IsCommit(source) ? source : null);
+                V3Commits.IsCommit(source) ? source : null)
+            {
+                TextYield = root.TryGetProperty("textYield", out var textYield) && textYield.ValueKind != JsonValueKind.Null
+                    ? V3TextYield.Read(textYield)
+                    : null,
+            };
         }
 
         static bool Bound(JsonElement root, string member, string? mounted)

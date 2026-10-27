@@ -9,9 +9,11 @@ using static Lex.V3.Ingest.Tests.V3CorpusResolveMountTests;
 namespace Lex.V3.Ingest.Tests;
 
 /// <summary>
-/// EU <c>search</c> in one work named by identifier: the Luxembourg search's two lanes over the one wording
-/// the EU index holds of the work's expression, with EU context, the Formex act date named as
-/// <c>wording_date</c> and never as an applicability date, no text served, and every refusal typed.
+/// EU <c>search</c> in one work named by identifier, over the GDPR's census (its original wording alone): the Luxembourg
+/// search's two lanes, folded alike, over the wording the EU index holds, with EU context, the Formex act date named as
+/// <c>wording_date</c> and never as an applicability date, each hit's extract served with the acknowledgement and the
+/// authenticity statement EU text carries, a date answered as <c>as_of</c> answers it, and every refusal typed.
+/// The consolidated versions' search is held in <see cref="V3CorpusEuropeTimeSearchTests"/>.
 /// </summary>
 [TestClass]
 public sealed class V3CorpusEuropeSearchMountTests
@@ -43,7 +45,11 @@ public sealed class V3CorpusEuropeSearchMountTests
             Assert.AreEqual("eu-eurlex", body.GetProperty("publisher").GetString());
             Assert.AreEqual(fixture.IndexSha256, body.GetProperty("index_sha256").GetString());
             Assert.IsFalse(body.GetProperty("consolidations_held").GetBoolean());
-            Assert.IsFalse(body.GetProperty("text_served").GetBoolean());
+            Assert.IsTrue(body.GetProperty("text_served").GetBoolean());
+            Assert.AreEqual(V3CorpusMount.EuropeTextAcknowledgement, body.GetProperty("acknowledgement").GetString());
+            Assert.IsFalse(string.IsNullOrEmpty(body.GetProperty("authenticity").GetString()), "EU text served carries its authenticity statement");
+            Assert.AreEqual(Celex, body.GetProperty("seed_celex").GetString());
+            Assert.AreEqual(V3CorpusMount.EuropeSearchScope, body.GetProperty("scope").GetString());
             StringAssert.Contains(body.GetProperty("date_semantics").GetString(), "never merged with a Luxembourg applicability date");
             Assert.AreEqual("not_run_identifier_given", body.GetProperty("work_resolution").GetProperty("outcome").GetString());
             var hits = body.GetProperty("hits").EnumerateArray().ToArray();
@@ -53,9 +59,14 @@ public sealed class V3CorpusEuropeSearchMountTests
             Assert.AreEqual(Celex, hit.GetProperty("celex").GetString());
             Assert.AreEqual(fixture.PublisherExpressionId, hit.GetProperty("publisher_expression_id").GetString());
             Assert.AreEqual("2016-04-27", hit.GetProperty("wording_date").GetString(), "the Formex act date of the GDPR's original wording.");
+            Assert.AreEqual("original_wording", hit.GetProperty("kind").GetString());
+            Assert.AreEqual(JsonValueKind.Null, hit.GetProperty("next_date").ValueKind, "no later wording is held");
             Assert.AreEqual("eng", hit.GetProperty("language").GetString());
             Assert.IsFalse(ContainsProperty(body, "applicability_date"), "an EU answer never carries a Luxembourg applicability date.");
-            Assert.IsFalse(ContainsProperty(body, "text"), "no article text is served.");
+            var matched = hit.GetProperty("extract").GetProperty("parts").EnumerateArray()
+                .Where(static part => part.GetProperty("matched").GetBoolean()).Select(static part => part.GetProperty("text").GetString()).ToArray();
+            CollectionAssert.AreEqual(new[] { Span }, matched, "the extract marks the phrase, word for word");
+            StringAssert.StartsWith(hit.GetProperty("permalink").GetString(), body.GetProperty("pinned_wording").GetProperty("permalink").GetString() + "/");
 
             var resolved = await EnvelopeAsync(mount, V3RestRouteBinding.Resolve.RawTarget, "resolve",
                 new { identifier = hit.GetProperty("resolve").GetProperty("identifier").GetString() });
@@ -123,19 +134,27 @@ public sealed class V3CorpusEuropeSearchMountTests
     }
 
     [TestMethod]
-    public async Task EveryEuRefusalIsTypedWithEuContextAndADateIsNeverAFilter()
+    public async Task EveryEuRefusalIsTypedWithEuContextAndADateSelectsTheWordingAsAsOfDoes()
     {
         var fixture = await EuropeMountedFixture.CreateAsync();
         await using var cleanup = fixture;
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
 
-        foreach (var date in new[] { "2010-01-01", "2016-04-27", "2018-05-25" })
+        // A date before the act's first wording is as_of's no_version_for_date; on or after it, the wording that date selects.
+        var before = await EnvelopeAsync(mount, RawTarget, "search", new { query = Span, language = "eng", identifier = Celex, date = "2010-01-01" });
+        Assert.AreEqual("no_version_for_date", before.Refusal?.Code);
+        Assert.AreEqual(PublisherId.EuEurLex, before.Context.Publisher);
+        Assert.AreEqual("2016-04-27", before.Refusal!.HelpfulPayload.GetProperty("history_begins").GetString());
+        foreach (var date in new[] { "2016-04-27", "2018-05-25" })
         {
             var dated = await EnvelopeAsync(mount, RawTarget, "search", new { query = Span, language = "eng", identifier = Celex, date });
-            Assert.AreEqual("retrieval_mode_unavailable", dated.Refusal?.Code, date);
-            Assert.AreEqual("r6_as_of", dated.Refusal!.HelpfulPayload.GetProperty("requested_mode").GetString());
-            Assert.AreEqual(PublisherId.EuEurLex, dated.Context.Publisher);
+            Assert.IsNull(dated.Refusal, date);
+            var value = dated.Result!.Value;
+            Assert.AreEqual(date, value.GetProperty("requested_date").GetString());
+            Assert.AreEqual("2016-04-27", value.GetProperty("pinned_wording").GetProperty("wording_date").GetString(), date);
+            Assert.AreEqual(1, value.GetProperty("hits").GetArrayLength(), date);
+            Assert.AreEqual(JsonValueKind.Null, value.GetProperty("fold").ValueKind, "a dated search reads one wording and folds nothing");
         }
 
         var french = await EnvelopeAsync(mount, RawTarget, "search", new { query = Span, language = "fra", identifier = Celex });
@@ -144,7 +163,7 @@ public sealed class V3CorpusEuropeSearchMountTests
         Assert.AreEqual(PublisherId.EuEurLex, french.Context.Publisher);
 
         var unknown = await EnvelopeAsync(mount, RawTarget, "search", new { query = Span, language = "eng", identifier = "32099R9999" });
-        Assert.AreEqual("identifier_unknown", unknown.Refusal?.Code);
+        Assert.AreEqual("out_of_corpus_scope", unknown.Refusal?.Code, "an EU act outside the population the EU index states (R80)");
         Assert.AreEqual(PublisherId.EuEurLex, unknown.Context.Publisher);
 
         var ranked = await EnvelopeAsync(mount, RawTarget, "search", new { query = Span, language = "eng", identifier = Celex, mode = "bm25" });
@@ -154,11 +173,18 @@ public sealed class V3CorpusEuropeSearchMountTests
         var second = await fixture.AddSecondExpressionWithSamePublisherProvisionIdentifierAsync(fixture.PublisherWorkId);
         using var twoExpressions = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(twoExpressions);
-        var ambiguous = await EnvelopeAsync(twoExpressions, RawTarget, "search", new { query = Span, language = "eng", identifier = fixture.PublisherWorkId });
-        Assert.AreEqual("ambiguous_identifier", ambiguous.Refusal?.Code, "two English expressions of one work: none is picked.");
-        CollectionAssert.AreEquivalent(
-            new[] { fixture.PublisherExpressionId, second },
-            ambiguous.Refusal!.HelpfulPayload.GetProperty("candidates").EnumerateArray().Select(static value => value.GetString()).ToArray());
+        // Two English expressions of one work, with two Formex dates: the census cannot place the original wording in time, so
+        // none is picked; an undated search searches neither and counts both, and a dated one refuses as as_of refuses.
+        var undated = await EnvelopeAsync(twoExpressions, RawTarget, "search", new { query = Span, language = "eng", identifier = fixture.PublisherWorkId });
+        Assert.IsNull(undated.Refusal, undated.Refusal?.Code);
+        Assert.AreEqual(0, undated.Result!.Value.GetProperty("hits").GetArrayLength(), "neither expression is picked");
+        var searched = undated.Result.Value.GetProperty("searched");
+        Assert.AreEqual(0, searched.GetProperty("wordings").GetInt32());
+        Assert.AreEqual(2, searched.GetProperty("not_searched").GetProperty("versions_without_usable_date").GetInt32(), second);
+        var asOf = await EnvelopeAsync(twoExpressions, "/api/v3/as_of", "as_of", new { identifier = fixture.PublisherWorkId, date = "2018-05-25", language = "eng" });
+        var datedSearch = await EnvelopeAsync(twoExpressions, RawTarget, "search", new { query = Span, language = "eng", identifier = fixture.PublisherWorkId, date = "2018-05-25" });
+        Assert.IsNotNull(asOf.Refusal);
+        Assert.AreEqual(asOf.Refusal.Code, datedSearch.Refusal?.Code, "a dated EU search selects as as_of does, and refuses as it refuses");
     }
 
     [TestMethod]

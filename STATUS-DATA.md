@@ -1,6 +1,826 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-26.
+Updated 2026-10-27.
+
+## Where the data stands at the end of 27 October, and what Release 3's derive would add (sole driver, 2026-10-27)
+
+- **Release 2's data is derived and waits.** The D1 at 98eef6c6 (rule set lu-release-2, policy A; derive A and B
+  byte-identical; luxembourg_rederivation 93872e80...; mount tar `derive/d1-20261027-98eef6c6/mount-r1.tar` in
+  stlexv3soufien) passes 29 of the 30 machine gates. The one that fails is Luxembourg temporal exactness (as_of, fra):
+  the gates' oracle, not the reader (data/r1-gates, waiting on the owner's "continue the gates"). Until then the live
+  site's data stays Release 1's (derive-c).
+- **R111's copy.** Release 1 is copied to `stlexv3soufien/releases/v3-20261026T180319Z-8958ec5fa63f/` and verified by
+  SHA-256, with blob versioning and 365-day soft delete on for the account (deploy/backup-release.ps1). The two releases
+  before the opening are being copied the same way.
+- **Release 3's derive, scoped read-only** (the driver's scope note, outside the repository):
+  - Luxembourg relation records are held but never projected: 15,078 `modifies` and 7,879 `repeals` edges from run
+    15's set G. Over derive-r1's served acts, R72's "amended after the last consolidation" fires for 54 acts. That is
+    an index /10 relations table, 10 to 12 hours.
+  - EU titles are in run 16's custody, and OJ references are in the held Formex packages (67 of 82 seeds classic). That
+    is EU index /7, 8 to 10 hours.
+  - EU per-consolidation amending-act and corrigendum lists (258 and 76 pairs), 6 to 8 hours.
+  - Annexes as text provisions (R84/R59): EU 3,934 consolidated annexes and 480 in act packages, Luxembourg 1,761
+    parts in admitted files. 22 to 26 hours.
+  - An XHTML/HTML reader for 5 EU works, about 1,030 articles, 8 to 10 hours.
+  - Correction to the audit: no corrigendum row is indexed today. Run 16's corrigendum sets are empty.
+  - Needs the owner:
+    - EU R72 and R68 need a Cellar query: publisher traffic, which could ride the EU refresh due 4 November.
+    - 12,040 licenceSCL Luxembourg acts list HTML/DOCX manifestations under CC BY 4.0. They are not in custody, so they
+      need an acquisition. They are also single-channel, while the same expression's XML/PDF say licenceSCL, so they
+      need a new ruling.
+## The release path's checks against the release serving now: R106, R88, R86(2) listed and blocking, the card at promotion (R104), the exports' disclosure, R111's copy (sole driver, 2026-10-27)
+
+The audit's gaps 6, 9 and 16 (R111), for Release 2, the first release after the opening (`data/release-checks-ops`). No
+publisher traffic, no browser, no Azure call.
+- **`Lex.V3.Tool release-checks`** (`src/Lex.V3.Ingest/Releases/`): read-only over a candidate mount, and with
+  `--serving-mount` and `--serving-report` over the mount of the release serving now, held first file by file to that
+  release's signed mount report. It reads a Luxembourg index of schema 6 to 9 and an EU index of schema 5 or 6, so Release 1's
+  derive-c (/8, /5) can be compared. Exit 4 when a check refuses; 3 when a mount does not match its report.
+  - **R106** (`release-comparison.json`): works, versions, articles and EU annexes kept, added, changed and lost per publisher
+    and class. A version's served identity is its permalink's digest (the Luxembourg state digest; for the EU a digest over
+    the wording's article identities, which the API's wording digest follows); an article's is its coordinate, with the
+    SHA-256 of its served text. A version or its text lost, a permalink digest changed, an article's text digest changed, an
+    article lost from a version both serve, and an EU annex lost are listed; each needs a typed reason, the data's
+    (`publisher_body_changed`) or an entry of the release's explanations (`lex-v3-release-explanations/1`:
+    `derivation_rule_changed`, `rights_withdrawn`, `withdrawn_by_publisher`, `defect_corrected`, scoped by items, two rule
+    profiles or rights dispositions, each scope checked against both mounts). Additions never refuse.
+  - **R86(2)** (`consolidation-text.json`): every admitted consolidation file (Luxembourg consolidation and code states, EU
+    consolidated wordings) that yields no text, by identity and typed outcome. Typed textless outcomes (misfiled,
+    marker-only, no XML main body, no package held) and a PDF's text-layer profile are explained by the data; any other is a
+    failure, explained only by an entry naming the file with exactly its outcome. EU files are listed by custody identity
+    (object and body digests): an EU member names no work.
+- **The release path** (`image-rehearsal.mjs`, `release-checks.mjs`): the checks run before anything is built; a release
+  signed by the release signer must name the release serving now (`--serving-release`, `--serving-mount`,
+  `--release-explanations`). The reports, the explanations and **R88's manifest diff** (`manifest-diff.json` and
+  `manifest-diff.md`: fields, assets, mount files, the text yield per class, drops beyond ten per cent) are release assets; the
+  read-back refuses a release whose checks refuse it or whose diff does not describe its manifest.
+- **R104**: `deploy-probe.mjs --promotion-check` exits 3 for a release whose signed card has a gate not passing, a control that
+  missed its shuffle, or a target that is not the release's mount, as for the data's age; `deploy.ps1` says why.
+- **The exports' copy of the disclosure** (#999's "not in this slice"): a single-channel admission's `rights_disclosure` is
+  in every JSON item and the export's `rights_disclosures`, a last CSV column `rights_disclosure`, and the PDF, with the reading
+  page's sentence. L1, L1b and L2 may now be switched on as far as the exports go.
+- **R111**: `deploy/backup-release.ps1` copies a signed release's assets, manifest and signature, and the custody pointers it
+  names, into the private container `releases` of `stlexv3soufien`, never over a blob, refuses an account without versioning
+  and soft delete unless `-EnableProtection`, and verifies each object by SHA-256 (OPERATING.md section 9). Not run against
+  Azure; the restore drill is not done.
+- **Measured over derive-r1 against Release 1's derive-c** (read-only, 74 s): R106 lists 1,730 Luxembourg version identity
+  changes (content /2 `dd32d9a5…` to content /3 `33bb002c…`, inventory /3 to /4), 0 article texts changed, 0 lost; the EU
+  is unchanged (173,820 articles kept). R86(2) lists 53 files: Luxembourg 1 (`code/civil/20190428`, typed misfiled), EU 52 (2
+  typed no XML main body; 48 `formex_main_body_missing` and 2 `formex_main_body_package_rejected`, failures). #996 moves the
+  48 to admitted, so Release 2 should list the 2 package-rejected EU files and whichever of the 451 consolidations policy A
+  admits yield no text (the index-stage probe held 450 states for 451 bodies).
+- **Release 2's explanations** (`C:\lex-v3\driver-scripts\release-2\`, outside the repository): one entry,
+  `derivation_rule_changed` from `dd32d9a5…` to `33bb002c…`, which explains all 1,730 over derive-r1. The 2 EU
+  package-rejected files are a reader defect and are left unexplained, so Release 2 refuses until the driver decides.
+- **Driver decisions (reversible).** Codes count as consolidations under R86(2). A textless version the candidate lists under
+  another coordinate of the same publisher identity is changed, not lost. An annex whose disposition changes is counted, not
+  listed. Drops beyond ten per cent are named, never blocking by themselves (each lost item already is).
+- **Tests.** `V3ReleaseChecksTests` (7: the reader over a fixture mount and a changed copy, every scope, the multiset, the
+  re-keyed textless version, the explanations' 17 refusals, R86(2)'s classes, the command's exits); web `release-checks` (5),
+  `backup-release` (6, under a made-up Azure CLI), `deploy-probe` (one more), `export-build` (two more), and the deploy kit's
+  pins. `dotnet build Lex.V3.slnx -c Release`: 0 warnings. `Lex.V3.Tests`: 3,375 (3,369 passed, 6 skipped). Ingest: the new
+  class and every census class, 68 (66 passed, 2 skipped). Web: `npm run build`, then `npm test` 1,466 (1,463 passed, 3
+  skipped). `deploy/validate.ps1` passes.
+- **Not in this slice**: R106's replay of the probe set (the spec's answer-level half); R88's publication on Coverage; R86(1);
+  the restore drill; running the copy against Azure.
+
+## R92: the acts that name private individuals measured, withheld and kept out of search engines; the release carries both records (sole driver, 2026-10-27)
+
+The plan's item 1.11 and the specification of record's R92(1) and (2), O28, O27 (`data/names-r92`).
+- **Measurement** (`Lex.V3.Ingest.Names`; `Lex.V3.Tool names-records --mount <v3-corpus> --out <dir>`, read-only and offline,
+  never writing into the mount): every work the mount serves gets a class from what it is (a Luxembourg act's titles, the
+  index's and the catalogue's; an EU act's operative text, since the EU index holds no title), and its served text is read
+  by a conservative detector: a person's particulars (a birth date or place given as one, an identity document or national
+  number, a residence) within 300 characters of a person named after an honorific, or two particulars of different kinds. A
+  label with no value, a residence rule, a variable written "M." and an office ("Monsieur le Ministre") are no finding. The
+  acts the Luxembourg catalogue names only by a title (no version held) are measured too: search's exact references serve
+  their titles. Classes: `lu_naturalisation`, `lu_nobility`, `lu_grant_to_named_person`, `lu_property_of_named_person`,
+  `lu_civil_status_of_named_person`, `lu_title_names_person`, `lu_text_names_person`, `eu_restrictive_measures`,
+  `eu_text_names_person`, and the two general classes. Output, one form per mount (two runs over derive-r1 byte-identical):
+  the indexing record (`lex-v3-indexing-record/1`, the web's), the names record (`lex-v3-names-record/1`, bound to the
+  mount's corpus and index digests) and the counts (`names-measurement.json`). None holds a name: identifiers, classes, reason
+  codes, counts and hashes only.
+- **Over derive-r1** (`C:\lex-v3\lu-population-20261011-15\derive-r1`, 31 s): Luxembourg, 2,572 works held (137,632
+  articles), every one `lu_general`, no detector finding, 2,572 listed for search engines; 22,048 acts the catalogue names
+  only by a title, 974 withheld (954 `lu_naturalisation`, 8 `lu_grant_to_named_person`, 4 `lu_property_of_named_person`, 8
+  `lu_title_names_person`; acts of the 1840s to the 2000s); EU, 82 acts (173,820 articles), every one `eu_general` (the
+  population holds no restrictive measures act), no finding, 70 listed (12 hold no text). Signals the detector saw and set
+  aside: 536 Luxembourg articles (53 works) and 118 EU articles (5 acts) with a particulars' label and no value, 2 Luxembourg
+  articles of a form whose "Lieu de naissance" is an empty field, 1 a naming rule's placeholders. Digests: indexing record
+  `3105aa4f…`, names record `a5e94725…`, counts `3a76941a…`, bound to corpus `0746826f…` and indexes `da7725df…` and
+  `090e166f…` (the build report's). The served text names no private individual by this detector, so Release 2 withholds
+  no served act; what it withholds is 974 catalogue acts whose titles name people or whose class does (971 before the review
+  of #1001, F2, below).
+- **Calibration** (read-only, on masked text: every capitalised word and every digit replaced before anything was printed,
+  so no name was read): 40 of the 971 first withheld at random, and all 17 outside naturalisation, are acts about named people (57
+  of 57; "conférant la naturalisation." names its people in its text, by the class). 40 of the 834 general catalogue titles
+  with a person-like word (pension, "en faveur de", nationalité): none names a person (none missed in the sample). In served
+  text the detector flagged nothing, so its precision there is unmeasured; its 3 candidate articles were judged general (3 of
+  3 set aside rightly), and its recall is held only by the synthetic tests. A public office holder named with an honorific
+  would be counted (a false positive by design).
+- **Handling** (driver decision, reversible): the owner's standing order names no person and gives no contact channel, so R92's
+  first option (text kept out of search with an objection contact, R49) is not available; a class or work found to name
+  private individuals is pointed to the publisher. It is out of the indexing record (search engines, the sitemap, the home
+  page's examples), and the API answers `text_withheld` with `reason: names_private_individuals`, its class and reason codes,
+  its identity, every state digest and the official link on every operation about it; search never matches its text nor shows
+  its titles (the title ladder, search's references, a catalogue act's title), and another act's `cited_by` never quotes its
+  articles. `browse`, `coverage`, `events` and `changes_in_period` still name it by identifiers (R92(2)). Every screen says
+  it in one sentence, reviewed in French (STATUS-WEB.md). No refusal code is added: `text_withheld` with a reason, under
+  #998's payload schema (its three mandated fields, more allowed).
+- **Where it is applied, and why** (driver decision, reversible): at serve time, from the record beside the mount, not in the
+  derive. The measurement reads the derived indexes, so it needs no new derive and the two-build derive stays byte-stable; a
+  withdrawal is a new release with a new record (R92(2)); the indexes that hold the withheld text live only in the private
+  image and custody, never in a public asset (R92(3)): the release's public assets are its manifest, the card, the mount
+  report and now the two records and the counts. Fail closed: a names record of another build, or one that breaks a rule,
+  refuses the mount; a mount with no record withholds nothing, so the release path measures its own mount every time. Were
+  the indexes ever a public download, the withheld text would have to leave them in the derive.
+- **Release path** (`web/scripts/image-rehearsal.mjs`): the rehearsal, and the release from custody with its bound tool, run
+  the measurement over the mount into the work directory, refuse a mount that already holds either record, hold the two
+  together (no withheld work offered to search engines or in the sitemap), publish both beside the mount in the image
+  (`LexImageMountRecords`), hold the image to them byte for byte, derive the home page's examples among the acts the record
+  admits, probe the running image (a withheld held work's dossier is `text_withheld` for R92; a catalogue act's ELI is
+  answered without its title) and publish both records and the counts as release assets.
+- **Tests**: `V3NamesDetectorTests` (10, one of 9 cases: each class and the general acts beside it, a title's honorific
+  with one name, the detector's positives and negatives, the window, the signals, EU restrictive measures, work IRIs),
+  `V3NamesRecordTests` (4: one form, the binding, 26 broken records refused, the indexing record admitted by
+  `V3WebRoot.ReadIndexingRecord`), `V3CorpusNamesMountTests` (6: a synthetic act naming an invented person measured and
+  withheld on all 18 operations asked, search unmatched; a general act listed and served; the GDPR withheld by a record on 6
+  operations; bad records, half a pair, two build times and a work in both refuse the mount; relations and cited_by never
+  quote a withheld citing work; a person named only in a note found), the refusal census (R92's payload
+  among `text_withheld`'s), the census pins (4 Ingest registries, the API's gate doors), and the web's `names-records` (4)
+  and `image-rehearsal` (1 more).
+- **Review and repair** (#1001, an independent reviewer: REPAIR, two medium and two low findings, each reproduced and fixed):
+  - F1: `relations` served a withheld work's citing articles, labels included, where `cited_by` did not. Its inbound edges now
+    drop them, and its counts follow; search drops a withheld work's hits by its key as well as its state digests. The sweep
+    found no other operation that serves another work's text or title: outbound edges are the asked work's own text, and the
+    as-published facts, the compare, the history and the in-force rows hold no other work's text.
+  - F2: a title's class read a person only with a given name and a surname, so "M. ‹surname›" and "MM. ‹surname› et consorts"
+    were general and their titles were still served by search's references. A title now names a person by an honorific with
+    one name (never an office) or by "et consorts": 3 more acts withheld over derive-r1 (974); on masked titles, 2 are about
+    named people (a pension, an acquisition from co-owners) and 1 an association named with "et consorts", kept withheld.
+  - Low: the detector also reads each article's note bodies (served by the API, not in its searchable text) and an EU
+    article's heading: no new finding over derive-r1. A mount now holds R92's two records together or not at all, with one
+    build time and no work in both, or is refused.
+- **Not done here**: Trust and Coverage does not count the works withheld under R92; search's `searched` counts a withheld
+  work's states as searched (none on Release 2's mount); the privacy notice's section on people named in acts does not yet say
+  that such an act is pointed to the publisher (a public claim, asked in the pull request). R92(1) asks the measurement again
+  before any widening run: the release path makes it part of every release.
+
+## The text yield per class: the build reports it, Coverage and R26's sentence say it (R86(4); sole driver, 2026-10-27)
+
+- **What was asked.** R86(4): "The build reports the text yield per class: works and articles with served text; text
+  withheld, by reason (licenceSCL, conflict); parse failures; PDF-only bodies. Coverage and R26's sentence show the same
+  figures." Branch `data/yield-per-class`, from `data/text-yield` (#996). No publisher traffic, no browser, no Azure.
+- **The build reports it.** `V3TextYield` (new, `src/Lex.V3.Ingest/V3TextYield.cs`) counts, per publisher and per class, from
+  what the derive already writes and nothing else: the corpus's members, the Luxembourg index's articles and catalogue facts
+  (`work_facts`), the EU index's articles and states. The mount writer puts it in the build report as `textYield`
+  (`lex-v3-text-yield/1`); the report's schema is now `lex-v3-first-mount-report/2`. Every count is ordered by ordinal
+  comparison, so a second derive writes the same bytes (the two-process offline test compares every file, the report
+  included).
+  - **Classes.** Luxembourg: the ELI family (`code`, `loi`, `rgd`) and the state kind (`code`, `as_published`,
+    `consolidation`), read from the state IRI, so a family the catalogue adds becomes a class with no change. EU: the
+    content class (`original_legal_text`, `consolidation`).
+  - **Per class.** Versions the catalogue lists and versions with text; acts and acts with text; articles served; versions of
+    which no file is held, by what the catalogue says of them (`catalogue_licence_scl`, `catalogue_licence_scl_in_part`,
+    `catalogue_no_expression`, `catalogue_cc_by_not_acquired`, ...; the licence is read from the XML and PDF manifestations
+    only); and every held file in exactly one of: with text, withheld (by its rights disposition's own wire name, with how
+    many are PDFs), PDF only, or failed (an admitted file with no article served, by its derivation dispositions' own
+    names: for Luxembourg a non-PDF file; the EU's corpus records no file format, so `files_pdf_only` is null there and an EU
+    file with no Formex main body, a PDF or HTML one among them, is failed by its own disposition, such as
+    `formex_main_body_not_eligible`). EU classes carry R84's annex counts (with text, image-only, failed, by disposition);
+    Luxembourg records none.
+  - **No closed list of reasons.** A rights disposition is counted under `ContractWire.NameOf`, so Release 2's
+    `agreed_cc_by_rederived` and policy A (#999) need no change here: an admitted file counts by its articles, a withheld
+    one by its token.
+- **The API serves it.** `V3CorpusMount` reads `textYield` from the report beside the mount, holds it to its arithmetic and
+  to the mount (a publisher exactly when its index is mounted, its articles the index's, its files the corpus's held
+  files; anything else refuses the mount, as a report naming other artifacts does), and the coverage answer carries
+  `text_yield` and `text_yield_note`; with a yield, its `scope` and `publisher_universe` row say the catalogue is counted.
+- **A mount without the figures answers as before** (driver decision, reversible): derive-r1 and derive-c carry report /1,
+  so their coverage answers `text_yield: null` with a note saying why, and every other member is unchanged. Refusing such
+  a mount would take the live release down for a figure it never claimed; computing the yield in the server would serve a
+  figure the build did not report. An API before this slice reading a /2 report ignores the new member.
+- **The web says the same figures.** Coverage has a section "How much text this site serves, class by class": R26's
+  sentence per publisher, every number its publisher row's (versions with text, versions, acts with text, acts,
+  articles), the class table with each publisher's own row, why a version or file has no text (each reason the data's
+  token), the annex counts, and the platform's note; for a mount with no yield, the sentence saying so. `readCoverage`
+  holds the block to the same arithmetic, and to the mount (its Luxembourg articles are `totals.articles`, its files the
+  members acquired or withheld). English and French: the French forms were reviewed by an independent reviewer against
+  the table's vocabulary (11 changed, the English with 5: a withheld text "n'est pas communiqué", a file "sans texte
+  servi", the catalogue "recense"; recorded in `live-chrome-fr.mjs`). No count is typed in copy.
+- **Measured over derive-r1, read-only** (`V3TextYieldMountProbe`, opt-in, the production count over the mount's own
+  files; 45 seconds, nothing written beside the mount). These are the figures a derive at this head writes for those
+  inputs; they equal the ones #996 measured from custody by other means.
+
+  | Class | Versions (with text) | Acts (with text) | Articles | Not held | Files: withheld (PDF) / failed |
+  |---|---|---|---|---|---|
+  | Codes | 914 (126) | 17 (8) | 119,730 | 724 CC BY not acquired (the nine code recueils); 1 no expression | 62 (30) / 1 `akn_upstream_not_inventoried` |
+  | Lois, as published | 9,238 (689) | 9,238 (689) | 7,586 | 6,129 licenceSCL; 1 no expression | 2,398 (9) / 19 `akn_unsupported_content_shape`, 2 `akn_upstream_not_inventoried` |
+  | Lois, consolidations | 1,594 (0) | 595 (0) | 0 | 60 no expression | 1,534 (105) / 0 |
+  | RGD, as published | 15,366 (1,875) | 15,366 (1,875) | 10,316 | 10,201 licenceSCL; 1 CC BY not acquired; 1 no expression | 3,275 (175) / 12 `akn_unsupported_content_shape`, 1 `akn_upstream_not_inventoried` |
+  | RGD, consolidations | 1,244 (0) | 660 (0) | 0 | 33 no expression | 1,211 (49) / 0 |
+  | EU, consolidated wordings | 295 (245) | 1,088 works (482) | 171,664 | not recorded | 0 / 48 `formex_main_body_missing`, 2 not eligible, 2 package rejected |
+  | EU, original wordings | 82 (29) | 82 works (29) | 2,156 | not recorded | 0 / 4 missing, 10 not eligible, 86 package not acquired, 6 rejected; 16 annexes failed (`annex_mapping_unresolved`) |
+
+  Every Luxembourg withheld file reads `typed_quarantine_in_file_reading_rejected` (reading /1); no admitted PDF is held
+  (the 368 PDF files are all withheld). Luxembourg: 2,690 of 28,356 versions, 2,572 of 24,621 acts, 137,632 articles;
+  the EU: 274 of 377 versions, 173,820 articles.
+- **Review and repair (#1000).** REPAIR, every figure confirmed by an independent count over derive-r1. F1 (medium): the note
+  and the class doc said the EU holds no PDF, and two EU consolidation bodies of `02003R0001-20040501`
+  (`formex_main_body_not_eligible`) are PDFs in run 16's custody. The claims are corrected, not the count: `files_pdf_only`
+  is null where the corpus records no file format, and Coverage says so for the EU in English and French (2 forms
+  reviewed, 1 changed). Determinism: the classes sort by an ordinal comparer, and an EU work the census lists under two
+  seeds gives its text to both seeds' versions whatever order the rows come in (none in derive-r1; the bound "versions
+  with text are no more than the files with text" is dropped for it).
+- **What a new D1 needs.** Nothing new as input: inputs /3 stay valid, and a derive at this head writes report /2 with the
+  yield (about a minute more, reading the two placed indexes). Deploy the API at this head or later to serve it; Release 1's
+  mount keeps answering with none.
+- **Tests.** `V3TextYieldTests` (every class and reason over synthetic rows, every rights disposition by its own name, the EU
+  classes and annexes, the zero cases, an article of no held file refused, the block's arithmetic, the coverage answer with,
+  without and with a yield that does not hold); the full build test now holds the report's yield to the written mount and
+  to coverage; the census pin (`V3CorpusMountWriter`'s `ReportSchema`); the answer and envelope censuses re-rendered (a
+  coverage answer with the yield, and one without); the legacy schema-8 and schema-6 answers re-recorded (each coverage
+  answer gained `text_yield: null` and its note, nothing else moved); web: `coverage.test.mjs` (both renderers, both
+  languages, R26's sentence against the table, every refusal), and the home and no-literal-counts tests move the yield
+  with the totals.
+- **Measured** (Windows, no browser, no publisher traffic, no Azure; targeted classes, CI runs the suites):
+  - `dotnet build Lex.V3.slnx -c Release`: 0 warnings, 0 errors.
+  - The mount, report and coverage classes with the offline two-process derive (`V3FirstMountBuildTests` and its eight
+    offline rows, `V3CorpusCoverageMountTests`, `V3MountBuildFileTests`, `EuFirstMountAcquisitionResumeTests`,
+    `V3IndexNineServingTests`, `V3CorpusGenerationQuoteTests`, `V3CorpusLegacySchema8MountTests`, three Luxembourg mount
+    classes, `V3CorpusEuropeTimeViewTests`): 93, of which 2 failed on the first run and are repaired (the legacy answers and
+    the declared coverage paths), 2 opt-in.
+  - Then `V3TextYieldTests`, the censuses, both sample censuses, the coverage, legacy and freshness classes: 84 (80 passed,
+    4 opt-in); the mount-writing classes again after the last change: 7 and 36 passed; `Lex.V3.Tests` censuses and
+    vocabulary: 45 passed.
+  - Web (`npm run build`, then `node --test`): `coverage`, `live-chrome`, `live-chrome-scan`, `no-literal-counts`,
+    `live-home`, `live-french`, `live-coverage`: 85 of 85; 31 other files that read a coverage answer: 343 of 343.
+  - `eng/verify-v3-tree.ps1`: passes.
+
+## Release 2's rights: reading /2, resolution /2, policy A and R1 with rights; the owner's rulings L1, L1b and L2 built and switched off (sole driver, 2026-10-27)
+
+- **The defect (the text-yield slice's finding).** On the Release 1 mount (`derive-r1`), R86(2) fails: no consolidation is
+  served. Reading /1 (`LuxembourgInFileRightsReader.ReadAsync`) admits a file only when its identification holds exactly
+  one `scl:JOLUXManifestation`, the file fetched, and the publisher's consolidations carry a second block, the PDF twin.
+  Run 15's `loi/2021/01/22/a45/consolide/20211217` has one `FRBRthis` (`…/fr/xml`) and two blocks (`…/fr/xml`, `…/fr/pdf`),
+  each CC BY 4.0; reading /1 calls it `typed_quarantine_in_file_reading_rejected`. Reading /1 does not change: R0's replay
+  runs it byte for byte.
+- **The rules, as LU-DATA-DESIGN v2 §1.1, §1.2 and §2.2 state them.**
+  - **In-file reading /2** (`ReadTwoAsync`, `lex-lu-in-file-rights-reading/2`, `eb3b6d96…`). It binds the
+    `scl:JOLUXManifestation` of the document's own identification whose `uriThis` is exactly the fetched XML
+    manifestation, the one custody holds. A sibling block (the PDF twin) is a named identity, never the held body's
+    licence. FRBR is recorded, never required, and a leading `scl:postit` is tolerated. Every `license` value anywhere in
+    the document is declared.
+  - Reading /2's refusals: two blocks naming the file, or one naming it and another identity (`ambiguous_binding`);
+    markup in a value, or a value that is not one exact IRI (`invalid_licence_iri`); a root that is not one Akoma Ntoso
+    document (`root_rejected`); `malformed_xml`. Its other statuses are `bound`, `own_block_empty`, `unbound`, `silent` and
+    `not_applicable` (a PDF).
+  - **Resolution /2** (`LuxembourgRightsChannels.ResolveTwo`, `lex-lu-rights-resolution/2`, `05ed311f…` since the review): /1's order, then
+    rules 8 to 15. A conflict is any declared value, in any block, that is not the SPARQL value, or any identity a block
+    names that the catalogue (the run's typed `jolux:license` assertions) licenses otherwise. An own block of exactly CC
+    BY with nothing disagreeing is `agreed_cc_by_rederived`. Six dispositions are new: that one, the four single-channel
+    ones and `typed_quarantine_in_file_identity_unknown`.
+  - **Policy A** (`lex-lu-rights-admission-policy/A`, `b9687998…`, a driver decision, §3.3 item 11): admits
+    `agreed_same_run_cc_by` and `agreed_cc_by_rederived`, and no single-channel disposition. The registry refuses to compose
+    a policy that names a disposition no policy may admit. Policy /1 is unchanged (`a477f4f2…`).
+  - **R1 with rights**, rule set `lu-release-2`: reading /2 and resolution /2, then Release 1's inventory /4, content /3
+    and state digest /2. Each held body is read by digest. The in-file evidence index `lex-lu-in-file-rights-evidence/2`
+    holds every reading, refused ones too, and names the /1 index. Resolution /2 runs against R0's own SPARQL channel.
+  - R1 refuses on a non-terminal resolution, on `non_admitting_licence_scl`, and on an acquisition admission that /2 does
+    not agree with. An admission it keeps keeps its own resolution; every other member is re-bound (`WithRederivedRights`,
+    a run of R0's own via `WithHeldBodyDerivationPopulation`). The record gains a `rights` part; Release 1's record bytes
+    do not change.
+  - **Corpus, mount and web.** The corpus admits what its header's policy admits. Conflict, Multiple and the six new
+    dispositions are terminal. Re-bound rights carry `resolution_rule` and binding /2, and the set and the mount view each
+    hold every member to the policy.
+  - The bundle and search admit by the corpus's policy. A bundle says `agreed_cc_by_rederived` when any of its sources is,
+    and states policy A's rule; a policy /1 corpus answers byte for byte as before. The web reads both agreements.
+- **The owner's rulings (§5), built and off.** L2, L1 and L1b are registered entries over policy A, each with option (a)
+  (every licence page) or (b) (only pages run 15 observed live, from its resumption at 2026-10-11T12:28:45Z): 14 entries,
+  `PolicyFor(l1, l1b, l2, livePagesOnly)`. Four constant switches in `LuxembourgRederivation` are false, so `lu-release-2`
+  names policy A. A yes sets the switch and puts the owner's words, dated, on the entry's ruling line; the rule set's policy
+  entry and its digest change, and nothing else.
+  - A single-channel admission is bound to the retained SPARQL page that holds its licence row, from the licence-page index
+    `lex-lu-sparql-licence-pages/1` (held, and named in the record). R1 refuses an admission without its page.
+  - The admitted member carries `rights_disclosure` (its code, the page, the page's observation time) beside its gaps, and
+    cites the page. The bundle carries it, with the rule's single-channel sentence, and the reading screen says the L5
+    sentence with the page's date, in English and French (drafts the owner revises). Under (b), a body whose page was
+    replayed is withheld, with the gap `rights_licence_page_outside_evidence_window`.
+  - L3 (PDFs) and L4 (conflicts) have no entry; no entry can admit `not_applicable` or a conflict.
+- **Measured over run 15** (`LuxembourgInFileRightsReadingTwoRun15Probe`, new, opt-in `LEX_LU_RIGHTS2_PROBE=1`, read-only,
+  never a CI test). Custody was read by digest through S2's read-only decorator; derive-c's work facts were the catalogue;
+  no derive ran and nothing went over the network. It took 12.5 minutes, with a peak working set of 2,044 MiB, and found
+  0 failures.
+  - The licence-page index: 4,721 pages, 194,828 licence rows, 96,984 manifestations (3 whose pages disagree or are not
+    exact). That is the design's scan, figure for figure.
+  - Under resolution /2, the 11,205 held bodies split as follows:
+    - every one of the 2,725 the acquisition admitted agrees (2,598 acts, 127 codes);
+    - `agreed_cc_by_rederived` 702 (451 consolidations, 250 acts, 1 code state, `code/procedure_civile/20230201`);
+    - single channel: names another identity 1,043 (1,012 consolidations, 31 code states), silent 2,196 (1,934 acts, 262
+      consolidations), own block empty 31 acts, not applicable 368 (the PDFs);
+    - withheld under every policy: conflict 4,012 (3,201 acts, 811 consolidations), multiple 71, missing value 1,
+      identity unknown 54 (1 act, 53 consolidations), rejected 2.
+  - Two acts differ from the design's simulation, and both stay withheld:
+    - `loi/1997/07/27/n6/jo`: its own block says CC BY, but the catalogue licenses its PDF twin both CC BY and
+      licenceSCL. Rule 8, as the design writes it, makes that a conflict; the simulation had applied that check to
+      unbound files only. That is why there are 702 agreements, not 703.
+    - `loi/2001/12/21/n8/jo` holds a second root element, `components`, beside `act`, so its root is rejected. Its own
+      block says licenceSCL, so it is withheld either way.
+  - Admitted bodies, bodies with text, and articles content /3 admits, by policy:
+
+    | Policy | Bodies | With text | Articles | Over policy A |
+    |---|---|---|---|---|
+    | /1 (Release 1) | 2,725 | 2,690 | 137,632 | |
+    | A (this slice) | 3,427 | 3,387 | 152,031 | 451 consolidations (9,700 articles), 250 acts, 1 code state: +14,399 articles |
+    | A + L2 (a) | 4,470 | 4,425 | 215,466 | +1,043 (1,012 consolidations, 31 code states), +63,435 articles; 5 refused as misfiled |
+    | A + L2 (b) | 3,857 | 3,816 | 158,821 | +430 consolidations, +6,790 articles; no code state (all 31 rest on run-14 pages) |
+    | A + L1 (a) | 5,623 | 5,561 | 173,072 | +2,196 (1,934 acts, 262 consolidations), +21,041 articles |
+    | A + L1 (b) | 4,877 | 4,837 | 161,311 | +1,450 (1,306 acts, 144 consolidations), +9,280 articles |
+    | A + L1b (a) | 3,458 | 3,418 | 152,614 | +31 acts, +583 articles |
+    | A + L1b (b) | 3,450 | 3,410 | 152,356 | +23 acts, +325 articles |
+    | A + all three (a) | 6,697 | 6,630 | 237,090 | +3,270, +85,059 articles |
+    | A + all three (b) | 5,330 | 5,289 | 168,426 | +1,903, +16,395 articles |
+
+  - Content /3 admits 9,700 articles of the 451 consolidations, the design's figure. The file counts are the design's
+    (§1.1, §5), with the live-page splits 430 / 1,450 / 23, except L2: 12 of the design's 1,055 name an identity the
+    catalogue does not know (rule 12 since the review). The articles are content /3's, so they are above the design's
+    content /2 estimates (L2 (a): 57,661).
+  - A body is a text here; the index's states, and "6 codes current" under L2, come from index /9.
+- **The index stage under policy A** (`LuxembourgIndexNineBuildRun15Probe` with `held: run15-held-release2.jsonl` and
+  `admission_policy: A`): the projection and the first write ran. Then free disk fell to 2.25 GB: the page file grew to cover the probe's 2.7 GB
+  of private memory while other agents ran. The probe was stopped there, as this slice's limits require (3 GB), so the
+  reader's file door and the second write did not run.
+  - The written file was read back before it was deleted (SQLite, read-only and immutable). `quick_check` is ok.
+  - Its rows: 152,031 articles (21,212 acts, 121,119 code states, 9,700 consolidations); held states 2,810 as published,
+    127 code and 450 consolidation; 518 consolidation and 61 code states `withheld_rights`.
+  - Its members: 702 `agreed_cc_by_rederived` and 2,725 `agreed_same_run_cc_by` acquired, every other disposition
+    withheld.
+  - The file was 1,455,538,176 bytes (Release 1's index is 1,378,668,544).
+  - Under Release 1 the same probe gave 2,690 held states and 137,632 articles. The index builds with the consolidations'
+    text, and its article count is the rights probe's to the article.
+  - The probe now deletes its first file before the second write, so one index is on disk at a time.
+  - The full run (reader door, double build) waits for a machine with headroom, or for D1 on Azure, which runs every one
+    of those checks.
+- **Tests** (Windows; no browser, no publisher traffic, no Azure; custody read only; targeted classes only, CI runs the
+  suites): - `dotnet build -c Release`: `Lex.V3.Tool`, `Lex.V3.Api` and both test projects, 0 warnings and 0 errors. Rebased on
+    473a9fae (#994, #995), whose census counts are combined with this slice's.
+  - Contracts (`Lex.V3.Tests`), 132 tests, 0 failed: `LuxembourgRightsResolutionTwoTests` (new, 13: every rule of
+    resolution /2, the policies' texts and digests, the switches and their windows, licence-page binding, a policy
+    naming a never-admissible disposition cannot be built), `LuxembourgRightsChannelsTests` (the /1 pins, unchanged),
+    the gazette, body-join and scope-resolver classes, and every census.
+  - Ingest (`Lex.V3.Ingest.Tests`), 301 tests (299 passed, 0 failed, 2 skipped: the opt-in writers) before the rebase, and
+    87 again after it.
+    - `LuxembourgInFileRightsReaderTwoTests` (new, 15): reading /2 rule by rule, the licence rows of a SPARQL page, and
+      reading /1 still refusing the twin-block file.
+    - `LuxembourgRightsReleaseTwoTests` (new, 12): the derive's own path. Each fixture consolidation is acquired by the
+      fixture, built under policy /1, re-derived under `lu-release-2`, built, written, verified and mounted:
+      - two agreeing blocks: withheld under /1, served under A (corpus, index and evidence bundle);
+      - the held block alone: the acquisition's admission is kept, with binding /1;
+      - disagreeing blocks: a conflict;
+      - a twin the catalogue licenses licenceSCL: a conflict;
+      - no block naming the file: an unknown identity, or `names_other_identity`, withheld;
+      - a licenceSCL own block: a conflict;
+      - an own block without a licence: withheld under A;
+      - an annex block's licenceSCL behind an acquisition admission: R1 refuses;
+      - a changed member set: the re-binding door refuses;
+      - Release 2's inputs through `rederive-inputs`, `derive` and `rederive-seal`: zero network operations and the same
+        files;
+      - L1b and L1 switched on through the rulings' door: served with the disclosure, while a corpus whose policy would
+        not admit them refuses to read.
+    - `LuxembourgRederivationTests`, `LexCorpus6BuilderTests` (the terminal set), `V3CorpusEvidenceBundleMountTests`,
+      `V3CorpusSearchResultsMountTests`, `V3AnswerSamplesTests` (the samples unchanged), `V3FirstMountBuildTests`,
+      `V3MountedGatesTests`, `LuxembourgIndexBuilderTests`, the frozen replay and the censuses.
+  - Web: `npm run build`, then the 309 tests of every file touching the reading screen, its copy or the number allowlist:
+    0 failed. That includes the policy-A bundle, the single-channel bundle with and without its disclosure, and the
+    French and English disclosure sentences.
+- **What a new D1 does.** No new acquisition: every body is in run 15's custody.
+  - `rederive-inputs --custody … --base mount-inputs-b306a972….json --rules lu-release-2 --policy b9687998dcde76930137a913f54b753d3f496a13da1c7d827d3f1573dcf3dc41 --derived-at <utc> --custody-encoding brotli`
+  - then `derive` over the inputs it writes, `rederive-seal` with the `luxembourg_rederivation` it prints, and a second
+    derive of the sealed inputs, which must be byte-equal.
+  - R1 reads each held body three more times (reading /2, inventory /4, content /3) and holds the evidence index /2 and the
+    record. Under policy A it reads no licence page. Its memory peak should stay Release 1's, which is in R0's replay.
+- **Review of #999 (an independent reviewer: REPAIR) and the repair.**
+  - **F1, high: R0 could no longer replay run 15.** The resolution gained three public members (`InFileReadingTwo`,
+    `ResolutionRuleSha256`, `LicencePage`). ContractJson wrote them as nulls on every resolution /1, and the Gazette
+    checkpoint's input and result digests and the query checkpoint's result digest hash the body joins and Gazette sets
+    that carry one. A derive over run 15 would have refused at the Gazette checkpoint, before R1.
+    - Fixed: each is now a no-argument method over private state (`JsonIgnore` at first, which CI refused). No other type
+      this slice touched is hashed through ContractJson:
+      the corpus member's rights block has its own canonical writer, which writes the new fields only when set; the record
+      and its rights part omit theirs when null; the Gazette rights digests are field by field.
+    - `LuxembourgRightsResolutionWirePinTests` (new) pins `ContractJson.Sha256` of a resolution /1 (agreed, and refused
+      for a PDF), a body join, a Gazette disposition and a Gazette set. The values were computed with 473a9fae's Contracts,
+      built in a scratch worktree outside the repository, by an F# script making the same objects. The branch gives the
+      same five values. With a public property exposing one of the three the pin fails, which was run once to check.
+    - Not checked: the stored checkpoint digests of run 15 themselves. They hash R0's in-memory resolution, which only the
+      query phase's full replay (about 34 GiB) rebuilds, so no read-only check over custody can recompute them on this PC.
+      The pin holds the bytes those digests were made from to 473a9fae's.
+  - **F2: rule 12** now quarantines an unbound file that names no identity, or any identity the catalogue does not know
+    (the design's L2 condition: every identity the block names is itself CC BY in the same catalogue). It is re-pinned,
+    and a new test covers a file naming one CC BY and one unknown identity.
+    - Over run 15, 12 consolidations move from `names_other_identity` to `typed_quarantine_in_file_identity_unknown`
+      (1,024 to 1,012; 41 to 53). L2 (a) adds 1,043 files and 63,435 articles; (b) adds 430 and 6,790. Policy A and every
+      other figure are unchanged.
+  - **F3: binding /2** hashes the reading /2 rule, the admission policy and the re-derivation record besides the resolution
+    rule. The set checks it against its header, and a header naming another record or another policy does not read
+    (tested).
+  - **F4: the L2 disclosure** now says the file's licence statement names another publication, not this file, in English
+    and French; the code does not check "the same act".
+  - **F5: R1's other refusals are tested**: a non-terminal resolution (no SPARQL row), `non_admitting_licence_scl` (a
+    silent file whose SPARQL channel says licenceSCL), and a single-channel admission under L1 whose rights evidence
+    index lists no page. Policy A reads no page for the same body, which is withheld.
+  - **Tests after the repair and the merge of v3/integration at 562d12e7** (#996, #997):
+    - contracts 162 passed;
+    - ingest 320 (318 passed, 0 failed, 2 opt-in skipped);
+    - web 331 passed over 39 files;
+    - `eng/verify-v3-tree.ps1` 1,736 tracked paths.
+    - After merging f7f1f80d (#998) too: contracts 113 passed (the censuses, combined: candidates 630, registries 90),
+      ingest 95 passed (the censuses, the rights classes, the bundle, search and the answer samples), web 334 passed,
+      `eng/verify-v3-tree.ps1` 1,760 tracked paths.
+  - **The rights probe again** (12.4 minutes, peak 2,124 MiB, 0 failures): the moves above, nothing else.
+  - **D1's commands do not change.** `lu-release-2` and policy A (`b9687998…`) are the same; the inputs name resolution
+    /2's new digest through `RulesOf`.
+  - **CI at 07930fec was red (5 of 6,926 tests) and is repaired.**
+    - `WireIgnoredMemberTests`: resolution /2's three facts are no-argument methods over private state,
+      `InFileReadingTwo()`, `ResolutionRuleSha256()` and `LicencePage()`. The type has no deserializing constructor, so it
+      is not in that test's corpus. The wire pin still gives 473a9fae's five values.
+    - `RetiredGenerationBoundaryTests`: every V2 name is now Two (`LuxembourgInFileRightsReadingTwo`, `ReadTwoAsync`,
+      `ResolveTwo`, `ReadingTwoProfileSha256`, `ResolutionTwoProfileSha256`, `InFileEvidenceTwoSchema`), and four files
+      are renamed. No digest moved: reading /2 `eb3b6d96…`, resolution /2 `05ed311f…`, policy A `b9687998…`.
+    - `LuxembourgQueryExecutionAdapterConstructionSurfaceTests` (2): R1's rights step hands back the re-bound population,
+      not a run. R1's main door re-makes the run through the run's internal copy `WithHeldBodyDerivationPopulation`, which
+      is pinned with the reason it cannot leak an unrefused result.
+    - Tests: the whole `Lex.V3.Tests` project, 3,375 (3,369 passed, 0 failed, 6 skipped: the image-conditions lane and
+      Windows symbolic links); ingest 230 passed (every construction-surface class, the censuses, the rights classes, the
+      corpus builder, mount view, bundle, search and answer samples); `eng/verify-v3-tree.ps1` 1,760 tracked paths.
+- **Driver decisions (reversible).**
+  - Policy A, as the design proposes.
+  - Rule 8 applies to every reading, bound ones included: an identity the catalogue licenses otherwise is a conflict,
+    which withholds `loi/1997/07/27/n6/jo`.
+  - Rule 12 quarantines an unbound file naming no identity or any unknown one (the review of #999).
+  - A root-level element beside the document element is a rejected root (`loi/2001/12/21/n8/jo`).
+  - A binding block that names a second identity is ambiguous.
+  - A single-channel page is the latest page holding the row; (b) asks that page to be live.
+  - The disclosure sits in the member's rights block, not in a member field.
+  - The owner's switches and their 14 entries exist before the answer, so a yes changes the release rule set's policy
+    entry and its digest only.
+- **Not in this slice.** The exports' copy of the disclosure (needed before a switch is turned on), the reading /2 identity
+  class of an unbound block's named identities (diagnostic only), and `measure-lu-rights` as a tool step (the probe
+  measures it). The new D1 on Azure is the driver's, at the merged head, as Release 1's was.
+
+## The text yield, measured from custody: why 659 EU works and every Luxembourg consolidation have no text; the EU main body reads the Treaties, the Charter and the packages whose annexes are unclassified (sole driver, 2026-10-27)
+
+- **What was asked.** The served EU index (derive-r1, index /6) holds text for 511 of the 1,170 Cellar works the census
+  found; derive-r1's Luxembourg index holds no consolidation. The specification of record wants every consolidated version
+  with text wherever the publisher serves a usable Formex or XHTML file, one typed outcome per publisher file and a textless
+  version typed and listed (EU); for Luxembourg every consolidation with an admitted XML file yielding text, each failure
+  listed and blocking, and the yield per class on Coverage (R86, R26, R84). Measured read-only from EU run 16's custody, run
+  15's custody and derive-r1, with no publisher traffic, no browser and no Azure.
+
+### EU: the classes
+
+- **The denominator.** The 1,170 are Cellar works, not publisher versions: each consolidation date has one work carrying the
+  CELEX (`0YYYYXNNNN-YYYYMMDD`) and up to eleven more with the same date and no CELEX, and 476 of those hold expressions in
+  other languages only (the publisher's language-specific consolidations, read from the run's expression facts: for example
+  `02017L1132-20170630` is Bulgarian only). By publisher version (seed and date: 82 originals and 295 consolidation dates)
+  the served index covers 274 of 377.
+- **Per work, from the census, the expression facts (15,855 language rows), the Formex enumerations (1,327), the document
+  ladders (1,152 fetches) and the retained packages (1,120 ZIPs), each read from custody by digest.** Versions count a date
+  once, by its best work.
+
+  | Class | Works | Versions | Verdict | Examples |
+  |---|---|---|---|---|
+  | Served | 511 | 274 | | |
+  | No English or French expression of the work | 476 | 34 | Faithful: the publisher has none | `02014R0910-20140917`, `02017R1001-20170616`, `02023R2854-20231222` (German, Finnish, Dutch, Spanish only) |
+  | English or French expression, no manifestation at all (its Formex enumeration answered no row) | 3 | 0 | Faithful: no file served | `32003R0001@2004-05-01`, `32011L0016@2017-06-05`, `12016E/TXT@2016-09-01` (no CELEX) |
+  | Formex listed, never requested: no body held (the listing offers `pdfa1a` beside `fmx4`, or XHTML answered 404) | 101 | 0 | Our defect, needs an acquisition: the package producer sends no request for an expression whose body is not held (`body_not_held`) | `32006L0112@2009-06-01`, `12016M/TXT@2016-09-01`, `12016E/TXT@2015-12-25` |
+  | Formex held, root `CONS.OTH`: the consolidated TEU and TFEU | 24 | 14 | Our defect, fixed here | `02016E/TXT-20200301`, `02016M/TXT-20190501`, `02016E/TXT-20151225` |
+  | Formex held and admitted, annex chain not closed, main body never read | 43 | 43 | Our defect, fixed here | `32014L0065`, `32023R1114`, `32014R0651` (all originals) |
+  | Formex held, root `GENERAL`: the Charter | 2 | 2 | Our defect, fixed here | `12012P/TXT`, `12016P/TXT` |
+  | Formex held, package refused by the inventory: no Formex `DOC` unit (the 2003 schema host `formex.publications.eu.int`; the 2012 Official Journal issue holding both Treaties, with no descriptor and several act units) | 4 | 4 | Our defect, not offline: the inventory is part of the acquisition's replay | `02003L0087-20041113`, `32003L0087`, `12012E/TXT`, `12012M/TXT` |
+  | XHTML or HTML held, no Formex listed | 5 | 5 | Our defect, offline, needs an XHTML/HTML main-body profile | `12016E/TXT`, `12016M/TXT` (XHTML), `32003L0088`, `32004R0139`, `32003R0001` (HTML) |
+  | PDF only | 1 | 1 | Faithful | `02003R0001-20040501` |
+  | Rights withheld | 0 | 0 | | |
+
+- **One typed outcome per file, and the textless version.** Every corpus member keeps its typed main-body disposition, and a
+  textless EU date refuses `text_not_available` with its official identity and source; the refusal names no class (the EU
+  members carry no work IRI, so the index cannot say which outcome a state's text lacks for). Listing the class with the
+  version needs index rows per state and language: not in this slice.
+
+### EU: the fixes, offline
+
+- **Main-body profile /5** (`EuFormexMainBodyLegalContentProducer.Profile`):
+  - `CONS.OTH`: one `CONS.OTH.DOC`, its own `BIB.INSTANCE` for language and date, and the one `ENACTING.TERMS` reached
+    through `CONS.DOC.GEN` parts only (the TFEU's sits in a part beside its Protocols, the TEU's in the top part). The
+    Protocols, Annexes and Declarations sit under `CONTENTS` with `ENACTING.TERMS` of their own and stay out, as an act's
+    annexes do, each listed as a typed row since the review of #996 (below). Over the 48 retained packages: the TFEU's 358 articles and the TEU's 55 in every one, no duplicate identifier.
+  - `GENERAL`: the main body only of a package with no act root, the one `GENERAL` unit that carries an `ENACTING.TERMS`
+    (the Charter's contents page carries none); a `GENERAL` unit beside an act (a Commission statement) is never read.
+  - The package is read in two passes (every XML entry checked as before, then the one main unit read again), so no more
+    than one entry's tree is held.
+- **An admitted package whose annex chain did not close keeps its main body.** The four annex-chain reasons
+  (`annex_xhtml_not_inventoried`, `annex_pdf_not_served`, `annex_evidence_not_bound`, `annex_body_not_classified`) now carry
+  the admitted inventory (`EuFormexPackageOutcome.RetainedInventory`). It is outside the outcome's replay digests, so run
+  16's package and population checkpoints reopen unchanged. The producer reads the main body as
+  `admitted_annexes_unclassified` (corpus `formex_main_body_admitted_annexes_unclassified`), and the EU index serves its
+  articles as an acquired package's. The annexes stay unclassified for the stated reason and never enter the main body; the
+  dossier and the reading list them as one typed row, `annex_unclassified`, since the review of #996 (below).
+- **Driver decisions (reversible).**
+  - **A Treaty's own articles are its text; its Protocols and Declarations are not**, as an act's annexes are not: they are
+    left out, not merged, listed as typed rows, and stay readable at the official source.
+  - **A package's main body does not wait on its annexes.** The annex chain classifies annexes against the PDF; its failure
+    says nothing about the act's articles, which the admitted package holds as it holds an annex-free act's.
+  - **The 2012 Treaty package is not guessed.** It holds both Treaties, a draft decision and the Protocols as separate act
+    and general units, with no descriptor: which unit is the work's is the publisher's designation, and none is retained.
+
+### EU: what each remedy yields (works / versions of 377 / originals of 82 / consolidation dates of 295)
+
+| | Works | Versions | Originals | Consolidation dates | Articles added |
+|---|---|---|---|---|---|
+| Served today (derive-r1) | 511 | 274 | 29 | 245 | |
+| A re-derivation at this head (offline) | 580 | 333 | 74 | 259 | 17,850 (Treaties 9,912; originals 7,722; Charter 216), in English and French alike |
+| Plus an XHTML/HTML main-body profile (offline, a later slice) | 585 | 338 | 79 | 259 | |
+| Plus an inventory that admits the 2003 schema host (re-inventory in derivation, or a new acquisition) | 587 | 340 | 80 | 260 | |
+| Plus a new acquisition requesting Formex without a held body (the 101) | 688 | 340 | 80 | 260 | |
+
+- The 101 are all works of dates another work already serves after the offline fixes, so a new acquisition adds works and
+  no publisher version (one, `02003L0087-20041113`, if the inventory is not fixed first).
+- What stays textless after all of them: 37 versions: 34 dates whose works hold no English or French expression, the
+  PDF-only `02003R0001-20040501`, and the 2012 Treaties (`12012E/TXT`, `12012M/TXT`).
+- The first row after today's is measured by the probe below through the production code over run 16's custody: 580
+  works (English 536, French 576, from 467 and 507), 333 versions, 74 originals, 191,670 articles; the 17,850 added equal
+  the count read from the retained packages.
+
+### Luxembourg: derive-r1 per class
+
+- **derive-r1 runs Release 1's rule set** (`lu-release-1`, rights `as_acquired`): inventory /4 and content /3 over run 15's
+  held bodies, with the acquisition's own rights resolution and in-file reading /1. No rights rule changed.
+- **Per class, every catalogue state** (served: a held state row in index /9):
+
+  | Class | States | Served (articles) | Not acquired: licenceSCL in the catalogue | Held, withheld by reading /1 (XML + PDF) | Acquired, no text | Other |
+  |---|---|---|---|---|---|---|
+  | Codes (8) | 190 | 126 (119,730) | – | 32 + 30 | 1 misfiled (`code/civil/20190428`) | 1 not acquired (`code/procedure_penale/20270301`) |
+  | Code recueils (9) | 724 | 0 | – | – | – | 724 outside the scope (`point_exact_family`) |
+  | Lois, acts as published | 9,238 | 689 (7,586) | 6,129, and 1 with no manifestation | 2,389 + 9 | 21 | – |
+  | Lois, consolidations | 1,594 | **0** | – | 1,429 + 105 | – | 60 (no expression) |
+  | RGD, acts as published | 15,366 | 1,875 (10,316) | 10,201, and 1 with no manifestation | 3,100 + 175 | 13 | 1 refused |
+  | RGD, consolidations | 1,244 | **0** | – | 1,162 + 49 | – | 33 (no expression) |
+
+- **Why the 2,745 held consolidations have no text.** Reading /1 (`LuxembourgInFileRightsReader.ReadAsync`) admits a file
+  only when the document has one child `act`, one `FRBRthis` equal to the fetched manifestation and exactly one
+  `scl:JOLUXManifestation` whose `uriThis` is that manifestation; anything else is `typed_quarantine_in_file_reading_rejected`,
+  whatever the catalogue says. Replicated over all 8,112 withheld XML bodies (none reads `Observed`; 276 acquired bodies
+  sampled all read CC BY), the withheld consolidations' files say:
+
+  | What the file's identification says | Lois | RGD | Verdict |
+  |---|---|---|---|
+  | Its own block names this file and says CC BY, and the catalogue says CC BY | 234 | 217 | **Our defect**: reading /1 refuses the publisher's second block, the PDF twin (445 files), or a FRBR or `scl:postit` shape |
+  | Its block names the base act or another consolidation; CC BY in the catalogue | 577 | 447 | Owner ruling L2 |
+  | No licence anywhere in the file | 118 | 144 | Owner ruling L1 |
+  | The file says licenceSCL, or two licences | 386 | 273 | Faithful: conflict, stays withheld |
+  | Its block names an identity the catalogue marks licenceSCL or double-licensed | 99 | 53 | Faithful: conflict |
+  | Its block names only identities the catalogue does not know | 13 | 28 | Faithful: quarantine |
+  | No licence in the catalogue; malformed XML | 1; 1 | 0 | Faithful |
+
+  Read again from run 15's custody for this slice: `loi/2021/01/22/a45/consolide/20211217` (body `7b22f2eb…`) has one
+  `FRBRthis` of the manifestation `…/fr/xml` and two `scl:JOLUXManifestation` blocks, `…/fr/xml` and `…/fr/pdf`, each
+  `license` `http://creativecommons.org/licenses/by/4.0/`: the file says CC BY for exactly the file fetched, and reading /1
+  refuses it for the second block.
+  The 154 PDF consolidations have no text-layer profile (`pdf_gazette_issue_scope` 150, `pdf_upstream_text_layer_gap` 4) and
+  are counted `withheld_rights`, because rights are read first.
+- **R86(2) fails.** 451 consolidations (and one code state, `code/procedure_civile/20230201`) are cleared by both channels
+  and held, and yield no text; nothing lists them or blocks: 2,198 of the 2,745 held consolidations have no state row, and
+  the other 547 carry one undifferentiated reason. The fix is not a parser change: reading /1 is part of R0's byte-exact
+  replay and stays frozen. It is Release 2's rights (LU-DATA-DESIGN v2 §1.1 and §1.2): reading /2 binds the block whose
+  `uriThis` is the fetched file (the PDF twin and a leading `scl:postit` tolerated, FRBR recorded, never required),
+  resolution v2 gives `agreed_cc_by_rederived`, policy A (the same two-channel agreement, a driver decision) admits it, and
+  R1 re-binds rights under a new rule set. It needs a new D1 on Azure (R0 and R1, about 34 GiB); no new acquisition, since
+  every body is in run 15's custody. Under policy A the design counts 703 files (451 consolidations, 251 acts, 1 code
+  state) and 144,153 articles in all (Release 1: 131,103); content /3 admits 9,700 articles of the 451 consolidations.
+  Reading /2 and the rest of Release 2's rights are being implemented by another agent on `data/lu-rights-reading-2`;
+  this slice changes no Luxembourg rule.
+- **Coverage shows no yield per class.** `V3CorpusMount.Coverage` reads `LuxembourgIndexReader.ReadCoverage`: members by
+  outcome, gap tokens and the article outcomes of acquired members, with no class, no catalogue denominator, no
+  withheld-by-reason split and no PDF-only or failed count; the EU index adds nothing to it, and the web renders what the API
+  sends (`web/app/Coverage.jsx`, `web/scripts/coverage.mjs`). The yield needs build-time rows: index /9 holds rows only for
+  works with a served state (25,044 catalogue states have none), and the EU members carry no work IRI. Not in this slice; it
+  belongs with Release 2's D1, which rebuilds both indexes anyway.
+
+### What a re-derivation at this head changes
+
+- **EU index /6, same schema:** 138 expressions gain articles (17,850 by the packages' count); their members' stage-3
+  dispositions move (48 `formex_main_body_missing` and 4 Charter ones to `formex_main_body_admitted`, 86
+  `formex_main_body_package_not_acquired` to `formex_main_body_admitted_annexes_unclassified`); every EU member's main-body
+  semantic identity moves, because profile /5 is in it. The article identity and text digest do not name the profile, so the
+  173,820 articles served today keep their permalinks: the probe derives every one with the same identity and text digest. The EU capability
+  manifest's cells grow with the new articles. With the review's repair, the member rows also carry the parts not served
+  (below).
+- **Corpus lex-corpus/6, same schema:** the EU profile digest in its profile identities, the members above, and three new
+  disposition tokens in its closed vocabulary (one main-body and, with the review's repair, two annex ones). Its digest moves, so the Luxembourg index's stamp and capability manifest move
+  with it; no Luxembourg row changes.
+- **D1's inputs stay valid:** inputs /3 name only the Luxembourg re-derivation's rules, which this slice does not touch; a
+  rerun at this head with the same inputs gives the new EU half. The API and the web change only as the review's repair
+  says (below): a CELEX's solidus is written `%2F` in every address, and the two new annex rows have their reasons and lines.
+- **The EU index alone, locally.** The derive builds it from the combined corpus, which needs the Luxembourg R0 and R1 (D1's
+  34 GiB). The EU half alone (the acquisition reopened and the main-body producer) runs here in 31 minutes at a peak
+  working set of 2.6 GB, which is what the probe does, and gives the EU index's whole content (the index projects exactly
+  the main bodies bound to held members); writing a 1.4 GB EU index file is not done on this PC (the disk is full), and it
+  could not be mounted beside derive-r1's corpus anyway.
+
+### The probe
+
+- `EuTextYieldRun16Probe` (new, opt-in `LEX_EU_TEXT_YIELD_PROBE=1`, read-only, never a CI test): run 16's acquisition
+  reopened through `EuFirstMountAcquisition.ReopenAsync` over `HeldOnlyCustody`, the build's main-body producer over it,
+  derive-r1's EU index opened read-only; per state and language the expressions, their manifestation types, the package
+  outcome, the main-body disposition and detail, the corpus records with their served format, the served and derived
+  articles; and every served article's identity and text digest against what this build derives.
+- **Measured at the head** (run 16's catalog `767ceba4…`, derive-r1's EU index): 1,170 states, 15,855 main-body outcomes
+  (none outside the census), 1,857 corpus records. Served 511 states; this build derives 580. Of the 173,820 served
+  articles, 173,820 are derived with the same identity and text digest, 0 with another text, 0 not at all; 17,850 are new.
+  The outcomes: English and French acquired and admitted 493 and 533 (with the 48 Treaty and 4 Charter packages);
+  `admitted_annexes_unclassified` 86 (76 `annex_xhtml_not_inventoried`, 10 `annex_pdf_not_served`); `body_not_held` 91
+  and 99 (the 101 works); not eligible 9 and 8; package rejected 4 and 4; every other language not enumerated (out of
+  scope). No acquired package fails the parse. 31 minutes (the reopen 30), peak working set 2.6 GB (the producer holds every
+  article at once).
+
+### Tests and measurements
+
+- **Tests.** `EuFormexMainBodyLegalContentProducerTests`: a consolidated Treaty reads its own articles and not its
+  Protocols' (the TFEU's shape and the TEU's); a Treaty with two own texts, none, or two documents refuses; a `GENERAL` unit is
+  the main body only without an act root (a contents page beside it, and a statement beside an act, are never read); an
+  admitted package whose annex chain did not close keeps its main body as `admitted_annexes_unclassified`, a not-acquired
+  outcome without a retained inventory keeps `package_not_acquired`, and only an annex-chain reason may carry one.
+  `EuFormexPackagePopulationProducerTests.AnAnnexPackageWhoseHeldBodyHasNoAnnexConventionIsRetainedNotAcquiredAndItsMainBodyRead`
+  (was `...IsRetainedButNotAcquired`): through the real session, the outcome carries the inventory, the corpus states the new
+  disposition and the EU index serves the act's two articles. Census pins: the two closed vocabularies' new members and
+  `EuFormexPackageOutcome`'s second `NotAcquired`.
+- **Measured** (Windows, no browser, no publisher traffic, no Azure, custody and mounts read only):
+  - `dotnet build tests/Lex.V3.Ingest.Tests -c Release`: 0 warnings, 0 errors.
+  - The producer tests and the closed-vocabulary census: 28 passed; the construction census failed on the new overload and a
+    static constructor, which the predicate `IsAnnexChainReason` removes, and its pin is updated.
+  - `EuFormexPackagePopulationProducerTests`, `EuropeIndexBuilderTests`, `LexCorpus6BuilderTests`,
+    `EuFormexAnnexClassificationReconciliationTests`: 168 (167 passed, 1 env-gated skipped).
+  - `EuAnnexControlCaseTests`, `EuFirstMountAcquisitionTests`, `V3FirstMountBuildTests`, `EuFormexAnnexInventoryProducerTests`,
+    `V3CorpusResolveMountTests`: 150 (144 passed, 1 skipped, 5 failed). The five are the tests that write custody, journals or
+    index staging to `%TEMP%`, and they ran while the PC's disk filled (1.6 GB free); the in-memory builds from the same
+    GDPR package (`EuropeIndexBuilderTests`, `LexCorpus6BuilderTests`) pass.
+  - Rerun at the head with 7.5 GB free: those five (every data row), both censuses and the producer tests: 44 passed, 0
+    failed, in 15 minutes.
+  - The custody counts above: read by digest from run 16's custody (Python, brotli, SHA-256 checked) and from derive-r1's
+    index opened `immutable=1`.
+
+### Review and repair (#996)
+
+- **The review** (the other model family, Decision 95): REPAIR, two findings and two low notes, each reproduced. One
+  repair round; all four are answered here.
+- **F1 (high): a CELEX with a solidus broke every address of its act.** Profile /5 serves four CELEX with a solidus
+  (`12016E/TXT`, `12016M/TXT`, `12016P/TXT`, `12012P/TXT`, with the consolidated `02016E/TXT-…` and `02016M/TXT-…`): 10,128
+  of the 17,850 articles a re-derivation adds (the Treaties' 9,912 and the Charter's 216). Their permalinks had six
+  segments, so no reader parsed them back.
+  - **Fixed: the CELEX is one path segment everywhere, its solidus written `%2F`.** The API mints every EU address through
+    `V3CorpusMount.EuropeWorkSegment` (the permalink, the article permalink, the stable coordinate, the act's address, the
+    readable address and the reference reader's addresses) and reads one back through `EuropeCelexOfSegment` (letters,
+    digits, `( ) . _ -` and `%2F` or `%2f`; any other escape, or a bare solidus, is no CELEX segment). The same in the web
+    (`permalinks.mjs`: `europeWorkSegment`, `europeCelexOfSegment`, `europePermalink`, `currentAddress`, `parseSitePath`;
+    `search-engines.mjs`; `reading-answer.mjs`'s stable coordinate), in the server's site paths (`V3WebRoot`, its EU
+    pattern before R64 too) and in the sitemap's dossier identifiers. The shared site-paths table gains 9 rows: a slash
+    CELEX's dossier (with the lower-case escape too), its permalink and article permalink, its readable address at an
+    article, its bare address redirected, its permalink before R64 moved to R64's, and a bare solidus and a broken escape,
+    which serve no page.
+  - **Driver decision (reversible): `%2F`.** R64 fixes the permalink as `/{publisher}/{work}/{date}--{digest}/{language}`
+    with the work one segment; percent-encoding is the one way RFC 3986 gives to carry a reserved `/` inside a segment, and
+    ASP.NET Core keeps `%2F` undecoded in the request path. A substitute character would be ambiguous: `_`, `-` and `.`
+    are CELEX characters already.
+  - **Byte-identical elsewhere.** Only `/` is replaced, so a CELEX without one keeps its bytes: derive-r1's EU index serves
+    173,820 articles and none has a solidus in its CELEX (read `immutable=1`), so no served permalink moves; the answer
+    samples and the legacy answers are unchanged, and their tests pass.
+- **F2 (medium): the parts left out had no row.** The annexes of an admitted package whose annex chain did not close, and
+  the Treaties' Protocols, Annexes, Declarations and tables of equivalences, were left out with nothing listed.
+  - **Fixed: each is a typed row of `annexes_not_served`**, on the dossier and on the reading, with its count, identities,
+    `served_as` `text_not_available`, reason and official source, as an annex the corpus classified is. The producer
+    names them (`EuFormexMainBodyLegalContentOutcome.PartsNotServed`, kind `annex_unclassified` or
+    `treaty_part_not_served`, in the outcome's semantic identity); the corpus writes each as a `europe_annex_body` outcome
+    on the member the articles are read from (dispositions `annex_unclassified` 30, `treaty_part_not_served` 31); the EU
+    index copies them into its member rows; the API gives each its fixed reason; the web's closed list
+    (`europe-annexes.mjs`) admits both, and `LiveAnswer` says a Treaty's parts with their own line
+    (`common.europeTreatyParts`), an unclassified annex with the annex line.
+  - **Counted.** An unclassified annex: one identity per member of the retained inventory (the expression, the package
+    entry, the inventory's identity, the member's sequence and the reason); 86 expressions at a re-derivation (76
+    `annex_xhtml_not_inventoried`, 10 `annex_pdf_not_served`), from at most 464 annex units in the class's 92 retained
+    packages. A Treaty's parts: each `CONS.DOC.GEN` part beside the Treaty's own, unit by unit (each child of its
+    `CONTENTS`): the TFEU's 48 (41 Protocols, 2 Annexes, 3 groups of Declarations, 2 tables), the TEU's 46, 45 to 47 in four
+    packages; 2,252 over the 48 packages (counted read-only from run 16's custody).
+  - **Wording.** The two reasons and the four forms of `common.europeTreatyParts` were reviewed by one independent reviewer
+    (Claude, AI reviewer, not the author) under the owner's delegation (Decision 41), in the addendum of 2026-10-27 in
+    `C:\lex-v3\lanes\fr-review\review.md`: 6 forms, all changed, the English too. The Declarations are annexed to the
+    Final Act and the tables of equivalences to the Treaty of Lisbon, so an item is "published with" the Treaty, never
+    "annexed to" it; "item", never "part"; "the {language} wording of the Treaty"; "or" in the plural. The finals are
+    applied byte for byte (a script checks each).
+  - **R84 and R59.** Met by these rows: nothing is called image-only without positive evidence, each part left out is
+    listed with a typed reason, and each is `text_not_available`, officially linked and out of search, quotes and exports.
+    Not met, and not this slice: R84's annexes served as provisions with their text and Coverage's annex counts per
+    publisher, and R59's "annex N of act X" opening the annex's card (the rows carry no number or heading in the API; the
+    producer keeps each part's title).
+- **Low note: TFEU identifier `001` 31 times.** Those are the Protocols' own articles, which profile /5 never reads: the
+  Treaty's one `ENACTING.TERMS` holds unique identifiers (the TFEU's 358 and the TEU's 55 in each of the 48 packages), an
+  article's identity hashes its expression, package entry, identifier, heading, language, date, text and tokens, and a
+  duplicate identity refuses the package. The Treaty test now asserts every identifier distinct and the Protocols one
+  `treaty_part_not_served` part.
+- **Low note: a checkpoint reopen with a retained inventory.** `EuFormexPopulationCheckpointTests` gains shape 5 (an annex
+  package whose held body has no annex convention): the reopened outcome's retained inventory and receipt equal the
+  captured ones, with no annex classified.
+- **Tests** (new or changed): `EuropeSlashCelexMountTests` (`12016P/TXT`, `12016E/TXT`, `32016R0679`, through the API:
+  dossier, evidence_bundle by CELEX, by article and by permalink, verify of the permalink and the article permalink, search
+  opening each of the five addresses, and as_of naming no bare solidus); `EuropeNotServedPartsMountTests` (each new
+  disposition through the corpus, the index and the API, on the dossier and the reading); the producer, checkpoint, annex
+  reason and census tests above; web `permalinks.test.mjs` (a slash CELEX encoded, idempotent, read back, the lower-case
+  escape, a bare solidus and other escapes refused, a CELEX without one unchanged) and `live-dossier.test.mjs` (both lines).
+- **Measured** (Windows, no browser, no publisher traffic, no Azure; custody and derive-r1 read only; free disk 5.0 to 5.4 GB):
+  - `dotnet build` of `tests/Lex.V3.Ingest.Tests` and `tests/Lex.V3.Tests` (Release): 0 warnings, 0 errors.
+  - The producer, checkpoint, census and the two new mount classes: 34, 31 passed and 3 failed: the new slash test asked
+    `resolve`, which takes no EU permalink for any CELEX (the GDPR's neither); it now searches each address, and passes 3 of 3.
+  - The censuses, `V3EuropePermalinkTests`, `EuropeIndexBuilderTests`, `LexCorpus6BuilderTests`,
+    `EuFormexPackageOutcomePopulationTests`, `EuAnnexControlCaseTests`: 120, 115 passed, 3 skipped (env-gated), 2 failed
+    (the partition and declaration totals for the new closed vocabulary, pinned 278, 107 and 87); the censuses again: 38,
+    36 passed, 2 skipped.
+  - The EU mount classes (`V3CorpusEurope*`), pinned permalinks, verify, reference, resolve, `EuConsolidatedFirstMountTests`
+    and the legacy schema 6 and 8 mounts: 159, 156 passed, 2 skipped, 1 failed (the annex reasons' closed list, now seven).
+  - `V3CorpusEuropeAnnexTests` (now seven dispositions), `EuFormexPackagePopulationProducerTests` (with the two new mount
+    classes), `LexCorpus6MountViewTests`, `EuFormexAnnexClassificationReconciliationTests`: 113, 112 passed, 1 skipped
+    (env-gated).
+  - `Lex.V3.Tests` `V3WebRoot*` (the site-paths table, the search engines, the 404): 22 passed.
+  - Web: `node scripts/build.mjs`, then `node --test` over 17 files (permalinks, live dossier, dossier answer, the chrome
+    and its scan, localization, search engines, reading answer, the EU reading, live, pinned and pages readings, evidence
+    bundle, dossier, legal pages, live SSR): 186 passed.
+- **Merged with v3/integration** (#997, the screens' gaps), the French table's header comment holding both addenda. Its
+  breadcrumbs built an EU act's address from the bare CELEX; they now write it through `europeWorkSegment`, and
+  `breadcrumbs.test.mjs` holds a slash CELEX's act crumb to `/en/eu-eurlex/12016E%2FTXT` (it fails without the fix).
+  After the merge: `Lex.V3.Tests` `V3WebRoot*` 28 passed; the web built again and `node --test` over 20 files (the 17
+  above, breadcrumbs, print view, live home): 210 passed.
+
+## The PDF layout reads no host font: a Windows and a Linux derive write the same PDF artefacts (sole driver, 2026-10-27)
+
+- **The defect** (known since b0a342e3, below under R1): PdfPig 0.1.11 lays out a TrueType font the PDF does not embed
+  from an installed font of the same name. `PdfDocumentFactory` gives each document's `TrueTypeFontHandler` the
+  process-wide `SystemFontFinder.Instance` (the Windows font folder, `/usr/share/fonts`, `~/.fonts`). With a host font a
+  glyph's box is that font's outline; without one it is the descriptor's `/FontBBox` at the glyph's origin; when the font
+  dictionary has no `/Encoding`, even the glyph's text comes from the host font's cmap. This PC has Arial; the Linux
+  release image and D1 have no such font. PdfPig has no option for it, in 0.1.11 or in 0.1.16 (its latest): the finder is
+  a private field of the document's handler. An upgrade would not help, so none is made and no lock file moves.
+- **The fix** (`HostFontFreePdf`, new): the one door through which the product opens a PDF. It opens the document as PdfPig
+  does, then, before any page loads a font, sets that field of this document's handler to a finder that finds nothing. A
+  non-embedded TrueType font is then read on every host as on a host without it: advances from the PDF's `/Widths`, each
+  box the `/FontBBox` at its origin, the Standard 14 metrics PdfPig bundles where a dictionary names one without metrics.
+  Type 1, CID and Type 3 fonts never read the host. Each reflection step is checked against the pinned PdfPig; one that
+  does not hold throws `PdfHostFontIsolationException`, which every caller lets through (a PDF is never called
+  unreadable, nor read with host fonts, because the door did not close). All four PdfPig opens go through it: the layout
+  producer and the three EU annex classes (page labels, letter counts and images: no output of theirs moves, but a host
+  font could make a page throw and read as unreadable on one machine only).
+- **Which source of metrics, and why this one.** The PDF's own `/FontBBox` is the only geometry the PDF states for a glyph
+  it does not embed, and it encloses every glyph of the font; a host font or the bundled Helvetica would be a substitute
+  for a program the publisher never shipped. The text layer (`LXPDTL1`) reads only each glyph's text, its order and its
+  rendering mode, never a box; the act scope reads only the item's address; the corpus reads only identities and
+  dispositions. Glyph text did not differ by host in run 15: D1's 20 text layers have 19 distinct bodies, all 19 also
+  written by the Windows build of 2026-10-12; only their header binding (the layout outcome's identity) differed. **No
+  served text or answer can change**: no Luxembourg PDF's text is served (`not_available_pdf`), and the index reader counts
+  stage-3 outcomes by disposition and never reads their identities.
+- **Tests.**
+  - `HostFontFreePdfTests` (new, 5): a synthetic PDF, every byte written in the test, with a non-embedded TrueType
+    "Arial,Bold" lays out to boxes from its `/FontBBox` and `/Widths` and to one layout artifact, `9c7f0938…`, on Windows 11
+    and in WSL Ubuntu 24.04 (`DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1`, `TZ=UTC`), in WSL also with Windows' Arial and
+    Arial Bold in a test-only `~/.fonts`. A finder standing for a host that has the font (a TrueType program the committed
+    EU PDF/A fixture embeds, no file of the machine) reads other boxes; the document asks only the finder the door gives
+    it; an embedded font asks no finder; the door names the PdfPig the project references; and no file in `src` opens a
+    PDF or names a font finder outside the door.
+  - Before the fix (the door made a plain `PdfDocument.Open`): on Windows the synthetic "L" read from 20.77 to 25.81,
+    Arial Bold's outline, instead of 13.72 to 40, and 2 of the 5 failed; in WSL 5 of 5 passed (no Arial: why Linux never
+    saw it), and with Arial in `~/.fonts` the same 2 failed with Windows' boxes to the bit.
+  - `LuxembourgPdfLayoutHostFontProbe` (new, opt-in `LEX_V3_PDF_LAYOUT_PROBE=1`, read-only, never a CI test): run 15's 22
+    publisher PDFs of D1 (21 PDFs; one serves two members), read from custody by digest, laid out by the producer's own
+    `ReadLayout`, must be the artifacts custody holds. After the fix, Windows and WSL (with and without Arial) give D1's
+    22 artifacts byte for byte, source `cdbb6a99…` its `16423639…`. The base build gives on Windows the 22 artifacts the
+    Windows build wrote on 2026-10-12 (`29d6431a…` for `cdbb6a99…`) and in WSL D1's 22; in WSL with Windows' Arial and
+    Arial Bold, 20 of the Windows 22, `29d6431a…` among them (the other two use fonts not copied, Arial Italic and
+    Arial Narrow among them). The host's fonts were the only difference.
+- **What moves.** No rule profile: layout rule /2 `b3a32ec7…`, text layer `1ef57d74…` and act scope stay. On a host
+  without the PDF's non-embedded fonts (D1, the release image, CI) no byte moves. On a host with them (this PC) the layout
+  artifacts of the members that use such a font become the ones D1 wrote, and so their layout, text-layer and act-scope
+  outcome identities, the three population identities in the corpus header, each such member's `stage3_outcomes` entry
+  in the corpus and in the Luxembourg index's `members.stage3_outcomes_json`, and those files' digests. Release 2's path
+  (R1, D1, Linux) does not move: a re-derivation of it, here or on Azure, names D1's 22 layout and 20 text-layer
+  artifacts (all held, so none is written again) and builds D1's corpus; before the fix one on this PC named the
+  2026-10-12 artifacts and built another corpus. derive-c, which release 1 serves, ran on this PC on 2026-10-13
+  and names the host-font readings. Of its 184 layout artifacts (164 PDFs, each mapped to its artifact by the base build
+  reproducing it here), the fixed build changes exactly 22, D1's 22 sources, each to D1's artifact; the other 162 use no
+  non-embedded TrueType font and are the same on every host. A re-derivation of R0 after the fix therefore names D1's 22
+  layout and 20 text-layer artifacts (held, none written again) and builds a corpus and a Luxembourg index whose digests
+  differ from derive-c's, with the same dispositions and text. Release 1 is not re-derived.
+- **Driver decision (reversible).** The layout rule stays /2: its text names PdfPig 0.1.11 and no host input, and every
+  host now writes what the release image always wrote, so D1 and the release 2 path stand without a rerun. The 184
+  artifacts the Windows builds wrote under the same rule digest are host-font readings no build now writes; they stay in
+  custody (create-only), named only by derive-c. Reversing it (a rule /3) would move every layout artifact, the text
+  layer, the act scope, the corpus and both indexes, and need a new D1 on Azure. The earlier decision to derive and
+  release on Linux only is withdrawn: a derive on Windows now gives the same PDF outcomes.
 
 ## D1's second refusal: a code's title dated by each of its articles; the index build now runs over run 15 on this PC first (sole driver, 2026-10-26)
 
@@ -1406,9 +2226,9 @@ Updated 2026-10-26.
     glyphs with other bounding boxes (up to 7.6 points; the first glyphs, "Arial,Bold", 2.7 points wide on Windows and 14.1
     on Linux). PdfPig 0.1.11 reads a font the PDF does not embed from the host's installed fonts, so those glyphs' metrics
     are the machine's. Derives A and B (both Linux) agree; a Windows derive of the same custody names other PDF outcomes
-    and builds another corpus. **Known defect, not fixed here**: the PDF layout depends on the host's fonts. **Driver
-    decision (reversible)**: D1's artefacts stand, and the population is derived and released on Linux only (as D1 and the
-    release image are) until the layout reads no host font.
+    and builds another corpus. **Known defect, fixed on 2026-10-27** (the section "The PDF layout reads no host font"
+    above): every host now writes D1's 22 artefacts. **Driver decision (reversible)**: D1's artefacts stand; the
+    decision to derive and release on Linux only, made until the layout read no host font, is withdrawn with the fix.
 - **Not yet.** Release 2's R1 (S4r: reading /2, the re-resolution, the licence-page index, `measure-lu-rights`); state digest
   /2 and `log.derived_at` (S6); the coverage row and its web copies (S7c); S4b; the dry run.
 

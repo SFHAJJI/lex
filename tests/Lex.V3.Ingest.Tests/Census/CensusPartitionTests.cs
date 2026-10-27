@@ -76,6 +76,9 @@ public sealed class CensusPartitionTests
             + "artifact magic and strict UTF-8 codec state; the complete binary form is exercised "
             + "through the governed writer and reader and this is not a selectable vocabulary "
             + "registry.",
+        "Lex.V3.Ingest.HostFontFreePdf: one PdfPig assembly version, the one whose private font-finder field the door "
+            + "replaces; not a selectable vocabulary. HostFontFreePdfTests holds it to the referenced PdfPig and proves the "
+            + "door on Windows and Linux.",
     ];
 
     [TestMethod]
@@ -102,14 +105,14 @@ public sealed class CensusPartitionTests
     public void ThePartitionTotalsAreExactlyThese()
     {
         Assert.AreEqual(
-            276, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
+            286, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
         Assert.AreEqual(
-            106, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
+            107, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
         Assert.AreEqual(
-            146, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
+            149, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
         Assert.AreEqual(
-            14, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
-        Assert.AreEqual(10, Declined.Length, "declined");
+            19, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
+        Assert.AreEqual(11, Declined.Length, "declined");
     }
 
     private static string NameOf(string row) =>

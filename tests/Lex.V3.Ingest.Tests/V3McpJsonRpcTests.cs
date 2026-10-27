@@ -68,17 +68,45 @@ public sealed class V3McpJsonRpcTests
         Assert.AreEqual(V3McpJsonRpc.ProtocolVersion, result.GetProperty("protocolVersion").GetString());
         Assert.IsTrue(result.GetProperty("capabilities").TryGetProperty("tools", out _));
         Assert.AreEqual(V3McpJsonRpc.ServerName, result.GetProperty("serverInfo").GetProperty("name").GetString());
+        // The server's instructions (the MCP specification, 2025-06-18; the plan's item 8.5): refusals are answers.
+        var instructions = result.GetProperty("instructions").GetString()!;
+        Assert.AreEqual(V3McpJsonRpc.Instructions, instructions);
+        StringAssert.Contains(instructions, "A refusal is an answer, not an error");
+        StringAssert.Contains(instructions, "isError stays false");
+        StringAssert.Contains(instructions, "lex-v3-envelope/1");
+        StringAssert.Contains(instructions, "is not legal advice");
+        CollectionAssert.AreEqual(
+            new[] { "protocolVersion", "capabilities", "serverInfo", "instructions" },
+            result.EnumerateObject().Select(static member => member.Name).ToArray());
     }
 
     [TestMethod]
-    public async Task ToolsListListsOneToolPerServedOperationInTheServedOrder()
+    public async Task PingAnswersAnEmptyResultAndANotifiedPingNothing()
+    {
+        // The MCP specification's ping (2025-06-18, basic utilities): the receiver answers promptly with an empty result.
+        using var response = await HandleAsync(new { jsonrpc = "2.0", id = "p", method = "ping" });
+        Assert.AreEqual("p", response.RootElement.GetProperty("id").GetString());
+        Assert.AreEqual(JsonValueKind.Object, response.RootElement.GetProperty("result").ValueKind);
+        Assert.IsFalse(response.RootElement.GetProperty("result").EnumerateObject().Any());
+        Assert.IsNull(await RawHandleAsync(new { jsonrpc = "2.0", method = "ping" }), "a ping sent as a notification is not answered");
+    }
+
+    [TestMethod]
+    public async Task ToolsListListsOneToolPerRoutedOperationInTheRoutedOrder()
     {
         using var response = await HandleAsync(new { jsonrpc = "2.0", id = "a", method = "tools/list" });
         var tools = response.RootElement.GetProperty("result").GetProperty("tools").EnumerateArray().ToArray();
         CollectionAssert.AreEqual(
-            V3RestRouteBinding.Served.Select(static binding => binding.OperationId).ToArray(),
+            V3RestRouteBinding.Routed.Select(static binding => binding.OperationId).ToArray(),
             tools.Select(static tool => tool.GetProperty("name").GetString()).ToArray(),
-            "the tools are the served REST operations, one each, in the served order.");
+            "the tools are the REST routes, one each, the served then the three served from no data.");
+        Assert.HasCount(27, tools, "every registered operation is a tool");
+        foreach (var refusing in V3RestRouteBinding.Refusing)
+        {
+            StringAssert.StartsWith(
+                tools.Single(tool => tool.GetProperty("name").GetString() == refusing.OperationId).GetProperty("description").GetString(),
+                "Not served: ", refusing.OperationId);
+        }
         Assert.IsTrue(tools.All(static tool => tool.GetProperty("description").GetString()!.Length > 20));
         var resolve = tools.Single(static tool => tool.GetProperty("name").GetString() == "resolve");
         var inputSchema = resolve.GetProperty("inputSchema");
@@ -218,15 +246,72 @@ public sealed class V3McpJsonRpcTests
     }
 
     [TestMethod]
-    public async Task AToolsCallForAnUnservedOperationIsAJsonRpcInvalidParamsErrorAndNothingRuns()
+    public async Task AToolsCallForAnOperationServedFromNoDataIsAnAnswerInsideTheEnvelopeAndAnUnknownNameAnError()
     {
-        // browse is registered and not served, so it is not a tool; a served operation would run.
-        using var response = await HandleAsync(new { jsonrpc = "2.0", id = 3, method = "tools/call", @params = new { name = "concepts", arguments = new { } } });
+        // concepts is registered and served from no data: its tool call is the same envelope REST answers, a refusal inside a
+        // normal answer (with no corpus mounted, the one every operation gives), never a protocol error (the plan's item 8.6).
+        const string requestReference = "mcp_test_ref_concepts";
+        using var response = await HandleAsync(
+            new { jsonrpc = "2.0", id = 3, method = "tools/call", @params = new { name = "concepts", arguments = new { } } },
+            mount: null,
+            requestReference);
+        Assert.IsFalse(response.RootElement.TryGetProperty("error", out _));
+        var structured = response.RootElement.GetProperty("result").GetProperty("structuredContent");
+        Assert.AreEqual("concepts", structured.GetProperty("operation_id").GetString());
+        Assert.AreEqual(V3Verdicts.Refuse, structured.GetProperty("verdict").GetString());
+        Assert.AreEqual("no_corpus_mounted", structured.GetProperty("refusal").GetProperty("code").GetString());
+        Assert.IsFalse(response.RootElement.GetProperty("result").GetProperty("isError").GetBoolean());
 
-        Assert.IsFalse(response.RootElement.TryGetProperty("result", out _));
-        var error = response.RootElement.GetProperty("error");
+        using var unknown = await HandleAsync(new { jsonrpc = "2.0", id = 4, method = "tools/call", @params = new { name = "no_such_tool", arguments = new { } } });
+        Assert.IsFalse(unknown.RootElement.TryGetProperty("result", out _));
+        var error = unknown.RootElement.GetProperty("error");
         Assert.AreEqual(-32602, error.GetProperty("code").GetInt32());
-        StringAssert.Contains(error.GetProperty("message").GetString(), "concepts");
+        Assert.AreEqual("Unknown tool: no_such_tool", error.GetProperty("message").GetString());
+    }
+
+    /// <summary>
+    /// The review of #998, F3: an answer the server built and its own reviewed schema refused on the way out is the server's
+    /// failure (REST's 500 <c>internal_response_invalid</c>), so a tool call answers JSON-RPC's Internal error, -32603, and never
+    /// the caller's Invalid params; a request its schema refuses is still Invalid params. Every failure below the envelope is
+    /// the one or the other as REST's status says: a 5xx is the server's.
+    /// </summary>
+    [TestMethod]
+    public async Task AnAnswerTheServersOwnSchemaRefusesIsAnInternalErrorAndABadRequestIsInvalidParams()
+    {
+        var host = new V3PlatformHost(new RefusingOutgoingSchemas());
+        async Task<JsonElement> CallAsync(string tool, object arguments)
+        {
+            var bytes = await V3McpJsonRpc.HandleAsync(
+                Request(new { jsonrpc = "2.0", id = 9, method = "tools/call", @params = new { name = tool, arguments } }),
+                host, null, static () => ObservedAt, "mcp_test_ref", CancellationToken.None);
+            using var response = JsonDocument.Parse(bytes!);
+            Assert.IsFalse(response.RootElement.TryGetProperty("result", out _), $"{tool}: no envelope and no partial answer");
+            return response.RootElement.GetProperty("error").Clone();
+        }
+
+        var internalError = await CallAsync("resolve", new { identifier = "eli/example" });
+        Assert.AreEqual(-32603, internalError.GetProperty("code").GetInt32());
+        Assert.AreEqual("Internal error: InternalResponseInvalid", internalError.GetProperty("message").GetString());
+        var invalid = await CallAsync("as_of", new { identifier = "eli/example" });
+        Assert.AreEqual(-32602, invalid.GetProperty("code").GetInt32(), "a missing required date is the caller's");
+        Assert.AreEqual("Invalid params: RequestSchemaInvalid", invalid.GetProperty("message").GetString());
+
+        CollectionAssert.AreEqual(
+            new[] { V3TransportFailureKind.InternalResponseInvalid, V3TransportFailureKind.InternalFailure, V3TransportFailureKind.ServiceInMaintenance },
+            Enum.GetValues<V3TransportFailureKind>().Where(V3TransportResponse.IsServerFailure).ToArray());
+    }
+
+    /// <summary>The reviewed schemas for requests and results, and a refusal schema that refuses every refusal on the way out.</summary>
+    private sealed class RefusingOutgoingSchemas : IV3PlatformSchemaDocuments
+    {
+        public void ValidateRequest(V3OperationDefinition operation, JsonElement document) =>
+            V3PlatformSchemaDocuments.Reviewed.ValidateRequest(operation, document);
+
+        public void ValidateResult(V3OperationDefinition operation, JsonElement document) =>
+            V3PlatformSchemaDocuments.Reviewed.ValidateResult(operation, document);
+
+        public void ValidateRefusal(JsonElement document) =>
+            throw new JsonException("an outgoing refusal its schema refuses");
     }
 
     [TestMethod]

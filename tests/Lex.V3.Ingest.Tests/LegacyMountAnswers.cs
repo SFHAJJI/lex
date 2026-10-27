@@ -15,7 +15,9 @@ namespace Lex.V3.Ingest.Tests;
 /// act, on 8e6d3d27, whose two schema-8 search answers gained additive members and a ranking sentence for the new order),
 /// then at 34d493d0 (freshness and the commits, plan 6.1 and 6.5, on 0b908870: every envelope's context gained `commits`
 /// and the freshness header's new members, and nothing else moved), then at 496eeced (the owner's maximum data age of 30
-/// days, O11, 2026-10-19: every answer's `maximum_data_age_days`, 10 to 30, and nothing else),
+/// days, O11, 2026-10-19: every answer's `maximum_data_age_days`, 10 to 30, and nothing else), then on data/yield-per-class
+/// (the text yield per class, R86(4): each mount's coverage answer gained `text_yield`, null, since neither mount has a
+/// build report stating one, and `text_yield_note`, and nothing else moved; the two bodies replaced, every other byte kept),
 /// over the committed schema-8 mount (written at 3b7913ec) and the schema-6 one, by this same code, on Linux as the release
 /// image runs (globalization-invariant, UTC), with <c>V3CorpusLegacySchema8MountTests.TheAnswersAreRecordedWhereTheRecordingAsks</c>,
 /// and every system is held to them (a rooted path reads alike everywhere since #983); a later change that moves one byte

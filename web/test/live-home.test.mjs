@@ -64,7 +64,7 @@ test("the home page says what Lex is and is not, and the sentence under the box 
   assert.ok(main.includes(`<h2>${escaped(EN.home.aboutHeading)}</h2><p>${escaped(EN.home.intro)}</p>`), "what Lex is and is not");
 });
 
-test("the home page links to Changes and to Trust and Coverage, and to no page the site does not serve", () => {
+test("the home page links to Changes, Trust and Coverage, Developers and Get help, the specification's list, and to no page the site does not serve", () => {
   for (const html of [rendered(COVERAGE), renderLiveHomePage()]) {
     const links = /<nav aria-label="([^"]*)" class="home-links" data-home-links="">([\s\S]*?)<\/nav>/.exec(html);
     assert.ok(links !== null, "the links");
@@ -72,9 +72,11 @@ test("the home page links to Changes and to Trust and Coverage, and to no page t
     assert.deepEqual([...links[2].matchAll(/<a href="([^"]+)">([^<]+)<\/a>/g)].map(([, href, text]) => [href, text]), [
       ["/en/radar.html", EN.site.radar],
       ["/en/coverage.html", EN.coverage.title],
+      ["/en/developers.html", EN.developers.title],
+      ["/en/help.html", EN.help.title],
     ]);
-    // Developers and Get help have no live page yet (R52: nothing unserved is shown).
-    assert.doesNotMatch(mainOf(html), /developer|get-help|help\.html/i);
+    // Each a page the site serves (`reference-pages.test.mjs` builds and serves them), and nothing else is linked (R52).
+    assert.equal([...mainOf(html).matchAll(/developers\.html|help\.html/g)].length, 2);
   }
 });
 
@@ -120,23 +122,41 @@ test("the date is sent with the search and printed from the answer; a blank date
   assert.equal(outcomes.at(-1).state, "invalid_request");
 });
 
+/**
+ * The coverage answer's text yield moved with its totals, as the producer holds the build report's yield to the mount
+ * (its Luxembourg articles are the index's): served articles where there are any, and none where the mount serves none,
+ * its one file then counted as an admitted file with no article.
+ */
+function yieldServing(value, articles) {
+  const publisher = value.text_yield.publishers[0];
+  const row = publisher.classes[0];
+  const served = articles > 0;
+  for (const node of [publisher, row]) {
+    node.articles = articles;
+    if (!served) Object.assign(node, { files_with_text: 0, versions_with_text: 0, works_with_text: 0 });
+  }
+  if (!served) row.files_parse_failed = [{ reason: "akn_unsupported_content_shape", count: row.files }];
+}
+
 test("the coverage line says only what the coverage answer counts, as of its index's build date (R11)", () => {
   const line = coverageLineOf(coverageOutcome(answerHandedWith("coverage", COVERAGE, { contract: LIVE_CONTRACT, objectType: "coverage_report" })));
   const { totals, history } = COVERAGE.result.value;
   const mounted = history.snapshots_with_text.find((snapshot) => snapshot.retained_as.includes("mounted"));
-  assert.deepEqual(line, { state: "counted", works: totals.works, states: totals.states, articles: totals.articles, builtOn: mounted.built_at.slice(0, 10) });
+  // With the digest of the index it counts, which the example searches are held to (`home-examples.mjs`).
+  assert.deepEqual(line, { state: "counted", works: totals.works, states: totals.states, articles: totals.articles, builtOn: mounted.built_at.slice(0, 10), indexSha256: COVERAGE.result.value.mounted.index_sha256 });
   assert.ok(mainOf(rendered(COVERAGE)).includes(`This site holds ${totals.works} act of Luxembourg law, in ${totals.states} version with ${totals.articles} articles, as of the index built on ${line.builtOn}.`));
 
   // Other counts, another build: the line follows the answer, and says the build's date in Luxembourg.
   const other = coverageAt("2026-10-15T10:00:00.0000000Z", (value) => {
     value.totals = { ...value.totals, works: 1730, states: 1731, articles: 52617 };
+    yieldServing(value, 52617);
     value.languages = value.languages.map((row) => ({ ...row, works: 1730, states: 1731, articles: 52617, articles_with_searchable_text: row.articles_with_searchable_text }));
     value.history.snapshots_with_text = value.history.snapshots_with_text.map((snapshot) => ({ ...snapshot, built_at: "2026-10-13T22:40:36Z" }));
     value.history.history_begins = "2026-10-13T22:40:36Z";
     return value;
   });
   const otherFacts = homeFacts(other, LIVE_CONTRACT);
-  assert.deepEqual(otherFacts.coverage, { state: "counted", works: 1730, states: 1731, articles: 52617, builtOn: "2026-10-14" }, "22:40 UTC on 13 October is the 14th in Luxembourg");
+  assert.deepEqual(otherFacts.coverage, { state: "counted", works: 1730, states: 1731, articles: 52617, builtOn: "2026-10-14", indexSha256: other.result.value.mounted.index_sha256 }, "22:40 UTC on 13 October is the 14th in Luxembourg");
   // The index is older than today, so both dates are shown (R13; the plan's item 3.4).
   assert.equal(otherFacts.today, "2026-10-15");
   assert.ok(mainOf(renderLiveHomePage({ facts: otherFacts })).includes("This site holds 1730 acts of Luxembourg law, in 1731 versions with 52617 articles, as of the index built on 2026-10-14; today in Luxembourg is 2026-10-15."));

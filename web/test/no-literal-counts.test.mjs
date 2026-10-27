@@ -19,8 +19,9 @@ import test from "node:test";
 import {
   LIVE_CONTRACT, renderLiveComparePage, renderLiveCoveragePage, renderLiveDossierPage, renderLiveExportPage, renderLiveHistoryPage,
   renderLiveHomePage, renderLiveMaintenancePage, renderLiveNotFoundPage, renderLiveRadarPage, renderLiveReadingPage, renderLiveSearchPage,
-  SearchAnswerView, renderLiveLegalPage,
+  SearchAnswerView, renderLiveLegalPage, renderLiveReferencePage,
 } from "../.react-build/app.mjs";
+import { readDevelopersContracts } from "../scripts/developers-contracts.mjs";
 import { LIVE_CHROME, REFUSAL_TRANSLATIONS, entriesOf } from "../scripts/live-chrome.mjs";
 import { servedRefusalSentences } from "../scripts/refusal-sentences.mjs";
 import { homeFacts } from "../scripts/live-home.mjs";
@@ -66,6 +67,12 @@ const NUMBERS_ALLOWED = Object.freeze({
   "legalNotice.sections.sources.europe": ["2011", "833"],
   "terms.sections.texts.licences": ["4", "0", "4", "0", "2011", "833"],
   "accessibility.sections.status.text": ["2", "2"],
+  // The single-channel disclosure (L5; LU-DATA-DESIGN v2 §1.2): the licence's version, CC BY 4.0.
+  "reading.disclosure.lu_rights_publisher_catalogue_only_file_silent": ["4", "0"],
+  "reading.disclosure.lu_rights_publisher_catalogue_only_own_block_empty": ["4", "0"],
+  "reading.disclosure.lu_rights_publisher_catalogue_only_file_names_other_identity": ["4", "0"],
+  // R77's record of an act the catalogue licenses CC BY 4.0 and Lex has not acquired: the licence's version.
+  "refusalCard.catalogue.reasons.catalogue_cc_by_not_acquired": ["4", "0"],
 });
 
 const TABLES = Object.freeze([
@@ -103,7 +110,8 @@ test("the interface tables say a number only where the allowlist names it: a cit
   }
 });
 
-test("no live page, as built or rendered from the census answers, says a pack figure", () => {
+test("no live page, as built or rendered from the census answers, says a pack figure", async () => {
+  const developers = await readDevelopersContracts();
   const coverage = census.envelopes.find((entry) => entry.operation === "coverage" && entry.envelope.result !== null).envelope;
   const reading = census.envelopes.find((entry) => entry.operation === "evidence_bundle" && entry.envelope.result !== null).envelope;
   const pages = {
@@ -121,6 +129,9 @@ test("no live page, as built or rendered from the census answers, says a pack fi
     "404": renderLiveNotFoundPage(),
     maintenance: renderLiveMaintenancePage(),
     ...Object.fromEntries(["legalNotice", "privacy", "terms", "accessibility", "cookies"].map((key) => [key, renderLiveLegalPage(key)])),
+    // The three reference pages, the Developers page generated from the contracts, whose counts it says as served fields.
+    ...Object.fromEntries(["help", "guide"].map((key) => [key, renderLiveReferencePage(key)])),
+    developers: renderLiveReferencePage("developers", { developers }),
   };
   for (const [name, html] of Object.entries(pages)) {
     // What a reader is shown: the text and the human-read attributes, without the scripts and the head's machine links.
@@ -129,6 +140,22 @@ test("no live page, as built or rendered from the census answers, says a pack fi
     assert.deepEqual(packFiguresIn(said), [], name);
   }
 });
+
+/**
+ * The coverage answer's text yield moved with its totals, as the producer holds the build report's yield to the mount
+ * (its Luxembourg articles are the index's): served articles where there are any, and none where the mount serves none,
+ * its one file then counted as an admitted file with no article.
+ */
+function yieldServing(value, articles) {
+  const publisher = value.text_yield.publishers[0];
+  const row = publisher.classes[0];
+  const served = articles > 0;
+  for (const node of [publisher, row]) {
+    node.articles = articles;
+    if (!served) Object.assign(node, { files_with_text: 0, versions_with_text: 0, works_with_text: 0 });
+  }
+  if (!served) row.files_parse_failed = [{ reason: "akn_unsupported_content_shape", count: row.files }];
+}
 
 /** An answer given long after any build the census records: its index is older than today, so today is said beside it. */
 const LATER = "2026-12-01T10:00:00.0000000Z";
@@ -142,6 +169,7 @@ test("the home page's coverage line says the counts the coverage answer serves, 
     if (later) envelope.context.freshness.observed_at = LATER;
     const value = envelope.result.value;
     value.totals = { ...value.totals, works, states, articles };
+    yieldServing(value, articles);
     value.languages = value.languages.map((row) => ({ ...row, works, states, articles, articles_with_searchable_text: Math.min(row.articles_with_searchable_text, articles), searchable_text_held: Math.min(row.articles_with_searchable_text, articles) > 0 }));
     value.capability_cells = articles === 0 ? [] : value.capability_cells;
     const facts = homeFacts(envelope, LIVE_CONTRACT);

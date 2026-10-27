@@ -25,6 +25,7 @@ import {
 } from "../scripts/legal-pages.mjs";
 import { LIVE_CHROME, entriesOf, liveChrome } from "../scripts/live-chrome.mjs";
 import { searchFragment } from "../scripts/search-address.mjs";
+import { REFERENCE_PAGE_PATHS } from "../scripts/reference-pages.mjs";
 import { NEVER_INDEXED_META } from "../scripts/search-engines.mjs";
 import { createLiveServer } from "../scripts/serve-live.mjs";
 
@@ -146,9 +147,10 @@ test("the five legal pages are built under each interface language, with the sit
     const origin = await new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${server.address().port}`)));
     try {
       assert.deepEqual(await openingFailures(origin), [], "the opening's check passes over the pages the live server serves");
-      // The site's table names the ten as files, and the live server serves each as the file it is (the API: V3WebRootTests).
-      const rows = TABLE.paths.filter((row) => row.file !== undefined);
-      assert.deepEqual(rows.map((row) => row.path).sort(), [...LEGAL_PAGE_PATHS].sort(), "the table's file rows are the ten legal pages");
+      // The site's table names the ten as files, beside the six reference pages (`reference-pages.test.mjs`), and the live
+      // server serves each as the file it is (the API: V3WebRootTests).
+      const rows = TABLE.paths.filter((row) => row.file !== undefined && LEGAL_PAGE_PATHS.includes(row.path));
+      assert.deepEqual(TABLE.paths.filter((row) => row.file !== undefined).map((row) => row.path).sort(), [...LEGAL_PAGE_PATHS, ...REFERENCE_PAGE_PATHS].sort(), "the table's file rows are the ten legal pages and the six reference pages");
       for (const row of rows) {
         assert.equal(row.path, `/${row.file}`, row.path);
         assert.deepEqual([row.page, row.redirect, row.moved, row.render], [null, null, null, null], `${row.path}: a file, not a law's address`);
@@ -292,9 +294,22 @@ test("what the legal pages say of the site is what its code and its deployment d
   }
   // "Lex asks your browser not to tell it which page you came from": the API's pages carry Referrer-Policy: no-referrer.
   assert.match(await repository("src/Lex.V3.Api/V3WebRoot.cs"), /headers\["Referrer-Policy"\] = "no-referrer";/);
-  // "It writes no access log": the API clears its logging providers; "no log store and no monitoring service": the
-  // template configures none, and no affinity cookie (sticky sessions) either.
+  // "It keeps no access log": the API clears its logging providers; "a template that adds no log store and no monitoring
+  // service": the template configures none, and no affinity cookie (sticky sessions) either. The notice says the hosting's
+  // settings once deployed are not tested this way (the audit of 2026-10-27, overclaim 4): no release check reads them back.
   assert.match(await repository("src/Lex.V3.Api/Program.cs"), /builder\.Logging\.ClearProviders\(\);/);
+  // "The server counts the requests that come from each IP address ... a fingerprint of the IP address beside a count ...
+  // computed with a secret key that is drawn at random, never written down and replaced every day; the IP address itself
+  // is not kept ... forgotten at the latest about two minutes after the last request": the per-client limit (R109), whose
+  // behaviour V3ClientLimiterTests holds and PublicRequestRecordingTests shows writes nothing.
+  const limiter = await repository("src/Lex.V3.Api/V3ClientLimiter.cs");
+  assert.match(limiter, /RandomNumberGenerator\.GetBytes\(KeyBytes\)/, "a key drawn at random");
+  assert.match(limiter, /HMACSHA256\.HashData\(_key, /, "a fingerprint made with that key");
+  assert.match(limiter, /Dictionary<UInt128, Entry>/, "only 16 bytes of it, beside the counts: no address");
+  assert.match(limiter, /SweepInterval = TimeSpan\.FromMinutes\(1\)/, "the idle entries forgotten every minute");
+  assert.match(limiter, /var day = DateOnly\.FromDateTime\(now\.UtcDateTime\);/, "the key replaced when the day changes");
+  assert.doesNotMatch(limiter.replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, ""), /\bFile\.|StreamWriter|Console\./, "never written down");
+  for (const language of ["en", "fr"]) assert.ok(LIVE_CHROME[language].privacy.sections.reading.limit, `${language}: the privacy notice says it`);
   const bicep = await repository("deploy/main.bicep");
   for (const absent of [/stickySessions/i, /affinity/i, /appInsights|applicationInsights/i, /logAnalytics|appLogsConfiguration/i, /diagnosticSettings/i]) {
     assert.doesNotMatch(bicep, absent, `the template configures ${absent}`);
@@ -332,6 +347,35 @@ test("the accessibility statement declares Lex non-conformant until an audit, th
   assert.deepEqual(Object.keys(LIVE_CHROME.en.accessibility.sections), ["status", "done", "limits", "law", "prepared"]);
 });
 
+test("the privacy notice says what the per-client limit holds of an IP address, where and for how long, in the review's words (R109; the addendum of 2026-10-27)", () => {
+  // The English, and the French of the review's addendum of 2026-10-27, byte for byte (a no-break space before ":" and ";").
+  const english = {
+    intro: "What happens to your data when you read Lex: it asks you for none, sets no cookie and records nothing about you.",
+    kept: "The server uses the request to answer it and to count it (see below), and writes nothing of it anywhere: it keeps no access log and no record of what is read or searched. This is tested on the server's own code, before it is deployed: the server is run with requests carrying marked values (a search phrase, an IP address, a browser's name), and none of them may appear in anything it writes. The hosting is set up from a template that adds no log store and no monitoring service that would keep requests; the hosting's settings, once deployed, are not tested this way.",
+    limit: "So that no single IP address can overload the server, the server counts the requests that come from each IP address. For this it holds, in its working memory only, a fingerprint of the IP address beside a count of its recent requests. The fingerprint is computed with a secret key that is drawn at random, never written down and replaced every day; the IP address itself is not kept. Neither the fingerprint nor the count is ever written down, and both are forgotten at the latest about two minutes after the last request from that IP address, or when the server restarts. An IP address that sends too many requests at once or in a minute is asked to wait a moment.",
+    nothingHeld: "Lex has no accounts and no sign-up, so it never knows who you are. Since it records nothing about a visit, and forgets the count above within minutes, it holds nothing about you that it could later show, correct or erase.",
+  };
+  const french = {
+    intro: "Ce qu’il advient de vos données lorsque vous consultez Lex : il ne vous en demande aucune, ne dépose aucun cookie et n’enregistre rien qui vous concerne.",
+    kept: "Le serveur utilise la requête pour y répondre et pour la compter (voir ci-dessous), et n’en écrit rien nulle part : il ne tient aucun journal des accès ni aucun relevé de ce qui est lu ou recherché. Cela est vérifié sur le code du serveur lui-même, avant son déploiement : le serveur est soumis à des requêtes portant des valeurs repérables (une expression recherchée, une adresse IP, le nom d’un navigateur), dont aucune ne doit apparaître dans ce qu’il écrit. L’hébergement est configuré à partir d’un modèle qui n’ajoute ni stockage de journaux ni service de surveillance qui conserverait les requêtes ; les paramètres de l’hébergement, une fois déployé, ne sont pas vérifiés de cette manière.",
+    limit: "Pour qu’aucune adresse IP ne puisse à elle seule surcharger le serveur, celui-ci compte les requêtes qui proviennent de chaque adresse IP. Il garde pour cela, dans sa seule mémoire vive, une empreinte de l’adresse IP, accompagnée du décompte de ses requêtes récentes. L’empreinte est calculée avec une clé secrète tirée au hasard, jamais écrite et remplacée chaque jour ; l’adresse IP elle-même n’est pas conservée. Ni l’empreinte ni ce décompte ne sont jamais écrits, et tous deux sont oubliés au plus tard deux minutes environ après la dernière requête provenant de cette adresse IP, ou lorsque le serveur redémarre. Une adresse IP qui envoie trop de requêtes à la fois ou en une minute est invitée à patienter un instant.",
+    nothingHeld: "Lex ne propose ni compte ni inscription : il ne sait donc jamais qui vous êtes. Comme il n’enregistre rien d’une visite et oublie en quelques minutes le décompte ci-dessus, il ne détient rien vous concernant qu’il pourrait ensuite montrer, rectifier ou effacer.",
+  };
+  for (const [language, forms] of [["en", english], ["fr", french]]) {
+    const privacy = LIVE_CHROME[language].privacy;
+    assert.equal(privacy.intro, forms.intro, `${language} intro`);
+    for (const key of ["kept", "limit", "nothingHeld"]) assert.equal(privacy.sections.reading[key], forms[key], `${language} ${key}`);
+    // Said in this order: what the server does with a request, then what it counts and holds, then what it cannot show.
+    assert.deepEqual(Object.keys(privacy.sections.reading), ["heading", "request", "host", "kept", "limit", "nothingHeld"], language);
+  }
+  // No legal text still says the server keeps nothing of a request, which the limit's fingerprint would contradict.
+  for (const language of ["en", "fr"]) {
+    const notice = JSON.stringify(LIVE_CHROME[language].privacy);
+    assert.doesNotMatch(notice, language === "en" ? /keeps nothing/ : /ne conserve rien|n’en conserve rien/, language);
+  }
+  assert.ok(said(app.renderLiveLegalPage("privacy")).includes(english.limit), "the English page says it");
+});
+
 test("the legal notice promises a text at a date only for the texts and dates Lex holds, as the terms do, and its date says when it changed (the review of #990)", () => {
   // The English, and the French of the review's addendum of 2026-10-26, byte for byte (a no-break space before the colon).
   const english = "Lex is an independent, non-commercial tool for reading Luxembourg and EU law over time: for the texts and dates it holds, it shows a text as it stood on the date you choose, and how it changed. It is free, carries no advertising and asks for no account.";
@@ -347,9 +391,10 @@ test("the legal notice promises a text at a date only for the texts and dates Le
     for (const [path, text] of entriesOf(LIVE_CHROME[language]).filter(([one]) => LEGAL_SECTIONS.test(one))) assert.doesNotMatch(text, unqualified, `${language} ${path}`);
   }
   assert.ok(said(app.renderLiveLegalPage("legalNotice")).includes(english), "the English page says it");
-  // The texts changed on 2026-10-26, and every page says so ("Last updated"), in words and in the markup.
-  assert.equal(LEGAL_TEXTS_UPDATED, "2026-10-26");
-  for (const page of LEGAL_PAGES) assert.ok(app.renderLiveLegalPage(page.key).includes(`<time dateTime="2026-10-26">26 October 2026</time>`), page.key);
+  // The texts changed on 2026-10-26, and again on 2026-10-27 (the privacy notice's per-client limit, below), and every page
+  // says the last ("Last updated"), in words and in the markup.
+  assert.equal(LEGAL_TEXTS_UPDATED, "2026-10-27");
+  for (const page of LEGAL_PAGES) assert.ok(app.renderLiveLegalPage(page.key).includes(`<time dateTime="2026-10-27">27 October 2026</time>`), page.key);
   // The footer strip of a page that ships no script, as reviewed in the same addendum, byte for byte (shown on every legal
   // page and the maintenance page: `freshness.test.mjs`; the French page as built says both: the first test above).
   assert.equal(LIVE_CHROME.fr.freshness.noAnswer, "Cette page ne contient aucune réponse du serveur ; il n’y a donc rien à afficher ici. Sur une page qui en contient une, cette partie indique, d’après cette réponse, quand l’index a été construit, quand les textes de chaque éditeur ont été collectés pour la dernière fois, ainsi que le code qui a construit l’index et celui qui le sert.");

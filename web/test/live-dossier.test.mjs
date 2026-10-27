@@ -21,7 +21,7 @@ import {
   dossierParameters,
   loadLiveDossier,
 } from "../scripts/live-dossier.mjs";
-import { noCorpusMountedSentence } from "../scripts/live-refusals.mjs";
+import { OUTSIDE_EU_POPULATION_SENTENCE, noCorpusMountedSentence } from "../scripts/live-refusals.mjs";
 
 /** A refusal's card as the screen shows it: one about this service (R60) inside the failure panel, under its line; any other alone. */
 const asShown = (outcome, card) => renderToStaticMarkup(h(FailureFrame, { outcome }, h("lex-card"))).replace("<lex-card></lex-card>", card);
@@ -101,6 +101,51 @@ test("a served dossier is the work, its states and what it does not hold, read b
   assert.equal((markup.match(/<li><strong>/g) ?? []).length, value.not_held.length);
 });
 
+test("a Luxembourg dossier says the act's force as the publisher records it, each date with its role, and no reading of it (R79, R21)", async () => {
+  const envelope = structuredClone(envelopeOf(ANSWER));
+  const value = envelope.result.value;
+  // The census's act asserts no force fact: each absence is said, never left blank or read as "not in force".
+  assert.deepEqual(value.force.subjects, [value.publisher_work_iri, `${value.publisher_work_iri}/jo`]);
+  const none = text(view(dossierOutcome({ state: "success", envelope })));
+  assert.ok(none.includes("The act's force, as the publisher records it"));
+  assert.ok(none.includes("The publisher's record gives no status for this act."));
+  assert.ok(none.includes("The publisher's record gives no entry-into-force date for this act."));
+  assert.ok(!none.includes("End of force"), "no end of force is said where none is asserted");
+
+  // Asserted facts: the publisher's token, verbatim, and each date with its role, attributed to the publisher.
+  const jo = `${value.publisher_work_iri}/jo`;
+  const fact = (predicateValue, datatype = "http://www.w3.org/2001/XMLSchema#date", objectKind = "literal") => ({
+    subject_iri: jo, object_kind: objectKind, value: predicateValue, datatype_iri: datatype, language_tag: null, evidence_sha256: "1".repeat(64),
+  });
+  value.force.in_force_status = [fact("http://data.legilux.public.lu/resource/authority/legal-status/inForce", null, "iri")];
+  value.force.entry_into_force = [fact("1991-09-01")];
+  value.force.no_longer_in_force = [fact("2026-01-04"), fact("2026-01", "http://www.w3.org/2001/XMLSchema#gYearMonth")];
+  const markup = view(dossierOutcome({ state: "success", envelope }));
+  const shown = text(markup);
+  assert.ok(markup.includes("Status, in the publisher&#x27;s own words: <code>inForce</code>."), markup);
+  assert.ok(markup.includes('<li data-date-role="entry_into_force">Entry into force: <time dateTime="1991-09-01">1991-09-01</time> (the publisher&#x27;s record).</li>'));
+  assert.ok(markup.includes('<li data-date-role="no_longer_in_force">End of force: <time dateTime="2026-01-04">2026-01-04</time> (the publisher&#x27;s record).</li>'));
+  assert.ok(shown.includes("an entry-into-force or end-of-force date in a form that is not a calendar date; it is not shown here"), "a fact in another form is counted, not dropped");
+  assert.ok(shown.includes("Lex does not say whether or how the act applies to anyone's situation"));
+  // R21: the section says no date or interval is "in force", in either language.
+  const { assertTimeVocabulary } = await import("../scripts/publisher-vocabulary.mjs");
+  const at = markup.indexOf("<section data-force");
+  assertTimeVocabulary(text(markup.slice(at, markup.indexOf("</section>", at))), "the dossier's force section");
+  const { LIVE_CHROME } = await import("../scripts/live-chrome.mjs");
+  for (const language of ["en", "fr"]) {
+    for (const key of ["forceHeading", "forceStatus", "forceStatusNone", "forceEntry", "forceEntryNone", "forceEnd", "forceOtherForms", "forceNote"]) {
+      assertTimeVocabulary(LIVE_CHROME[language].dossier[key], `${language} dossier.${key}`);
+    }
+  }
+
+  // A fact on another subject than the work and its act as published is refused, so a state's fact is never said as the act's.
+  value.force.entry_into_force = [{ ...fact("1991-09-01"), subject_iri: `${value.publisher_work_iri}/consolide/20200101` }];
+  assert.equal(dossierOutcome({ state: "success", envelope }).state, "invalid_envelope");
+  // An index of schema 8 or 6 sends no force: no section.
+  delete value.force;
+  assert.ok(!view(dossierOutcome({ state: "success", envelope })).includes("data-force"));
+});
+
 test("an EU work's dossier is the work by its CELEX, its expressions with the original wording of each, pinned, and what it does not hold", async () => {
   const envelope = envelopeOf("one EU work by its CELEX");
   const value = envelope.result.value;
@@ -140,6 +185,26 @@ test("an EU work's dossier is the work by its CELEX, its expressions with the or
   assert.ok(annexMarkup.includes(`<code>${source}</code>`));
   assert.ok(annexMarkup.indexOf("data-annexes-not-served") > annexMarkup.indexOf("</table>"), "said below the expressions");
   assert.doesNotMatch(markup, /data-annexes-not-served/, "the captured dossier lists no annex, and the page says none");
+
+  // A consolidated Treaty's Protocols, Annexes, Declarations and tables, and an annex an admitted package could not match to
+  // the PDF, are rows of their own (review of #996, F2): the Treaty's parts with their own line, the annex with the annex's.
+  const parted = structuredClone(envelope);
+  parted.result.value.expressions[0].annexes_not_served = [
+    {
+      disposition: "annex_unclassified", annexes: 2, annex_identities_sha256: ["b".repeat(64), "c".repeat(64)], served_as: "text_not_available",
+      official_identity: expression.publisher_expression_id, official_source: source,
+      reason: "the act's articles are read from the publisher's Formex package, but its annexes could not be matched to the publisher's PDF, so they were not classified and their text is not served",
+    },
+    {
+      disposition: "treaty_part_not_served", annexes: 48, annex_identities_sha256: Array.from({ length: 48 }, (_, at) => at.toString(16).padStart(64, "0")), served_as: "text_not_available",
+      official_identity: expression.publisher_expression_id, official_source: source,
+      reason: "a Protocol, Annex, Declaration or table of equivalences published with the consolidated Treaty is part of the publisher's document but not one of the Treaty's articles, so its text is not served here",
+    },
+  ];
+  const partedMarkup = text(view(dossierOutcome({ state: "success", envelope: parted })));
+  assert.ok(partedMarkup.includes("2 annexes of the English wording are not served as text"), "an unclassified annex is an annex of the wording");
+  assert.ok(partedMarkup.includes("48 items published with the English wording of the Treaty (Protocols, Annexes, Declarations or tables of equivalences) are not served as text"),
+    "a Treaty's annexed parts have their own line");
 
   const unpinned = structuredClone(envelope);
   unpinned.result.value.expressions[0].pinned_wording = null;
@@ -189,6 +254,24 @@ test("the other refusals a dossier from this page can meet are refusal cards wit
     assert.equal(view(outcome), `<section data-answer-state="refusal">${asShown(outcome, card)}</section>`, scenario);
   }
   assert.equal(LIVE_DOSSIER_REFUSAL_SENTENCES.no_corpus_mounted, undefined, "the missing index is named from the payload");
+});
+
+test("an EU act outside the EU population is said as not held by the rule, never as a kind Lex never holds, with EUR-Lex as its official place (R80)", async () => {
+  const entry = census.envelopes.find((candidate) => candidate.envelope.refusal?.helpful_payload?.out_of_scope_class === "eu_act_outside_population");
+  assert.ok(entry, "the census holds an EU act outside the EU population, refused out of scope");
+  const outcome = dossierOutcome({ state: "refusal", envelope: entry.envelope });
+  assert.equal(outcome.code, "out_of_corpus_scope");
+  assert.equal(outcome.card, true, "the card's rules accept EUR-Lex as the official place of an EU act");
+  assert.equal(outcome.sentence, OUTSIDE_EU_POPULATION_SENTENCE);
+  assert.notEqual(outcome.sentence, LIVE_DOSSIER_REFUSAL_SENTENCES.out_of_corpus_scope, "an EU act is not a kind of instrument Lex never holds");
+  const shown = text(view(outcome));
+  const payload = entry.envelope.refusal.helpful_payload;
+  assert.ok(shown.includes(payload.reason), "the rule, as the platform words it");
+  assert.match(view(outcome), new RegExp(`href="${payload.official_source.replace(/[.?]/g, "\\$&")}"`), "the act's page on EUR-Lex, linked");
+  assert.ok(view(outcome).includes(`href="${payload.who_to_ask.link}"`));
+  // The list's own refusals keep the list's sentence.
+  const circular = dossierOutcome({ state: "refusal", envelope: envelopeOf("a CSSF circular") });
+  assert.equal(circular.sentence, LIVE_DOSSIER_REFUSAL_SENTENCES.out_of_corpus_scope);
 });
 
 test("a transport failure is a state with a sentence, a refused request is said as refused", async () => {

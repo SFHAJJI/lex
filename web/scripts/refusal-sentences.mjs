@@ -21,14 +21,14 @@ import * as reading from './live-reading.mjs';
 import * as history from './live-history.mjs';
 import * as compare from './live-compare.mjs';
 import * as radar from './live-radar.mjs';
-import { historyBeginsHint, nearestAnchorsHint, noCorpusMountedSentence } from './live-refusals.mjs';
+import { CATALOGUE_RECORD_SENTENCE, NAMES_WITHHELD_SENTENCE, OUTSIDE_EU_POPULATION_SENTENCE, historyBeginsHint, nearestAnchorsHint, noCorpusMountedSentence } from './live-refusals.mjs';
 import { LIVE_CHROME, entriesOf } from './live-chrome.mjs';
 import { REFUSALS_FR } from './live-chrome-fr.mjs';
 
 /** The live screens, in the launch contract's order, each with its refusal table. */
 export const SCREENS = Object.freeze([
   Object.freeze({ id: 'coverage', name: 'Trust and Coverage', module: coverage, table: coverage.LIVE_COVERAGE_REFUSAL_SENTENCES }),
-  Object.freeze({ id: 'search', name: 'Search', module: search, table: search.LIVE_SEARCH_REFUSAL_SENTENCES, referenceTable: search.LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES, europeReferenceTable: search.LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES, heldActTable: search.LIVE_SEARCH_HELD_ACT_REFUSAL_SENTENCES }),
+  Object.freeze({ id: 'search', name: 'Search', module: search, table: search.LIVE_SEARCH_REFUSAL_SENTENCES, europeTable: search.LIVE_SEARCH_EUROPE_REFUSAL_SENTENCES, referenceTable: search.LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES, europeReferenceTable: search.LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES, heldActTable: search.LIVE_SEARCH_HELD_ACT_REFUSAL_SENTENCES }),
   Object.freeze({ id: 'dossier', name: 'Work dossier', module: dossier, table: dossier.LIVE_DOSSIER_REFUSAL_SENTENCES }),
   Object.freeze({ id: 'reading', name: 'Reading and Export composer', module: reading, table: reading.LIVE_READING_REFUSAL_SENTENCES, europeTable: reading.LIVE_READING_EUROPE_REFUSAL_SENTENCES }),
   Object.freeze({ id: 'history', name: 'Provision history', module: history, table: history.LIVE_HISTORY_REFUSAL_SENTENCES }),
@@ -80,6 +80,12 @@ export function servedRefusalSentences() {
       for (const requiredCorpus of ['lu', 'eu', null]) {
         for (const id of NAMING_THE_INDEX) add(noCorpusMountedSentence({ required_corpus: requiredCorpus }), id, 'no_corpus_mounted');
       }
+      // R92: a work the names record withholds is said in one sentence on every screen that asks about one work.
+      for (const id of NAMING_THE_INDEX) add(NAMES_WITHHELD_SENTENCE, id, 'text_withheld');
+      // R77: an act the catalogue holds and Lex holds no version of is said in one sentence on every screen that asks about one work.
+      for (const id of NAMING_THE_INDEX) add(CATALOGUE_RECORD_SENTENCE, id, 'text_not_available');
+      // R80: an EU act outside the EU population is said in one sentence on every screen that asks about one work.
+      for (const id of NAMING_THE_INDEX) add(OUTSIDE_EU_POPULATION_SENTENCE, id, 'out_of_corpus_scope');
     }
   }
   return [...rows.values()].map((row) => Object.freeze({ sentence: row.sentence, uses: Object.freeze(row.uses) }));

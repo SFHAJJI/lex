@@ -21,7 +21,7 @@
       "type": "string"
     },
     "registry_schema": {
-      "const": "lex-v3-operation-registry/1"
+      "const": "lex-v3-operation-registry/2"
     },
     "registry_sha256": {
       "type": "string",

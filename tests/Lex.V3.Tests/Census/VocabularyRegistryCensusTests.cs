@@ -61,11 +61,17 @@ public sealed class VocabularyRegistryCensusTests
                     + "static property Rule",
                 "Lex.V3.Api.CitationDates: Months=32, const Shape",
                 "Lex.V3.Api.ExactReferenceReader: InstrumentWords=7, LuxembourgTypes=5, "
-                    + "const EuropeOrg, const EuropeType, const OfWords, const Preposition, const SiteOrigin",
+                    + "const EuropeOrg, const EuropeType, const OfWords, const Preposition, "
+                    + "const SiteOrigin",
                 "Lex.V3.Api.SyntheticPreviewTrustConfiguration: const EnvironmentBinding, "
                     + "const IssuerId, const KeyId, const PublicKeySha256",
-                "Lex.V3.Api.V3McpJsonRpc: const ProtocolVersion, const ServerName",
-                "Lex.V3.Api.V3StaleIndexCopies: const CopyPattern, const PrivateTemporaryFolderVariable",
+                "Lex.V3.Api.V3HostHeaders: const MachineContentSecurityPolicy, const ReferrerPolicy, "
+                    + "const StrictTransportSecurity",
+                "Lex.V3.Api.V3KeySet: Document=1985, const RawTarget, const ResourceName",
+                "Lex.V3.Api.V3McpJsonRpc: const Instructions, const ProtocolVersion, "
+                    + "const ServerName",
+                "Lex.V3.Api.V3StaleIndexCopies: const CopyPattern, "
+                    + "const PrivateTemporaryFolderVariable",
                 "Lex.V3.Artifacts.AdmissionHeaderReader: AttestationMembers=4, "
                     + "ContractReferenceMembers=3, ContractSetMembers=4, EnvironmentMembers=2, "
                     + "IssuerMembers=3, PayloadMembers=6, RootMembers=11",
@@ -112,6 +118,7 @@ public sealed class VocabularyRegistryCensusTests
                     + "const PublisherDateFact, const PublisherRelation, const RelationFact, "
                     + "const VocabularyDrift",
                 "Lex.V3.Contracts.Facts.FactsVocabularies: KindsByType=8, AllKinds=8",
+                "Lex.V3.Contracts.Index.TextFolding: Units=65536, const Rule",
                 "Lex.V3.Contracts.Index.TitleFolding: Folds=2140",
                 "Lex.V3.Contracts.Index.V3IndexCapabilityManifestArtifact: Domain=35, "
                     + "const SchemaId",
@@ -126,6 +133,8 @@ public sealed class VocabularyRegistryCensusTests
                     + "const GenesisBasis, const IntervalClosed, const MetadataRevised, "
                     + "const RelationAsserted, const RelationRetracted, const Resighted, "
                     + "const ValidityRevised, const WithdrawnFromSource",
+                "Lex.V3.Contracts.Platform.V3OutOfScope: Compiled=4, Classes=4, const AsAmended, "
+                    + "const CaseNumber, const Schema, static property Sha256",
                 "Lex.V3.Contracts.Platform.V3PlatformSchemaExporter: const EnvelopeSchemaId, "
                     + "const RefusalSchemaId",
                 "Lex.V3.Contracts.Platform.V3UnservedOperations: Rows=3",
@@ -229,9 +238,14 @@ public sealed class VocabularyRegistryCensusTests
                     + "FileName, const ResourceId",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRelationVocabulary: Authorities=2, "
                     + "Predicates=18",
-                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsAdmissionPolicies: "
-                    + "RegisteredSha256s=1, const Policy1Name, const Policy1Text, "
-                    + "static property Policy1Sha256",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsAdmissionPolicies: Admissible=6, "
+                    + "Entries=16, Rulings=3, RegisteredSha256s=16, const Policy1Name, "
+                    + "const Policy1Text, const PolicyAName, const PolicyAText, "
+                    + "const SingleChannelAdmission, const WindowEveryPage, const WindowLivePages, "
+                    + "static property Policy1Sha256, static property PolicyASha256",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannels: const "
+                    + "ResolutionTwoProfileName, const ResolutionTwoProfileText, "
+                    + "static property ResolutionTwoProfileSha256",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgScopeResolver: AccTypes=1, "
                     + "AdmittedNonShelfTypes=23, MetadataSupportClasses=10, NeverFormats=3, "
                     + "NeverTypes=2, OrdinaryCandidateTypes=17, PointFormats=3, "

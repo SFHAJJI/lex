@@ -76,6 +76,12 @@ public enum LexCorpus6Stage3Disposition
     [JsonStringEnumMemberName("formex_main_body_route_refused")] FormexMainBodyRouteRefused = 27,
     [JsonStringEnumMemberName("formex_main_body_package_rejected")] FormexMainBodyPackageRejected = 28,
     [JsonStringEnumMemberName("akn_marker_only_evidence")] AknMarkerOnlyEvidence = 25,
+    /// <summary>An admitted Formex package's main body, read while its annexes stay unclassified (its annex chain did not close).</summary>
+    [JsonStringEnumMemberName("formex_main_body_admitted_annexes_unclassified")] FormexMainBodyAdmittedAnnexesUnclassified = 29,
+    /// <summary>An annex unit of an admitted package whose annex chain did not close: not classified, never served as text.</summary>
+    [JsonStringEnumMemberName("annex_unclassified")] AnnexUnclassified = 30,
+    /// <summary>A Protocol, Annex, Declaration or table of equivalences published with a consolidated Treaty: not one of the Treaty's articles, never served as text.</summary>
+    [JsonStringEnumMemberName("treaty_part_not_served")] TreatyPartNotServed = 31,
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -107,12 +113,14 @@ public sealed record LexCorpus6Stage3Outcome(
                 LexCorpus6Stage3Disposition.PdfActScopeUnproven,
             LexCorpus6Stage3OutcomeDomain.EuropeAnnexBody => disposition is >=
                 LexCorpus6Stage3Disposition.AnnexTextNotAvailable and <=
-                LexCorpus6Stage3Disposition.AnnexMappedPageOutsideDocument,
+                LexCorpus6Stage3Disposition.AnnexMappedPageOutsideDocument
+                or LexCorpus6Stage3Disposition.AnnexUnclassified or LexCorpus6Stage3Disposition.TreatyPartNotServed,
             LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody => disposition is >=
                 LexCorpus6Stage3Disposition.FormexMainBodyAdmitted and <=
                 LexCorpus6Stage3Disposition.FormexMainBodyUnsupportedContentShape
                 or (>= LexCorpus6Stage3Disposition.FormexMainBodyPackageNotAcquired and <=
-                    LexCorpus6Stage3Disposition.FormexMainBodyPackageRejected),
+                    LexCorpus6Stage3Disposition.FormexMainBodyPackageRejected)
+                or LexCorpus6Stage3Disposition.FormexMainBodyAdmittedAnnexesUnclassified,
             _ => false,
         };
 }
@@ -301,6 +309,43 @@ public sealed record LexCorpus6LuxembourgWemiBinding(
     }
 }
 
+/// <summary>
+/// The disclosure a single-channel admission carries (LU-DATA-DESIGN v2 §1.2, "Disclosure"; the owner's rulings L1, L1b, L2):
+/// the text rests on the publisher's SPARQL declaration of exactly CC BY 4.0 for the file alone, on the retained licence page
+/// <see cref="LicencePage"/>, which the acquisition observed at <see cref="ObservedAt"/> (live, or replayed from the run it
+/// resumed). It is kept apart from the member's gaps.
+/// </summary>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record LexCorpus6LuxembourgRightsDisclosure(
+    string Code,
+    SourceArtifactRef LicencePage,
+    string ObservedAt,
+    bool ObservedLive)
+{
+    /// <summary>The gap of a single-channel body its policy names but whose licence page lies outside its evidence window (option b).</summary>
+    public const string OutsideEvidenceWindowGap = "rights_licence_page_outside_evidence_window";
+
+    internal static LexCorpus6LuxembourgRightsDisclosure Of(LuxembourgRightsChannelDisposition disposition, LuxembourgSparqlLicencePage page) => new(
+        LuxembourgRightsChannelResolution.DisclosureCodeOf(disposition)
+            ?? throw new ArgumentException("Only a single-channel disposition carries a disclosure.", nameof(disposition)),
+        page.PageRef,
+        page.ObservedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture),
+        page.ObservedLive);
+
+    public LexCorpus6LuxembourgRightsDisclosure Validate()
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(Code);
+        ArgumentNullException.ThrowIfNull(LicencePage);
+        if (!DateTimeOffset.TryParseExact(ObservedAt, "yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal, out _))
+        {
+            throw new ArgumentException("A disclosure's observation time is a whole UTC second.", nameof(ObservedAt));
+        }
+
+        return this;
+    }
+}
+
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record LexCorpus6LuxembourgRights(
     LexCorpus6LuxembourgWemiBinding SelectedWemi,
@@ -309,21 +354,64 @@ public sealed record LexCorpus6LuxembourgRights(
     LuxembourgRightsChannelDisposition Disposition,
     IReadOnlyList<SourceArtifactRef> EvidenceRefs)
 {
+    /// <summary>
+    /// The SHA-256 of the resolution rule a re-derivation re-bound these rights under (resolution /2,
+    /// <see cref="LuxembourgRightsChannels.ResolutionTwoProfileSha256"/>); null, and absent on the wire, for rights as the
+    /// acquisition resolved them, whose block and binding are what they always were.
+    /// </summary>
+    public string? ResolutionRule { get; init; }
+
+    /// <summary>
+    /// The single-channel disclosure an admitted single-channel body carries (one of the owner's rulings): its code, the
+    /// licence page it rests on and when the acquisition observed that page. Null, and absent on the wire, otherwise.
+    /// </summary>
+    public LexCorpus6LuxembourgRightsDisclosure? RightsDisclosure { get; init; }
+
     public LexCorpus6LuxembourgRights Validate(SourceArtifactRef memberRunIdentity)
     {
+        if (RightsDisclosure is { } disclosure)
+        {
+            disclosure.Validate();
+            if (ResolutionRule is null || !string.Equals(
+                    disclosure.Code, LuxembourgRightsChannelResolution.DisclosureCodeOf(Disposition), StringComparison.Ordinal) ||
+                EvidenceRefs is null || !EvidenceRefs.Contains(disclosure.LicencePage))
+            {
+                throw new ArgumentException(
+                    "A rights disclosure belongs to a single-channel disposition re-bound under resolution /2, its code that "
+                    + "disposition's, and its licence page among the rights evidence.",
+                    nameof(RightsDisclosure));
+            }
+        }
+
         ArgumentNullException.ThrowIfNull(SelectedWemi);
         SelectedWemi.Validate();
 
         ArgumentNullException.ThrowIfNull(BoundRunIdentity);
         ArgumentNullException.ThrowIfNull(memberRunIdentity);
-        if (!string.Equals(
-                BindingSha256,
-                ComputeBindingSha256(memberRunIdentity, BoundRunIdentity, SelectedWemi.IdentitySha256),
-                StringComparison.Ordinal))
+        if (ResolutionRule is not null &&
+            !string.Equals(ResolutionRule, LuxembourgRightsChannels.ResolutionTwoProfileSha256, StringComparison.Ordinal))
         {
             throw new ArgumentException(
-                "The Luxembourg rights binding does not match its acquisition run, rights run and selected WEMI.",
-                nameof(BindingSha256));
+                "The Luxembourg rights name a resolution rule this build does not implement.", nameof(ResolutionRule));
+        }
+
+        // Binding /1 is the member's own. Binding /2 also covers the corpus header's admission policy and re-derivation record,
+        // so the set checks it (LexCorpus6ManifestSet.ValidateLuxembourgAdmission) and the member checks only its form here.
+        if (ResolutionRule is null)
+        {
+            if (!string.Equals(
+                    BindingSha256,
+                    ComputeBindingSha256(memberRunIdentity, BoundRunIdentity, SelectedWemi.IdentitySha256),
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "The Luxembourg rights binding does not match its acquisition run, rights run and selected WEMI.",
+                    nameof(BindingSha256));
+            }
+        }
+        else
+        {
+            LexCorpus6Member.RequireSha256(BindingSha256, nameof(BindingSha256));
         }
 
         if (!IsTerminal(Disposition))
@@ -331,6 +419,12 @@ public sealed record LexCorpus6LuxembourgRights(
             throw new ArgumentException(
                 "The Luxembourg rights resolution is not a terminal post-acquisition disposition.",
                 nameof(Disposition));
+        }
+
+        if (ResolutionRule is null && IsResolutionTwoOnly(Disposition))
+        {
+            throw new ArgumentException(
+                "A disposition only resolution /2 makes is carried only by rights re-bound under it.", nameof(Disposition));
         }
 
         ArgumentNullException.ThrowIfNull(EvidenceRefs);
@@ -345,25 +439,58 @@ public sealed record LexCorpus6LuxembourgRights(
         return this;
     }
 
+    /// <summary>
+    /// The member's rights binding: binding /1 over the acquisition run, the rights' run and the selected WEMI. Binding /2
+    /// covers rights a re-derivation re-bound (<paramref name="resolutionRule"/> given). It hashes the same, plus the
+    /// resolution /2 rule, the in-file reading /2 rule, the admission policy and the re-derivation record the corpus names
+    /// (LU-DATA-DESIGN v2 §1.2), every one of them required.
+    /// </summary>
     public static string ComputeBindingSha256(
         SourceArtifactRef memberRunIdentity,
         SourceArtifactRef rightsRunIdentity,
-        string selectedWemiIdentitySha256)
+        string selectedWemiIdentitySha256,
+        string? resolutionRule = null,
+        string? readingRule = null,
+        string? admissionPolicy = null,
+        string? rederivationRecord = null)
     {
         ArgumentNullException.ThrowIfNull(memberRunIdentity);
         ArgumentNullException.ThrowIfNull(rightsRunIdentity);
         ArgumentException.ThrowIfNullOrWhiteSpace(selectedWemiIdentitySha256);
+        if (resolutionRule is null
+                ? readingRule is not null || admissionPolicy is not null || rederivationRecord is not null
+                : string.IsNullOrWhiteSpace(readingRule) || string.IsNullOrWhiteSpace(admissionPolicy) ||
+                  string.IsNullOrWhiteSpace(rederivationRecord))
+        {
+            throw new ArgumentException(
+                "Binding /2 names the resolution rule, the reading rule, the policy and the re-derivation record together; binding /1 none.");
+        }
 
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        foreach (var value in new[]
-        {
-            "lex-corpus/6/luxembourg-rights-binding/1",
-            memberRunIdentity.ResourceId,
-            memberRunIdentity.Sha256,
-            rightsRunIdentity.ResourceId,
-            rightsRunIdentity.Sha256,
-            selectedWemiIdentitySha256,
-        })
+        string[] values = resolutionRule is null
+            ?
+            [
+                "lex-corpus/6/luxembourg-rights-binding/1",
+                memberRunIdentity.ResourceId,
+                memberRunIdentity.Sha256,
+                rightsRunIdentity.ResourceId,
+                rightsRunIdentity.Sha256,
+                selectedWemiIdentitySha256,
+            ]
+            :
+            [
+                "lex-corpus/6/luxembourg-rights-binding/2",
+                memberRunIdentity.ResourceId,
+                memberRunIdentity.Sha256,
+                rightsRunIdentity.ResourceId,
+                rightsRunIdentity.Sha256,
+                selectedWemiIdentitySha256,
+                resolutionRule,
+                readingRule!,
+                admissionPolicy!,
+                rederivationRecord!,
+            ];
+        foreach (var value in values)
         {
             hash.AppendData(Encoding.UTF8.GetBytes(value));
             hash.AppendData([(byte)'\n']);
@@ -372,13 +499,29 @@ public sealed record LexCorpus6LuxembourgRights(
         return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
+    /// <summary>
+    /// The dispositions a corpus member may carry: terminal evidence, never a pending or non-independent state. Conflict,
+    /// Multiple and the six dispositions of resolution /2 first occur under resolution /2.
+    /// </summary>
     internal static bool IsTerminal(LuxembourgRightsChannelDisposition disposition) =>
         disposition is LuxembourgRightsChannelDisposition.MissingValue
             or LuxembourgRightsChannelDisposition.AgreedSameRunCcBy
             or LuxembourgRightsChannelDisposition.NonAdmittingLicenceScl
             or LuxembourgRightsChannelDisposition.TypedQuarantineUnruledLicence
             or LuxembourgRightsChannelDisposition.TypedQuarantineUnrepresentableLicenceShape
-            or LuxembourgRightsChannelDisposition.TypedQuarantineInFileReadingRejected;
+            or LuxembourgRightsChannelDisposition.TypedQuarantineInFileReadingRejected
+            or LuxembourgRightsChannelDisposition.Conflict
+            or LuxembourgRightsChannelDisposition.Multiple
+            || IsResolutionTwoOnly(disposition);
+
+    /// <summary>The six dispositions only resolution /2 makes.</summary>
+    internal static bool IsResolutionTwoOnly(LuxembourgRightsChannelDisposition disposition) =>
+        disposition is LuxembourgRightsChannelDisposition.AgreedCcByRederived
+            or LuxembourgRightsChannelDisposition.SparqlCcByInFileNamesOtherIdentity
+            or LuxembourgRightsChannelDisposition.SparqlCcByInFileSilent
+            or LuxembourgRightsChannelDisposition.SparqlCcByInFileOwnBlockEmpty
+            or LuxembourgRightsChannelDisposition.SparqlCcByInFileNotApplicable
+            or LuxembourgRightsChannelDisposition.TypedQuarantineInFileIdentityUnknown;
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -476,11 +619,14 @@ public sealed record LexCorpus6Member(
 
             ArgumentNullException.ThrowIfNull(LuxembourgRights);
             LuxembourgRights.Validate(RunIdentity);
-            var expectedOutcome = LuxembourgRights.Disposition ==
-                LuxembourgRightsChannelDisposition.AgreedSameRunCcBy
-                    ? LexCorpus6OutcomeKind.Acquired
-                    : LexCorpus6OutcomeKind.RightsWithheld;
-            if (Outcome != expectedOutcome)
+            // agreed_same_run_cc_by admits under every policy and a disposition no policy may admit is withheld under every
+            // one; whether any other admits is the corpus's policy's question, which the set answers
+            // (LexCorpus6ManifestSet.ValidateLuxembourgAdmission).
+            var disposition = LuxembourgRights.Disposition;
+            var contradicts = disposition == LuxembourgRightsChannelDisposition.AgreedSameRunCcBy
+                ? Outcome != LexCorpus6OutcomeKind.Acquired
+                : !LuxembourgRightsAdmissionPolicies.IsAdmissible(disposition) && Outcome != LexCorpus6OutcomeKind.RightsWithheld;
+            if (contradicts)
             {
                 throw new ArgumentException("The Luxembourg outcome contradicts its closed rights disposition.");
             }
@@ -816,7 +962,69 @@ public sealed record LexCorpus6ManifestSet(
             }
         }
 
+        ValidateLuxembourgAdmission(Members);
         return this;
+    }
+
+    /// <summary>
+    /// The corpus's admission policy over its Luxembourg members (LU-DATA-DESIGN v2 §1.2): each member with rights is acquired
+    /// exactly when the policy the header names (none: policy /1) admits its disposition, and rights re-bound under resolution
+    /// /2 are carried only by a corpus that names the re-derivation that re-bound them.
+    /// </summary>
+    internal void ValidateLuxembourgAdmission(IEnumerable<LexCorpus6Member> members)
+    {
+        foreach (var member in members)
+        {
+            if (member.LuxembourgRights is not { } rights)
+            {
+                continue;
+            }
+
+            if (rights.ResolutionRule is not null && LuxembourgRederivation is null)
+            {
+                throw new ArgumentException(
+                    "Luxembourg rights re-bound under resolution /2 belong only to a corpus that names its re-derivation.",
+                    nameof(Members));
+            }
+
+            // Binding /2: the member's run, rights run and WEMI, the resolution and reading rules, and this corpus's policy
+            // and re-derivation record.
+            if (rights.ResolutionRule is not null && !string.Equals(
+                    rights.BindingSha256,
+                    LexCorpus6LuxembourgRights.ComputeBindingSha256(
+                        member.RunIdentity, rights.BoundRunIdentity, rights.SelectedWemi.IdentitySha256, rights.ResolutionRule,
+                        Luxembourg.LuxembourgInFileRightsReader.ReadingTwoProfileSha256, LuxembourgRightsAdmissionPolicy!,
+                        LuxembourgRederivation!),
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "The Luxembourg rights binding /2 does not match its runs, its WEMI, the rules, and the corpus's policy and "
+                    + "re-derivation record.",
+                    nameof(Members));
+            }
+
+            // A single-channel disposition admits only with its disclosed licence page, within the policy's evidence window;
+            // a disclosure is carried by an admitted body only.
+            var expected = Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsAdmissionPolicies.Admits(
+                LuxembourgRightsAdmissionPolicy, rights.Disposition, rights.RightsDisclosure?.ObservedLive)
+                    ? LexCorpus6OutcomeKind.Acquired
+                    : LexCorpus6OutcomeKind.RightsWithheld;
+            if (rights.RightsDisclosure is not null && expected != LexCorpus6OutcomeKind.Acquired)
+            {
+                throw new ArgumentException(
+                    $"A rights disclosure belongs to an admitted body, and the corpus's policy does not admit this "
+                    + $"{ContractWire.NameOf(rights.Disposition)} body.",
+                    nameof(Members));
+            }
+
+            if (member.Outcome != expected)
+            {
+                throw new ArgumentException(
+                    $"The Luxembourg outcome {ContractWire.NameOf(member.Outcome)} contradicts the corpus's admission policy for "
+                    + $"{ContractWire.NameOf(rights.Disposition)}.",
+                    nameof(Members));
+            }
+        }
     }
 
     /// <summary>Every check of <see cref="Validate"/> but the members': what a reader that checks the members one at a time
@@ -955,7 +1163,8 @@ public static class LexCorpus6Builder
                 .Take(2)
                 .ToArray();
             if (matches.Length == 0 &&
-                outcome.Source.Kind != Europe.EuFormexPackageOutcomeKind.Acquired)
+                outcome.Source.Kind != Europe.EuFormexPackageOutcomeKind.Acquired &&
+                !Europe.EuFormexMainBodyLegalContentProducer.CarriesArticles(outcome.Disposition))
             {
                 continue;
             }
@@ -1081,7 +1290,17 @@ public static class LexCorpus6Builder
                 return null;
             }
 
-            var admitted = rights.ChannelsAgreeOnAdmittingLicence;
+            // The policy the re-derivation names admits; without one, policy /1 (agreed_same_run_cc_by alone). A single-channel
+            // disposition admits only with its licence page, under option (b) only one observed live.
+            var policy = profileEnvelope.LuxembourgRederivation?.AdmissionPolicySha256;
+            var admitted = LuxembourgRightsAdmissionPolicies.Admits(policy, rights);
+            if (rights.ResolutionRuleSha256() is not null && profileEnvelope.LuxembourgRederivation is null)
+            {
+                refusal = LexCorpus6BuildRefusal.LuxembourgRightsEvidenceIncomplete;
+                detail = $"{record.ObjectRef.PublisherUri}: rights re-bound under resolution /2 without a re-derivation record";
+                return null;
+            }
+
             var rightsEvidence = new List<SourceArtifactRef>
             {
                 rights.SparqlObservations.EnumerationRef,
@@ -1089,6 +1308,23 @@ public static class LexCorpus6Builder
             };
             if (rights.SparqlObservation is not null) rightsEvidence.Add(rights.SparqlObservation.EvidenceRef);
             if (rights.InFileObservation is not null) rightsEvidence.Add(rights.InFileObservation.EvidenceRef);
+            // A single-channel admission cites its licence page and discloses it, with the page's observation time; a
+            // single-channel body the policy names but whose page is outside its evidence window is withheld, saying why.
+            LexCorpus6LuxembourgRightsDisclosure? disclosure = null;
+            var gaps = admitted ? new List<string>() : [rights.ReasonCode];
+            if (rights.LicencePage() is { } page && LuxembourgRightsChannelResolution.IsSingleChannel(rights.Disposition))
+            {
+                if (admitted)
+                {
+                    rightsEvidence.Add(page.PageRef);
+                    disclosure = LexCorpus6LuxembourgRightsDisclosure.Of(rights.Disposition, page);
+                }
+                else if (LuxembourgRightsAdmissionPolicies.Admits(policy, rights.Disposition))
+                {
+                    gaps.Add(LexCorpus6LuxembourgRightsDisclosure.OutsideEvidenceWindowGap);
+                }
+            }
+
             var selectedWemi = LexCorpus6LuxembourgWemiBinding.From(input.SelectedWemiCandidate);
             members.Add(MemberFromRecord(
                 PublisherId.LuLegilux,
@@ -1098,14 +1334,21 @@ public static class LexCorpus6Builder
                 new LexCorpus6LuxembourgRights(
                     selectedWemi,
                     rights.BoundRunIdentity,
-                    LexCorpus6LuxembourgRights.ComputeBindingSha256(
-                        record.RunIdentity,
-                        rights.BoundRunIdentity,
-                        selectedWemi.IdentitySha256),
+                    rights.ResolutionRuleSha256() is null
+                        ? LexCorpus6LuxembourgRights.ComputeBindingSha256(
+                            record.RunIdentity, rights.BoundRunIdentity, selectedWemi.IdentitySha256)
+                        : LexCorpus6LuxembourgRights.ComputeBindingSha256(
+                            record.RunIdentity, rights.BoundRunIdentity, selectedWemi.IdentitySha256, rights.ResolutionRuleSha256(),
+                            Luxembourg.LuxembourgInFileRightsReader.ReadingTwoProfileSha256,
+                            profileEnvelope.LuxembourgRederivation!.AdmissionPolicySha256, profileEnvelope.LuxembourgRederivation.Sha256),
                     rights.Disposition,
-                    SortArtifacts(rightsEvidence)),
+                    SortArtifacts(rightsEvidence))
+                {
+                    ResolutionRule = rights.ResolutionRuleSha256(),
+                    RightsDisclosure = disclosure,
+                },
                 Stage3OutcomesFor(stage3Outcomes, record.ObjectRef),
-                admitted ? [] : [rights.ReasonCode]));
+                gaps.Order(StringComparer.Ordinal).ToArray()));
         }
 
         var profileIdentities = ProfileIdentities(profileEnvelope);
@@ -1304,6 +1547,22 @@ public static class LexCorpus6Builder
             writer.WriteStartArray("evidence_refs");
             foreach (var artifact in member.LuxembourgRights.EvidenceRefs) WriteArtifactValue(writer, artifact);
             writer.WriteEndArray();
+            // Rights as the acquisition resolved them write no rule, so their bytes are what they always were.
+            if (member.LuxembourgRights.ResolutionRule is not null)
+            {
+                writer.WriteString("resolution_rule", member.LuxembourgRights.ResolutionRule);
+            }
+
+            if (member.LuxembourgRights.RightsDisclosure is { } disclosure)
+            {
+                writer.WriteStartObject("rights_disclosure");
+                writer.WriteString("code", disclosure.Code);
+                WriteArtifact(writer, "licence_page", disclosure.LicencePage);
+                writer.WriteString("observed_at", disclosure.ObservedAt);
+                writer.WriteBoolean("observed_live", disclosure.ObservedLive);
+                writer.WriteEndObject();
+            }
+
             writer.WriteEndObject();
         }
 
@@ -1456,6 +1715,22 @@ public static class LexCorpus6Builder
                     LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody,
                     outcome.SemanticIdentitySha256,
                     FormexMainBodyDisposition(outcome.Disposition)));
+
+            // The parts of the admitted package that are not served as text, each typed on the member its articles are
+            // read from, where the answers list annexes not served (review of #996, F2).
+            foreach (var part in outcome.PartsNotServed)
+            {
+                Add(pair.Value,
+                    new LexCorpus6Stage3Outcome(
+                        LexCorpus6Stage3OutcomeDomain.EuropeAnnexBody,
+                        part.IdentitySha256,
+                        part.Kind switch
+                        {
+                            Europe.EuFormexMainBodyPartKind.AnnexUnclassified => LexCorpus6Stage3Disposition.AnnexUnclassified,
+                            Europe.EuFormexMainBodyPartKind.TreatyPartNotServed => LexCorpus6Stage3Disposition.TreatyPartNotServed,
+                            _ => throw new InvalidOperationException("Unknown EU main-body part."),
+                        }));
+            }
         }
 
         return collected.ToDictionary(
@@ -1536,6 +1811,7 @@ public static class LexCorpus6Builder
             Europe.EuFormexMainBodyLegalContentDisposition.PackageNotAcquired => LexCorpus6Stage3Disposition.FormexMainBodyPackageNotAcquired,
             Europe.EuFormexMainBodyLegalContentDisposition.RouteRefused => LexCorpus6Stage3Disposition.FormexMainBodyRouteRefused,
             Europe.EuFormexMainBodyLegalContentDisposition.PackageRejected => LexCorpus6Stage3Disposition.FormexMainBodyPackageRejected,
+            Europe.EuFormexMainBodyLegalContentDisposition.AdmittedAnnexesUnclassified => LexCorpus6Stage3Disposition.FormexMainBodyAdmittedAnnexesUnclassified,
             _ => throw new InvalidOperationException("Unknown EU Formex main-body disposition."),
         };
 

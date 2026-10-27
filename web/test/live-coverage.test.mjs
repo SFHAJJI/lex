@@ -127,10 +127,10 @@ test("mounting asks once, hands the state over, and a cancel aborts and silences
 });
 
 test("a transport failure and an unreadable answer are said as what they are", async () => {
-  const notServed = answering(404, "application/problem+json", { code: "operation_not_served" });
+  const notServed = answering(404, "application/problem+json", { code: "unknown_route" });
   const failed = await loadLiveCoverage({ contract, fetchImpl: notServed.fetchImpl });
   assert.equal(failed.state, "transport_failure");
-  assert.match(view(failed), /data-answer-state="transport_failure"[^]*operation_not_served/);
+  assert.match(view(failed), /data-answer-state="transport_failure"[^]*unknown_route/);
 
   const html = answering(200, "text/html", "<html>");
   const unreadable = await loadLiveCoverage({ contract, fetchImpl: html.fetchImpl });

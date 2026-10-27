@@ -68,6 +68,14 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Api.SyntheticIndexResolver: constructor private instance "
                     + "Lex.V3.Api.SyntheticIndexResolver::.ctor, "
                     + "method public static Lex.V3.Api.SyntheticIndexResolver::Open",
+                "Lex.V3.Api.V3ClientLimiter: constructor internal instance "
+                    + "Lex.V3.Api.V3ClientLimiter::.ctor, "
+                    + "constructor private static Lex.V3.Api.V3ClientLimiter::.cctor",
+                "Lex.V3.Api.V3ClientLimiter+Admission: constructor internal instance "
+                    + "Lex.V3.Api.V3ClientLimiter+Admission::.ctor, "
+                    + "method internal instance Lex.V3.Api.V3ClientLimiter::AdmitApi, "
+                    + "method internal instance Lex.V3.Api.V3ClientLimiter::AdmitRender, "
+                    + "method private instance Lex.V3.Api.V3ApiHandler::AdmitRender",
                 "Lex.V3.Api.V3CorpusMount: constructor private instance "
                     + "Lex.V3.Api.V3CorpusMount::.ctor, "
                     + "constructor private static Lex.V3.Api.V3CorpusMount::.cctor, "
@@ -77,11 +85,19 @@ public sealed class GuardedConstructionCensusTests
                     + "method internal static Lex.V3.Api.V3PageRenderer::Open",
                 "Lex.V3.Api.V3PlatformOperationOutcome: constructor private instance "
                     + "Lex.V3.Api.V3PlatformOperationOutcome::.ctor, "
+                    + "method internal instance Lex.V3.Api.V3CorpusMount::RefuseOutOfScope, "
+                    + "method internal instance Lex.V3.Api.V3CorpusMount::Unserved, "
+                    // The names record's gate on every answer (R92; V3CorpusMount.Names.cs).
+                    + "method internal instance Lex.V3.Api.V3CorpusMount::WithNamesWithheld, "
                     + "method internal static Lex.V3.Api.V3ApiHandler::ExecuteFor, "
+                    + "method internal static Lex.V3.Api.V3ApiHandler::RateLimitedOutcome, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::AnchorNotInVersion, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::AsOfEurope, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::AsOfEuropeOf, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::AsOfEuropePinned, "
+                    // R77: an act only the catalogue holds is refused with its record (V3CorpusMount.CatalogueRecords.cs).
+                    + "method private instance Lex.V3.Api.V3CorpusMount::CatalogueOnlyRefusal, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::CatalogueRecordRefusal, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::DossierEurope, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::EuropeReference, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::EvidenceBundleEurope, "
@@ -89,6 +105,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::EvidenceBundleEuropeOf, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::EvidenceBundleEuropePinned, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::LocateEuropeSeed, "
+                    // EU search over the act's time view (the audit of 2026-10-27, gap 5; V3CorpusMount.EuropeSearch.cs).
+                    + "method private instance Lex.V3.Api.V3CorpusMount::LocateEuropeSeedForSearch, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::LocateEuropeSeedForTime, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::LocateEuropeWork, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::LuxembourgReference, "
@@ -99,23 +117,28 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseAmbiguousVersion, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseArticleNotInVersion, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseEuropeLanguage, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::RefuseEuropeSearchMode, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNamesWithheld, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
-                    // A version an ELI names that the interval rules do not serve on the date (S7a; the review of #987, F2).
+                    // An EU act outside the mounted EU population, refused out of scope (R80; V3CorpusMount.Scope.cs).
+                    + "method private instance Lex.V3.Api.V3CorpusMount::RefuseOutsideEuropePopulation, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseOutsideScope, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefusePageNotInVersion, "
-                    // The reader's interval rules on index 9 (S7a): a state without text, and a date no state covers.
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseTextless, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUncoveredNine, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUncoveredNine, "
                     + "method private instance "
                     + "Lex.V3.Api.V3CorpusMount::RefuseUnlessCursorOfThisLog, "
-                    + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUnlessPinnedOriginalWording, "
+                    + "method private instance "
+                    + "Lex.V3.Api.V3CorpusMount::RefuseUnlessPinnedOriginalWording, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUnlessPinnedState, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUnlessPinnedWording, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUnlessWorkStates, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RouteEuropeSearch, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::SearchEurope, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::SearchEuropeTime, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::SearchEuropeWordings, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::SearchReference, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::SelectEuropeAt, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::SitePathReference, "
@@ -153,7 +176,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Api.V3CorpusMount::Verify, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Refused, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Success, "
-                    + "24 compiler-generated",
+                    // ExecuteFor's dispatch names each operation's method, so its one lambda is the gates'.
+                    + "3 compiler-generated",
                 "Lex.V3.Api.V3PlatformSchemaDocuments: constructor private instance "
                     + "Lex.V3.Api.V3PlatformSchemaDocuments::.ctor, "
                     + "constructor private static Lex.V3.Api.V3PlatformSchemaDocuments::.cctor, "
@@ -303,6 +327,9 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Contracts.Evaluation.RetrievalMetrics::ReciprocalRank, "
                     + "5 compiler-generated",
+                // A text and its fold, made by the fold alone (the plan's item 4.4; TextFolding).
+                "Lex.V3.Contracts.Index.FoldedText: constructor internal instance Lex.V3.Contracts.Index.FoldedText::.ctor, "
+                    + "method public static Lex.V3.Contracts.Index.TextFolding::Folded",
                 "Lex.V3.Contracts.Index.V3IndexCapabilityManifest: by-ref-method public static "
                     + "Lex.V3.Contracts.Index.V3IndexCapabilityManifest::TryCreate, "
                     + "by-ref-method public static "
@@ -1666,16 +1693,30 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgResourceResolution::<Clone>$, "
                     + "2 compiler-generated",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsCatalogue: constructor private "
+                    + "instance Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsCatalogue::.ctor, "
+                    + "constructor private static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsCatalogue::.cctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsCatalogue::From",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelResolution: constructor "
                     + "internal instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelResolution::.ctor, "
                     + "constructor private instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelResolution::.ctor, "
+                    + "method internal instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelResolution::AsReso"
+                    + "lutionTwo, "
                     + "method public instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelResolution::<Clone"
                     + ">$, "
+                    + "method public instance "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelResolution::WithLi"
+                    + "cencePage, "
                     + "method public static "
-                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannels::Resolve",
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannels::Resolve, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannels::ResolveTwo",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgTranspositionIdentityDiscoveryPlan: "
                     + "constructor private instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgTranspositionIdentityDiscoveryP"

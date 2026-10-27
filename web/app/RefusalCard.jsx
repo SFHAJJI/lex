@@ -13,9 +13,9 @@
 // expression's own language, because hardcoding French mislabels every EU expression and makes a
 // screen reader read English law in a French voice.
 
-import { REFUSAL_CARD_COPY, candidateView, reasonView, validateRefusal, versionNameKey } from '../scripts/refusal-card.mjs';
+import { REFUSAL_CARD_COPY, candidateView, catalogueRecord, reasonView, validateRefusal, versionNameKey } from '../scripts/refusal-card.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG, fillText } from '../scripts/live-chrome.mjs';
-import { permalinkHref } from '../scripts/permalinks.mjs';
+import { isSiteAddress, permalinkHref } from '../scripts/permalinks.mjs';
 import { Say } from './LiveAnswer.jsx';
 import { TOKENS } from '../scripts/design-tokens.mjs';
 import { handoffUri } from '../scripts/routes.mjs';
@@ -133,8 +133,14 @@ function Payload({ parts, copy }) {
             <div className="strip-row" key={row.key}>
               <dt>{row.key}</dt>
               {/* A declared null is the card's own sentence; any other value is the platform's, in English
-                  where it is words, so a page in another language marks it English. */}
-              <dd lang={row.declaredNull ? undefined : ENGLISH_LANG}>{row.declaredNull ? copy.nullSentences[row.key] : row.value}</dd>
+                  where it is words, so a page in another language marks it English; a catalogue record's title is the
+                  act's own words, in their language (R77). */}
+              <dd lang={row.declaredNull || row.lang !== undefined ? undefined : ENGLISH_LANG}>
+                {row.declaredNull
+                  ? copy.nullSentences[row.key]
+                  : row.lang !== undefined ? <span lang={row.lang}>{row.value}</span>
+                    : row.href === undefined ? row.value : <a href={row.href} rel="external">{row.value}</a>}
+              </dd>
             </div>
           ))}
         </dl>
@@ -196,6 +202,12 @@ export function RefusalCard({ code, sentence, payload, governingText, handoff, c
       {(reasonView(card.code, card.payload, copy) ?? []).map((line) => (
         <p className="refusal-reason" key={line.key} data-reason={line.key}>{line.text}</p>
       ))}
+      {/* A catalogue record's page on this site (R77): the act's dossier, which shows this record. */}
+      {catalogueRecord(card.code, card.payload) && isSiteAddress(card.payload.record_address) ? (
+        <p className="refusal-reason" data-reason="catalogue.record">
+          <Say template={copy.catalogue.record} values={{ address: <a href={permalinkHref(card.payload.record_address, CHROME_LOCALE)}><code>{card.payload.record_address}</code></a> }} />
+        </p>
+      ) : null}
       {card.note ? <p className="refusal-note">{copy.notes[card.code]}</p> : null}
       <AbsenceEvidence absence={card.absence} copy={copy} />
       <Payload parts={card.payloadParts} copy={copy} />

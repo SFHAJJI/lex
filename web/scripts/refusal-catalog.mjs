@@ -92,11 +92,22 @@ export const REFUSAL_EXAMPLES = Object.freeze({
     },
   },
   out_of_corpus_scope: {
-    sentence: 'That instrument is outside the reviewed corpus.',
+    // What the platform sends (the registry's version 2, the plan's item 6.10): the instrument asked for, its official place, the
+    // reason and who to ask, an institution and never a person, as the checked-in out-of-scope list states them (`V3OutOfScope`),
+    // here with synthetic values on the reserved host the card admits for previews.
+    sentence: 'Lex never holds this kind of instrument: where it is published, and who to ask, follow.',
     payload: {
-      population_disclosure: 'The reviewed corpus holds Legilux and EUR-Lex legislation only.',
+      requested_identifier: 'Synthetic circular 00/000',
+      out_of_scope_class: 'cssf_circular',
+      instrument: 'a synthetic instrument of a synthetic institution',
+      reason: 'Synthetic instruments are published by their synthetic institution, not by Legilux or EUR-Lex, and Lex does not collect them.',
+      official_source: 'https://out-of-scope.invalid/',
+      who_to_ask: { name: 'Synthetic institution (SYN)', link: 'https://out-of-scope.invalid/', role: 'information' },
       what_would_answer: ['expanded_official_scope'],
+      what_would_answer_detail: 'Lex collecting this class of instrument, which it does not: the official place and who_to_ask name where it is published',
       asserts_absence_of_law: false,
+      scope_list: 'lex-v3-out-of-scope/1',
+      scope_list_sha256: '0'.repeat(64),
     },
   },
   no_version_for_date: {
@@ -280,9 +291,11 @@ export const REFUSAL_EXAMPLES = Object.freeze({
     sentence: 'The publisher did not answer.',
     payload: { host: 'preview.invalid' },
   },
+  // The per-client limit (R109): the client's own requests to this site, never the publisher's; the wait in whole seconds, as
+  // Retry-After says it, as the platform sends it (refusal-payload-samples.json).
   rate_limited: {
-    sentence: 'Too many requests reached the publisher.',
-    payload: { retry_after: '30s' },
+    sentence: 'Too many requests came from your address in the last minute.',
+    payload: { retry_after: 1, retryable: true },
   },
   advice_boundary: {
     sentence: 'I cannot apply the law to your situation.',
