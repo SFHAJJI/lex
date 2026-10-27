@@ -44,6 +44,17 @@ The audit of 2026-10-27, gaps 3 and 5; the plan's item 4.4; R59, R21, R107. `wri
 - **Not done**: exact-accent matches ranked first (no ranker; the order is still the stated one); quotation marks not
   stripped; ’ and ', and a no-break space and a space, stay different (measured on /9: "l'article" 9,168 passages,
   "l’article" 23,940): folding them is a change to the documented rule, for the owner's or the next slice's decision.
+- **Records and tests**: integration at b3896074 (#1003 carrying #1004) merged in (222a3cf6): the EU not-held rows keep
+  #1004's other-languages sentence, its `article_text` row dropped (the extracts serve the text). The schema-8 and EU /5 base
+  answers recorded again on Linux (WSL Ubuntu 24.04.4, .NET 10.0.11, invariant, UTC) at 222a3cf6: the two schema-8 searches
+  by their matching, lanes and extract sentences alone (no hit moved), the EU /5 search row by the time view's answer, no
+  other row; Windows replays them. The answer and envelope samples rendered from the handler (new: the phrase in capitals
+  without accents; an EU act's two wordings with no date, and at a date) and verified without the switches; the refusal
+  payloads did not move. `dotnet build Lex.V3.slnx -c Release`: 0 warnings, 0 errors; `Lex.V3.Tests`: 3,385, 3,379 passed,
+  6 skipped; `Lex.V3.Ingest.Tests`, the touched classes, every census class and `PublicRequestRecordingTests` (and the
+  gates, samples, legacy, EU search and time-view classes): 276, 272 passed, 4 skipped (recorders and the mount to evaluate);
+  `npm run build` then `npm test`: 1,486, 1,483 passed, 3 skipped (browser); `eng/verify-v3-tree.ps1`: 1,799 tracked paths.
+  New tests: `TextFoldingTests` (Lex.V3.Tests), `V3CorpusEuropeTimeSearchTests` (4), `web/test/text-folding.test.mjs`.
 ## The combine's two layout failures in CI's journeys (sole driver, 2026-10-27)
 
 CI's journeys at dfb8d82f failed two layout checks, both from #1004's changes:
