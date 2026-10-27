@@ -28,7 +28,11 @@
 //    wording digests are equal, changed when they are not; the counts are the rows';
 //  - a changed, added or removed article carries its text on each side as served (R57, `text_rule`), or null for a side
 //    whose rights do not admit it; from which the row's wording is read, word by word (`word-diff.mjs`): the status is
-//    still the digests', and a row with no text served says which side it is not shown for.
+//    still the digests', and a row with no text served says which side it is not shown for;
+//  - the wording is served in pages (`text_page`, the review of #1003, F4: at most 50 articles and 96 KiB a page): the page
+//    names its number, the count and its first and last article, which are changed, added or removed articles in the rows'
+//    order, and exactly the moved rows from the first to the last carry their texts; null where nothing moved; absent from
+//    an answer of a server before the pages, every moved row of which carries its text.
 
 import { isCalendarDate } from './temporal.mjs';
 import { SAME_STATE_ENTRY_INTO_FORCE_SENTENCE, SAME_STATE_SENTENCE } from './publisher-vocabulary.mjs';
@@ -229,8 +233,11 @@ function readComparison(comparison, index, context) {
     if (articlesValue !== null || countsValue !== null) {
       throw new Error(`${where} is the same state on both dates, which compares no article and counts none`);
     }
+    if (Object.hasOwn(comparison, 'text_page') && comparison.text_page !== null) {
+      throw new Error(`${where} is the same state on both dates, and names a page of wording`);
+    }
     // Its note is held to what the work is held as once the whole answer is read (`sameStateNoted`).
-    return { language, from, to, sameState, note, articles: null, counts: null };
+    return { language, from, to, sameState, note, articles: null, counts: null, textPage: null };
   }
 
   const rows = requireList(articlesValue, `${where} articles`).map((row, rowIndex) => {
@@ -266,7 +273,41 @@ function readComparison(comparison, index, context) {
       throw new Error(`${where} counts ${counts[status]} ${status}, and ${tallied} of its rows are`);
     }
   }
-  return { language, from, to, sameState, note, articles: Object.freeze(rows), counts: Object.freeze(counts) };
+  return { language, from, to, sameState, note, articles: Object.freeze(rows), counts: Object.freeze(counts), textPage: readTextPage(comparison, rows, where) };
+}
+
+/**
+ * The page of a comparison's wording its answer carries (`text_page`; the review of #1003, F4), held to its rows: its number
+ * from 1 to its count, its first and last article changed, added or removed and in the rows' order, and exactly the moved rows
+ * from the first to the last carrying their texts. Null where nothing moved, and for an answer of a server before the pages.
+ */
+function readTextPage(comparison, rows, where) {
+  if (!Object.hasOwn(comparison, 'text_page')) return null;
+  const value = comparison.text_page;
+  const moved = rows.filter((row) => row.status !== 'unchanged');
+  if (value === null) {
+    if (moved.length > 0) throw new Error(`${where} moves ${moved.length} articles and names no page of their wording`);
+    return null;
+  }
+  const at = `${where} text_page`;
+  const page = requireOwn(value, 'page', at);
+  const pages = requireOwn(value, 'pages', at);
+  if (!Number.isInteger(page) || !Number.isInteger(pages) || page < 1 || page > pages) {
+    throw new Error(`${at} is page ${JSON.stringify(page)} of ${JSON.stringify(pages)}`);
+  }
+  const first = requireText(requireOwn(value, 'first', at), `${at}.first`);
+  const last = requireText(requireOwn(value, 'last', at), `${at}.last`);
+  const start = moved.findIndex((row) => row.publisherId === first);
+  const end = moved.findIndex((row) => row.publisherId === last);
+  if (start < 0 || end < start) throw new Error(`${at} runs from ${first} to ${last}, which are not moved articles in the rows' order`);
+  moved.forEach((row, index) => {
+    const onPage = index >= start && index <= end;
+    const carries = [...row.from, ...row.to].some((entry) => Object.hasOwn(entry, 'text'));
+    if (onPage !== carries) {
+      throw new Error(`${at}: ${row.publisherId} is ${onPage ? 'on the page and carries no text' : 'on another page and carries its text'}`);
+    }
+  });
+  return Object.freeze({ page, pages, first, last });
 }
 
 /**

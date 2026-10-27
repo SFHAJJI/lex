@@ -377,6 +377,15 @@
 // address is "inscrit" in the page's only when the act is named by its address on this site: "lorsque l’acte est désigné par
 // son adresse sur ce site, ils sont aussi inscrits"), and approved the French of `wordingNotServed` with its English "This
 // article's wording".
+// Its supplement 2 (the review-and-repair round of #1003) reviewed 13 forms: `refusalCard.catalogue.held`, `heldRead` and
+// `versions` and `CATALOGUE_RECORD_SENTENCE`, which now say "montre" ("shows") since the site may hold the act's file; the
+// four held-file reasons `file_withheld`, `file_pdf_only`, `file_no_article_served` and `file_articles_no_state`; and
+// Compare's `wordingPage`, `wordingPageOne`, `wordingOtherPage`, `previousPage` and `nextPage` (8 approved, 5 changed in
+// French, 2 blocking in English: "The wording of the changes" spoke the EU's "wording of", so "The wording that changed" /
+// "Le libellé modifié"): a held file's rights "n’ont pas permis d’en admettre le texte" (a quarantine is no prohibition); one
+// subject in "ce site … et l’a admis, mais aucun article n’en est servi"; articles are "lus dans ce fichier"; a page is
+// "{first} à {last}", as a reading's. On its advice `refusalCard.textless` and `textlessNamed` say "montre" too, in its
+// French.
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
 
@@ -732,6 +741,11 @@ export const LIVE_CHROME_FR = Object.freeze({
       both: 'Le libellé de cet article n’est pas affiché : ce site ne communique le texte d’aucune des deux versions.',
     }),
     wordingWhole: 'Cet article a trop changé pour être comparé ici mot à mot : hormis le début et la fin éventuellement communs à ses deux textes, son texte à la date de départ est affiché comme supprimé et son texte à la date d’arrivée comme inséré, chacun d’un seul tenant.',
+    wordingPage: 'Le libellé modifié est affiché sur plusieurs pages ; voici la page {page} sur {pages} : {first} à {last}.',
+    wordingPageOne: 'Le libellé modifié est affiché sur plusieurs pages ; voici la page {page} sur {pages} : {first} seulement.',
+    wordingOtherPage: 'Le libellé de cet article figure sur une autre page de cette comparaison.',
+    previousPage: 'Page précédente du libellé',
+    nextPage: 'Page suivante du libellé',
   }),
   radar: Object.freeze({
     title: 'Radar',
@@ -910,11 +924,11 @@ export const LIVE_CHROME_FR = Object.freeze({
       not_available_misfiled: 'le fichier de l’éditeur qui lui est associé est celui d’une autre version',
       not_acquired: 'ce site n’a pas acquis cette version',
     }),
-    textless: 'La version qui couvre cette date, {version}, figure dans le catalogue de l’éditeur, et ce site n’en détient aucun texte : {why}. Aucune autre version n’est présentée à sa place.',
-    textlessNamed: 'Cette version, {version}, figure dans le catalogue de l’éditeur, et ce site n’en détient aucun texte : {why}.',
+    textless: 'La version qui couvre cette date, {version}, figure dans le catalogue de l’éditeur, et ce site n’en montre aucun texte : {why}. Aucune autre version n’est présentée à sa place.',
+    textlessNamed: 'Cette version, {version}, figure dans le catalogue de l’éditeur, et ce site n’en montre aucun texte : {why}.',
     catalogue: Object.freeze({
-      held: 'Cet acte figure dans le catalogue de l’éditeur, et ce site n’en détient aucun texte : {why}.',
-      heldRead: 'Cet acte figure dans le catalogue de l’éditeur, tel que ce site l’a lu au plus tard le {read}, et ce site n’en détient aucun texte : {why}.',
+      held: 'Cet acte figure dans le catalogue de l’éditeur, et ce site n’en montre aucun texte : {why}.',
+      heldRead: 'Cet acte figure dans le catalogue de l’éditeur, tel que ce site l’a lu au plus tard le {read}, et ce site n’en montre aucun texte : {why}.',
       reasons: Object.freeze({
         catalogue_licence_scl: 'l’éditeur place tous les fichiers XML et PDF du texte français de l’acte sous la licence licenceSCL, sous laquelle ce site ne reproduit aucun texte',
         catalogue_licence_scl_in_part: 'l’éditeur ne place qu’une partie des fichiers XML et PDF du texte français de l’acte sous la licence licenceSCL, et ce site n’en détient aucun',
@@ -923,6 +937,10 @@ export const LIVE_CHROME_FR = Object.freeze({
         catalogue_no_xml_or_pdf_manifestation: 'le catalogue de l’éditeur ne nomme aucun fichier XML ou PDF du texte français de l’acte',
         catalogue_translations_only: 'le catalogue de l’éditeur ne nomme le texte de l’acte que dans d’autres langues que le français',
         catalogue_no_expression: 'le catalogue de l’éditeur n’en nomme aucun texte',
+        file_withheld: 'ce site détient le fichier de l’éditeur, mais les droits de ce fichier n’ont pas permis d’en admettre le texte ({disposition})',
+        file_pdf_only: 'ce site détient le fichier de l’éditeur, un PDF dont aucun texte n’est servi',
+        file_no_article_served: 'ce site détient le fichier de l’éditeur et l’a admis, mais aucun article n’en est servi ({disposition})',
+        file_articles_no_state: 'ce site détient le fichier de l’éditeur et les articles lus dans ce fichier, mais aucune version de l’acte établie à partir d’eux, de sorte qu’aucun d’eux n’est servi',
       }),
       type: 'Son type dans les données de l’éditeur : {type} (typeDocument).',
       documentDate: 'Les données de l’éditeur indiquent le {dates} comme date de l’acte (dateDocument).',
@@ -931,7 +949,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       entryIntoForce: 'Son entrée en vigueur dans les données de l’éditeur : {dates} (dateEntryInForce).',
       status: 'Son statut dans les données de l’éditeur : {status} (inForceStatus).',
       historicalId: 'Son identifiant historique dans les données de l’éditeur : {id} (historicalLegalId).',
-      versions: 'Le catalogue de l’éditeur en recense {count} versions, et ce site ne détient le texte d’aucune.',
+      versions: 'Le catalogue de l’éditeur en recense {count} versions, et ce site ne montre le texte d’aucune.',
       record: 'Sa notice sur ce site : {address}',
     }),
   }),
@@ -1918,8 +1936,8 @@ export const REFUSALS_FR = Object.freeze({
     "According to Lex's check, this act names private individuals, so Lex shows neither its text nor its titles: read it at the publisher, by following the official link.":
       'D’après la vérification de Lex, cet acte nomme des personnes privées ; Lex n’en communique donc ni le texte ni les intitulés : lisez-le chez l’éditeur, en suivant le lien officiel.',
     // R77: an act the publisher's catalogue holds and Lex holds no version of, said on every screen that asks about one work.
-    "This act is in the publisher's catalogue, and Lex holds none of its text: its record follows.":
-      'Cet acte figure dans le catalogue de l’éditeur, et Lex n’en détient aucun texte : sa notice suit.',
+    "This act is in the publisher's catalogue, and Lex shows none of its text: its record follows.":
+      'Cet acte figure dans le catalogue de l’éditeur, et Lex n’en montre aucun texte : sa notice suit.',
     'This index holds this state but no text for it.':
       'Cet index contient cette version, mais aucun texte de celle-ci.',
     "This index cannot read this work's text.":

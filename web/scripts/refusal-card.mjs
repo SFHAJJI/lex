@@ -306,7 +306,7 @@ export const CATALOGUE_RECORD_KEYS = Object.freeze([
   'record_kind', 'reason', 'reason_rule', 'work_iri', 'work_key', 'record_address', 'act_iri', 'title', 'title_language',
   'document_type', 'document_type_codes', 'in_force_status_codes', 'date_document', 'publication_date', 'entry_into_force', 'no_longer_in_force', 'in_force_status',
   'memorial_issue', 'historical_legal_id', 'official_pdf', 'versions', 'version_kinds', 'version_reasons',
-  'record_evidence_sha256s', 'catalogue_read_no_later_than', 'rule',
+  'record_evidence_sha256s', 'catalogue_read_no_later_than', 'rule', 'disposition', 'version_dispositions',
 ]);
 
 /** The kind a catalogue record names itself by. */
@@ -1027,18 +1027,22 @@ const TEXT_NOT_HELD = Object.freeze({
 });
 
 /** The version a textless refusal names: the one covering the date asked, or the one a permalink names (no date asked). */
-const TEXTLESS = "The version that covers this date, {version}, is in the publisher's catalogue, and this site holds none of its text: {why}. No other version is shown in its place.";
-const TEXTLESS_NAMED = "This version, {version}, is in the publisher's catalogue, and this site holds none of its text: {why}.";
+// "Shows", not "holds": a textless version's reason may name a file this site holds (its rights, a PDF, a derivation; the
+// French review's supplement 2 to #1003, as the review of #1003, F1, found of the record of an act).
+const TEXTLESS = "The version that covers this date, {version}, is in the publisher's catalogue, and this site shows none of its text: {why}. No other version is shown in its place.";
+const TEXTLESS_NAMED = "This version, {version}, is in the publisher's catalogue, and this site shows none of its text: {why}.";
 /**
  * R77: an act the publisher's catalogue holds and this site holds no version of, said from its record (`catalogueRecord`):
- * that it is there and why no text of it is held (its reason, as Coverage counts it), then each fact the record states, by
+ * that it is there and why none of its text is shown (its reason, as Coverage counts it: what the catalogue states of a
+ * version of which no file is held, or, for one whose file is held, that file's bucket with its disposition, the review of
+ * #1003, F1), then each fact the record states, by
  * its role (R21: the act's date, its publication, its entry into force and its end of force, each the publisher's, never
  * merged), its status in the publisher's own word (the record's codes), its Mémorial issue and its historical identifier. A reason outside this
  * set is refused, so a new one is worded before it is shown.
  */
 const CATALOGUE_RECORD_COPY = Object.freeze({
-  held: "This act is in the publisher's catalogue, and this site holds none of its text: {why}.",
-  heldRead: "This act is in the publisher's catalogue, as this site read it no later than {read}, and this site holds none of its text: {why}.",
+  held: "This act is in the publisher's catalogue, and this site shows none of its text: {why}.",
+  heldRead: "This act is in the publisher's catalogue, as this site read it no later than {read}, and this site shows none of its text: {why}.",
   reasons: Object.freeze({
     catalogue_licence_scl: 'the publisher licenses every XML and PDF file of its French text under licenceSCL, which this site does not reproduce',
     catalogue_licence_scl_in_part: 'the publisher licenses some XML and PDF files of its French text under licenceSCL and the others otherwise, and this site holds none of them',
@@ -1047,6 +1051,10 @@ const CATALOGUE_RECORD_COPY = Object.freeze({
     catalogue_no_xml_or_pdf_manifestation: "the publisher's catalogue names no XML or PDF file of its French text",
     catalogue_translations_only: "the publisher's catalogue names its text in languages other than French only",
     catalogue_no_expression: "the publisher's catalogue names no text of it",
+    file_withheld: "this site holds the publisher's file of it, and that file's rights did not admit its text ({disposition})",
+    file_pdf_only: "this site holds the publisher's file of it, a PDF from which no text is served",
+    file_no_article_served: "this site holds the publisher's file of it, admitted, and no article of it is served ({disposition})",
+    file_articles_no_state: "this site holds the publisher's file of it and the articles read from it, and no version of the act built from them, so none of them is served",
   }),
   type: "Its type in the publisher's record: {type} (typeDocument).",
   documentDate: "The publisher's record gives {dates} as the act's date (dateDocument).",
@@ -1055,7 +1063,7 @@ const CATALOGUE_RECORD_COPY = Object.freeze({
   entryIntoForce: "Its entry into force in the publisher's record: {dates} (dateEntryInForce).",
   status: "Its status in the publisher's record: {status} (inForceStatus).",
   historicalId: "Its historical identifier in the publisher's record: {id} (historicalLegalId).",
-  versions: "The publisher's catalogue lists {count} versions of it, and this site holds the text of none of them.",
+  versions: "The publisher's catalogue lists {count} versions of it, and this site shows the text of none of them.",
   record: 'Its record on this site: {address}',
 });
 
@@ -1063,6 +1071,14 @@ const CATALOGUE_RECORD_COPY = Object.freeze({
 function memorialIssue(iri) {
   const match = /\/eli\/etat\/leg\/memorial\/([0-9]{4})\/a([0-9]+)$/.exec(typeof iri === 'string' ? iri : '');
   return match === null ? null : { year: match[1], number: String(Number(match[2])) };
+}
+
+/** Throws when a reason's sentence names a disposition the record does not carry as a text; else null. */
+function requireDisposition(template, payload) {
+  if (template.includes('{disposition}') && (typeof payload.disposition !== 'string' || payload.disposition.length === 0)) {
+    throw new Error(`a catalogue record's reason ${JSON.stringify(payload.reason)} names its disposition, and the record carries none`);
+  }
+  return null;
 }
 
 /** The card's own sentences above a catalogue record (R77), each a copy key and its text filled with the record's values. */
@@ -1076,7 +1092,11 @@ function catalogueRecordView(payload, copy) {
   const read = payload.catalogue_read_no_later_than;
   const lines = [{
     key: 'catalogue.held',
-    text: fillCard(typeof read === 'string' && read.length > 0 ? said.heldRead : said.held, { read, why: said.reasons[reason] }),
+    // A held file's reason names its disposition or dispositions as Coverage prints them, the data's own token.
+    text: requireDisposition(said.reasons[reason], payload) ?? fillCard(typeof read === 'string' && read.length > 0 ? said.heldRead : said.held, {
+      read,
+      why: fillCard(said.reasons[reason], { disposition: payload.disposition }),
+    }),
   }];
   const add = (key, template, values) => lines.push({ key: `catalogue.${key}`, text: fillCard(template, values) });
   if (list('document_type_codes').length > 0) add('type', said.type, { type: list('document_type_codes').join(', ') });

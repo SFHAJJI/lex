@@ -11,7 +11,11 @@
 // words inserted underlined, each also said in words hidden from sight, so a screen reader reads it linearly and nothing is
 // said by colour alone; an added article is its text inserted, a removed one its text deleted. A jump list leads to each
 // change, and each change to the previous and the next. The wording is the text each side serves (`diff`'s `text_rule`),
-// compared word by word (`scripts/word-diff.mjs`); the status is still the digests'. What an answer means is decided
+// compared word by word (`scripts/word-diff.mjs`); the status is still the digests'. It is served in pages (the review of
+// #1003, F4: at most 50 articles and 96 KiB a page, as a reading's): a comparison of more than one page says which page it
+// shows, by its first and last article, links to the pages before and after it (at the comparison's address, `page=N`, which
+// the server renders; a comparison with no address asks the page in place), and says of each change on another page that its
+// wording is there. What an answer means is decided
 // elsewhere: `scripts/live-compare.mjs` builds the request
 // and maps the answer to a view state, `scripts/compare-answer.mjs` reads and recomputes the
 // comparison, and `RefusalCard` lays out a refusal. This file lays the view out and marks the state
@@ -109,13 +113,14 @@ function changeId(language, index) {
   return `change-${language}-${index + 1}`;
 }
 
-function Row({ row, language, change = null }) {
+function Row({ row, language, change = null, elsewhere = false }) {
   // The whole digest, never a prefix: a prefix is not the digest a reader can check (review of #783).
   const digest = (entries) => (entries.length === 0 ? COPY.noWording : <code>{entries.map((entry) => entry.wordingSha256).join(', ')}</code>);
   return (
     <li id={change === null ? undefined : changeId(language, change.index)} data-status={row.status}>
       <Say template={COPY.row} values={{ article: <strong>{row.publisherId}</strong>, status: COPY.status[row.status], from: digest(row.from), to: digest(row.to) }} />
       <Wording wording={row.wording} language={language} />
+      {elsewhere ? <p data-wording-elsewhere="">{COPY.wordingOtherPage}</p> : null}
       {change === null ? null : (
         // The previous and next change (R57), as links any reader can follow, the keyboard's included.
         <p className="change-nav" data-change-nav="">
@@ -125,6 +130,37 @@ function Row({ row, language, change = null }) {
         </p>
       )}
     </li>
+  );
+}
+
+/**
+ * The page of a comparison's wording shown (the review of #1003, F4), by its first and last article, and the links to the pages
+ * before and after it: at the comparison's address (`hrefOf`), which the server renders, or, for a comparison with no address,
+ * a button that asks that page in place (`onPage`). Nothing for a comparison of one page.
+ */
+function WordingPages({ textPage, hrefOf, onPage }) {
+  if (textPage === null || textPage.pages < 2) return null;
+  const go = (page, label) => {
+    const href = hrefOf(page);
+    if (href !== null) return <a href={href} rel={page < textPage.page ? 'prev' : 'next'}>{label}</a>;
+    return <button type="button" onClick={() => onPage?.(page)}>{label}</button>;
+  };
+  const before = textPage.page > 1;
+  const after = textPage.page < textPage.pages;
+  return (
+    <div data-wording-pages={`${textPage.page}/${textPage.pages}`}>
+      <p>
+        <Say
+          template={textPage.first === textPage.last ? COPY.wordingPageOne : COPY.wordingPage}
+          values={{ page: textPage.page, pages: textPage.pages, first: textPage.first, last: textPage.last }}
+        />
+      </p>
+      <p className="change-nav">
+        {before ? go(textPage.page - 1, COPY.previousPage) : null}
+        {before && after ? COMMON_LIST_SEPARATOR : null}
+        {after ? go(textPage.page + 1, COPY.nextPage) : null}
+      </p>
+    </div>
   );
 }
 
@@ -200,8 +236,10 @@ function sameStateTemplate(comparison) {
   return comparison.onlyTextHeld ? COPY.sameTextHeld : COPY.sameTextHeldOfSeveral;
 }
 
-function Comparison({ comparison, between }) {
+function Comparison({ comparison, between, hrefOf, onPage }) {
   const moved = comparison.articles?.filter((row) => row.status !== 'unchanged') ?? [];
+  // A change whose wording is on another page of the comparison (the review of #1003, F4) says so.
+  const paged = comparison.textPage !== null && comparison.textPage.pages > 1;
   const kept = comparison.articles?.filter((row) => row.status === 'unchanged') ?? [];
   return (
     <section data-comparison={comparison.language}>
@@ -231,9 +269,12 @@ function Comparison({ comparison, between }) {
             />
           </p>
           <JumpList moved={moved} language={comparison.language} />
+          <WordingPages textPage={comparison.textPage} hrefOf={hrefOf} onPage={onPage} />
           {moved.length > 0 ? (
             <ol data-moved={moved.length}>
-              {moved.map((row, index) => <Row key={row.publisherId} row={row} language={comparison.language} change={{ index, count: moved.length }} />)}
+              {moved.map((row, index) => (
+                <Row key={row.publisherId} row={row} language={comparison.language} change={{ index, count: moved.length }} elsewhere={paged && row.wording === null} />
+              ))}
             </ol>
           ) : null}
           {kept.length > 0 ? (
@@ -251,7 +292,9 @@ function Comparison({ comparison, between }) {
 }
 
 /** One comparison view, laid out: each compared language, the languages not compared, the rule. */
-export function CompareView({ view }) {
+export function CompareView({ view, onPage = null }) {
+  // The address of another page of this comparison's wording, or null when its work is no address of this site of an act.
+  const hrefOf = (page) => compareQueryOf({ identifier: view.identifier, dateFrom: view.dateFrom, dateTo: view.dateTo, language: view.language ?? '', page });
   return (
     <>
       <p data-compare-summary="">
@@ -263,7 +306,9 @@ export function CompareView({ view }) {
       </p>
       {/* An act held only as published says so here as on its reading and its dossier (the review of #964). */}
       <AsPublished asPublished={view.asPublished} />
-      {view.comparisons.map((comparison) => <Comparison key={comparison.language} comparison={comparison} between={view.laterVersionsBetween} />)}
+      {view.comparisons.map((comparison) => (
+        <Comparison key={comparison.language} comparison={comparison} between={view.laterVersionsBetween} hrefOf={hrefOf} onPage={onPage} />
+      ))}
       {view.languagesNotCompared.length > 0 ? (
         <ul data-not-compared={view.languagesNotCompared.length}>
           {view.languagesNotCompared.map((entry) => (
@@ -281,11 +326,11 @@ export function CompareView({ view }) {
 }
 
 /** One view state, laid out: the comparison, the refusal card, or the sentence a state carries. */
-export function CompareAnswerView({ outcome, onRetry }) {
+export function CompareAnswerView({ outcome, onRetry, onPage = null }) {
   if (outcome.state === 'success') {
     return (
       <section data-answer-state="success">
-        <CompareView view={outcome.view} />
+        <CompareView view={outcome.view} onPage={onPage} />
       </section>
     );
   }
@@ -322,8 +367,8 @@ const COMPARE_TODAY_HINT = 'compare-today';
 function fieldsOf(search) {
   const asked = compareOfQuery(search ?? '');
   return asked === null
-    ? { identifier: '', dateFrom: '', dateTo: '', language: '' }
-    : { identifier: asked.identifier, dateFrom: asked.date_from, dateTo: asked.date_to, language: asked.language ?? '' };
+    ? { identifier: '', dateFrom: '', dateTo: '', language: '', page: null }
+    : { identifier: asked.identifier, dateFrom: asked.date_from, dateTo: asked.date_to, language: asked.language ?? '', page: asked.page ?? null };
 }
 
 /** The query of a path the page was rendered at (`/en/compare.html?work=…`), with its `?`, or empty. */
@@ -407,7 +452,7 @@ export function LiveCompare({ contract, fetchImpl, initial = null }) {
         <button type="submit">{FORM.submit.compare}</button>
       </form>
       <LiveAnswer>
-        <CompareAnswerView outcome={outcome} onRetry={() => session.current.retry()} />
+        <CompareAnswerView outcome={outcome} onRetry={() => session.current.retry()} onPage={(page) => session.current.askPage(page)} />
       </LiveAnswer>
     </div>
   );

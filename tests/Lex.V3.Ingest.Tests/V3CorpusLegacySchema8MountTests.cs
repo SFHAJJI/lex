@@ -190,6 +190,62 @@ public sealed class V3CorpusLegacySchema8MountTests
         Assert.Fail($"V3_RECORD_LEGACY_ANSWERS recorded {output} and checked nothing: run again without the variable, which is the only run that checks anything.");
     }
 
+    /// <summary>
+    /// The review of #1003, F1, on the real bounded first mount (schema 6): its one act, <c>loi/2017/03/14/a439/jo</c>, whose file
+    /// the corpus holds (acquired, <c>agreed_same_run_cc_by</c>) and whose four admitted articles its index holds with no state of
+    /// it, is recorded with the reason Coverage counts that file under, counted here over the same committed files: a file with
+    /// text, of which no state is served, with the receipt of the file's body as its retained transport evidence; never as a
+    /// version of which no file is held (<c>catalogue_cc_by_not_acquired</c>, which the record said before the repair).
+    /// </summary>
+    [TestMethod]
+    public async Task TheSchema6ActsRecordGivesTheReasonCoverageCountsItsHeldFileUnder()
+    {
+        var corpusBytes = Schema6("lex-corpus-6.json");
+        var directory = Path.Combine(Path.GetTempPath(), $"lex-v3-legacy6-record-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            await File.WriteAllBytesAsync(Path.Combine(directory, V3CorpusMount.CorpusFileName), corpusBytes);
+            await File.WriteAllBytesAsync(Path.Combine(directory, V3CorpusMount.IndexFileName), Schema6("luxembourg-index.sqlite3"));
+            await File.WriteAllBytesAsync(Path.Combine(directory, V3CorpusMount.CapabilityManifestFileName), Schema6("luxembourg-capability-manifest.json"));
+            const string Act = "http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a439/jo";
+            var members = VerifiedLexCorpus6ManifestSet.ParseCanonicalAndVerify(corpusBytes).Set.Members;
+            var file = members.Single(member => member.LuxembourgRights?.SelectedWemi.RootIri == Act);
+            Assert.AreEqual(LexCorpus6OutcomeKind.Acquired, file.Outcome, "the fixture's act is acquired");
+            var coverage = V3TextYield.FromMount(members, Path.Combine(directory, V3CorpusMount.IndexFileName), null)
+                .Publishers.Single().Classes.Single(static row => row.Family == "loi" && row.Kind == "as_published");
+            Assert.HasCount(0, coverage.VersionsNotHeld!, "Coverage counts the act's file, not a version of which no file is held");
+            Assert.AreEqual((1L, 1L, 4L), (coverage.Files, coverage.FilesWithText, coverage.Articles), "a file with text: its four articles");
+
+            using (var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None))
+            {
+                Assert.IsNotNull(mount);
+                foreach (var identifier in new[] { "/lu-legilux/loi-2017-03-14-a439", Act })
+                {
+                    var request = JsonSerializer.Serialize(new { operation_id = "dossier", parameters = new { identifier } });
+                    var (status, body) = await LegacyMountAnswers.RespondAsync(mount, "dossier", request, "schema6-record");
+                    Assert.AreEqual(200, status, identifier);
+                    using var envelope = JsonDocument.Parse(body);
+                    var refusal = envelope.RootElement.GetProperty("refusal");
+                    Assert.AreEqual("text_not_available", refusal.GetProperty("code").GetString(), identifier);
+                    var payload = refusal.GetProperty("helpful_payload");
+                    Assert.AreEqual(V3CorpusMount.FileArticlesNoState, payload.GetProperty("reason").GetString(), identifier);
+                    Assert.AreEqual(JsonValueKind.Null, payload.GetProperty("disposition").ValueKind, identifier);
+                    CollectionAssert.AreEqual(new[] { V3CorpusMount.FileArticlesNoState },
+                        payload.GetProperty("version_reasons").EnumerateArray().Select(static value => value.GetString()).ToArray(), identifier);
+                    Assert.AreEqual(JsonValueKind.Null, payload.GetProperty("version_dispositions").EnumerateArray().Single().ValueKind, identifier);
+                    Assert.AreEqual(file.BodyReceiptSha256, payload.GetProperty("retained_transport_evidence").GetString(), identifier);
+                    CollectionAssert.AreEqual(new[] { "new_official_observation" },
+                        payload.GetProperty("what_would_answer").EnumerateArray().Select(static value => value.GetString()).ToArray(), identifier);
+                }
+            }
+        }
+        finally
+        {
+            try { Directory.Delete(directory, recursive: true); } catch (IOException) { }
+        }
+    }
+
     private static async Task ReplayAsync(
         byte[] corpus, byte[] index, byte[] manifest, JsonElement rows)
     {

@@ -626,9 +626,12 @@ internal sealed partial class V3CorpusMount
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-    /// <summary>Whether the publisher's catalogue states anything of a work, or of a version or expression of it.</summary>
+    /// <summary>
+    /// Whether the publisher's catalogue states anything of a work, or of a version or expression of it. An IRI with no work's
+    /// shape (a whole act type, a year) names none and reads no range of the catalogue (the review of #1003, F2).
+    /// </summary>
     private bool CatalogueNames(string workIri) =>
-        _reader!.ResolveFacts([workIri]).Count > 0 || _reader.ResolveSubjectsUnder(workIri + "/").Count > 0;
+        IsWorkShape(workIri) && (_reader!.ResolveFacts([workIri]).Count > 0 || _reader.ResolveSubjectsUnder(workIri + "/").Count > 0);
 
     /// <summary>
     /// The catalogue's subjects of one Mémorial issue (by its IRI) or of one historical legal identifier, from the fact table

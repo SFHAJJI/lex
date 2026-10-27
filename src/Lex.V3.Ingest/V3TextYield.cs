@@ -416,7 +416,9 @@ public sealed record V3TextYield(string Schema, IReadOnlyList<V3TextYieldPublish
             tally.Files++;
             var served = inputs.ArticlesByObject.GetValueOrDefault(member.ObjectRefSha256);
             var pdf = IsPdfFormat(wemi.FormatIri);
-            if (served > 0)
+            // One rule for a held file's bucket, which the API's record of an act the index holds no version of says too (R77).
+            var held = HeldFile(member, served);
+            if (held.Bucket == HeldFileWithText)
             {
                 counted++;
                 tally.FilesWithText++;
@@ -424,20 +426,21 @@ public sealed record V3TextYield(string Schema, IReadOnlyList<V3TextYieldPublish
                 tally.VersionsWithText.Add(root);
                 tally.WorksWithText.Add(work);
             }
-            else if (member.Outcome == LexCorpus6OutcomeKind.RightsWithheld)
-            {
-                var reason = ContractWire.NameOf(member.LuxembourgRights.Disposition);
-                var (files, pdfFiles) = tally.Withheld.GetValueOrDefault(reason);
-                tally.Withheld[reason] = (files + 1, pdfFiles + (pdf ? 1 : 0));
-            }
-            else if (pdf)
-            {
-                tally.PdfOnly++;
-            }
             else
             {
-                var reason = DispositionsOf(member, LexCorpus6Stage3OutcomeDomain.LuxembourgAknLegalContent);
-                tally.ParseFailed[reason] = tally.ParseFailed.GetValueOrDefault(reason) + 1;
+                switch (held.Bucket)
+                {
+                    case HeldFileWithheld:
+                        var (files, pdfFiles) = tally.Withheld.GetValueOrDefault(held.Reason!);
+                        tally.Withheld[held.Reason!] = (files + 1, pdfFiles + (pdf ? 1 : 0));
+                        break;
+                    case HeldFilePdfOnly:
+                        tally.PdfOnly++;
+                        break;
+                    default:
+                        tally.ParseFailed[held.Reason!] = tally.ParseFailed.GetValueOrDefault(held.Reason!) + 1;
+                        break;
+                }
             }
         }
 
@@ -647,6 +650,54 @@ public sealed record V3TextYield(string Schema, IReadOnlyList<V3TextYieldPublish
         return NotHeldReason(FactsBySubject(facts.Where(static fact => CataloguePredicates.Contains(fact.Predicate, StringComparer.Ordinal))), state);
     }
 
+    /// <summary>The bucket of a held Luxembourg file of which the index holds articles (<c>files_with_text</c>).</summary>
+    public const string HeldFileWithText = "files_with_text";
+
+    /// <summary>The bucket of a held Luxembourg file served without text whose rights withhold its text (<c>files_withheld</c>).</summary>
+    public const string HeldFileWithheld = "files_withheld";
+
+    /// <summary>The bucket of a held, admitted Luxembourg PDF file served without text (<c>files_pdf_only</c>).</summary>
+    public const string HeldFilePdfOnly = "files_pdf_only";
+
+    /// <summary>The bucket of a held, admitted Luxembourg file of which no article is served (<c>files_parse_failed</c>).</summary>
+    public const string HeldFileParseFailed = "files_parse_failed";
+
+    /// <summary>
+    /// Where this block counts a held Luxembourg file of which no article is served: its bucket (<see cref="HeldFileWithheld"/>,
+    /// <see cref="HeldFilePdfOnly"/>, <see cref="HeldFileParseFailed"/>) and the reason it is counted under there (the rights
+    /// disposition's wire name, none for a PDF, the legal-content dispositions joined with <c>+</c>). One rule, which the count
+    /// applies and the API's record of an act the index holds no version of says (R77), so the two never disagree.
+    /// </summary>
+    public static (string Bucket, string? Reason) HeldFileWithoutText(LexCorpus6Member member)
+    {
+        return HeldFile(member, 0);
+    }
+
+    /// <summary>
+    /// Where this block counts a held Luxembourg file the index holds <paramref name="articles"/> articles of: with text
+    /// (<see cref="HeldFileWithText"/>, no reason) when it holds any, else as <see cref="HeldFileWithoutText"/> says. One rule,
+    /// which the count applies and the API's record of an act the index holds no version of says (R77): a file whose articles
+    /// the index holds while it holds no state of its version is counted with text here, and the record says so.
+    /// </summary>
+    public static (string Bucket, string? Reason) HeldFile(LexCorpus6Member member, long articles)
+    {
+        ArgumentNullException.ThrowIfNull(member);
+        var rights = member.LuxembourgRights ?? throw new ArgumentException("A held Luxembourg file carries its rights evidence.", nameof(member));
+        if (articles > 0)
+        {
+            return (HeldFileWithText, null);
+        }
+
+        if (member.Outcome == LexCorpus6OutcomeKind.RightsWithheld)
+        {
+            return (HeldFileWithheld, ContractWire.NameOf(rights.Disposition));
+        }
+
+        return IsPdfFormat(rights.SelectedWemi.FormatIri)
+            ? (HeldFilePdfOnly, null)
+            : (HeldFileParseFailed, DispositionsOf(member, LexCorpus6Stage3OutcomeDomain.LuxembourgAknLegalContent));
+    }
+
     /// <summary>
     /// The versions of one work among catalogue subjects, as this block counts them (each subject an ELI state of the work: its act
     /// as published <c>{work}/jo</c>, a consolidation <c>{work}/consolide/{yyyymmdd}</c> or a code's <c>{work}/{yyyymmdd}</c>), each
@@ -666,6 +717,9 @@ public sealed record V3TextYield(string Schema, IReadOnlyList<V3TextYieldPublish
 
     /// <summary>A catalogue version's kind as the index names a state's (<c>as_published</c>, <c>consolidation</c>, <c>code</c>), or null.</summary>
     public static string? CatalogueVersionKindOf(string subject) => LuxembourgIndexBuilder.StateKindOf(subject);
+
+    /// <summary>The work a catalogue version or a held file's root belongs to (<c>{work}/jo</c>, a consolidation, a code's version), or null.</summary>
+    public static string? CatalogueVersionWorkOf(string subject) => LuxembourgEliState.WorkOf(subject);
 
     /// <summary>
     /// What the catalogue says of a state of which no file is held: that it names no expression, or translations only; that

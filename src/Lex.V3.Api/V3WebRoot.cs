@@ -708,8 +708,9 @@ internal sealed partial class V3WebRoot
     /// <c>from</c> and <c>to</c> once and <c>language</c> at most once, a value form-decoded (<c>+</c> a space, <c>%HH</c> UTF-8
     /// bytes; a malformed escape or bytes that are not UTF-8 name nothing); the work this site's address of a Luxembourg act
     /// (<c>/lu-legilux/{work key}</c>), never words (R109: no word a reader types reaches an address a server could record); two
-    /// calendar dates; a language the form offers, or none (empty). Any other name is ignored. As <c>compareOfQuery</c> in
-    /// <c>web/scripts/permalinks.mjs</c> (a test holds the two to one table).
+    /// calendar dates; a language the form offers, or none (empty); and <c>page</c>, at most once, the page of the wording asked
+    /// (<c>diff</c>'s <c>page</c>, the review of #1003, F4), a whole number from 2 written without a leading zero. Any other name
+    /// is ignored. As <c>compareOfQuery</c> in <c>web/scripts/permalinks.mjs</c> (a test holds the two to one table).
     /// </summary>
     internal static Dictionary<string, object>? CompareOfQuery(string? query)
     {
@@ -723,7 +724,7 @@ internal sealed partial class V3WebRoot
         {
             var equals = part.IndexOf('=', StringComparison.Ordinal);
             var name = equals < 0 ? part : part[..equals];
-            if (name is not ("work" or "from" or "to" or "language"))
+            if (name is not ("work" or "from" or "to" or "language" or "page"))
             {
                 continue;
             }
@@ -753,8 +754,27 @@ internal sealed partial class V3WebRoot
             parameters["language"] = language;
         }
 
+        if (values.TryGetValue("page", out var pageText))
+        {
+            if (!ComparePage.IsMatch(pageText))
+            {
+                return null;
+            }
+
+            var page = int.Parse(pageText, System.Globalization.CultureInfo.InvariantCulture);
+            if (page < 2 || page > 100_000)
+            {
+                return null;
+            }
+
+            parameters["page"] = page;
+        }
+
         return parameters;
     }
+
+    /// <summary>A comparison's page as its address writes it: a whole number, no leading zero (checked from 2 to the schema's maximum).</summary>
+    private static readonly Regex ComparePage = new("^[1-9][0-9]{0,5}\\z", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
 
     /// <summary>A comparison's work: this site's address of a Luxembourg act, a work key's characters and nothing else.</summary>
     private static readonly Regex CompareWork = new("^/lu-legilux/[a-z0-9][a-z0-9_-]{0,511}\\z", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));

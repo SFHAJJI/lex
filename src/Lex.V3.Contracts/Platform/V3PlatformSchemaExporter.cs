@@ -236,7 +236,8 @@ public static class V3PlatformSchemaExporter
             ("identifier", NonBlankString()),
             ("date_from", CivilDate()),
             ("date_to", CivilDate()),
-            ("language", NonBlankString())),
+            ("language", NonBlankString()),
+            ("page", PageNumber())),
         "changes_in_period" => Parameters(
             ["date_from", "date_to"],
             ("date_from", CivilDate()),
@@ -401,8 +402,9 @@ public static class V3PlatformSchemaExporter
     };
 
     /// <summary>
-    /// A page of a version's reading, counted from 1 (<c>evidence_bundle</c>): the operation refuses a page past the version's
-    /// last as an anchor the version does not hold (<c>anchor_not_in_version</c>), naming the version's pages.
+    /// A page of a version's reading, counted from 1 (<c>evidence_bundle</c>), or of a comparison's wording (<c>diff</c>, R57):
+    /// the operation refuses a page past the last as an anchor the version does not hold (<c>anchor_not_in_version</c>),
+    /// naming the pages.
     /// </summary>
     private static JsonObject PageNumber() => new()
     {

@@ -14,7 +14,7 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup, renderToString } from "react-dom/server";
 
 import { CompareAnswerView, DossierAnswerView, LIVE_COMPARE_ROOT, RefusalCard, liveCompareTree, renderLiveComparePage } from "../.react-build/app.mjs";
-import { compareOutcome } from "../scripts/live-compare.mjs";
+import { compareOutcome, compareParameters } from "../scripts/live-compare.mjs";
 import { dossierOutcome } from "../scripts/live-dossier.mjs";
 import { readingOutcome } from "../scripts/live-reading.mjs";
 import { searchOutcome } from "../scripts/live-search.mjs";
@@ -181,7 +181,7 @@ test("an act held only in the publisher's catalogue is said in one sentence on e
   assert.ok(markup.includes('<h2 data-catalogue-record="">loi-1991-08-10-n5</h2>'), "the act, by the address this site gives it");
   assert.ok(markup.includes('<p data-catalogue-title=""><span lang="fr">Loi du 10 août 1991 portant approbation de la Convention de La Haye</span></p>'), "its title, in its language");
   for (const said of [
-    "This act is in the publisher's catalogue, as this site read it no later than 2026-10-01T08:00:00Z, and this site holds none of its text: the publisher licenses every XML and PDF file of its French text under licenceSCL, which this site does not reproduce.",
+    "This act is in the publisher's catalogue, as this site read it no later than 2026-10-01T08:00:00Z, and this site shows none of its text: the publisher licenses every XML and PDF file of its French text under licenceSCL, which this site does not reproduce.",
     "Its type in the publisher's record: LOI (typeDocument).",
     "The publisher's record gives 1991-08-10 as the act's date (dateDocument).",
     "The publisher's record gives 1991-08-23 as its publication date (publicationDate).",
@@ -216,4 +216,90 @@ test("an act held only in the publisher's catalogue is said in one sentence on e
   // A reason the card does not word is refused, so a new one is worded before it is shown.
   assert.throws(() => validateRefusal({ code: "text_not_available", sentence: CATALOGUE_RECORD_SENTENCE, payload: RECORD_DOSSIER.refusal.helpful_payload }) &&
     renderToStaticMarkup(h(RefusalCard, { code: "text_not_available", sentence: CATALOGUE_RECORD_SENTENCE, payload: { ...RECORD_DOSSIER.refusal.helpful_payload, reason: "catalogue_unworded" } })), /words catalogue_licence_scl/);
+});
+
+test("a record whose act's file this site holds names the bucket Coverage counts that file under, with its disposition, in English and in French", () => {
+  const base = RECORD_DOSSIER.refusal.helpful_payload;
+  const cases = [
+    ["file_withheld", "typed_quarantine_in_file_reading_rejected",
+      "this site holds the publisher's file of it, and that file's rights did not admit its text (typed_quarantine_in_file_reading_rejected)",
+      "ce site détient le fichier de l’éditeur, mais les droits de ce fichier n’ont pas permis d’en admettre le texte (typed_quarantine_in_file_reading_rejected)"],
+    ["file_pdf_only", null, "this site holds the publisher's file of it, a PDF from which no text is served",
+      "ce site détient le fichier de l’éditeur, un PDF dont aucun texte n’est servi"],
+    ["file_no_article_served", "akn_unsupported_content_shape",
+      "this site holds the publisher's file of it, admitted, and no article of it is served (akn_unsupported_content_shape)",
+      "ce site détient le fichier de l’éditeur et l’a admis, mais aucun article n’en est servi (akn_unsupported_content_shape)"],
+    ["file_articles_no_state", null,
+      "this site holds the publisher's file of it and the articles read from it, and no version of the act built from them, so none of them is served",
+      "ce site détient le fichier de l’éditeur et les articles lus dans ce fichier, mais aucune version de l’acte établie à partir d’eux, de sorte qu’aucun d’eux n’est servi"],
+  ];
+  for (const [reason, disposition, english, french] of cases) {
+    const payload = { ...base, reason, disposition, version_reasons: [reason], version_dispositions: [disposition] };
+    validateRefusal({ code: "text_not_available", sentence: CATALOGUE_RECORD_SENTENCE, payload });
+    const [lead] = reasonView("text_not_available", payload);
+    assert.ok(lead.text.endsWith(`and this site shows none of its text: ${english}.`), lead.text);
+    const [frenchLead] = reasonView("text_not_available", payload, LIVE_CHROME.fr.refusalCard);
+    assert.ok(frenchLead.text.endsWith(`et ce site n’en montre aucun texte\u00a0: ${french}.`), frenchLead.text);
+  }
+  // A reason that names its disposition, from a record that carries none, is refused rather than said with a gap.
+  assert.throws(() => reasonView("text_not_available", { ...base, reason: "file_withheld", disposition: null }), /names its disposition/);
+  for (const key of ["disposition", "version_dispositions"]) assert.ok(CATALOGUE_RECORD_KEYS.includes(key), key);
+  // The French review's supplement 2: refused forms.
+  const french = JSON.stringify([LIVE_CHROME.fr.compare, LIVE_CHROME.fr.refusalCard.catalogue]);
+  for (const refused of ["de {first}", "dont les droits", ", admis, dont", "n’en détient aucun texte"]) {
+    assert.ok(!french.includes(refused), refused);
+  }
+  assert.ok(!JSON.stringify(LIVE_CHROME.en.refusalCard.catalogue).includes("holds none of its text"), "the site may hold the file: it shows none of its text");
+});
+
+test("a comparison's wording is shown in pages, the page named by its first and last article, with links to the pages around it", () => {
+  // The census's comparison, its wording cut as a server cuts a longer one: art_15 and art_16 on page 1 of 2, art_16-new on page 2.
+  const paged = twoStates();
+  const comparison = paged.result.value.comparisons[0];
+  comparison.text_page = { page: 1, pages: 2, first: "art_15", last: "art_16" };
+  const added = comparison.articles.find((entry) => entry.publisher_id === "art_16-new");
+  added.to = added.to.map(({ text, text_sha256, ...entry }) => entry);
+  const outcome = compareOutcome({ state: "success", envelope: paged });
+  assert.equal(outcome.state, "success", outcome.sentence);
+  assert.deepEqual({ ...outcome.view.comparisons[0].textPage }, { page: 1, pages: 2, first: "art_15", last: "art_16" });
+  const markup = renderToStaticMarkup(h(CompareAnswerView, { outcome })).replaceAll("&amp;", "&").replaceAll("&#x27;", "'");
+  assert.ok(markup.includes("The wording that changed is shown in pages; this is page 1 of 2: art_15 to art_16."), "the page shown");
+  const next = compareQueryOf({ identifier: outcome.view.identifier, dateFrom: outcome.view.dateFrom, dateTo: outcome.view.dateTo, language: outcome.view.language ?? "", page: 2 });
+  assert.ok(next !== null && next.endsWith("&page=2"), next);
+  assert.ok(markup.includes(`<a href="${next}" rel="next">Next page of the wording</a>`), "a link to the next page, at the comparison's address");
+  assert.ok(!markup.includes("Previous page of the wording"), "no page before the first");
+  assert.match(markup, /<li id="change-fra-3" data-status="added">.*?<p data-wording-elsewhere="">This article's wording is on another page of this comparison\.<\/p>/s);
+  assert.equal((markup.match(/data-wording-elsewhere/g) ?? []).length, 1, "only the change on another page says so");
+
+  // A comparison with no address of its own (its work named otherwise) asks the page in place.
+  const unaddressed = structuredClone(paged);
+  unaddressed.result.value.requested_identifier = "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3";
+  const asked = [];
+  const inPlace = renderToStaticMarkup(h(CompareAnswerView, { outcome: compareOutcome({ state: "success", envelope: unaddressed }), onPage: (page) => asked.push(page) }));
+  assert.ok(inPlace.includes('<button type="button">Next page of the wording</button>'), "a button, since no address names the comparison");
+
+  // A page whose rows do not carry exactly its texts is no answer.
+  const carried = structuredClone(paged);
+  carried.result.value.comparisons[0].text_page = { page: 1, pages: 2, first: "art_15", last: "art_15" };
+  assert.throws(() => readDiff(carried.result.value), /art_16 is on another page and carries its text/);
+  const short = structuredClone(paged);
+  short.result.value.comparisons[0].text_page = { page: 3, pages: 2, first: "art_15", last: "art_16" };
+  assert.throws(() => readDiff(short.result.value), /page 3 of 2/);
+  const unnamed = structuredClone(paged);
+  unnamed.result.value.comparisons[0].text_page = null;
+  assert.throws(() => readDiff(unnamed.result.value), /names no page of their wording/);
+
+  // The page is part of a comparison's address, from the second; the first is the address without it.
+  const search = "?work=%2Flu-legilux%2Floi-1991-08-10-n3&from=2024-02-01&to=2025-04-01&page=2";
+  assert.deepEqual({ ...compareOfQuery(search) }, { identifier: "/lu-legilux/loi-1991-08-10-n3", date_from: "2024-02-01", date_to: "2025-04-01", page: 2 });
+  assert.equal(compareQueryOf({ identifier: "/lu-legilux/loi-1991-08-10-n3", dateFrom: "2024-02-01", dateTo: "2025-04-01", page: 2 }), search);
+  assert.equal(compareQueryOf({ identifier: "/lu-legilux/loi-1991-08-10-n3", dateFrom: "2024-02-01", dateTo: "2025-04-01", page: 1 }), search.replace("&page=2", ""));
+  for (const page of ["1", "02", "0", "x", "100001"]) {
+    assert.equal(compareOfQuery(search.replace("page=2", `page=${page}`)), null, page);
+  }
+  assert.equal(compareOfQuery(`${search}&page=3`), null, "a page named twice");
+  assert.deepEqual(compareParameters({ identifier: "/lu-legilux/loi-1991-08-10-n3", dateFrom: "2024-02-01", dateTo: "2025-04-01", page: 2 }),
+    { identifier: "/lu-legilux/loi-1991-08-10-n3", date_from: "2024-02-01", date_to: "2025-04-01", page: 2 });
+  assert.equal("page" in compareParameters({ identifier: "/lu-legilux/loi-1991-08-10-n3", dateFrom: "2024-02-01", dateTo: "2025-04-01", page: 1 }), false, "the first page is asked without it");
+  assert.throws(() => compareParameters({ identifier: "/lu-legilux/loi-1991-08-10-n3", dateFrom: "2024-02-01", dateTo: "2025-04-01", page: 0 }), /whole number/);
 });

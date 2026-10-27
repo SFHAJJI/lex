@@ -446,6 +446,13 @@ const EN = Object.freeze({
       both: "This article's wording is not shown: this site serves the text of neither version.",
     }),
     wordingWhole: "This article changed too much to be compared word by word here: apart from any beginning or end its two texts share, its text at the from date is shown deleted and its text at the to date inserted, each in one piece.",
+    // The wording of the changes in pages (the review of #1003, F4: at most 50 articles and 96 KiB a page, as a reading's), the
+    // page shown by its first and last article, and the links to the pages before and after it.
+    wordingPage: "The wording that changed is shown in pages; this is page {page} of {pages}: {first} to {last}.",
+    wordingPageOne: "The wording that changed is shown in pages; this is page {page} of {pages}: {first} only.",
+    wordingOtherPage: "This article's wording is on another page of this comparison.",
+    previousPage: "Previous page of the wording",
+    nextPage: "Next page of the wording",
   }),
   radar: Object.freeze({
     title: "Radar",

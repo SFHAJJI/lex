@@ -954,7 +954,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+          "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
         },
         "works": [
           {
@@ -1306,7 +1306,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+          "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -1424,7 +1424,7 @@
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
           "publisher": "lu-legilux",
-          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+          "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
         },
         "not_held": [
           {
@@ -1660,7 +1660,7 @@
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
           "publisher": "lu-legilux",
-          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+          "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
         },
         "not_held": [
           {
@@ -2117,6 +2117,7 @@
             "language": "fra",
             "note": "Both dates select the one text held, the act as published, applicable from 2024-02-01 (publisher); later versions are not held",
             "same_state": true,
+            "text_page": null,
             "to": {
               "applicability_date": "2024-02-01",
               "applicable_to": null,
@@ -2460,7 +2461,7 @@
         "requested_date_to": "2024-02-01",
         "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
         "requested_language": "fra",
-        "text_rule": "R57: each entry of a changed, added or removed article carries the article\u0027s text as evidence_bundle serves it (text, and text_sha256, the SHA-256 of its UTF-8 bytes) when that side\u0027s state\u0027s rights admit its text, and null for both when they do not, so a reader can show the wording that changed; an unchanged article carries no text; the text is the publisher\u0027s as served, and its status is still decided by the wording digests alone",
+        "text_rule": "R57: each entry of a changed, added or removed article on the page of the wording served carries the article\u0027s text as evidence_bundle serves it (text, and text_sha256, the SHA-256 of its UTF-8 bytes) when that side\u0027s state\u0027s rights admit its text, and null for both when they do not, so a reader can show the wording that changed; the changed, added and removed articles are cut into pages as a reading\u0027s are, in the rows\u0027 order, each page at most 50 articles and 98,304 bytes of their texts (UTF-8, both sides), an article whose texts alone pass that bound being a page of its own; page asks one (the first by default), text_page names it, its count and its first and last ids (null where nothing moved), and a page past the last of every comparison is refused anchor_not_in_version, as a reading\u0027s is; an article on another page, and an unchanged one, carries no text; the text is the publisher\u0027s as served, and every article\u0027s status is still decided by the wording digests alone",
         "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date",
         "wording_rule": "wording_sha256 is the SHA-256 of a canonical JSON array of [kind, text, target] for the Text and Reference tokens of the article\u0027s stored token stream, in order, with consecutive text merged into one entry (reference labels and targets included; note references, note bodies and modification markers excluded); wording_changed is true when it differs from the previous state of the same language, and any byte difference in the merged text or in a reference counts; paragraph and inline-formatting boundaries and whitespace-only nodes are not compared; wording_runs counts the first state and every change per language; distinct_wordings counts distinct digests per language",
         "work_key": "loi-1991-08-10-n3"
@@ -3636,6 +3637,12 @@
             "language": "fra",
             "note": "two publisher-dated states; each article is compared by its publisher-minted id and wording digest, and nothing about legal effect is asserted",
             "same_state": false,
+            "text_page": {
+              "first": "art_15",
+              "last": "art_16-new",
+              "page": 1,
+              "pages": 1
+            },
             "to": {
               "applicability_date": "2025-03-07",
               "applicable_to": null,
@@ -3979,7 +3986,7 @@
         "requested_date_to": "2025-03-07",
         "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
         "requested_language": "fra",
-        "text_rule": "R57: each entry of a changed, added or removed article carries the article\u0027s text as evidence_bundle serves it (text, and text_sha256, the SHA-256 of its UTF-8 bytes) when that side\u0027s state\u0027s rights admit its text, and null for both when they do not, so a reader can show the wording that changed; an unchanged article carries no text; the text is the publisher\u0027s as served, and its status is still decided by the wording digests alone",
+        "text_rule": "R57: each entry of a changed, added or removed article on the page of the wording served carries the article\u0027s text as evidence_bundle serves it (text, and text_sha256, the SHA-256 of its UTF-8 bytes) when that side\u0027s state\u0027s rights admit its text, and null for both when they do not, so a reader can show the wording that changed; the changed, added and removed articles are cut into pages as a reading\u0027s are, in the rows\u0027 order, each page at most 50 articles and 98,304 bytes of their texts (UTF-8, both sides), an article whose texts alone pass that bound being a page of its own; page asks one (the first by default), text_page names it, its count and its first and last ids (null where nothing moved), and a page past the last of every comparison is refused anchor_not_in_version, as a reading\u0027s is; an article on another page, and an unchanged one, carries no text; the text is the publisher\u0027s as served, and every article\u0027s status is still decided by the wording digests alone",
         "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date",
         "wording_rule": "wording_sha256 is the SHA-256 of a canonical JSON array of [kind, text, target] for the Text and Reference tokens of the article\u0027s stored token stream, in order, with consecutive text merged into one entry (reference labels and targets included; note references, note bodies and modification markers excluded); wording_changed is true when it differs from the previous state of the same language, and any byte difference in the merged text or in a reference counts; paragraph and inline-formatting boundaries and whitespace-only nodes are not compared; wording_runs counts the first state and every change per language; distinct_wordings counts distinct digests per language",
         "work_key": "loi-1991-08-10-n3"
@@ -4376,6 +4383,7 @@
             "language": "fra",
             "note": "Both dates select the one text held, the act as published, applicable from 2024-02-01 (publisher); later versions are not held; the publisher\u0027s record names 2 consolidated versions of it whose applicability dates fall after 2024-02-10 and on or before 2024-10-31, applicable from 2024-03-11 to 2024-06-24 and from 2024-06-25 to 2024-09-29 (publisher); the publisher\u0027s record gives 2024-09-30 as the act\u0027s end-of-force date (dateNoLongerInForce), which falls after 2024-02-10 and on or before 2024-10-31",
             "same_state": true,
+            "text_page": null,
             "to": {
               "applicability_date": "2024-02-01",
               "applicable_to": null,
@@ -4739,7 +4747,7 @@
         "requested_date_to": "2024-10-31",
         "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
         "requested_language": "fra",
-        "text_rule": "R57: each entry of a changed, added or removed article carries the article\u0027s text as evidence_bundle serves it (text, and text_sha256, the SHA-256 of its UTF-8 bytes) when that side\u0027s state\u0027s rights admit its text, and null for both when they do not, so a reader can show the wording that changed; an unchanged article carries no text; the text is the publisher\u0027s as served, and its status is still decided by the wording digests alone",
+        "text_rule": "R57: each entry of a changed, added or removed article on the page of the wording served carries the article\u0027s text as evidence_bundle serves it (text, and text_sha256, the SHA-256 of its UTF-8 bytes) when that side\u0027s state\u0027s rights admit its text, and null for both when they do not, so a reader can show the wording that changed; the changed, added and removed articles are cut into pages as a reading\u0027s are, in the rows\u0027 order, each page at most 50 articles and 98,304 bytes of their texts (UTF-8, both sides), an article whose texts alone pass that bound being a page of its own; page asks one (the first by default), text_page names it, its count and its first and last ids (null where nothing moved), and a page past the last of every comparison is refused anchor_not_in_version, as a reading\u0027s is; an article on another page, and an unchanged one, carries no text; the text is the publisher\u0027s as served, and every article\u0027s status is still decided by the wording digests alone",
         "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date",
         "wording_rule": "wording_sha256 is the SHA-256 of a canonical JSON array of [kind, text, target] for the Text and Reference tokens of the article\u0027s stored token stream, in order, with consecutive text merged into one entry (reference labels and targets included; note references, note bodies and modification markers excluded); wording_changed is true when it differs from the previous state of the same language, and any byte difference in the merged text or in a reference counts; paragraph and inline-formatting boundaries and whitespace-only nodes are not compared; wording_runs counts the first state and every change per language; distinct_wordings counts distinct digests per language",
         "work_key": "loi-1991-08-10-n3"
@@ -6245,7 +6253,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+          "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -6328,7 +6336,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+          "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -6417,7 +6425,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+          "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -9074,7 +9082,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
+          "registry_sha256": "627879b6718d746b944758378b9ea476919311a72857bcba0cb72e202fb70059"
         },
         "what_would_answer": [
           "new_official_observation"

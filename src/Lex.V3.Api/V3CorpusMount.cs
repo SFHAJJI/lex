@@ -3455,6 +3455,9 @@ internal sealed partial class V3CorpusMount : IDisposable
             }
         }
 
+        // The page of the wording asked (R57's texts, cut as a reading's pages are; the review of #1003, F4): the first by default.
+        var textPage = DiffTextPageOf(request.Parameters);
+
         if (RefuseUnlessWorkStates(request, identifier, observedAt, "r6_diff", requestedLanguage,
                 out var states, out var availableLanguages) is { } refused)
         {
@@ -3470,7 +3473,9 @@ internal sealed partial class V3CorpusMount : IDisposable
         // Each language compared, held until every language is classified: a same-state note says what the work is held as
         // (an act held only as published names the facts between the dates), which is known once the compared states are.
         var compared = new List<(string Language, LuxembourgIndexResolvedState From, string? FromNext,
-            LuxembourgIndexResolvedState To, string? ToNext, bool OnlyStateHeld, (IReadOnlyList<object> Articles, object Counts)? Rows)>();
+            LuxembourgIndexResolvedState To, string? ToNext, bool OnlyStateHeld, (IReadOnlyList<object> Articles, object Counts, object? TextPage)? Rows)>();
+        (ReadingPages Pages, string Language)? pastLast = null;
+        var pageServed = false;
         var notCompared = new List<object>();
         (string Bound, string Date, string[] Candidates)? ambiguous = null;
         (string Language, LuxembourgIndexResolvedState From, LuxembourgIndexResolvedState To)? profilesDiffer = null;
@@ -3520,10 +3525,19 @@ internal sealed partial class V3CorpusMount : IDisposable
             }
 
             // The wording of what changed (R57), from each side's text as served, where its rights admit it (evidence_bundle's rule).
-            var (articles, counts, _) = CompareArticles(
+            var (articles, counts, _, pages) = CompareArticles(
                 _reader!.ResolveStateArticles(from.StateSha256), _reader.ResolveStateArticles(to.StateSha256),
-                texts: true, fromAdmitted: SearchAdmits(from.StateSha256), toAdmitted: SearchAdmits(to.StateSha256));
-            compared.Add((language, from, fromNext, to, toNext, ofLanguage.Length == 1, (articles, counts)));
+                texts: true, fromAdmitted: SearchAdmits(from.StateSha256), toAdmitted: SearchAdmits(to.StateSha256), textPage: textPage);
+            if (pages is not null && pages.PastLast)
+            {
+                pastLast ??= (pages, language);
+            }
+            else if (pages is not null)
+            {
+                pageServed = true;
+            }
+
+            compared.Add((language, from, fromNext, to, toNext, ofLanguage.Length == 1, (articles, counts, DiffTextPageMember(pages))));
         }
 
         // One rule for refusals, the one as_of follows: an ambiguity or a profile mismatch in any served
@@ -3547,6 +3561,14 @@ internal sealed partial class V3CorpusMount : IDisposable
         if (ambiguous is { } ambiguity)
         {
             return RefuseAmbiguousVersion(request, observedAt, ambiguity.Date, ambiguity.Candidates, ambiguity.Bound);
+        }
+
+        // A page of the wording past the last of every comparison is refused as a reading's page is, naming the pages of the first
+        // language whose wording moved (none where nothing moved, or the two dates name one state).
+        if (textPage > 1 && !pageServed && compared.Count > 0)
+        {
+            var (beyond, ofLanguage) = pastLast ?? (CutReadingPages([], new ReadingPageAsked(textPage, null, false))!, compared[0].Language);
+            return RefusePageNotInVersion(request, observedAt, PublisherId.LuLegilux, beyond, ofLanguage);
         }
 
         if (compared.Count == 0)
@@ -3577,6 +3599,8 @@ internal sealed partial class V3CorpusMount : IDisposable
                     : between.Note(entry.From.ApplicabilityDate, entry.OnlyStateHeld, DatedByEntryIntoForce(entry.From)),
             articles = (object?)entry.Rows?.Articles,
             counts = entry.Rows?.Counts,
+            // The page of the wording this answer carries (R57; the review of #1003, F4), or null when no article moved.
+            text_page = entry.Rows?.TextPage,
         }).ToArray();
 
         using var result = JsonSerializer.SerializeToDocument(new
@@ -3623,10 +3647,57 @@ internal sealed partial class V3CorpusMount : IDisposable
     }
 
     internal const string DiffTextRule =
-        "R57: each entry of a changed, added or removed article carries the article's text as evidence_bundle serves it (text, and " +
-        "text_sha256, the SHA-256 of its UTF-8 bytes) when that side's state's rights admit its text, and null for both when they " +
-        "do not, so a reader can show the wording that changed; an unchanged article carries no text; the text is the publisher's " +
-        "as served, and its status is still decided by the wording digests alone";
+        "R57: each entry of a changed, added or removed article on the page of the wording served carries the article's text as " +
+        "evidence_bundle serves it (text, and text_sha256, the SHA-256 of its UTF-8 bytes) when that side's state's rights admit its " +
+        "text, and null for both when they do not, so a reader can show the wording that changed; the changed, added and removed " +
+        "articles are cut into pages as a reading's are, in the rows' order, each page at most 50 articles and 98,304 bytes of " +
+        "their texts (UTF-8, both sides), an article whose texts alone pass that bound being a page of its own; page asks one (the " +
+        "first by default), text_page names it, its count and its first and last ids (null where nothing moved), and a page past " +
+        "the last of every comparison " +
+        "is refused anchor_not_in_version, as a reading's is; an article on another page, and an unchanged one, carries no text; " +
+        "the text is the publisher's as served, and every article's status is still decided by the wording digests alone";
+
+    /// <summary>
+    /// The page of a comparison's wording asked (<c>page</c>, a whole number from 1 to <see cref="MaximumReadingPage"/>, as the
+    /// request schema checks it), or the first.
+    /// </summary>
+    private static int DiffTextPageOf(JsonElement parameters)
+    {
+        if (!parameters.TryGetProperty("page", out var value))
+        {
+            return 1;
+        }
+
+        if (value.ValueKind != JsonValueKind.Number || !value.TryGetInt32(out var page) || page < 1 || page > MaximumReadingPage)
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The operation request's 'page' is not a whole page number from 1.");
+        }
+
+        return page;
+    }
+
+    /// <summary>
+    /// A comparison's <c>text_page</c>: the page of the wording served, the count of pages, and the publisher ids of the first
+    /// and last articles on it; null with no changed, added or removed article, or for a page past the last.
+    /// </summary>
+    private static object? DiffTextPageMember(ReadingPages? pages)
+    {
+        if (pages is null || pages.PastLast)
+        {
+            return null;
+        }
+
+        var (first, last) = pages.ServedBounds;
+        return new
+        {
+            page = pages.Served,
+            pages = pages.Count,
+            first = pages.Entries[first].PublisherId,
+            last = pages.Entries[last].PublisherId,
+        };
+    }
 
     /// <summary>
     /// Article-level comparison of two states by publisher-minted id: present in both with the same
@@ -3636,9 +3707,9 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// when <paramref name="fromAdmitted"/> or <paramref name="toAdmitted"/> says that side's rights admit it, else nulls
     /// (<see cref="DiffTextRule"/>).
     /// </summary>
-    private static (IReadOnlyList<object> Articles, object Counts, bool Differs) CompareArticles(
+    private static (IReadOnlyList<object> Articles, object Counts, bool Differs, ReadingPages? TextPages) CompareArticles(
         IReadOnlyList<LuxembourgIndexStateArticle> from, IReadOnlyList<LuxembourgIndexStateArticle> to,
-        bool texts = false, bool fromAdmitted = false, bool toAdmitted = false)
+        bool texts = false, bool fromAdmitted = false, bool toAdmitted = false, int textPage = 1)
     {
         static Dictionary<string, LuxembourgIndexStateArticle[]> ById(IReadOnlyList<LuxembourgIndexStateArticle> articles) =>
             articles.GroupBy(static article => article.PublisherId, StringComparer.Ordinal)
@@ -3659,7 +3730,37 @@ internal sealed partial class V3CorpusMount : IDisposable
 
         var left = ById(from);
         var right = ById(to);
-        var ids = left.Keys.Concat(right.Keys).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
+        var ids = left.Keys.Concat(right.Keys).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+
+        // The articles that moved, cut into pages by their texts' weight (R57; the review of #1003, F4): only the page asked
+        // carries texts.
+        ReadingPages? pages = null;
+        var onPage = new HashSet<string>(StringComparer.Ordinal);
+        if (texts)
+        {
+            static long Weight(LuxembourgIndexStateArticle[]? side, bool admitted) =>
+                side is null || !admitted ? 0 : side.Sum(static article => (long)Encoding.UTF8.GetByteCount(article.Text));
+            bool Moved(string id) =>
+                !left.TryGetValue(id, out var before) || !right.TryGetValue(id, out var after) ||
+                !before.Select(static a => a.WordingSha256).SequenceEqual(after.Select(static a => a.WordingSha256), StringComparer.Ordinal);
+            var moved = ids.Where(Moved)
+                .Select(id => new ReadingEntry(id, null, true, Weight(left.GetValueOrDefault(id), fromAdmitted) + Weight(right.GetValueOrDefault(id), toAdmitted)))
+                .ToArray();
+            // With no article moved there is no page; a page past the first is still asked past the last.
+            if (moved.Length > 0 || textPage > 1)
+            {
+                pages = CutReadingPages(moved, new ReadingPageAsked(textPage, null, false));
+                if (pages is not null && !pages.PastLast)
+                {
+                    var (first, last) = pages.ServedBounds;
+                    for (var position = first; position <= last; position++)
+                    {
+                        onPage.Add(moved[position].PublisherId);
+                    }
+                }
+            }
+        }
+
         var rows = new List<object>();
         int unchanged = 0, changed = 0, added = 0, removed = 0;
         foreach (var id in ids)
@@ -3684,11 +3785,11 @@ internal sealed partial class V3CorpusMount : IDisposable
                 status = "changed"; changed++;
             }
 
-            var withText = texts && status != "unchanged";
+            var withText = texts && status != "unchanged" && onPage.Contains(id);
             rows.Add(new { publisher_id = id, status, from = Side(before, withText, fromAdmitted), to = Side(after, withText, toAdmitted) });
         }
 
-        return (rows, new { unchanged, changed, added, removed }, changed + added + removed > 0);
+        return (rows, new { unchanged, changed, added, removed }, changed + added + removed > 0, pages);
     }
 
     /// <summary>The ceiling on the rows one <c>in_force_on</c> answer carries.</summary>
@@ -6001,7 +6102,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             }
             else
             {
-                var (_, compared, differs) = CompareArticles(
+                var (_, compared, differs, _) = CompareArticles(
                     _reader!.ResolveStateArticles(baselines[0].StateSha256), _reader.ResolveStateArticles(state.StateSha256));
                 wordingChanged = differs;
                 counts = compared;

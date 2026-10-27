@@ -166,6 +166,97 @@ public sealed class V3CorpusCatalogueRecordMountTests
         CollectionAssert.AreEqual(new[] { "expanded_official_scope" }, Strings(payload.GetProperty("what_would_answer")));
     }
 
+    /// <summary>
+    /// The review of #1003, F2: an address with no work's shape (a whole act type, a year, a month, a day) is
+    /// <c>identifier_unknown</c> without a read of the catalogue's facts under it, by every route that reaches the record (the
+    /// dossier, resolve, reading, and search's exact reference), which the record's own counter of such reads proves; the act's
+    /// own address reads its range once.
+    /// </summary>
+    [TestMethod]
+    public async Task AnAddressWithNoWorksShapeIsUnknownWithoutReadingTheCatalogueUnderIt()
+    {
+        var (fixture, mount) = await MountAsync(static fixture => AddCatalogueActAsync(fixture));
+        await using var cleanup = fixture;
+        using var mounted = mount;
+        var before = mount.CatalogueRangeReads;
+        foreach (var identifier in new[]
+                 {
+                     "/lu-legilux/rgd", "/lu-legilux/loi", "/lu-legilux/code", "/lu-legilux/loi-1991", "/lu-legilux/loi-1991-08",
+                     "/lu-legilux/loi-1991-08-10",
+                     "http://data.legilux.public.lu/eli/etat/leg/rgd", "http://data.legilux.public.lu/eli/etat/leg/loi/1991",
+                     "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10",
+                 })
+        {
+            foreach (var (operation, parameters) in new (string, object)[]
+                     {
+                         ("dossier", new { identifier }),
+                         ("resolve", new { identifier }),
+                         ("evidence_bundle", new { identifier, date = "2026-09-18", language = "fra" }),
+                     })
+            {
+                Assert.AreEqual("identifier_unknown", (await AskAsync(mount, operation, parameters)).Refusal?.Code, $"{operation} {identifier}");
+            }
+
+            var search = await AskAsync(mount, "search", new { query = identifier, language = "fra" });
+            Assert.AreNotEqual("text_not_available", search.Refusal?.Code, $"search {identifier}");
+        }
+
+        Assert.AreEqual(before, mount.CatalogueRangeReads, "no read of the catalogue's facts under an address with no work's shape");
+        Record(await AskAsync(mount, "dossier", new { identifier = "/lu-legilux/" + Key }), "the act's own address");
+        Assert.AreEqual(before + 1, mount.CatalogueRangeReads, "the act's own address reads its range once");
+    }
+
+    /// <summary>
+    /// The review of #1003, F3: a work the catalogue names no act as published of (a code, whose versions are each dated by
+    /// their own facts) has no act-level facts in its record: no type, dates, status, issue or historical identifier are said as
+    /// the act's, though its first version states them; its identity is that version, and its versions are listed with their
+    /// kind and reason.
+    /// </summary>
+    [TestMethod]
+    public async Task AWorkWithNoActAsPublishedSaysNoActLevelFacts()
+    {
+        const string Code = "http://data.legilux.public.lu/eli/etat/leg/code/exemple";
+        const string First = Code + "/20200101";
+        const string Second = Code + "/20210101";
+        var (fixture, mount) = await MountAsync(static async fixture =>
+        {
+            foreach (var version in new[] { First, Second })
+            {
+                await fixture.AddWorkFactAsync(version, "typeDocument", "resource_type", "iri", Jolux + "authority/resource-type/CODE");
+                await fixture.AddWorkFactAsync(version, "dateDocument", "descriptive_date", "literal", "2020-01-01");
+                await fixture.AddWorkFactAsync(version, "dateEntryInForce", "act_force", "literal", "2020-01-01");
+                await fixture.AddWorkFactAsync(version, "inForceStatus", "act_force", "iri", Jolux + "authority/application-status/in-force");
+                await fixture.AddWorkFactAsync(version, "isRealizedBy", "wemi_structural", "iri", version + "/fr");
+                await fixture.AddWorkFactAsync(version + "/fr", "language", "expression_language_or_title", "iri", "http://publications.europa.eu/resource/authority/language/FRA");
+                await fixture.AddWorkFactAsync(version + "/fr", "isEmbodiedBy", "wemi_structural", "iri", version + "/fr/pdf");
+                await fixture.AddWorkFactAsync(version + "/fr/pdf", "userFormat", "manifestation_format", "iri", Jolux + "authority/user-format/pdf");
+                await fixture.AddWorkFactAsync(version + "/fr/pdf", "license", "rights_and_provenance", "iri", Jolux + "authority/license/licenceSCL");
+            }
+        });
+        await using var cleanup = fixture;
+        using var mounted = mount;
+
+        var envelope = await AskAsync(mount, "dossier", new { identifier = "/lu-legilux/code-exemple" });
+        Assert.AreEqual("text_not_available", envelope.Refusal?.Code, envelope.Refusal?.HelpfulPayload.GetRawText());
+        var payload = envelope.Refusal!.HelpfulPayload;
+        Assert.AreEqual("catalogue_only", payload.GetProperty("record_kind").GetString());
+        Assert.AreEqual(First, payload.GetProperty("official_identity").GetString(), "the work's first version");
+        Assert.AreEqual(JsonValueKind.Null, payload.GetProperty("act_iri").ValueKind, "a code has no act as published");
+        foreach (var member in new[]
+                 {
+                     "document_type", "document_type_codes", "date_document", "publication_date", "entry_into_force", "no_longer_in_force",
+                     "in_force_status", "in_force_status_codes", "memorial_issue", "historical_legal_id",
+                 })
+        {
+            Assert.AreEqual(0, payload.GetProperty(member).GetArrayLength(), $"{member}: a version's facts are not the act's");
+        }
+
+        CollectionAssert.AreEqual(new[] { First, Second }, Strings(payload.GetProperty("versions")));
+        CollectionAssert.AreEqual(new[] { "code", "code" }, Strings(payload.GetProperty("version_kinds")));
+        CollectionAssert.AreEqual(new[] { "catalogue_licence_scl", "catalogue_licence_scl" }, Strings(payload.GetProperty("version_reasons")));
+        StringAssert.Contains(payload.GetProperty("rule").GetString(), "for a work the catalogue names no act as published of");
+    }
+
     [TestMethod]
     public async Task AnActTheNamesRecordWithholdsIsTextWithheldWithNoTitleAndNoRecord()
     {

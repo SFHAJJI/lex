@@ -373,8 +373,9 @@ const COMPARE_WORK = /^\/lu-legilux\/[a-z0-9][a-z0-9_-]{0,511}$/;
  * compare screen writes it into its own address once it has asked it; R57), as the request the page would send (`diff`'s
  * `identifier`, `date_from`, `date_to` and `language`), or null: each of `work`, `from` and `to` once and `language` at most
  * once, each value form-decoded; the work this site's address of a Luxembourg act (`COMPARE_WORK`), never words; two calendar
- * dates; a language the form offers, or none (empty). Any other name is ignored. As `V3WebRoot.CompareOfQuery` (a test holds
- * the two to one table).
+ * dates; a language the form offers, or none (empty); and `page`, at most once, the page of the wording asked (`diff`'s `page`,
+ * the review of #1003, F4), a whole number from 2 written without a leading zero (the first page is the address without it).
+ * Any other name is ignored. As `V3WebRoot.CompareOfQuery` (a test holds the two to one table).
  */
 export function compareOfQuery(search) {
   if (typeof search !== 'string' || search.length < 2 || search[0] !== '?') return null;
@@ -382,7 +383,7 @@ export function compareOfQuery(search) {
   for (const part of search.slice(1).split('&')) {
     const equals = part.indexOf('=');
     const name = equals < 0 ? part : part.slice(0, equals);
-    if (!['work', 'from', 'to', 'language'].includes(name)) continue;
+    if (!['work', 'from', 'to', 'language', 'page'].includes(name)) continue;
     const value = formDecoded(equals < 0 ? '' : part.slice(equals + 1));
     if (values.has(name) || value === null) return null;
     values.set(name, value);
@@ -394,7 +395,20 @@ export function compareOfQuery(search) {
   if (!isCalendarDate(from) || !isCalendarDate(to)) return null;
   const language = values.get('language') ?? '';
   if (language !== '' && !COMPARE_QUERY_LANGUAGES.includes(language)) return null;
-  return Object.freeze({ identifier: work, date_from: from, date_to: to, ...(language === '' ? {} : { language }) });
+  const pageText = values.get('page');
+  const page = pageText === undefined ? null : comparePageOf(pageText);
+  if (pageText !== undefined && page === null) return null;
+  return Object.freeze({ identifier: work, date_from: from, date_to: to, ...(language === '' ? {} : { language }), ...(page === null ? {} : { page }) });
+}
+
+/** The greatest page a request may name (`diff`'s request schema, as a reading's). */
+const MAXIMUM_COMPARE_PAGE = 100000;
+
+/** A comparison's page as its address writes it: a whole number from 2 to the schema's maximum, no leading zero; else null. */
+function comparePageOf(text) {
+  if (!/^[1-9][0-9]{0,5}$/.test(text)) return null;
+  const page = Number(text);
+  return page >= 2 && page <= MAXIMUM_COMPARE_PAGE ? page : null;
 }
 
 /**
@@ -411,14 +425,16 @@ export function compareWorkOf(identifier) {
 
 /**
  * The query a comparison writes into the compare page's own address once it is asked (`?work=/lu-legilux/{key}&from=…&to=…
- * [&language=…]`), so it can be shared and read without JavaScript, or null when its work is no address of this site of an
- * act (`compareWorkOf`): words a reader typed never reach an address (R109), and the address is then left as it is.
+ * [&language=…][&page=N]`), so it can be shared and read without JavaScript, or null when its work is no address of this site
+ * of an act (`compareWorkOf`): words a reader typed never reach an address (R109), and the address is then left as it is. The
+ * page of the wording (the review of #1003, F4) is written from the second; the first is the address without it.
  */
-export function compareQueryOf({ identifier, dateFrom, dateTo, language = '' }) {
+export function compareQueryOf({ identifier, dateFrom, dateTo, language = '', page = null }) {
   const work = compareWorkOf(identifier);
   if (work === null || !isCalendarDate(dateFrom) || !isCalendarDate(dateTo)) return null;
   if (language !== '' && !COMPARE_QUERY_LANGUAGES.includes(language)) return null;
-  const query = new URLSearchParams({ work, from: dateFrom, to: dateTo, ...(language === '' ? {} : { language }) });
+  const paged = Number.isInteger(page) && page >= 2 && page <= MAXIMUM_COMPARE_PAGE;
+  const query = new URLSearchParams({ work, from: dateFrom, to: dateTo, ...(language === '' ? {} : { language }), ...(paged ? { page: String(page) } : {}) });
   return `?${query.toString()}`;
 }
 

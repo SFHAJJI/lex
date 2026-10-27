@@ -4721,6 +4721,33 @@ public sealed class LuxembourgIndexReader : IDisposable
     }
 
     /// <summary>
+    /// How many articles the index holds of each of <paramref name="objectRefs"/> (corpus members by object reference), each
+    /// counted by the articles' object index; a member it holds none of is left out. The record of an act the index holds no
+    /// version of reads it for the few files the corpus holds of that act (R77), as the text yield counts them.
+    /// </summary>
+    public IReadOnlyDictionary<string, long> ResolveArticleCountsOfObjects(IReadOnlyList<string> objectRefs)
+    {
+        ArgumentNullException.ThrowIfNull(objectRefs);
+        var counts = new Dictionary<string, long>(StringComparer.Ordinal);
+        lock (_gate)
+        {
+            foreach (var objectRef in objectRefs.Distinct(StringComparer.Ordinal))
+            {
+                using var command = _connection.CreateCommand();
+                command.CommandText = "SELECT COUNT(*) FROM articles WHERE object_ref_sha256=$object";
+                command.Parameters.AddWithValue("$object", objectRef);
+                var count = Convert.ToInt64(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
+                if (count > 0)
+                {
+                    counts.Add(objectRef, count);
+                }
+            }
+        }
+
+        return counts;
+    }
+
+    /// <summary>
     /// The publisher's catalogue references an exact reference is read against: each subject the catalogue says is part of an
     /// issue of the Mémorial (<c>isPartOf</c> an IRI under <c>…/eli/etat/leg/memorial/</c>), and each subject's historical legal
     /// identifier (<c>historicalLegalId</c>), verbatim, in subject, predicate and value order. It reads the fact table once (the

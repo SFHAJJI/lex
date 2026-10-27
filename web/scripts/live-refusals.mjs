@@ -55,10 +55,10 @@ export function namesWithheld(code, payload) {
 
 /**
  * What every screen says of an act the publisher's catalogue holds and Lex holds no version of (R77; `text_not_available`
- * whose payload's `record_kind` is `catalogue_only`): it is in the catalogue, Lex holds none of its text, and its record
+ * whose payload's `record_kind` is `catalogue_only`): it is in the catalogue, Lex shows none of its text, and its record
  * follows, in the card (`refusal-card.mjs`, `catalogueRecord`), which says why.
  */
-export const CATALOGUE_RECORD_SENTENCE = "This act is in the publisher's catalogue, and Lex holds none of its text: its record follows.";
+export const CATALOGUE_RECORD_SENTENCE = "This act is in the publisher's catalogue, and Lex shows none of its text: its record follows.";
 
 /**
  * The sentence a screen's table (English, keyed by code) says for a code, or the one naming a code it has none for; a work R92
