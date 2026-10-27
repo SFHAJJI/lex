@@ -488,6 +488,9 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Ingest.Europe.LuxembourgOpinionRequestGraphRunRequest::<Clone>$, "
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.LuxembourgOpinionRequestGraphRunRequest::ForBatch",
+                // The search's folded texts, made by their builder alone, and one language's, by the reader (the plan's item 4.4).
+                "Lex.V3.Ingest.FoldedSearchTexts: constructor private instance Lex.V3.Ingest.FoldedSearchTexts::.ctor, "
+                    + "method public instance Lex.V3.Ingest.FoldedSearchTexts+Builder::Build",
                 "Lex.V3.Ingest.LexCorpus6MountView: constructor private instance "
                     + "Lex.V3.Ingest.LexCorpus6MountView::.ctor, "
                     + "method public static Lex.V3.Ingest.LexCorpus6MountView::ParseCanonicalAndVerify",
@@ -966,6 +969,9 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgRelationFamilyAcquisition::NotComplete, "
                     + "3 compiler-generated",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgSearchTexts: constructor internal instance "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgSearchTexts::.ctor, "
+                    + "method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgIndexReader::SearchTextsOf",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgSelectedDocumentFetch: constructor internal "
                     + "instance Lex.V3.Ingest.Luxembourg.LuxembourgSelectedDocumentFetch::.ctor, "
                     + "method private static "

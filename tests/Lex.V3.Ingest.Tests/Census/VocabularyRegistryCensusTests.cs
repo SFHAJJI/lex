@@ -104,7 +104,7 @@ public sealed class VocabularyRegistryCensusTests
                     + "const ArticleIds, const CatalogueStatesOfWork, const CitationsTo, const EventCount, "
                     + "const EventLog, const EventsAfter, const EventsOfNameAfter, const HeldWorks, "
                     + "const HeldWorksNine, const IntervalsOfWork, const MemberOutcomes, const Observations, "
-                    + "const ObservationsNine, const RevisingEventsAfter, const StateArticles, const StateArticlesNine, "
+                    + "const ObservationsNine, const RevisingEventsAfter, const SearchTexts, const StateArticles, const StateArticlesNine, "
                     + "const StateCitations, const StateColumnsNine, const StateDocumentOutcomes, "
                     + "const StateSources, const StateTextSources, const StatesOfExpressions, const StatesOfExpressionsNine, "
                     + "const SubjectFacts, const SubjectFactsUnder, const WorkEventsUpTo, const WorkRecords, "

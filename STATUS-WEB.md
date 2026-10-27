@@ -4,6 +4,47 @@ Updated 2026-10-27. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Search with capitals and accents ignored, and EU search over the consolidated wordings (sole driver, 2026-10-27)
+
+The audit of 2026-10-27, gaps 3 and 5; the plan's item 4.4; R59, R21, R107. `writer/search-quality`.
+- **One folding** (`TextFolding`, Contracts; `TextFolding.Rule` is the sentence every answer's `matching` carries): each
+  letter or digit to its canonical decomposition (NFD) without its combining marks, lowered by the invariant case map, by
+  the title folding's ICU-derived table (the same with or without the image's missing language data); a combining mark
+  alone dropped; œ and æ written oe and ae; every other character kept (punctuation, ’ and ', every kind of space; a symbol
+  is not decomposed, so ≠ is not =). `FoldedText` maps each folded unit to the original's, so a match is marked on the text's
+  own characters (a letter with its marks, a ligature whole) and the extract's byte range is unchanged in kind.
+- **Luxembourg** (driver decision, reversible): folded at query and match time over the indexes already built (/9, /8,
+  /6), no derive. The reader holds a folded copy per searchable language (`LuxembourgIndexReader.Search.cs`,
+  `FoldedSearchTexts`: every state's article once, each distinct text folded once, UTF-8), read at `Warm` by
+  `LuxembourgIndexQueries.SearchTexts` (its plan held by `LuxembourgIndexQueryPlanTests`), replacing the SQL `instr` scan.
+  No index change is needed for the next derive: a folded column would add about 90 MB to /9's file for no latency gain.
+- **EU** (`V3CorpusMount.EuropeSearch.cs`): over the act's census, with no date every wording whose text is held and the
+  rights rule admits, an article's text once under the latest wording that holds it (`same_wording` names the others,
+  `fold` counts); with a date the one wording `as_of` selects, with its refusals; each hit dated by its wording's role and
+  `next_date` (R21), its extract, its provision permalink; the answer under Decision 95's acknowledgement and authenticity
+  statement, with `wordings`, `searched`, `rights_rule`. An EU index with no census: the one original wording, folded, with
+  extracts; a date refused as before. The rows of a wording (no text) are cached per expression; texts are read once per
+  distinct digest and not kept. Not held, said in `not_held`: EU titles and OJ references (a derive would add them from the
+  census's work facts, so an EU act could be found by its title and an undated search across EU acts served).
+- **Measured, read-only, in place** (SQLite `immutable=1`, nothing copied or written; a harness running the reader's queries
+  and fold, this PC shared with another agent's build):
+  - `derive-r1` LU /9 (137,614 French articles, 29,374 distinct texts): the folded copy 26.9 MB, 51.7 MiB held, built in
+    5.3 s at start; a search 5 to 11 ms median (p95 at most 31 ms), against 3.9 to 6.3 s for the `instr` scan it replaces.
+    "conge", "Congé" and "CONGÉ" now find the 2,399 passages "congé" finds (were 2, 11 and 0); "reglement grand-ducal"
+    5,099 (was 0); "oeuvre" 2,391 (was 767).
+  - `derive-c` LU /8 (live; 7,877 articles): 7.6 MiB, 1.0 s at start; 2 to 4 ms against about 240 ms; "conge" 139 (was 0).
+  - `derive-r1` EU /6: the GDPR's three wordings, 2 to 8 ms (44 ms the first time); the CRR's 55 French wordings (38,683
+    articles, 1,585 distinct texts), 594 ms the first time (its rows read) and 46 ms after; a dated search 19 to 22 ms.
+- **Copy** (EN and FR): the search page's intro, counts, lane, no-hit card (`runText`, `exactOnly`), the Developers line,
+  the EU results' new entries (`euFound`, `euWordings`, `euSearched`, `euDated`, `euUndated`, `euNotSearched`,
+  `euSameWording`; `euWording` and `euHit` removed; the wordings headed by the reading's headings), and the EU date refusal.
+  The French reviewed by an independent reviewer (Claude, AI reviewer), 19 forms, 3 changed, `euUndated` in English too (an
+  article is shown once per text, not once; a wording is searched only when held and admitted); finals applied byte for
+  byte, addendum appended to `C:\lex-v3\lanes\fr-review\review.md`.
+- **Not done**: exact-accent matches ranked first (no ranker; the order is still the stated one); quotation marks not
+  stripped; ’ and ', and a no-break space and a space, stay different (measured on /9: "l'article" 9,168 passages,
+  "l’article" 23,940): folding them is a change to the documented rule, for the owner's or the next slice's decision.
+
 ## Review and repair (#998): G2 exact, the change policy's digest, MCP failures, the out-of-scope forms (sole driver, 2026-10-27)
 
 The review of #998 (`writer/api-gaps` at 0bb59e65, the other model family, Decision 95) said REPAIR, with its scripts in the

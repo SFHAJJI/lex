@@ -4484,9 +4484,9 @@ internal sealed partial class V3CorpusMount : IDisposable
 
     internal const string EuropeSearchScope =
         "one EU act named by the identifier (its CELEX, a work or expression IRI of the act or of one of its consolidated versions, or one of " +
-        "their provisions), in the language asked: with no date, every wording of it this index holds the text of, the original wording and " +
-        "each consolidated version the publisher dated; with a date, the one wording that date selects (selection_rule), as as_of selects it; " +
-        "a search across EU acts is not served";
+        "their provisions), in the language asked: with no date, every wording of it whose text this index holds and the rights rule admits " +
+        "(rights_rule), the original wording and each consolidated version the publisher dated; with a date, the one wording that date " +
+        "selects (selection_rule), as as_of selects it; a search across EU acts is not served";
 
     /// <summary><see cref="EuropeSearchScope"/> on an EU index that holds no census of the act: its one original wording.</summary>
     internal const string EuropeSearchOriginalScope =

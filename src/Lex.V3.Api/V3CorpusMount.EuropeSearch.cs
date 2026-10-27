@@ -31,7 +31,7 @@ internal sealed partial class V3CorpusMount
     internal const string EuropeSearchFoldRule =
         "with no date, one hit per publisher article id and text: the hit of the latest wording that holds that text (by wording date), each " +
         "other wording that holds it named under the hit's same_wording, so an article a consolidation did not change is one hit and not one per " +
-        "version; strict_hits and relaxed_hits count the hits served, and fold counts the hits before they were folded; with a date, one wording " +
+        "wording; strict_hits and relaxed_hits count the hits served, and fold counts the hits before they were folded; with a date, one wording " +
         "is searched and nothing is folded";
 
     internal const string EuropeSearchedRule =
