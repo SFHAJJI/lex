@@ -249,8 +249,11 @@ test("the home page's run passes when it arrived rendered, dated today in Luxemb
   assert.deepEqual(journeyVerdict(across, HOME), []);
   assert.equal(todayInLuxembourgAt(Date.parse("2026-10-24T22:30:00Z")), "2026-10-25", "the coded rule: 23:30 in summer time is 00:30 on the 25th");
   assert.deepEqual(frontDoorOf('<p class="coverage-line" data-coverage-line="counted">x</p><input type="text" data-search-date="" aria-describedby="search-today" value="2026-10-16"/>'
-    + '<script type="application/json" id="lex-home-facts">{}</script>'), { coverageLine: "counted", dateField: "2026-10-16", facts: true });
-  assert.deepEqual(frontDoorOf("<p>nothing</p>"), { coverageLine: null, dateField: null, facts: false });
+    + '<script type="application/json" id="lex-home-facts">{}</script>'), { coverageLine: "counted", dateField: "2026-10-16", facts: true, examples: [] });
+  assert.deepEqual(frontDoorOf("<p>nothing</p>"), { coverageLine: null, dateField: null, facts: false, examples: [] });
+  // The example searches it lists (R47), each link's address and the article it opens.
+  assert.deepEqual(frontDoorOf('<li><a href="/en/search.html#q=x&amp;lang=fra" data-home-example="/lu-legilux/a/fra/art_1er" lang="fr">x</a></li>').examples,
+    [{ href: "/en/search.html#q=x&lang=fra", opens: "/lu-legilux/a/fra/art_1er" }]);
   assert.equal(NOT_ADVICE_SAID, "Lex shows the published text of the law. It does not tell you whether or how it applies to your situation and is not legal advice.");
 });
 

@@ -126,7 +126,8 @@ test("the coverage line says only what the coverage answer counts, as of its ind
   const line = coverageLineOf(coverageOutcome(answerHandedWith("coverage", COVERAGE, { contract: LIVE_CONTRACT, objectType: "coverage_report" })));
   const { totals, history } = COVERAGE.result.value;
   const mounted = history.snapshots_with_text.find((snapshot) => snapshot.retained_as.includes("mounted"));
-  assert.deepEqual(line, { state: "counted", works: totals.works, states: totals.states, articles: totals.articles, builtOn: mounted.built_at.slice(0, 10) });
+  // With the digest of the index it counts, which the example searches are held to (`home-examples.mjs`).
+  assert.deepEqual(line, { state: "counted", works: totals.works, states: totals.states, articles: totals.articles, builtOn: mounted.built_at.slice(0, 10), indexSha256: COVERAGE.result.value.mounted.index_sha256 });
   assert.ok(mainOf(rendered(COVERAGE)).includes(`This site holds ${totals.works} act of Luxembourg law, in ${totals.states} version with ${totals.articles} articles, as of the index built on ${line.builtOn}.`));
 
   // Other counts, another build: the line follows the answer, and says the build's date in Luxembourg.
@@ -138,7 +139,7 @@ test("the coverage line says only what the coverage answer counts, as of its ind
     return value;
   });
   const otherFacts = homeFacts(other, LIVE_CONTRACT);
-  assert.deepEqual(otherFacts.coverage, { state: "counted", works: 1730, states: 1731, articles: 52617, builtOn: "2026-10-14" }, "22:40 UTC on 13 October is the 14th in Luxembourg");
+  assert.deepEqual(otherFacts.coverage, { state: "counted", works: 1730, states: 1731, articles: 52617, builtOn: "2026-10-14", indexSha256: other.result.value.mounted.index_sha256 }, "22:40 UTC on 13 October is the 14th in Luxembourg");
   // The index is older than today, so both dates are shown (R13; the plan's item 3.4).
   assert.equal(otherFacts.today, "2026-10-15");
   assert.ok(mainOf(renderLiveHomePage({ facts: otherFacts })).includes("This site holds 1730 acts of Luxembourg law, in 1731 versions with 52617 articles, as of the index built on 2026-10-14; today in Luxembourg is 2026-10-15."));

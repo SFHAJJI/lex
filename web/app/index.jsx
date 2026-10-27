@@ -41,13 +41,15 @@ export {
 } from './ReferencePages.jsx';
 export { LiveSearch, SEARCH_VARIANTS, SearchAnswerView, SearchResultsView, SearchWorkResolution } from './LiveSearch.jsx';
 export { LIVE_SEARCH_ROOT, LiveSearchRoot, liveSearchTree, renderLiveSearchPage } from './live-search-page.jsx';
-export { CoverageLine, HomeLinks, LiveHome } from './LiveHome.jsx';
+export { CoverageLine, HomeExamples, HomeLinks, LiveHome } from './LiveHome.jsx';
 export { TodayHint, TodayLine, useLuxembourgToday } from './Today.jsx';
 export { LIVE_HOME_ROOT, liveHomeTree, renderLiveHomePage } from './live-home-page.jsx';
 export { DossierAnswerView, DossierTitles, DossierView, EuropeDossierView, LiveDossier } from './LiveDossier.jsx';
 export { LIVE_DOSSIER_ROOT, liveDossierTree, renderLiveDossierPage } from './live-dossier-page.jsx';
 export { LiveReading, ReadingAnswerView, ReadingView, readingHolds } from './LiveReading.jsx';
 export { FailureFrame, OfficialSites, Permalink, TableRegion } from './LiveAnswer.jsx';
+export { Breadcrumbs } from './Breadcrumbs.jsx';
+export { GUIDE_LINK_SECTIONS, GuideLink, guideSectionHref } from './GuideLink.jsx';
 export { LIVE_READING_ROOT, liveReadingTree, readingLawPath, readingTitle, renderLiveReadingPage } from './live-reading-page.jsx';
 export { ArticleNotHeld, Citations, NotToday, PageNotHeld, PinnedLead, citedArticle, citedTitle, versionShown } from './PinnedReading.jsx';
 export { HistoryAnswerView, HistoryView, LiveHistory } from './LiveHistory.jsx';

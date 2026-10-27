@@ -73,7 +73,7 @@ const escaped = (text) => text.replaceAll("&", "&amp;").replaceAll("'", "&#x27;"
 
 test("every live page renders its chrome from the table", () => {
   const copy = liveChrome("en");
-  assert.deepEqual(Object.keys(copy).filter((key) => !["form", "common", "shell", "site", "freshness", "card", "refusalCard", "coverageAnswer", "failure", "citation", "legal", "reference"].includes(key)).sort(), Object.keys(PAGES).sort(), "one entry per live page, the forms, the page shell, the site around it and its freshness strip, the evaluation and refusal cards, the coverage answer, the failure panel, what the screens share, the citation generator's words, what the legal pages share and what the reference pages share");
+  assert.deepEqual(Object.keys(copy).filter((key) => !["form", "common", "shell", "site", "breadcrumbs", "freshness", "card", "refusalCard", "coverageAnswer", "failure", "citation", "legal", "reference"].includes(key)).sort(), Object.keys(PAGES).sort(), "one entry per live page, the forms, the page shell, the site around it, its breadcrumbs and its freshness strip, the evaluation and refusal cards, the coverage answer, the failure panel, what the screens share, the citation generator's words, what the legal pages share and what the reference pages share");
   for (const [key, render] of Object.entries(PAGES)) {
     const html = render();
     const entry = copy[key];

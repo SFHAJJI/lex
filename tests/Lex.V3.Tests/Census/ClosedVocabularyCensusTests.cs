@@ -61,7 +61,8 @@ public sealed class ClosedVocabularyCensusTests
                 "Lex.V3.Api.V3TransportFailureKind: MalformedJson, DuplicateJsonMember, "
                     + "TrailingJsonContent, RequestTooLarge, RequestTooDeep, ParametersNotObject, "
                     + "RequestSchemaInvalid, UnknownOperation, MethodNotAllowed, UnknownRoute, "
-                    + "InternalResponseInvalid, InternalFailure, OperationNotServed",
+                    + "InternalResponseInvalid, InternalFailure, OperationNotServed, "
+                    + "ServiceInMaintenance",
                 "Lex.V3.Artifacts.ArtifactAdmissionFailureCode: HeaderTooLarge, MalformedHeader, "
                     + "DuplicateMember, UnknownMember, PreviewSchemaForbidden, "
                     + "SyntheticFlagForbidden, SyntheticEvidenceForbidden, SyntheticSourceForbidden, "

@@ -286,6 +286,11 @@ Updated 2026-10-27.
   - Web: `node scripts/build.mjs`, then `node --test` over 17 files (permalinks, live dossier, dossier answer, the chrome
     and its scan, localization, search engines, reading answer, the EU reading, live, pinned and pages readings, evidence
     bundle, dossier, legal pages, live SSR): 186 passed.
+- **Merged with v3/integration** (#997, the screens' gaps), the French table's header comment holding both addenda. Its
+  breadcrumbs built an EU act's address from the bare CELEX; they now write it through `europeWorkSegment`, and
+  `breadcrumbs.test.mjs` holds a slash CELEX's act crumb to `/en/eu-eurlex/12016E%2FTXT` (it fails without the fix).
+  After the merge: `Lex.V3.Tests` `V3WebRoot*` 28 passed; the web built again and `node --test` over 20 files (the 17
+  above, breadcrumbs, print view, live home): 210 passed.
 
 ## The PDF layout reads no host font: a Windows and a Linux derive write the same PDF artefacts (sole driver, 2026-10-27)
 

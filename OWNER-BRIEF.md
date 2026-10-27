@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-27 at 06:00 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-27 at 04:55 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -14,12 +14,12 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 - Today Luxembourg has 1,730 acts as first published, no codes; EU text covers 511 of 1,170 versions. The codes were
   rebuilt on Azure on 26 October; their date check is being rewritten before a second release carries them.
 - Fixed on 27 October: reading a PDF no longer depends on the machine's fonts, so this PC and Azure build the same files.
-- In review, in one pull request: Get help, How to read Lex (with a glossary) and Developers, the three pages the
-  specification lists and the site lacked, in French and English; a limit of 60 questions a minute per visitor on the
-  programming interface (pages are never refused), kept only in memory as a fingerprint forgotten within two minutes,
-  as the privacy notice and Developers say; security headers on every answer; the published signing key; a check of
-  the site every five minutes from outside Azure; and two operating documents, docs/OPERATING.md and
-  docs/INCIDENT-RUNBOOK.md.
+- Merged on 27 October: Get help, How to read Lex and Developers; a limit of 60 questions a minute per visitor on
+  the programming interface, kept only in memory; security headers; the published signing key; an outside check of the
+  site every five minutes; and two operating documents, docs/OPERATING.md and docs/INCIDENT-RUNBOOK.md.
+- In review on 27 October, repaired after its review: the last screen gaps: breadcrumbs, a clean printout of a text, a
+  maintenance page for deployments, and example searches on the home page, shown only once the list of acts that name no
+  private person exists (not yet). A deployment now refuses to start unless it names the version serving all visitors.
 
 ## The plan
 
