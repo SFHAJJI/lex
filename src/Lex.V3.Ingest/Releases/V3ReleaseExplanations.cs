@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using Lex.V3.Contracts.Source.Luxembourg;
 
 namespace Lex.V3.Ingest.Releases;
 
@@ -66,6 +67,17 @@ public sealed record V3ReleaseExplanations(
     /// <summary>The reasons an entry may give, in a closed list.</summary>
     public static IReadOnlyList<string> Reasons { get; } = [DerivationRuleChanged, RightsWithdrawn, WithdrawnByPublisher, DefectCorrected];
 
+    /// <summary>The Luxembourg rights dispositions by their wire names, the tokens a withheld version's reason starts with.</summary>
+    private static readonly HashSet<string> LuxembourgRightsDispositions = typeof(LuxembourgRightsChannelDisposition)
+        .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+        .Select(static field => field.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonStringEnumMemberNameAttribute), false)
+            .Cast<System.Text.Json.Serialization.JsonStringEnumMemberNameAttribute>().SingleOrDefault()?.Name)
+        .OfType<string>()
+        .ToHashSet(StringComparer.Ordinal);
+
+    private static bool IsToken(string value) =>
+        value.Length > 0 && value[0] is >= 'a' and <= 'z' && value.All(static c => c is >= 'a' and <= 'z' or >= '0' and <= '9' or '_');
+
     /// <summary>Reads and checks an explanations file.</summary>
     public static V3ReleaseExplanations Read(byte[] bytes)
     {
@@ -111,6 +123,15 @@ public sealed record V3ReleaseExplanations(
                 if (byProfiles && (reason != DerivationRuleChanged || publisher != V3MountInventory.Luxembourg || from is null || to is null || from == to))
                 {
                     throw new InvalidDataException($"{where}: a scope by rule profiles is a Luxembourg derivation_rule_changed naming two different profiles.");
+                }
+
+                // A disposition is a whole rights token the data can carry, never a fragment (the review of #1002, F2).
+                foreach (var disposition in dispositions)
+                {
+                    if (publisher == V3MountInventory.Luxembourg ? !LuxembourgRightsDispositions.Contains(disposition) : !IsToken(disposition))
+                    {
+                        throw new InvalidDataException($"{where} names the disposition {disposition}, which is not a rights disposition of {publisher}.");
+                    }
                 }
 
                 if (dispositions.Count > 0 && reason != RightsWithdrawn)

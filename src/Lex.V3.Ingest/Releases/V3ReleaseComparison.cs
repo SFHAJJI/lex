@@ -227,7 +227,8 @@ public sealed record V3ReleaseComparison(
                     ByEntry(entry => ItemListed(entry, after.Publisher, key) ||
                         (entry.Publisher == after.Publisher && entry.Dispositions.Count > 0 &&
                          after.TextStatus == "withheld_rights" && after.TextStatusReason is { } withheld &&
-                         entry.Dispositions.Any(disposition => withheld.StartsWith(disposition, StringComparison.Ordinal)))));
+                         entry.Dispositions.Any(disposition => withheld == disposition ||
+                             withheld.StartsWith(disposition + "; ", StringComparison.Ordinal)))));
             }
             else if (!before.HasText && after.HasText)
             {
@@ -306,7 +307,8 @@ public sealed record V3ReleaseComparison(
                 // with text is its own.
                 if (servingVersion is not null && candidateVersion is { HasText: true })
                 {
-                    var bodyChanged = !servingVersion.BodySha256s.SequenceEqual(candidateVersion.BodySha256s, StringComparer.Ordinal);
+                    // The data explains it only when the file it was read from is no longer read (the review of #1002, F1).
+                    var bodyChanged = !candidateVersion.BodySha256s.Contains(unmatched[index].BodySha256, StringComparer.Ordinal);
                     Add(ArticleLost, version, key, address, ArticleFacts(unmatched[index]), VersionFacts(null),
                         bodyChanged ? (PublisherBodyChanged, "data", null) : ByEntry(entry => ItemListed(entry, version.Publisher, key)));
                 }

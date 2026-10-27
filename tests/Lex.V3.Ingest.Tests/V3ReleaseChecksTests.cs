@@ -217,6 +217,48 @@ public sealed class V3ReleaseChecksTests
     }
 
     [TestMethod]
+    public void ARightsEntryExplainsOnlyAWholeDispositionAndAnArticleLostFromAFileStillReadIsNeverTheDatas()
+    {
+        // The review of #1002, F2: "conflict" explains a version withheld as a conflict, with or without the reason's detail, and
+        // never one whose reason merely starts with the same letters.
+        var serving = Inventory(
+            Version("a", "2020-01-01", "s1", bodies: ["b1"]),
+            Version("b", "2020-01-01", "s2", bodies: ["b2"]),
+            Version("c", "2020-01-01", "s3", bodies: ["b3"]));
+        var candidate = Inventory(
+            Version("a", "2020-01-01", "s1", status: "withheld_rights", reason: "conflict", bodies: [], articles: 0),
+            Version("b", "2020-01-01", "s2", status: "withheld_rights", reason: "conflict; content consistency", bodies: [], articles: 0),
+            Version("c", "2020-01-01", "s3", status: "withheld_rights", reason: "conflicting_detail", bodies: [], articles: 0));
+        var explained = V3ReleaseComparison.Compare(serving, candidate, Explanations(new JsonArray
+        {
+            Entry(V3ReleaseExplanations.RightsWithdrawn, V3MountInventory.Luxembourg, dispositions: ["conflict"]),
+        }));
+        var byWork = explained.Items.ToDictionary(static item => item.Key[..item.Key.IndexOf("|2020", StringComparison.Ordinal)], static item => item.Explained);
+        Assert.IsTrue(byWork["lu-legilux|a"]);
+        Assert.IsTrue(byWork["lu-legilux|b"]);
+        Assert.IsFalse(byWork["lu-legilux|c"], "a reason that only starts with the disposition's letters is another reason");
+
+        // F1: the version now also reads b2, but y is gone from b1, which it still reads: the data does not explain that loss.
+        var version = Version("d", "2020-01-01", "s4", bodies: ["b1"], articles: 2);
+        var widened = version with { BodySha256s = ["b1", "b2"] };
+        var lost = V3ReleaseComparison.Compare(
+                Inventory([version], Article(version, "1", ("x", "b1", ProfileBefore)), Article(version, "2", ("y", "b1", ProfileBefore))),
+                Inventory([widened], Article(widened, "1", ("x", "b1", ProfileBefore)), Article(widened, "3", ("w", "b2", ProfileBefore))),
+                null)
+            .Items.Single(static item => item.Change == V3ReleaseComparison.ArticleLost);
+        Assert.IsFalse(lost.Explained, "an article lost from a file the candidate still reads is never the publisher's change");
+
+        // An article lost with the file it was read from is the data's.
+        var moved = version with { BodySha256s = ["b2"] };
+        var gone = V3ReleaseComparison.Compare(
+                Inventory([version], Article(version, "1", ("x", "b1", ProfileBefore)), Article(version, "2", ("y", "b1", ProfileBefore))),
+                Inventory([moved], Article(moved, "1", ("x", "b2", ProfileBefore))),
+                null)
+            .Items.Single(static item => item.Change == V3ReleaseComparison.ArticleLost);
+        Assert.AreEqual((V3ReleaseComparison.PublisherBodyChanged, "data"), (gone.Reason, gone.ReasonSource));
+    }
+
+    [TestMethod]
     public void TheExplanationsFileIsReadStrictly()
     {
         var good = Explanations(new JsonArray
@@ -247,6 +289,9 @@ public sealed class V3ReleaseChecksTests
             ("a profile that is no digest", static root => root["changes"]![0]!["from_rule_profile_sha256"] = "ABC"),
             ("dispositions for another reason", static root => root["changes"]![1]!["reason"] = V3ReleaseExplanations.DefectCorrected),
             ("an item twice", static root => root["changes"]![2]!["items"] = new JsonArray("eu-eurlex|x", "eu-eurlex|x")),
+            // The review of #1002, F2: a disposition is a whole rights token, never a fragment of one.
+            ("a disposition that is a fragment", static root => root["changes"]![1]!["dispositions"] = new JsonArray("t")),
+            ("a disposition no rights rule names", static root => root["changes"]![1]!["dispositions"] = new JsonArray("conflicting")),
             ("a textless entry with no object", static root => root["textless"]![0]!.AsObject().Remove("object_ref_sha256")),
             ("a textless entry with no outcome", static root => root["textless"]![0]!["outcome"] = ""),
         };

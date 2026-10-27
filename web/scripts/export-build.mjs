@@ -38,7 +38,8 @@
 // each item read from such a source carries `rights_disclosure` (the code, the licence page's digest, the date it was observed
 // and whether live, and the platform's English sentence, the reading page's L5 sentence), and the export as a whole lists the
 // bundle's disclosures once each (`rights_disclosures`); the CSV says it in a last column, `rights_disclosure`, and the PDF in a
-// paragraph beside the rights rule and on each item. An export of a text with no disclosure is byte for byte what it was.
+// paragraph beside the rights rule and on each item. An export of a text with no disclosure keeps its JSON and PDF byte for
+// byte; its CSV gains the last column, empty (the review of #1002).
 //
 // An EU reading (`readEuropeEvidenceBundle`) is composed by `composeEuropeExport` into a model of its
 // own (`lex-v3-export-eu/1`), never through the Luxembourg one: an EU article is dated by its wording,
@@ -363,7 +364,7 @@ export function exportJson(model) {
     requested_date: model.date,
     rights_disposition: model.rightsDisposition,
     rights_rule: model.rightsRule,
-    // Only where the text rests on the publisher's catalogue alone, so every other export is byte for byte what it was.
+    // Only where the text rests on the publisher's catalogue alone, so every other export's JSON is byte for byte what it was.
     ...((model.rightsDisclosures ?? []).length === 0 ? {} : { rights_disclosures: model.rightsDisclosures.map(disclosureJson) }),
     as_published: model.asPublished === null ? null : {
       label: model.asPublished.label,
