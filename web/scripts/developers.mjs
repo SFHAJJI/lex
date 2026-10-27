@@ -89,6 +89,16 @@ export const LIVE_EXAMPLE_REQUEST = Object.freeze({ operation_id: "browse", para
 /** The largest request body the API reads, in bytes (`V3PlatformHost.MaximumRequestBytes`); a larger one answers request_too_large. */
 export const MAXIMUM_REQUEST_BYTES = 1024 * 1024;
 
+/**
+ * The per-client limit (R109, R46; `V3ClientLimiter`): API requests a minute and at once for one client (REST and MCP
+ * together), the status REST answers `rate_limited` with (`V3ResolveRestRoute.HandleRateLimitedAsync`), and the pages the
+ * server renders itself a minute, past which a page is sent as built.
+ */
+export const CLIENT_LIMIT = Object.freeze({ apiPerMinute: 60, apiInFlight: 4, status: 429, rendersPerMinute: 300 });
+
+/** Where the published key set stands (R116; `V3KeySet.RawTarget`), served by the API, not a file of the pages. */
+export const KEY_SET_PATH = "/.well-known/lex-keys.json";
+
 /** The schema of the problem document a request that never reaches an envelope answers (`V3TransportResponse.Schema`). */
 export const TRANSPORT_PROBLEM_SCHEMA = "lex-v3-transport-problem/1";
 

@@ -102,6 +102,7 @@ import { searchFragment } from "./search-address.mjs";
 import { INDEXED, X_ROBOTS_TAG } from "./search-engines.mjs";
 import { CANONICAL_HOST } from "./routes.mjs";
 import { luxembourgDate } from "./temporal.mjs";
+import { fetchWithinLimit } from "./within-limit.mjs";
 
 /** The origin the site's head links name (`Document.jsx`, `head-links.mjs`), whatever server a journey runs against. */
 const SITE_ORIGIN = `https://${CANONICAL_HOST}`;
@@ -1464,7 +1465,7 @@ const COVERAGE_BODY = Object.freeze({ operation_id: "coverage", parameters: Obje
 async function verifyCitations(origin, citations) {
   const verifications = [];
   for (const identifier of citations) {
-    const answer = await fetch(`${origin}/api/v3/verify`, {
+    const answer = await fetchWithinLimit(`${origin}/api/v3/verify`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation_id: "verify", parameters: { identifier } }),
     });
     const envelope = await answer.json();
@@ -1489,9 +1490,9 @@ async function verifyCitations(origin, citations) {
 export async function verifyEvidence(origin, cited, fetchImpl = fetch) {
   const checks = [];
   for (const { permalink, textSha256 } of cited) {
-    const answer = await fetchImpl(`${origin}/api/v3/verify`, {
+    const answer = await fetchWithinLimit(`${origin}/api/v3/verify`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation_id: "verify", parameters: { identifier: permalink } }),
-    });
+    }, { fetchImpl });
     const envelope = await answer.json();
     const value = envelope.result?.value ?? null;
     checks.push({
@@ -1520,7 +1521,7 @@ export async function run(apiOutput, mount, expected, browser, liveRoot) {
   if (expected.fromApi) {
     // Asked before the browser, of the same server, with the page's own request.
     const body = bodyOn(expected.step.body ?? COVERAGE_BODY, todayInLuxembourgAt(Date.now()));
-    const answer = await fetch(`${api.origin}/api/v3/${body.operation_id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const answer = await fetchWithinLimit(`${api.origin}/api/v3/${body.operation_id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     expected = expectedForAnswer(expected, await answer.json());
   }
   const live = expected.servedByApi ? null : createLiveServer({ root: liveRoot, apiOrigin: api.origin });
@@ -1624,7 +1625,7 @@ export async function heldLuxembourgWork(mount) {
 
 /** One operation asked of a server as a page asks it (`POST /api/v3/{operation}`), and its envelope; null when it answers no 200. */
 export async function askOperation(origin, operation, parameters) {
-  const answer = await fetch(`${origin}/api/v3/${operation}`, {
+  const answer = await fetchWithinLimit(`${origin}/api/v3/${operation}`, {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation_id: operation, parameters }),
   });
   return answer.ok ? answer.json() : null;
@@ -1961,7 +1962,7 @@ export function pageRequestBodies() {
 }
 
 async function postJson(url, body) {
-  const answer = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const answer = await fetchWithinLimit(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   const text = await answer.text();
   let json = null;
   try {

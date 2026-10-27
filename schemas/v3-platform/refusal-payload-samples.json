@@ -3,7 +3,7 @@
     "advice_boundary",
     "derivation_refused",
     "not_transposable",
-    "rate_limited",
+    "out_of_corpus_scope",
     "upstream_unreachable"
   ],
   "produced": [
@@ -481,35 +481,6 @@
       ]
     },
     {
-      "code": "out_of_corpus_scope",
-      "optional_payload_keys": [],
-      "payload": {
-        "asserts_absence_of_law": false,
-        "instrument": "a decision or opinion of the Commission nationale pour la protection des donn\u00E9es (CNPD)",
-        "official_source": "https://cnpd.public.lu/",
-        "out_of_scope_class": "cnpd_decision",
-        "reason": "Decisions and opinions of the CNPD are issued and published by the CNPD, not by Legilux or EUR-Lex, and Lex does not collect them.",
-        "requested_identifier": "D\u00E9lib\u00E9ration CNPD n\u00B0 12/2023",
-        "scope_list": "lex-v3-out-of-scope/1",
-        "scope_list_sha256": "2020e923582bf0ffc3f0b5fd25e1d6f356f1c5e1506f7db16bde3463a3ae1372",
-        "what_would_answer": [
-          "expanded_official_scope"
-        ],
-        "what_would_answer_detail": "Lex collecting this class of instrument, which it does not: the official place and who_to_ask name where it is published",
-        "who_to_ask": {
-          "link": "https://cnpd.public.lu/",
-          "name": "Commission nationale pour la protection des donn\u00E9es (CNPD)",
-          "role": "information"
-        }
-      },
-      "produced_by": [
-        "as_of",
-        "dossier",
-        "resolve",
-        "timeline"
-      ]
-    },
-    {
       "code": "pinned_digest_mismatch",
       "optional_payload_keys": [],
       "payload": {
@@ -551,18 +522,42 @@
       ]
     },
     {
+      "code": "rate_limited",
+      "optional_payload_keys": [],
+      "payload": {
+        "retry_after": 1,
+        "retryable": true
+      },
+      "produced_by": [
+        "answer_drift",
+        "article_history",
+        "as_observed",
+        "as_of",
+        "ask",
+        "browse",
+        "changes_in_period",
+        "citation",
+        "cited_by",
+        "classification",
+        "coverage",
+        "diff",
+        "dossier",
+        "events",
+        "evidence_bundle",
+        "in_force_on",
+        "manifestation",
+        "provenance",
+        "relations",
+        "resolve",
+        "search",
+        "status_on",
+        "timeline",
+        "verify"
+      ]
+    },
+    {
       "code": "retrieval_mode_unavailable",
-      "more_payloads": [
-        {
-          "available_modes": [
-            "r5_browse"
-          ],
-          "data_needed": "the concept data attached to EU works: EuroVoc descriptors, EU directory codes and subject matters as the Publications Office records them; the EU index holds none of them",
-          "requested_mode": "r5_concepts"
-        }
-      ],
       "optional_payload_keys": [
-        "data_needed",
         "recognised_act",
         "recognised_article",
         "recognised_date",
@@ -593,11 +588,9 @@
         "citation",
         "cited_by",
         "classification",
-        "concepts",
         "diff",
         "evidence_bundle",
         "in_force_on",
-        "knowable_on",
         "manifestation",
         "provenance",
         "relations",
@@ -605,7 +598,6 @@
         "search",
         "status_on",
         "timeline",
-        "transposition",
         "verify"
       ]
     },

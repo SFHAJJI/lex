@@ -25,10 +25,10 @@ import { OFFICIAL_SITES } from '../scripts/live-failure.mjs';
 import { legalPage } from '../scripts/legal-pages.mjs';
 import { REFERENCE_PAGES, glossaryRows, referencePage } from '../scripts/reference-pages.mjs';
 import {
-  LIVE_EXAMPLE_REQUEST, MAXIMUM_REQUEST_BYTES, MCP_ENDPOINT, MCP_INSTRUCTIONS, MCP_METHODS, MCP_PROTOCOL_VERSION, PRESENTATION_RESULTS,
-  PREVIOUS_REGISTRY_SCHEMA, REGISTRY_VERSION_SINCE, REPLAY_GUARANTEES, REPLAY_TESTS, RETENTION_NIGHTLY_DAYS, TRANSPORT_PROBLEMS,
-  TRANSPORT_PROBLEM_SCHEMA, liveAnswerText, liveExamples, liveNextExamples, liveRestExample, mcpClientExample, mcpExample,
-  parameterSchemaText, restExample,
+  CLIENT_LIMIT, KEY_SET_PATH, LIVE_EXAMPLE_REQUEST, MAXIMUM_REQUEST_BYTES, MCP_ENDPOINT, MCP_INSTRUCTIONS, MCP_METHODS, MCP_PROTOCOL_VERSION,
+  PRESENTATION_RESULTS, PREVIOUS_REGISTRY_SCHEMA, REGISTRY_VERSION_SINCE, REPLAY_GUARANTEES, REPLAY_TESTS, RETENTION_NIGHTLY_DAYS,
+  TRANSPORT_PROBLEMS, TRANSPORT_PROBLEM_SCHEMA, liveAnswerText, liveExamples, liveNextExamples, liveRestExample, mcpClientExample,
+  mcpExample, parameterSchemaText, restExample,
 } from '../scripts/developers.mjs';
 import { longDate } from '../scripts/live-search.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG } from '../scripts/live-chrome.mjs';
@@ -351,7 +351,8 @@ export function DevelopersBody({ model, live = null }) {
   const chrome = liveChrome();
   const copy = chrome.developers;
   const endpoint = <code>{`${SITE_ORIGIN}${MCP_ENDPOINT}`}</code>;
-  const bytes = new Intl.NumberFormat(CHROME_LOCALE).format(MAXIMUM_REQUEST_BYTES);
+  const count = (value) => new Intl.NumberFormat(CHROME_LOCALE).format(value);
+  const bytes = count(MAXIMUM_REQUEST_BYTES);
   const events = model.events;
   return (
     <>
@@ -472,6 +473,7 @@ export function DevelopersBody({ model, live = null }) {
           />
         </p>
         <p><Say template={copy.citing.verify} values={{ verify: code('verify') }} /></p>
+        <p data-key-set={KEY_SET_PATH}><Say template={copy.citing.keys} values={{ keySet: code(`${SITE_ORIGIN}${KEY_SET_PATH}`) }} /></p>
         <p><Say template={copy.citing.forms} values={{ conventional: chrome.reading.citeConventional, withPermalink: chrome.reading.citeWithPermalink, evidence: chrome.reading.citeEvidence }} /></p>
       </Part>
 
@@ -479,7 +481,16 @@ export function DevelopersBody({ model, live = null }) {
         <p><Say template={copy.limits.anonymous} values={{ privacyPage: pageLink(legalPage('privacy').file, chrome.legal.inline.privacy) }} /></p>
         <p data-request-bytes={MAXIMUM_REQUEST_BYTES}><Say template={copy.limits.size} values={{ bytes, code: code('request_too_large') }} /></p>
         <p><Say template={copy.limits.paging} values={{ limit: code('limit'), after: code('after') }} /></p>
-        <p><Say template={copy.limits.rate} values={{ code: code('rate_limited'), retryAfter: code('retry_after') }} /></p>
+        <p data-client-limit={`${CLIENT_LIMIT.apiPerMinute}/${CLIENT_LIMIT.apiInFlight}/${CLIENT_LIMIT.status}`}>
+          <Say
+            template={copy.limits.rate}
+            values={{
+              perMinute: count(CLIENT_LIMIT.apiPerMinute), atOnce: count(CLIENT_LIMIT.apiInFlight), status: CLIENT_LIMIT.status,
+              code: code('rate_limited'), retryAfter: code('retry_after'), retryAfterHeader: code('Retry-After'),
+            }}
+          />
+        </p>
+        <p data-render-limit={CLIENT_LIMIT.rendersPerMinute}><Say template={copy.limits.pages} values={{ renders: count(CLIENT_LIMIT.rendersPerMinute) }} /></p>
         <p><Say template={copy.limits.availability} values={{ termsPage: pageLink(legalPage('terms').file, chrome.legal.inline.terms) }} /></p>
       </Part>
 

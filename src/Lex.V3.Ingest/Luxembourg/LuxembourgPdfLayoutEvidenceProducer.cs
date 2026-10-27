@@ -4,7 +4,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
 using Lex.V3.Contracts.Custody;
-using UglyToad.PdfPig;
 
 namespace Lex.V3.Ingest.Luxembourg;
 
@@ -258,6 +257,11 @@ public static class LuxembourgPdfLayoutEvidenceArtifactReader
 /// </summary>
 public sealed class LuxembourgPdfLayoutEvidenceProducer
 {
+    // "parser=pdfpig/0.1.11" is PdfPig reading no font from the host (HostFontFreePdf). Until 2026-10-27 a font the PDF
+    // does not embed was read from the host's installed fonts, so a Windows host with Arial wrote other glyph boxes than
+    // the Linux release image, which has none. The rule is unchanged: every host now writes what a host without the PDF's
+    // non-embedded fonts always wrote (run 15: D1's 22 artifacts byte for byte; 22 of the 184 the Windows build wrote on
+    // 2026-10-12 were host-font readings, the other 162 are the same on every host).
     private const string RuleProfile =
         "lex-v3-luxembourg-pdf-layout-evidence-rule/2\n" +
         "parser=pdfpig/0.1.11\n" +
@@ -365,7 +369,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducer
                     0));
                 continue;
             }
-            catch (Exception)
+            catch (Exception exception) when (exception is not PdfHostFontIsolationException)
             {
                 outcomes.Add(Outcome(
                     source,
@@ -442,13 +446,18 @@ public sealed class LuxembourgPdfLayoutEvidenceProducer
         return receipt;
     }
 
-    private static PdfLayoutEvidenceArtifact ReadLayout(
+    /// <summary>
+    /// One member's canonical artifact from its retained bytes. The document is opened through
+    /// <see cref="HostFontFreePdf"/>, so a font the PDF does not embed is read from the PDF's own metrics on every host;
+    /// internal so tests can lay out a PDF without composing a population.
+    /// </summary>
+    internal static PdfLayoutEvidenceArtifact ReadLayout(
         byte[] bytes,
         string sourceSemanticIdentitySha256,
         long maximumArtifactBytes,
         CancellationToken cancellationToken)
     {
-        using var document = PdfDocument.Open(bytes);
+        using var document = HostFontFreePdf.Open(bytes);
         using var writer = new LuxembourgPdfLayoutEvidenceArtifactCodec.Writer(
             RuleProfileSha256,
             sourceSemanticIdentitySha256,
@@ -523,7 +532,7 @@ public sealed class LuxembourgPdfLayoutEvidenceProducer
     private static string Digest(string value) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
-    private sealed record PdfLayoutEvidenceArtifact(
+    internal sealed record PdfLayoutEvidenceArtifact(
         ReadOnlyMemory<byte> Bytes,
         int PageCount,
         int GlyphCount,

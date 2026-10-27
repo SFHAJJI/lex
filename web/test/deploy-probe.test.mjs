@@ -15,7 +15,7 @@ import test from "node:test";
 import { cspValue } from "../scripts/csp.mjs";
 import { CARD_ROUTE } from "../scripts/evaluation-card.mjs";
 import { redirectFor } from "../scripts/permalinks.mjs";
-import { ROBOTS_KEPT_OUT } from "../scripts/search-engines.mjs";
+import { INDEXED, KEPT_OUT, ROBOTS_KEPT_OUT, SITEMAP_INDEX_HEAD, robotsTxt } from "../scripts/search-engines.mjs";
 import {
   NOT_FOUND_PROBE, REMOTE_PRIVACY_NOTE, accentedTitleFailures, browserFailures, clockFailures, deployedReleaseFailures, homePageFailures,
   legalPageFailures, liveFilesOf, luxembourgTodayNote, remoteRevision, renderedHomePage, revisionFailures,
@@ -101,7 +101,7 @@ async function revision(change = {}) {
   const answer = {
     page: PAGE, card: CARD, corpus: CORPUS, headers: HEADERS, refusal: null, extra: new Map(), root: { status: 302, location: "/fr/", vary: "Accept-Language" },
     ready: { status: 204, cache: "no-store" }, observedAt: () => observedAt(Date.now()), folds: true, titlesHeld: true,
-    notFound: { status: 404, body: NOT_FOUND_PAGE }, legal: new Map(), ...change,
+    notFound: { status: 404, body: NOT_FOUND_PAGE }, legal: new Map(), robots: ROBOTS_KEPT_OUT, sitemap: null, ...change,
   };
   const server = createServer((request, response) => {
     const path = request.url.split("?")[0];
@@ -113,9 +113,13 @@ async function revision(change = {}) {
       response.writeHead(302, { ...answer.headers, location: redirectFor(path, "", request.headers["accept-language"]), vary: "Accept-Language" });
       response.end();
     } else if (request.method === "GET" && path === "/robots.txt") {
-      // The release's own robots.txt, kept out of search engines until O27 (R67).
+      // The release's own robots.txt, kept out of search engines unless the deployment opens it (R67, O27).
       response.writeHead(200, { "content-type": "text/plain; charset=utf-8", ...answer.headers });
-      response.end(ROBOTS_KEPT_OUT);
+      response.end(answer.robots);
+    } else if (request.method === "GET" && path === "/sitemap.xml" && answer.sitemap !== null) {
+      // The sitemap index a revision opened to search engines serves.
+      response.writeHead(200, { "content-type": "application/xml; charset=utf-8", ...answer.headers });
+      response.end(answer.sitemap);
     } else if (request.method === "GET" && path === "/health/ready") {
       response.writeHead(answer.ready.status, { "cache-control": answer.ready.cache, "x-content-type-options": "nosniff" });
       response.end(answer.ready.status === 204 ? undefined : "No law is mounted.\n");
@@ -161,6 +165,27 @@ async function revision(change = {}) {
 }
 
 const WEB = [["fr/index.html", PAGE], ["evaluation-card.json", CARD], ["not-found/fr.html", NOT_FOUND_PAGE]];
+
+test("robots.txt and the sitemap are held to the deployment's own switch: an indexed revision passes as indexed, and fails as kept out (the probe of 2026-10-27)", async () => {
+  const indexed = await revision({ robots: robotsTxt(INDEXED), sitemap: `${SITEMAP_INDEX_HEAD}<sitemap><loc>https://example.test/sitemap-1.xml</loc></sitemap></sitemapindex>\n` });
+  const keptOut = await revision();
+  try {
+    assert.deepEqual(await revisionFailures(indexed.origin, { web: WEB, card: CARD, corpusSha256: CORPUS, searchEngines: INDEXED }), []);
+    // Held to the kept-out switch, the indexed revision fails exactly as the deployment of 27 October's candidate did.
+    assert.deepEqual(await revisionFailures(indexed.origin, { web: WEB, card: CARD, corpusSha256: CORPUS }), [
+      "GET /robots.txt answered 200, not V3's own robots.txt (kept-out)",
+      "GET /sitemap.xml answered 200, not 404",
+    ]);
+    assert.deepEqual(await revisionFailures(keptOut.origin, { web: WEB, card: CARD, corpusSha256: CORPUS, searchEngines: KEPT_OUT }), []);
+    // A kept-out revision held to the indexed switch fails: no indexed robots.txt, and no sitemap.
+    const asIndexed = await revisionFailures(keptOut.origin, { web: WEB, card: CARD, corpusSha256: CORPUS, searchEngines: INDEXED });
+    assert.ok(asIndexed.includes("GET /robots.txt answered 200, not V3's own robots.txt (indexed)"), asIndexed.join("\n"));
+    assert.ok(asIndexed.includes("GET /sitemap.xml answered 404, not V3's own sitemap.xml (indexed)"), asIndexed.join("\n"));
+  } finally {
+    await indexed.close();
+    await keptOut.close();
+  }
+});
 
 test("a revision that answers as its release holds passes the probe", async () => {
   const served = await revision();
@@ -438,7 +463,11 @@ test("the browser probes run the journey's real-mount steps against the revision
     assert.ok(seen.report.equals(report), "the release's mount report stands as the build report the steps read");
     assert.equal(seen.server.origin, "https://candidate.example");
     assert.equal(seen.options.servedByApi, true, "the revision serves its own pages, so the security headers are held");
+    assert.equal(seen.options.searchEngines, KEPT_OUT, "unsaid, the walk holds the pages to the kept-out switch");
     assert.equal(seen.browser, "the browser");
+    // Told the deployment's switch, the walk holds each page's robots elements to it (the review of #993, its F1).
+    await browserFailures("https://candidate.example", release, { browser: "the browser", runs, held, searchEngines: INDEXED });
+    assert.equal(seen.options.searchEngines, INDEXED, "an indexed deployment's walk is held to the indexed switch");
     const { existsSync } = await import("node:fs");
     assert.ok(!existsSync(seen.mount), "the temporary mount report is removed");
   } finally {

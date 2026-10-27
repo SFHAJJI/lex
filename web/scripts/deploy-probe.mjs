@@ -50,7 +50,7 @@ import { askOperation, heldLuxembourgWorkFromAnswers, realMountRuns } from "./jo
 import { ASSETS, RELEASE_MANIFEST, releaseFailures } from "./release-assets.mjs";
 import { readLargeFile } from "./large-bytes.mjs";
 import { HOME_FACTS_ID, readHomeFactsValue } from "./live-home.mjs";
-import { KEPT_OUT_META, NEVER_INDEXED_META } from "./search-engines.mjs";
+import { INDEXED, KEPT_OUT, KEPT_OUT_META, NEVER_INDEXED_META } from "./search-engines.mjs";
 import { LEGAL_PAGE_PATHS, builtLegalPageFailures, openingFailures } from "./legal-pages.mjs";
 import { luxembourgDate, luxembourgOffset, luxembourgSummerTimeEnds, luxembourgSummerTimeStarts } from "./temporal.mjs";
 
@@ -190,7 +190,9 @@ export async function revisionFailures(origin, options) {
   const served = servedPaths(options.web);
   if (!served.has("/fr/")) return failures;
   failures.push(...await serverFailures(origin));
-  failures.push(...await v2RouteFailures(origin, { v3Files: served }));
+  // robots.txt and the sitemap are held to the deployment's own switch (deploy.ps1 -SearchEngines): a revision opened to
+  // search engines serves V3's indexed robots.txt and its sitemap index, one kept out neither (the probe of 27 October).
+  failures.push(...await v2RouteFailures(origin, { v3Files: served, searchEngines: options.searchEngines ?? KEPT_OUT }));
   return failures;
 }
 
@@ -513,11 +515,13 @@ export function remoteRevision(origin) {
  * build report they read, and the Luxembourg work they ask for chosen from the revision's own answers (`held`; the
  * revision's index is not at hand). Failures, each prefixed with its step; empty when every step passes.
  */
-export async function browserFailures(origin, releaseDirectory, { browser, runs = realMountRuns, held = heldLuxembourgWorkFromAnswers }) {
+export async function browserFailures(origin, releaseDirectory, { browser, runs = realMountRuns, held = heldLuxembourgWorkFromAnswers, searchEngines = KEPT_OUT }) {
   const work = await mkdtemp(join(tmpdir(), "lex-deploy-browser-"));
   try {
     await writeFile(join(work, "build-report.json"), await readFile(join(releaseDirectory, ASSETS.mountReport)));
-    const results = await runs(null, work, { servedByApi: true, keyboard: false, startServer: async () => remoteRevision(origin) }, browser, null,
+    // The walk holds each page's robots elements and X-Robots-Tag to the deployment's own switch (`journey.mjs`, its
+    // `expected.searchEngines`), as the HTTP probe holds robots.txt and the sitemap (the review of #993, its F1).
+    const results = await runs(null, work, { servedByApi: true, keyboard: false, searchEngines, startServer: async () => remoteRevision(origin) }, browser, null,
       { held: await held(origin) });
     return results.flatMap(([label, { failures }]) => failures.map((failure) => `${label}: ${failure}`));
   } finally {
@@ -530,7 +534,7 @@ export async function browserFailures(origin, releaseDirectory, { browser, runs 
  * identity's key (`publicKeyPem`), and as signed by the release signer `identity` when one is named, then the revision
  * held to what the release holds. Failures, empty when both hold; what the probe says but does not hold goes to `notes`.
  */
-export async function deployedReleaseFailures(origin, releaseDirectory, { publicKeyPem, identity = null, notes = [], promotion = [], opening = false }) {
+export async function deployedReleaseFailures(origin, releaseDirectory, { publicKeyPem, identity = null, notes = [], promotion = [], opening = false, searchEngines = KEPT_OUT }) {
   const release = await releaseFailures(releaseDirectory, { publicKeyPem, identity });
   if (release.length > 0) return release.map((failure) => `the release does not read back: ${failure}`);
   const manifest = JSON.parse(await readFile(join(releaseDirectory, RELEASE_MANIFEST), "utf8"));
@@ -541,6 +545,7 @@ export async function deployedReleaseFailures(origin, releaseDirectory, { public
     notes,
     promotion,
     opening,
+    searchEngines,
   });
 }
 
@@ -558,6 +563,8 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
   const opening = argv.includes("--opening");
   // With --promotion-check, a revision that passes its probe while promotion refuses its data exits 3 (deploy.ps1).
   const promotionCheck = argv.includes("--promotion-check");
+  // The deployment's search-engine switch (deploy.ps1 -SearchEngines), exactly as the API reads it; kept out unless said.
+  const searchEngines = argv.includes("--search-engines") ? value("--search-engines") : KEPT_OUT;
   // The opening's own check (deploy.ps1 -Open): the site's served legal pages, and nothing else; it fails closed.
   if (opening && release === null && publicKey === null && origin !== null && /^https?:\/\//.test(origin) && !withBrowser) {
     const failures = await openingFailures(origin.replace(/\/+$/, ""));
@@ -567,8 +574,9 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
       : `${failures.length} reason(s) the site may not open`);
     process.exit(failures.length === 0 ? 0 : 1);
   }
-  if (release === null || publicKey === null || (origin !== null && !/^https?:\/\//.test(origin)) || (argv.includes("--signer") && !identity)) {
-    console.error("usage: node scripts/deploy-probe.mjs --release <release directory> --public-key <signing identity's public key, PEM> [--signer <the release signer's identity>] [--origin <the candidate revision's URL> [--browser] [--opening] [--promotion-check]]");
+  if (release === null || publicKey === null || (origin !== null && !/^https?:\/\//.test(origin)) || (argv.includes("--signer") && !identity)
+    || (searchEngines !== KEPT_OUT && searchEngines !== INDEXED)) {
+    console.error("usage: node scripts/deploy-probe.mjs --release <release directory> --public-key <signing identity's public key, PEM> [--signer <the release signer's identity>] [--origin <the candidate revision's URL> [--browser] [--opening] [--promotion-check] [--search-engines kept-out|indexed]]");
     console.error("       node scripts/deploy-probe.mjs --opening --origin <the site's URL>: the opening's check of the served legal pages alone");
     console.error("       with --promotion-check, a revision that answers as its release holds while promotion refuses its data's age exits 3");
     console.error("       with --signer, the release must be signed by that release signer, never a rehearsal");
@@ -587,10 +595,10 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
   const target = origin.replace(/\/+$/, "");
   const notes = [];
   const promotion = [];
-  const failures = await deployedReleaseFailures(target, release, { publicKeyPem, identity, notes, promotion, opening });
+  const failures = await deployedReleaseFailures(target, release, { publicKeyPem, identity, notes, promotion, opening, searchEngines });
   for (const note of notes) console.log(note);
   if (failures.length === 0 && withBrowser) {
-    failures.push(...await browserFailures(target, release, { browser: await findBrowser() }));
+    failures.push(...await browserFailures(target, release, { browser: await findBrowser(), searchEngines }));
     console.log(REMOTE_PRIVACY_NOTE);
   }
   if (!withBrowser) console.log(NOT_WALKED_NOTE);

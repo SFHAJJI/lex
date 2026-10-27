@@ -619,7 +619,8 @@ public sealed class V3WebRootTests
             await handler.HandleAsync(api, CancellationToken.None);
             Assert.AreEqual(StatusCodes.Status200OK, api.Response.StatusCode, "the API route is the API's");
             StringAssert.Contains(Body(api), "no_corpus_mounted");
-            Assert.AreEqual(0, api.Response.Headers.ContentSecurityPolicy.Count, "an API answer is not a page");
+            // An API answer is not a page: the host's policy for answers that are none, never the page's (V3HostHeaders).
+            Assert.AreEqual(V3HostHeaders.MachineContentSecurityPolicy, api.Response.Headers.ContentSecurityPolicy.ToString(), "an API answer is not a page");
 
             var elsewhere = Request("GET", "/nothing-here.html");
             await handler.HandleAsync(elsewhere, CancellationToken.None);

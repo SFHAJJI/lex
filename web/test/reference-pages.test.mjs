@@ -26,8 +26,8 @@ import { pathToFileURL } from "node:url";
 import * as app from "../.react-build/app.mjs";
 import { buildLive } from "../scripts/build-live.mjs";
 import {
-  LIVE_EXAMPLE_REQUEST, MAXIMUM_REQUEST_BYTES, MCP_INSTRUCTIONS, MCP_METHODS, MCP_PROTOCOL_VERSION, REPLAY_GUARANTEES, REPLAY_TESTS, TRANSPORT_PROBLEMS,
-  TRANSPORT_PROBLEM_SCHEMA, developersModel, liveAnswerText, publishedSchemaPath,
+  CLIENT_LIMIT, KEY_SET_PATH, LIVE_EXAMPLE_REQUEST, MAXIMUM_REQUEST_BYTES, MCP_INSTRUCTIONS, MCP_METHODS, MCP_PROTOCOL_VERSION, REPLAY_GUARANTEES,
+  REPLAY_TESTS, TRANSPORT_PROBLEMS, TRANSPORT_PROBLEM_SCHEMA, developersModel, liveAnswerText, publishedSchemaPath,
 } from "../scripts/developers.mjs";
 import { OUT_OF_SCOPE_HOSTS } from "../scripts/routes.mjs";
 import { sitePageFor } from "../scripts/permalinks.mjs";
@@ -345,6 +345,21 @@ test("the facts the Developers page takes from the API's code are that code's", 
   const html = render("developers");
   for (const problem of TRANSPORT_PROBLEMS) assert.ok(html.includes(`data-transport-problem="${problem.code}"`), problem.code);
   assert.ok(html.includes(`data-request-bytes="${MAXIMUM_REQUEST_BYTES}"`), "the ceiling, as the page says it");
+  // The per-client limit (R109, R46), as the server enforces it, and the key set's address (R116).
+  const limiter = await repository("src/Lex.V3.Api/V3ClientLimiter.cs");
+  for (const [name, value] of [["ApiPerMinute", CLIENT_LIMIT.apiPerMinute], ["ApiInFlight", CLIENT_LIMIT.apiInFlight], ["RendersPerMinute", CLIENT_LIMIT.rendersPerMinute]]) {
+    assert.equal(Number(new RegExp(`internal const int ${name} = (\\d+);`).exec(limiter)?.[1]), value, `the limit's ${name}`);
+  }
+  const route = await repository("src/Lex.V3.Api/V3ResolveRestRoute.cs");
+  assert.equal(Number(/StatusCodes\.Status(\d{3})TooManyRequests/.exec(route)?.[1]), CLIENT_LIMIT.status, "the status REST answers rate_limited with");
+  const keySet = await repository("src/Lex.V3.Api/V3KeySet.cs");
+  assert.equal(/internal const string RawTarget = "([^"]+)";/.exec(keySet)?.[1], KEY_SET_PATH, "the key set's address");
+  assert.ok(html.includes(`data-client-limit="${CLIENT_LIMIT.apiPerMinute}/${CLIENT_LIMIT.apiInFlight}/${CLIENT_LIMIT.status}"`), "the API's limit, as the page says it");
+  assert.ok(html.includes(`data-render-limit="${CLIENT_LIMIT.rendersPerMinute}"`), "the pages' budget, as the page says it");
+  assert.ok(html.includes(`data-key-set="${KEY_SET_PATH}"`), "the key set, named");
+  for (const language of ["en", "fr"]) {
+    assert.doesNotMatch(LIVE_CHROME[language].developers.limits.rate, /no per-client|aucune limite de débit/, `${language}: the page no longer says there is no limit`);
+  }
 });
 
 test("the Developers page's live examples are the served release's own answer: rendered from browse for the first act it holds, and as built, none", () => {
@@ -468,4 +483,33 @@ test("the forms the French review pinned say what the platform does, and the Fre
   for (const [path, text] of entriesOf(FR).filter(([one]) => SECTIONS.test(one))) {
     for (const pattern of refused) assert.doesNotMatch(text, pattern, `fr ${path}`);
   }
+});
+
+test("the Developers page says the per-client limit and the key set in the review's words (R46, R109, R116; the addendum of 2026-10-27)", () => {
+  // The French of the review's addendum of 2026-10-27 on the Developers page's limits and the key set, byte for byte, with the
+  // English it recommended (a no-break space before ":" and ";").
+  const french = {
+    "limits.anonymous": "Il n’y a ni clé ni compte, et le serveur ne garde aucune trace écrite d’une requête ; pour la limite par client ci-dessous, il compte les requêtes dans sa seule mémoire vive : voir la {privacyPage}.",
+    "limits.rate": "Chaque client, reconnu à son adresse IP, peut envoyer {perMinute} requêtes par minute à l’API, REST et MCP confondus, dont au plus {atOnce} traitées en même temps. Au-delà de l’une ou l’autre limite, une requête adressée à une opération (en MCP, un appel d’outil) est refusée avec {code}, qui porte {retryAfter}, le nombre de secondes à attendre avant de demander de nouveau, comme le fait l’en-tête {retryAfterHeader} ; en REST, son statut est {status}. Le service est de petite taille : envoyez une requête à la fois et interrogez avec modération.",
+    "limits.pages": "Les pages que le serveur produit lui-même ont un budget distinct, de {renders} par minute pour chaque client ; au-delà, une page est envoyée telle qu’elle a été construite, et le navigateur demande alors sa réponse à l’API. Aucune page n’est refusée.",
+    "citing.keys": "Chaque mise en production de Lex est signée. Les clés qui les signent, chacune avec son identité, son rôle, sa validité et son statut, sont publiées à l’adresse {keySet} : vérifiez les signatures d’une mise en production au regard de cet ensemble, jamais au seul regard de la clé qu’elle contient.",
+    "access.same": "Les deux donnent la même enveloppe pour la même requête : un appel d’outil est converti en document de requête REST et traité par le même code, et son résultat porte l’enveloppe comme contenu structuré. Un refus est une réponse, non une erreur : REST l’envoie comme une réponse HTTP réussie, et MCP comme un résultat d’outil avec {isError} ; seul le refus d’une requête au-delà de la limite de son client a un autre statut en REST, indiqué ci-dessous.",
+  };
+  const english = {
+    "limits.anonymous": "There is no key and no account, and the server keeps no record of a request; for the per-client limit below, it counts requests in its working memory alone: see the {privacyPage}.",
+    "limits.rate": "Each client, known by its IP address, may send {perMinute} API requests a minute, REST and MCP together, with at most {atOnce} being answered at once. Past either limit, a request to an operation (over MCP, a tool call) is refused with {code}, which carries {retryAfter}, the seconds to wait before asking again, as the {retryAfterHeader} header does; over REST its status is {status}. The service is small: send one request at a time and poll gently.",
+    "limits.pages": "The pages the server renders itself have a budget of their own, {renders} a minute for each client; past it, a page is sent as built, and the browser then asks the API for its answer. No page is refused.",
+    "citing.keys": "Each release of Lex is signed. The keys that sign releases, each with its identity, role, validity and status, are published at {keySet}: check a release's signatures against that set, never only against the key the release carries.",
+    "access.same": "Both give the same envelope for the same request: a tool call is turned into the REST request document and answered by the same code, and its result carries the envelope as its structured content. A refusal is an answer, not an error: REST sends it as a successful HTTP answer, and MCP as a tool result with {isError}; only the refusal of a request past its client's limit has another status over REST, given below.",
+  };
+  const at = (table, path) => path.split(".").reduce((node, key) => node[key], table.developers);
+  for (const [path, text] of Object.entries(french)) {
+    assert.equal(at(LIVE_CHROME.fr, path), text, `fr developers.${path}`);
+    assert.equal(at(LIVE_CHROME.en, path), english[path], `en developers.${path}`);
+    // A release of Lex is a "mise en production" (on this page "publication" is a law's); a client is known "à" its IP
+    // address, and a refusal is "avec" its code (the addendum's G22).
+    assert.doesNotMatch(text, /publication|reconnu par|refusée par/, `fr developers.${path}`);
+  }
+  assert.deepEqual(Object.keys(LIVE_CHROME.en.developers.limits), ["heading", "anonymous", "size", "paging", "rate", "pages", "availability"]);
+  assert.deepEqual(Object.keys(LIVE_CHROME.fr.developers.limits), Object.keys(LIVE_CHROME.en.developers.limits));
 });

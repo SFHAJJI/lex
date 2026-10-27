@@ -9,7 +9,8 @@
 // including me"; "the user is there to have temporal feature over lux and eu laws thats it"; "why r we mentioning emails
 // andadress"), departing from R49 (an editor, an address, an e-mail, a controller and its contact, an objection contact)
 // and from O5's recommended answer. So the pages say what Lex is, where its texts come from and on what licences, who hosts
-// it, what it keeps of a reader (nothing), how accessible it is and that it sets no cookie, and nothing else: there is no
+// it, what it records of a reader (nothing; of an IP address, a fingerprint held in memory for minutes, for the per-client
+// limit), how accessible it is and that it sets no cookie, and nothing else: there is no
 // detail for anyone to fill in, and nothing waits for one. The privacy notice keeps the reader's right to complain to the
 // CNPD, the regulator, named with a link to its site and no postal address (`CNPD_SITE`; the driver's decision of
 // 2026-10-19): a right of the reader's, not a contact of Lex's.
@@ -21,7 +22,9 @@
 //
 // Every statement the pages make is one the code or the deployment supports (STATUS-WEB.md lists each with its evidence):
 // no cookie and nothing written to the browser's storage (the journeys, the release's image probe, the deployment probe),
-// nothing kept of a request (`PublicRequestRecordingTests`, the image probe's privacy record, the API's cleared logging),
+// nothing recorded of a request (`PublicRequestRecordingTests`, the image probe's privacy record, the API's cleared logging),
+// and of an IP address only a keyed fingerprint and a count, in memory, forgotten within about two minutes (the per-client
+// limit, R109: `V3ClientLimiter`, `V3ClientLimiterTests`),
 // nothing asked of another origin (the CSP, `csp.mjs`), a search's words in a request's body and never in its address
 // (`v3-client.mjs`, `search-address.mjs`), the host and its region (`deploy/main.bicep`, the environment as read back), the
 // texts' licences (the rights admission policy /1, Decision 95). The pages ask nothing, carry no script and are never
@@ -48,9 +51,10 @@ export const LEGAL_PAGE_PATHS = Object.freeze(INTERFACE_LANGUAGES.flatMap((langu
 
 /**
  * The date the five texts were last changed, which each page prints ("Last updated"): changed with any of their words (on
- * 2026-10-26, the legal notice's "for the texts and dates it holds", the review of #990).
+ * 2026-10-26, the legal notice's "for the texts and dates it holds", the review of #990; on 2026-10-27, the privacy notice's
+ * per-client limit, R109).
  */
-export const LEGAL_TEXTS_UPDATED = "2026-10-26";
+export const LEGAL_TEXTS_UPDATED = "2026-10-27";
 
 /**
  * The supervisory authority a reader may complain to (GDPR art. 77), which the privacy notice names, as a link to its site

@@ -80,6 +80,8 @@ internal static class V3TransportResponse
             response.Headers.Allow = HttpMethods.Post;
         }
 
+        // The host's security headers again, which the reset dropped (V3HostHeaders).
+        V3HostHeaders.Apply(response);
         afterClear?.Invoke(response);
         return BufferedHttpResponse.WriteJsonAsync(
             response,

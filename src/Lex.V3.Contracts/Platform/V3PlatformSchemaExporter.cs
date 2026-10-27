@@ -482,8 +482,9 @@ public static class V3PlatformSchemaExporter
         ("pinned_digest_mismatch", "current_hash_pinned_url") => Text(),
         ("profiles_differ", "left_profile") => Texts(minItems: 1),
         ("profiles_differ", "right_profile") => Texts(minItems: 1),
-        ("rate_limited", "retry_after") => NotProduced(new JsonObject { ["type"] = "integer", ["minimum"] = 0 }),
-        ("rate_limited", "retryable") => NotProduced(new JsonObject { ["const"] = true }),
+        // The per-client limit's refusal (R109, V3ClientLimiter): the whole seconds to wait, as Retry-After says them, and true.
+        ("rate_limited", "retry_after") => new JsonObject { ["type"] = "integer", ["minimum"] = 1 },
+        ("rate_limited", "retryable") => new JsonObject { ["const"] = true },
         ("retrieval_mode_unavailable", "requested_mode") => Text(),
         ("retrieval_mode_unavailable", "available_modes") => Texts(minItems: 1),
         ("snapshot_unknown", "snapshot_id") => Text(),

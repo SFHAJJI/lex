@@ -1,0 +1,79 @@
+name: v3-monitor
+
+# The outside monitor (the specification of record's R107; the plan's item 10.3; docs/INCIDENT-RUNBOOK.md). Every five
+# minutes, from GitHub's runners and so from outside Azure, the public site is asked what any reader may ask: readiness, the
+# home page, one dated reading page, one API operation and the TLS certificate (web/scripts/site-monitor.mjs, which the web
+# suite tests). A check that fails is asked once more a minute later; one that fails twice fails the run, which GitHub
+# reports to whoever last changed this schedule, and opens (or adds to) one incident issue, which is closed once the site
+# answers again. It needs no secret: the issue is written with this run's own token. It sends nothing of anyone's and
+# records nothing but this run's log and summary.
+#
+# GitHub runs a schedule only from the repository's default branch: this file acts once it is on that branch (the
+# runbook's "Monitoring" says how). It always runs the monitor as v3/integration holds it.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: v3-monitor
+  cancel-in-progress: false
+
+env:
+  INCIDENT_TITLE: "Lex monitor: law.soufien.lu failed its outside check"
+
+jobs:
+  monitor:
+    name: monitor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          ref: v3/integration
+          sparse-checkout: |
+            web/scripts/site-monitor.mjs
+            web/scripts/invoked-directly.mjs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+      - name: Ask the site
+        run: node web/scripts/site-monitor.mjs --origin https://law.soufien.lu --report "$RUNNER_TEMP/monitor-report.md"
+      - name: Open or add to the incident issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/monitor-report.md"
+          [ -s "$report" ] || echo "The monitor gave no report: see the run." > "$report"
+          printf '\nRun: %s\n\nWhat to do: docs/INCIDENT-RUNBOOK.md.\n' "$RUN_URL" >> "$report"
+          number="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$INCIDENT_TITLE\"" --json number,title \
+            --jq "map(select(.title == \"$INCIDENT_TITLE\")) | .[0].number // empty")"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body-file "$report"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$INCIDENT_TITLE" --body-file "$report"
+          fi
+      - name: Close the incident issue once the site answers again
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          number="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$INCIDENT_TITLE\"" --json number,title \
+            --jq "map(select(.title == \"$INCIDENT_TITLE\")) | .[0].number // empty")"
+          if [ -n "$number" ]; then
+            gh issue close "$number" --repo "$GITHUB_REPOSITORY" --comment "The site answers every check again: $RUN_URL"
+          fi
