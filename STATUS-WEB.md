@@ -4,6 +4,70 @@ Updated 2026-10-27. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## R77's records of the acts only the catalogue holds, and R57's wording on Compare (sole driver, 2026-10-27)
+
+The audit of 2026-10-27 (`C:\lex-v3\AUDIT-2026-10-27.md`), gaps 1 and 2, as one pull request (`writer/catalogue-and-compare`,
+on v3/integration a0958bb9, #1001's names record included; v3/integration 404bfc9a, #1002, merged before it was handed
+back).
+- **R77.** An act the Luxembourg catalogue holds and the index holds no version of answered `identifier_unknown`, with no
+  record. It now answers `text_not_available`, the code R77 names (no registry change), with its record read from the
+  catalogue's facts the index already holds (`work_facts`; `V3CorpusMount.CatalogueRecords.cs`): its identity and the address
+  this site gives it (`/lu-legilux/{key}`, as the index would mint it), its type, its dates by role (dateDocument,
+  publicationDate, dateEntryInForce, dateNoLongerInForce, each the publisher's, R21), its status in the publisher's word
+  (the act's `inForceStatus`, never a consolidation's), its Mémorial issue, historicalLegalId, official PDF, title, its
+  versions, and why no text of each is held, by the reason Coverage counts it under; the publisher's own word for its type
+  and status (`document_type_codes`, `in_force_status_codes`, the last segment of each authority IRI), which a page says (`V3TextYield.CatalogueNotHeldReason`:
+  (`catalogue_licence_scl`, `catalogue_cc_by_not_acquired`, …; what the catalogue states, never why the acquisition did not
+  fetch it). Every per-work operation (the dossier, reading and the rest), `resolve` and search's exact reference (a
+  reference, or this site's address of the act) answer it; it needs no new derive and reads index /9 and /8 alike.
+  - **R92 first:** an act the names record withholds answers `text_withheld` (`names_private_individuals`) with no title and
+    no record, as every answer about it does (a test measures a catalogue act whose title grants naturalisation).
+  - **Screens:** every screen says one sentence (`CATALOGUE_RECORD_SENTENCE`), and the card says why no text is held and each
+    fact by its role, in English and French (`refusal-card.mjs`, `catalogueRecord`); the dossier shows the act and its title
+    in its language, and links the record's page.
+  - **Measured, read-only:** derive-r1, 22,049 acts gain a record (16,330 `catalogue_licence_scl`, 5,362
+    `catalogue_cc_by_not_acquired`, 355 `catalogue_licence_scl_in_part`, 2 `catalogue_no_expression`; by the act as
+    published's reason); R92's record withholds 974 of the catalogue's acts (STATUS-DATA). derive-c, 22,891 (16,330, 6,204,
+    355, 2). Of derive-r1's, 22,040 state their dates, status and issue, 19,679 a historical identifier, 6,467 an end of force.
+- **R57.** `diff` carries the served text of each changed, added or removed article, where that side's rights admit it, and
+  null otherwise (`text_rule`; the digests still decide the status). The compare page shows each change inline, word by
+  word (`word-diff.mjs`): the text deleted struck through, the text inserted underlined, each also said in hidden words,
+  a jump list and the previous and next change; the digests, permalinks and date roles stay. A comparison has its own
+  address (`/{lang}/compare.html?work=/lu-legilux/{key}&from=…&to=…[&language=…]`), which both servers render from `diff`
+  (`SitePageFor`/`sitePageFor`, one table), so it reads without JavaScript. EU diff, article_history and changes_in_period
+  stay typed refusals.
+  - **Driver decision (reversible), the compare form and R109:** the first draft named the form's controls and made it a GET
+    so a submit with no script would ask the comparison's address; the web suite's R109 hold ("no word a reader types
+    reaches an address a server could record") refused it, and the decision is reversed. The form's controls carry no name,
+    as every form's do. Once a comparison is asked, the screen writes its address into the page's query only when its work
+    is this site's address of an act, in any form the API reads as one (`/lu-legilux/{key}`, under an interface language
+    or this origin, written as `/lu-legilux/{key}`: `compareQueryOf`), with the two dates and the language: a law's address,
+    never a word, pinned in `request-addresses.test.mjs`. The server renders a comparison's address for such a work alone.
+    The page's introduction says so (the French review's supplement).
+- **Pins moved.** The envelope, answer and refusal-payload samples re-rendered (`V3_RENDER_*`) and verified without: three
+  new envelopes (the record by the dossier, reading and search), the payload census samples the record, the two-state
+  diff carries its texts. The legacy base answers recorded again on Linux at ee44bf68 (9 of 53 rows, each by R77 or R57
+  alone) and at a9179b39 (the five schema-6 records by their two code members alone); Windows replays the same bytes.
+- **French** (Decision 41): the 32 new or changed forms were reviewed by an independent reviewer (Claude, AI reviewer, not the
+  author) in the addendum of 2026-10-27 "R77's catalogue records and R57's compare wording" (`C:\lex-v3\lanes\fr-review\review.md`):
+  20 approved, 12 changed in French and 8 of them in English too, 5 blocking and each a truth finding (a compared side is named
+  by its date's label, since the page does not order its dates; a comparison shown whole keeps the beginning and end its
+  texts share; a licence reason names the XML and PDF files it reads, never every file; an entry into force is a labelled
+  line, since two records carry two dates). Every final applied byte for byte and read back (0 differ); the English taken:
+  the blocking finals, the recommended ones of 17 to 19 and the optional one of the intro. Not taken (reversible): ordering
+  the two dates, setting the status token apart, a spoken end marker. Its supplement (the intro after R109, and the English
+  "This article's wording", since "wording of" is the EU's) changed the intro in French with its recommended English, and its
+  blocking point was taken by the preferred fix (every form of an act's site address written as the bare one).
+- **For the data lane** (the review's point 3): 12,040 of the 16,330 expressions whose XML and PDF files are licenceSCL also
+  carry an HTML or DOCX file under CC BY 4.0 in the catalogue. Whether Lex could admit those files is a question for R83 and
+  the data lane; nothing here claims it.
+- **Counts** (this PC, one heavy step at a time, at 6d4c4c02 over v3/integration 404bfc9a): `dotnet build Lex.V3.slnx -c
+  Release`, 0 warnings. Lex.V3.Tests, whole: 3,375, 3,369 pass, 6 skip. Lex.V3.Ingest.Tests, every mount class
+  (`V3Corpus*`), the text yield, the three sample censuses, the machine gates, the EU predicate census, PublicRequestRecording,
+  the index builder and #1002's release checks: 632, 627 pass, 5 skip (33 min). `npm run build`; `npm test`: 1,471, 1,468
+  pass, 3 skip (the real-browser tests). `eng/verify-v3-tree.ps1`: 1,788 tracked paths verified.
+- **Not done:** R57's side-by-side view and its swap control; R56's gap rows on the reading's version list.
+
 ## Review and repair (#998): G2 exact, the change policy's digest, MCP failures, the out-of-scope forms (sole driver, 2026-10-27)
 
 The review of #998 (`writer/api-gaps` at 0bb59e65, the other model family, Decision 95) said REPAIR, with its scripts in the
