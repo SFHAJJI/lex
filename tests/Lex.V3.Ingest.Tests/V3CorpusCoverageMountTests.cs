@@ -434,9 +434,11 @@ public sealed class V3CorpusCoverageMountTests
         CollectionAssert.AreEqual(registered.Except(served, StringComparer.Ordinal).ToArray(), notServed);
         Assert.IsFalse(served.Intersect(notServed, StringComparer.Ordinal).Any());
         CollectionAssert.AreEqual(registered, served.Concat(notServed).Order(StringComparer.Ordinal).ToArray());
-        // It states a fact about the mount and says what a request for an unserved operation returns.
+        // It states a fact about the mount and says what a request for an unserved operation returns: a typed refusal inside a
+        // normal envelope, never a transport failure (the plan's item 8.6).
         var note = operations.GetProperty("note").GetString();
-        StringAssert.Contains(note, "a request for an unserved operation answers the transport failure operation_not_served");
+        StringAssert.Contains(note, "a request for an unserved one answers inside a normal envelope with the typed refusal its row of not_served_data gives");
+        StringAssert.Contains(note, "never a transport failure");
         // A mount with no EU index states no EU refusal: the block is what it was before EU manifests stated them.
         Assert.IsFalse(operations.TryGetProperty("refused_for_eu", out _), "no EU index, no EU refusals");
 
@@ -447,12 +449,15 @@ public sealed class V3CorpusCoverageMountTests
         CollectionAssert.AreEqual(notServed, rows.Select(static row => row.GetProperty("operation").GetString()!).ToArray());
         foreach (var row in rows)
         {
-            Assert.IsFalse(string.IsNullOrWhiteSpace(row.GetProperty("data_needed").GetString()), row.GetProperty("operation").GetString());
+            var operation = row.GetProperty("operation").GetString()!;
+            Assert.IsFalse(string.IsNullOrWhiteSpace(row.GetProperty("data_needed").GetString()), operation);
+            Assert.AreEqual("retrieval_mode_unavailable", row.GetProperty("reason").GetString(), operation);
+            Assert.AreEqual(V3UnservedOperations.RequestedMode(operation), row.GetProperty("requested_mode").GetString(), operation);
         }
 
         CollectionAssert.AreEquivalent(notServed, V3CorpusMount.NotServedDataNeeded.Keys.ToArray(),
             "NotServedDataNeeded names exactly the registered operations this mount does not serve");
-        StringAssert.Contains(note, "not_served_data names, for each unserved operation, the data that would serve it");
+        StringAssert.Contains(note, "not_served_data names, for each, the data that would serve it");
     }
 
     [TestMethod]
@@ -591,6 +596,7 @@ public sealed class V3CorpusCoverageMountTests
             "mounted", "mounted.corpus_sha256", "mounted.index_sha256", "mounted.publisher", "mounted.registry_sha256",
             "not_held", "not_held[].item", "not_held[].reason",
             "operations", "operations.not_served_data", "operations.not_served_data[].data_needed", "operations.not_served_data[].operation",
+            "operations.not_served_data[].reason", "operations.not_served_data[].requested_mode",
             "operations.not_served_operations", "operations.note", "operations.registered",
             "operations.served_operations",
             "requested_language",

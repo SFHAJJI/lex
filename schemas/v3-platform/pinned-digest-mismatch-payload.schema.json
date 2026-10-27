@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-pinned_digest_mismatch-payload/1",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "requested_digest": {
+      "type": "string"
+    },
+    "current_digest": {
+      "type": "string"
+    },
+    "stable_coordinate": {
+      "type": "string"
+    },
+    "current_hash_pinned_url": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "requested_digest",
+    "current_digest",
+    "stable_coordinate",
+    "current_hash_pinned_url"
+  ]
+}

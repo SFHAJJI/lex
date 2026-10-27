@@ -81,7 +81,9 @@ async function buildPages(destination, { card, developers, locale, buildTag = ""
   // the API and the live server run it, a reader never fetches it.
   const { bundleServerRenderer } = await import("./react-build.mjs");
   await mkdir(new URL("ssr/", destination), { recursive: true });
-  await cp(await bundleServerRenderer("app/ssr-entry.jsx", `ssr-entry${suffix}.js`, options), new URL(`ssr/${locale}.js`, destination));
+  // The renderer is handed the Developers page's contracts as data, since it reads nothing (`ssr-entry.jsx`).
+  const ssrOptions = { ...options, define: { ...(options.define ?? {}), __LEX_DEVELOPERS__: JSON.stringify(developers) } };
+  await cp(await bundleServerRenderer("app/ssr-entry.jsx", `ssr-entry${suffix}.js`, ssrOptions), new URL(`ssr/${locale}.js`, destination));
   // The five legal pages, each a static page of this language, with no script.
   const legal = await import(pathToFileURL(await bundle("app/LegalPage.jsx", `LegalPage${suffix}.mjs`, options)).href);
   for (const { key, file } of LEGAL_PAGES) await writeFile(new URL(file, out), legal.renderLiveLegalPage(key), "utf8");
