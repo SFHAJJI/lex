@@ -4826,6 +4826,12 @@ internal sealed partial class V3CorpusMount : IDisposable
             .FirstOrDefault(candidate => string.Equals(candidate.PublisherExpressionId, expression, StringComparison.Ordinal));
         var wording = EuropeWordingOf(expression);
         var celex = wording?.Celex ?? held?.PublisherWorkCelex;
+        // R92 before any text is read (the review of #1005, F1), by the act's CELEX, its work or its expression.
+        if ((WithheldEurope(celex) ?? WithheldEurope(workId) ?? WithheldEurope(expression)) is { } withheld)
+        {
+            return RefuseNamesWithheld(request, withheld, null, observedAt);
+        }
+
         var searched = new EuropeSearchWording(expression, language, wording?.WordingDate, "original_wording", workId, celex,
             NextDate: null, NextTextHeld: null, EuropeArticleRowsOf(expression), wording?.Sha256, wording?.Permalink);
         var authenticity = EuropeAuthenticityOf(celex is null

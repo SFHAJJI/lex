@@ -34,6 +34,8 @@ import { REFUSAL_EXAMPLES } from "../scripts/refusal-catalog.mjs";
 import { OUTSIDE_EU_POPULATION_SENTENCE } from "../scripts/live-refusals.mjs";
 import { OFFICIAL_SEARCH_PAGES } from "../scripts/live-failure.mjs";
 import { publisherSourceUri } from "../scripts/routes.mjs";
+import { liveChrome } from "../scripts/live-chrome.mjs";
+import { SEARCH_SEARCHED_SAID, specificationJourneyExpectations } from "../scripts/journey.mjs";
 
 /** A refusal's card as the screen shows it: one about this service (R60) inside the failure panel, under its line; any other alone. */
 const asShown = (outcome, card) => renderToStaticMarkup(h(FailureFrame, { outcome }, h("lex-card"))).replace("<lex-card></lex-card>", card);
@@ -226,7 +228,7 @@ test("a search with no hit is the plain no-hit card: what ran, that only the phr
   assert.doesNotMatch(markup, /data-title-matching/, "no title was matched, so how titles are matched is not said");
   assert.ok(shown.includes("Text: no article searched contains the phrase, even with capitals and accents ignored."));
   assert.doesNotMatch(markup, /data-search-run="every-word"/, "the relaxed lane was not run, so it is not said to have found nothing");
-  assert.ok(shown.includes("Only the phrase was matched in the text, with capitals and accents ignored and \u0153 and \u00e6 read as oe and ae: every other character of it counts, apostrophes, hyphens and spaces included, and nothing is stemmed or expanded. A looser search of the text stays off until its own check has passed."));
+  assert.ok(shown.includes(liveChrome("en").search.exactOnly), "the no-hit card says the matching rule, as the table words it");
   assert.ok(shown.includes(`Searched: ${value.searched.works} act of Luxembourg law in French`));
   assert.equal((markup.match(/data-searched=/g) ?? []).length, 1, "the population is said once, inside the card");
   assert.ok(markup.indexOf("data-searched=") > markup.indexOf("data-no-hit-card"));
@@ -236,6 +238,16 @@ test("a search with no hit is the plain no-hit card: what ran, that only the phr
   assert.ok(shown.includes("Legilux search, for Luxembourg law") && shown.includes("EUR-Lex advanced search, for EU law"));
   assert.ok(shown.includes("It is not evidence that the instrument or the law does not exist."), "the absence note (journey J2)");
   assert.ok(shown.includes("0 passages with the phrase, in 0 acts."));
+});
+
+test("the J2 walk expects the no-hit card's own sentences: what the page shows is what the walk reads (the review of #1005)", () => {
+  const [, j2] = specificationJourneyExpectations().find(([name]) => name.startsWith("J2"));
+  const shown = text(view(searchOutcome({ state: "success", envelope: envelopeOf(NO_HIT) })));
+  // The population line counts the journey's own fixture mount, which this census is not.
+  for (const said of j2.texts.filter((entry) => entry !== SEARCH_SEARCHED_SAID)) {
+    assert.ok(shown.includes(said), `the no-hit card shows ${JSON.stringify(said)}`);
+  }
+  assert.ok(j2.texts.includes(liveChrome("en").search.exactOnly), "the walk reads the matching rule whole, from the table");
 });
 
 test("an EU work's no-hit card says the reference and the titles were not run, and counts the act's wordings, no Luxembourg population", () => {

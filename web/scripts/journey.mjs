@@ -113,6 +113,7 @@ import { INDEXED, X_ROBOTS_TAG } from "./search-engines.mjs";
 import { CANONICAL_HOST } from "./routes.mjs";
 import { luxembourgDate } from "./temporal.mjs";
 import { exampleHref } from "./home-examples.mjs";
+import { liveChrome } from "./live-chrome.mjs";
 import { fetchWithinLimit } from "./within-limit.mjs";
 
 /** The origin the site's head links name (`Document.jsx`, `head-links.mjs`), whatever server a journey runs against. */
@@ -1934,7 +1935,7 @@ export function specificationJourneyExpectations() {
     ["J1, a date before the history", { step: EARLY_READING_STEP, state: "refusal", refusalCode: "no_version_for_date", texts: [NO_EARLIER_STATE, "2024-02-01"] }],
     // The plain no-hit card (the plan's item 4.5): what was searched, that only exact matching ran, the population searched and
     // the publishers' own search pages, above the absence note.
-    ["J2, a question no article carries", { step: NO_HIT_SEARCH_STEP, state: "success", nothingToCite: true, texts: ["0 passages with the phrase, in 0 acts.", "What was searched", "Text: no article searched contains the phrase, even with capitals and accents ignored.", "Only the phrase was matched in the text, with capitals and accents ignored:", SEARCH_SEARCHED_SAID, "Legilux search, for Luxembourg law", "EUR-Lex advanced search, for EU law", absence] }],
+    ["J2, a question no article carries", { step: NO_HIT_SEARCH_STEP, state: "success", nothingToCite: true, texts: ["0 passages with the phrase, in 0 acts.", "What was searched", liveChrome("en").search.runText, liveChrome("en").search.exactOnly, SEARCH_SEARCHED_SAID, "Legilux search, for Luxembourg law", "EUR-Lex advanced search, for EU law", absence] }],
     ["J5, a law not held", { step: UNKNOWN_LAW_STEP, state: "refusal", refusalCode: "out_of_corpus_scope", texts: [LIVE_DOSSIER_REFUSAL_SENTENCES.out_of_corpus_scope, UNKNOWN_LAW_WHO_TO_ASK, UNKNOWN_LAW_OFFICIAL_PLACE, absence] }],
   ];
 }

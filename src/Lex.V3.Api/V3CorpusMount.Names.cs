@@ -196,6 +196,10 @@ internal sealed partial class V3CorpusMount
             ?? WithheldEurope(Member("celex"))
             ?? WithheldEurope(Member("work_celex"))
             ?? WithheldEurope(Member("publisher_work_id"))
+            // An EU time-view answer names its act by the seed it was located to (the review of #1005, F1: a search or an as_of
+            // reached by a provision coordinate or an article identity names the act nowhere else).
+            ?? WithheldEurope(Member("seed_celex"))
+            ?? WithheldEurope(Member("original_work_id"))
             ?? WithheldNamedByIdentifier(Member("requested_identifier"));
     }
 

@@ -15,11 +15,12 @@ namespace Lex.V3.Tests.Contracts.Index;
 public sealed class TextFoldingTests
 {
     [TestMethod]
-    [DataRow("Congé parental")]
-    [DataRow("congé parental")]
+    [DataRow("Cong\u00E9 parental")]
+    [DataRow("cong\u00E9 parental")]
     [DataRow("conge parental")]
-    [DataRow("CONGÉ PARENTAL")]
-    [DataRow("congé parental")]
+    [DataRow("CONG\u00C9 PARENTAL")]
+    [DataRow("conge\u0301 parental")]
+    [DataRow("conge\u00A0parental")]
     public void EveryFormOfCongeParentalFoldsAlike(string value)
     {
         Assert.AreEqual("conge parental", TextFolding.Fold(value));
@@ -28,16 +29,31 @@ public sealed class TextFoldingTests
     [TestMethod]
     public void TheLigaturesAreWrittenAsTwoLettersInEitherCase()
     {
-        Assert.AreEqual("oeuvre oeuvre aeternam caesar", TextFolding.Fold("œuvre ŒUVRE Æternam Cæsar"));
-        Assert.AreEqual("ae", TextFolding.Fold("ǽ"), "a ligature with an accent loses the accent, then is written as two letters");
+        Assert.AreEqual("oeuvre oeuvre aeternam caesar", TextFolding.Fold("\u0153uvre \u0152UVRE \u00C6ternam C\u00E6sar"));
+        Assert.AreEqual("ae", TextFolding.Fold("\u01FD"), "a ligature with an accent loses the accent, then is written as two letters");
+    }
+
+    [TestMethod]
+    public void TheTypographicApostrophesAndTheNoBreakSpacesFoldAsTheirPlainFormsAndTheSoftHyphenIsDropped()
+    {
+        // The review of #1005 (the driver's decision): one unit for one, or one dropped, so a match's offsets stay exact.
+        Assert.AreEqual("l'article l'article l'article l'article", TextFolding.Fold("l\u2019article l\u2018article l\u02BCarticle l'article"));
+        Assert.AreEqual("6 septembre 6 septembre 6 km", TextFolding.Fold("6\u00A0septembre 6\u202Fseptembre 6\u2007km"));
+        Assert.AreEqual("obligation", TextFolding.Fold("obli\u00ADgation"));
+        var text = TextFolding.Folded("une obli\u00ADgation de l\u2019article");
+        CollectionAssert.AreEqual(new[] { "obli\u00ADgation", "l\u2019article" },
+            new[] { "obligation", "l'article" }.Select(needle => text.Occurrences(needle).Single()).Select(span => text.Original[span.Start..span.End]).ToArray(),
+            "a match is marked on the text's own characters, the soft hyphen inside it");
+        CollectionAssert.AreEqual(new[] { "obli" }, text.Occurrences("obli").Select(span => text.Original[span.Start..span.End]).ToArray(),
+            "a soft hyphen after a match is not taken along, as a combining mark is");
     }
 
     [TestMethod]
     public void EveryOtherCharacterIsKeptAsItIs()
     {
-        // Apostrophes, quotation marks, dashes, no-break spaces, punctuation and symbols are not folded: unlike a title's fold,
-        // nothing separates words, and a symbol is not decomposed (U+2260 would otherwise lose its stroke and read as "=").
-        const string Kept = "l’article l'article « x » a–b 6 km § 2, ≠ = €";
+        // Quotation marks, dashes, hyphens, ordinary and other spaces, punctuation and symbols are not folded: unlike a title's
+        // fold, nothing separates words, and a symbol is not decomposed (U+2260 would otherwise lose its stroke and read as "=").
+        const string Kept = "l'article \u00AB x \u00BB a\u2013b a-b a\u2011b \u2009x \u00A7 2, \u2260 = \u20AC";
         Assert.AreEqual(Kept, TextFolding.Fold(Kept));
         Assert.AreSame(Kept, TextFolding.Fold(Kept), "a text nothing in which folds is returned as it is");
     }
@@ -46,26 +62,27 @@ public sealed class TextFoldingTests
     public void AMatchIsSaidOnTheTextsOwnCharacters()
     {
         // A decomposed accent is taken with its letter, a ligature whole, and the original's own spelling is what is marked.
-        var text = TextFolding.Folded("Le congé et l’Œuvre, puis CONGÉ.");
-        CollectionAssert.AreEqual(new[] { "congé", "CONGÉ" },
+        var text = TextFolding.Folded("Le conge\u0301 et l\u2019\u0152uvre, puis CONG\u00C9.");
+        CollectionAssert.AreEqual(new[] { "conge\u0301", "CONG\u00C9" },
             text.Occurrences("conge").Select(span => text.Original[span.Start..span.End]).ToArray());
-        CollectionAssert.AreEqual(new[] { "Œu" }, text.Occurrences("oeu").Select(span => text.Original[span.Start..span.End]).ToArray());
-        CollectionAssert.AreEqual(new[] { "Œ" }, text.Occurrences("e").Where(span => span.Start == text.Original.IndexOf('Œ')).Select(span => text.Original[span.Start..span.End]).ToArray(),
+        CollectionAssert.AreEqual(new[] { "\u0152u" }, text.Occurrences("oeu").Select(span => text.Original[span.Start..span.End]).ToArray());
+        CollectionAssert.AreEqual(new[] { "\u0152" }, text.Occurrences("e").Where(span => span.Start == text.Original.IndexOf('\u0152')).Select(span => text.Original[span.Start..span.End]).ToArray(),
             "half a ligature marks the whole ligature");
-        Assert.IsTrue(text.Contains("l’oeuvre"));
-        Assert.IsFalse(text.Contains("l'oeuvre"), "the typographic apostrophe is not the ASCII one");
+        Assert.IsTrue(text.Contains("l'oeuvre"), "the typographic apostrophe is read as the straight one");
+        Assert.IsFalse(text.Contains("l oeuvre"), "and never as a space");
     }
 
     [TestMethod]
     public void ANeedleThatFoldsToNothingOrToALoneSurrogateMatchesNothing()
     {
-        Assert.IsFalse(TextFolding.CanMatch(TextFolding.Fold("́")));
-        Assert.IsFalse(TextFolding.CanMatch(TextFolding.Fold(" ́ ")));
+        Assert.IsFalse(TextFolding.CanMatch(TextFolding.Fold("\u0301")));
+        Assert.IsFalse(TextFolding.CanMatch(TextFolding.Fold(" \u0301 ")));
+        Assert.IsFalse(TextFolding.CanMatch(TextFolding.Fold("\u00AD")), "a soft hyphen alone folds to nothing");
         Assert.IsFalse(TextFolding.CanMatch("\uD83D"), "a lone surrogate");
-        Assert.IsTrue(TextFolding.CanMatch("😀"), "a whole pair");
-        var text = TextFolding.Folded("a 😀 b");
+        Assert.IsTrue(TextFolding.CanMatch("\uD83D\uDE00"), "a whole pair");
+        var text = TextFolding.Folded("a \uD83D\uDE00 b");
         Assert.HasCount(0, text.Occurrences("\uDE00"));
-        Assert.HasCount(1, text.Occurrences("😀"));
+        Assert.HasCount(1, text.Occurrences("\uD83D\uDE00"));
     }
 
     /// <summary>
@@ -87,7 +104,8 @@ public sealed class TextFoldingTests
             var character = (char)code;
             // A Hangul syllable keeps its composed form, as the title folding's table, which this fold reads, keeps it (the
             // library composed it again): its decomposition is its jamo, which no accent is among.
-            if (char.IsSurrogate(character) || !char.IsLetterOrDigit(character) || code is 0xFFFE or (>= 0xAC00 and <= 0xD7A3))
+            // U+02BC, the modifier letter apostrophe, is a letter the fold writes as the straight apostrophe (the review of #1005).
+            if (char.IsSurrogate(character) || !char.IsLetterOrDigit(character) || code is 0xFFFE or 0x02BC or (>= 0xAC00 and <= 0xD7A3))
             {
                 continue;
             }
@@ -127,7 +145,7 @@ public sealed class TextFoldingTests
     {
         try
         {
-            return string.Equals("é".Normalize(NormalizationForm.FormC), "é", StringComparison.Ordinal);
+            return string.Equals("e\u0301".Normalize(NormalizationForm.FormC), "\u00E9", StringComparison.Ordinal);
         }
         catch (PlatformNotSupportedException)
         {

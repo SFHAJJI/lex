@@ -174,7 +174,7 @@ const EN = Object.freeze({
     runTitlesNotRun: "Titles: not searched, since a work was named.",
     runText: "Text: no article searched contains the phrase, even with capitals and accents ignored.",
     runTextWords: "Text, every word in any order: no article searched contains them all.",
-    exactOnly: "Only the phrase was matched in the text, with capitals and accents ignored and œ and æ read as oe and ae: every other character of it counts, apostrophes, hyphens and spaces included, and nothing is stemmed or expanded. A looser search of the text stays off until its own check has passed.",
+    exactOnly: "Only the phrase was matched in the text, with capitals and accents ignored, œ and æ read as oe and ae, the typographic apostrophes as the straight one, a no-break space as a space and a soft hyphen as nothing: every other character of it counts, hyphens and punctuation included, and nothing is stemmed or expanded. A looser search of the text stays off until its own check has passed.",
     officialSearch: "The publishers' own search pages:",
     officialSites: Object.freeze({
       legilux: "Legilux search, for Luxembourg law",

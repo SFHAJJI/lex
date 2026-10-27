@@ -9,9 +9,13 @@ namespace Lex.V3.Contracts.Index;
 /// is found. Each letter or digit is folded by the title folding's table (<see cref="TitleFolding"/>: its canonical
 /// decomposition, Unicode NFD, without its non-spacing marks, and lowered by the invariant case map, letter by letter, so the
 /// fold is the same with the operating system's language library and without it, as the release image runs); a non-spacing
-/// (combining) mark on its own is dropped; the ligatures œ and æ, of either case, are written oe and ae; and every other
-/// character is kept as it is. Unlike the title folding nothing separates words: punctuation, the apostrophes and every kind
-/// of space stay as they are, so a phrase is found only where its every other character is.
+/// (combining) mark on its own is dropped; the ligatures œ and æ, of either case, are written oe and ae; the typographic
+/// apostrophes (U+2019, U+2018 and the modifier letter U+02BC) are written as the straight one, and the no-break spaces
+/// (U+00A0, U+202F, U+2007) as an ordinary space; a soft hyphen (U+00AD) is dropped, as a combining mark is (the driver's
+/// decision on the review of #1005: on derive-r1 "l'article" is in 1,517 texts and "l’article" in 9,246, and the soft hyphen
+/// appears 441 times, 438 of them inside a word); and every other character is kept as it is. Unlike the title folding
+/// nothing separates words: punctuation, the hyphens and the other spaces stay as they are, so a phrase is found only where
+/// its every other character is.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -32,10 +36,12 @@ public static class TextFolding
         "the query and each article's searchable text are folded alike before they are matched: each letter or digit to its canonical " +
         "decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex's own table, the same " +
         "with or without the operating system's language library; a combining mark on its own is dropped; the ligatures œ and æ, " +
-        "of either case, are written oe and ae; every other character, punctuation, apostrophes and every kind of space included, is kept " +
-        "as it is, so capitals and accents never decide a match and every other character does";
+        "of either case, are written oe and ae; the apostrophes ’, ‘ and ʼ are written ' and the no-break spaces U+00A0, U+202F and " +
+        "U+2007 an ordinary space; a soft hyphen (U+00AD) is dropped; every other character, punctuation, hyphens and the other spaces " +
+        "included, is kept as it is, so capitals, accents, these apostrophes and these spaces never decide a match and every other " +
+        "character does";
 
-    /// <summary>Each UTF-16 unit's fold: null when it is itself, empty when it is dropped (a non-spacing mark).</summary>
+    /// <summary>Each UTF-16 unit's fold: null when it is itself, empty when it is dropped (a non-spacing mark, a soft hyphen).</summary>
     private static readonly string?[] Units = BuildUnits();
 
     /// <summary><paramref name="value"/> folded (<see cref="Rule"/>); the same instance when nothing in it folds.</summary>
@@ -133,8 +139,14 @@ public static class TextFolding
         return false;
     }
 
-    /// <summary>Whether a unit is dropped by the fold (a non-spacing mark), so a match that ends before it takes it along.</summary>
-    internal static bool IsDropped(char character) => Units[character] is { Length: 0 };
+    /// <summary>
+    /// Whether a unit is a combining mark the fold drops, so a match that ends before it takes it along: it belongs to the letter
+    /// before it. A soft hyphen is dropped too, but belongs to no letter, and a match never takes it along.
+    /// </summary>
+    internal static bool IsDropped(char character) => Units[character] is { Length: 0 } && character != SoftHyphen;
+
+    /// <summary>The soft hyphen (U+00AD), dropped by the fold: a line-break hint inside a word, never seen.</summary>
+    private const char SoftHyphen = (char)0x00AD;
 
     private static string?[] BuildUnits()
     {
@@ -159,6 +171,18 @@ public static class TextFolding
             units[code] = folded.Length == 1 && folded[0] == character ? null : folded;
         }
 
+        // The typographic apostrophes and the no-break spaces, one unit for one, and the soft hyphen dropped: offsets stay exact.
+        foreach (var apostrophe in new[] { (char)0x2019, (char)0x2018, (char)0x02BC })
+        {
+            units[apostrophe] = "'";
+        }
+
+        foreach (var space in new[] { (char)0x00A0, (char)0x202F, (char)0x2007 })
+        {
+            units[space] = " ";
+        }
+
+        units[SoftHyphen] = string.Empty;
         return units;
     }
 }

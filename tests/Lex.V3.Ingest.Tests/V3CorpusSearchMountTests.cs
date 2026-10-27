@@ -254,7 +254,8 @@ public sealed class V3CorpusSearchMountTests
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
         // The plan's item 4.4: "Congé", "congé", "conge" and the capitals find one another; a decomposed accent and the
-        // ligature œ fold as their letters do; an apostrophe, a hyphen and a no-break space still count.
+        // ligature œ fold as their letters do; the apostrophes and the no-break spaces fold too (the review of #1005), and a
+        // hyphen still counts.
         var ids = await SetTextsAsync(fixture, fixture.ExpressionIri,
             "Le cong\u00E9 parental est d\u00FB \u00E0 l\u2019\u0153uvre.",
             "Le conge\u0301 parental, CONG\u00C9 PARENTAL, est du a l'oeuvre.",
@@ -275,12 +276,14 @@ public sealed class V3CorpusSearchMountTests
 
         CollectionAssert.AreEqual(accented, await Found("\u0152UVRE"), "the ligature folds as oe, in capitals too");
         CollectionAssert.AreEqual(accented, await Found("oeuvre"));
-        CollectionAssert.AreEqual(new[] { ids[0] }, await Found("l\u2019oeuvre"), "a typographic apostrophe is not the ASCII one");
-        CollectionAssert.AreEqual(new[] { ids[1] }, await Found("l'\u0153uvre"));
+        // The review of #1005: a typographic apostrophe is the straight one, a no-break space a space, a soft hyphen nothing.
+        CollectionAssert.AreEqual(accented, await Found("l\u2019oeuvre"), "a typographic apostrophe finds the straight one too");
+        CollectionAssert.AreEqual(accented, await Found("l'\u0153uvre"));
         CollectionAssert.AreEqual(new[] { ids[2] }, await Found("compte-rendu"));
         CollectionAssert.AreEqual(Array.Empty<string>(), await Found("compte rendu"), "a hyphen is not folded away");
-        CollectionAssert.AreEqual(Array.Empty<string>(), await Found("6 septembre"), "a no-break space is not a space");
+        CollectionAssert.AreEqual(new[] { ids[2] }, await Found("6 septembre"), "a no-break space is read as a space");
         CollectionAssert.AreEqual(new[] { ids[2] }, await Found("6\u00A0SEPTEMBRE"));
+        CollectionAssert.AreEqual(new[] { ids[2] }, await Found("compte-ren\u00ADdu"), "a soft hyphen is nothing");
         CollectionAssert.AreEqual(Array.Empty<string>(), await Found("\u0301"), "a combining mark alone folds to nothing, which matches nothing");
     }
 

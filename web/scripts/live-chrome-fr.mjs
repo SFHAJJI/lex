@@ -531,7 +531,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     runTitlesNotRun: 'Intitulés : non recherchés, un acte ayant été désigné.',
     runText: 'Texte : aucun article interrogé ne contient l’expression, même sans tenir compte des majuscules ni des accents.',
     runTextWords: 'Texte, chacun des mots dans un ordre quelconque : aucun article interrogé ne les contient tous.',
-    exactOnly: 'Seule l’expression a été recherchée dans le texte, sans tenir compte des majuscules ni des accents, œ et æ étant lus oe et ae : chacun de ses autres caractères compte, apostrophes, traits d’union et espaces compris, et rien n’est réduit à son radical ni étendu. Une recherche moins stricte dans le texte reste désactivée tant que sa propre vérification n’est pas réussie.',
+    exactOnly: 'Seule l’expression a été recherchée dans le texte, sans tenir compte des majuscules ni des accents, œ et æ étant lus oe et ae, les apostrophes typographiques comme l’apostrophe droite, une espace insécable comme une espace et un trait d’union conditionnel comme rien : chacun de ses autres caractères compte, traits d’union et ponctuation compris, et rien n’est réduit à son radical ni étendu. Une recherche moins stricte dans le texte reste désactivée tant que sa propre vérification n’est pas réussie.',
     officialSearch: 'Les pages de recherche des éditeurs :',
     officialSites: Object.freeze({
       legilux: 'Recherche sur Legilux, pour le droit luxembourgeois',

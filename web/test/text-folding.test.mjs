@@ -15,15 +15,17 @@ test("the fold ignores capitals and accents, writes œ and æ as two letters, an
     assert.equal(foldText(form), "conge parental", form);
   }
   assert.equal(foldText("Œuvre æther"), "oeuvre aether");
-  assert.equal(foldText("l\u2019article l'article 6\u00A0septembre compte-rendu"), "l\u2019article l'article 6\u00A0septembre compte-rendu",
-    "apostrophes, no-break spaces and hyphens are kept");
+  // The review of #1005: the typographic apostrophes as the straight one, the no-break spaces as a space, a soft hyphen dropped.
+  assert.equal(foldText("l\u2019article l\u2018article l\u02BCarticle 6\u00A0septembre 6\u202Fkm obli\u00ADgation"),
+    "l'article l'article l'article 6 septembre 6 km obligation");
+  assert.equal(foldText("compte-rendu a\u2013b \u00AB x \u00BB"), "compte-rendu a\u2013b \u00AB x \u00BB", "hyphens, dashes and quotation marks are kept");
   assert.throws(() => foldText(null), /not text to fold/);
 });
 
 test("the search pages say what the matching is, and no form the French review refused", () => {
   const en = liveChrome("en").search;
   const fr = liveChrome("fr").search;
-  assert.match(en.exactOnly, /with capitals and accents ignored and œ and æ read as oe and ae/);
+  assert.match(en.exactOnly, /with capitals and accents ignored, œ and æ read as oe and ae, the typographic apostrophes as the straight one, a no-break space as a space and a soft hyphen as nothing:/);
   assert.doesNotMatch(en.exactOnly, /nothing is folded|Only exact matching/, "the text is folded now");
   assert.doesNotMatch(en.runText, /exactly as typed/);
   assert.doesNotMatch(en.intro, /exactly as typed/);

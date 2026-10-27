@@ -141,6 +141,13 @@ internal sealed partial class V3CorpusMount
         int limit,
         DateTimeOffset observedAt)
     {
+        // R92 before any text is read (the review of #1005, F1): an act the names record withholds is never matched, however it
+        // was named; the answer's own gate (WithNamesWithheld) holds it too.
+        if (WithheldEurope(seed) is { } withheld)
+        {
+            return RefuseNamesWithheld(request, withheld, null, observedAt);
+        }
+
         var timeline = EuropeTimelineOf(seed);
         if (RefuseEuropeLanguage(request, timeline, language, observedAt) is { } unavailable)
         {
