@@ -20,7 +20,7 @@ Updated 2026-10-27.
     markup in a value, or a value that is not one exact IRI (`invalid_licence_iri`); a root that is not one Akoma Ntoso
     document (`root_rejected`); `malformed_xml`. Its other statuses are `bound`, `own_block_empty`, `unbound`, `silent` and
     `not_applicable` (a PDF).
-  - **Resolution /2** (`LuxembourgRightsChannels.ResolveV2`, `lex-lu-rights-resolution/2`, `ab8a42cb…`): /1's order, then
+  - **Resolution /2** (`LuxembourgRightsChannels.ResolveV2`, `lex-lu-rights-resolution/2`, `05ed311f…` since the review): /1's order, then
     rules 8 to 15. A conflict is any declared value, in any block, that is not the SPARQL value, or any identity a block
     names that the catalogue (the run's typed `jolux:license` assertions) licenses otherwise. An own block of exactly CC
     BY with nothing disagreeing is `agreed_cc_by_rederived`. Six dispositions are new: that one, the four single-channel
@@ -61,10 +61,10 @@ Updated 2026-10-27.
   - Under resolution /2, the 11,205 held bodies split as follows:
     - every one of the 2,725 the acquisition admitted agrees (2,598 acts, 127 codes);
     - `agreed_cc_by_rederived` 702 (451 consolidations, 250 acts, 1 code state, `code/procedure_civile/20230201`);
-    - single channel: names another identity 1,055 (1,024 consolidations, 31 code states), silent 2,196 (1,934 acts, 262
+    - single channel: names another identity 1,043 (1,012 consolidations, 31 code states), silent 2,196 (1,934 acts, 262
       consolidations), own block empty 31 acts, not applicable 368 (the PDFs);
     - withheld under every policy: conflict 4,012 (3,201 acts, 811 consolidations), multiple 71, missing value 1,
-      identity unknown 42, rejected 2.
+      identity unknown 54 (1 act, 53 consolidations), rejected 2.
   - Two acts differ from the design's simulation, and both stay withheld:
     - `loi/1997/07/27/n6/jo`: its own block says CC BY, but the catalogue licenses its PDF twin both CC BY and
       licenceSCL. Rule 8, as the design writes it, makes that a conflict; the simulation had applied that check to
@@ -77,17 +77,18 @@ Updated 2026-10-27.
     |---|---|---|---|---|
     | /1 (Release 1) | 2,725 | 2,690 | 137,632 | |
     | A (this slice) | 3,427 | 3,387 | 152,031 | 451 consolidations (9,700 articles), 250 acts, 1 code state: +14,399 articles |
-    | A + L2 (a) | 4,482 | 4,437 | 216,125 | +1,055 (1,024 consolidations, 31 code states), +64,094 articles; 5 refused as misfiled |
-    | A + L2 (b) | 3,865 | 3,824 | 159,317 | +438 consolidations, +7,286 articles; no code state (all 31 rest on run-14 pages) |
+    | A + L2 (a) | 4,470 | 4,425 | 215,466 | +1,043 (1,012 consolidations, 31 code states), +63,435 articles; 5 refused as misfiled |
+    | A + L2 (b) | 3,857 | 3,816 | 158,821 | +430 consolidations, +6,790 articles; no code state (all 31 rest on run-14 pages) |
     | A + L1 (a) | 5,623 | 5,561 | 173,072 | +2,196 (1,934 acts, 262 consolidations), +21,041 articles |
     | A + L1 (b) | 4,877 | 4,837 | 161,311 | +1,450 (1,306 acts, 144 consolidations), +9,280 articles |
     | A + L1b (a) | 3,458 | 3,418 | 152,614 | +31 acts, +583 articles |
     | A + L1b (b) | 3,450 | 3,410 | 152,356 | +23 acts, +325 articles |
-    | A + all three (a) | 6,709 | 6,642 | 237,749 | +3,282, +85,718 articles |
-    | A + all three (b) | 5,338 | 5,297 | 168,922 | +1,911, +16,891 articles |
+    | A + all three (a) | 6,697 | 6,630 | 237,090 | +3,270, +85,059 articles |
+    | A + all three (b) | 5,330 | 5,289 | 168,426 | +1,903, +16,395 articles |
 
   - Content /3 admits 9,700 articles of the 451 consolidations, the design's figure. The file counts are the design's
-    (§1.1, §5), with the live-page splits 438 / 1,450 / 23. The articles are content /3's, so they are above the design's
+    (§1.1, §5), with the live-page splits 430 / 1,450 / 23, except L2: 12 of the design's 1,055 name an identity the
+    catalogue does not know (rule 12 since the review). The articles are content /3's, so they are above the design's
     content /2 estimates (L2 (a): 57,661).
   - A body is a text here; the index's states, and "6 codes current" under L2, come from index /9.
 - **The index stage under policy A** (`LuxembourgIndexNineBuildRun15Probe` with `held: run15-held-release2.jsonl` and
@@ -143,10 +144,48 @@ Updated 2026-10-27.
     derive of the sealed inputs, which must be byte-equal.
   - R1 reads each held body three more times (reading /2, inventory /4, content /3) and holds the evidence index /2 and the
     record. Under policy A it reads no licence page. Its memory peak should stay Release 1's, which is in R0's replay.
+- **Review of #999 (an independent reviewer: REPAIR) and the repair.**
+  - **F1, high: R0 could no longer replay run 15.** The resolution gained three public members (`InFileReadingV2`,
+    `ResolutionRuleSha256`, `LicencePage`). ContractJson wrote them as nulls on every resolution /1, and the Gazette
+    checkpoint's input and result digests and the query checkpoint's result digest hash the body joins and Gazette sets
+    that carry one. A derive over run 15 would have refused at the Gazette checkpoint, before R1.
+    - Fixed: each member is `JsonIgnore(WhenWritingNull)`. No other type this slice touched is hashed through ContractJson:
+      the corpus member's rights block has its own canonical writer, which writes the new fields only when set; the record
+      and its rights part omit theirs when null; the Gazette rights digests are field by field.
+    - `LuxembourgRightsResolutionWirePinTests` (new) pins `ContractJson.Sha256` of a resolution /1 (agreed, and refused
+      for a PDF), a body join, a Gazette disposition and a Gazette set. The values were computed with 473a9fae's Contracts,
+      built in a scratch worktree outside the repository, by an F# script making the same objects. The branch gives the
+      same five values. With one `JsonIgnore` removed the pin fails, which was run once to check.
+    - Not checked: the stored checkpoint digests of run 15 themselves. They hash R0's in-memory resolution, which only the
+      query phase's full replay (about 34 GiB) rebuilds, so no read-only check over custody can recompute them on this PC.
+      The pin holds the bytes those digests were made from to 473a9fae's.
+  - **F2: rule 12** now quarantines an unbound file that names no identity, or any identity the catalogue does not know
+    (the design's L2 condition: every identity the block names is itself CC BY in the same catalogue). It is re-pinned,
+    and a new test covers a file naming one CC BY and one unknown identity.
+    - Over run 15, 12 consolidations move from `names_other_identity` to `typed_quarantine_in_file_identity_unknown`
+      (1,024 to 1,012; 41 to 53). L2 (a) adds 1,043 files and 63,435 articles; (b) adds 430 and 6,790. Policy A and every
+      other figure are unchanged.
+  - **F3: binding /2** hashes the reading /2 rule, the admission policy and the re-derivation record besides the resolution
+    rule. The set checks it against its header, and a header naming another record or another policy does not read
+    (tested).
+  - **F4: the L2 disclosure** now says the file's licence statement names another publication, not this file, in English
+    and French; the code does not check "the same act".
+  - **F5: R1's other refusals are tested**: a non-terminal resolution (no SPARQL row), `non_admitting_licence_scl` (a
+    silent file whose SPARQL channel says licenceSCL), and a single-channel admission under L1 whose rights evidence
+    index lists no page. Policy A reads no page for the same body, which is withheld.
+  - **Tests after the repair and the merge of v3/integration at 562d12e7** (#996, #997):
+    - contracts 162 passed;
+    - ingest 320 (318 passed, 0 failed, 2 opt-in skipped);
+    - web 331 passed over 39 files;
+    - `eng/verify-v3-tree.ps1` 1,736 tracked paths.
+  - **The rights probe again** (12.4 minutes, peak 2,124 MiB, 0 failures): the moves above, nothing else.
+  - **D1's commands do not change.** `lu-release-2` and policy A (`b9687998…`) are the same; the inputs name resolution
+    /2's new digest through `RulesOf`.
 - **Driver decisions (reversible).**
   - Policy A, as the design proposes.
   - Rule 8 applies to every reading, bound ones included: an identity the catalogue licenses otherwise is a conflict,
     which withholds `loi/1997/07/27/n6/jo`.
+  - Rule 12 quarantines an unbound file naming no identity or any unknown one (the review of #999).
   - A root-level element beside the document element is a rejected root (`loi/2001/12/21/n8/jo`).
   - A binding block that names a second identity is ambiguous.
   - A single-channel page is the latest page holding the row; (b) asks that page to be live.
