@@ -52,6 +52,10 @@ public sealed partial class V3MountedGatesTests
         var requests = new SortedDictionary<string, RefusalRequest>(StringComparer.Ordinal)
         {
             ["coverage"] = new("coverage", new { }, hasLuxembourgIndex ? "answer" : "no_corpus_mounted"),
+            // What no data of the mount decides, so every mount gives it: an instrument the out-of-scope list names, refused before
+            // the mount is read (the plan's item 6.10; J5), and an operation served from no data (8.6), refused with its typed reason.
+            ["cssf-circular"] = new("dossier", new { identifier = "Circulaire CSSF 20/747" }, "out_of_corpus_scope"),
+            ["served-from-no-data"] = new("concepts", new { }, "retrieval_mode_unavailable"),
         };
         var notProduced = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var hasEuropeIndex = File.Exists(Path.Combine(mountDirectory, V3CorpusMount.EuropeIndexFileName));
@@ -385,7 +389,7 @@ public sealed partial class V3MountedGatesTests
         CollectionAssert.AreEquivalent(
             new[] { "text_withheld", "text_not_available" }, derived.NotProduced.Keys.ToArray(),
             "one mount cannot hold a withheld licence and text beside them; every other produced code is derived: " + string.Join("; ", derived.NotProduced.Select(static pair => pair.Key + " (" + pair.Value + ")")));
-        Assert.AreEqual(16, set.CaseCount, "the fixture machine gates' 18 less the two codes another mount holds");
+        Assert.AreEqual(18, set.CaseCount, "the fixture machine gates' 21 less the two codes another mount holds and the regulation's twin, which is the fixture's own");
     }
 
     [TestMethod]

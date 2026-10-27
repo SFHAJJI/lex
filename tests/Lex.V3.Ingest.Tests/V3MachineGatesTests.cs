@@ -295,6 +295,12 @@ public sealed class V3MachineGatesTests
             ["eu-work-no-eu-index"] = (mount, "search", new { query = "x", language = "eng", identifier = "32016R0679" }, "no_corpus_mounted"),
             ["rights-not-agreed"] = (withheldMount, "evidence_bundle", new { identifier = $"/lu-legilux/{withheld.WorkKey}", date = withheld.ApplicabilityDate, language = "fra" }, "text_withheld"),
             ["no-text-held"] = (emptyMount, "evidence_bundle", new { identifier = $"/lu-legilux/{empty.WorkKey}", date = empty.ApplicabilityDate, language = "fra" }, "text_not_available"),
+            // An instrument Lex never holds (the out-of-scope list, the plan's item 6.10; J5), and its minimal twin: a regulator's
+            // regulation, which R78 admits, is no out-of-scope instrument, so this mount, which does not hold it, finds it unknown.
+            ["cssf-circular"] = (mount, "dossier", new { identifier = "Circulaire CSSF 20/747" }, "out_of_corpus_scope"),
+            ["cssf-regulation"] = (mount, "dossier", new { identifier = "Règlement CSSF n° 12-02" }, "identifier_unknown"),
+            // An operation served from no data refuses with its typed reason, inside the envelope (the plan's item 8.6).
+            ["served-from-no-data"] = (mount, "knowable_on", new { identifier = work, date }, "retrieval_mode_unavailable"),
             ["a-held-state"] = (mount, "as_of", new { identifier = work, date, language = "fra" }, "answer"),
             ["the-held-permalink"] = (mount, "verify", new { identifier = permalink, language = "fra" }, "answer"),
             ["coverage"] = (mount, "coverage", new { }, "answer"),
