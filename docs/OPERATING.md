@@ -86,8 +86,9 @@ A data refresh and a release are four steps, each with its own evidence:
    `Lex.V3.Tool rederive-inputs`, `derive` twice (A and B), compares every file, `rederive-seal`, runs the machine gates
    and uploads the mount with its manifest. The kit that launches it (its scripts and the installer that brings a mount
    back to the PC, verified file by file against the manifest) is the operator's, outside this public repository, because
-   it handles storage keys. A derive takes about three hours, all on Linux (the PDF layout depends on the host's fonts,
-   so the population is derived and released on Linux only).
+   it handles storage keys. A derive takes about three hours on Linux. Since #994 the PDF layout reads no host font, so a
+   derive on Windows writes the same files; the population is still derived on Azure for its memory (a derive peaks near
+   34 GiB).
 3. **The release, on this PC**: from a clean checkout of the merged head, in `web/`, with the signing key piped from Key
    Vault to standard input and never written:
 
