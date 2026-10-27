@@ -405,13 +405,13 @@
     ],
     "out_of_scope": {
       "schema": "lex-v3-out-of-scope/1",
-      "sha256": "2020e923582bf0ffc3f0b5fd25e1d6f356f1c5e1506f7db16bde3463a3ae1372",
+      "sha256": "d473256c14a1c973b441567d9bf9802532347643b5b3f384704f9027b07a06b7",
       "classes": [
         {
           "class": "cssf_circular",
           "jurisdiction": "lu",
-          "instrument": "a circular of the Commission de surveillance du secteur financier (CSSF)",
-          "reason": "CSSF circulars are issued and published by the CSSF, not by Legilux or EUR-Lex, and Lex does not collect them.",
+          "instrument": "a circular of the Commission de surveillance du secteur financier (CSSF), or of the Institut Mon\u00E9taire Luxembourgeois (IML) before it",
+          "reason": "CSSF circulars, and the IML\u0027s before them, are published by the CSSF, not by Legilux or EUR-Lex, and Lex does not collect them.",
           "official_source": "https://www.cssf.lu/",
           "who_to_ask": {
             "name": "Commission de surveillance du secteur financier (CSSF)",
@@ -419,14 +419,16 @@
             "role": "information"
           },
           "patterns": [
-            "^(?:circulaire|circular)\\s\u002B(?:de\\s\u002Bla\\s\u002B|of\\s\u002Bthe\\s\u002B)?CSSF\\s\u002B(?:n[\u00B0o]\\.?\\s*)?[0-9]{2}/[0-9]{3,4}$",
-            "^CSSF\\s\u002B(?:circulaire|circular)\\s\u002B(?:n[\u00B0o]\\.?\\s*)?[0-9]{2}/[0-9]{3,4}$",
+            "^(?:(?:circulaire|circular|rundschreiben)\\s\u002B|circ\\.\\s*)(?:de\\s\u002Bla\\s\u002B|de\\s\u002Bl[\u0027\u2019]\\s*|of\\s\u002Bthe\\s\u002B)?(?:CSSF(?:-CPDI)?|IML)\\s\u002B(?:n[\u00B0o]\\.?\\s*)?[0-9]{2}/[0-9]{2,4}(?:,?\\s\u002B(?:telle\\s\u002Bque\\s\u002Bmodifi[\u00E9e]e|as\\s\u002Bamended)(?:\\s\u002B(?:par|by)\\s.{1,80})?)?$",
+            "^(?:CSSF(?:-CPDI)?|IML)(?:\\s\u002B|-)(?:(?:circulaire|circular|rundschreiben)\\s\u002B|circ\\.\\s*)(?:n[\u00B0o]\\.?\\s*)?[0-9]{2}/[0-9]{2,4}(?:,?\\s\u002B(?:telle\\s\u002Bque\\s\u002Bmodifi[\u00E9e]e|as\\s\u002Bamended)(?:\\s\u002B(?:par|by)\\s.{1,80})?)?$",
             "^CSSF\\s\u002B[0-9]{2}/[0-9]{3,4}$"
           ],
           "examples": [
             "Circulaire CSSF 20/747",
             "CSSF circular 22/806",
-            "CSSF 20/747"
+            "CSSF 20/747",
+            "Circ. CSSF 12/552 telle que modifi\u00E9e",
+            "Circulaire IML 98/143"
           ]
         },
         {
@@ -442,11 +444,13 @@
           },
           "patterns": [
             "^(?:d[\u00E9e]lib[\u00E9e]ration|d[\u00E9e]cision|decision|deliberation|avis|opinion)\\s\u002B(?:de\\s\u002Bla\\s\u002B|of\\s\u002Bthe\\s\u002B)?CNPD\\s\u002B(?:n[\u00B0o]\\.?\\s*)?[0-9]{1,4}[A-Z]{0,3}/[0-9]{4}$",
-            "^CNPD\\s\u002B(?:(?:d[\u00E9e]lib[\u00E9e]ration|d[\u00E9e]cision|decision|deliberation|avis|opinion)\\s\u002B)?(?:n[\u00B0o]\\.?\\s*)?[0-9]{1,4}[A-Z]{0,3}/[0-9]{4}$"
+            "^CNPD\\s\u002B(?:(?:d[\u00E9e]lib[\u00E9e]ration|d[\u00E9e]cision|decision|deliberation|avis|opinion)\\s\u002B)?(?:n[\u00B0o]\\.?\\s*)?[0-9]{1,4}[A-Z]{0,3}/[0-9]{4}$",
+            "^(?:d[\u00E9e]lib[\u00E9e]ration|d[\u00E9e]cision|decision|deliberation|avis|opinion)\\s\u002B(?:n[\u00B0o]\\.?\\s*)?[0-9]{1,4}[A-Z]{0,3}/[0-9]{4}\\s\u002B(?:de\\s\u002Bla\\s\u002B|of\\s\u002Bthe\\s\u002B)CNPD$"
           ],
           "examples": [
             "D\u00E9lib\u00E9ration CNPD n\u00B0 12/2023",
-            "CNPD decision 3/2021"
+            "CNPD decision 3/2021",
+            "D\u00E9lib\u00E9ration n\u00B0 36FR/2021 de la CNPD"
           ]
         },
         {
@@ -463,12 +467,15 @@
           "patterns": [
             "^ECLI:EU:[CTF]:[0-9]{4}:[0-9]{1,6}$",
             "^6[0-9]{4}[A-Z]{2}[0-9]{4}(?:\\([0-9]{2}\\))?$",
-            "^(?:(?:case|affaire|aff\\.)\\s\u002B)?[CTF]-[0-9]{1,4}/[0-9]{2}(?:\\s\u002BP)?$"
+            "^(?:(?:joined\\s\u002Bcases|cases|case|affaires\\s\u002Bjointes|affaires|affaire|aff\\.|arr[\u00EAe]t|judgment(?:\\s\u002Bin\\s\u002Bcase)?)\\s\u002B)?[CTF]-[0-9]{1,4}/[0-9]{2}(?:\\s\u002BP)?(?:\\s*(?:,|and|et|\u0026)\\s*[CTF]-[0-9]{1,4}/[0-9]{2}(?:\\s\u002BP)?)*(?:,?\\s\u002B\\p{L}.{0,120})?$",
+            "^https?://curia\\.europa\\.eu/juris/\\S*[?\u0026]num=[CTF]-[0-9]{1,4}/[0-9]{2}\\S*$"
           ],
           "examples": [
             "ECLI:EU:C:2014:317",
             "62012CJ0131",
-            "C-131/12"
+            "C-131/12",
+            "Case C-131/12 Google Spain",
+            "Joined Cases C-293/12 and C-594/12"
           ]
         },
         {
@@ -483,7 +490,8 @@
             "role": "information"
           },
           "patterns": [
-            "^RESA(?:[\\s_:/-]\u002B[0-9A-Za-z][0-9A-Za-z._/-]{0,40})?$",
+            "^(?-i:RESA)$",
+            "^RESA[\\s_]\u002B[0-9]{4}[\\s_/]\u002B[0-9]{3}\\.?[0-9]{3}$",
             "^recueil\\s\u002B[\u00E9e]lectronique\\s\u002Bdes\\s\u002Bsoci[\u00E9e]t[\u00E9e]s\\s\u002Bet\\s\u002Bassociations(?:\\s.{0,60})?$"
           ],
           "examples": [
@@ -1086,13 +1094,13 @@
           "code": "out_of_corpus_scope",
           "helpful_payload": {
             "asserts_absence_of_law": false,
-            "instrument": "a circular of the Commission de surveillance du secteur financier (CSSF)",
+            "instrument": "a circular of the Commission de surveillance du secteur financier (CSSF), or of the Institut Mon\u00E9taire Luxembourgeois (IML) before it",
             "official_source": "https://www.cssf.lu/",
             "out_of_scope_class": "cssf_circular",
-            "reason": "CSSF circulars are issued and published by the CSSF, not by Legilux or EUR-Lex, and Lex does not collect them.",
+            "reason": "CSSF circulars, and the IML\u0027s before them, are published by the CSSF, not by Legilux or EUR-Lex, and Lex does not collect them.",
             "requested_identifier": "Circulaire CSSF 20/747",
             "scope_list": "lex-v3-out-of-scope/1",
-            "scope_list_sha256": "2020e923582bf0ffc3f0b5fd25e1d6f356f1c5e1506f7db16bde3463a3ae1372",
+            "scope_list_sha256": "d473256c14a1c973b441567d9bf9802532347643b5b3f384704f9027b07a06b7",
             "what_would_answer": [
               "expanded_official_scope"
             ],

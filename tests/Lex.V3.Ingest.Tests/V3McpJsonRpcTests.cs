@@ -269,6 +269,51 @@ public sealed class V3McpJsonRpcTests
         Assert.AreEqual("Unknown tool: no_such_tool", error.GetProperty("message").GetString());
     }
 
+    /// <summary>
+    /// The review of #998, F3: an answer the server built and its own reviewed schema refused on the way out is the server's
+    /// failure (REST's 500 <c>internal_response_invalid</c>), so a tool call answers JSON-RPC's Internal error, -32603, and never
+    /// the caller's Invalid params; a request its schema refuses is still Invalid params. Every failure below the envelope is
+    /// the one or the other as REST's status says: a 5xx is the server's.
+    /// </summary>
+    [TestMethod]
+    public async Task AnAnswerTheServersOwnSchemaRefusesIsAnInternalErrorAndABadRequestIsInvalidParams()
+    {
+        var host = new V3PlatformHost(new RefusingOutgoingSchemas());
+        async Task<JsonElement> CallAsync(string tool, object arguments)
+        {
+            var bytes = await V3McpJsonRpc.HandleAsync(
+                Request(new { jsonrpc = "2.0", id = 9, method = "tools/call", @params = new { name = tool, arguments } }),
+                host, null, static () => ObservedAt, "mcp_test_ref", CancellationToken.None);
+            using var response = JsonDocument.Parse(bytes!);
+            Assert.IsFalse(response.RootElement.TryGetProperty("result", out _), $"{tool}: no envelope and no partial answer");
+            return response.RootElement.GetProperty("error").Clone();
+        }
+
+        var internalError = await CallAsync("resolve", new { identifier = "eli/example" });
+        Assert.AreEqual(-32603, internalError.GetProperty("code").GetInt32());
+        Assert.AreEqual("Internal error: InternalResponseInvalid", internalError.GetProperty("message").GetString());
+        var invalid = await CallAsync("as_of", new { identifier = "eli/example" });
+        Assert.AreEqual(-32602, invalid.GetProperty("code").GetInt32(), "a missing required date is the caller's");
+        Assert.AreEqual("Invalid params: RequestSchemaInvalid", invalid.GetProperty("message").GetString());
+
+        CollectionAssert.AreEqual(
+            new[] { V3TransportFailureKind.InternalResponseInvalid, V3TransportFailureKind.InternalFailure, V3TransportFailureKind.ServiceInMaintenance },
+            Enum.GetValues<V3TransportFailureKind>().Where(V3TransportResponse.IsServerFailure).ToArray());
+    }
+
+    /// <summary>The reviewed schemas for requests and results, and a refusal schema that refuses every refusal on the way out.</summary>
+    private sealed class RefusingOutgoingSchemas : IV3PlatformSchemaDocuments
+    {
+        public void ValidateRequest(V3OperationDefinition operation, JsonElement document) =>
+            V3PlatformSchemaDocuments.Reviewed.ValidateRequest(operation, document);
+
+        public void ValidateResult(V3OperationDefinition operation, JsonElement document) =>
+            V3PlatformSchemaDocuments.Reviewed.ValidateResult(operation, document);
+
+        public void ValidateRefusal(JsonElement document) =>
+            throw new JsonException("an outgoing refusal its schema refuses");
+    }
+
     [TestMethod]
     public async Task AToolNameIsMatchedExactlyAndACaseVariantIsUnknown()
     {

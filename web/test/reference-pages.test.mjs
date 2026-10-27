@@ -543,3 +543,34 @@ test("the forms the French review of the API's gaps pinned say what the platform
     for (const pattern of refused) assert.doesNotMatch(text, pattern, `fr ${path}`);
   }
 });
+
+test("G2 names what moves with the moment asked, as its replay test holds it, and the change policy points to the out-of-scope list's own digest (the review of #998, F1 and F2)", async () => {
+  const [EN, FR] = [LIVE_CHROME.en, LIVE_CHROME.fr];
+  // F1: the members G2 names are the ones `V3ReplayGuaranteesTests` finds moving a month later, and no other.
+  const replay = await repository(REPLAY_TESTS);
+  for (const member of [
+    "context.freshness.channels[0].age_days", "context.freshness.channels[0].stale", "context.freshness.observed_at", "context.freshness.stale",
+    "request_ref", "result.value.reference.recognised.date.date", "result.value.reference.opens.state_date",
+    "result.value.reference.opens.address", "result.value.reference.opens.address_kind",
+  ]) {
+    assert.ok(replay.includes(`"${member}"`), `${REPLAY_TESTS} holds ${member}`);
+  }
+  for (const key of ["servingCommit", "observedAt", "requestRef", "ageDays", "channelStale", "stale", "recognisedDate", "rateLimited"]) {
+    assert.ok(EN.developers.replay.guarantees.G2.text.includes(`{${key}}`), `en G2 names {${key}}`);
+    assert.ok(FR.developers.replay.guarantees.G2.text.includes(`{${key}}`), `fr G2 names {${key}}`);
+  }
+  assert.doesNotMatch(EN.developers.replay.guarantees.G2.text, /the two members/);
+  // F2: the registry's digest moves with an operation's definition, not with a fix to how it behaves; the out-of-scope list
+  // is not in the registry, and every out_of_corpus_scope refusal names its own identity and digest.
+  assert.ok(EN.developers.changes.digest.startsWith("Any change to an operation's definition,"));
+  assert.match(EN.developers.changes.digest, /that leaves its definition as it is keeps the digest/);
+  for (const [language, table] of [["en", EN], ["fr", FR]]) {
+    for (const key of ["code", "scopeList", "scopeListDigest"]) assert.ok(table.developers.changes.digest.includes(`{${key}}`), `${language} digest names {${key}}`);
+  }
+  const scope = await repository("src/Lex.V3.Api/V3CorpusMount.Scope.cs");
+  assert.ok(scope.includes("scope_list = V3OutOfScope.Schema") && scope.includes("scope_list_sha256 = V3OutOfScope.Sha256"), "the refusal names the list and its digest");
+  const page = mainOf(render("developers"));
+  for (const member of ["context.freshness.channels[].age_days", "result.value.reference.recognised.date", "context.commits.serving_runtime_source_commit", "scope_list_sha256"]) {
+    assert.ok(page.includes(`<code>${member}</code>`), `the page shows ${member}`);
+  }
+});

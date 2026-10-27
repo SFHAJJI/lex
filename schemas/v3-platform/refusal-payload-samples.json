@@ -490,7 +490,7 @@
         "reason": "Decisions and opinions of the CNPD are issued and published by the CNPD, not by Legilux or EUR-Lex, and Lex does not collect them.",
         "requested_identifier": "D\u00E9lib\u00E9ration CNPD n\u00B0 12/2023",
         "scope_list": "lex-v3-out-of-scope/1",
-        "scope_list_sha256": "2020e923582bf0ffc3f0b5fd25e1d6f356f1c5e1506f7db16bde3463a3ae1372",
+        "scope_list_sha256": "d473256c14a1c973b441567d9bf9802532347643b5b3f384704f9027b07a06b7",
         "what_would_answer": [
           "expanded_official_scope"
         ],

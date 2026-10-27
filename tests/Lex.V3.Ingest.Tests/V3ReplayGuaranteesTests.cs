@@ -20,7 +20,11 @@ namespace Lex.V3.Ingest.Tests;
 /// snapshot determinism and G5 independent verifiability need one build:
 /// <list type="bullet">
 /// <item>G2: every served operation answers the same canonical bytes from the same snapshot, from a byte copy of it and
-/// when asked again later, apart from the observation time and the request's own reference;</item>
+/// when asked again later, apart from what belongs to the request (the observation time and the request's own reference)
+/// and to the moment it is asked (the review of #998, F1): each channel's data age and staleness and the envelope's, on a
+/// mount whose build report dates its channel, and, for a search that reads an exact reference naming no date, the date it
+/// reads it at (today in Luxembourg), the version that date selects and whether it opens the readable address or a
+/// permalink. Nothing else moves;</item>
 /// <item>G5: a reader holding one evidence bundle and the publisher's file finds each served article's text in that file,
 /// and recomputes the body digest, each text digest, the article identities digest and the state digest from the
 /// derivations the platform publishes. On an index 9 the state digest is digest /2, whose row facts after the language
@@ -60,11 +64,31 @@ public sealed class V3ReplayGuaranteesTests
         await using var cleanup = fixture;
         var laterDate = DateOnly.ParseExact(fixture.ApplicabilityDate, "yyyy-MM-dd").AddDays(400).ToString("yyyy-MM-dd");
         await fixture.AddStateAsync(laterDate, "later");
+        // A version whose date falls between the two answers' days, which a reference naming no date opens once that day is today.
+        var today = LuxembourgCalendar.DateAt(ObservedAt);
+        var laterToday = LuxembourgCalendar.DateAt(Later);
+        var between = today.AddDays(13).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        Assert.IsTrue(today < DateOnly.ParseExact(between, "yyyy-MM-dd") && DateOnly.ParseExact(between, "yyyy-MM-dd") < laterToday);
+        await fixture.AddStateAsync(between, "between");
+        // The build report dates the Luxembourg channel's newest acquisition twenty days before the first answer: twenty days
+        // old then, within the maximum; fifty days old a month later, past it.
+        await File.WriteAllTextAsync(
+            Path.Combine(fixture.Directory, V3CorpusMount.BuildReportFileName),
+            JsonSerializer.Serialize(new
+            {
+                schema = "lex-v3-first-mount-report/1",
+                corpus = new { resourceId = "urn:uuid:00000000-0000-0000-0000-000000000000", Sha256 = fixture.CorpusSha256 },
+                resumption = new
+                {
+                    statement = "This population was not observed in one window.",
+                    luxembourg = new { resumedAt = ObservedAt.AddDays(-21).ToString("O"), catalogedAt = ObservedAt.AddDays(-20).ToString("O") },
+                },
+            }));
         var copy = Path.Combine(Path.GetTempPath(), $"lex-v3-replay-copy-{Guid.NewGuid():N}");
         Directory.CreateDirectory(copy);
         try
         {
-            foreach (var name in new[] { V3CorpusMount.IndexFileName, V3CorpusMount.CapabilityManifestFileName, V3CorpusMount.CorpusFileName })
+            foreach (var name in new[] { V3CorpusMount.IndexFileName, V3CorpusMount.CapabilityManifestFileName, V3CorpusMount.CorpusFileName, V3CorpusMount.BuildReportFileName })
             {
                 File.Copy(Path.Combine(fixture.Directory, name), Path.Combine(copy, name));
             }
@@ -76,54 +100,96 @@ public sealed class V3ReplayGuaranteesTests
 
             var work = $"/lu-legilux/{fixture.WorkKey}";
             var date = fixture.ApplicabilityDate;
-            var requests = new Dictionary<string, object>(StringComparer.Ordinal)
-            {
-                ["resolve"] = new { identifier = fixture.Permalink },
-                ["as_of"] = new { identifier = work, date, language = "fra" },
-                ["timeline"] = new { identifier = work, language = "fra" },
-                ["article_history"] = new { identifier = work, anchor = "art_2", language = "fra" },
-                ["diff"] = new { identifier = work, date_from = date, date_to = laterDate, language = "fra" },
-                ["changes_in_period"] = new { identifier = work, date_from = date, date_to = laterDate },
-                ["in_force_on"] = new { identifier = work, date, language = "fra" },
-                ["search"] = new { query = "Assemblée", language = "fra" },
-                ["coverage"] = new { },
-                ["provenance"] = new { identifier = work, date, language = "fra" },
-                ["dossier"] = new { identifier = work, language = "fra" },
-                ["citation"] = new { identifier = work, date },
-                ["cited_by"] = new { identifier = work },
-                ["verify"] = new { identifier = fixture.Permalink + "/art_2", language = "fra" },
-                ["relations"] = new { identifier = work },
-                ["evidence_bundle"] = new { identifier = work, date, language = "fra" },
-                ["classification"] = new { identifier = work, language = "fra" },
-                ["manifestation"] = new { identifier = work },
-                ["status_on"] = new { identifier = work, date, language = "fra" },
-                ["browse"] = new { },
-                ["ask"] = new { question = $"Quel est le texte de {work} au {date} ?" },
-                ["events"] = new { },
-                ["answer_drift"] = new { },
-                ["as_observed"] = new { identifier = work, date, language = "fra", snapshot = fixture.IndexSha256 },
-            };
+            const string undated = "article 2 de la loi du 10 août 1991";
+            var todayText = today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            (string Operation, object Parameters)[] requests =
+            [
+                ("resolve", new { identifier = fixture.Permalink }),
+                ("as_of", new { identifier = work, date, language = "fra" }),
+                ("timeline", new { identifier = work, language = "fra" }),
+                ("article_history", new { identifier = work, anchor = "art_2", language = "fra" }),
+                ("diff", new { identifier = work, date_from = date, date_to = laterDate, language = "fra" }),
+                ("changes_in_period", new { identifier = work, date_from = date, date_to = laterDate }),
+                ("in_force_on", new { identifier = work, date, language = "fra" }),
+                ("search", new { query = "Assemblée", language = "fra" }),
+                ("coverage", new { }),
+                ("provenance", new { identifier = work, date, language = "fra" }),
+                ("dossier", new { identifier = work, language = "fra" }),
+                ("citation", new { identifier = work, date }),
+                ("cited_by", new { identifier = work }),
+                ("verify", new { identifier = fixture.Permalink + "/art_2", language = "fra" }),
+                ("relations", new { identifier = work }),
+                ("evidence_bundle", new { identifier = work, date, language = "fra" }),
+                ("classification", new { identifier = work, language = "fra" }),
+                ("manifestation", new { identifier = work }),
+                ("status_on", new { identifier = work, date, language = "fra" }),
+                ("browse", new { }),
+                ("ask", new { question = $"Quel est le texte de {work} au {date} ?" }),
+                ("events", new { }),
+                ("answer_drift", new { }),
+                ("as_observed", new { identifier = work, date, language = "fra", snapshot = fixture.IndexSha256 }),
+                // An exact reference that names no date, read at today in Luxembourg; and one asked with the search's date set
+                // to the first answer's today, as the home page's box sends it, which is no date given only on that day.
+                ("search", new { query = undated, language = "fra" }),
+                ("search", new { query = undated, language = "fra", date = todayText }),
+            ];
             CollectionAssert.AreEquivalent(
                 V3RestRouteBinding.Served.Select(static binding => binding.OperationId).ToArray(),
-                requests.Keys.ToArray(),
+                requests.Select(static request => request.Operation).Distinct().ToArray(),
                 "every served operation has a replay case, so a new operation fails here until it has one.");
 
-            foreach (var (operation, parameters) in requests)
+            // What moves with the moment asked, in every answer: the request's own members, and each channel's data age and
+            // staleness and the envelope's, counted to the moment asked.
+            string[] everyAnswer =
+            [
+                "context.freshness.channels[0].age_days", "context.freshness.channels[0].stale", "context.freshness.observed_at",
+                "context.freshness.stale", "request_ref",
+            ];
+            foreach (var (index, (operation, parameters)) in requests.Index())
             {
+                var label = $"{operation} (case {index})";
                 // The same request (one trace identity) asked twice, and of a byte copy of the mount: the same bytes.
                 var first = await AnswerAsync(mount, operation, parameters, ObservedAt, "replay-first");
-                CollectionAssert.AreEqual(first, await AnswerAsync(mount, operation, parameters, ObservedAt, "replay-first"), $"{operation}: asked again");
-                CollectionAssert.AreEqual(first, await AnswerAsync(copied, operation, parameters, ObservedAt, "replay-first"), $"{operation}: from a byte copy of the mount");
+                CollectionAssert.AreEqual(first, await AnswerAsync(mount, operation, parameters, ObservedAt, "replay-first"), $"{label}: asked again");
+                CollectionAssert.AreEqual(first, await AnswerAsync(copied, operation, parameters, ObservedAt, "replay-first"), $"{label}: from a byte copy of the mount");
 
-                // Asked later, by another request: only the observation time and the request's own reference move; the
-                // snapshot, the result and any refusal are the same bytes.
+                // Asked a month later, by another request: only the members G2 names move.
                 var later = await AnswerAsync(mount, operation, parameters, Later, "replay-later");
-                var earlier = WithoutRequestOwnFields(first);
-                var then = WithoutRequestOwnFields(later);
-                Assert.AreNotEqual(earlier.ObservedAt, then.ObservedAt, $"{operation}: the observation time is the request's own");
-                Assert.AreNotEqual(earlier.RequestRef, then.RequestRef, $"{operation}: the request reference is the request's own");
-                Assert.AreEqual(earlier.Remainder, then.Remainder, $"{operation}: asked later by another request");
+                var (earlier, then) = (JsonNode.Parse(first)!, JsonNode.Parse(later)!);
+                string[] expected = index switch
+                {
+                    24 => [.. everyAnswer, "result.value.reference.opens.state_date", "result.value.reference.recognised.date.date"],
+                    25 => [.. everyAnswer, "result.value.reference.opens.address", "result.value.reference.opens.address_kind"],
+                    _ => everyAnswer,
+                };
+                CollectionAssert.AreEqual(expected.Order(StringComparer.Ordinal).ToArray(), MovedMembers(earlier, then), $"{label}: asked later by another request");
+
+                var (channel, laterChannel) = (earlier["context"]!["freshness"]!["channels"]![0]!, then["context"]!["freshness"]!["channels"]![0]!);
+                Assert.AreEqual(20, (int)channel["age_days"]!, label);
+                Assert.AreEqual(50, (int)laterChannel["age_days"]!, label);
+                Assert.IsFalse((bool)channel["stale"]! || (bool)earlier["context"]!["freshness"]!["stale"]!, label);
+                Assert.IsTrue((bool)laterChannel["stale"]! && (bool)then["context"]!["freshness"]!["stale"]!, label);
             }
+
+            // The undated reference: read at today in Luxembourg, so at each answer's own day, it opens the version that day
+            // selects, at the act's readable address both times.
+            var (undatedFirst, undatedLater) = (await ReferenceAsync(mount, requests[24].Parameters, ObservedAt), await ReferenceAsync(mount, requests[24].Parameters, Later));
+            Assert.AreEqual(todayText, (string?)undatedFirst["recognised"]!["date"]!["date"]);
+            Assert.AreEqual(laterToday.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), (string?)undatedLater["recognised"]!["date"]!["date"]);
+            Assert.AreEqual("today_in_luxembourg", (string?)undatedFirst["recognised"]!["date"]!["source"]);
+            Assert.AreEqual("today_in_luxembourg", (string?)undatedLater["recognised"]!["date"]!["source"]);
+            Assert.AreEqual(laterDate, (string?)undatedFirst["opens"]!["state_date"]);
+            Assert.AreEqual(between, (string?)undatedLater["opens"]!["state_date"]);
+            Assert.AreEqual("readable", (string?)undatedFirst["opens"]!["address_kind"]);
+            Assert.AreEqual("readable", (string?)undatedLater["opens"]!["address_kind"]);
+
+            // The box's date: today on the first day, so no date given and the readable address; a given date a month later,
+            // so the permalink of the version it selects, which is the same version.
+            var (boxFirst, boxLater) = (await ReferenceAsync(mount, requests[25].Parameters, ObservedAt), await ReferenceAsync(mount, requests[25].Parameters, Later));
+            Assert.AreEqual("readable", (string?)boxFirst["opens"]!["address_kind"]);
+            Assert.AreEqual("permalink", (string?)boxLater["opens"]!["address_kind"]);
+            Assert.AreEqual(laterDate, (string?)boxFirst["opens"]!["state_date"]);
+            Assert.AreEqual(laterDate, (string?)boxLater["opens"]!["state_date"]);
         }
         finally
         {
@@ -540,15 +606,45 @@ public sealed class V3ReplayGuaranteesTests
         return bytes;
     }
 
-    /// <summary>The envelope without the two fields that belong to the request rather than the answer.</summary>
-    private static (string Remainder, string? ObservedAt, string? RequestRef) WithoutRequestOwnFields(byte[] envelope)
+    /// <summary>A search answer's reference (what it recognised and what it opens), asked at <paramref name="observedAt"/>.</summary>
+    private static async Task<JsonNode> ReferenceAsync(V3CorpusMount mount, object parameters, DateTimeOffset observedAt)
     {
-        var node = JsonNode.Parse(envelope)!.AsObject();
-        var freshness = node["context"]!["freshness"]!.AsObject();
-        var observedAt = (string?)freshness["observed_at"];
-        freshness.Remove("observed_at");
-        var requestRef = (string?)node["request_ref"];
-        node.Remove("request_ref");
-        return (node.ToJsonString(), observedAt, requestRef);
+        var answer = JsonNode.Parse(await AnswerAsync(mount, "search", parameters, observedAt, "replay-reference"))!;
+        Assert.AreEqual("answer", (string?)answer["verdict"], answer.ToJsonString());
+        var reference = answer["result"]!["value"]!["reference"]!;
+        Assert.AreEqual("opens", (string?)reference["outcome"], reference.ToJsonString());
+        return reference;
+    }
+
+    /// <summary>
+    /// The members of two envelopes whose values differ, each by its path (<c>context.freshness.channels[0].age_days</c>), in
+    /// ordinal order; a member one has and the other lacks is one that moved.
+    /// </summary>
+    private static string[] MovedMembers(JsonNode? one, JsonNode? other)
+    {
+        var moved = new List<string>();
+        Walk(one, other, "");
+        return [.. moved.Order(StringComparer.Ordinal)];
+
+        void Walk(JsonNode? a, JsonNode? b, string path)
+        {
+            if (a is JsonObject left && b is JsonObject right)
+            {
+                foreach (var key in left.Select(static pair => pair.Key).Union(right.Select(static pair => pair.Key)))
+                {
+                    var member = path.Length == 0 ? key : $"{path}.{key}";
+                    if (left.ContainsKey(key) != right.ContainsKey(key)) moved.Add(member);
+                    else Walk(left[key], right[key], member);
+                }
+            }
+            else if (a is JsonArray first && b is JsonArray second && first.Count == second.Count)
+            {
+                for (var index = 0; index < first.Count; index++) Walk(first[index], second[index], $"{path}[{index}]");
+            }
+            else if (!JsonNode.DeepEquals(a, b))
+            {
+                moved.Add(path);
+            }
+        }
     }
 }

@@ -37,7 +37,8 @@ public sealed record V3OutOfScopeClass(
 /// <para>
 /// Each class is recognised by exact patterns over the whole identifier, never by a word inside a longer text, so a held act
 /// whose title names one of these bodies (the law that organises the CNPD, a CSSF regulation, which R78 admits) is never
-/// refused: a CSSF regulation is "Règlement CSSF n° 12-02", which no pattern here matches. The official places are each body's
+/// refused: a CSSF regulation is "Règlement CSSF n° 12-02", which no pattern here matches. A pattern names the issuing body,
+/// so a numbered "délibération" that does not name the CNPD is not the CNPD's (a commune numbers its own). The official places are each body's
 /// own site; the list goes to the lawyer with the other named places (O4), and R42's handoff list, which a person writes and
 /// checks (N2), may later add advisers.
 /// </para>
@@ -61,17 +62,19 @@ public static class V3OutOfScope
         new V3OutOfScopeClass(
             "cssf_circular",
             "lu",
-            "a circular of the Commission de surveillance du secteur financier (CSSF)",
-            "CSSF circulars are issued and published by the CSSF, not by Legilux or EUR-Lex, and Lex does not collect them.",
+            "a circular of the Commission de surveillance du secteur financier (CSSF), or of the Institut Monétaire Luxembourgeois (IML) before it",
+            "CSSF circulars, and the IML's before them, are published by the CSSF, not by Legilux or EUR-Lex, and Lex does not collect them.",
             "https://www.cssf.lu/",
             new V3OutOfScopeWhoToAsk("Commission de surveillance du secteur financier (CSSF)", "https://www.cssf.lu/", "information"),
             Array.AsReadOnly(new[]
             {
-                @"^(?:circulaire|circular)\s+(?:de\s+la\s+|of\s+the\s+)?CSSF\s+(?:n[°o]\.?\s*)?[0-9]{2}/[0-9]{3,4}$",
-                @"^CSSF\s+(?:circulaire|circular)\s+(?:n[°o]\.?\s*)?[0-9]{2}/[0-9]{3,4}$",
+                // A circular by its name, in French, English or German or abbreviated, the CSSF's, its CPDI's (the Conseil de
+                // protection des déposants et des investisseurs, within the CSSF) or the IML's, as amended or not.
+                @"^(?:(?:circulaire|circular|rundschreiben)\s+|circ\.\s*)(?:de\s+la\s+|de\s+l['’]\s*|of\s+the\s+)?(?:CSSF(?:-CPDI)?|IML)\s+(?:n[°o]\.?\s*)?[0-9]{2}/[0-9]{2,4}" + AsAmended + "$",
+                @"^(?:CSSF(?:-CPDI)?|IML)(?:\s+|-)(?:(?:circulaire|circular|rundschreiben)\s+|circ\.\s*)(?:n[°o]\.?\s*)?[0-9]{2}/[0-9]{2,4}" + AsAmended + "$",
                 @"^CSSF\s+[0-9]{2}/[0-9]{3,4}$",
             }),
-            Array.AsReadOnly(new[] { "Circulaire CSSF 20/747", "CSSF circular 22/806", "CSSF 20/747" })),
+            Array.AsReadOnly(new[] { "Circulaire CSSF 20/747", "CSSF circular 22/806", "CSSF 20/747", "Circ. CSSF 12/552 telle que modifiée", "Circulaire IML 98/143" })),
         new V3OutOfScopeClass(
             "cnpd_decision",
             "lu",
@@ -83,8 +86,10 @@ public static class V3OutOfScope
             {
                 @"^(?:d[ée]lib[ée]ration|d[ée]cision|decision|deliberation|avis|opinion)\s+(?:de\s+la\s+|of\s+the\s+)?CNPD\s+(?:n[°o]\.?\s*)?[0-9]{1,4}[A-Z]{0,3}/[0-9]{4}$",
                 @"^CNPD\s+(?:(?:d[ée]lib[ée]ration|d[ée]cision|decision|deliberation|avis|opinion)\s+)?(?:n[°o]\.?\s*)?[0-9]{1,4}[A-Z]{0,3}/[0-9]{4}$",
+                // The body named after the number.
+                @"^(?:d[ée]lib[ée]ration|d[ée]cision|decision|deliberation|avis|opinion)\s+(?:n[°o]\.?\s*)?[0-9]{1,4}[A-Z]{0,3}/[0-9]{4}\s+(?:de\s+la\s+|of\s+the\s+)CNPD$",
             }),
-            Array.AsReadOnly(new[] { "Délibération CNPD n° 12/2023", "CNPD decision 3/2021" })),
+            Array.AsReadOnly(new[] { "Délibération CNPD n° 12/2023", "CNPD decision 3/2021", "Délibération n° 36FR/2021 de la CNPD" })),
         new V3OutOfScopeClass(
             "eu_case_law",
             "eu",
@@ -98,10 +103,14 @@ public static class V3OutOfScope
                 @"^ECLI:EU:[CTF]:[0-9]{4}:[0-9]{1,6}$",
                 // A CELEX of sector 6, which EUR-Lex gives case law, with or without its corrigendum suffix.
                 @"^6[0-9]{4}[A-Z]{2}[0-9]{4}(?:\([0-9]{2}\))?$",
-                // A case number of the Court of Justice (C-), the General Court (T-) or the Civil Service Tribunal (F-).
-                @"^(?:(?:case|affaire|aff\.)\s+)?[CTF]-[0-9]{1,4}/[0-9]{2}(?:\s+P)?$",
+                // A case number of the Court of Justice (C-), the General Court (T-) or the Civil Service Tribunal (F-), an
+                // appeal's P after it, or joined cases, named as a case or not, with the parties' names after it or not.
+                @"^(?:(?:joined\s+cases|cases|case|affaires\s+jointes|affaires|affaire|aff\.|arr[êe]t|judgment(?:\s+in\s+case)?)\s+)?" +
+                CaseNumber + @"(?:\s*(?:,|and|et|&)\s*" + CaseNumber + @")*(?:,?\s+\p{L}.{0,120})?$",
+                // A case's page on the court's own site, which names it by its number.
+                @"^https?://curia\.europa\.eu/juris/\S*[?&]num=[CTF]-[0-9]{1,4}/[0-9]{2}\S*$",
             }),
-            Array.AsReadOnly(new[] { "ECLI:EU:C:2014:317", "62012CJ0131", "C-131/12" })),
+            Array.AsReadOnly(new[] { "ECLI:EU:C:2014:317", "62012CJ0131", "C-131/12", "Case C-131/12 Google Spain", "Joined Cases C-293/12 and C-594/12" })),
         new V3OutOfScopeClass(
             "resa",
             "lu",
@@ -111,24 +120,49 @@ public static class V3OutOfScope
             new V3OutOfScopeWhoToAsk("Luxembourg Business Registers (LBR)", "https://www.lbr.lu/", "information"),
             Array.AsReadOnly(new[]
             {
-                @"^RESA(?:[\s_:/-]+[0-9A-Za-z][0-9A-Za-z._/-]{0,40})?$",
+                // The RESA by its acronym, or a publication by its reference, RESA_{year}_{number} as the RESA prints it, or with
+                // spaces or a slash.
+                @"^(?-i:RESA)$",
+                @"^RESA[\s_]+[0-9]{4}[\s_/]+[0-9]{3}\.?[0-9]{3}$",
                 @"^recueil\s+[ée]lectronique\s+des\s+soci[ée]t[ée]s\s+et\s+associations(?:\s.{0,60})?$",
             }),
             Array.AsReadOnly(new[] { "RESA_2020_123.456", "Recueil électronique des sociétés et associations" })),
     });
+
+    /// <summary>A circular's "as amended", and what amended it.</summary>
+    private const string AsAmended = @"(?:,?\s+(?:telle\s+que\s+modifi[ée]e|as\s+amended)(?:\s+(?:par|by)\s.{1,80})?)?";
+
+    /// <summary>One case number of an EU court, and an appeal's P after it.</summary>
+    private const string CaseNumber = @"[CTF]-[0-9]{1,4}/[0-9]{2}(?:\s+P)?";
+
+    private static readonly TimeSpan MatchTimeout = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>An EUR-Lex address that names its document by CELEX, and the CELEX it names.</summary>
+    private static readonly Regex EurLexCelex = new(
+        @"^https?://(?:www\.)?eur-lex\.europa\.eu/\S*?[?&]uri=CELEX(?::|%3A)(?<celex>[0-9A-Z()]{6,24})(?:[&#]\S*)?$",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture,
+        MatchTimeout);
+
+    /// <summary>A CELEX written after its name, "CELEX:".</summary>
+    private static readonly Regex CelexPrefixed = new(
+        @"^CELEX\s*:\s*(?<celex>\S+)$",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture,
+        MatchTimeout);
 
     private static readonly IReadOnlyList<(V3OutOfScopeClass Class, Regex[] Patterns)> Compiled = Classes
         .Select(static entry => (entry, entry.Patterns
             .Select(static pattern => new Regex(
                 pattern,
                 RegexOptions.CultureInvariant | RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture,
-                TimeSpan.FromMilliseconds(250)))
+                MatchTimeout))
             .ToArray()))
         .ToArray();
 
     /// <summary>
-    /// The class the identifier names, or null: the identifier trimmed, its spaces (no-break ones too) run together and its
-    /// Unicode composed, then matched whole against each class's patterns, ignoring case.
+    /// The class the identifier names, or null. The identifier is read as it is typed: its Unicode composed, its spaces (no-break
+    /// ones too) run together and trimmed, every dash (U+2010 to U+2015) and the minus sign read as the hyphen, and the
+    /// punctuation that ends a sentence after it dropped; an EUR-Lex address, or a CELEX written after "CELEX:", is read as the
+    /// CELEX it names. It is then matched whole against each class's patterns, ignoring case.
     /// </summary>
     public static V3OutOfScopeClass? Recognise(string? identifier)
     {
@@ -137,12 +171,7 @@ public static class V3OutOfScope
             return null;
         }
 
-        var normalised = Regex.Replace(
-            identifier.Normalize(NormalizationForm.FormC).Replace(' ', ' ').Replace(' ', ' '),
-            @"\s+",
-            " ",
-            RegexOptions.CultureInvariant,
-            TimeSpan.FromMilliseconds(250)).Trim();
+        var normalised = Normalise(identifier);
         foreach (var (entry, patterns) in Compiled)
         {
             if (patterns.Any(pattern => pattern.IsMatch(normalised)))
@@ -152,6 +181,23 @@ public static class V3OutOfScope
         }
 
         return null;
+    }
+
+    /// <summary>The identifier as <see cref="Recognise"/> matches it.</summary>
+    internal static string Normalise(string identifier)
+    {
+        var spaced = Regex.Replace(
+            identifier.Normalize(NormalizationForm.FormC).Replace('\u00a0', ' ').Replace('\u202f', ' '),
+            @"\s+",
+            " ",
+            RegexOptions.CultureInvariant,
+            MatchTimeout).Trim();
+        var hyphened = Regex.Replace(spaced, "[\u2010-\u2015\u2212]", "-", RegexOptions.CultureInvariant, MatchTimeout);
+        var ended = hyphened.TrimEnd('.', ',', ';', ':', '!', '?', ' ');
+        var celex = EurLexCelex.Match(ended) is { Success: true } address ? address
+            : CelexPrefixed.Match(ended) is { Success: true } prefixed ? prefixed
+            : null;
+        return celex is null ? ended : celex.Groups["celex"].Value;
     }
 
     /// <summary>The list as canonical JSON (every class in order, its patterns and examples included), as the census publishes it.</summary>

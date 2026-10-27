@@ -103,6 +103,13 @@ internal static class V3TransportResponse
             cancellationToken);
     }
 
+    /// <summary>
+    /// Whether a failure below the envelope is the server's own, which REST answers with a 5xx status, rather than the
+    /// request's: MCP answers it JSON-RPC's Internal error, never Invalid params (<see cref="V3McpJsonRpc"/>).
+    /// </summary>
+    internal static bool IsServerFailure(V3TransportFailureKind kind) =>
+        Describe(kind).Status >= StatusCodes.Status500InternalServerError;
+
     private static (string Code, string Title, int Status) Describe(V3TransportFailureKind kind) => kind switch
     {
         V3TransportFailureKind.MalformedJson =>

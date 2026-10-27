@@ -307,6 +307,9 @@ function Replay() {
   const copy = liveChrome().developers.replay;
   const values = {
     fileReplaced: code('file_replaced'), observedAt: code('context.freshness.observed_at'), requestRef: code('request_ref'),
+    servingCommit: code('context.commits.serving_runtime_source_commit'), ageDays: code('context.freshness.channels[].age_days'),
+    channelStale: code('context.freshness.channels[].stale'), stale: code('context.freshness.stale'),
+    recognisedDate: code('result.value.reference.recognised.date'), rateLimited: code('rate_limited'),
     asObserved: code('as_observed'), knowableOn: code('knowable_on'), provenance: code('provenance'), bundle: code('evidence_bundle'),
     days: RETENTION_NIGHTLY_DAYS,
   };
@@ -516,7 +519,7 @@ export function DevelopersBody({ model, live = null }) {
       <Part name="changes" heading={copy.changes.heading}>
         <p><Say template={copy.changes.versioned} values={{ example: code(model.envelope.schema.id), registry: code(model.registry.schema) }} /></p>
         <p>{copy.changes.additive}</p>
-        <p>{copy.changes.digest}</p>
+        <p><Say template={copy.changes.digest} values={{ code: code('out_of_corpus_scope'), scopeList: code('scope_list'), scopeListDigest: code('scope_list_sha256') }} /></p>
         <p><Say template={copy.changes.registryInEnvelope} values={{ member: code('registry_schema') }} /></p>
         <p>{copy.changes.closed}</p>
         <p>{copy.changes.notice}</p>

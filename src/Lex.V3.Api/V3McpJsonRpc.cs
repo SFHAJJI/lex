@@ -86,7 +86,9 @@ internal static class V3McpJsonRpc
         "(lex-v3-envelope/1) as structuredContent, the same envelope the REST route POST /api/v3/{operation} returns. " +
         "A refusal is an answer, not an error: its verdict is refuse, isError stays false, and its refusal names one code of the " +
         "registry's closed twenty with the payload the registry fixes for that code; read the payload rather than retrying " +
-        "another way. A transport or protocol failure is a JSON-RPC error, never an envelope. A Luxembourg state's date is the " +
+        "another way. A failure is never an envelope: a JSON-RPC message the server cannot carry out answers a JSON-RPC error " +
+        "(-32602 for invalid arguments, -32603 for a failure of the server's own), and an HTTP request the endpoint refuses or " +
+        "cannot answer answers an HTTP status with a problem document (application/problem+json). A Luxembourg state's date is the " +
         "publisher's applicability date, or, where its date_role is entry_into_force, the act's entry into force, which is never an " +
         "applicability date; an EU wording date is never an applicability date; the kinds are never merged. An absence in this server is not evidence that a law does not exist. Every envelope names the registry " +
         "digest it is bound to (registry_sha256) and its context says how current the data is. Lex shows the published text of " +
@@ -255,8 +257,12 @@ internal static class V3McpJsonRpc
             // A malformed request document (schema-invalid arguments) never reaches the reviewed
             // envelope; that is a transport-layer refusal below the envelope on REST too, so it is
             // a JSON-RPC protocol error here rather than a false "the tool ran and this is its
-            // answer".
-            return Error(id, -32602, $"Invalid params: {exception.Kind}");
+            // answer". An answer the server built and its own schema refused on the way out
+            // (internal_response_invalid, REST's 500) is the server's failure, not the caller's:
+            // JSON-RPC's Internal error (the review of #998, F3).
+            return V3TransportResponse.IsServerFailure(exception.Kind)
+                ? Error(id, -32603, $"Internal error: {exception.Kind}")
+                : Error(id, -32602, $"Invalid params: {exception.Kind}");
         }
     }
 

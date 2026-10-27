@@ -48,7 +48,9 @@ export const MCP_INSTRUCTIONS =
   "(lex-v3-envelope/1) as structuredContent, the same envelope the REST route POST /api/v3/{operation} returns. " +
   "A refusal is an answer, not an error: its verdict is refuse, isError stays false, and its refusal names one code of the " +
   "registry's closed twenty with the payload the registry fixes for that code; read the payload rather than retrying " +
-  "another way. A transport or protocol failure is a JSON-RPC error, never an envelope. A Luxembourg state's date is the " +
+  "another way. A failure is never an envelope: a JSON-RPC message the server cannot carry out answers a JSON-RPC error " +
+  "(-32602 for invalid arguments, -32603 for a failure of the server's own), and an HTTP request the endpoint refuses or " +
+  "cannot answer answers an HTTP status with a problem document (application/problem+json). A Luxembourg state's date is the " +
   "publisher's applicability date, or, where its date_role is entry_into_force, the act's entry into force, which is never an " +
   "applicability date; an EU wording date is never an applicability date; the kinds are never merged. An absence in this server is not evidence that a law does not exist. Every envelope names the registry " +
   "digest it is bound to (registry_sha256) and its context says how current the data is. Lex shows the published text of " +
