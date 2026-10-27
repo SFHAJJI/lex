@@ -82,6 +82,133 @@ UTC.
   `rate_limited` on each screen (the panel says the code today); latency, error-rate and restart alerts; the load test
   that re-sizes the limit.
 
+## Get help, How to read Lex and Developers: the launch set's three missing screens (sole driver, 2026-10-27)
+
+The owner's order of 2026-10-27 (finish V3 to the ideal specification within 72 hours, at high quality): the screens the
+specification of record's launch set names (§3, Screens; R42, R46, R48, R50, R55) and the site did not serve, built as one
+web pull request (`writer/help-and-developers`). Each page is in French and English, under its language (R61), complete
+from the server and readable with no script (R67), never indexed, its footer's freshness strip saying it carries no answer,
+as the legal pages are (`scripts/reference-pages.mjs`, `app/ReferencePages.jsx`).
+- **Get help** (`/{fr,en}/help.html`, R42, R50). What Lex is, R50's sentence word for word, and that for what a text means
+  for a reader they should ask a lawyer or another adviser of their choice; what Lex does not do (apply the law, compute a
+  deadline, predict, consolidate, hold case law, choose between versions or fill a gap, keep a record of readers); how to
+  read an answer when Lex cannot give the one asked for (the plain sentence first, then what would answer and the official
+  link; an answer about what Lex holds, never about the law; a service failure in R60's words); where the official texts
+  are (the authenticity line, legilux.public.lu and eur-lex.europa.eu as links); that Lex names no adviser yet, since R42's
+  list must first be checked by a person (N2); and, by the owner's decision of 2026-10-19, that Lex has no contact channel
+  (no e-mail address, form, telephone or postal address, and no person), so it receives and keeps no message, the privacy
+  notice naming where to complain about personal data.
+- **How to read Lex** (`/{fr,en}/how-to-read.html`, R48, R21, R24, R58, R64, R65, R87). The two kinds of date (from when a
+  text is applicable, in the publisher's words, a Luxembourg version's "applicable from … (publisher)" and an EU act's
+  wordings; and when it was published and collected), never merged; each date with its role; as published and
+  consolidated, with the authenticity line and the as-published label; versions without text and image-only annexes; gaps;
+  two versions for one date; how current Lex is; permalinks, readable addresses and the three citation forms; the keyboard
+  (no shortcuts of its own; the skip link). Then a glossary of the site's own words: each term is an entry of the chrome
+  table named by its path (`GLOSSARY`), said as the page that prints it says it, a template's term its words before its
+  first value, sorted in each language's order.
+- **Developers** (`/{fr,en}/developers.html`, R46, R55; the plan's item 8.4). Generated from the contracts, never by hand
+  (`scripts/developers.mjs`): the census's `contract` block, which `V3EnvelopeSamplesTests` reads from the reviewed
+  registry (the operations, the refusal codes with the fields each payload must carry, the verdicts, the registry's
+  digest); the census's coverage answer (which operations this server serves, and the data that would serve the three it
+  does not); the request schemas (each operation's parameters) and the envelope schema (its members). REST and MCP and
+  that both give one envelope; examples (curl, a tools/call message, an MCP client's configuration); every operation with
+  its REST path, its MCP tool, its parameters, its answer's objects and its two schemas, linked and with their digests;
+  the envelope, its context and the verdicts; the refusal codes, the two presentation results and the failures below the
+  envelope; quoting and citing; the limits as they are (no key, no account, nothing recorded; the request body's ceiling;
+  paging; no per-client rate limit applied yet, R109 not built; no availability promised); the events log (polling by
+  cursor, at least once, no webhooks, the platform's own delivery statement); and the schemas. The facts only the API's
+  code holds (the MCP protocol version and methods, the request ceiling, the transport failures) are named once in
+  `developers.mjs` and held to the C# by `reference-pages.test.mjs`.
+- **The schemas, published.** Every file of `schemas/v3-platform/*.schema.json` is published beside the pages, byte for
+  byte, at `/schemas/v3-platform/{name}.json` (one extension per file, as both servers' path rules require), and the
+  Developers page links each with its SHA-256, which the API checks against the registry's when it loads it.
+- **Links.** Every page's footer has a "Help and reference" menu of the three, the current one marked; the home page links
+  Changes, Trust and Coverage, Developers and Get help (§3, Shell and home); Get help links How to read Lex and the
+  Developers page. The site's table (`site-paths.json`) names the six pages as files, which both servers serve
+  (`V3WebRootTests`, `legal-pages.test.mjs`, `reference-pages.test.mjs`).
+- **Tests** (`test/reference-pages.test.mjs`, 9 cases): the pages built in both languages with the site around them, no
+  script, no form, never indexed, language links to the same page, the French saying none of the English's words; every
+  internal link they hold served by the live server (pages and schemas, a schema's bytes); every footer's menu and the
+  home page's links; the Developers page in sync with the registry (the C#'s `RequiredOperationIds`,
+  `RequiredRefusalCodes`, `MandatoryRefusalPayloadFields` and `V3RestRouteBinding.Served` parsed and compared with the
+  census, the chrome table and the rendered page; an operation, or a refusal code, the page has no words for fails the
+  render); the API facts held to the C#; the glossary's terms the table's entries; R21's guard over every form and every
+  rendered page in both languages; Get help's no-contact statement and no contact; every count the page says the
+  contracts'; and the forms the French review pinned, beside the C# they describe. Changed tests: `live-chrome`, `live-home`, `legal-pages`, `freshness`, `no-literal-counts` (the new pages and
+  sections), `V3WebRootTests` (16 file rows). Mutation: the `verify` description taken out of the English table failed 5 of
+  the first 8 cases (the page refuses to render an operation it has no words for).
+- **French** (Decision 41): one independent reviewer (Claude, AI reviewer, not the author) under the owner's delegation,
+  in the addendum of 2026-10-27 of `C:\lex-v3\lanes\fr-review\review.md` ("the three reference pages, Get help, How to read
+  Lex and its glossary, and Developers"): 242 forms reviewed, 59 changed (the English too in 31), 183 approved. Its blocking
+  points, both languages: a Luxembourg version's end day ("until the day before the end date Legilux gives it", the end the
+  publisher states being the first day not covered, `[from, to)`), and "never chooses between two versions", which holds only
+  when their texts differ, since the platform serves one of several held with one text (`SameWording`). Its recommended
+  points made twelve other forms say only what the code does (an article held without text is named apart; a permalink says
+  first when it shows another text; the freshness strip is a region a screen reader names; the staleness banner stands only
+  on a page with an answer; any other REST method gets a failure below the envelope; a refusal's code and payload follow its
+  sentence). The finals are applied byte for byte (checked against the reviewer's own file), with its point 6's English for
+  `developers.operations.notServed`; its point 8's tests are the ninth case of `reference-pages.test.mjs`; the 242 forms and
+  the new vocabulary rows (conseiller, ce déploiement, Streamable HTTP, "sert de réponse pour", "intervalle sans version")
+  are named in the header comment of `live-chrome-fr.mjs`; the addendum is appended with the driver's note.
+- **Driver decisions** (reversible): the pages stand under each language as every page does (R61), so R55's "/developers"
+  is `/{lang}/developers.html`, with no unprefixed redirect; the three are never indexed, as the legal pages are, until a
+  release's switch is extended to them; the header menu is unchanged (the home page holds the audience entry points, R47,
+  and every footer the three), which keeps the keyboard journeys' path to each form as it is; Get help names no adviser
+  until R42's list is checked by a person; the Developers page says the rate limit as it is (none), since R109's limiter is
+  not built.
+- **The L lines, against what the site serves** (the specification of record's §3 and the plan's "On opening day"): what each L line that names a screen, a page or an address asks, and
+  whether the site serves it after this pull request. Each "missing" was looked for in `web/app`, `web/scripts`,
+  `src/Lex.V3.Api` and `deploy/`, and is not there.
+  - Served, each with its page: Search as the home page (one box, today's date, what Lex is and is not, the dated coverage
+    line, the links §3 names), the Work dossier, Reading with its date, Provision history, Compare, Changes, Trust and
+    Coverage, the Export composer, Developers, Get help, How to read Lex, the five legal pages, the 404 page and the
+    failure panels, the German and Luxembourgish page, the freshness strip and staleness banner, robots.txt and the
+    sitemap (with the switch), the evaluation card's JSON, `/api/v3` and `/mcp`, and now the published schemas.
+  - Missing on the home page: example searches (R47; no answer names a title or a text a search would land on, so none is
+    shown, `LiveHome.jsx`).
+  - Missing in the shell: breadcrumbs (publisher, act, article, version; R48); a print view of Reading (R62's fifth item,
+    33 §7 rule 9; the stylesheet has no print rules); the maintenance page during a deployment (R60; built, not wired into
+    the deploy kit).
+  - Missing in How to read Lex's reach: a link from each banner's info control (R48); the guide is linked from every
+    footer, and no banner has an info control yet.
+  - Missing in Get help: R42's versioned handoff list by theme (advisers, "where to complain"), and the help block on the
+    dossier and reading pages of acts in high-stakes themes (R50). Both need the list a person writes and checks (N2).
+  - Missing on Developers (the plan's item 8.4): replay guarantees G1 to G5 as supported, live examples from the
+    release's own data, and a stated change policy beyond the schemas' versioned identities and the registry digest; the
+    try-it console moves with O1.
+  - Missing in the API the page describes (each one the Developers page says as it is): a typed refusal inside a normal answer for the three unserved operations
+    (`concepts`, `knowable_on`, `transposition` answer the transport failure `operation_not_served`; the plan's item 8.6);
+    a published schema for each refusal code's payload (the plan's item 6.10; `refusal.schema.json` holds an open
+    payload, and the mandatory fields are the registry's, now listed on the page); "out of scope" with its reason and who
+    to ask, and the list of what Lex never holds (6.10, J5); MCP `ping` and server instructions (8.5); the per-client rate
+    limiter (R109), which `writer/platform-ops` builds: when the two branches are combined, `developers.limits.rate` (which
+    says no per-client limit is applied) must say the limit as that branch enforces it, in both languages, reviewed.
+  - Missing addresses: `/.well-known/lex-keys.json`, the published key set (R116); `/.well-known/security.txt` with a
+    disclosure policy (R74), which the owner's decision of 2026-10-19 (no contact of any kind) leaves to the owner; a page
+    "Operating Lex after launch" with the hosting statement and the monthly ceiling (R8, R113, R114); R55's unprefixed
+    `/developers` (the page stands under each language, R61).
+  - Missing in the journeys: J6 through Get help and J7 through the Developers page (R53); the CI journeys walk neither
+    page yet.
+  - Not audited by this slice, and each the subject of its own L line: the dossier's relation tabs (R29), the inline diff
+    (R57), Changes' export, density notice and watch scope (R54), Coverage's text yield per class, attribution rate and
+    retention rule (R86, R29, R89), Reading's notices and in-act links (R17, R68, R71, R72).
+- **Measured** (Windows, no browser, no publisher traffic, no Azure):
+  - `npm test` (Git Bash), on 7808a5fa: 1,368 (1,365 passed, 0 failed, 3 skipped); before the French finals, 1,367 (1,364
+    passed, 0 failed, 3 skipped). `node --test test/reference-pages.test.mjs`: 9 of 9.
+  - `npm run build`: 30 state pages (the preview build, which this slice does not change), before the French finals.
+  - `dotnet build Lex.V3.slnx -c Release`: 0 warnings, 0 errors; `Lex.V3.Tests` (Release): 3,329 (3,323 passed, 0 failed, 6
+    skipped), on the tree of 95935ef7, whose C# (`V3WebRootTests`, the site-paths table) has not changed since.
+  - `eng/verify-v3-tree.ps1`: 1,694 tracked paths.
+  - Not run here: the Ingest suite and the journeys, which CI runs (no browser on this machine).
+- **Follow-ups the review named** (driver points of the addendum): show a reading's `same_text_states` (the other versions
+  held with the same text) under the text, so the guide's same-text sentence can say more; R28's collapsed details on the
+  refusal card, open by default only on Developers (the card shows its code and payload inline today; the review gives the
+  forms to use once it is built).
+- **For the owner** (not asked, recorded): the site's host name carries a first name, which the Developers page prints in
+  its examples and every page in its head links (the decision of 2026-10-19 names no person in the pages' words); Get help
+  narrows "how each article changed" to Luxembourg acts, where `home.intro` still says it generally; the lawyer's read (O4)
+  of "un avocat ou un autre conseiller de votre choix" and of R50's "conseil juridique".
+
 ## Release 1 on the private copy, and the opening that waits on the owner's command (sole driver, 2026-10-26)
 
 The release `v3-20261026T180319Z-8958ec5fa63f` (from v3/integration at 8958ec5f, #987 merged, over derive-c) was built

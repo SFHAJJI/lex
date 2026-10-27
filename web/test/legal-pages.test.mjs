@@ -25,6 +25,7 @@ import {
 } from "../scripts/legal-pages.mjs";
 import { LIVE_CHROME, entriesOf, liveChrome } from "../scripts/live-chrome.mjs";
 import { searchFragment } from "../scripts/search-address.mjs";
+import { REFERENCE_PAGE_PATHS } from "../scripts/reference-pages.mjs";
 import { NEVER_INDEXED_META } from "../scripts/search-engines.mjs";
 import { createLiveServer } from "../scripts/serve-live.mjs";
 
@@ -146,9 +147,10 @@ test("the five legal pages are built under each interface language, with the sit
     const origin = await new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${server.address().port}`)));
     try {
       assert.deepEqual(await openingFailures(origin), [], "the opening's check passes over the pages the live server serves");
-      // The site's table names the ten as files, and the live server serves each as the file it is (the API: V3WebRootTests).
-      const rows = TABLE.paths.filter((row) => row.file !== undefined);
-      assert.deepEqual(rows.map((row) => row.path).sort(), [...LEGAL_PAGE_PATHS].sort(), "the table's file rows are the ten legal pages");
+      // The site's table names the ten as files, beside the six reference pages (`reference-pages.test.mjs`), and the live
+      // server serves each as the file it is (the API: V3WebRootTests).
+      const rows = TABLE.paths.filter((row) => row.file !== undefined && LEGAL_PAGE_PATHS.includes(row.path));
+      assert.deepEqual(TABLE.paths.filter((row) => row.file !== undefined).map((row) => row.path).sort(), [...LEGAL_PAGE_PATHS, ...REFERENCE_PAGE_PATHS].sort(), "the table's file rows are the ten legal pages and the six reference pages");
       for (const row of rows) {
         assert.equal(row.path, `/${row.file}`, row.path);
         assert.deepEqual([row.page, row.redirect, row.moved, row.render], [null, null, null, null], `${row.path}: a file, not a law's address`);
