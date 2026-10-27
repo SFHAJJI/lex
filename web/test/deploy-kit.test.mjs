@@ -50,11 +50,14 @@ test("one server, with a private writable /tmp, its probes on the image's own ro
   assert.deepEqual(scale, { minReplicas: 1, maxReplicas: 1 });
   assert.deepEqual(volumes, [{ name: "tmp", storageType: "EmptyDir" }]);
   assert.deepEqual(containers[0].volumeMounts, [{ volumeName: "tmp", mountPath: "/tmp" }]);
-  assert.deepEqual(containers[0].probes.map((probe) => [probe.type, probe.httpGet.path, probe.httpGet.port]),
+  // A release's revision is probed as it always was; its maintenance revision asks its readiness alone (held below).
+  assert.equal(containers[0].probes, "[if(parameters('maintenance'), variables('maintenanceProbes'), variables('releaseProbes'))]");
+  const probes = template.variables.releaseProbes;
+  assert.deepEqual(probes.map((probe) => [probe.type, probe.httpGet.path, probe.httpGet.port]),
     [["Startup", "/", 8080], ["Liveness", "/", 8080], ["Readiness", "/health/ready", 8080]]);
   // The API listens only once its mount is verified: the startup probe gives it about four and a half minutes before the
   // container is restarted, at the probe's last failure (initial delay and every period but the last).
-  const startup = containers[0].probes[0];
+  const startup = probes[0];
   assert.ok(startup.initialDelaySeconds + startup.periodSeconds * (startup.failureThreshold - 1) >= 270, "four and a half minutes to open the mount");
   // One vCPU: a replica's ephemeral storage holds the verified index copies only from one vCPU up (4 GiB; 2 GiB at half).
   assert.deepEqual(containers[0].resources, { cpu: "[json('1.0')]", memory: "2Gi" });
@@ -68,6 +71,72 @@ test("a new revision arrives as the candidate with no traffic while a live revis
   const { activeRevisionsMode, ingress } = app.properties.configuration;
   assert.equal(activeRevisionsMode, "Multiple", "every revision is kept, so the live one serves while the candidate is probed");
   assert.match(ingress.traffic, /createObject\('revisionName', parameters\('liveRevision'\), 'weight', 100\), createObject\('latestRevision', true\(\), 'weight', 0, 'label', 'candidate'\)/);
+});
+
+test("the release's maintenance revision is the same image with LEX_V3_MAINTENANCE=on, probed on its readiness, and never takes traffic as it deploys", () => {
+  // R60, R108, R115; the plan's item 10.14. Off by default: every other revision is a release's, as before.
+  assert.equal(template.parameters.maintenance.type, "bool");
+  assert.equal(template.parameters.maintenance.defaultValue, false);
+  const [container] = app.properties.template.containers;
+  assert.equal(container.image, "[parameters('image')]", "the release's own image, by digest, as any revision");
+  // The variable the API reads, and its one value that switches it on, are the API's own (V3WebRoot.Maintenance.cs).
+  const api = readFileSync(new URL("../../src/Lex.V3.Api/V3WebRoot.Maintenance.cs", import.meta.url), "utf8");
+  const variable = /internal const string MaintenanceVariable = "([^"]+)";/.exec(api)?.[1];
+  const on = /internal const string MaintenanceOn = "([^"]+)";/.exec(api)?.[1];
+  assert.deepEqual([variable, on], ["LEX_V3_MAINTENANCE", "on"]);
+  assert.deepEqual(container.env.filter((entry) => entry.name === variable), [{ name: variable, value: `[if(parameters('maintenance'), '${on}', 'off')]` }],
+    "on only for the maintenance revision; every other revision says off, which the API reads as off");
+  // It mounts nothing, so it listens within seconds, and its `/` is the maintenance page (503): each probe asks readiness,
+  // which is 204 only while it holds a maintenance page in each language, and soon.
+  const probes = template.variables.maintenanceProbes;
+  assert.deepEqual(probes.map((probe) => [probe.type, probe.httpGet.path, probe.httpGet.port]),
+    [["Startup", "/health/ready", 8080], ["Liveness", "/health/ready", 8080], ["Readiness", "/health/ready", 8080]]);
+  assert.ok(probes.every((probe) => probe.initialDelaySeconds <= 5), "short delays: there is no mount to wait for");
+  const [startup] = probes;
+  assert.ok(startup.initialDelaySeconds + startup.periodSeconds * (startup.failureThreshold - 1) <= 60, "a minute to start, not four and a half");
+  // The traffic: the live revision keeps 100 per cent and the new revision has none, labelled maintenance; never the
+  // first-deployment rule that sends all traffic to the latest revision.
+  const { traffic } = app.properties.configuration.ingress;
+  const branch = "[if(parameters('maintenance'), createArray(createObject('revisionName', parameters('liveRevision'), 'weight', 100), createObject('latestRevision', true(), 'weight', 0, 'label', 'maintenance')), if(variables('firstDeployment'), ";
+  assert.ok(traffic.startsWith(branch), traffic);
+  assert.equal((traffic.match(/'label', 'maintenance'/g) ?? []).length, 1);
+  // Everything else is the release's revision's: the same resources, volume, scale, registry and ingress rules.
+  assert.deepEqual(container.resources, { cpu: "[json('1.0')]", memory: "2Gi" });
+  assert.ok(!/maintenance/.test(JSON.stringify(app.properties.configuration.ingress.ipSecurityRestrictions)));
+
+  // The kit: -Maintenance in the deployment's parameter set; refused without -LiveRevision (never a first deployment) or with
+  // the browser probes, before the release is read back; its settings name it, so its revision is never the candidate's;
+  // the template told maintenance.
+  assert.match(code, /\[Parameter\(ParameterSetName = 'Deploy'\)\] \[switch\] \$Maintenance,/);
+  const refused = code.indexOf("if ($Maintenance -and [string]::IsNullOrEmpty($LiveRevision)) {");
+  assert.ok(refused > 0 && refused < code.indexOf('Step "verify the release'), "refused before anything is read or changed");
+  assert.match(code, /if \(\$Maintenance -and \$BrowserProbe\) \{ throw /);
+  assert.match(code, /if \(\$Maintenance\) \{ \$revisionSettings\['maintenance'\] = \$true \}\n\$suffix = Get-RevisionSuffix /);
+  assert.match(code, /maintenance = \[bool\]\$Maintenance\n/, "the template's parameter");
+  // Its probe: at its own address, under the trap, held to the release's maintenance pages; a failure deactivates it and
+  // stops; a pass deactivates it too, through the same guard, and prints the switch, which is never run.
+  const branchCode = code.slice(code.indexOf("if ($Maintenance) {\n    & node @nodeTrap"), code.indexOf('if (-not $BrowserProbe) { Write-Host "  no browser probe (no -BrowserProbe)'));
+  assert.match(branchCode, /^if \(\$Maintenance\) \{\n    & node @nodeTrap \(Join-Path \$checkout 'web\/scripts\/deploy-probe\.mjs'\) --maintenance --origin \$origin --release \$releasePath --public-key \$keyPath @signerProbe\n    if \(\$LASTEXITCODE -ne 0\) \{\n        Disable-Candidate 'the maintenance probe failed'\n/);
+  assert.match(branchCode, /\n    Disable-Candidate 'the maintenance revision answers as its release holds, and is kept inactive until it is switched on'\n    if \(\$LASTEXITCODE -ne 0\) \{ throw /);
+  assert.match(branchCode, /\n    Write-MaintenanceSwitch\n    exit 0\n\}\n$/, "and exits before anything a candidate's probe says");
+  assert.ok(code.indexOf("$origin = \"https://$($state.fqdn)\"") < code.indexOf(branchCode), "after the wait for the revision's own address");
+  const switching = code.slice(code.indexOf("function Write-MaintenanceSwitch {"), code.indexOf("\n}\n", code.indexOf("function Write-MaintenanceSwitch {")));
+  const commands = switching.split("\n").filter((line) => line.includes("> az "));
+  assert.deepEqual(commands.map((line) => line.trim().replace(/^Write-Host "  > (.*)"$/, "$1")), [
+    "az containerapp revision activate -g $ResourceGroup -n $AppName --revision $candidate",
+    "az containerapp ingress traffic set -g $ResourceGroup -n $AppName --revision-weight $candidate=100",
+    "az containerapp ingress traffic set -g $ResourceGroup -n $AppName --revision-weight $LiveRevision=100",
+    "az containerapp revision deactivate -g $ResourceGroup -n $AppName --revision $candidate",
+  ], "switch on, then off: printed");
+  assert.ok(switching.split("\n").slice(1).every((line) => line.trim().startsWith("Write-Host")), "and nothing in it runs");
+  // Every deployment says how to pre-build its release's maintenance revision (R60), naming the revision serving as it is
+  // printed and never the candidate not yet promoted (the review of writer/screens-gaps, F1).
+  assert.match(code, /-LiveRevision \$servingNow -Maintenance -Apply"\n/);
+  assert.doesNotMatch(code, /-LiveRevision \$candidate -Maintenance/);
+  // And every redeployment reads the traffic before anything in Azure changes: -LiveRevision must hold all of it.
+  const trafficRead = code.indexOf("properties.configuration.ingress.traffic");
+  assert.ok(trafficRead > 0 && trafficRead < code.indexOf("oras cp") && trafficRead < code.indexOf("az deployment group create"), "the traffic is read before the image is copied or the template deployed");
+  assert.match(code, /if \(\$serving -ne \$LiveRevision\) \{/);
 });
 
 test("the candidate is probed at its own address, once it is ready, never through the candidate label", () => {
@@ -98,7 +167,8 @@ test("a deployment deactivates only the revision it made: every deactivation is 
   assert.match(guard, /^function Disable-Candidate\(\[string\] \$Why, \[switch\] \$IfActive\) \{\s*if \(-not \$candidateIsOurs\) \{\n/, "the guard's first question");
   assert.match(guard.slice(0, guard.indexOf("if ($IfActive)")), /\n\s*return\n\s*\}\s*$/, "nothing is deactivated unless the candidate is this deployment's");
   assert.match(code, /\$candidateIsOurs = \$null -ne \$priorRevisions -and \$priorRevisions -notcontains \$candidate -and \$candidate -ne \$LiveRevision\n/);
-  assert.equal((code.match(/^\s*Disable-Candidate '/gm) ?? []).length, 4, "the failed deployment, the candidate that fails or is never ready, and the failed probe");
+  assert.equal((code.match(/^\s*Disable-Candidate '/gm) ?? []).length, 6,
+    "the failed deployment, the candidate that fails or is never ready, the failed probe, and the maintenance revision's failed probe and its keeping inactive");
   // The revisions, every inactive one too, are read and a name the app holds (or -LiveRevision's) refused before the image
   // is copied, the template previewed or anything else in Azure changes.
   const read = code.indexOf('az containerapp revision list -g $ResourceGroup -n $AppName --all --query "[].name" -o tsv');
@@ -308,8 +378,9 @@ test("the script deploys only a release that verifies, and only by the image's d
   assert.match(code, /\$trapPath = \[System\.IO\.Path\]::GetFullPath\(\(Join-Path \$checkout 'web\/scripts\/browser-trap\.mjs'\)\)/);
   assert.match(code, /if \(-not \$trapUrl -or -not \$trapUrl\.StartsWith\('file:\/\/\/'\)\) \{ throw /, "an empty or non-file trap URL stops the deployment");
   assert.match(code, /\$nodeTrap = @\(if \(-not \$BrowserProbe\) \{ '--import', \$trapUrl \}\)/);
-  assert.equal((code.match(/& node @nodeTrap \(Join-Path \$checkout 'web\/scripts\/deploy-probe\.mjs'\)/g) ?? []).length, 3, "both probes and the opening's check of the legal pages run under the trap");
-  assert.equal((code.match(/Join-Path \$checkout 'web\/scripts\/deploy-probe\.mjs'\)/g) ?? []).length, 3, "and the probe runs nowhere else");
+  assert.equal((code.match(/& node @nodeTrap \(Join-Path \$checkout 'web\/scripts\/deploy-probe\.mjs'\)/g) ?? []).length, 4,
+    "both probes, the maintenance revision's probe and the opening's check of the legal pages run under the trap");
+  assert.equal((code.match(/Join-Path \$checkout 'web\/scripts\/deploy-probe\.mjs'\)/g) ?? []).length, 4, "and the probe runs nowhere else");
   // Once the site is open, a -Public deployment's probe holds the candidate's legal pages to the opening's rule; and every
   // candidate's probe says whether promotion refuses its data's age (`--promotion-check`, exit 3).
   assert.match(code, /\$openingArgs = @\(if \(\$Public\) \{ '--opening' \}\)/);

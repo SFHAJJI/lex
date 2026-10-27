@@ -141,6 +141,26 @@ test("an EU work's dossier is the work by its CELEX, its expressions with the or
   assert.ok(annexMarkup.indexOf("data-annexes-not-served") > annexMarkup.indexOf("</table>"), "said below the expressions");
   assert.doesNotMatch(markup, /data-annexes-not-served/, "the captured dossier lists no annex, and the page says none");
 
+  // A consolidated Treaty's Protocols, Annexes, Declarations and tables, and an annex an admitted package could not match to
+  // the PDF, are rows of their own (review of #996, F2): the Treaty's parts with their own line, the annex with the annex's.
+  const parted = structuredClone(envelope);
+  parted.result.value.expressions[0].annexes_not_served = [
+    {
+      disposition: "annex_unclassified", annexes: 2, annex_identities_sha256: ["b".repeat(64), "c".repeat(64)], served_as: "text_not_available",
+      official_identity: expression.publisher_expression_id, official_source: source,
+      reason: "the act's articles are read from the publisher's Formex package, but its annexes could not be matched to the publisher's PDF, so they were not classified and their text is not served",
+    },
+    {
+      disposition: "treaty_part_not_served", annexes: 48, annex_identities_sha256: Array.from({ length: 48 }, (_, at) => at.toString(16).padStart(64, "0")), served_as: "text_not_available",
+      official_identity: expression.publisher_expression_id, official_source: source,
+      reason: "a Protocol, Annex, Declaration or table of equivalences published with the consolidated Treaty is part of the publisher's document but not one of the Treaty's articles, so its text is not served here",
+    },
+  ];
+  const partedMarkup = text(view(dossierOutcome({ state: "success", envelope: parted })));
+  assert.ok(partedMarkup.includes("2 annexes of the English wording are not served as text"), "an unclassified annex is an annex of the wording");
+  assert.ok(partedMarkup.includes("48 items published with the English wording of the Treaty (Protocols, Annexes, Declarations or tables of equivalences) are not served as text"),
+    "a Treaty's annexed parts have their own line");
+
   const unpinned = structuredClone(envelope);
   unpinned.result.value.expressions[0].pinned_wording = null;
   const refused = dossierOutcome({ state: "success", envelope: unpinned });

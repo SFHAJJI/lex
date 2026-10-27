@@ -274,6 +274,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.EuFormexPackageOutcome::NotAcquired, "
                     + "method public static "
+                    + "Lex.V3.Ingest.Europe.EuFormexPackageOutcome::NotAcquired, "
+                    + "method public static "
                     + "Lex.V3.Ingest.Europe.EuFormexPackageOutcome::NotEligible, "
                     + "method public static "
                     + "Lex.V3.Ingest.Europe.EuFormexPackageOutcome::NotEnumeratedLanguageOutOfScope, "

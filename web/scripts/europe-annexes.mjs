@@ -8,14 +8,23 @@
 /** How every annex an answer lists is served: never as text. */
 export const EUROPE_ANNEX_SERVED_AS = 'text_not_available';
 
-/** The corpus's annex dispositions, closed: what it found against the publisher's PDF. */
+/**
+ * The corpus's annex dispositions, closed: what it found against the publisher's PDF; an annex of an admitted package whose
+ * annexes could not be matched to the PDF (`annex_unclassified`); and a Protocol, Annex, Declaration or table of equivalences
+ * published with a consolidated Treaty, which is not one of the Treaty's articles (`treaty_part_not_served`; review of #996, F2).
+ */
 export const EUROPE_ANNEX_DISPOSITIONS = Object.freeze([
   'annex_text_not_available',
   'annex_mapping_unresolved',
   'annex_body_contains_text',
   'annex_body_contains_no_image',
   'annex_mapped_page_outside_document',
+  'annex_unclassified',
+  'treaty_part_not_served',
 ]);
+
+/** The dispositions whose rows count the items published with a Treaty, not annexes of an act: their line says so. */
+export const EUROPE_TREATY_PART_DISPOSITIONS = Object.freeze(['treaty_part_not_served']);
 
 const DIGEST = /^[0-9a-f]{64}$/;
 

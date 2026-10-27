@@ -63,6 +63,7 @@ internal sealed partial class V3WebRoot
     private readonly IReadOnlyDictionary<string, string> _files;
     private readonly V3PageRenderer? _renderer;
     private readonly IReadOnlyDictionary<string, string> _notFoundPages;
+    private readonly IReadOnlyDictionary<string, string> _maintenancePages;
     private readonly IndexingRecord? _indexingRecord;
     private readonly byte[] _robots;
     private readonly IReadOnlyDictionary<string, byte[]>? _sitemap;
@@ -72,6 +73,7 @@ internal sealed partial class V3WebRoot
         string contentSecurityPolicy,
         V3PageRenderer? renderer,
         IReadOnlyDictionary<string, string> notFoundPages,
+        IReadOnlyDictionary<string, string> maintenancePages,
         string searchEngines,
         IndexingRecord? indexingRecord,
         string? lastmod)
@@ -80,6 +82,7 @@ internal sealed partial class V3WebRoot
         ContentSecurityPolicy = contentSecurityPolicy;
         _renderer = renderer;
         _notFoundPages = notFoundPages;
+        _maintenancePages = maintenancePages;
         SearchEngines = searchEngines;
         _indexingRecord = indexingRecord;
         // robots.txt and, with the site indexed, the sitemap's files, built once for the root's life (review of #976, F4).
@@ -126,6 +129,7 @@ internal sealed partial class V3WebRoot
         var root = Path.GetFullPath(directory);
         var files = new Dictionary<string, string>(StringComparer.Ordinal);
         var notFound = new Dictionary<string, string>(StringComparer.Ordinal);
+        var maintenance = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
         {
             var relative = Path.GetRelativePath(root, file).Replace('\\', '/');
@@ -140,8 +144,9 @@ internal sealed partial class V3WebRoot
             }
 
             // The pages' server renderer is run (V3PageRenderer), never served; the 404 pages answer a page request nothing
-            // claims, and the maintenance pages are the deploy kit's: none is served at its own address (V3WebRoot.NotFound.cs).
-            if (relative.StartsWith("ssr/", StringComparison.Ordinal) || IsUnservedPage(relative, file, notFound))
+            // claims, and the maintenance pages every page request of a maintenance revision: none is served at its own address
+            // (V3WebRoot.NotFound.cs, V3WebRoot.Maintenance.cs).
+            if (relative.StartsWith("ssr/", StringComparison.Ordinal) || IsUnservedPage(relative, file, notFound, maintenance))
             {
                 continue;
             }
@@ -169,6 +174,7 @@ internal sealed partial class V3WebRoot
             $"{System.Net.WebUtility.HtmlDecode(policy.Groups["policy"].Value)}; {FrameAncestors}",
             V3PageRenderer.Open(Path.Combine(root, "ssr")),
             notFound,
+            maintenance,
             SearchEnginesState(searchEngines),
             indexingRecord,
             lastmod);
@@ -396,11 +402,12 @@ internal sealed partial class V3WebRoot
     /// <c>%2E%2E</c> as an article, which the live server and a browser resolve away). A readable address's article is never
     /// a calendar date, with or without a digest after it: <c>/eu-eurlex/{celex}/{lng}/{date}</c> is an EU stable coordinate
     /// and <c>/eu-eurlex/{celex}/{lng}/{date}--{sha256}</c> the EU permalink shape before R64 (<see cref="MovedFor"/>), so
-    /// neither shape names an article. A <c>#</c> (a position inside an article) never reaches a server. The end is
-    /// <c>\z</c>, not <c>$</c>, which in .NET also matches before a final newline.
+    /// neither shape names an article. A <c>{celex}</c> is one segment, a solidus written <c>%2F</c> (the Treaties' and the
+    /// Charter's <c>12016E%2FTXT</c>; <see cref="V3CorpusMount.EuropeWorkSegment"/>). A <c>#</c> (a position inside an
+    /// article) never reaches a server. The end is <c>\z</c>, not <c>$</c>, which in .NET also matches before a final newline.
     /// </summary>
     private static readonly Regex SitePath = new(
-        "^/(?:(?<locale>fr|en)/)?(?<law>lu-legilux/(?<work>[a-z0-9][a-z0-9_-]*)|eu-eurlex/(?<celex>[0-9A-Za-z][0-9A-Za-z()._-]*))" +
+        "^/(?:(?<locale>fr|en)/)?(?<law>lu-legilux/(?<work>[a-z0-9][a-z0-9_-]*)|eu-eurlex/(?<celex>[0-9A-Za-z](?:[0-9A-Za-z()._-]|%2[Ff])*))" +
         "(?:(?<pin>/(?<date>[0-9]{4}-[0-9]{2}-[0-9]{2})--(?<digest>[0-9a-f]{64})/(?<lng>[a-z]{3})" +
         "(?:/(?!(?:\\.|%2[eE]){1,2}\\z)(?:[0-9A-Za-z._~!$&'()*+,;=:@-]|%[0-9A-Fa-f]{2})+)?)" +
         "|(?<current>/(?<currentLng>[a-z]{3})" +
@@ -415,7 +422,7 @@ internal sealed partial class V3WebRoot
     /// alone: it is not matched, and is answered as any address this root does not hold.
     /// </summary>
     private static readonly Regex EuropeWordingBeforeR64 = new(
-        "^/(?:(?<locale>fr|en)/)?eu-eurlex/(?<celex>[0-9A-Za-z][0-9A-Za-z()._-]*)/(?<lng>[a-z]{3})/(?<pin>[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9a-f]{64})\\z",
+        "^/(?:(?<locale>fr|en)/)?eu-eurlex/(?<celex>[0-9A-Za-z](?:[0-9A-Za-z()._-]|%2[Ff])*)/(?<lng>[a-z]{3})/(?<pin>[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9a-f]{64})\\z",
         RegexOptions.CultureInvariant,
         TimeSpan.FromMilliseconds(100));
 
@@ -505,7 +512,7 @@ internal sealed partial class V3WebRoot
         }
 
         var language = match.Groups["locale"].Value;
-        var work = match.Groups["work"].Success ? "/lu-legilux/" + match.Groups["work"].Value : match.Groups["celex"].Value;
+        var work = match.Groups["work"].Success ? "/lu-legilux/" + match.Groups["work"].Value : V3CorpusMount.EuropeCelexOfSegment(match.Groups["celex"].Value)!;
         if (match.Groups["pin"].Success)
         {
             var date = match.Groups["date"].Value;

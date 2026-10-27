@@ -304,6 +304,24 @@
 // what this site holds, never "the act's dates", which the wording headings use for the Formex date; MA is "mise en
 // application"; an end of validity is said "totale ou partielle", since 20 of run 16's 24 are partial; the qualifier is
 // "la mention de l’éditeur", in parentheses after its date; and `notWording` says that no date above chooses a wording).
+// The breadcrumbs, the banners' info control and the home page's example searches (R48, R47): `breadcrumbs.label`, the two
+// `breadcrumbs.publishers`, `breadcrumbs.state`, `breadcrumbs.stateEntryIntoForce`, `breadcrumbs.europeOriginal`,
+// `breadcrumbs.europeConsolidated`, `reference.info`, `reference.infoNamed`, `home.examplesHeading` and `home.examplesIntro`
+// were reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the same delegation in the addendum
+// of 2026-10-27 "breadcrumbs, the banners' info controls and the home page's example searches" (11 forms, 1 changed in
+// review: `home.examplesIntro`; the optional pair of `stateEntryIntoForce`, its heading's "(éditeur)", taken in both
+// languages), and with them, from its point 1, `search.opensReading` and `search.opensDossier` (both changed, the English
+// too: a search read from an address does not go to the act by itself, so the line says what the reference opens, never
+// "Ouverture"). Vocabulary: a breadcrumb is a "Fil d’Ariane"; a version crumb says its reading heading's words; an info
+// control is "Comment lire ceci"; the usual citation is the "citation usuelle" ("telle qu’on l’écrit d’ordinaire"), never
+// "d’habitude"; an example "lance la recherche", never "recherche".
+// The line for a consolidated Treaty's parts this site does not serve as text (`common.europeTreatyParts`, both forms; the
+// review of #996, F2) was reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the same
+// delegation in the addendum of 2026-10-27 on a Treaty's parts not served (2 forms, both changed in review, the English too:
+// the Declarations are annexed to the Final Act and the tables of equivalences to the Treaty of Lisbon, so an item is
+// "publié avec" the Treaty, never "annexé au"; it is an "élément", never a "partie", the TFUE's own division; "le
+// libellé en {language} du traité", one Treaty in equally authentic languages; "tableau de correspondance", the
+// official term; and "ou" in the plural, since a count may be of Protocols only).
 // Typography: a no-break space (U+00A0) stands before : ; ! ? % and » and after «, and the apostrophe is ’.
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
@@ -361,8 +379,8 @@ export const LIVE_CHROME_FR = Object.freeze({
     recognisedArticleDate: 'Référence reconnue : {act}, article {article}, au {date}.',
     recognisedToday: 'Aucune date n’a été indiquée : la date lue est celle d’aujourd’hui au Luxembourg, le {date}.',
     recognisedSearchDate: 'La référence n’indique aucune date : la date lue est celle de la recherche, le {date}.',
-    opensReading: 'Ouverture de la lecture : {link}',
-    opensDossier: 'Ouverture du dossier : {link}',
+    opensReading: 'Cette référence ouvre la lecture : {link}',
+    opensDossier: 'Cette référence ouvre le dossier : {link}',
     notOpenedDate: '« {date} » ne désigne aucun jour du calendrier ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
     notOpenedTwoDates: 'La référence indique deux dates qui ne concordent pas ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
     titleNotHeld: 'Ce site ne détient aucun acte sous l’intitulé que cite l’expression ; ses mots ont donc été recherchés.',
@@ -932,6 +950,17 @@ export const LIVE_CHROME_FR = Object.freeze({
     authenticity: 'Les textes consolidés n’ont aucun effet juridique : seuls font foi les textes publiés au Journal officiel du Grand-Duché de Luxembourg (Mémorial A) et au Journal officiel de l’Union européenne.',
     sources: 'Les textes proviennent de Legilux et de l’Office des publications de l’Union européenne, tels que ce site les détient ; chaque article cité indique sa source officielle.',
   }),
+  breadcrumbs: Object.freeze({
+    label: 'Fil d’Ariane',
+    publishers: Object.freeze({
+      'lu-legilux': 'Droit luxembourgeois',
+      'eu-eurlex': 'Droit de l’UE',
+    }),
+    state: 'Version applicable à partir du {date}',
+    stateEntryIntoForce: 'Acte tel que publié, daté de son entrée en vigueur le {date} (éditeur)',
+    europeOriginal: 'Libellé original du {date}',
+    europeConsolidated: 'Libellé consolidé du {date}',
+  }),
   freshness: Object.freeze({
     heading: 'Mise à jour des données',
     asBuilt: 'Chaque réponse du serveur indique quand l’index a été construit, quand les textes de chaque éditeur ont été collectés pour la dernière fois, ainsi que le code qui a construit l’index et celui qui le sert ; cette page affiche ces indications dès qu’elle a reçu une réponse.',
@@ -978,6 +1007,8 @@ export const LIVE_CHROME_FR = Object.freeze({
       other: '{count} articles',
     }),
     links: 'Ailleurs sur ce site',
+    examplesHeading: 'Exemples de recherche',
+    examplesIntro: 'Chaque exemple lance la recherche d’un article que ce site détient, désigné par sa citation usuelle, et mène à son texte.',
   }),
   failure: Object.freeze({
     line: 'Lex n’a pas pu mener à bien cette demande. Ce n’est pas une réponse sur le droit.',
@@ -1163,6 +1194,8 @@ export const LIVE_CHROME_FR = Object.freeze({
       guide: 'Comment lire Lex',
       developers: 'page Développeurs',
     }),
+    info: 'Comment lire ceci',
+    infoNamed: 'Comment lire ceci : {section}',
   }),
   help: Object.freeze({
     title: 'Obtenir de l’aide',
@@ -1502,6 +1535,10 @@ export const LIVE_CHROME_FR = Object.freeze({
     europeAnnexes: Object.freeze({
       one: '{count} annexe du libellé en {language} n’est pas communiquée sous forme de texte et n’est jamais interrogée, citée ni exportée : {reason}. Source officielle {source}.',
       other: '{count} annexes du libellé en {language} ne sont pas communiquées sous forme de texte et ne sont jamais interrogées, citées ni exportées : {reason}. Source officielle {source}.',
+    }),
+    europeTreatyParts: Object.freeze({
+      one: '{count} élément publié avec le libellé en {language} du traité (un protocole, une annexe, une déclaration ou un tableau de correspondance) n’est pas communiqué sous forme de texte et n’est jamais interrogé, cité ni exporté : {reason}. Source officielle {source}.',
+      other: '{count} éléments publiés avec le libellé en {language} du traité (protocoles, annexes, déclarations ou tableaux de correspondance) ne sont pas communiqués sous forme de texte et ne sont jamais interrogés, cités ni exportés : {reason}. Source officielle {source}.',
     }),
     europeForceDates: Object.freeze({
       heading: 'Les dates de l’éditeur que ce site détient pour cet acte',

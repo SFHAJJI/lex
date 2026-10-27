@@ -33,7 +33,7 @@
 //
 // This module is data and pure functions only.
 
-import { INTERFACE_LANGUAGES, currentAddress, parseSitePath } from "./permalinks.mjs";
+import { INTERFACE_LANGUAGES, currentAddress, europeWorkSegment, parseSitePath } from "./permalinks.mjs";
 import { CANONICAL_HOST } from "./routes.mjs";
 import { isUtcInstant } from "./temporal.mjs";
 
@@ -197,7 +197,7 @@ export async function searchEngineFacts(record, ask) {
 export function workAddressOf(pathname) {
   const named = parseSitePath(pathname);
   if (named === null) return null;
-  return named.publisher === "lu-legilux" ? named.identifier : `/eu-eurlex/${named.identifier}`;
+  return named.publisher === "lu-legilux" ? named.identifier : `/eu-eurlex/${europeWorkSegment(named.identifier)}`;
 }
 
 /**

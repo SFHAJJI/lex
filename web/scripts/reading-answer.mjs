@@ -43,7 +43,7 @@
 //    with the wording's permalink and the provision as a last segment, escaped as the platform escapes it.
 
 import { isCalendarDate } from './temporal.mjs';
-import { articlePermalink, europePermalink, luxembourgPermalink } from './permalinks.mjs';
+import { articlePermalink, europePermalink, europeWorkSegment, luxembourgPermalink } from './permalinks.mjs';
 import { readAnnexesNotServed } from './europe-annexes.mjs';
 import { readEuropeForceDates } from './europe-force-dates.mjs';
 import { readAsPublished } from './as-published.mjs';
@@ -684,7 +684,7 @@ function readEuropeWording(wording, index, { celex, date }) {
     throw new Error(`${where} carries the permalink ${JSON.stringify(permalink)}, not the wording it pins (${expected})`);
   }
   const stableCoordinate = requireText(requireOwn(wording, 'stable_coordinate', where), `${where} stable_coordinate`);
-  if (stableCoordinate !== `/eu-eurlex/${celex}/${language}/${wordingDate}`) {
+  if (stableCoordinate !== `/eu-eurlex/${europeWorkSegment(celex)}/${language}/${wordingDate}`) {
     throw new Error(`${where} carries the coordinate ${JSON.stringify(stableCoordinate)}, not its permalink's without the digest`);
   }
 

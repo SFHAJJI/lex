@@ -691,6 +691,23 @@ blockquote.law {
   line-height: 1.55;
 }
 
+.home-examples {
+  display: grid;
+  gap: 0.4rem;
+  max-inline-size: 42rem;
+}
+
+.home-examples h2 {
+  margin: 0;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.25rem;
+}
+
+.home-examples ul {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+}
+
 .home-links ul {
   display: flex;
   flex-wrap: wrap;
@@ -1821,4 +1838,125 @@ main > * {
 .reference-code code {
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+/* The breadcrumbs of a law's pages (R48; Breadcrumbs.jsx): one line that wraps, the marks between the crumbs drawn here
+   and silent to a screen reader (an empty alternative text), and the page's own crumb in bold. */
+.breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+}
+
+.breadcrumbs li + li::before {
+  content: "\203A";
+  content: "\203A" / "";
+  margin-inline-end: 0.4rem;
+}
+
+.breadcrumbs li[aria-current="page"] {
+  font-weight: 700;
+}
+
+.breadcrumbs code {
+  overflow-wrap: anywhere;
+}
+
+/* A banner's info control (R48; GuideLink.jsx): a small link to How to read Lex, marked by the information sign, which a
+   screen reader does not read (the link's name says where it leads). Alone on its line, it keeps the 24 pixel target. */
+.info-control {
+  display: inline-block;
+  min-block-size: 24px;
+  padding-block: 0.15rem;
+  font-size: 0.85rem;
+}
+
+.info-control::before {
+  content: "\24D8\00a0";
+  content: "\24D8\00a0" / "";
+}
+
+/* The print view of Reading (R62's fifth item, "a clean print view of Reading", pack 33 section 7 rule 9; UX spec section 3:
+   "print stylesheet strips chrome, keeps banner, hashes and citation strings"). On paper the site's chrome goes: the skip
+   link, the menu and the languages, every form and button, the pager and the contents, the info controls, the home page's
+   links and the footer's menus. What stays: the site's name, the breadcrumbs (where the text stands), the banners (the
+   staleness banner, the as-published label, the EU statements), each version's heading with its date said by its role,
+   the text, every digest, source and permalink, the citation forms, and the footer's lines (what Lex is not, which texts
+   are authentic, where the texts come from) with how current the answer is. Black on white in either colour scheme, the
+   page's full width, no poster layout, long digests and addresses wrapped inside the page. */
+@media print {
+  :root,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  a,
+  a:visited {
+    color: #000000 !important;
+  }
+
+  .skip-link,
+  .site-nav,
+  .site-header .locale-nav,
+  .site-tagline,
+  main form,
+  button,
+  .failure-retry,
+  [data-pager],
+  details[data-contents],
+  .info-control,
+  [data-guide-note],
+  .home-links,
+  .site-footer .reference-nav,
+  .site-footer .legal-nav {
+    display: none !important;
+  }
+
+  .site-header,
+  .site-footer,
+  .freshness-strip,
+  .staleness-banner {
+    border-color: #000000 !important;
+    background: none !important;
+    color: #000000 !important;
+  }
+
+  main,
+  .site-header ~ main {
+    display: block;
+    min-block-size: auto;
+    max-inline-size: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  main > * + * {
+    margin-block-start: 0.75rem;
+  }
+
+  .site-header ~ main h1 {
+    font-size: 1.5rem;
+  }
+
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+
+  [data-quote-evidence],
+  [data-citation-form],
+  .breadcrumbs {
+    break-inside: avoid;
+  }
+
+  code {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+  }
 }

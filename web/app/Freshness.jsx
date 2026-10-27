@@ -9,8 +9,11 @@
 // Each stands in a container of its own (`FRESHNESS_STRIP_ID`, `STALENESS_BANNER_ID`) outside the page's hydrated root, so
 // the browser can draw it again without touching what the server rendered for the root. The strip holds no section inside
 // it, so the deploy probe can set it aside when it holds a rendered home page to the page as built (`deploy-probe.mjs`).
+//
+// Each ends with its info control (R48, `GuideLink.jsx`): the section of How to read Lex that says how current Lex is.
 
 import { fillCounted, fillText, liveChrome } from '../scripts/live-chrome.mjs';
+import { GuideLink } from './GuideLink.jsx';
 import { freshnessKey, staleChannels } from '../scripts/freshness.mjs';
 
 /** The footer's container of the strip. */
@@ -39,6 +42,7 @@ export function FreshnessStrip({ facts = null, answers = true }) {
     return (
       <section className="freshness-strip" aria-label={copy.heading} data-freshness="no-answer">
         <p>{copy.noAnswer}</p>
+        <p data-guide-note=""><GuideLink section="freshness" /></p>
       </section>
     );
   }
@@ -46,6 +50,7 @@ export function FreshnessStrip({ facts = null, answers = true }) {
     return (
       <section className="freshness-strip" aria-label={copy.heading} data-freshness="as-built">
         <p>{copy.asBuilt}</p>
+        <p data-guide-note=""><GuideLink section="freshness" /></p>
       </section>
     );
   }
@@ -67,6 +72,7 @@ export function FreshnessStrip({ facts = null, answers = true }) {
         <Commit label={copy.indexCommit} commit={facts.indexCommit} unstated={copy.commitUnstated} />
         <Commit label={copy.serviceCommit} commit={facts.serviceCommit} unstated={copy.commitUnstated} />
       </dl>
+      <p data-guide-note=""><GuideLink section="freshness" /></p>
     </section>
   );
 }
@@ -89,6 +95,7 @@ export function StalenessBanner({ facts = null }) {
             {fillCounted(copy.stale, facts.maximumAgeDays, { channel: copy.channels[channel.publisher], date: channel.completedOn, today: facts.today })}
           </p>
         ))}
+        <p data-guide-note=""><GuideLink section="freshness" /></p>
       </details>
     </aside>
   );

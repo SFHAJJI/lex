@@ -94,8 +94,8 @@ const EN = Object.freeze({
     recognisedArticleDate: "Recognised: {act}, article {article}, at {date}.",
     recognisedToday: "No date was given: the date read is today in Luxembourg, {date}.",
     recognisedSearchDate: "The reference names no date: the date read is the search's, {date}.",
-    opensReading: "Opening the reading: {link}",
-    opensDossier: "Opening the dossier: {link}",
+    opensReading: "This reference opens the reading: {link}",
+    opensDossier: "This reference opens the dossier: {link}",
     notOpenedDate: "“{date}” names no day of the calendar, so nothing was opened and no word was searched.",
     notOpenedTwoDates: "The reference names two dates that disagree, so nothing was opened and no word was searched.",
     // The review of #974: a citation by a title this site holds no act under is searched as words, and the page says so; the
@@ -581,6 +581,21 @@ const EN = Object.freeze({
     authenticity: "Consolidated texts have no legal effect: the authentic texts are those published in the Journal officiel du Grand-Duché de Luxembourg (Mémorial A) and in the Official Journal of the European Union.",
     sources: "The texts come from Legilux and from the Publications Office of the European Union, as this site holds them; every quote names its official source.",
   }),
+  // The breadcrumbs of a law's pages (the specification of record's R48: "breadcrumbs (publisher, act, article, version)";
+  // `breadcrumbs.mjs`): the menu's name, the law each publisher publishes, and a version said by its date's role (R21): a
+  // Luxembourg state as applying from its date, or the act as published dated by its entry into force, never as applying
+  // from it; an EU wording by its own date, never with a Luxembourg word. The act and the article are the page's own codes.
+  breadcrumbs: Object.freeze({
+    label: "Breadcrumb",
+    publishers: Object.freeze({
+      "lu-legilux": "Luxembourg law",
+      "eu-eurlex": "EU law",
+    }),
+    state: "State applying from {date}",
+    stateEntryIntoForce: "Act as published, dated by its entry into force on {date} (publisher)",
+    europeOriginal: "Original wording of {date}",
+    europeConsolidated: "Consolidated wording of {date}",
+  }),
   // How current the law this site holds is, and the commits behind an answer (the specification of record's R87 and R23;
   // the plan's items 6.1 and 6.5; `freshness.mjs`, `Freshness.jsx`): the strip in every page's footer and the staleness
   // banner under its header, each said from the server's answer and nothing else. Every date is the server's, in
@@ -637,6 +652,11 @@ const EN = Object.freeze({
       other: "{count} articles",
     }),
     links: "Elsewhere on this site",
+    // The example searches (R47; `home-examples.mjs`): each a usual citation of an article this site holds, derived from the
+    // mount at build and kept only when searching it opens that article's text; the citations themselves are data, said in
+    // their text's language.
+    examplesHeading: "Example searches",
+    examplesIntro: "Each searches for an article this site holds, cited as it is usually written, and leads to its text.",
   }),
   // A service failure on a screen, panel by panel (the specification of record's R60; `live-failure.mjs`): its line, word
   // for word the specification's, above what the screen says of the failure; the retry, which asks the same request again;
@@ -853,6 +873,10 @@ const EN = Object.freeze({
       guide: "How to read Lex",
       developers: "Developers page",
     }),
+    // A banner's info control (R48: the guide "linked from each banner's info control"; `GuideLink.jsx`): a link to the
+    // section of How to read Lex that explains the banner, whose name holds that section's heading.
+    info: "How to read this",
+    infoNamed: "How to read this: {section}",
   }),
   help: Object.freeze({
     title: "Get help",
@@ -1200,6 +1224,12 @@ const EN = Object.freeze({
     europeAnnexes: Object.freeze({
       one: "{count} annex of the {language} wording is not served as text, and is never searched, quoted or exported: {reason}. Official source {source}.",
       other: "{count} annexes of the {language} wording are not served as text, and are never searched, quoted or exported: {reason}. Official source {source}.",
+    }),
+    // The items published with a consolidated EU Treaty (its Protocols, Annexes, Declarations and tables of equivalences), never
+    // served as text, beside the Treaty's own articles (`europe-annexes.mjs`, `treaty_part_not_served`; review of #996, F2).
+    europeTreatyParts: Object.freeze({
+      one: "{count} item published with the {language} wording of the Treaty (a Protocol, Annex, Declaration or table of equivalences) is not served as text, and is never searched, quoted or exported: {reason}. Official source {source}.",
+      other: "{count} items published with the {language} wording of the Treaty (Protocols, Annexes, Declarations or tables of equivalences) are not served as text, and are never searched, quoted or exported: {reason}. Official source {source}.",
     }),
     // The EU act's dates as the publisher records them in its dated statements (the plan's item 2.1; R79's E1, R21: each date a
     // value of its own, said with its role; `europe-force-dates.mjs`), where the act is read or its dossier shown: the act's

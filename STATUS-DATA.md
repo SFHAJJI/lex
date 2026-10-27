@@ -157,6 +157,296 @@ Updated 2026-10-27.
   class of an unbound block's named identities (diagnostic only), and `measure-lu-rights` as a tool step (the probe
   measures it). D2 on Azure is the owner's to run: it is Azure.
 
+## The text yield, measured from custody: why 659 EU works and every Luxembourg consolidation have no text; the EU main body reads the Treaties, the Charter and the packages whose annexes are unclassified (sole driver, 2026-10-27)
+
+- **What was asked.** The served EU index (derive-r1, index /6) holds text for 511 of the 1,170 Cellar works the census
+  found; derive-r1's Luxembourg index holds no consolidation. The specification of record wants every consolidated version
+  with text wherever the publisher serves a usable Formex or XHTML file, one typed outcome per publisher file and a textless
+  version typed and listed (EU); for Luxembourg every consolidation with an admitted XML file yielding text, each failure
+  listed and blocking, and the yield per class on Coverage (R86, R26, R84). Measured read-only from EU run 16's custody, run
+  15's custody and derive-r1, with no publisher traffic, no browser and no Azure.
+
+### EU: the classes
+
+- **The denominator.** The 1,170 are Cellar works, not publisher versions: each consolidation date has one work carrying the
+  CELEX (`0YYYYXNNNN-YYYYMMDD`) and up to eleven more with the same date and no CELEX, and 476 of those hold expressions in
+  other languages only (the publisher's language-specific consolidations, read from the run's expression facts: for example
+  `02017L1132-20170630` is Bulgarian only). By publisher version (seed and date: 82 originals and 295 consolidation dates)
+  the served index covers 274 of 377.
+- **Per work, from the census, the expression facts (15,855 language rows), the Formex enumerations (1,327), the document
+  ladders (1,152 fetches) and the retained packages (1,120 ZIPs), each read from custody by digest.** Versions count a date
+  once, by its best work.
+
+  | Class | Works | Versions | Verdict | Examples |
+  |---|---|---|---|---|
+  | Served | 511 | 274 | | |
+  | No English or French expression of the work | 476 | 34 | Faithful: the publisher has none | `02014R0910-20140917`, `02017R1001-20170616`, `02023R2854-20231222` (German, Finnish, Dutch, Spanish only) |
+  | English or French expression, no manifestation at all (its Formex enumeration answered no row) | 3 | 0 | Faithful: no file served | `32003R0001@2004-05-01`, `32011L0016@2017-06-05`, `12016E/TXT@2016-09-01` (no CELEX) |
+  | Formex listed, never requested: no body held (the listing offers `pdfa1a` beside `fmx4`, or XHTML answered 404) | 101 | 0 | Our defect, needs an acquisition: the package producer sends no request for an expression whose body is not held (`body_not_held`) | `32006L0112@2009-06-01`, `12016M/TXT@2016-09-01`, `12016E/TXT@2015-12-25` |
+  | Formex held, root `CONS.OTH`: the consolidated TEU and TFEU | 24 | 14 | Our defect, fixed here | `02016E/TXT-20200301`, `02016M/TXT-20190501`, `02016E/TXT-20151225` |
+  | Formex held and admitted, annex chain not closed, main body never read | 43 | 43 | Our defect, fixed here | `32014L0065`, `32023R1114`, `32014R0651` (all originals) |
+  | Formex held, root `GENERAL`: the Charter | 2 | 2 | Our defect, fixed here | `12012P/TXT`, `12016P/TXT` |
+  | Formex held, package refused by the inventory: no Formex `DOC` unit (the 2003 schema host `formex.publications.eu.int`; the 2012 Official Journal issue holding both Treaties, with no descriptor and several act units) | 4 | 4 | Our defect, not offline: the inventory is part of the acquisition's replay | `02003L0087-20041113`, `32003L0087`, `12012E/TXT`, `12012M/TXT` |
+  | XHTML or HTML held, no Formex listed | 5 | 5 | Our defect, offline, needs an XHTML/HTML main-body profile | `12016E/TXT`, `12016M/TXT` (XHTML), `32003L0088`, `32004R0139`, `32003R0001` (HTML) |
+  | PDF only | 1 | 1 | Faithful | `02003R0001-20040501` |
+  | Rights withheld | 0 | 0 | | |
+
+- **One typed outcome per file, and the textless version.** Every corpus member keeps its typed main-body disposition, and a
+  textless EU date refuses `text_not_available` with its official identity and source; the refusal names no class (the EU
+  members carry no work IRI, so the index cannot say which outcome a state's text lacks for). Listing the class with the
+  version needs index rows per state and language: not in this slice.
+
+### EU: the fixes, offline
+
+- **Main-body profile /5** (`EuFormexMainBodyLegalContentProducer.Profile`):
+  - `CONS.OTH`: one `CONS.OTH.DOC`, its own `BIB.INSTANCE` for language and date, and the one `ENACTING.TERMS` reached
+    through `CONS.DOC.GEN` parts only (the TFEU's sits in a part beside its Protocols, the TEU's in the top part). The
+    Protocols, Annexes and Declarations sit under `CONTENTS` with `ENACTING.TERMS` of their own and stay out, as an act's
+    annexes do, each listed as a typed row since the review of #996 (below). Over the 48 retained packages: the TFEU's 358 articles and the TEU's 55 in every one, no duplicate identifier.
+  - `GENERAL`: the main body only of a package with no act root, the one `GENERAL` unit that carries an `ENACTING.TERMS`
+    (the Charter's contents page carries none); a `GENERAL` unit beside an act (a Commission statement) is never read.
+  - The package is read in two passes (every XML entry checked as before, then the one main unit read again), so no more
+    than one entry's tree is held.
+- **An admitted package whose annex chain did not close keeps its main body.** The four annex-chain reasons
+  (`annex_xhtml_not_inventoried`, `annex_pdf_not_served`, `annex_evidence_not_bound`, `annex_body_not_classified`) now carry
+  the admitted inventory (`EuFormexPackageOutcome.RetainedInventory`). It is outside the outcome's replay digests, so run
+  16's package and population checkpoints reopen unchanged. The producer reads the main body as
+  `admitted_annexes_unclassified` (corpus `formex_main_body_admitted_annexes_unclassified`), and the EU index serves its
+  articles as an acquired package's. The annexes stay unclassified for the stated reason and never enter the main body; the
+  dossier and the reading list them as one typed row, `annex_unclassified`, since the review of #996 (below).
+- **Driver decisions (reversible).**
+  - **A Treaty's own articles are its text; its Protocols and Declarations are not**, as an act's annexes are not: they are
+    left out, not merged, listed as typed rows, and stay readable at the official source.
+  - **A package's main body does not wait on its annexes.** The annex chain classifies annexes against the PDF; its failure
+    says nothing about the act's articles, which the admitted package holds as it holds an annex-free act's.
+  - **The 2012 Treaty package is not guessed.** It holds both Treaties, a draft decision and the Protocols as separate act
+    and general units, with no descriptor: which unit is the work's is the publisher's designation, and none is retained.
+
+### EU: what each remedy yields (works / versions of 377 / originals of 82 / consolidation dates of 295)
+
+| | Works | Versions | Originals | Consolidation dates | Articles added |
+|---|---|---|---|---|---|
+| Served today (derive-r1) | 511 | 274 | 29 | 245 | |
+| A re-derivation at this head (offline) | 580 | 333 | 74 | 259 | 17,850 (Treaties 9,912; originals 7,722; Charter 216), in English and French alike |
+| Plus an XHTML/HTML main-body profile (offline, a later slice) | 585 | 338 | 79 | 259 | |
+| Plus an inventory that admits the 2003 schema host (re-inventory in derivation, or a new acquisition) | 587 | 340 | 80 | 260 | |
+| Plus a new acquisition requesting Formex without a held body (the 101) | 688 | 340 | 80 | 260 | |
+
+- The 101 are all works of dates another work already serves after the offline fixes, so a new acquisition adds works and
+  no publisher version (one, `02003L0087-20041113`, if the inventory is not fixed first).
+- What stays textless after all of them: 37 versions: 34 dates whose works hold no English or French expression, the
+  PDF-only `02003R0001-20040501`, and the 2012 Treaties (`12012E/TXT`, `12012M/TXT`).
+- The first row after today's is measured by the probe below through the production code over run 16's custody: 580
+  works (English 536, French 576, from 467 and 507), 333 versions, 74 originals, 191,670 articles; the 17,850 added equal
+  the count read from the retained packages.
+
+### Luxembourg: derive-r1 per class
+
+- **derive-r1 runs Release 1's rule set** (`lu-release-1`, rights `as_acquired`): inventory /4 and content /3 over run 15's
+  held bodies, with the acquisition's own rights resolution and in-file reading /1. No rights rule changed.
+- **Per class, every catalogue state** (served: a held state row in index /9):
+
+  | Class | States | Served (articles) | Not acquired: licenceSCL in the catalogue | Held, withheld by reading /1 (XML + PDF) | Acquired, no text | Other |
+  |---|---|---|---|---|---|---|
+  | Codes (8) | 190 | 126 (119,730) | – | 32 + 30 | 1 misfiled (`code/civil/20190428`) | 1 not acquired (`code/procedure_penale/20270301`) |
+  | Code recueils (9) | 724 | 0 | – | – | – | 724 outside the scope (`point_exact_family`) |
+  | Lois, acts as published | 9,238 | 689 (7,586) | 6,129, and 1 with no manifestation | 2,389 + 9 | 21 | – |
+  | Lois, consolidations | 1,594 | **0** | – | 1,429 + 105 | – | 60 (no expression) |
+  | RGD, acts as published | 15,366 | 1,875 (10,316) | 10,201, and 1 with no manifestation | 3,100 + 175 | 13 | 1 refused |
+  | RGD, consolidations | 1,244 | **0** | – | 1,162 + 49 | – | 33 (no expression) |
+
+- **Why the 2,745 held consolidations have no text.** Reading /1 (`LuxembourgInFileRightsReader.ReadAsync`) admits a file
+  only when the document has one child `act`, one `FRBRthis` equal to the fetched manifestation and exactly one
+  `scl:JOLUXManifestation` whose `uriThis` is that manifestation; anything else is `typed_quarantine_in_file_reading_rejected`,
+  whatever the catalogue says. Replicated over all 8,112 withheld XML bodies (none reads `Observed`; 276 acquired bodies
+  sampled all read CC BY), the withheld consolidations' files say:
+
+  | What the file's identification says | Lois | RGD | Verdict |
+  |---|---|---|---|
+  | Its own block names this file and says CC BY, and the catalogue says CC BY | 234 | 217 | **Our defect**: reading /1 refuses the publisher's second block, the PDF twin (445 files), or a FRBR or `scl:postit` shape |
+  | Its block names the base act or another consolidation; CC BY in the catalogue | 577 | 447 | Owner ruling L2 |
+  | No licence anywhere in the file | 118 | 144 | Owner ruling L1 |
+  | The file says licenceSCL, or two licences | 386 | 273 | Faithful: conflict, stays withheld |
+  | Its block names an identity the catalogue marks licenceSCL or double-licensed | 99 | 53 | Faithful: conflict |
+  | Its block names only identities the catalogue does not know | 13 | 28 | Faithful: quarantine |
+  | No licence in the catalogue; malformed XML | 1; 1 | 0 | Faithful |
+
+  Read again from run 15's custody for this slice: `loi/2021/01/22/a45/consolide/20211217` (body `7b22f2eb…`) has one
+  `FRBRthis` of the manifestation `…/fr/xml` and two `scl:JOLUXManifestation` blocks, `…/fr/xml` and `…/fr/pdf`, each
+  `license` `http://creativecommons.org/licenses/by/4.0/`: the file says CC BY for exactly the file fetched, and reading /1
+  refuses it for the second block.
+  The 154 PDF consolidations have no text-layer profile (`pdf_gazette_issue_scope` 150, `pdf_upstream_text_layer_gap` 4) and
+  are counted `withheld_rights`, because rights are read first.
+- **R86(2) fails.** 451 consolidations (and one code state, `code/procedure_civile/20230201`) are cleared by both channels
+  and held, and yield no text; nothing lists them or blocks: 2,198 of the 2,745 held consolidations have no state row, and
+  the other 547 carry one undifferentiated reason. The fix is not a parser change: reading /1 is part of R0's byte-exact
+  replay and stays frozen. It is Release 2's rights (LU-DATA-DESIGN v2 §1.1 and §1.2): reading /2 binds the block whose
+  `uriThis` is the fetched file (the PDF twin and a leading `scl:postit` tolerated, FRBR recorded, never required),
+  resolution v2 gives `agreed_cc_by_rederived`, policy A (the same two-channel agreement, a driver decision) admits it, and
+  R1 re-binds rights under a new rule set. It needs a new D1 on Azure (R0 and R1, about 34 GiB); no new acquisition, since
+  every body is in run 15's custody. Under policy A the design counts 703 files (451 consolidations, 251 acts, 1 code
+  state) and 144,153 articles in all (Release 1: 131,103); content /3 admits 9,700 articles of the 451 consolidations.
+  Reading /2 and the rest of Release 2's rights are being implemented by another agent on `data/lu-rights-reading-2`;
+  this slice changes no Luxembourg rule.
+- **Coverage shows no yield per class.** `V3CorpusMount.Coverage` reads `LuxembourgIndexReader.ReadCoverage`: members by
+  outcome, gap tokens and the article outcomes of acquired members, with no class, no catalogue denominator, no
+  withheld-by-reason split and no PDF-only or failed count; the EU index adds nothing to it, and the web renders what the API
+  sends (`web/app/Coverage.jsx`, `web/scripts/coverage.mjs`). The yield needs build-time rows: index /9 holds rows only for
+  works with a served state (25,044 catalogue states have none), and the EU members carry no work IRI. Not in this slice; it
+  belongs with Release 2's D1, which rebuilds both indexes anyway.
+
+### What a re-derivation at this head changes
+
+- **EU index /6, same schema:** 138 expressions gain articles (17,850 by the packages' count); their members' stage-3
+  dispositions move (48 `formex_main_body_missing` and 4 Charter ones to `formex_main_body_admitted`, 86
+  `formex_main_body_package_not_acquired` to `formex_main_body_admitted_annexes_unclassified`); every EU member's main-body
+  semantic identity moves, because profile /5 is in it. The article identity and text digest do not name the profile, so the
+  173,820 articles served today keep their permalinks: the probe derives every one with the same identity and text digest. The EU capability
+  manifest's cells grow with the new articles. With the review's repair, the member rows also carry the parts not served
+  (below).
+- **Corpus lex-corpus/6, same schema:** the EU profile digest in its profile identities, the members above, and three new
+  disposition tokens in its closed vocabulary (one main-body and, with the review's repair, two annex ones). Its digest moves, so the Luxembourg index's stamp and capability manifest move
+  with it; no Luxembourg row changes.
+- **D1's inputs stay valid:** inputs /3 name only the Luxembourg re-derivation's rules, which this slice does not touch; a
+  rerun at this head with the same inputs gives the new EU half. The API and the web change only as the review's repair
+  says (below): a CELEX's solidus is written `%2F` in every address, and the two new annex rows have their reasons and lines.
+- **The EU index alone, locally.** The derive builds it from the combined corpus, which needs the Luxembourg R0 and R1 (D1's
+  34 GiB). The EU half alone (the acquisition reopened and the main-body producer) runs here in 31 minutes at a peak
+  working set of 2.6 GB, which is what the probe does, and gives the EU index's whole content (the index projects exactly
+  the main bodies bound to held members); writing a 1.4 GB EU index file is not done on this PC (the disk is full), and it
+  could not be mounted beside derive-r1's corpus anyway.
+
+### The probe
+
+- `EuTextYieldRun16Probe` (new, opt-in `LEX_EU_TEXT_YIELD_PROBE=1`, read-only, never a CI test): run 16's acquisition
+  reopened through `EuFirstMountAcquisition.ReopenAsync` over `HeldOnlyCustody`, the build's main-body producer over it,
+  derive-r1's EU index opened read-only; per state and language the expressions, their manifestation types, the package
+  outcome, the main-body disposition and detail, the corpus records with their served format, the served and derived
+  articles; and every served article's identity and text digest against what this build derives.
+- **Measured at the head** (run 16's catalog `767ceba4…`, derive-r1's EU index): 1,170 states, 15,855 main-body outcomes
+  (none outside the census), 1,857 corpus records. Served 511 states; this build derives 580. Of the 173,820 served
+  articles, 173,820 are derived with the same identity and text digest, 0 with another text, 0 not at all; 17,850 are new.
+  The outcomes: English and French acquired and admitted 493 and 533 (with the 48 Treaty and 4 Charter packages);
+  `admitted_annexes_unclassified` 86 (76 `annex_xhtml_not_inventoried`, 10 `annex_pdf_not_served`); `body_not_held` 91
+  and 99 (the 101 works); not eligible 9 and 8; package rejected 4 and 4; every other language not enumerated (out of
+  scope). No acquired package fails the parse. 31 minutes (the reopen 30), peak working set 2.6 GB (the producer holds every
+  article at once).
+
+### Tests and measurements
+
+- **Tests.** `EuFormexMainBodyLegalContentProducerTests`: a consolidated Treaty reads its own articles and not its
+  Protocols' (the TFEU's shape and the TEU's); a Treaty with two own texts, none, or two documents refuses; a `GENERAL` unit is
+  the main body only without an act root (a contents page beside it, and a statement beside an act, are never read); an
+  admitted package whose annex chain did not close keeps its main body as `admitted_annexes_unclassified`, a not-acquired
+  outcome without a retained inventory keeps `package_not_acquired`, and only an annex-chain reason may carry one.
+  `EuFormexPackagePopulationProducerTests.AnAnnexPackageWhoseHeldBodyHasNoAnnexConventionIsRetainedNotAcquiredAndItsMainBodyRead`
+  (was `...IsRetainedButNotAcquired`): through the real session, the outcome carries the inventory, the corpus states the new
+  disposition and the EU index serves the act's two articles. Census pins: the two closed vocabularies' new members and
+  `EuFormexPackageOutcome`'s second `NotAcquired`.
+- **Measured** (Windows, no browser, no publisher traffic, no Azure, custody and mounts read only):
+  - `dotnet build tests/Lex.V3.Ingest.Tests -c Release`: 0 warnings, 0 errors.
+  - The producer tests and the closed-vocabulary census: 28 passed; the construction census failed on the new overload and a
+    static constructor, which the predicate `IsAnnexChainReason` removes, and its pin is updated.
+  - `EuFormexPackagePopulationProducerTests`, `EuropeIndexBuilderTests`, `LexCorpus6BuilderTests`,
+    `EuFormexAnnexClassificationReconciliationTests`: 168 (167 passed, 1 env-gated skipped).
+  - `EuAnnexControlCaseTests`, `EuFirstMountAcquisitionTests`, `V3FirstMountBuildTests`, `EuFormexAnnexInventoryProducerTests`,
+    `V3CorpusResolveMountTests`: 150 (144 passed, 1 skipped, 5 failed). The five are the tests that write custody, journals or
+    index staging to `%TEMP%`, and they ran while the PC's disk filled (1.6 GB free); the in-memory builds from the same
+    GDPR package (`EuropeIndexBuilderTests`, `LexCorpus6BuilderTests`) pass.
+  - Rerun at the head with 7.5 GB free: those five (every data row), both censuses and the producer tests: 44 passed, 0
+    failed, in 15 minutes.
+  - The custody counts above: read by digest from run 16's custody (Python, brotli, SHA-256 checked) and from derive-r1's
+    index opened `immutable=1`.
+
+### Review and repair (#996)
+
+- **The review** (the other model family, Decision 95): REPAIR, two findings and two low notes, each reproduced. One
+  repair round; all four are answered here.
+- **F1 (high): a CELEX with a solidus broke every address of its act.** Profile /5 serves four CELEX with a solidus
+  (`12016E/TXT`, `12016M/TXT`, `12016P/TXT`, `12012P/TXT`, with the consolidated `02016E/TXT-…` and `02016M/TXT-…`): 10,128
+  of the 17,850 articles a re-derivation adds (the Treaties' 9,912 and the Charter's 216). Their permalinks had six
+  segments, so no reader parsed them back.
+  - **Fixed: the CELEX is one path segment everywhere, its solidus written `%2F`.** The API mints every EU address through
+    `V3CorpusMount.EuropeWorkSegment` (the permalink, the article permalink, the stable coordinate, the act's address, the
+    readable address and the reference reader's addresses) and reads one back through `EuropeCelexOfSegment` (letters,
+    digits, `( ) . _ -` and `%2F` or `%2f`; any other escape, or a bare solidus, is no CELEX segment). The same in the web
+    (`permalinks.mjs`: `europeWorkSegment`, `europeCelexOfSegment`, `europePermalink`, `currentAddress`, `parseSitePath`;
+    `search-engines.mjs`; `reading-answer.mjs`'s stable coordinate), in the server's site paths (`V3WebRoot`, its EU
+    pattern before R64 too) and in the sitemap's dossier identifiers. The shared site-paths table gains 9 rows: a slash
+    CELEX's dossier (with the lower-case escape too), its permalink and article permalink, its readable address at an
+    article, its bare address redirected, its permalink before R64 moved to R64's, and a bare solidus and a broken escape,
+    which serve no page.
+  - **Driver decision (reversible): `%2F`.** R64 fixes the permalink as `/{publisher}/{work}/{date}--{digest}/{language}`
+    with the work one segment; percent-encoding is the one way RFC 3986 gives to carry a reserved `/` inside a segment, and
+    ASP.NET Core keeps `%2F` undecoded in the request path. A substitute character would be ambiguous: `_`, `-` and `.`
+    are CELEX characters already.
+  - **Byte-identical elsewhere.** Only `/` is replaced, so a CELEX without one keeps its bytes: derive-r1's EU index serves
+    173,820 articles and none has a solidus in its CELEX (read `immutable=1`), so no served permalink moves; the answer
+    samples and the legacy answers are unchanged, and their tests pass.
+- **F2 (medium): the parts left out had no row.** The annexes of an admitted package whose annex chain did not close, and
+  the Treaties' Protocols, Annexes, Declarations and tables of equivalences, were left out with nothing listed.
+  - **Fixed: each is a typed row of `annexes_not_served`**, on the dossier and on the reading, with its count, identities,
+    `served_as` `text_not_available`, reason and official source, as an annex the corpus classified is. The producer
+    names them (`EuFormexMainBodyLegalContentOutcome.PartsNotServed`, kind `annex_unclassified` or
+    `treaty_part_not_served`, in the outcome's semantic identity); the corpus writes each as a `europe_annex_body` outcome
+    on the member the articles are read from (dispositions `annex_unclassified` 30, `treaty_part_not_served` 31); the EU
+    index copies them into its member rows; the API gives each its fixed reason; the web's closed list
+    (`europe-annexes.mjs`) admits both, and `LiveAnswer` says a Treaty's parts with their own line
+    (`common.europeTreatyParts`), an unclassified annex with the annex line.
+  - **Counted.** An unclassified annex: one identity per member of the retained inventory (the expression, the package
+    entry, the inventory's identity, the member's sequence and the reason); 86 expressions at a re-derivation (76
+    `annex_xhtml_not_inventoried`, 10 `annex_pdf_not_served`), from at most 464 annex units in the class's 92 retained
+    packages. A Treaty's parts: each `CONS.DOC.GEN` part beside the Treaty's own, unit by unit (each child of its
+    `CONTENTS`): the TFEU's 48 (41 Protocols, 2 Annexes, 3 groups of Declarations, 2 tables), the TEU's 46, 45 to 47 in four
+    packages; 2,252 over the 48 packages (counted read-only from run 16's custody).
+  - **Wording.** The two reasons and the four forms of `common.europeTreatyParts` were reviewed by one independent reviewer
+    (Claude, AI reviewer, not the author) under the owner's delegation (Decision 41), in the addendum of 2026-10-27 in
+    `C:\lex-v3\lanes\fr-review\review.md`: 6 forms, all changed, the English too. The Declarations are annexed to the
+    Final Act and the tables of equivalences to the Treaty of Lisbon, so an item is "published with" the Treaty, never
+    "annexed to" it; "item", never "part"; "the {language} wording of the Treaty"; "or" in the plural. The finals are
+    applied byte for byte (a script checks each).
+  - **R84 and R59.** Met by these rows: nothing is called image-only without positive evidence, each part left out is
+    listed with a typed reason, and each is `text_not_available`, officially linked and out of search, quotes and exports.
+    Not met, and not this slice: R84's annexes served as provisions with their text and Coverage's annex counts per
+    publisher, and R59's "annex N of act X" opening the annex's card (the rows carry no number or heading in the API; the
+    producer keeps each part's title).
+- **Low note: TFEU identifier `001` 31 times.** Those are the Protocols' own articles, which profile /5 never reads: the
+  Treaty's one `ENACTING.TERMS` holds unique identifiers (the TFEU's 358 and the TEU's 55 in each of the 48 packages), an
+  article's identity hashes its expression, package entry, identifier, heading, language, date, text and tokens, and a
+  duplicate identity refuses the package. The Treaty test now asserts every identifier distinct and the Protocols one
+  `treaty_part_not_served` part.
+- **Low note: a checkpoint reopen with a retained inventory.** `EuFormexPopulationCheckpointTests` gains shape 5 (an annex
+  package whose held body has no annex convention): the reopened outcome's retained inventory and receipt equal the
+  captured ones, with no annex classified.
+- **Tests** (new or changed): `EuropeSlashCelexMountTests` (`12016P/TXT`, `12016E/TXT`, `32016R0679`, through the API:
+  dossier, evidence_bundle by CELEX, by article and by permalink, verify of the permalink and the article permalink, search
+  opening each of the five addresses, and as_of naming no bare solidus); `EuropeNotServedPartsMountTests` (each new
+  disposition through the corpus, the index and the API, on the dossier and the reading); the producer, checkpoint, annex
+  reason and census tests above; web `permalinks.test.mjs` (a slash CELEX encoded, idempotent, read back, the lower-case
+  escape, a bare solidus and other escapes refused, a CELEX without one unchanged) and `live-dossier.test.mjs` (both lines).
+- **Measured** (Windows, no browser, no publisher traffic, no Azure; custody and derive-r1 read only; free disk 5.0 to 5.4 GB):
+  - `dotnet build` of `tests/Lex.V3.Ingest.Tests` and `tests/Lex.V3.Tests` (Release): 0 warnings, 0 errors.
+  - The producer, checkpoint, census and the two new mount classes: 34, 31 passed and 3 failed: the new slash test asked
+    `resolve`, which takes no EU permalink for any CELEX (the GDPR's neither); it now searches each address, and passes 3 of 3.
+  - The censuses, `V3EuropePermalinkTests`, `EuropeIndexBuilderTests`, `LexCorpus6BuilderTests`,
+    `EuFormexPackageOutcomePopulationTests`, `EuAnnexControlCaseTests`: 120, 115 passed, 3 skipped (env-gated), 2 failed
+    (the partition and declaration totals for the new closed vocabulary, pinned 278, 107 and 87); the censuses again: 38,
+    36 passed, 2 skipped.
+  - The EU mount classes (`V3CorpusEurope*`), pinned permalinks, verify, reference, resolve, `EuConsolidatedFirstMountTests`
+    and the legacy schema 6 and 8 mounts: 159, 156 passed, 2 skipped, 1 failed (the annex reasons' closed list, now seven).
+  - `V3CorpusEuropeAnnexTests` (now seven dispositions), `EuFormexPackagePopulationProducerTests` (with the two new mount
+    classes), `LexCorpus6MountViewTests`, `EuFormexAnnexClassificationReconciliationTests`: 113, 112 passed, 1 skipped
+    (env-gated).
+  - `Lex.V3.Tests` `V3WebRoot*` (the site-paths table, the search engines, the 404): 22 passed.
+  - Web: `node scripts/build.mjs`, then `node --test` over 17 files (permalinks, live dossier, dossier answer, the chrome
+    and its scan, localization, search engines, reading answer, the EU reading, live, pinned and pages readings, evidence
+    bundle, dossier, legal pages, live SSR): 186 passed.
+- **Merged with v3/integration** (#997, the screens' gaps), the French table's header comment holding both addenda. Its
+  breadcrumbs built an EU act's address from the bare CELEX; they now write it through `europeWorkSegment`, and
+  `breadcrumbs.test.mjs` holds a slash CELEX's act crumb to `/en/eu-eurlex/12016E%2FTXT` (it fails without the fix).
+  After the merge: `Lex.V3.Tests` `V3WebRoot*` 28 passed; the web built again and `node --test` over 20 files (the 17
+  above, breadcrumbs, print view, live home): 210 passed.
+
 ## The PDF layout reads no host font: a Windows and a Linux derive write the same PDF artefacts (sole driver, 2026-10-27)
 
 - **The defect** (known since b0a342e3, below under R1): PdfPig 0.1.11 lays out a TrueType font the PDF does not embed

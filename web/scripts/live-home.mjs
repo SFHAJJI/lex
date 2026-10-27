@@ -14,7 +14,9 @@
 //   of the mounted Luxembourg index (`totals`), "as of the index built on" the date of the build the mounted log records
 //   as mounted (`history.snapshots_with_text`, retained as `mounted`), that build time's date in Luxembourg, as today is.
 //   A mount whose log records no build says the counts with no date and says why; with no corpus mounted, the line is the
-//   coverage page's own sentence for that refusal; an answer that cannot be read shows no line.
+//   coverage page's own sentence for that refusal; an answer that cannot be read shows no line. A counted line carries the
+//   digest of the Luxembourg index it counts (`mounted.index_sha256`), which the page holds its example searches to
+//   (`home-examples.mjs`): a build's examples are shown only over the index they were derived from.
 //
 // Data and pure functions only: the page, its client entry and the server renderer share it.
 
@@ -53,6 +55,7 @@ export function coverageLineOf(outcome) {
       states: view.totals.states,
       articles: view.totals.articles,
       builtOn: mounted === undefined ? null : dateInLuxembourg(mounted.builtAt),
+      indexSha256: view.mounted.index_sha256,
     });
   }
   if (outcome?.state === "refusal" && outcome.code === "no_corpus_mounted") return Object.freeze({ state: "unmounted" });
@@ -73,6 +76,7 @@ export function homeFacts(envelope, contract) {
 }
 
 const isCount = (value) => Number.isInteger(value) && value >= 0;
+const isDigest = (value) => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
 
 /**
  * Facts read back from a page's block, held to their shape, or null when they are not the facts a home page is rendered
@@ -86,9 +90,14 @@ export function readHomeFactsValue(value) {
   if (coverage.state === "counted") {
     if (![coverage.works, coverage.states, coverage.articles].every(isCount)) return null;
     if (!(coverage.builtOn === null || isCalendarDate(coverage.builtOn))) return null;
+    // The index's digest, which a renderer before the example searches did not write: none, and the page shows no example.
+    if (!(coverage.indexSha256 === undefined || coverage.indexSha256 === null || isDigest(coverage.indexSha256))) return null;
     return Object.freeze({
       today,
-      coverage: Object.freeze({ state: "counted", works: coverage.works, states: coverage.states, articles: coverage.articles, builtOn: coverage.builtOn }),
+      coverage: Object.freeze({
+        state: "counted", works: coverage.works, states: coverage.states, articles: coverage.articles, builtOn: coverage.builtOn,
+        indexSha256: coverage.indexSha256 ?? null,
+      }),
     });
   }
   return Object.freeze({ today, coverage: Object.freeze({ state: coverage.state }) });

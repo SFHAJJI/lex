@@ -90,10 +90,14 @@ const EUROPE_ENTRIES = new Set([
   "refusalCard.europeNotes.ambiguous_version",
   "reading.europeSameDateWorks.one", "reading.europeSameDateWorks.other", "reading.europeUnplaced.one", "reading.europeUnplaced.other",
   "common.europeAnnexes.one", "common.europeAnnexes.other",
+  // The Treaties' items left out, by the wording they are published with (the review of #996, F2).
+  "common.europeTreatyParts.one", "common.europeTreatyParts.other",
   "reading.europePinReplaced", "reading.europePinNotHeld", "reading.europeWholeAct", "reading.europeNewerWording",
   "reading.europeLaterWordingNotHeld",
   // A page past an EU wording's last (the review of #978, F2).
   "reading.europePageNotHeld.one", "reading.europePageNotHeld.other",
+  // An EU reading's breadcrumb for its wording, by its own date (R48, `breadcrumbs.mjs`), and the law the EU publishes.
+  "breadcrumbs.europeOriginal", "breadcrumbs.europeConsolidated", "breadcrumbs.publishers.eu-eurlex",
   // The citation generator's EU words (`citation.mjs`): an EU act's name and the date it is cited at, the wording's line of
   // the evidence form, the Official Journal reference no index holds, and the EU's authenticity statement.
   "citation.europe.article", "citation.europe.acts.R", "citation.europe.acts.L", "citation.europe.acts.D",

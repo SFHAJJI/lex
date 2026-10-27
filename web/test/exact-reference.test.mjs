@@ -101,16 +101,16 @@ const text = (markup) => markup.replace(/<[^>]+>/g, "").replaceAll("&quot;", '"'
 test("a reference the platform holds opens its act: the recognition, the address, under this page's language", async () => {
   for (const [scenario, query, recognised, opening, href] of [
     ["an article of that act at a date", "article 15 de la loi du 10 août 1991, 15 mars 2024",
-      "Recognised: loi du 10 août 1991, article 15, at 15 March 2024.", "Opening the reading: ",
+      "Recognised: loi du 10 août 1991, article 15, at 15 March 2024.", "This reference opens the reading: ",
       /^\/en\/lu-legilux\/loi-1991-08-10-n3\/2024-02-01--[0-9a-f]{64}\/fra\/art_15$/],
     ["the same article with no date", "article 15 de la loi du 10 août 1991",
-      "Recognised: loi du 10 août 1991, article 15.", "Opening the reading: ", /^\/en\/lu-legilux\/loi-1991-08-10-n3\/fra\/art_15$/],
+      "Recognised: loi du 10 août 1991, article 15.", "This reference opens the reading: ", /^\/en\/lu-legilux\/loi-1991-08-10-n3\/fra\/art_15$/],
     ["an act by its type and date", "loi du 10 août 1991",
-      "Recognised: loi du 10 août 1991.", "Opening the dossier: ", /^\/en\/lu-legilux\/loi-1991-08-10-n3$/],
+      "Recognised: loi du 10 août 1991.", "This reference opens the dossier: ", /^\/en\/lu-legilux\/loi-1991-08-10-n3$/],
     ["an EU act by its conventional name", "Regulation (EU) 2016/679",
-      "Recognised: Regulation (EU) 2016/679 (CELEX 32016R0679).", "Opening the dossier: ", /^\/en\/eu-eurlex\/32016R0679$/],
+      "Recognised: Regulation (EU) 2016/679 (CELEX 32016R0679).", "This reference opens the dossier: ", /^\/en\/eu-eurlex\/32016R0679$/],
     ["an article of the EU act with no date", "Article 99 of Regulation (EU) 2016/679",
-      "Recognised: Regulation (EU) 2016/679 (CELEX 32016R0679), article 99.", "Opening the reading: ", /^\/en\/eu-eurlex\/32016R0679\/eng\/099$/],
+      "Recognised: Regulation (EU) 2016/679 (CELEX 32016R0679), article 99.", "This reference opens the reading: ", /^\/en\/eu-eurlex\/32016R0679\/eng\/099$/],
   ]) {
     const answer = referenceAnswer(scenario);
     const { calls, fetchImpl } = answering(envelopeWith(answer));
