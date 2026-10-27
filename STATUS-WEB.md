@@ -1,8 +1,86 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-26. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-27. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## The per-client limit, the key set, the headers on every answer, the outside monitor and the runbook (sole driver, 2026-10-27)
+
+The specification of record's platform and "running it" lines (R109, R46, R116, the shell line and the plan's item 10.7,
+R107, R108, R8, R114), on `writer/platform-ops`, from v3/integration at db0a7b53. The site is open since 2026-10-27 01:10
+UTC.
+- **The per-client limit** (R109, R46; `src/Lex.V3.Api/V3ClientLimiter.cs`; driver decisions, reversible):
+  - **Budgets.** The API (`/api/v3/*` served routes and `/mcp`): 60 requests a minute, a bucket of 60 refilled at one a
+    second (R109's number; "re-sized by the load test"), and at most 4 of a client's requests answered at once (R109's
+    concurrency cap, on every operation: on one vCPU each is a costly one, and a page asks one at a time). The pages the
+    server renders from its own answer: 300 a minute (R46: well above), past which the page is served as built and asks
+    for itself, so no page is ever refused. Every other file of the site, readiness, the key set and unknown routes are
+    not counted.
+  - **The refusal.** Past the API budget a well-formed request is answered with the typed refusal `rate_limited`
+    (`{"retry_after":1,"retryable":true}`), in the mounted corpus's refusal context, before the mount is asked: REST
+    with status 429 and `Retry-After`; MCP's tool call with the same envelope in a JSON-RPC result, status 200 (the
+    dispatcher's rule) and `Retry-After`. A malformed request keeps its own transport problem. The web client reads a 429
+    envelope only when it is that refusal, which the failure panel shows with its retry (`v3-client.mjs`).
+  - **The client.** The connection's address; when the peer is inside the host's network (loopback, private, shared
+    100.64/10, link-local: Container Apps' ingress), the last address of `X-Forwarded-For`, the one the ingress appended;
+    with none, no client and no count (the platform's probes, the journeys, a release's image run: so no release probe or
+    journey meets the limit). An IPv6 address counts by its /64. On the live host the TCP peer is the ingress, so keying on
+    the connection alone would have made one bucket for every reader.
+  - **What is held.** 16 bytes of HMAC-SHA-256 of the address under a 32-byte key drawn at random per process and replaced
+    each UTC day (every entry dropped with it), beside the counts; the address itself is not kept; nothing is written. A
+    sweep each minute forgets every entry whose buckets have filled again, so none outlives its client's last request by
+    more than about two minutes. At most 100,000 entries; past that a new client is answered without one.
+  - **The census of S4-A11** (`PublicRequestRecordingTests`): the address and the forwarded header are read in one place,
+    `V3ApiHandler.ClientOf`, handed whole to the limit, and counted by a test of their own; the rules see through that one
+    expression and nothing else. The behavioural test now runs every scenario directly and through the ingress, and past
+    the limit to the 429, and finds no marked value anywhere.
+  - **The refusal census:** `rate_limited` moves from `not_produced` to `produced`, by every served operation (24); five
+    codes stay unproduced. The refusal gate's set gains one case, a client past its minute (19 cases; the evaluation card
+    re-rendered).
+  - **The probes:** the deploy probe asks a candidate through the ingress from one address and can ask about a hundred
+    times in seconds (the accented-title check), so its API requests (`askOperation`, `verify`, a step's own request) go
+    through `within-limit.mjs`: a 429 is waited out as its Retry-After says, then that origin is paced at two seconds a
+    request; a local server is never waited for.
+- **The privacy notice** (EN and FR): `privacy.intro` ("records nothing"), `reading.kept`, the new `reading.limit` (what
+  is held, where, how long) and `reading.nothingHeld` ("later"); the French reviewed by an independent reviewer in the
+  addendum of 2026-10-27 of `C:\lex-v3\lanes\fr-review\review.md` (4 forms, 2 changed, with two English changes taken);
+  `LEGAL_TEXTS_UPDATED` is 2026-10-27. Points for the lawyer's read (O4): the fingerprint is pseudonymised personal data;
+  the notice states no legal basis for it (the usual candidate art. 6(1)(f)); its first retention period is stated; an
+  IPv6 /64 shares one count.
+- **The key set** (R116): `src/Lex.V3.Api/well-known/lex-keys.json` (schema `lex-v3-keys/1`), embedded in the server
+  and served at `/.well-known/lex-keys.json`, GET and HEAD; the release key, identity `lex-v3-release`, role `release`,
+  status `active`, valid from 2026-10-13 to 2027-10-13, key id the SHA-256 of its SubjectPublicKeyInfo
+  (`c4e97ce0…`), its PEM committed beside it (`lex-v3-release.pem`, the key release 1 is signed with). No second signer's
+  key exists yet (O16).
+- **Headers on every answer** (`V3HostHeaders`): before, on https://law.soufien.lu, the pages carried HSTS,
+  `Referrer-Policy`, `nosniff` and their CSP with `frame-ancestors 'none'`, but readiness and the API's answers carried
+  only `nosniff` and `no-store` (read on 2026-10-27). Now every answer carries HSTS, `Referrer-Policy: no-referrer`,
+  `nosniff` and, when it is no page, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`; a transport
+  problem sets them again after its reset. A page keeps its own reviewed policy.
+- **The outside monitor** (R107): `.github/workflows/v3-monitor.yml`, every five minutes on GitHub's runners, runs
+  `web/scripts/site-monitor.mjs`: readiness 204, the French home page with its CSP and HSTS, one dated reading page
+  (the GDPR in French at 2024-01-01, answer state `success`), `coverage` answered and not stale, and the certificate
+  trusted and at least 21 days from its end; a failed check is asked again a minute later, and two failures fail the run
+  and open or add to one issue (the run's own token, no secret), closed once the site answers. Run once from this PC
+  against the live site: all five ok (certificate to 2027-04-18). It acts only once its file is on the default branch
+  (`main`), the owner's choice.
+- **The documents:** `docs/INCIDENT-RUNBOOK.md` (R108: classes, the first five minutes, rollback, forward, reactivating a
+  live revision, redeploying, blocking a client, the known failure modes with the incident of 2026-10-27, the breach
+  procedure, the cost ceiling's command) and `docs/OPERATING.md` (R8: who decides, the review rule, standing
+  authorisations, the platform, the domain and certificate, how a refresh and a release are made, the deploy kit's rules,
+  freshness and the 30 days, monitoring, money, what is not done). The tree's allowlist admits `docs/*.md` by name and the
+  monitor's workflow.
+- **The cost ceiling** (R114): the command is in the runbook, for the owner: an action group whose receiver is the Owner
+  role, then `az consumption budget create-with-rg` over `rg-lex-v3`, 150 EUR a month (the plan's N1), alerts at 50, 80
+  and 100 per cent to the Owner role, no e-mail address (the classic `create` takes no notifications); the JSON form of
+  its notifications was parsed by the CLI's own argument code offline, and nothing was sent to Azure.
+- **Tests:** `V3ClientLimiterTests` (10), `V3HostAnswerTests` (7), `V3ClientLimitTests` (1), the recording census's new
+  count test and its ingress and limit paths, the refusal census and gate set, the Lex.V3.Tests census pins (two guarded
+  types, two registries); web `within-limit.test.mjs` (3), `site-monitor.test.mjs` (6), `v3-client.test.mjs`'s 429 case,
+  `legal-pages.test.mjs`'s pinned privacy forms and their evidence.
+- **Not done here:** the Developers page's statement of the limits (R46) is the pages lane's; a reviewed sentence for
+  `rate_limited` on each screen (the panel says the code today); latency, error-rate and restart alerts; the load test
+  that re-sizes the limit.
 
 ## Release 1 on the private copy, and the opening that waits on the owner's command (sole driver, 2026-10-26)
 
