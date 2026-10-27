@@ -6,12 +6,10 @@
   "properties": {
     "retry_after": {
       "type": "integer",
-      "minimum": 0,
-      "$comment": "no operation produces this refusal at launch (the refusal census\u0027s not_produced); the type is the registry\u0027s meaning"
+      "minimum": 1
     },
     "retryable": {
-      "const": true,
-      "$comment": "no operation produces this refusal at launch (the refusal census\u0027s not_produced); the type is the registry\u0027s meaning"
+      "const": true
     }
   },
   "required": [

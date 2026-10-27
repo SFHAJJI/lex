@@ -954,7 +954,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "bf1b6e93cbcd33f264353643854434a7ee61fcc1d9706ba962b05b9778cf051d"
+          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
         },
         "works": [
           {
@@ -1306,7 +1306,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "bf1b6e93cbcd33f264353643854434a7ee61fcc1d9706ba962b05b9778cf051d"
+          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -1424,7 +1424,7 @@
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
           "publisher": "lu-legilux",
-          "registry_sha256": "bf1b6e93cbcd33f264353643854434a7ee61fcc1d9706ba962b05b9778cf051d"
+          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
         },
         "not_held": [
           {
@@ -5996,7 +5996,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "bf1b6e93cbcd33f264353643854434a7ee61fcc1d9706ba962b05b9778cf051d"
+          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -6079,7 +6079,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "bf1b6e93cbcd33f264353643854434a7ee61fcc1d9706ba962b05b9778cf051d"
+          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -6168,7 +6168,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "bf1b6e93cbcd33f264353643854434a7ee61fcc1d9706ba962b05b9778cf051d"
+          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
         },
         "work_key": "loi-1991-08-10-n3"
       }
@@ -8825,7 +8825,7 @@
         "verified_by": {
           "corpus_sha256": "\u003Cvaries-per-run\u003E",
           "index_sha256": "\u003Cvaries-per-run\u003E",
-          "registry_sha256": "bf1b6e93cbcd33f264353643854434a7ee61fcc1d9706ba962b05b9778cf051d"
+          "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7"
         },
         "what_would_answer": [
           "new_official_observation"

@@ -513,3 +513,33 @@ test("the Developers page says the per-client limit and the key set in the revie
   assert.deepEqual(Object.keys(LIVE_CHROME.en.developers.limits), ["heading", "anonymous", "size", "paging", "rate", "pages", "availability"]);
   assert.deepEqual(Object.keys(LIVE_CHROME.fr.developers.limits), Object.keys(LIVE_CHROME.en.developers.limits));
 });
+
+test("the forms the French review of the API's gaps pinned say what the platform does (the addendum of 2026-10-27, the API's gaps)", async () => {
+  const [EN, FR] = [LIVE_CHROME.en, LIVE_CHROME.fr];
+  // G1 and G3: an earlier version verifies only while a kept build holds its text (`VerifyScope`); a referenced build is one
+  // its caller lists (`V3GenerationRetention.Referenced`), never one a permalink names by itself.
+  const mount = await repository("src/Lex.V3.Api/V3CorpusMount.cs");
+  assert.ok(mount.includes("unless a retained generation holds that state"), "VerifyScope, where the review read it");
+  for (const key of ["G1", "G3"]) {
+    assert.match(EN.developers.replay.guarantees[key].text, /while a kept build holds its text/, `en ${key}`);
+    assert.match(FR.developers.replay.guarantees[key].text, /tant qu’une construction conservée en détient le texte/, `fr ${key}`);
+  }
+  const retention = await repository("src/Lex.V3.Ingest/V3GenerationRetention.cs");
+  assert.ok(retention.includes('public const string Referenced = "referenced";') && retention.includes("Nothing records which permalinks or bundles were published"));
+  assert.ok(EN.developers.replay.guarantees.G3.text.includes("every build listed as referenced by a published permalink"));
+  assert.equal(EN.developers.replay.guarantees.G3.name, "Nothing is deleted from the log");
+  // G1: a replaced file is recorded whether or not its text changed (the replay test's two file_replaced events).
+  assert.ok(EN.developers.replay.guarantees.G1.text.includes("the version stays the same when the text is unchanged"));
+  // G5: the bundle carries the row facts since S7a, so the version's own digest is recomputed from the answer.
+  assert.ok(mount.includes("caller recomputes the digest from this answer"), "ProvenanceDerivationNine, where the review read it");
+  assert.ok(EN.developers.replay.guarantees.G5.text.includes("and the version's own digest") && !/does not carry yet/.test(EN.developers.replay.guarantees.G5.text));
+  // Entry 3: a request to an operation served from no data is refused out of scope first, and with no mount no_corpus_mounted,
+  // so the sentence says "a request", never "every request" (`V3CorpusScopeMountTests`).
+  assert.ok(EN.developers.operations.notServed.startsWith("Not served from data: a request to it"));
+  assert.ok(FR.developers.operations.notServed.startsWith("Opération non servie faute de données : une requête qui la vise"));
+  // The words the review refused in these forms.
+  const refused = [/servies? sans données/, /refusée?s? par \{/, /qui en prend/, /sans eux/, /sa fiche en REST/, /ignore les membres/, /lié à côté/, /population de l’UE/, /comme celle de \{example\}/];
+  for (const [path, text] of [...entriesOf(FR.developers).map(([one, value]) => [`developers.${one}`, value]), ["coverageAnswer.facts.notRouted", FR.coverageAnswer.facts.notRouted], ["coverageAnswer.captions.notServedData", FR.coverageAnswer.captions.notServedData]]) {
+    for (const pattern of refused) assert.doesNotMatch(text, pattern, `fr ${path}`);
+  }
+});

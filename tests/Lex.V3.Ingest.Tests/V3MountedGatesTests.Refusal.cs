@@ -389,7 +389,7 @@ public sealed partial class V3MountedGatesTests
         CollectionAssert.AreEquivalent(
             new[] { "text_withheld", "text_not_available" }, derived.NotProduced.Keys.ToArray(),
             "one mount cannot hold a withheld licence and text beside them; every other produced code is derived: " + string.Join("; ", derived.NotProduced.Select(static pair => pair.Key + " (" + pair.Value + ")")));
-        Assert.AreEqual(18, set.CaseCount, "the fixture machine gates' 21 less the two codes another mount holds and the regulation's twin, which is the fixture's own");
+        Assert.AreEqual(18, set.CaseCount, "the fixture machine gates' 22 less the two codes another mount holds, the regulation's twin, which is the fixture's own, and the limit's case, which needs a handler of its own");
     }
 
     [TestMethod]

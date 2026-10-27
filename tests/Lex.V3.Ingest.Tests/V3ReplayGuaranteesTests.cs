@@ -24,8 +24,8 @@ namespace Lex.V3.Ingest.Tests;
 /// <item>G5: a reader holding one evidence bundle and the publisher's file finds each served article's text in that file,
 /// and recomputes the body digest, each text digest, the article identities digest and the state digest from the
 /// derivations the platform publishes. On an index 9 the state digest is digest /2, whose row facts after the language
-/// the answer does not carry until S7a serves them: until then this test reads them from the mounted index, and the
-/// derivation says a caller cannot recompute the digest from the answer alone.</item>
+/// the answer carries since S7a, so this test recomputes it from the answer alone (the expected gap of #980 is closed),
+/// and still holds those facts to the mounted index.</item>
 /// </list>
 /// G1 version immutability, G3 bitemporal completeness and G4 as-observed answering need a chain: three real builds of
 /// the state fixture on three days, each chained to the one before and written as the mount it would be, keeping the

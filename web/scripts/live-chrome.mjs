@@ -1029,7 +1029,7 @@ const EN = Object.freeze({
       schemas: "Schemas",
       requestSchema: "request",
       resultSchema: "answer",
-      notServed: "Not served from data: every request to it is answered inside the envelope with the refusal {code}, naming the mode asked, {mode}, and the modes this server serves; the data that would serve it: {data}.",
+      notServed: "Not served from data: a request to it is answered inside the envelope with the refusal {code}, naming the mode asked, {mode}, and the modes this server serves; the data that would serve it: {data}.",
       descriptions: Object.freeze({
         answer_drift: "The past dated answers that a later publisher revision invalidated, found from the event log.",
         article_history: "One article of a Luxembourg act through the versions held: whether its wording changed from one to the next, and which versions do not carry it.",
@@ -1118,11 +1118,11 @@ const EN = Object.freeze({
         no_corpus_mounted: "This server holds no law at the moment.",
         no_version_for_date: "No version the index holds covers the date; the payload gives the date its history begins and the nearest dates held before and after it.",
         not_transposable: "Only a directive is transposed, and this instrument is not one; the payload says why.",
-        out_of_corpus_scope: "The instrument is of a kind Lex never holds; the payload names it, its official place, the reason and who to ask, an institution and never a person.",
+        out_of_corpus_scope: "The instrument is of a kind Lex never holds; the payload names it, its official place, the reason and who to ask, an institution or an official service and never a person.",
         pinned_digest_mismatch: "The digest a permalink pins is not one Lex holds for that version; the payload gives the current digest and its permalink.",
         profiles_differ: "The two versions were read under different rule profiles, so they are not compared.",
         rate_limited: "Too many requests; the payload says when to ask again.",
-        retrieval_mode_unavailable: "The operation is not served in the mode asked: for an EU identifier, or not at all when it is served from no data; the modes available are listed.",
+        retrieval_mode_unavailable: "The operation is not served in the mode asked: for an EU identifier, or not at all when no data serves it; the modes available are listed.",
         snapshot_unknown: "The snapshot or the log the request names is not one this server holds; the payload says what would answer.",
         text_not_available: "The publisher's file holds no text Lex can read, such as an annex given only as images; its official identity and source are given.",
         text_withheld: "The licence of the text does not allow Lex to show it; its official link and digest are given.",
@@ -1130,7 +1130,7 @@ const EN = Object.freeze({
       }),
       outOfScope: Object.freeze({
         heading: "What Lex never holds",
-        text: "An identifier that names one of these is refused {code} by every operation that takes one, before anything is looked up. The list, {list}, names for each its official place and who to ask, an institution or an official service and never a person; each refusal names the list's digest, {digest}.",
+        text: "An identifier that names one of these is refused with {code} by every operation that takes one, before anything is looked up. The list, {list}, names for each its official place and who to ask, an institution or an official service and never a person; each refusal names the list's digest, {digest}.",
         row: "{instrument}: {reason} For example {examples}. Official place: {official}. Who to ask: {who}.",
         pending: "Not listed yet: communal regulations, whose official place is each commune's own; the decisions of Luxembourg's courts, which no identifier names exactly; and EU acts outside the EU population, until the EU index states the rule its population follows. Each still answers {code}.",
       }),
@@ -1145,7 +1145,7 @@ const EN = Object.freeze({
     }),
     examples: Object.freeze({
       heading: "Asked of this server now",
-      built: "When this server serves this page, it renders it from its own answer to {request}, the first act it holds, and shows that answer here whole, with the requests a program could send next about that act. This copy was served as built, without them; the examples above ask for the coverage report.",
+      built: "When this server serves this page, it renders it from its own answer to {request}, which asks for the first act it holds, and shows that answer here whole, with the requests a program could send next about that act. This copy was served as built, without them; the examples above ask for the coverage report.",
       live: "As it served this page, this server answered this request from the law it holds:",
       answer: "Its answer, whole:",
       next: "{identifier}, the first act it holds, asked for its dossier over REST, then over MCP for its text on {date}, its latest version's date:",
@@ -1182,20 +1182,20 @@ const EN = Object.freeze({
     }),
     replay: Object.freeze({
       heading: "Replay guarantees",
-      text: "What a program can rely on when it asks again, as the specification names it, {first} to {last}, each as this server supports it today. Each is held on the real API by a test of {tests}, named beside it.",
+      text: "What a program can rely on when it asks again: the guarantees the specification names {first} to {last}, each as this server supports it today. Each is held by a test of {tests}, named beside it, which runs the real API on test mounts.",
       test: "Test: {test}.",
       guarantees: Object.freeze({
         G1: Object.freeze({
           name: "Versions are never rewritten",
-          text: "A version is named by the digest of its text. A later build that reads the publisher's file again with its text unchanged keeps the same version; one whose text changed names a new version, and the log records the replaced file as {fileReplaced}. A permalink to the earlier version still verifies, naming the version that replaced it.",
+          text: "A version is named by the digest of its text. When a later build reads a publisher's file that has been replaced, the log records it as {fileReplaced}; the version stays the same when the text is unchanged, and a new version is named only when the text changed. A permalink to the earlier version still verifies while a kept build holds its text, naming the version that replaced it.",
         }),
         G2: Object.freeze({
           name: "The same request, the same bytes",
           text: "Every served operation answers the same request, asked of the same snapshot, with the same canonical bytes: asked again later, or of a byte copy of the mount, apart from the two members that belong to the request, {observedAt} and {requestRef}. The release is signed as a whole; an answer carries no signature of its own.",
         }),
         G3: Object.freeze({
-          name: "Nothing is deleted",
-          text: "Each build's events are the start of the next build's log, row for row, and every version the log names still verifies. Texts are kept by the retention rule: the build mounted, every build a permalink names, the last build of each day for {days} days and the first of each month. A version whose text no kept build holds is still named by the log, without its text.",
+          name: "Nothing is deleted from the log",
+          text: "Each build's events are the start of the next build's log, row for row. Texts are kept by the retention rule: the build mounted, every build listed as referenced by a published permalink, the last build of each day for {days} days and the first of each month. Every version the log names verifies while a kept build holds its text; one whose text no kept build holds is still named by the log, without its text, and a permalink to it no longer verifies.",
         }),
         G4: Object.freeze({
           name: "Answers as one build held them",
@@ -1203,7 +1203,7 @@ const EN = Object.freeze({
         }),
         G5: Object.freeze({
           name: "Checked without Lex",
-          text: "An answer of {bundle} and the publisher's file are enough to check each article's text and to recompute the file's digest, each text digest and the digest of the article identities, from the derivations {provenance} publishes. On the current Luxembourg index, the version's own digest also reads facts the answer does not carry yet; the wording digest, the rule-profile digests and the receipt are not recomputable, since their derivations are not published.",
+          text: "The answers of {bundle} for a version, page by page, and the publisher's file are enough to check each article's text and to recompute the file's digest, each text digest, the digest of the article identities and the version's own digest, from the derivations {provenance} publishes. Each article's identity, the wording digest, the rule-profile digests and the receipt are not recomputable: the wording digest reads a token stream the answer does not carry, and the others' derivations are not published.",
         }),
       }),
     }),
@@ -1211,8 +1211,9 @@ const EN = Object.freeze({
       heading: "How the API changes",
       versioned: "Each schema's identity ends in its version, as {example} does, and so does the registry's, {registry}. A change that removes or renames a member, or changes what one means, raises that version; the envelope admits no member it does not list, so a new member of the envelope raises its version too.",
       additive: "An answer's object, and a refusal's payload, may gain members within a version: a program ignores the members it does not know. Within a version of the registry, a payload never loses a field the registry requires of its code.",
-      digest: "Any change to an operation, a schema or a refusal code changes the registry's digest, which every envelope carries: a program that keeps it learns of the change from the first answer after it.",
-      closed: "The operations and the refusal codes are closed sets, changed only by a decision of the specification. An operation served from no data becomes served without a new version: its refusal gives way to answers.",
+      digest: "Any change to an operation, a schema the registry names or a refusal code changes the registry's digest, which every envelope carries: a program that keeps it learns of the change from the first answer after it.",
+      registryInEnvelope: "One member of the envelope names the registry's version, {member}: a new version of the registry changes the one value that member admits, and so the envelope's schema and its digest, without raising the envelope's own version. A program that holds the envelope's schema takes it again when the registry's version changes, and checks it against the digest the registry names.",
+      closed: "The operations and the refusal codes are closed sets, changed only by a decision of the specification. An operation not served from data becomes served without a new version of the registry: its refusal gives way to answers.",
       notice: "There is no period of notice and no deprecation window: a change is published with the release that makes it, on this page and in the schemas it links.",
       history: "Since {date}, the registry, {registry}, names each refusal code's payload schema and gives {code} its reason and who to ask; {previous} named neither.",
     }),

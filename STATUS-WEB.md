@@ -8,11 +8,13 @@ updates this file, not STATUS.md.
 
 The owner's order of 2026-10-27 (finish V3 to the specification of record within 72 hours, at high quality): the plan's items
 8.6, 6.10, 8.5 and 8.4, as one web pull request (`writer/api-gaps`, on v3/integration with `writer/help-and-developers`
-merged at its start, since the Developers page it extends is that branch's).
+merged at its start, since the Developers page it extends is that branch's, and v3/integration at 473a9fae, #995, the
+per-client limit, merged before it was handed back: both sides kept).
 - **8.6, the three operations served from no data** (`concepts`, `knowable_on`, `transposition`). The specification of record,
   §3, API and MCP: "All 27 registered operations are served, or refuse with the typed reason their capability manifest
-  states." Each now has a REST route and an MCP tool (`V3RestRouteBinding.Refusing`; `Routed` is the 27) and answers every
-  request inside a normal envelope with `retrieval_mode_unavailable`: `requested_mode` (`r5_concepts`, `r6_knowable_on`,
+  states." Each now has a REST route and an MCP tool (`V3RestRouteBinding.Refusing`; `Routed` is the 27) and answers a
+  request inside a normal envelope with `retrieval_mode_unavailable` (an identifier the out-of-scope list names is refused
+  out of scope first, and a request past its client's limit `rate_limited`): `requested_mode` (`r5_concepts`, `r6_knowable_on`,
   `r4_transposition`, the lanes of `34-ideal-architecture.md` §3), `available_modes` (the modes of the same lane this
   server serves) and `data_needed` (`V3UnservedOperations`). Attribution follows the identifier when one is named. With no
   corpus mounted they refuse `no_corpus_mounted`, as every operation does.
@@ -26,10 +28,12 @@ merged at its start, since the Developers page it extends is that branch's).
   - each refusal code names its payload's schema, `lex-v3-{code}-payload/1`, and that schema's digest, which the registry's
     digest covers. The 20 schemas are generated from the registry (each requires exactly the code's mandated fields, in
     the registry's order, typed as every producer sends them, read from a survey of the 100 constructions in
-    `src/Lex.V3.Api`; the five codes no operation produces say so in a `$comment`), published beside the envelope schemas
+    `src/Lex.V3.Api`; the four codes no operation produces say so in a `$comment`), published beside the envelope schemas
     (`/schemas/v3-platform/{code}-payload.json`), and embedded in the API, which checks each digest at load and validates
     every refusal's payload against its code's schema before it leaves (`V3PlatformSchemaDocuments.ValidateRefusal`). The
     refusal schema lists the 20 codes. The refusal census holds every payload it observes to the published file too.
+    `rate_limited` (#995's per-client limit) is typed as the limit sends it: `retry_after` a whole number of seconds from 1,
+    `retryable` true; the three operations served from no data are limited alike (the census drives all 27).
   - `out_of_corpus_scope` carries the four elements `36-ideal-evaluation.md` §4 mandates: `requested_identifier`,
     `official_source`, `reason` (one sentence) and `who_to_ask` (`{name, link, role}`, an institution or an official
     service and never a person: the owner's decision of 2026-10-19), with `out_of_scope_class`, `instrument`,
@@ -64,11 +68,11 @@ merged at its start, since the Developers page it extends is that branch's).
     (`__LEX_DEVELOPERS__`), since it reads nothing. The page as built says it carries none; a render that fails serves it
     as built.
 - **Pins moved, and why.** Every envelope names the registry: the registry digest is
-  `bf1b6e93cbcd33f264353643854434a7ee61fcc1d9706ba962b05b9778cf051d` (was `80dc8e29…`).
+  `befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7` (was `80dc8e29…`).
   - The four censuses were re-rendered with `V3_RENDER_*` and verified without it: `envelope-samples.json` (49 envelopes,
     three new: browse for the first act, `concepts` refused, J5's circular refused; the contract block gains each code's
     payload schema and the out-of-scope list), `refusal-payload-samples.json` (`out_of_corpus_scope` produced, by four
-    operations; `retrieval_mode_unavailable` by three more; five codes not produced), `answer-samples.json` (the registry
+    operations; `retrieval_mode_unavailable` by three more; with #995's `rate_limited`, 16 codes produced and 4 not), `answer-samples.json` (the registry
     digest, coverage's rows) and the 20 schema files (`V3_RENDER_PLATFORM_SCHEMAS`, 76 documents).
   - **The legacy base answers moved, recorded on Linux only**: the schema-8, schema-6 and EU /5 answers, in WSL (Ubuntu
     24.04.4, .NET 10.0.11, `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1`, `TZ=UTC`), with the gated recorders, from an archive of
@@ -96,8 +100,18 @@ merged at its start, since the Developers page it extends is that branch's).
     shows what the serving release answers.
 - **For the owner** (not asked, recorded): the four official places and institutions are public bodies' own sites, named
   from the driver's knowledge, with no site contacted; the lawyer's read (O4) covers them with the other named places.
-- **French** (Decision 41): one independent reviewer under the owner's delegation; its addendum of 2026-10-27 ("the API's
-  gaps") is appended to `C:\lex-v3\lanes\fr-review\review.md` with the driver's note.
+- **French** (Decision 41): one independent reviewer (Claude, AI reviewer, not the author) under the owner's delegation, in
+  the addendum of 2026-10-27 "the API's gaps" and its supplement, appended to `C:\lex-v3\lanes\fr-review\review.md` with the
+  driver's note: 45 forms reviewed, 29 changed (the English too in 13), applied byte for byte. Its blocking points, both
+  languages: G1 and G3 verify an earlier version only while a kept build holds its text, a replaced file is recorded whether
+  or not its text changed, a referenced build is one listed as referenced (no permalink names a build), nothing is deleted
+  "from the log"; G5 recomputes the version's own digest from the answers since S7a (the test's summary, which said
+  otherwise, is fixed); in French, an operation without data is "non servie faute de données", never "servie sans
+  données". Outside the forms, the MCP instructions now say a Luxembourg state's date is its applicability date or, by its
+  date role, the act's entry into force, never an applicability date; and the change policy gains a form for the
+  registry's version inside the envelope (`registry_schema`), which a new registry version changes without raising the
+  envelope's own. `reference-pages.test.mjs`'s last test pins the review's points beside the C# they describe. Only the
+  dossier has a sentence of its own for `out_of_corpus_scope`; another page names the code.
 ## Review and repair (#995): the runbook's blocks stop at a failed step, renders hold a place, the ingress checked by hand (sole driver, 2026-10-27)
 
 The one repair round of #995 (`writer/platform-ops` at ef99b6cc), after its one review: REPAIR, five findings. Each was

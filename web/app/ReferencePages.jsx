@@ -517,6 +517,7 @@ export function DevelopersBody({ model, live = null }) {
         <p><Say template={copy.changes.versioned} values={{ example: code(model.envelope.schema.id), registry: code(model.registry.schema) }} /></p>
         <p>{copy.changes.additive}</p>
         <p>{copy.changes.digest}</p>
+        <p><Say template={copy.changes.registryInEnvelope} values={{ member: code('registry_schema') }} /></p>
         <p>{copy.changes.closed}</p>
         <p>{copy.changes.notice}</p>
         <p>
