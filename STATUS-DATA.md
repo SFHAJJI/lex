@@ -20,16 +20,17 @@ The plan's item 1.11 and the specification of record's R92(1) and (2), O28, O27 
   codes, counts and hashes only.
 - **Over derive-r1** (`C:\lex-v3\lu-population-20261011-15\derive-r1`, 31 s): Luxembourg, 2,572 works held (137,632
   articles), every one `lu_general`, no detector finding, 2,572 listed for search engines; 22,048 acts the catalogue names
-  only by a title, 971 withheld (954 `lu_naturalisation`, 7 `lu_grant_to_named_person`, 3 `lu_property_of_named_person`, 7
+  only by a title, 974 withheld (954 `lu_naturalisation`, 8 `lu_grant_to_named_person`, 4 `lu_property_of_named_person`, 8
   `lu_title_names_person`; acts of the 1840s to the 2000s); EU, 82 acts (173,820 articles), every one `eu_general` (the
   population holds no restrictive measures act), no finding, 70 listed (12 hold no text). Signals the detector saw and set
   aside: 536 Luxembourg articles (53 works) and 118 EU articles (5 acts) with a particulars' label and no value, 2 Luxembourg
   articles of a form whose "Lieu de naissance" is an empty field, 1 a naming rule's placeholders. Digests: indexing record
-  `3105aa4f…`, names record `242b8fde…`, counts `672d578c…`, bound to corpus `0746826f…` and indexes `da7725df…` and
+  `3105aa4f…`, names record `a5e94725…`, counts `3a76941a…`, bound to corpus `0746826f…` and indexes `da7725df…` and
   `090e166f…` (the build report's). The served text names no private individual by this detector, so Release 2 withholds
-  no served act; what it withholds is 971 catalogue acts whose titles name people or whose class does.
+  no served act; what it withholds is 974 catalogue acts whose titles name people or whose class does (971 before the review
+  of #1001, F2, below).
 - **Calibration** (read-only, on masked text: every capitalised word and every digit replaced before anything was printed,
-  so no name was read): 40 of the 971 withheld at random, and all 17 outside naturalisation, are acts about named people (57
+  so no name was read): 40 of the 971 first withheld at random, and all 17 outside naturalisation, are acts about named people (57
   of 57; "conférant la naturalisation." names its people in its text, by the class). 40 of the 834 general catalogue titles
   with a person-like word (pension, "en faveur de", nationalité): none names a person (none missed in the sample). In served
   text the detector flagged nothing, so its precision there is unmeasured; its 3 candidate articles were judged general (3 of
@@ -57,13 +58,27 @@ The plan's item 1.11 and the specification of record's R92(1) and (2), O28, O27 
   (`LexImageMountRecords`), hold the image to them byte for byte, derive the home page's examples among the acts the record
   admits, probe the running image (a withheld held work's dossier is `text_withheld` for R92; a catalogue act's ELI is
   answered without its title) and publish both records and the counts as release assets.
-- **Tests**: `V3NamesDetectorTests` (9: each class and the general acts beside it, the detector's positives and negatives,
-  the window, the signals, EU restrictive measures, work IRIs), `V3NamesRecordTests` (4: one form, the binding, 26 broken
-  records refused, the indexing record admitted by `V3WebRoot.ReadIndexingRecord`), `V3CorpusNamesMountTests` (4: a synthetic
-  act naming an invented person measured and withheld on all 18 operations asked, search unmatched; a general act listed and
-  served; the GDPR withheld by a record on 6 operations; 4 bad records refuse the mount), the refusal census (R92's payload
+- **Tests**: `V3NamesDetectorTests` (10, one of 9 cases: each class and the general acts beside it, a title's honorific
+  with one name, the detector's positives and negatives, the window, the signals, EU restrictive measures, work IRIs),
+  `V3NamesRecordTests` (4: one form, the binding, 26 broken records refused, the indexing record admitted by
+  `V3WebRoot.ReadIndexingRecord`), `V3CorpusNamesMountTests` (6: a synthetic act naming an invented person measured and
+  withheld on all 18 operations asked, search unmatched; a general act listed and served; the GDPR withheld by a record on 6
+  operations; bad records, half a pair, two build times and a work in both refuse the mount; relations and cited_by never
+  quote a withheld citing work; a person named only in a note found), the refusal census (R92's payload
   among `text_withheld`'s), the census pins (4 Ingest registries, the API's gate doors), and the web's `names-records` (4)
   and `image-rehearsal` (1 more).
+- **Review and repair** (#1001, an independent reviewer: REPAIR, two medium and two low findings, each reproduced and fixed):
+  - F1: `relations` served a withheld work's citing articles, labels included, where `cited_by` did not. Its inbound edges now
+    drop them, and its counts follow; search drops a withheld work's hits by its key as well as its state digests. The sweep
+    found no other operation that serves another work's text or title: outbound edges are the asked work's own text, and the
+    as-published facts, the compare, the history and the in-force rows hold no other work's text.
+  - F2: a title's class read a person only with a given name and a surname, so "M. ‹surname›" and "MM. ‹surname› et consorts"
+    were general and their titles were still served by search's references. A title now names a person by an honorific with
+    one name (never an office) or by "et consorts": 3 more acts withheld over derive-r1 (974); on masked titles, 2 are about
+    named people (a pension, an acquisition from co-owners) and 1 an association named with "et consorts", kept withheld.
+  - Low: the detector also reads each article's note bodies (served by the API, not in its searchable text) and an EU
+    article's heading: no new finding over derive-r1. A mount now holds R92's two records together or not at all, with one
+    build time and no work in both, or is refused.
 - **Not done here**: Trust and Coverage does not count the works withheld under R92; search's `searched` counts a withheld
   work's states as searched (none on Release 2's mount); the privacy notice's section on people named in acts does not yet say
   that such an act is pointed to the publisher (a public claim, asked in the pull request). R92(1) asks the measurement again

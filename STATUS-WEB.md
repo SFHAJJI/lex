@@ -2326,7 +2326,7 @@ the site stays out.
   `dossier` of every listed work, and a work it does not answer is dropped, never opened nor listed (`searchEngineFacts`,
   `V3WebRoot.SearchEngineFacts`; review of #976, F5). Since `data/names-r92` (STATUS-DATA.md, R92) every release measures its
   own mount and carries the record beside it in its image: over derive-r1 it lists 2,642 works (2,572 Luxembourg, 70 EU; the
-  sitemap would hold 10,711 addresses in one part), and the names record beside it withholds 971 acts the catalogue names
+  sitemap would hold 10,711 addresses in one part), and the names record beside it withholds 974 acts the catalogue names
   only by a title; no served act names a private individual by the measurement. A work the names record withholds is never
   listed (the release checks the two records together), and its dossier answers `text_withheld`, which `SearchEngineFacts`
   drops in any case. The markup names no person (below).
