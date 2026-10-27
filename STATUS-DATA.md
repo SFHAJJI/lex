@@ -2,6 +2,87 @@
 
 Updated 2026-10-27.
 
+## The text yield per class: the build reports it, Coverage and R26's sentence say it (R86(4); sole driver, 2026-10-27)
+
+- **What was asked.** R86(4): "The build reports the text yield per class: works and articles with served text; text
+  withheld, by reason (licenceSCL, conflict); parse failures; PDF-only bodies. Coverage and R26's sentence show the same
+  figures." Branch `data/yield-per-class`, from `data/text-yield` (#996). No publisher traffic, no browser, no Azure.
+- **The build reports it.** `V3TextYield` (new, `src/Lex.V3.Ingest/V3TextYield.cs`) counts, per publisher and per class, from
+  what the derive already writes and nothing else: the corpus's members, the Luxembourg index's articles and catalogue facts
+  (`work_facts`), the EU index's articles and states. The mount writer puts it in the build report as `textYield`
+  (`lex-v3-text-yield/1`); the report's schema is now `lex-v3-first-mount-report/2`. Every count is ordered by ordinal
+  comparison, so a second derive writes the same bytes (the two-process offline test compares every file, the report
+  included).
+  - **Classes.** Luxembourg: the ELI family (`code`, `loi`, `rgd`) and the state kind (`code`, `as_published`,
+    `consolidation`), read from the state IRI, so a family the catalogue adds becomes a class with no change. EU: the
+    content class (`original_legal_text`, `consolidation`).
+  - **Per class.** Versions the catalogue lists and versions with text; acts and acts with text; articles served; versions of
+    which no file is held, by what the catalogue says of them (`catalogue_licence_scl`, `catalogue_licence_scl_in_part`,
+    `catalogue_no_expression`, `catalogue_cc_by_not_acquired`, ...; the licence is read from the XML and PDF manifestations
+    only); and every held file in exactly one of: with text, withheld (by its rights disposition's own wire name, with how
+    many are PDFs), PDF only, or failed (an admitted non-PDF file with no article served, by its derivation dispositions'
+    own names). EU classes carry R84's annex counts (with text, image-only, failed, by disposition); Luxembourg records none.
+  - **No closed list of reasons.** A rights disposition is counted under `ContractWire.NameOf`, so Release 2's
+    `agreed_cc_by_rederived` and policy A (#999) need no change here: an admitted file counts by its articles, a withheld
+    one by its token.
+- **The API serves it.** `V3CorpusMount` reads `textYield` from the report beside the mount, holds it to its arithmetic and
+  to the mount (a publisher exactly when its index is mounted, its articles the index's, its files the corpus's held
+  files; anything else refuses the mount, as a report naming other artifacts does), and the coverage answer carries
+  `text_yield` and `text_yield_note`; with a yield, its `scope` and `publisher_universe` row say the catalogue is counted.
+- **A mount without the figures answers as before** (driver decision, reversible): derive-r1 and derive-c carry report /1,
+  so their coverage answers `text_yield: null` with a note saying why, and every other member is unchanged. Refusing such
+  a mount would take the live release down for a figure it never claimed; computing the yield in the server would serve a
+  figure the build did not report. An API before this slice reading a /2 report ignores the new member.
+- **The web says the same figures.** Coverage has a section "How much text this site serves, class by class": R26's
+  sentence per publisher, every number its publisher row's (versions with text, versions, acts with text, acts,
+  articles), the class table with each publisher's own row, why a version or file has no text (each reason the data's
+  token), the annex counts, and the platform's note; for a mount with no yield, the sentence saying so. `readCoverage`
+  holds the block to the same arithmetic, and to the mount (its Luxembourg articles are `totals.articles`, its files the
+  members acquired or withheld). English and French: the French forms were reviewed by an independent reviewer against
+  the table's vocabulary (11 changed, the English with 5: a withheld text "n'est pas communiqué", a file "sans texte
+  servi", the catalogue "recense"; recorded in `live-chrome-fr.mjs`). No count is typed in copy.
+- **Measured over derive-r1, read-only** (`V3TextYieldMountProbe`, opt-in, the production count over the mount's own
+  files; 45 seconds, nothing written beside the mount). These are the figures a derive at this head writes for those
+  inputs; they equal the ones #996 measured from custody by other means.
+
+  | Class | Versions (with text) | Acts (with text) | Articles | Not held | Files: withheld (PDF) / failed |
+  |---|---|---|---|---|---|
+  | Codes | 914 (126) | 17 (8) | 119,730 | 724 CC BY not acquired (the nine code recueils); 1 no expression | 62 (30) / 1 `akn_upstream_not_inventoried` |
+  | Lois, as published | 9,238 (689) | 9,238 (689) | 7,586 | 6,129 licenceSCL; 1 no expression | 2,398 (9) / 19 `akn_unsupported_content_shape`, 2 `akn_upstream_not_inventoried` |
+  | Lois, consolidations | 1,594 (0) | 595 (0) | 0 | 60 no expression | 1,534 (105) / 0 |
+  | RGD, as published | 15,366 (1,875) | 15,366 (1,875) | 10,316 | 10,201 licenceSCL; 1 CC BY not acquired; 1 no expression | 3,275 (175) / 12 `akn_unsupported_content_shape`, 1 `akn_upstream_not_inventoried` |
+  | RGD, consolidations | 1,244 (0) | 660 (0) | 0 | 33 no expression | 1,211 (49) / 0 |
+  | EU, consolidated wordings | 295 (245) | 1,088 works (482) | 171,664 | not recorded | 0 / 48 `formex_main_body_missing`, 2 not eligible, 2 package rejected |
+  | EU, original wordings | 82 (29) | 82 works (29) | 2,156 | not recorded | 0 / 4 missing, 10 not eligible, 86 package not acquired, 6 rejected; 16 annexes failed (`annex_mapping_unresolved`) |
+
+  Every Luxembourg withheld file reads `typed_quarantine_in_file_reading_rejected` (reading /1); no admitted PDF is held
+  (the 368 PDF files are all withheld). Luxembourg: 2,690 of 28,356 versions, 2,572 of 24,621 acts, 137,632 articles;
+  the EU: 274 of 377 versions, 173,820 articles.
+- **What a new D1 needs.** Nothing new as input: inputs /3 stay valid, and a derive at this head writes report /2 with the
+  yield (about a minute more, reading the two placed indexes). Deploy the API at this head or later to serve it; Release 1's
+  mount keeps answering with none.
+- **Tests.** `V3TextYieldTests` (every class and reason over synthetic rows, every rights disposition by its own name, the EU
+  classes and annexes, the zero cases, an article of no held file refused, the block's arithmetic, the coverage answer with,
+  without and with a yield that does not hold); the full build test now holds the report's yield to the written mount and
+  to coverage; the census pin (`V3CorpusMountWriter`'s `ReportSchema`); the answer and envelope censuses re-rendered (a
+  coverage answer with the yield, and one without); the legacy schema-8 and schema-6 answers re-recorded (each coverage
+  answer gained `text_yield: null` and its note, nothing else moved); web: `coverage.test.mjs` (both renderers, both
+  languages, R26's sentence against the table, every refusal), and the home and no-literal-counts tests move the yield
+  with the totals.
+- **Measured** (Windows, no browser, no publisher traffic, no Azure; targeted classes, CI runs the suites):
+  - `dotnet build Lex.V3.slnx -c Release`: 0 warnings, 0 errors.
+  - The mount, report and coverage classes with the offline two-process derive (`V3FirstMountBuildTests` and its eight
+    offline rows, `V3CorpusCoverageMountTests`, `V3MountBuildFileTests`, `EuFirstMountAcquisitionResumeTests`,
+    `V3IndexNineServingTests`, `V3CorpusGenerationQuoteTests`, `V3CorpusLegacySchema8MountTests`, three Luxembourg mount
+    classes, `V3CorpusEuropeTimeViewTests`): 93, of which 2 failed on the first run and are repaired (the legacy answers and
+    the declared coverage paths), 2 opt-in.
+  - Then `V3TextYieldTests`, the censuses, both sample censuses, the coverage, legacy and freshness classes: 84 (80 passed,
+    4 opt-in); the mount-writing classes again after the last change: 7 and 36 passed; `Lex.V3.Tests` censuses and
+    vocabulary: 45 passed.
+  - Web (`npm run build`, then `node --test`): `coverage`, `live-chrome`, `live-chrome-scan`, `no-literal-counts`,
+    `live-home`, `live-french`, `live-coverage`: 85 of 85; 31 other files that read a coverage answer: 343 of 343.
+  - `eng/verify-v3-tree.ps1`: passes.
+
 ## The text yield, measured from custody: why 659 EU works and every Luxembourg consolidation have no text; the EU main body reads the Treaties, the Charter and the packages whose annexes are unclassified (sole driver, 2026-10-27)
 
 - **What was asked.** The served EU index (derive-r1, index /6) holds text for 511 of the 1,170 Cellar works the census
