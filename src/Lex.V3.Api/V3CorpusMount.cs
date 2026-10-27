@@ -62,6 +62,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         _generations = generations;
         _generationReaders = generationReaders ?? [];
         _freshness = FreshnessOf(reader, europeReader, report ?? throw new ArgumentNullException(nameof(report)));
+        _textYield = report.TextYield;
     }
 
     /// <summary>
@@ -160,6 +161,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             // The build report beside the mount, held to the artifacts just verified: what it says of each channel's newest
             // completed acquisition and of the commit that built the index (R87, R23); a report naming others refuses the mount.
             var report = await ReadBuildReportAsync(directory, corpus.ArtifactRef, reader, europeReader, cancellationToken).ConfigureAwait(false);
+            HoldTextYield(report.TextYield, reader, europeReader, corpus);
             return new V3CorpusMount(reader, europeReader, corpus, report, generations, generationReaders);
         }
         catch
@@ -4897,7 +4899,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             .ToArray();
         using var result = JsonSerializer.SerializeToDocument(new
         {
-            scope = CoverageScope,
+            scope = _textYield is null ? CoverageScope : CoverageScopeWithTextYield,
             counts_note = CoverageCountsNote,
             requested_language = language,
             mounted = new
@@ -4942,8 +4944,12 @@ internal sealed partial class V3CorpusMount : IDisposable
                 })
                 .ToArray(),
             operations = CoverageOperations(registered, served),
+            // The build's text yield per class (R86(4)), from its report, or null with the reason; never narrowed by language.
+            text_yield = TextYieldBlock(),
+            text_yield_note = _textYield is null ? TextYieldAbsentNote : TextYieldNote,
             not_held = CoverageNotHeld
-                .Select(row => row[0] != "build_time_and_currency" ? row
+                .Select(row => row[0] == "publisher_universe" && _textYield is not null ? CoveragePublisherUniverseWithTextYield
+                    : row[0] != "build_time_and_currency" ? row
                     : !_reader.RecordsBuilds ? CoverageLegacyBuildTimeRow
                     : _reader.RecordsCatalogueStates ? CoverageBuildTimeRowNine
                     : row)

@@ -525,7 +525,7 @@
             "not_held": [
               {
                 "item": "publisher_universe",
-                "reason": "how many acts the publisher holds, or how many of them this mount lacks: the mount records only what was admitted"
+                "reason": "how many acts the publisher holds outside the families whose catalogue facts this mount holds: text_yield counts the versions and acts the catalogue lists in those families, and the EU versions the census found for the seeds acquired, and nothing here counts any other"
               },
               {
                 "item": "never_consolidated_acts",
@@ -594,7 +594,41 @@
               ]
             },
             "requested_language": null,
-            "scope": "the mounted Luxembourg corpus and index: what this mount holds and recorded as missing, and nothing about what the publisher holds",
+            "scope": "the mounted Luxembourg corpus and index: what this mount holds and recorded as missing, and of what the publisher holds nothing but text_yield\u0027s count of the versions its catalogue lists, as this mount holds the catalogue\u0027s facts",
+            "text_yield": {
+              "publishers": [
+                {
+                  "articles": 49,
+                  "classes": [
+                    {
+                      "annexes": null,
+                      "articles": 49,
+                      "family": "loi",
+                      "files": 1,
+                      "files_parse_failed": [],
+                      "files_pdf_only": 0,
+                      "files_with_text": 1,
+                      "files_withheld": [],
+                      "kind": "as_published",
+                      "versions": 1,
+                      "versions_not_held": [],
+                      "versions_with_text": 1,
+                      "works": 1,
+                      "works_with_text": 1
+                    }
+                  ],
+                  "files": 1,
+                  "files_with_text": 1,
+                  "publisher": "lu-legilux",
+                  "versions": 1,
+                  "versions_with_text": 1,
+                  "works": 1,
+                  "works_with_text": 1
+                }
+              ],
+              "schema": "lex-v3-text-yield/1"
+            },
+            "text_yield_note": "the build\u0027s report of the text yield per class, read from the build report beside this mount and held to it when the mount opened: per publisher and per class of act (a Luxembourg family and state kind; an EU content class), versions counts the versions the catalogue lists (Luxembourg: the catalogue states of the class, as the index holds the catalogue\u0027s facts, and every state of which a file is held; EU: the census\u0027s versions, one per original wording and one per consolidation date of each seed) and versions_with_text those with an article served here; versions_not_held counts each catalogue state of which this mount holds no file, by what the catalogue says of it, and is null where the index cannot tell (EU); files counts the publisher files this mount holds, each in exactly one of files_with_text, files_withheld (by the rights disposition, verbatim; pdf counts the PDF files among them), files_pdf_only (an admitted PDF from which no text is served; null where no held file is a PDF: EU) and files_parse_failed (an admitted file that is not a PDF and from which no article is served, by the derivation\u0027s own dispositions, verbatim, joined with \u002B); articles counts the articles served; works counts distinct acts, so a publisher\u0027s works are not the sum of its classes\u0027, while its versions, files and articles are; annexes counts the annex outcomes the corpus recorded on the class\u0027s files: image_only those of annex_text_not_available, with_text those served as text (none: no annex is served as an article) and failed every other, by disposition, and is null where the corpus records no annex outcome (Luxembourg)",
             "totals": {
               "articles": 49,
               "members": 3,

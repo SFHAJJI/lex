@@ -308,8 +308,16 @@ public sealed class V3AnswerSamplesTests
     {
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
+        // The build report a derive writes beside its mount states the text yield per class (R86(4)), which coverage serves.
+        await V3TextYieldTests.WriteYieldReportAsync(fixture);
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
+
+        // The same mount with no build report beside it, as Release 1's mounts are to the yield: coverage answers with none.
+        var unreported = await MountedFixture.CreateAsync();
+        await using var cleanupUnreported = unreported;
+        using var unreportedMount = await V3CorpusMount.OpenAsync(unreported.Directory, CancellationToken.None);
+        Assert.IsNotNull(unreportedMount);
 
         // A second mount for `diff` between two states, so the compare screen's reader sees a comparison with
         // articles and counts: a later state in which one article's wording changed (its text amended) and one
@@ -388,6 +396,9 @@ public sealed class V3AnswerSamplesTests
             // works}. ("one" was my count and it was off by one; the writer seat counted both lists.)
             // The census is what makes a gap like that visible rather than something a person notices.
             await DriveAsync(mount, "coverage", "the whole mount, no language asked", new { }),
+            // A mount whose build report states no text yield (Release 1's are written under report /1): text_yield is null,
+            // with the note saying why, and every other member is what it was.
+            await DriveAsync(unreportedMount, "coverage", "the whole mount, whose build report states no text yield: text_yield null, and why", new { }),
             // `search` is sampled for the live search screen's reader: a phrase with hits in both lanes, the
             // first page of one hit with its cursor, the page that cursor leads to, the relaxed lane alone,
             // and a query the held text does not carry.

@@ -117,7 +117,7 @@ public sealed class VocabularyRegistryCensusTests
                     + "const IriKind, const ReferralDate",
                 "Lex.V3.Ingest.V3CorpusMountWriter: GenerationFiles=6, "
                     + "const GenerationsDirectoryName, const ReportFileName, "
-                    + "const RetentionFileName",
+                    + "const ReportSchema, const RetentionFileName",
                 "Lex.V3.Ingest.V3GenerationRetention: const MonthlyKeeper, const Nightly, "
                     + "const PolicyId, const Referenced",
                 "Lex.V3.Ingest.V3OfflineMount: const RederivationSchema, const Schema",
