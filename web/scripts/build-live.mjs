@@ -22,6 +22,9 @@
 // too, `help.html` (Get help), `how-to-read.html` (How to read Lex, with its glossary) and `developers.html` (Developers,
 // generated from the contracts: `developers.mjs`), with no script; the schemas the Developers page links are published
 // beside the pages, byte for byte, under `schemas/v3-platform/` at the root (`developers-contracts.mjs`).
+// A build handed the record of example searches derived from a mount (`home-examples.mjs`: the journeys' and the release's)
+// compiles it into every bundle as `__LEX_HOME_EXAMPLES__`, so the home page the servers render and the page the browser
+// hydrates show the same examples, over that mount's index only; a build handed none shows none.
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -33,6 +36,7 @@ import { MAINTENANCE_DIRECTORY, NOT_FOUND_DIRECTORY } from "./not-found.mjs";
 import { LEGAL_PAGES } from "./legal-pages.mjs";
 import { REFERENCE_PAGES } from "./reference-pages.mjs";
 import { publishedSchemaFiles, readDevelopersContracts } from "./developers-contracts.mjs";
+import { readHomeExamplesValue } from "./home-examples.mjs";
 
 const source = new URL("../src/", import.meta.url);
 export const LIVE_DESTINATION = new URL("../dist-live/", import.meta.url);
@@ -55,10 +59,14 @@ const PAGES = Object.freeze([
  * `/fr/`: the specification of record's R61; the root sends a reader to one of them), each page and the
  * script that hydrates it compiled for that language.
  */
-async function buildPages(destination, { card, developers, locale, buildTag = "" }) {
+async function buildPages(destination, { card, developers, locale, buildTag = "", examples = null }) {
   const { bundle, bundleClient } = await import("./react-build.mjs");
   const english = locale === "en";
-  const options = english ? {} : { define: { __LEX_CHROME_LOCALE__: JSON.stringify(locale) } };
+  const define = {
+    ...(english ? {} : { __LEX_CHROME_LOCALE__: JSON.stringify(locale) }),
+    ...(examples === null ? {} : { __LEX_HOME_EXAMPLES__: JSON.stringify(JSON.stringify(examples)) }),
+  };
+  const options = Object.keys(define).length === 0 ? {} : { define };
   // A caller's tag keeps its intermediate bundles apart from another build running at the same time.
   const suffix = `${buildTag ? `.${buildTag}` : ""}${english ? "" : `.${locale}`}`;
   const out = new URL(`${locale}/`, destination);
@@ -94,9 +102,12 @@ async function buildPages(destination, { card, developers, locale, buildTag = ""
 
 /**
  * Builds the live pages into `destination`. `card` is the evaluation card the Trust and Coverage page carries: the
- * platform's rendered card when none is given, the release card when a release build hands one (ruling 2).
+ * platform's rendered card when none is given, the release card when a release build hands one (ruling 2). `examples` is
+ * the record of the home page's example searches derived from the mount the pages will stand over (`home-examples.mjs`),
+ * or null for none; a record that is not one is refused.
  */
-export async function buildLive(destination = LIVE_DESTINATION, { card, buildTag = "" } = {}) {
+export async function buildLive(destination = LIVE_DESTINATION, { card, buildTag = "", examples = null } = {}) {
+  if (examples !== null && readHomeExamplesValue(examples) === null) throw new Error("the example searches handed to the build are not a record of lex-v3-home-examples/1");
   await rm(destination, { force: true, recursive: true });
   await mkdir(destination, { recursive: true });
   for (const asset of ["styles.css", "favicon.svg", "fonts"]) {
@@ -116,7 +127,7 @@ ${tokenCss()}`, "utf8");
     await mkdir(new URL(path.slice(0, path.lastIndexOf("/") + 1), destination), { recursive: true });
     await writeFile(new URL(path, destination), bytes);
   }
-  await buildPages(destination, { card, developers, locale: "en", buildTag });
+  await buildPages(destination, { card, developers, locale: "en", buildTag, examples });
   // The card as JSON at its stable route, for machines (36 s6): the same card the page renders.
   const { CARD_ROUTE } = await import("./evaluation-card.mjs");
   const platformCard = JSON.parse(await readFile(new URL("../../schemas/v3-platform/evaluation-card.json", import.meta.url), "utf8"));
@@ -125,7 +136,7 @@ ${tokenCss()}`, "utf8");
   // Every other reviewed interface language, under its own path, its bundles compiled for it
   // (Decision 41): French, reviewed by Claude (AI reviewer) under the owner's delegation of
   // 2026-10-02, at `/fr/`.
-  for (const locale of REVIEWED_CHROME_LOCALES.filter((code) => code !== "en")) await buildPages(destination, { card, developers, locale, buildTag });
+  for (const locale of REVIEWED_CHROME_LOCALES.filter((code) => code !== "en")) await buildPages(destination, { card, developers, locale, buildTag, examples });
   // One static page per chrome locale without reviewed copy: localization_unavailable, in English and
   // labelled English, with no script (Decision 41; the launch contract's DE and LB line).
   // Tagged as every other intermediate bundle is: an untagged name was one file every concurrent build rewrote, and a test

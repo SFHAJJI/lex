@@ -122,6 +122,171 @@ per-client limit, merged before it was handed back: both sides kept).
   registry's version inside the envelope (`registry_schema`), which a new registry version changes without raising the
   envelope's own. `reference-pages.test.mjs`'s last test pins the review's points beside the C# they describe. Only the
   dossier has a sentence of its own for `out_of_corpus_scope`; another page names the code.
+
+## Review and repair (writer/screens-gaps): the traffic read before a redeployment, the maintenance page styled, no copy left behind (sole driver, 2026-10-27)
+
+The review of `writer/screens-gaps` at be1c6c22 (the other model family, Decision 95) said REPAIR, with its reproductions in
+the driver's scratch folder (`rev/`). The one repair round, and v3/integration at 473a9fae (#995: the per-client limit, the
+key set, the host headers, the monitor and the runbook) merged in, both sides kept.
+- **F1 (high): the printed pre-build line promoted the candidate.** It named the new candidate as `-LiveRevision`, and the
+  template keeps `-LiveRevision` at all the traffic: run before the promotion, it moved every reader to the unprobed
+  candidate.
+  - Every redeployment, the maintenance revision's included, now reads the app's traffic (and its latest revision, for the
+    entry a first deployment leaves) before anything in Azure changes, and goes ahead only when `-LiveRevision` holds 100
+    per cent; split traffic or a read that fails stops it with nothing changed.
+  - The pre-build line names the revision serving as it is printed and says it is run after the promotion, naming the
+    revision that serves then. "which keeps all the traffic" is said plainly.
+  - And the gap before this pull request: on the open site (no address rule) a deployment without `-Public` would restrict
+    it again. It is refused before any change ("The site is open: every deployment says -Public"), and a redeployment whose
+    rules cannot be read is refused too.
+  - Tests (`deploy-run`): the reviewer's case refused with no Azure write; the pre-build after the promotion goes ahead; split
+    traffic, a failed read, the latest-revision entry, a first deployment and a plan run; the open site refused. `deploy-kit`
+    holds the read before the image copy and the template.
+- **F2 (medium): in maintenance the stylesheet and fonts answered the maintenance page.** The maintenance revision now serves
+  the web root's files that are no page (any extension but `.html`) as always, so the page shows styled; and it sets the
+  host's security headers on every answer, as #995's API does. `V3WebRootMaintenanceTests` serves `/styles.css` and a font;
+  the probe's `MAINTENANCE_PROBES` asks both and holds them to the release image's bytes.
+- **F3 (low-medium): `startApi` left its two temporary directories when the copy failed.** The setup is wrapped, so both go on
+  any failure. The example searches' derivation links the mount into place (a junction on Windows, a symbolic link
+  elsewhere) rather than copying 2.5 GB: Node's removal unlinks a link and never follows it (checked on this machine). The
+  journeys keep copying. Test: the reviewer's case and a failure after the link was made leave nothing, the mount whole.
+- **F4 (low): the R92 test asserted nothing** (its fixture lacked `short_titles`, the reading was refused). With a valid
+  fixture it shows the generator would name the person from the title, and that exactly one example is derived, holding no
+  title word.
+- **F5 (low): the bundles depended on the build's day.** The examples are derived on the release's source date (the commit's
+  time in Luxembourg, `examplesDay`), the reading asked and the citation composed on that day, never by the API's clock; two
+  derivations on one day give one record, byte for byte (tested with two API clocks).
+- **The open question (driver decision, reversible):** only an act the release's indexing record admits (R92) is featured;
+  with no record, none. The journeys give a fixture mount a record of its one act (the test suite's own, naming no one).
+- **CI's journeys on #997 (run 40452673971): the J7 walk failed, every schema link 404.** The walk asked the API's origin
+  for the schemas; in the journeys whose pages the live server serves, the API holds no web root, while the page's own
+  origin served every schema (the API-served runs passed). J7 now follows a link on the page's origin. The build, the
+  release image and both servers held the schemas all along; the image probe and the deploy probe now also hold every
+  schema a Developers page links to the image's own bytes (`schemaLinkFailures`), and `developers-schemas.test.mjs` holds
+  the built directory to every linked schema, byte for byte the repository's, through the live server, with the CI fault
+  reproduced.
+- **#995 merged in**: `deploy-probe.mjs` reads both `--maintenance` and `--search-engines`; the probe's example searches go
+  through `fetchWithinLimit` (the per-client limit); `V3TransportResponse` keeps both `service_in_maintenance` and the host
+  headers; STATUS-WEB keeps both sides; OWNER-BRIEF keeps v3/integration's lines.
+- **Measured** (Windows, no browser, no Azure, no publisher traffic): `dotnet build Lex.V3.slnx -c Release` once after the
+  merge and the C# repair, 0 warnings, 0 errors (a second, incremental, changed nothing); targeted `node --test`, after the
+  merge: 28 files (the examples, journeys' verdicts and walks, every deploy and image probe, the home page, the chrome
+  tables and scans, the reference and legal pages, and #995's runbook, monitor, limit and client tests), 300 tests, 300
+  passed; 18 files of the page renderers, 192 tests, 190 passed, 2 skipped (the real-browser tests, CI's);
+  `deploy/validate.ps1` clean; `eng/verify-v3-tree.ps1` 1,725 tracked paths; disk above 5 GB throughout. Not run here: the
+  whole `npm test`, the dotnet test suites, the journeys and the image rehearsal (CI's).
+
+## The screens' last gaps: example searches, breadcrumbs, info controls, a print view, the maintenance revision, J6 and J7 (sole driver, 2026-10-27)
+
+The owner's order of 2026-10-27 (finish V3 to the specification of record within 72 hours, at high quality): the gaps the
+audit of the site against §3 found (the section below, "The L lines, against what the site serves"), closed as one web pull
+request (`writer/screens-gaps`, from `v3/integration` with `writer/help-and-developers` merged in first, so the reference
+pages exist).
+
+- **R47, example searches that land on served text** (`home-examples.mjs`, `home-examples-run.mjs`, `LiveHome.jsx`). Derived
+  at build from the mounted corpus through the API's own answers, never typed into copy, by a fixed rule:
+  - the mount `coverage` counts, whose Luxembourg index's digest the record carries;
+  - the Luxembourg acts the release's indexing record admits (R92's measurement), in its order (at most 24), each read on the
+    derivation's day (`evidence_bundle`): the release's source date, or the journeys' day; with no record, none (the review's
+    repair, below);
+  - in each, the first article quoted with text whose usual citation the site's generator composes (`citationForms`, R65),
+    the act named by its type and date alone, never by its title, since a title can name a person (R92);
+  - that citation asked as the search page asks a search its address holds (strict lane, the text's language, no date), and
+    kept only when the exact-reference phase opens Reading at that very article (`usualVerdict` "matches");
+  - one per act, at most 3.
+
+  The record (`lex-v3-home-examples/1`) is compiled into the bundles by `build-live.mjs` (`__LEX_HOME_EXAMPLES__`), so the
+  page both servers render and the page the browser hydrates say the same; the coverage line now carries the index's digest,
+  and the home page lists the examples under it only over that index (never over another mount or none). Each is a link to
+  the search page with the search in its address (R109), in its text's language (`lang`). A build handed no record (the web
+  suite's, CI's web job) shows none.
+  - The journeys derive the record over their mount before they build the pages (an extra start of the API), the home step
+    must list exactly it over the mount and none over no mount, and on the fixture mount the derivation must find one.
+  - The release (`image-rehearsal.mjs`) publishes the API once more, starts it over the release's mount, derives the record,
+    builds both images with it and reports it; the probes (`servedPageFailures`, the image's and the deploy probe's) ask each
+    example a home page lists of the revision itself and hold it to the article the page names, and with the rehearsal's
+    record to exactly its examples.
+- **R48, breadcrumbs** (`breadcrumbs.mjs`, `Breadcrumbs.jsx`) on the dossier and reading screens, in the record's order:
+  publisher (the law it publishes), act (work key or CELEX, a link to its dossier), the article the address names when the
+  version shown holds it, and the version, said by its date's role (R21: a state applying from its date, an act as
+  published dated by its entry into force; an EU wording by its own date). The page's own crumb is current and no link; a
+  reading of several versions names none; a page with no answer has none.
+- **R48, How to read Lex from each banner's info control** (`GuideLink.jsx`): the staleness banner and the freshness strip
+  (to "How current Lex is"), the as-published label and the EU acknowledgement and authenticity statement (to "As
+  published, and consolidated") each end with a link to that section, its name its visible words and the section's heading.
+- **R62, a clean print view of Reading** (the stylesheet's one `@media print` block): the chrome goes (skip link, menu,
+  languages, forms, buttons, pager, contents, info controls, the home page's links, the footer's menus); the text, every
+  digest, source and permalink, the citation forms, the version headings with their dates by role, the banners, the
+  breadcrumbs and the footer's lines (what Lex is not, which texts are authentic, where the texts come from) and how current
+  the answer is stay; black on white in either scheme, full width, digests wrapped.
+- **R60, the maintenance page during deployments** (a subagent's slice, reviewed and merged): the release's own signed image
+  is the maintenance revision, with no hosting change.
+  - The API: `LEX_V3_MAINTENANCE=on` (exactly) opens no preview and no mount and serves only the built maintenance page:
+    every page request 503 with `Retry-After: 300` and a page's headers, in the path's language or the negotiated one; the
+    readiness 204 only with a page in each language; everything else the new transport problem `service_in_maintenance`
+    (503), which the Developers page lists (`V3WebRoot.Maintenance.cs`; the 404 page and it share one choice of page).
+  - The template's `maintenance` flag: that switch, all three probes on `/health/ready`, and the revision at weight 0 under
+    the label `maintenance` beside the live one; release revisions carry `LEX_V3_MAINTENANCE=off`.
+  - The kit: `deploy.ps1 -Maintenance` builds it from a verified release beside `-LiveRevision` (refused without one),
+    probes it (`deploy-probe.mjs --maintenance`: readiness, each page's status, headers and bytes against the image's own
+    page, the API's problem, no cookie), deactivates it and keeps it (an inactive revision bills nothing), and prints the
+    traffic moves that switch it on and off, never run: they are the owner's, as a promotion is (R108 pre-authorises the
+    page once O17 is adopted). Every deployment's closing lines print the command that pre-builds its release's one.
+- **R53, journeys J6 and J7 walk Get help and the Developers page** (`journey.mjs` `WALKS`, `runWalk`): from the home page, by
+  pointer and by keyboard (Tab to the link, Enter, every stop showing its focus), over the fixture mount and a real mount.
+  - J6: the reader's question typed into the box and sent (one request, dated today), the sentence under the box that says
+    what Lex is not, then Get help, which says R50's sentence, sends the reader to a lawyer or another adviser of their
+    choice and to the official texts, and asks nothing (no script, no form, no request to the API, noindex).
+  - J7: the Developers page, which asks nothing, held to the API (`developersPageFailures`): its operations and which are
+    served against the coverage answer, every schema it links served as JSON, and its REST example and MCP tools/call
+    message, sent as printed, one envelope (`envelopeIdentityFailures`).
+- **French** (Decision 41): one independent reviewer (Claude, AI reviewer, not the author) under the owner's
+  delegation, in the addendum of 2026-10-27 of `C:\lex-v3\lanes\fr-review\review.md` ("breadcrumbs, the banners' info
+  controls and the home page's example searches"): 11 forms reviewed, 1 changed (`home.examplesIntro`: "Chaque exemple lance
+  la recherche d’un article …, désigné par sa citation usuelle"), 10 approved, nothing blocking. Its optional pair for
+  `breadcrumbs.stateEntryIntoForce` ("(publisher)" / "(éditeur)", as the heading says it) is taken, and its material point
+  outside the forms too: on the examples' path the search page does not go to the act by itself, so `search.opensReading`
+  and `search.opensDossier` now say "This reference opens the reading: {link}" / "Cette référence ouvre la lecture : {link}"
+  (and the dossier), never "Opening" / "Ouverture". The thirteen finals are applied byte for byte (checked by a script),
+  pinned by `breadcrumbs.test.mjs`, and named with the new vocabulary in the header comment of `live-chrome-fr.mjs`; the
+  addendum is appended with the driver's note.
+- **Tests** (new: `breadcrumbs`, `print-view`, `home-examples`, `journey-walks`, `deploy-probe-maintenance`, and C#
+  `V3WebRootMaintenanceTests`; changed: `freshness`, `date-speech`, `live-chrome`, `live-home`, `journey-verdict`,
+  `deploy-kit`, `deploy-run`, `ClosedVocabularyCensusTests`). Measured (Windows, no browser, no publisher traffic, no Azure):
+  - the final targeted run, 38 files (the new and changed ones, and every file that renders the pages, the journeys' verdicts
+    and the deploy and image probes): 420 tests, 418 passed, 0 failed, 2 skipped (the real-browser tests, CI's);
+  - before the French finals, three batches of 44 files the changes reach (search, reading, dossier, history, compare, radar,
+    export, coverage, a11y, tokens, render, network gate and the rest; some also in the final run): 479 tests, 0 failed,
+    1 skipped;
+  - the maintenance slice's own: deploy-kit 17, deploy-run 19, deploy-probe 16, deploy-probe-maintenance 3, no-browser-probes
+    11, reference-pages 9; `deploy/validate.ps1` clean (`bicep build` matches `main.json`, `bicep lint` clean);
+  - `npm run build`: 30 state pages; `eng/verify-v3-tree.ps1`: 1,706 tracked paths.
+- **Not run here** (the owner's order: the PC's disk and memory are scarce): the whole `npm test`; any `dotnet` (the C# of
+  the maintenance revision was not compiled here: CI builds and tests it); the journeys and the image rehearsal (no browser
+  and no release run on this machine).
+- **Driver decisions** (reversible):
+  - The examples are usual citations of an article, the form the exact-reference phase is built to open, so each lands on
+    the article's text; never a title (R92) and never a word list typed into copy. Luxembourg only: no answer lists the EU
+    acts an index holds.
+  - An example is a link to the search page with its search in the address; that page shows the reference's link and does
+    not go there by itself (the rule for a search read from an address, so Back never loops).
+  - The release derives the examples by starting the API over its mount once more: about a minute, with the mount linked
+    into place, not copied, and its indexes copied into the API's own temporary folder while it runs (about 2.3 GB for the
+    population), removed when it closes.
+  - Only an act the release's indexing record admits is featured, and with no record none is: an act whose text may name a
+    person is never on the home page (the review's open question, decided here).
+  - The maintenance page is served by a maintenance revision of the same app from the release's own image (the plan's item
+    10.14's "pre-built maintenance revision"), not by a static host: no new resource and no cost while it is inactive.
+  - Release revisions carry `LEX_V3_MAINTENANCE=off` explicitly, so the template's environment stays one list.
+- **Not yet**:
+  - The live site shows the breadcrumbs, info controls and print view from the next release, and the maintenance revision
+    is pre-built from it too (`-Maintenance`). The example searches need more: no release carries an indexing record yet (R92's
+    measurement, the plan's item 1.11, writes it), so until one does the home page shows none.
+  - The Developers page's sentence on failures below the envelope ("a request the server cannot read or route") covers a
+    maintenance revision's 503 only loosely; its wording waits for a French review of its own.
+  - The JavaScript live server (`serve-live.mjs`, the journeys' and development's) has no maintenance mode; only the API,
+    which production runs, has one.
+
 ## Review and repair (#995): the runbook's blocks stop at a failed step, renders hold a place, the ingress checked by hand (sole driver, 2026-10-27)
 
 The one repair round of #995 (`writer/platform-ops` at ef99b6cc), after its one review: REPAIR, five findings. Each was
@@ -352,12 +517,12 @@ as the legal pages are (`scripts/reference-pages.mjs`, `app/ReferencePages.jsx`)
     failure panels, the German and Luxembourgish page, the freshness strip and staleness banner, robots.txt and the
     sitemap (with the switch), the evaluation card's JSON, `/api/v3` and `/mcp`, and now the published schemas.
   - Missing on the home page: example searches (R47; no answer names a title or a text a search would land on, so none is
-    shown, `LiveHome.jsx`).
+    shown, `LiveHome.jsx`). Closed by the screens' gaps slice (`writer/screens-gaps`, the section at the top): derived from the mount through the API's answers.
   - Missing in the shell: breadcrumbs (publisher, act, article, version; R48); a print view of Reading (R62's fifth item,
     33 §7 rule 9; the stylesheet has no print rules); the maintenance page during a deployment (R60; built, not wired into
-    the deploy kit).
+    the deploy kit). Closed by the screens' gaps slice (`writer/screens-gaps`, the section at the top): all three.
   - Missing in How to read Lex's reach: a link from each banner's info control (R48); the guide is linked from every
-    footer, and no banner has an info control yet.
+    footer, and no banner has an info control yet. Closed by the screens' gaps slice (`writer/screens-gaps`, the section at the top).
   - Missing in Get help: R42's versioned handoff list by theme (advisers, "where to complain"), and the help block on the
     dossier and reading pages of acts in high-stakes themes (R50). Both need the list a person writes and checks (N2).
   - Missing on Developers (the plan's item 8.4): replay guarantees G1 to G5 as supported, live examples from the
@@ -378,7 +543,7 @@ as the legal pages are (`scripts/reference-pages.mjs`, `app/ReferencePages.jsx`)
     since the combination, a repository document); R55's unprefixed
     `/developers` (the page stands under each language, R61).
   - Missing in the journeys: J6 through Get help and J7 through the Developers page (R53); the CI journeys walk neither
-    page yet.
+    page yet. Closed by the screens' gaps slice (`writer/screens-gaps`, the section at the top).
   - Not audited by this slice, and each the subject of its own L line: the dossier's relation tabs (R29), the inline diff
     (R57), Changes' export, density notice and watch scope (R54), Coverage's text yield per class, attribution rate and
     retention rule (R86, R29, R89), Reading's notices and in-act links (R17, R68, R71, R72).
@@ -3065,7 +3230,9 @@ unserved is shown) and R61 (French and English under `/fr/` and `/en/`) hold on 
   - The maintenance page is built and tested, and nothing serves it. During a deployment Azure keeps the live revision
     serving while the candidate is probed (multiple revision mode), so there is no gap for it to fill except a first
     deployment or a planned outage. Putting a page in front of the app for those needs a front door or a static host,
-    which is a hosting change with a cost: the owner's decision, not taken here.
+    which is a hosting change with a cost: the owner's decision, not taken here. (Superseded on 2026-10-27: the release's
+    own image serves it as a maintenance revision of the same app, with no hosting change; the screens' gaps section at
+    the top.)
   - A `/de/` or `/lb/` path nothing claims gets the 404 page in the language Accept-Language picks between French and
     English, not a `localization_unavailable` page.
   - The retry is pressed in a browser for the search screen only (the journeys' "search retried"). The other screens'
@@ -7155,7 +7322,8 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
     screen already names.
   - The 404 table is its own file beside `site-paths.json` (`not-found.json`), held by both servers' tests.
   - The maintenance page is built into the release (`maintenance/{language}.html`) and served by nothing: wiring it in
-    front of the app is a hosting change with a cost, the owner's.
+    front of the app is a hosting change with a cost, the owner's. (Superseded on 2026-10-27 by the maintenance revision:
+    the screens' gaps section at the top.)
 
 ## Waiting on others
 

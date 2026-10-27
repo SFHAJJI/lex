@@ -32,6 +32,8 @@ import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
 import { fillCard, versionNameKey } from '../scripts/refusal-card.mjs';
 import { todayAt } from '../scripts/initial-answer.mjs';
 import { TodayLine } from './Today.jsx';
+import { Breadcrumbs } from './Breadcrumbs.jsx';
+import { dossierCrumbs } from '../scripts/breadcrumbs.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -345,6 +347,8 @@ export function LiveDossier({ contract, fetchImpl, initial = null }) {
 
   return (
     <div>
+      {/* Where the act shown stands (R48): its publisher, and the act, which is this page; none until one is shown. */}
+      <Breadcrumbs crumbs={outcome.state === 'success' ? dossierCrumbs(outcome.view) : []} />
       <form
         role="search"
         onSubmit={(event) => {

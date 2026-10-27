@@ -321,6 +321,17 @@
 // d’actes de l’index de l’UE"; a request is "adressée à", never "posée"; the release is "la mise en production"; a page is
 // "produite", as built "telle qu’elle a été construite"; replay is "rejeu"; a program "ne tient pas compte" of what it does not
 // know, never "ignore"; an MCP client's model is "son modèle de langage".
+// The breadcrumbs, the banners' info control and the home page's example searches (R48, R47): `breadcrumbs.label`, the two
+// `breadcrumbs.publishers`, `breadcrumbs.state`, `breadcrumbs.stateEntryIntoForce`, `breadcrumbs.europeOriginal`,
+// `breadcrumbs.europeConsolidated`, `reference.info`, `reference.infoNamed`, `home.examplesHeading` and `home.examplesIntro`
+// were reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the same delegation in the addendum
+// of 2026-10-27 "breadcrumbs, the banners' info controls and the home page's example searches" (11 forms, 1 changed in
+// review: `home.examplesIntro`; the optional pair of `stateEntryIntoForce`, its heading's "(éditeur)", taken in both
+// languages), and with them, from its point 1, `search.opensReading` and `search.opensDossier` (both changed, the English
+// too: a search read from an address does not go to the act by itself, so the line says what the reference opens, never
+// "Ouverture"). Vocabulary: a breadcrumb is a "Fil d’Ariane"; a version crumb says its reading heading's words; an info
+// control is "Comment lire ceci"; the usual citation is the "citation usuelle" ("telle qu’on l’écrit d’ordinaire"), never
+// "d’habitude"; an example "lance la recherche", never "recherche".
 // Typography: a no-break space (U+00A0) stands before : ; ! ? % and » and after «, and the apostrophe is ’.
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
@@ -378,8 +389,8 @@ export const LIVE_CHROME_FR = Object.freeze({
     recognisedArticleDate: 'Référence reconnue : {act}, article {article}, au {date}.',
     recognisedToday: 'Aucune date n’a été indiquée : la date lue est celle d’aujourd’hui au Luxembourg, le {date}.',
     recognisedSearchDate: 'La référence n’indique aucune date : la date lue est celle de la recherche, le {date}.',
-    opensReading: 'Ouverture de la lecture : {link}',
-    opensDossier: 'Ouverture du dossier : {link}',
+    opensReading: 'Cette référence ouvre la lecture : {link}',
+    opensDossier: 'Cette référence ouvre le dossier : {link}',
     notOpenedDate: '« {date} » ne désigne aucun jour du calendrier ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
     notOpenedTwoDates: 'La référence indique deux dates qui ne concordent pas ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
     titleNotHeld: 'Ce site ne détient aucun acte sous l’intitulé que cite l’expression ; ses mots ont donc été recherchés.',
@@ -946,6 +957,17 @@ export const LIVE_CHROME_FR = Object.freeze({
     authenticity: 'Les textes consolidés n’ont aucun effet juridique : seuls font foi les textes publiés au Journal officiel du Grand-Duché de Luxembourg (Mémorial A) et au Journal officiel de l’Union européenne.',
     sources: 'Les textes proviennent de Legilux et de l’Office des publications de l’Union européenne, tels que ce site les détient ; chaque article cité indique sa source officielle.',
   }),
+  breadcrumbs: Object.freeze({
+    label: 'Fil d’Ariane',
+    publishers: Object.freeze({
+      'lu-legilux': 'Droit luxembourgeois',
+      'eu-eurlex': 'Droit de l’UE',
+    }),
+    state: 'Version applicable à partir du {date}',
+    stateEntryIntoForce: 'Acte tel que publié, daté de son entrée en vigueur le {date} (éditeur)',
+    europeOriginal: 'Libellé original du {date}',
+    europeConsolidated: 'Libellé consolidé du {date}',
+  }),
   freshness: Object.freeze({
     heading: 'Mise à jour des données',
     asBuilt: 'Chaque réponse du serveur indique quand l’index a été construit, quand les textes de chaque éditeur ont été collectés pour la dernière fois, ainsi que le code qui a construit l’index et celui qui le sert ; cette page affiche ces indications dès qu’elle a reçu une réponse.',
@@ -992,6 +1014,8 @@ export const LIVE_CHROME_FR = Object.freeze({
       other: '{count} articles',
     }),
     links: 'Ailleurs sur ce site',
+    examplesHeading: 'Exemples de recherche',
+    examplesIntro: 'Chaque exemple lance la recherche d’un article que ce site détient, désigné par sa citation usuelle, et mène à son texte.',
   }),
   failure: Object.freeze({
     line: 'Lex n’a pas pu mener à bien cette demande. Ce n’est pas une réponse sur le droit.',
@@ -1177,6 +1201,8 @@ export const LIVE_CHROME_FR = Object.freeze({
       guide: 'Comment lire Lex',
       developers: 'page Développeurs',
     }),
+    info: 'Comment lire ceci',
+    infoNamed: 'Comment lire ceci : {section}',
   }),
   help: Object.freeze({
     title: 'Obtenir de l’aide',

@@ -94,6 +94,8 @@ const EUROPE_ENTRIES = new Set([
   "reading.europeLaterWordingNotHeld",
   // A page past an EU wording's last (the review of #978, F2).
   "reading.europePageNotHeld.one", "reading.europePageNotHeld.other",
+  // An EU reading's breadcrumb for its wording, by its own date (R48, `breadcrumbs.mjs`), and the law the EU publishes.
+  "breadcrumbs.europeOriginal", "breadcrumbs.europeConsolidated", "breadcrumbs.publishers.eu-eurlex",
   // The citation generator's EU words (`citation.mjs`): an EU act's name and the date it is cited at, the wording's line of
   // the evidence form, the Official Journal reference no index holds, and the EU's authenticity statement.
   "citation.europe.article", "citation.europe.acts.R", "citation.europe.acts.L", "citation.europe.acts.D",
