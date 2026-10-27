@@ -178,6 +178,9 @@ Updated 2026-10-27.
     - ingest 320 (318 passed, 0 failed, 2 opt-in skipped);
     - web 331 passed over 39 files;
     - `eng/verify-v3-tree.ps1` 1,736 tracked paths.
+    - After merging f7f1f80d (#998) too: contracts 113 passed (the censuses, combined: candidates 630, registries 90),
+      ingest 95 passed (the censuses, the rights classes, the bundle, search and the answer samples), web 334 passed,
+      `eng/verify-v3-tree.ps1` 1,760 tracked paths.
   - **The rights probe again** (12.4 minutes, peak 2,124 MiB, 0 failures): the moves above, nothing else.
   - **D1's commands do not change.** `lu-release-2` and policy A (`b9687998…`) are the same; the inputs name resolution
     /2's new digest through `RulesOf`.
