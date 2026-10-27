@@ -4,6 +4,101 @@ Updated 2026-10-27. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The API's gaps: every operation routed, a schema per refusal payload, what Lex never holds, MCP ping, and the Developers page's guarantees and live examples (sole driver, 2026-10-27)
+
+The owner's order of 2026-10-27 (finish V3 to the specification of record within 72 hours, at high quality): the plan's items
+8.6, 6.10, 8.5 and 8.4, as one web pull request (`writer/api-gaps`, on v3/integration with `writer/help-and-developers`
+merged at its start, since the Developers page it extends is that branch's).
+- **8.6, the three operations served from no data** (`concepts`, `knowable_on`, `transposition`). The specification of record,
+  §3, API and MCP: "All 27 registered operations are served, or refuse with the typed reason their capability manifest
+  states." Each now has a REST route and an MCP tool (`V3RestRouteBinding.Refusing`; `Routed` is the 27) and answers every
+  request inside a normal envelope with `retrieval_mode_unavailable`: `requested_mode` (`r5_concepts`, `r6_knowable_on`,
+  `r4_transposition`, the lanes of `34-ideal-architecture.md` §3), `available_modes` (the modes of the same lane this
+  server serves) and `data_needed` (`V3UnservedOperations`). Attribution follows the identifier when one is named. With no
+  corpus mounted they refuse `no_corpus_mounted`, as every operation does.
+  - The transport failure `operation_not_served` is retired (`V3TransportFailureKind`): no registered name is a failure below
+    the envelope; a path nothing names is `unknown_route`, as before.
+  - Both index builders state the three with the new reason in every capability manifest they write; a manifest written
+    before still reads (`V3UnservedOperation.OperationNotServed` is kept for reading). `coverage` names each with its
+    `reason` and `requested_mode` beside `data_needed`, and its note says so; `refused_for_eu` leaves them out, since the
+    rows above state them for every identifier.
+- **6.10, the refusal registry completed.** The registry is raised to `lex-v3-operation-registry/2`:
+  - each refusal code names its payload's schema, `lex-v3-{code}-payload/1`, and that schema's digest, which the registry's
+    digest covers. The 20 schemas are generated from the registry (each requires exactly the code's mandated fields, in
+    the registry's order, typed as every producer sends them, read from a survey of the 100 constructions in
+    `src/Lex.V3.Api`; the five codes no operation produces say so in a `$comment`), published beside the envelope schemas
+    (`/schemas/v3-platform/{code}-payload.json`), and embedded in the API, which checks each digest at load and validates
+    every refusal's payload against its code's schema before it leaves (`V3PlatformSchemaDocuments.ValidateRefusal`). The
+    refusal schema lists the 20 codes. The refusal census holds every payload it observes to the published file too.
+  - `out_of_corpus_scope` carries the four elements `36-ideal-evaluation.md` §4 mandates: `requested_identifier`,
+    `official_source`, `reason` (one sentence) and `who_to_ask` (`{name, link, role}`, an institution or an official
+    service and never a person: the owner's decision of 2026-10-19), with `out_of_scope_class`, `instrument`,
+    `what_would_answer` (`expanded_official_scope`), `asserts_absence_of_law: false` and the list's identity and digest.
+  - The out-of-scope list (`V3OutOfScope`, `lex-v3-out-of-scope/1`, published in the census's contract block and on the
+    Developers page): CSSF circulars (the CSSF), CNPD decisions and opinions (the CNPD), EU court decisions by ECLI, sector-6
+    CELEX or case number (the Court of Justice), and RESA publications (Luxembourg Business Registers), each matched whole
+    by exact patterns, so a held act whose title names one of these bodies, or a CSSF regulation (admitted by R78), is
+    never refused. Every operation that takes an identifier refuses such an identifier before the mount is read
+    (`V3ApiHandler.ExecuteFor`), over REST and MCP alike. J5 ("Circulaire CSSF 20/747") now refuses
+    `out_of_corpus_scope` naming the CSSF, and the dossier page's card shows the official place and who to ask as links on
+    the list's hosts only (`OUT_OF_SCOPE_HOSTS`, held to the census).
+  - Not listed yet, each said on the Developers page: communal regulations (no single official place; each commune
+    publishes its own, so the entry waits for R42's list, N2); Luxembourg court decisions (no identifier names one exactly,
+    and the Constitutional Court's are admitted later as ACC, R78); EU acts outside the EU population (R80: the EU index does
+    not state its population's rule, so an unheld EU act still answers `identifier_unknown`). The official places go to the
+    lawyer with the other named places (O4).
+- **8.5, MCP basics.** `ping` answers an empty result; `initialize` carries `instructions` (the MCP specification,
+  2025-06-18): every tool answers one envelope, a refusal is an answer and not an error (`isError` false), the two clocks
+  are never merged, an absence is not evidence that a law does not exist, nothing here is advice. Every registered
+  operation is a tool (27).
+- **8.4, the Developers page.** New parts: live examples; replay guarantees G1 to G5 as this server supports each, with the
+  `V3ReplayGuaranteesTests` method that holds it (G4 says no observation time is held, so `knowable_on` is not served; G5 says
+  what an answer does not let a reader recompute on index /9); how the API changes (versioned identities, additive
+  members, the registry digest, closed sets, no notice period, the registry's version history). The refusals part links
+  each code's payload schema with its digest and lists what Lex never holds; the access part quotes the MCP instructions;
+  each operation served from no data names its refusal and mode; every operation is an MCP tool.
+  - Live examples from the release's own data: both servers render the Developers page, as they render the home page,
+    from their own answer to `browse` with `limit` 1 (`V3WebRoot.SitePageFor`, `sitePageFor`, the site's table), and the
+    page shows that request, the answer whole, and the next requests about the first act held (its dossier over REST, its
+    text on its latest version's date over MCP). The renderer is handed the contracts as data at build time
+    (`__LEX_DEVELOPERS__`), since it reads nothing. The page as built says it carries none; a render that fails serves it
+    as built.
+- **Pins moved, and why.** Every envelope names the registry: the registry digest is
+  `bf1b6e93cbcd33f264353643854434a7ee61fcc1d9706ba962b05b9778cf051d` (was `80dc8e29…`).
+  - The four censuses were re-rendered with `V3_RENDER_*` and verified without it: `envelope-samples.json` (49 envelopes,
+    three new: browse for the first act, `concepts` refused, J5's circular refused; the contract block gains each code's
+    payload schema and the out-of-scope list), `refusal-payload-samples.json` (`out_of_corpus_scope` produced, by four
+    operations; `retrieval_mode_unavailable` by three more; five codes not produced), `answer-samples.json` (the registry
+    digest, coverage's rows) and the 20 schema files (`V3_RENDER_PLATFORM_SCHEMAS`, 76 documents).
+  - **The legacy base answers moved, recorded on Linux only**: the schema-8, schema-6 and EU /5 answers, in WSL (Ubuntu
+    24.04.4, .NET 10.0.11, `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1`, `TZ=UTC`), with the gated recorders, from an archive of
+    9b28c5c3. A script checked all 53 rows (29, 9, 15): the same request, trace and status, and each body equal to the
+    fixture's once the registry identity is put back, coverage's operations note and `not_served_data` aside;
+    `refused_for_eu` did not move. Windows replays the same bytes (12 of 12).
+- **Tests.** New: `V3OutOfScopeTests` (3: every class's examples and J5, nothing held refused, institutions and links),
+  `V3CorpusScopeMountTests` (3: the three refusing operations over REST and MCP with identical envelopes, on a Luxembourg and
+  an EU-only mount; the circular refused by all 23 operations that take an identifier, identically over both), and in
+  `V3PlatformSchemaTests` each payload schema held to the registry. Changed: `V3PlatformHostTests` (every registered name
+  routed, the three refusing inside an envelope, `operation_not_served` retired), `V3McpJsonRpcTests` (instructions, ping,
+  27 tools), `V3McpHttpEndpointTests` (all 27 tool calls identical to REST), the coverage, census, builder and vocabulary
+  pins. Web: `reference-pages.test.mjs` (payload schemas and digests, the out-of-scope list, the instructions and the replay
+  tests held to the C#, the live examples), `live-ssr.test.mjs` (the built renderer renders the page from browse), the
+  coverage page's two new columns, J5's expectations, the card's out-of-scope payload.
+- **Driver decisions (reversible).**
+  - `retrieval_mode_unavailable` is the typed reason for an operation served from no data, not a new code: the registry's
+    set of 20 is closed (the launch contract's refusal line), and the code already means "this mode is not served here, these
+    are", as it does for an EU identifier.
+  - The out-of-scope check runs before the mount for every operation, so the same instrument gets the same refusal
+    wherever it is asked; `search`'s text query is not matched (only its `identifier`), so a phrase is never refused.
+  - Who to ask is the institution that issues and publishes the instrument (role `information`), not an adviser: R42's
+    handoff list of advisers still waits for a person (N2).
+  - The live examples are rendered by the server at request time rather than built into the release, so the page always
+    shows what the serving release answers.
+- **For the owner** (not asked, recorded): the four official places and institutions are public bodies' own sites, named
+  from the driver's knowledge, with no site contacted; the lawyer's read (O4) covers them with the other named places.
+- **French** (Decision 41): one independent reviewer under the owner's delegation; its addendum of 2026-10-27 ("the API's
+  gaps") is appended to `C:\lex-v3\lanes\fr-review\review.md` with the driver's note.
+
 ## The live revision deactivated by a redeployment, 01:10 to 01:13 UTC, and the fix (sole driver, 2026-10-27)
 
 - **What happened.** The site (the container app `ca-lex-v3`), open to everyone, served release
@@ -141,7 +236,7 @@ as the legal pages are (`scripts/reference-pages.mjs`, `app/ReferencePages.jsx`)
     dossier and reading pages of acts in high-stakes themes (R50). Both need the list a person writes and checks (N2).
   - Missing on Developers (the plan's item 8.4): replay guarantees G1 to G5 as supported, live examples from the
     release's own data, and a stated change policy beyond the schemas' versioned identities and the registry digest; the
-    try-it console moves with O1.
+    try-it console moves with O1. (Closed by `writer/api-gaps`, the section above, but for the console.)
   - Missing in the API the page describes (each one the Developers page says as it is): a typed refusal inside a normal answer for the three unserved operations
     (`concepts`, `knowable_on`, `transposition` answer the transport failure `operation_not_served`; the plan's item 8.6);
     a published schema for each refusal code's payload (the plan's item 6.10; `refusal.schema.json` holds an open
@@ -149,6 +244,7 @@ as the legal pages are (`scripts/reference-pages.mjs`, `app/ReferencePages.jsx`)
     to ask, and the list of what Lex never holds (6.10, J5); MCP `ping` and server instructions (8.5); the per-client rate
     limiter (R109), which `writer/platform-ops` builds: when the two branches are combined, `developers.limits.rate` (which
     says no per-client limit is applied) must say the limit as that branch enforces it, in both languages, reviewed.
+    (All but the rate limiter closed by `writer/api-gaps`, the section above.)
   - Missing addresses: `/.well-known/lex-keys.json`, the published key set (R116); `/.well-known/security.txt` with a
     disclosure policy (R74), which the owner's decision of 2026-10-19 (no contact of any kind) leaves to the owner; a page
     "Operating Lex after launch" with the hosting statement and the monthly ceiling (R8, R113, R114); R55's unprefixed

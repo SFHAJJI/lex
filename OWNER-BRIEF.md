@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-27 at 02:15 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-27 at 04:20 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -14,8 +14,8 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
   the address rules from your phone. The legal pages were checked first and again after.
 - Down 3 minutes on 27 October (01:10 to 01:13 UTC): a redeployment switched off the live version by mistake. The
   deployment script is fixed so it never switches off a version it did not make.
-- In review on 27 October: the three pages the specification lists and the site lacked, Get help, How to read Lex
-  (with a glossary) and Developers (made from the API's own list of operations), in French and English.
+- In review on 27 October: Get help, How to read Lex and Developers, the three pages the site lacked; and the API's last
+  gaps (every operation answers, what Lex never holds names where it is published and which body to ask).
 - Today Luxembourg has 1,730 acts as first published, no codes; EU text covers 511 of 1,170 versions.
 - The codes (121,000 articles) were rebuilt on Azure on 26 October after two fixes found on real data (a date written
   20220101, and a code's title given each article's date): two builds agreed byte for byte. Their quality gates pass
