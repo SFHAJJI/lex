@@ -92,7 +92,9 @@ public sealed class LuxembourgRederivationTests
         Assert.AreEqual(Inventory3RuleSha256, LuxembourgAknArticleInventoryProducer.RuleProfileSha256);
         Assert.AreEqual(Content1RuleSha256, LuxembourgAknLegalContentProfileProducer.RuleProfileSha256);
 
-        CollectionAssert.AreEqual(new[] { LuxembourgRederivation.Release1RuleSet }, LuxembourgRederivation.ImplementedRuleSets.ToArray());
+        CollectionAssert.AreEqual(
+            new[] { LuxembourgRederivation.Release1RuleSet, LuxembourgRederivation.Release2RuleSet },
+            LuxembourgRederivation.ImplementedRuleSets.ToArray());
         CollectionAssert.AreEqual(
             new[]
             {
@@ -109,7 +111,20 @@ public sealed class LuxembourgRederivationTests
         StringAssert.StartsWith(text, LuxembourgRightsAdmissionPolicies.Policy1Name + "\n");
         StringAssert.Contains(text, "\nadmits=" + ContractWire.NameOf(LuxembourgRightsChannelDisposition.AgreedSameRunCcBy) + "\n");
         Assert.AreEqual(Policy1Sha256, LuxembourgRederivation.AdmissionPolicyOf(LuxembourgRederivation.Release1RuleSet));
-        CollectionAssert.AreEqual(new[] { Policy1Sha256 }, LuxembourgRightsAdmissionPolicies.RegisteredSha256s.ToArray());
+        CollectionAssert.Contains(LuxembourgRightsAdmissionPolicies.RegisteredSha256s.ToArray(), Policy1Sha256);
+
+        // Release 2: reading /2 and resolution /2 first, then Release 1's three, under policy A.
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                new LuxembourgRederivationRule("lex-lu-in-file-rights-reading/2", LuxembourgInFileRightsReaderTwoTests.PinnedReadingTwoProfileSha256),
+                new LuxembourgRederivationRule("lex-lu-rights-resolution/2", LuxembourgRightsChannels.ResolutionTwoProfileSha256),
+                new LuxembourgRederivationRule("lex-v3-luxembourg-akn-article-inventory-profile/4", Inventory4RuleSha256),
+                new LuxembourgRederivationRule("lex-v3-luxembourg-akn-legal-content-profile/3", Content3RuleSha256),
+                new LuxembourgRederivationRule("lex-v3-luxembourg-expression-state/2", State2RuleSha256),
+            },
+            LuxembourgRederivation.RulesOf(LuxembourgRederivation.Release2RuleSet).ToArray());
+        Assert.AreEqual(LuxembourgRightsAdmissionPolicies.PolicyASha256, LuxembourgRederivation.AdmissionPolicyOf(LuxembourgRederivation.Release2RuleSet));
         Assert.IsTrue(LuxembourgRightsAdmissionPolicies.IsRegistered(Policy1Sha256));
         Assert.IsFalse(LuxembourgRightsAdmissionPolicies.IsRegistered(new string('a', 64)));
         Assert.IsFalse(LuxembourgRightsAdmissionPolicies.IsRegistered(null));
@@ -390,7 +405,13 @@ public sealed class LuxembourgRederivationTests
                          "no rule digest is substituted"),
                      ("a rule renamed", Release1() with { Rules = [rules[0] with { Profile = "lex-v3-luxembourg-akn-article-inventory-profile/5" }, rules[1], rules[2]] },
                          "no rule digest is substituted"),
-                     ("an unknown rule set", Release1() with { RuleSet = "lu-release-2" }, "no rule set is substituted"),
+                     ("an unknown rule set", Release1() with { RuleSet = "lu-release-9" }, "no rule set is substituted"),
+                     ("Release 1's rules under Release 2's set", Release1() with { RuleSet = LuxembourgRederivation.Release2RuleSet },
+                         "no rule digest is substituted"),
+                     ("Release 2 under policy /1", LuxembourgRightsReleaseTwoTests.Release2() with { AdmissionPolicySha256 = Policy1Sha256 },
+                         "no policy is substituted"),
+                     ("Release 1 under policy A", Release1() with { AdmissionPolicySha256 = LuxembourgRightsAdmissionPolicies.PolicyASha256 },
+                         "no policy is substituted"),
                      ("an unregistered policy", Release1() with { AdmissionPolicySha256 = new string('a', 64) }, "no policy is substituted"),
                  })
         {
@@ -437,7 +458,7 @@ public sealed class LuxembourgRederivationTests
         StringAssert.Contains(again.Message, "never over a re-derived one");
         await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => LuxembourgRederivation.ApplyAsync(store,
             LuxembourgFirstMountAcquisitionResult.Refused(LuxembourgFirstMountAcquisitionRefusal.RunRefused, "test"), Release1(), CancellationToken.None));
-        Assert.ThrowsExactly<ArgumentException>(() => LuxembourgRederivation.RulesOf("lu-release-2"));
+        Assert.ThrowsExactly<ArgumentException>(() => LuxembourgRederivation.RulesOf("lu-release-9"));
     }
 
     /// <summary>

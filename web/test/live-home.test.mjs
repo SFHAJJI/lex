@@ -122,6 +122,22 @@ test("the date is sent with the search and printed from the answer; a blank date
   assert.equal(outcomes.at(-1).state, "invalid_request");
 });
 
+/**
+ * The coverage answer's text yield moved with its totals, as the producer holds the build report's yield to the mount
+ * (its Luxembourg articles are the index's): served articles where there are any, and none where the mount serves none,
+ * its one file then counted as an admitted file with no article.
+ */
+function yieldServing(value, articles) {
+  const publisher = value.text_yield.publishers[0];
+  const row = publisher.classes[0];
+  const served = articles > 0;
+  for (const node of [publisher, row]) {
+    node.articles = articles;
+    if (!served) Object.assign(node, { files_with_text: 0, versions_with_text: 0, works_with_text: 0 });
+  }
+  if (!served) row.files_parse_failed = [{ reason: "akn_unsupported_content_shape", count: row.files }];
+}
+
 test("the coverage line says only what the coverage answer counts, as of its index's build date (R11)", () => {
   const line = coverageLineOf(coverageOutcome(answerHandedWith("coverage", COVERAGE, { contract: LIVE_CONTRACT, objectType: "coverage_report" })));
   const { totals, history } = COVERAGE.result.value;
@@ -133,6 +149,7 @@ test("the coverage line says only what the coverage answer counts, as of its ind
   // Other counts, another build: the line follows the answer, and says the build's date in Luxembourg.
   const other = coverageAt("2026-10-15T10:00:00.0000000Z", (value) => {
     value.totals = { ...value.totals, works: 1730, states: 1731, articles: 52617 };
+    yieldServing(value, 52617);
     value.languages = value.languages.map((row) => ({ ...row, works: 1730, states: 1731, articles: 52617, articles_with_searchable_text: row.articles_with_searchable_text }));
     value.history.snapshots_with_text = value.history.snapshots_with_text.map((snapshot) => ({ ...snapshot, built_at: "2026-10-13T22:40:36Z" }));
     value.history.history_begins = "2026-10-13T22:40:36Z";

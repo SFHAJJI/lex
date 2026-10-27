@@ -47,6 +47,7 @@ import {
 } from "../scripts/coverage.mjs";
 import { PREVIEW_ANSWERS } from "../scripts/coverage-preview.mjs";
 import { LIVE_EU_COVERAGE, LIVE_LU_COVERAGE } from "../scripts/live-coverage-record.mjs";
+import { LIVE_CHROME } from "../scripts/live-chrome.mjs";
 import { Coverage } from "../.react-build/app.mjs";
 
 const SAMPLES = new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url);
@@ -70,6 +71,7 @@ const MUST_REACH = [
   "operations.not_served_data[].data_needed",
   "history.snapshots_with_text[].retained_as[]",
   "not_held[].reason",
+  "text_yield.publishers[].classes[].files_with_text",
 ];
 
 /**
@@ -85,7 +87,15 @@ const MUST_REACH = [
 // `history` brought two more, both read off the producer (`V3CorpusMount.HistoryBlock`):
 // `history_begins` is null when the mounted index is schema 6 and records no build, and
 // `retention_policy` is null when the mount keeps no generation, which the captured genesis log does.
-const NULLABLE = new Set(["requested_language", "history.history_begins", "history.retention_policy"]);
+//
+// `text_yield` brought four, read off its producer (`V3TextYield`, `V3CorpusMount.TextYieldBlock`): the block is null on a
+// mount whose build report states none; a class's `annexes` is null where the corpus records no annex outcome (Luxembourg),
+// and its `versions_not_held` and `files_pdf_only` where the publisher does not record them (the EU).
+const NULLABLE = new Set([
+  "requested_language", "history.history_begins", "history.retention_policy",
+  "text_yield", "text_yield.publishers[].classes[].annexes", "text_yield.publishers[].classes[].versions_not_held",
+  "text_yield.publishers[].classes[].files_pdf_only",
+]);
 
 const HISTORY_HEADING = "What this mount keeps of its history";
 const SNAPSHOTS_CAPTION = "Snapshots whose text this mount holds";
@@ -294,6 +304,7 @@ test("the page renders the answer the platform really sends", async () => {
     "What this page is about",
     "How these counts are counted",
     "What this mount holds",
+    "How much text this site serves, class by class",
     "What the corpus recorded for its members",
     "What can be asked of this mount",
     HISTORY_HEADING,
@@ -549,7 +560,12 @@ test("the language table reconciles per column, because it is a partition in two
     /the articles the language breakdown accounts for is 240 against 239/,
   );
   assert.equal(
-    typeof string(mutate(whole, (a) => { a.totals.articles = 300; })),
+    typeof string(mutate(whole, (a) => {
+      a.totals.articles = 300;
+      // The yield's Luxembourg articles are the mount's, so they move with its total.
+      a.text_yield.publishers[0].articles = 300;
+      a.text_yield.publishers[0].classes[0].articles = 300;
+    })),
     "string",
     "the rows falling short of the article total was refused, and it is allowed to",
   );
@@ -1629,5 +1645,245 @@ test("a history whose counts do not add up, or that lists what a log recording n
   const none = mutate(captured, (a) => { a.history = null; });
   for (const [renderer, html] of [["string", string(none)], ["react", react(none)]]) {
     assert.equal(headings(html).includes(HISTORY_HEADING), false, `${renderer}: a history section for no history`);
+  }
+});
+
+// ---- The text yield per class (R86(4)) and R26's sentence. ----
+
+/**
+ * The captured answer's samples, by scenario: the census holds a mount whose build reported its yield and the same mount
+ * with no report beside it.
+ */
+async function capturedCoverage(scenario) {
+  const parsed = JSON.parse(await readFile(SAMPLES, "utf8"));
+  const row = parsed.sampled?.find((sample) => sample.operation === "coverage" && sample.scenario.startsWith(scenario));
+  assert.ok(row, `the census holds no coverage answer for ${scenario}`);
+  return withDigests(row.answer);
+}
+
+/**
+ * A yield of both publishers with every outcome and reason a class can carry, in the producer's shape (each member and
+ * element the producer writes; `V3TextYieldTests.TheBlockRoundTripsAndIsHeldToItsArithmetic` pins the names), on the
+ * whole-mount preview's answer, whose 240 articles it serves and whose members it holds: 14 acquired and 3 withheld.
+ */
+function richYieldAnswer() {
+  return mutate(PREVIEW_ANSWERS[0].answer, (a) => {
+    a.members.by_outcome = [
+      { members: 14, outcome: "acquired" },
+      { members: 3, outcome: "rights_withheld" },
+      { members: 3, outcome: "unavailable" },
+    ];
+    a.totals.members = 20;
+    const of = (family, kind, values) => ({ family, kind, ...values });
+    a.text_yield = {
+      schema: "lex-v3-text-yield/1",
+      publishers: [
+        {
+          publisher: "lu-legilux", works: 7, works_with_text: 4, versions: 13, versions_with_text: 5, articles: 240, files: 17, files_with_text: 12,
+          classes: [
+            of("code", "code", {
+              works: 2, works_with_text: 1, versions: 4, versions_with_text: 1, articles: 200,
+              versions_not_held: [{ reason: "catalogue_cc_by_not_acquired", count: 2 }],
+              files: 3, files_with_text: 1,
+              files_withheld: [{ reason: "typed_quarantine_in_file_reading_rejected", files: 2, pdf: 1 }],
+              files_pdf_only: 0, files_parse_failed: [], annexes: null,
+            }),
+            of("loi", "consolidation", {
+              works: 5, works_with_text: 3, versions: 9, versions_with_text: 4, articles: 40,
+              versions_not_held: [{ reason: "catalogue_licence_scl", count: 1 }, { reason: "catalogue_no_expression", count: 1 }],
+              files: 14, files_with_text: 11,
+              files_withheld: [{ reason: "conflict", files: 1, pdf: 0 }],
+              files_pdf_only: 1, files_parse_failed: [{ reason: "akn_unsupported_content_shape", count: 1 }], annexes: null,
+            }),
+          ],
+        },
+        {
+          publisher: "eu-eurlex", works: 8, works_with_text: 4, versions: 6, versions_with_text: 3, articles: 560, files: 8, files_with_text: 4,
+          classes: [
+            of("eu", "consolidation", {
+              works: 6, works_with_text: 3, versions: 4, versions_with_text: 2, articles: 500, versions_not_held: null,
+              files: 5, files_with_text: 3, files_withheld: [], files_pdf_only: null,
+              files_parse_failed: [{ reason: "formex_main_body_missing", count: 2 }],
+              annexes: { annexes: 0, with_text: 0, image_only: 0, failed: 0, by_disposition: [] },
+            }),
+            of("eu", "original_legal_text", {
+              works: 2, works_with_text: 1, versions: 2, versions_with_text: 1, articles: 60, versions_not_held: null,
+              files: 3, files_with_text: 1, files_withheld: [], files_pdf_only: null,
+              files_parse_failed: [{ reason: "formex_main_body_package_not_acquired", count: 2 }],
+              annexes: { annexes: 3, with_text: 0, image_only: 1, failed: 2, by_disposition: [{ reason: "annex_mapping_unresolved", count: 2 }, { reason: "annex_text_not_available", count: 1 }] },
+            }),
+          ],
+        },
+      ],
+    };
+  });
+}
+
+const YIELD_HEADING = "How much text this site serves, class by class";
+const YIELD_CLASSES = "Versions, acts, articles served and files held, by class of act";
+const YIELD_REASONS = "Why this site serves no text for a version or a file, by class of act";
+const YIELD_ANNEXES = "Annex outcomes the corpus recorded, by class of act";
+
+/** The yield section's sentences marked as R26's, from either renderer. */
+function yieldSentences(html) {
+  return [...html.matchAll(/<p class="coverage-held" data-text-yield-sentence="">(.*?)<\/p>/gs)].map(([, value]) => strip(value));
+}
+
+test("R26's sentence and the class table say the same figures, which are the build's, in both renderers", async () => {
+  const answer = richYieldAnswer();
+  for (const render of [string, react]) {
+    const html = render(answer);
+    assert.ok(headings(html).includes(YIELD_HEADING));
+    const sentences = yieldSentences(html);
+    assert.deepEqual(sentences, [
+      "This site holds the codes and lois that Legilux publishes: text for 5 of the 13 versions its catalogue lists and for 4 of its 7 acts, 240 articles in all.",
+      "This site holds acts of the European Union in English and French: text for 3 of the 6 wordings the Publications Office lists for the acts this site selected, 560 articles in all.",
+    ]);
+    const classes = tableRows(html, YIELD_CLASSES);
+    assert.deepEqual(classes, [
+      ["Codes lu-legilux code/code", "4", "1", "2", "1", "200", "2", "3", "1", "2", "0", "0"],
+      ["Lois, consolidated versions lu-legilux loi/consolidation", "9", "4", "5", "3", "40", "2", "14", "11", "1", "1", "1"],
+      ["Luxembourg, every class lu-legilux", "13", "5", "7", "4", "240", "4", "17", "12", "3", "1", "1"],
+      ["EU acts, consolidated wordings eu-eurlex eu/consolidation", "4", "2", "6", "3", "500", "not recorded", "5", "3", "0", "not recorded", "2"],
+      ["EU acts, original wordings eu-eurlex eu/original_legal_text", "2", "1", "2", "1", "60", "not recorded", "3", "1", "0", "not recorded", "2"],
+      ["European Union, every class eu-eurlex", "6", "3", "8", "4", "560", "not recorded", "8", "4", "0", "not recorded", "4"],
+    ]);
+    // Every number R26's sentence says is its publisher's own row's, in the order the sentence says them.
+    for (const [index, publisherRow] of [[0, classes[2]], [1, classes[5]]]) {
+      const said = sentences[index].match(/\d+/g);
+      const own = index === 0
+        ? [publisherRow[2], publisherRow[1], publisherRow[4], publisherRow[3], publisherRow[5]]
+        : [publisherRow[2], publisherRow[1], publisherRow[5]];
+      assert.deepEqual(said, own, `R26's sentence and the table disagree: ${sentences[index]}`);
+    }
+    assert.deepEqual(tableRows(html, YIELD_REASONS), [
+      ["Codes lu-legilux code/code", "version with no file held", "catalogue_cc_by_not_acquired", "2"],
+      ["Codes lu-legilux code/code", "file whose text is withheld", "typed_quarantine_in_file_reading_rejected", "2"],
+      ["Codes lu-legilux code/code", "of those files, PDFs", "typed_quarantine_in_file_reading_rejected", "1"],
+      ["Lois, consolidated versions lu-legilux loi/consolidation", "version with no file held", "catalogue_licence_scl", "1"],
+      ["Lois, consolidated versions lu-legilux loi/consolidation", "version with no file held", "catalogue_no_expression", "1"],
+      ["Lois, consolidated versions lu-legilux loi/consolidation", "file whose text is withheld", "conflict", "1"],
+      ["Lois, consolidated versions lu-legilux loi/consolidation", "PDF file with no text served", NOT_STATED, "1"],
+      ["Lois, consolidated versions lu-legilux loi/consolidation", "admitted file with no article served", "akn_unsupported_content_shape", "1"],
+      ["EU acts, consolidated wordings eu-eurlex eu/consolidation", "admitted file with no article served", "formex_main_body_missing", "2"],
+      ["EU acts, original wordings eu-eurlex eu/original_legal_text", "admitted file with no article served", "formex_main_body_package_not_acquired", "2"],
+      ["EU acts, original wordings eu-eurlex eu/original_legal_text", "annex outcome", "annex_mapping_unresolved", "2"],
+      ["EU acts, original wordings eu-eurlex eu/original_legal_text", "annex outcome", "annex_text_not_available", "1"],
+    ]);
+    assert.deepEqual(tableRows(html, YIELD_ANNEXES), [
+      ["EU acts, consolidated wordings eu-eurlex eu/consolidation", "0", "0", "0", "0"],
+      ["EU acts, original wordings eu-eurlex eu/original_legal_text", "3", "0", "1", "2"],
+    ]);
+    const body = text(html);
+    assert.ok(body.includes("The corpus records no annex outcome for Luxembourg acts, so none of their annexes is counted here."));
+    // The EU's files carry no format in the corpus: said once, and never for Luxembourg, whose files do.
+    assert.ok(body.includes("The corpus records no file format for EU files, so a PDF or HTML file with no text served is counted with the admitted files with no article served, under its own reason."));
+    assert.ok(!body.includes("these Luxembourg files"));
+    assert.ok(body.includes(answer.text_yield_note), "the platform's note is reproduced verbatim");
+    assert.equal(rows(html).get("counted by the build, in the block"), "lex-v3-text-yield/1");
+  }
+});
+
+test("in French, R26's sentence says the same figures as the table, in the reviewed words", () => {
+  const answer = richYieldAnswer();
+  const copy = LIVE_CHROME.fr.coverageAnswer;
+  const html = renderToStaticMarkup(h(Coverage, { answer, copy }));
+  const sentences = yieldSentences(html);
+  assert.deepEqual(sentences, [
+    "Ce site détient les codes et lois que publie Legilux : du texte pour 5 des 13 versions que recense son catalogue et pour 4 de ses 7 actes, soit 240 articles en tout.",
+    "Ce site détient des actes de l’Union européenne en anglais et en français : du texte pour 3 des 6 libellés que l’Office des publications recense pour les actes que ce site a retenus, soit 560 articles en tout.",
+  ]);
+  const classes = tableRows(html, copy.captions.yieldClasses);
+  assert.deepEqual(classes.map((row) => row[0]), [
+    "Codes lu-legilux code/code",
+    "Lois, versions consolidées lu-legilux loi/consolidation",
+    "Luxembourg, toutes catégories lu-legilux",
+    "Actes de l’UE, libellés consolidés eu-eurlex eu/consolidation",
+    "Actes de l’UE, libellés originaux eu-eurlex eu/original_legal_text",
+    "Union européenne, toutes catégories eu-eurlex",
+  ]);
+  // The figures are the English page's, cell for cell: only the words change with the language.
+  assert.deepEqual(classes.map((row) => row.slice(1).map((value) => (value === copy.notRecorded ? "-" : value))),
+    tableRows(react(answer), YIELD_CLASSES).map((row) => row.slice(1).map((value) => (value === "not recorded" ? "-" : value))));
+  assert.deepEqual(sentences.map((sentence) => sentence.match(/\d+/g)),
+    yieldSentences(react(answer)).map((sentence) => sentence.match(/\d+/g)));
+  assert.ok(text(html).includes(copy.noAnnexOutcomes["lu-legilux"]));
+  // The page's whitespace is read normalised above; the table's own typography keeps a no-break space before the colon.
+  assert.ok(copy.textYieldLuxembourg.includes("Legilux : du texte") && copy.textYieldEurope.includes("français : du texte"));
+  for (const key of Object.keys(LIVE_CHROME.en.coverageAnswer)) {
+    assert.ok(Object.hasOwn(copy, key), `the French coverage words lack ${key}`);
+  }
+});
+
+test("a family the copy does not name is said by its token, and a class's tokens are always shown", () => {
+  const answer = mutate(richYieldAnswer(), (a) => {
+    a.text_yield.publishers[0].classes[1].family = "arrete";
+    a.text_yield.publishers[0].classes[1].kind = "as_published";
+  });
+  for (const render of [string, react]) {
+    const html = render(answer);
+    assert.ok(yieldSentences(html)[0].startsWith("This site holds the codes and arrete that Legilux publishes"), yieldSentences(html)[0]);
+    assert.equal(tableRows(html, YIELD_CLASSES)[1][0], "lu-legilux arrete/as_published");
+  }
+});
+
+test("the census's two coverage answers: the build's yield shown, and a mount whose report states none said so", async () => {
+  const reported = await capturedCoverage("the whole mount, no language asked");
+  assert.notEqual(reported.text_yield, null, "the census's mount carries its build report's yield");
+  const unreported = await capturedCoverage("the whole mount, whose build report states no text yield");
+  assert.equal(unreported.text_yield, null);
+  for (const render of [string, react]) {
+    const shown = render(reported);
+    const lu = reported.text_yield.publishers[0];
+    assert.deepEqual(tableRows(shown, YIELD_CLASSES).at(-1).slice(1, 6),
+      [lu.versions, lu.versions_with_text, lu.works, lu.works_with_text, lu.articles].map(String));
+    assert.equal(lu.articles, reported.totals.articles, "the yield's articles are the mount's");
+
+    const none = render(unreported);
+    assert.ok(headings(none).includes(YIELD_HEADING), "the section stays, and says why it is empty");
+    assert.ok(text(none).includes("This mount’s build report states no text yield per class, so this page shows none."));
+    assert.ok(text(none).includes(unreported.text_yield_note));
+    assert.deepEqual(yieldSentences(none), []);
+    assert.ok(!captions(none).includes(YIELD_CLASSES));
+  }
+  // Every member but the yield, its note, the scope and the universe row is the same answer.
+  const others = (answer) => {
+    const { text_yield: _yield, text_yield_note: _note, scope: _scope, not_held: notHeld, ...rest } = answer;
+    return { ...rest, not_held: notHeld.filter((row) => row.item !== "publisher_universe") };
+  };
+  assert.deepEqual(Object.keys(others(reported)).sort(), Object.keys(others(unreported)).sort());
+  assert.deepEqual(others(reported).totals, others(unreported).totals);
+});
+
+test("a yield that does not hold to its arithmetic or to the mount is refused by the one reader", () => {
+  const answer = richYieldAnswer();
+  assert.equal(typeof string(answer), "string");
+  const cases = [
+    [(a) => { a.text_yield.publishers[0].classes[0].files = 4; }, /holds 4 files and puts 3 in its buckets/],
+    [(a) => { a.text_yield.publishers[0].classes[0].files_withheld[0].pdf = 3; }, /withheld PDF files are counted among the withheld files/],
+    [(a) => { a.text_yield.publishers[0].classes[0].versions_with_text = 5; }, /versions with text are among its versions/],
+    [(a) => { a.text_yield.publishers[0].classes[0].versions_not_held[0].count = 4; }, /among the versions without text/],
+    [(a) => { a.text_yield.publishers[0].classes[0].versions_not_held[0].count = 0; }, /counts nothing under catalogue_cc_by_not_acquired/],
+    [(a) => { a.text_yield.publishers[0].classes[1].versions_not_held[1].reason = "catalogue_licence_scl"; }, /lists "catalogue_licence_scl" twice/],
+    [(a) => { a.text_yield.publishers[0].versions = 14; }, /versions is 14 and its classes' sum 13/],
+    [(a) => { a.text_yield.publishers[0].works = 8; }, /acts are distinct/],
+    [(a) => { a.text_yield.publishers[0].works = 4; }, /acts are distinct/],
+    [(a) => { a.text_yield.publishers[1].classes[1].annexes.failed = 1; }, /annex outcomes, which are not/],
+    [(a) => { a.text_yield.publishers[1].publisher = "xx-other"; }, /a publisher this site does not hold/],
+    [(a) => { a.text_yield.publishers[1].classes[1].kind = "consolidation"; }, /lists "eu\/consolidation" twice/],
+    [(a) => { a.text_yield.publishers[0].classes[0].more = 1; }, /carries more, which the text yield's producer does not write/],
+    [(a) => { delete a.text_yield.publishers[0].classes[0].files_pdf_only; }, /does not carry files_pdf_only/],
+    [(a) => { a.text_yield.schema = "lex-v3-text-yield/2"; }, /not lex-v3-text-yield\/1/],
+    [(a) => { a.text_yield.publishers[0].articles = 241; a.text_yield.publishers[0].classes[0].articles = 201; }, /Luxembourg articles served and this mount holds 240/],
+    [(a) => { a.members.by_outcome[1].members = 2; a.members.by_outcome[2].members = 4; }, /Luxembourg files held and this mount's members hold 16/],
+    [(a) => { a.text_yield.publishers.shift(); }, /no Luxembourg yield/],
+    [(a) => { delete a.text_yield; }, /does not carry text_yield/],
+    [(a) => { delete a.text_yield_note; }, /does not carry text_yield_note/],
+  ];
+  for (const [change, message] of cases) {
+    const mutant = mutate(answer, change);
+    assert.throws(() => readCoverage(mutant), message);
+    assert.throws(() => string(mutant), message);
+    assert.throws(() => react(mutant), message);
   }
 });

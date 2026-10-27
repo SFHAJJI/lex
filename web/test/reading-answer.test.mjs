@@ -12,7 +12,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { ADMITTING_RIGHTS_DISPOSITION, readEvidenceBundle } from "../scripts/reading-answer.mjs";
+import { ADMITTING_RIGHTS_DISPOSITION, ADMITTING_RIGHTS_DISPOSITIONS, DISCLOSED_RIGHTS_DISPOSITIONS, readEvidenceBundle } from "../scripts/reading-answer.mjs";
 
 const SAMPLES = new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url);
 const PLACEHOLDER = "<varies-per-run>";
@@ -90,6 +90,54 @@ test("the captured bundle reads: one state, its quoted articles, and what the bu
       `${article.publisherId}: the text digest is the served text's`);
   }
   assert.deepEqual(view.notHeld.map((row) => row.item), answer.not_held.map((row) => row.item));
+});
+
+test("a bundle a policy-A corpus serves under agreed_cc_by_rederived reads, and says so", async () => {
+  const answer = await capturedAnswer();
+  answer.rights_disposition = "agreed_cc_by_rederived";
+  for (const source of answer.states[0].sources) source.rights_disposition = "agreed_cc_by_rederived";
+  const view = readEvidenceBundle(answer);
+  assert.equal(view.rightsDisposition, "agreed_cc_by_rederived");
+  assert.ok(view.states[0].sources.every((source) => source.rightsDisposition === "agreed_cc_by_rederived"));
+  assert.deepEqual([...ADMITTING_RIGHTS_DISPOSITIONS], ["agreed_same_run_cc_by", "agreed_cc_by_rederived"]);
+  const single = await capturedAnswer();
+  single.rights_disposition = "sparql_cc_by_in_file_silent";
+  assert.throws(() => readEvidenceBundle(single), /a bundle served under sparql_cc_by_in_file_silent names no source disclosing it/,
+    "a single-channel disposition is no agreement, and is read only with its disclosure");
+});
+
+test("a single-channel bundle reads only with its disclosure, which the view carries once", async () => {
+  const disclosed = (a) => {
+    a.rights_disposition = "sparql_cc_by_in_file_silent";
+    for (const source of a.states[0].sources) {
+      source.rights_disposition = "sparql_cc_by_in_file_silent";
+      source.rights_disclosure = {
+        code: "lu_rights_publisher_catalogue_only_file_silent",
+        licence_page_sha256: "a".repeat(64),
+        licence_page_observed_on: "2026-10-11",
+        licence_page_observed_live: true,
+      };
+    }
+    return a;
+  };
+  const view = readEvidenceBundle(disclosed(await capturedAnswer()));
+  assert.equal(view.rightsDisposition, "sparql_cc_by_in_file_silent");
+  assert.deepEqual(view.disclosures.map((d) => [d.code, d.observedOn, d.observedLive]),
+    [["lu_rights_publisher_catalogue_only_file_silent", "2026-10-11", true]]);
+  assert.deepEqual(DISCLOSED_RIGHTS_DISPOSITIONS.slice().sort(), [
+    "sparql_cc_by_in_file_names_other_identity", "sparql_cc_by_in_file_own_block_empty", "sparql_cc_by_in_file_silent"]);
+  const undisclosed = disclosed(await capturedAnswer());
+  for (const source of undisclosed.states[0].sources) delete source.rights_disclosure;
+  assert.throws(() => readEvidenceBundle(undisclosed), /without its rights_disclosure/);
+  const wrongCode = disclosed(await capturedAnswer());
+  wrongCode.states[0].sources[0].rights_disclosure.code = "lu_rights_publisher_catalogue_only_own_block_empty";
+  assert.throws(() => readEvidenceBundle(wrongCode), /is not sparql_cc_by_in_file_silent's/);
+  const agreed = await capturedAnswer();
+  agreed.states[0].sources[0].rights_disclosure = disclosed(await capturedAnswer()).states[0].sources[0].rights_disclosure;
+  assert.throws(() => readEvidenceBundle(agreed), /which needs none/, "a two-channel agreement carries no disclosure");
+  const notApplicable = await capturedAnswer();
+  notApplicable.rights_disposition = "sparql_cc_by_in_file_not_applicable";
+  assert.throws(() => readEvidenceBundle(notApplicable), /only under/, "no ruling serves a PDF's text (L3)");
 });
 
 test("a bundle in two languages reads, one state per language in the languages' order", async () => {

@@ -72,6 +72,21 @@ public sealed partial class V3FirstMountBuildTests
 
             using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None);
             Assert.IsNotNull(mount, "the API's own mount must open what the build wrote.");
+
+            // The report states the text yield per class (R86(4)), counted from the written mount, and coverage serves it.
+            using var report = System.Text.Json.JsonDocument.Parse(await File.ReadAllBytesAsync(write.ReportPath));
+            Assert.AreEqual(V3CorpusMountWriter.ReportSchema, report.RootElement.GetProperty("schema").GetString());
+            var reported = V3TextYield.Read(report.RootElement.GetProperty("textYield"));
+            var recounted = System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(
+                V3TextYield.FromMount(members, Path.Combine(directory, V3FirstMountBuildResult.LuxembourgIndexFileName),
+                    Path.Combine(directory, V3FirstMountBuildResult.EuropeIndexFileName)), V3TextYield.JsonOptions));
+            var reportedNode = System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(reported, V3TextYield.JsonOptions));
+            Assert.IsTrue(System.Text.Json.Nodes.JsonNode.DeepEquals(recounted, reportedNode), "the report's yield is the written mount's");
+            CollectionAssert.AreEqual(new[] { "lu-legilux", "eu-eurlex" }, reported.Publishers.Select(static row => row.Publisher).ToArray());
+            Assert.AreEqual(1L, reported.Publishers[1].FilesWithText, "the EU member's main body is admitted and served");
+            var served = await V3TextYieldTests.CoverageOfAsync(mount);
+            Assert.IsTrue(System.Text.Json.Nodes.JsonNode.DeepEquals(reportedNode, System.Text.Json.Nodes.JsonNode.Parse(served.GetProperty("text_yield").GetRawText())),
+                "coverage serves the figures the build reported");
         }
         finally
         {

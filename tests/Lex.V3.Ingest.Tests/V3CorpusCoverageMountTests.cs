@@ -601,6 +601,10 @@ public sealed class V3CorpusCoverageMountTests
             "operations.served_operations",
             "requested_language",
             "scope",
+            // The build's text yield per class (R86(4)): null here, where no build report states one, with the note saying
+            // why. What the publisher's catalogue lists is said only inside it, and only as the build reported it; its own
+            // members are pinned by V3TextYieldTests, and a mount whose report states one says so in its scope.
+            "text_yield", "text_yield_note",
             "totals", "totals.articles", "totals.members", "totals.states", "totals.works",
         }.Order(StringComparer.Ordinal).ToArray();
         CollectionAssert.AreEqual(declared, paths.ToArray(), "The answer carries a property that is not declared, or lost one that is.");

@@ -762,6 +762,160 @@ function readCells(value) {
 }
 
 /**
+ * THE TEXT YIELD PER CLASS (the specification of record's R86(4) and R26), as the build reported it.
+ *
+ * `text_yield` is the build report's block, served verbatim, or null when the mount's report states
+ * none (Release 1's mounts were written before it existed), and `text_yield_note` says which and how
+ * the counts relate. Every relation the producer holds the block to (`V3TextYield.Validate`) is held
+ * again here, because this is the page a reader checks the others against and its figures are the
+ * ones R26's sentence repeats: within a class, each held file is in exactly one of with text,
+ * withheld, PDF only and failed; a part is never more than its whole; the versions with no file held
+ * are among those with no text. A publisher's versions, files and articles are its classes' sums,
+ * and its acts are distinct, so no more than the sum of its classes' and no fewer than the largest.
+ * Each list is keyed once, by a token the data carries, and none is glossed here. The block's
+ * members are exactly the producer's, so a member it grows is refused rather than dropped.
+ */
+const TEXT_YIELD_SCHEMA = 'lex-v3-text-yield/1';
+const TEXT_YIELD_PUBLISHERS = Object.freeze(['lu-legilux', 'eu-eurlex']);
+
+function requireExactly(object, keys, where) {
+  if (object === null || typeof object !== 'object' || Array.isArray(object)) {
+    throw new Error(`${where} is not an object: ${JSON.stringify(object)}`);
+  }
+  const extra = Object.keys(object).filter((key) => !keys.includes(key));
+  if (extra.length > 0) {
+    throw new Error(`${where} carries ${extra.join(', ')}, which the text yield's producer does not write`);
+  }
+  for (const key of keys) requireOwn(object, key, where);
+  return object;
+}
+
+function readReasonCounts(value, where, countKey = 'count') {
+  const rows = requireList(value, where).map((row, index) => {
+    const at = `${where}[${index}]`;
+    requireExactly(row, countKey === 'files' ? ['reason', 'files', 'pdf'] : ['reason', countKey], at);
+    const read = {
+      reason: requireText(row.reason, `${at}.reason`),
+      count: requireCount(row[countKey], `${at}.${countKey}`),
+      pdf: countKey === 'files' ? requireCount(row.pdf, `${at}.pdf`) : null,
+    };
+    if (read.count === 0) {
+      throw new Error(`${at} counts nothing under ${read.reason}; a reason is listed only where the data carries it`);
+    }
+    if (read.pdf !== null) {
+      requireAtMost(read.pdf, read.count, `${at}.pdf`, 'the withheld PDF files are counted among the withheld files');
+    }
+    return Object.freeze(read);
+  });
+  requireDistinct(rows.map((row) => row.reason), where);
+  return Object.freeze(rows);
+}
+
+const sumOf = (rows) => rows.reduce((sum, row) => sum + row.count, 0);
+
+function readYieldClass(row, where) {
+  requireExactly(row, ['family', 'kind', 'works', 'works_with_text', 'versions', 'versions_with_text', 'articles',
+    'versions_not_held', 'files', 'files_with_text', 'files_withheld', 'files_pdf_only', 'files_parse_failed', 'annexes'], where);
+  const read = {
+    family: requireText(row.family, `${where}.family`),
+    kind: requireText(row.kind, `${where}.kind`),
+    works: requireCount(row.works, `${where}.works`),
+    worksWithText: requireCount(row.works_with_text, `${where}.works_with_text`),
+    versions: requireCount(row.versions, `${where}.versions`),
+    versionsWithText: requireCount(row.versions_with_text, `${where}.versions_with_text`),
+    articles: requireCount(row.articles, `${where}.articles`),
+    versionsNotHeld: row.versions_not_held === null ? null : readReasonCounts(row.versions_not_held, `${where}.versions_not_held`),
+    files: requireCount(row.files, `${where}.files`),
+    filesWithText: requireCount(row.files_with_text, `${where}.files_with_text`),
+    filesWithheld: readReasonCounts(row.files_withheld, `${where}.files_withheld`, 'files'),
+    filesPdfOnly: row.files_pdf_only === null ? null : requireCount(row.files_pdf_only, `${where}.files_pdf_only`),
+    filesParseFailed: readReasonCounts(row.files_parse_failed, `${where}.files_parse_failed`),
+    annexes: null,
+  };
+  requireAtMost(read.worksWithText, read.works, `${where}.works_with_text`, 'the acts with text are among its acts');
+  requireAtMost(read.versionsWithText, read.versions, `${where}.versions_with_text`, 'the versions with text are among its versions');
+  // An act with text has a file with text of its own. A version need not: an EU work the census lists under two seeds gives
+  // its one file's text to both seeds' versions, so the versions with text are bounded by the versions alone.
+  requireAtMost(read.worksWithText, read.filesWithText, `${where}.works_with_text`, 'an act with text has a file with text');
+  if ((read.articles === 0) !== (read.filesWithText === 0) || (read.articles === 0) !== (read.versionsWithText === 0)) {
+    throw new Error(`${where} counts ${read.articles} articles beside ${read.filesWithText} files and ${read.versionsWithText} versions with text; a file or version has text exactly when an article is served`);
+  }
+  const bucketed = read.filesWithText + sumOf(read.filesWithheld) + (read.filesPdfOnly ?? 0) + sumOf(read.filesParseFailed);
+  if (bucketed !== read.files) {
+    throw new Error(`${where} holds ${read.files} files and puts ${bucketed} in its buckets; each held file is in exactly one of with text, withheld, PDF only and failed`);
+  }
+  if (read.versionsNotHeld !== null) {
+    requireAtMost(sumOf(read.versionsNotHeld), read.versions - read.versionsWithText, `${where}.versions_not_held`,
+      'a version with no file held has no text, so these are among the versions without text');
+  }
+  if (row.annexes !== null) {
+    const at = `${where}.annexes`;
+    requireExactly(row.annexes, ['annexes', 'with_text', 'image_only', 'failed', 'by_disposition'], at);
+    const annexes = {
+      annexes: requireCount(row.annexes.annexes, `${at}.annexes`),
+      withText: requireCount(row.annexes.with_text, `${at}.with_text`),
+      imageOnly: requireCount(row.annexes.image_only, `${at}.image_only`),
+      failed: requireCount(row.annexes.failed, `${at}.failed`),
+      byDisposition: readReasonCounts(row.annexes.by_disposition, `${at}.by_disposition`),
+    };
+    if (annexes.withText + annexes.imageOnly + annexes.failed !== annexes.annexes || sumOf(annexes.byDisposition) !== annexes.annexes) {
+      throw new Error(`${at} counts ${annexes.annexes} annex outcomes, which are not its with-text, image-only and failed ones, or its dispositions' sum`);
+    }
+    read.annexes = Object.freeze(annexes);
+  }
+  return Object.freeze(read);
+}
+
+/** The text yield the answer serves, read and held to its arithmetic, or null when the build reported none. */
+export function readTextYield(value) {
+  if (value === null) return null;
+  const where = 'text_yield';
+  requireExactly(value, ['schema', 'publishers'], where);
+  if (value.schema !== TEXT_YIELD_SCHEMA) {
+    throw new Error(`${where}.schema is ${JSON.stringify(value.schema)}, not ${TEXT_YIELD_SCHEMA}, the block this page reads`);
+  }
+  const publishers = requireList(value.publishers, `${where}.publishers`).map((publisher, index) => {
+    const at = `${where}.publishers[${index}]`;
+    requireExactly(publisher, ['publisher', 'works', 'works_with_text', 'versions', 'versions_with_text', 'articles',
+      'files', 'files_with_text', 'classes'], at);
+    if (!TEXT_YIELD_PUBLISHERS.includes(publisher.publisher)) {
+      throw new Error(`${at}.publisher is ${JSON.stringify(publisher.publisher)}, a publisher this site does not hold`);
+    }
+    const classes = requireList(publisher.classes, `${at}.classes`).map((row, position) => readYieldClass(row, `${at}.classes[${position}]`));
+    requireDistinct(classes.map((row) => `${row.family}/${row.kind}`), `${at}.classes`);
+    const read = {
+      publisher: publisher.publisher,
+      works: requireCount(publisher.works, `${at}.works`),
+      worksWithText: requireCount(publisher.works_with_text, `${at}.works_with_text`),
+      versions: requireCount(publisher.versions, `${at}.versions`),
+      versionsWithText: requireCount(publisher.versions_with_text, `${at}.versions_with_text`),
+      articles: requireCount(publisher.articles, `${at}.articles`),
+      files: requireCount(publisher.files, `${at}.files`),
+      filesWithText: requireCount(publisher.files_with_text, `${at}.files_with_text`),
+      classes: Object.freeze(classes),
+    };
+    for (const [key, member] of [['versions', 'versions'], ['versionsWithText', 'versions_with_text'], ['articles', 'articles'],
+      ['files', 'files'], ['filesWithText', 'files_with_text']]) {
+      const summed = classes.reduce((sum, row) => sum + row[key], 0);
+      if (summed !== read[key]) {
+        throw new Error(`${at}.${member} is ${read[key]} and its classes' sum ${summed}; a publisher's ${member} are its classes' sum`);
+      }
+    }
+    for (const [key, member] of [['works', 'works'], ['worksWithText', 'works_with_text']]) {
+      const values = classes.map((row) => row[key]);
+      const summed = values.reduce((sum, count) => sum + count, 0);
+      if (read[key] > summed || read[key] < Math.max(0, ...values)) {
+        throw new Error(`${at}.${member} is ${read[key]}; acts are distinct, so no more than its classes' sum (${summed}) and no fewer than the largest class's`);
+      }
+    }
+    requireAtMost(read.worksWithText, read.works, `${at}.works_with_text`, 'the acts with text are among its acts');
+    return Object.freeze(read);
+  });
+  requireDistinct(publishers.map((publisher) => publisher.publisher), `${where}.publishers`);
+  return Object.freeze({ schema: value.schema, publishers: Object.freeze(publishers) });
+}
+
+/**
  * Validates one `coverage_report` and returns what the renderers lay out.
  *
  * Every rule lives here and is applied once, so the React port can share them rather than
@@ -822,15 +976,38 @@ export function readCoverage(answer) {
   // the page whose job is to say what is missing a reader cannot tell which of the two governs.
   requireDistinct(notHeldRows.map((row) => row.item), 'the list of what is not held');
 
+  const members = readMembers(requireOwn(answer, 'members', where), totals);
+  const textYield = readTextYield(requireOwn(answer, 'text_yield', where));
+  if (textYield !== null) {
+    // The yield's Luxembourg figures are the mount's own, which the producer holds the report to when the mount opens: its
+    // articles are the articles the index holds, and its files the members whose file the corpus holds, acquired or with
+    // their text withheld.
+    const luxembourg = textYield.publishers.find((publisher) => publisher.publisher === 'lu-legilux');
+    if (luxembourg === undefined) {
+      throw new Error('text_yield reports no Luxembourg yield on a mount whose Luxembourg index answered this coverage');
+    }
+    if (luxembourg.articles !== totals.articles) {
+      throw new Error(`text_yield counts ${luxembourg.articles} Luxembourg articles served and this mount holds ${totals.articles}; the yield is the mount's`);
+    }
+    const held = members.byOutcome
+      .filter((row) => row.outcome === 'acquired' || row.outcome === 'rights_withheld')
+      .reduce((sum, row) => sum + row.members, 0);
+    if (luxembourg.files !== held) {
+      throw new Error(`text_yield counts ${luxembourg.files} Luxembourg files held and this mount's members hold ${held}; the yield is the mount's`);
+    }
+  }
+
   return {
     scope: requireText(requireOwn(answer, 'scope', where), 'scope'),
     countsNote: requireText(requireOwn(answer, 'counts_note', where), 'counts_note'),
+    textYield,
+    textYieldNote: requireText(requireOwn(answer, 'text_yield_note', where), 'text_yield_note'),
     requestedLanguage,
     languagesHeld,
     mounted,
     totals,
     languages,
-    members: readMembers(requireOwn(answer, 'members', where), totals),
+    members,
     operations: readOperations(requireOwn(answer, 'operations', where)),
     history: readHistory(requireOwn(answer, 'history', where)),
     capabilityCells: readCells(requireOwn(answer, 'capability_cells', where)),
@@ -994,6 +1171,7 @@ export const COVERAGE_COPY = Object.freeze({
     about: 'What this page is about',
     counted: 'How these counts are counted',
     holds: 'What this mount holds',
+    textYield: 'How much text this site serves, class by class',
     recorded: 'What the corpus recorded for its members',
     asked: 'What can be asked of this mount',
     history: 'What this mount keeps of its history',
@@ -1017,6 +1195,7 @@ export const COVERAGE_COPY = Object.freeze({
     nightlyDays: 'days each day’s last build is kept',
     retentionEvaluatedAt: 'retention decided as of',
     snapshotsWithoutText: 'builds the log names whose text this mount does not hold',
+    textYieldBlock: 'counted by the build, in the block',
   }),
   languagesHeld: 'Languages held: {languages}',
   captions: Object.freeze({
@@ -1027,6 +1206,9 @@ export const COVERAGE_COPY = Object.freeze({
     capabilities: 'Measured capabilities, by operation, column, field, language and period',
     notServedData: 'The data that would serve each operation served from no data',
     snapshots: 'Snapshots whose text this mount holds',
+    yieldClasses: 'Versions, acts, articles served and files held, by class of act',
+    yieldReasons: 'Why this site serves no text for a version or a file, by class of act',
+    yieldAnnexes: 'Annex outcomes the corpus recorded, by class of act',
   }),
   scrollable: '{caption}, scrollable',
   columns: Object.freeze({
@@ -1057,6 +1239,25 @@ export const COVERAGE_COPY = Object.freeze({
     observation: 'observation',
     builtAt: 'built at',
     keptAs: 'kept as',
+    yieldClass: 'class',
+    yieldVersions: 'versions',
+    yieldVersionsWithText: 'versions with text',
+    yieldActs: 'acts',
+    yieldActsWithText: 'acts with text',
+    yieldArticles: 'articles served',
+    yieldVersionsNotHeld: 'versions with no file held',
+    yieldFiles: 'files held',
+    yieldFilesWithText: 'files with text',
+    yieldFilesWithheld: 'files whose text is withheld',
+    yieldFilesPdfOnly: 'PDF files with no text served',
+    yieldFilesParseFailed: 'admitted files with no article served',
+    yieldOutcome: 'what',
+    yieldReason: 'reason, as the data gives it',
+    yieldCount: 'count',
+    yieldAnnexes: 'annex outcomes',
+    yieldAnnexesWithText: 'with text',
+    yieldAnnexesImageOnly: 'image-only',
+    yieldAnnexesFailed: 'failed',
   }),
   held: HELD,
   none: 'none',
@@ -1074,6 +1275,42 @@ export const COVERAGE_COPY = Object.freeze({
   narrowed: 'This answer was narrowed to {language} when it was requested. Only the language rows and the measured capabilities are that language’s. The totals here, the members below and everything else on this page are the whole mount’s.',
   unserved: 'The index measured a capability for {operations}, which this mount does not serve. What the index measured and what the mount answers are two different facts, and here they disagree.',
   notHeldRow: '{item}: {reason}',
+  // The text yield per class (R86(4)) and R26's sentence, which says the same figures as the table under it.
+  textYieldPublishers: Object.freeze({ 'lu-legilux': 'Luxembourg', 'eu-eurlex': 'European Union' }),
+  textYieldClasses: Object.freeze({
+    'code/code': 'Codes',
+    'loi/as_published': 'Lois, as published',
+    'loi/consolidation': 'Lois, consolidated versions',
+    'rgd/as_published': 'Grand-ducal regulations, as published',
+    'rgd/consolidation': 'Grand-ducal regulations, consolidated versions',
+    'eu/original_legal_text': 'EU acts, original wordings',
+    'eu/consolidation': 'EU acts, consolidated wordings',
+  }),
+  textYieldFamilies: Object.freeze({ code: 'codes', loi: 'lois', rgd: 'grand-ducal regulations' }),
+  textYieldAllClasses: '{publisher}, every class',
+  textYieldOutcomes: Object.freeze({
+    notHeld: 'version with no file held',
+    withheld: 'file whose text is withheld',
+    withheldPdf: 'of those files, PDFs',
+    pdfOnly: 'PDF file with no text served',
+    parseFailed: 'admitted file with no article served',
+    annex: 'annex outcome',
+  }),
+  textYieldListLast: '{items} and {last}',
+  textYieldListNext: '{items}, {item}',
+  textYieldLuxembourg: 'This site holds the {families} that Legilux publishes: text for {versionsWithText} of the {versions} versions its catalogue lists and for {worksWithText} of its {works} acts, {articles} articles in all.',
+  textYieldEurope: 'This site holds acts of the European Union in English and French: text for {versionsWithText} of the {versions} wordings the Publications Office lists for the acts this site selected, {articles} articles in all.',
+  noTextYield: 'This mount’s build report states no text yield per class, so this page shows none.',
+  noTextYieldReasons: 'No version or file is counted without text here.',
+  noAnnexOutcomes: Object.freeze({
+    'lu-legilux': 'The corpus records no annex outcome for Luxembourg acts, so none of their annexes is counted here.',
+    'eu-eurlex': 'The corpus records no annex outcome for EU acts, so none of their annexes is counted here.',
+  }),
+  noFileFormat: Object.freeze({
+    'lu-legilux': 'The corpus records no file format for these Luxembourg files, so a PDF file with no text served is counted with the admitted files with no article served, under its own reason.',
+    'eu-eurlex': 'The corpus records no file format for EU files, so a PDF or HTML file with no text served is counted with the admitted files with no article served, under its own reason.',
+  }),
+  notRecorded: 'not recorded',
 });
 
 /** Each table's columns, in order, as keys of `COVERAGE_COPY.columns`. */
@@ -1086,7 +1323,128 @@ export const COVERAGE_COLUMNS = Object.freeze({
   capabilities: Object.freeze(['operation', 'column', 'field', 'language', 'from', 'to', 'population']),
   notServedData: Object.freeze(['operation', 'reason', 'requestedMode', 'dataNeeded']),
   snapshots: Object.freeze(['snapshot', 'observation', 'builtAt', 'keptAs']),
+  yieldClasses: Object.freeze(['yieldClass', 'yieldVersions', 'yieldVersionsWithText', 'yieldActs', 'yieldActsWithText',
+    'yieldArticles', 'yieldVersionsNotHeld', 'yieldFiles', 'yieldFilesWithText', 'yieldFilesWithheld', 'yieldFilesPdfOnly',
+    'yieldFilesParseFailed']),
+  yieldReasons: Object.freeze(['yieldClass', 'yieldOutcome', 'yieldReason', 'yieldCount']),
+  yieldAnnexes: Object.freeze(['yieldClass', 'yieldAnnexes', 'yieldAnnexesWithText', 'yieldAnnexesImageOnly', 'yieldAnnexesFailed']),
 });
+
+/**
+ * THE TEXT YIELD'S ROWS, decided once for both renderers: each a class's or a publisher's, its cells in
+ * `COVERAGE_COLUMNS.yieldClasses` order after the class cell. A publisher's own row follows its classes:
+ * its acts are its own distinct count and every other cell its classes' sum. A count the publisher does
+ * not record (`null`: the EU's versions with no file held, and its PDF files, whose format its corpus does
+ * not record) is null on its rows, and is
+ * said "not recorded", never zero.
+ */
+export function textYieldClassRows(textYield) {
+  const sum = (rows, read) => (rows.some((row) => read(row) === null) ? null : rows.reduce((total, row) => total + read(row), 0));
+  const cellsOf = (source, rows) => [
+    source.versions, source.versionsWithText, source.works, source.worksWithText, source.articles,
+    sum(rows, (row) => (row.versionsNotHeld === null ? null : sumOf(row.versionsNotHeld))),
+    source.files, source.filesWithText,
+    rows.reduce((total, row) => total + sumOf(row.filesWithheld), 0),
+    sum(rows, (row) => row.filesPdfOnly),
+    rows.reduce((total, row) => total + sumOf(row.filesParseFailed), 0),
+  ];
+  return textYield.publishers.flatMap((publisher) => [
+    ...publisher.classes.map((row) => Object.freeze({
+      publisher: publisher.publisher, family: row.family, kind: row.kind, cells: Object.freeze(cellsOf(row, [row])),
+    })),
+    Object.freeze({ publisher: publisher.publisher, family: null, kind: null, cells: Object.freeze(cellsOf(publisher, publisher.classes)) }),
+  ]);
+}
+
+/**
+ * Why a version or a file has no text, one row per class, outcome and reason, in the order the data
+ * gives them: the versions with no file held, by what the catalogue says of them; the withheld files,
+ * by their rights disposition, and how many of them are PDFs; the PDF files with no text; the admitted
+ * files with no article, by their dispositions; and the annex outcomes, by disposition. Each reason is
+ * the data's token, printed as it is sent; a PDF-only file carries none.
+ */
+export function textYieldReasonRows(textYield) {
+  return textYield.publishers.flatMap((publisher) => publisher.classes.flatMap((row) => {
+    const of = (outcome, reason, count) => Object.freeze({ publisher: publisher.publisher, family: row.family, kind: row.kind, outcome, reason, count });
+    return [
+      ...(row.versionsNotHeld ?? []).map((count) => of('notHeld', count.reason, count.count)),
+      ...row.filesWithheld.flatMap((count) => [
+        of('withheld', count.reason, count.count),
+        ...(count.pdf === 0 ? [] : [of('withheldPdf', count.reason, count.pdf)]),
+      ]),
+      ...(row.filesPdfOnly ? [of('pdfOnly', null, row.filesPdfOnly)] : []),
+      ...row.filesParseFailed.map((count) => of('parseFailed', count.reason, count.count)),
+      ...(row.annexes?.byDisposition ?? []).map((count) => of('annex', count.reason, count.count)),
+    ];
+  }));
+}
+
+/** The annex counts of each class whose files the corpus records annex outcomes for (R84's with text, image-only and failed). */
+export function textYieldAnnexRows(textYield) {
+  return textYield.publishers.flatMap((publisher) => publisher.classes
+    .filter((row) => row.annexes !== null)
+    .map((row) => Object.freeze({
+      publisher: publisher.publisher, family: row.family, kind: row.kind,
+      cells: Object.freeze([row.annexes.annexes, row.annexes.withText, row.annexes.imageOnly, row.annexes.failed]),
+    })));
+}
+
+/**
+ * The publishers some of whose files the corpus records no format for (`files_pdf_only` null: the EU), each said once: a PDF
+ * of theirs with no text served is counted with the admitted files with no article served, under its own reason.
+ */
+export function textYieldPublishersWithoutFileFormat(textYield) {
+  return textYield.publishers
+    .filter((publisher) => publisher.classes.some((row) => row.filesPdfOnly === null && row.files > 0))
+    .map((publisher) => publisher.publisher);
+}
+
+/** The publishers whose files the corpus records no annex outcome for, each said once. */
+export function textYieldPublishersWithoutAnnexes(textYield) {
+  return textYield.publishers
+    .filter((publisher) => publisher.classes.length > 0 && publisher.classes.every((row) => row.annexes === null))
+    .map((publisher) => publisher.publisher);
+}
+
+/** A class's name in the copy, or null for a class the copy does not name (its tokens are shown either way). */
+export function textYieldClassLabel(row, copy = COVERAGE_COPY) {
+  return row.family === null
+    ? fill(copy.textYieldAllClasses, { publisher: textYieldPublisherLabel(row.publisher, copy) })
+    : copy.textYieldClasses[`${row.family}/${row.kind}`] ?? null;
+}
+
+/** A publisher's name in the copy, or its token. */
+export function textYieldPublisherLabel(publisher, copy = COVERAGE_COPY) {
+  return copy.textYieldPublishers[publisher] ?? publisher;
+}
+
+/** Items joined as a sentence lists them, in the copy's words: "a", "a and b", "a, b and c". */
+function listed(items, copy) {
+  if (items.length <= 1) return items.join('');
+  const head = items.slice(1, -1).reduce((joined, item) => fill(copy.textYieldListNext, { items: joined, item }), items[0]);
+  return fill(copy.textYieldListLast, { items: head, last: items[items.length - 1] });
+}
+
+/**
+ * R26'S SENTENCE: the declared scope with the computed figures, one sentence per publisher, every number
+ * the publisher's own row in the table below (its versions with text and versions, its acts with text and
+ * acts, its articles), and the families named from the classes the data holds, never from copy alone.
+ */
+export function textYieldSentences(textYield, copy = COVERAGE_COPY) {
+  return textYield.publishers.map((publisher) => {
+    const values = {
+      versionsWithText: publisher.versionsWithText,
+      versions: publisher.versions,
+      worksWithText: publisher.worksWithText,
+      works: publisher.works,
+      articles: publisher.articles,
+    };
+    if (publisher.publisher === 'eu-eurlex') return fill(copy.textYieldEurope, values);
+    const families = [...new Set(publisher.classes.map((row) => row.family))]
+      .map((family) => copy.textYieldFamilies[family] ?? family);
+    return fill(copy.textYieldLuxembourg, { ...values, families: listed(families, copy) });
+  });
+}
 
 function languageRows(languages) {
   return languages.map((language) => (
@@ -1144,6 +1502,67 @@ function historySection(history) {
   );
 }
 
+/** A count, or "not recorded" for one the publisher does not record. */
+function counted(value) {
+  return value === null ? escapeHtml(COVERAGE_COPY.notRecorded) : String(value);
+}
+
+/** A class's cell: its name where the copy has one, and always its tokens as the data sends them. */
+function classCell(row) {
+  const label = textYieldClassLabel(row);
+  const tokens = row.family === null ? code(row.publisher) : `${code(row.publisher)} ${code(`${row.family}/${row.kind}`)}`;
+  return label === null ? tokens : `${escapeHtml(label)} ${tokens}`;
+}
+
+/**
+ * The text yield per class (R86(4)): R26's sentence, the table of classes with each publisher's own row,
+ * why a version or a file has no text, the annex counts, and the platform's note; or, for a mount whose
+ * build reported none, the sentence saying so and the note.
+ */
+function textYieldSection(view) {
+  const open = `<section class="coverage-block"><h2>${escapeHtml(COVERAGE_COPY.headings.textYield)}</h2>`;
+  const note = `<p class="coverage-note">${escapeHtml(view.textYieldNote)}</p></section>`;
+  const textYield = view.textYield;
+  if (textYield === null) {
+    return open + `<p class="coverage-held">${escapeHtml(COVERAGE_COPY.noTextYield)}</p>` + note;
+  }
+  const reasons = textYieldReasonRows(textYield);
+  const annexes = textYieldAnnexRows(textYield);
+  return (
+    open
+    + textYieldSentences(textYield).map((sentence) => `<p class="coverage-held" data-text-yield-sentence="">${escapeHtml(sentence)}</p>`).join('')
+    + '<table class="coverage-facts"><tbody>'
+    + row(COVERAGE_COPY.facts.textYieldBlock, code(textYield.schema))
+    + '</tbody></table>'
+    + table({
+      caption: COVERAGE_COPY.captions.yieldClasses,
+      head: COVERAGE_COLUMNS.yieldClasses.map((key) => COVERAGE_COPY.columns[key]),
+      rows: textYieldClassRows(textYield).map((yieldRow) => (
+        `<tr><td>${classCell(yieldRow)}</td>${yieldRow.cells.map((value) => `<td>${counted(value)}</td>`).join('')}</tr>`)).join(''),
+    })
+    + (reasons.length === 0
+      ? `<p class="coverage-note">${escapeHtml(COVERAGE_COPY.noTextYieldReasons)}</p>`
+      : table({
+        caption: COVERAGE_COPY.captions.yieldReasons,
+        head: COVERAGE_COLUMNS.yieldReasons.map((key) => COVERAGE_COPY.columns[key]),
+        rows: reasons.map((reason) => (
+          `<tr><td>${classCell(reason)}</td><td>${escapeHtml(COVERAGE_COPY.textYieldOutcomes[reason.outcome])}</td>`
+          + `<td>${cell(reason.reason, code)}</td><td>${reason.count}</td></tr>`)).join(''),
+      }))
+    + (annexes.length === 0 ? '' : table({
+      caption: COVERAGE_COPY.captions.yieldAnnexes,
+      head: COVERAGE_COLUMNS.yieldAnnexes.map((key) => COVERAGE_COPY.columns[key]),
+      rows: annexes.map((annex) => (
+        `<tr><td>${classCell(annex)}</td>${annex.cells.map((value) => `<td>${value}</td>`).join('')}</tr>`)).join(''),
+    }))
+    + textYieldPublishersWithoutFileFormat(textYield).map((publisher) => (
+      `<p class="coverage-note">${escapeHtml(COVERAGE_COPY.noFileFormat[publisher])}</p>`)).join('')
+    + textYieldPublishersWithoutAnnexes(textYield).map((publisher) => (
+      `<p class="coverage-note">${escapeHtml(COVERAGE_COPY.noAnnexOutcomes[publisher])}</p>`)).join('')
+    + note
+  );
+}
+
 /** The page. Every rule is in readCoverage; this decides only how the result looks. */
 export function renderCoverage(answer) {
   const view = readCoverage(answer);
@@ -1181,6 +1600,7 @@ export function renderCoverage(answer) {
         rows: languageRows(view.languages),
       }) + `<p class="coverage-note">${escapeHtml(STATE_RANGE_NOTE)}</p>`)
     + '</section>'
+    + textYieldSection(view)
     + `<section class="coverage-block"><h2>${escapeHtml(COVERAGE_COPY.headings.recorded)}</h2>`
     + table({
       caption: COVERAGE_COPY.captions.outcomes,

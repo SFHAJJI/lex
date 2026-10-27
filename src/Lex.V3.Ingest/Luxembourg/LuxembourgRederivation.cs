@@ -118,8 +118,25 @@ public static class LuxembourgRederivation
     /// </summary>
     public const string Release1RuleSet = "lu-release-1";
 
+    /// <summary>
+    /// Release 2's rule set (LU-DATA-DESIGN v2 §1.1, §1.2, §2.2 "R1 with rights"): Release 1's rules, and before them in-file
+    /// rights reading /2 and resolution /2 over every held body, under admission policy A. A member the acquisition admitted
+    /// (<c>agreed_same_run_cc_by</c>) keeps its resolution once reading /2 agrees with it; every other member takes its
+    /// resolution /2.
+    /// </summary>
+    public const string Release2RuleSet = "lu-release-2";
+
     /// <summary>The value of the record's <c>rights_resolution</c> under Release 1: the acquisition's own, re-read by nothing.</summary>
     private const string RightsAsAcquired = "as_acquired";
+
+    /// <summary>
+    /// The value of the record's <c>rights_resolution</c> under Release 2: every held body re-read by reading /2 and
+    /// re-resolved by resolution /2, the acquisition's admissions kept where /2 agrees with them.
+    /// </summary>
+    private const string RightsReResolved = "re_resolved_reading_2_keeping_agreed_admissions";
+
+    /// <summary>The schema of the in-file rights evidence index /2 Release 2 holds (every reading, refused ones too).</summary>
+    internal const string InFileEvidenceTwoSchema = "lex-lu-in-file-rights-evidence/2";
 
     /// <summary>
     /// The record's <c>publisher_session</c>: the path holds no transport and builds no session. A statement of the path,
@@ -128,34 +145,69 @@ public static class LuxembourgRederivation
     private const string NoPublisherSession = "none_on_this_path";
 
     /// <summary>The rule sets this build implements, sorted ordinally.</summary>
-    public static IReadOnlyList<string> ImplementedRuleSets { get; } = Array.AsReadOnly(new[] { Release1RuleSet });
+    public static IReadOnlyList<string> ImplementedRuleSets { get; } = Array.AsReadOnly(new[] { Release1RuleSet, Release2RuleSet });
 
-    /// <summary>The rules this build runs for <paramref name="ruleSet"/>; a set it does not implement throws.</summary>
+    /// <summary>
+    /// The rules this build runs for <paramref name="ruleSet"/>; a set it does not implement throws. Release 2 names the rights
+    /// rules first (reading /2, then resolution /2), then Release 1's three.
+    /// </summary>
     public static IReadOnlyList<LuxembourgRederivationRule> RulesOf(string ruleSet) => ruleSet switch
     {
-        Release1RuleSet => Array.AsReadOnly(new[]
+        Release1RuleSet => Array.AsReadOnly(ProfileRules()),
+        Release2RuleSet => Array.AsReadOnly(new[]
         {
             new LuxembourgRederivationRule(
-                FirstLine(LuxembourgAknArticleInventoryProducerV4.CopyRuleProfileBytes()),
-                LuxembourgAknArticleInventoryProducerV4.RuleProfileSha256),
+                FirstLine(LuxembourgInFileRightsReader.CopyReadingTwoProfileBytes()),
+                LuxembourgInFileRightsReader.ReadingTwoProfileSha256),
             new LuxembourgRederivationRule(
-                FirstLine(LuxembourgAknLegalContentProfile3Producer.CopyRuleProfileBytes()),
-                LuxembourgAknLegalContentProfile3Producer.RuleProfileSha256),
-            // State digest /2 (index 9's states): inputs written before index 9 name two rules and refuse here, so no
-            // build ever runs them under a state rule they did not name.
-            new LuxembourgRederivationRule(
-                FirstLine(LuxembourgIndexBuilder.CopyStateRuleProfileBytes()),
-                LuxembourgIndexBuilder.StateRuleProfileSha256),
-        }),
+                FirstLine(LuxembourgRightsChannels.CopyResolutionTwoProfileBytes()),
+                LuxembourgRightsChannels.ResolutionTwoProfileSha256),
+        }.Concat(ProfileRules()).ToArray()),
         _ => throw new ArgumentException(
             $"Rule set '{ruleSet}' is not one this build implements ({string.Join(", ", ImplementedRuleSets)}).",
             nameof(ruleSet)),
     };
 
-    /// <summary>The admission policy <paramref name="ruleSet"/> names: Release 1 changes no rights, so its policy is /1.</summary>
+    private static LuxembourgRederivationRule[] ProfileRules() =>
+    [
+        new LuxembourgRederivationRule(
+            FirstLine(LuxembourgAknArticleInventoryProducerV4.CopyRuleProfileBytes()),
+            LuxembourgAknArticleInventoryProducerV4.RuleProfileSha256),
+        new LuxembourgRederivationRule(
+            FirstLine(LuxembourgAknLegalContentProfile3Producer.CopyRuleProfileBytes()),
+            LuxembourgAknLegalContentProfile3Producer.RuleProfileSha256),
+        // State digest /2 (index 9's states): inputs written before index 9 name two rules and refuse here, so no
+        // build ever runs them under a state rule they did not name.
+        new LuxembourgRederivationRule(
+            FirstLine(LuxembourgIndexBuilder.CopyStateRuleProfileBytes()),
+            LuxembourgIndexBuilder.StateRuleProfileSha256),
+    ];
+
+    // ---- The owner's rulings Release 2 applies (LU-DATA-DESIGN v2 §5, asked 2026-10-27), each OFF until the owner's yes. ----
+    // A yes sets its switch here and gives the policy entry the owner's words (LuxembourgRightsAdmissionPolicies); the rule
+    // set then names that entry, its digest changes, and so do the inputs a derive is sealed with. Nothing else changes.
+
+    /// <summary>L2: files whose only licence statement names another identity, on the SPARQL declaration alone.</summary>
+    private const bool Release2RulingL2 = false;
+
+    /// <summary>L1: files that state no licence at all, on the SPARQL declaration alone.</summary>
+    private const bool Release2RulingL1 = false;
+
+    /// <summary>L1b: files whose own block states no licence, on the SPARQL declaration alone.</summary>
+    private const bool Release2RulingL1b = false;
+
+    /// <summary>Option (b) of the rulings above: only licence pages the acquisition observed live. Option (a) when false.</summary>
+    private const bool Release2LivePagesOnly = false;
+
+    /// <summary>
+    /// The admission policy <paramref name="ruleSet"/> names: Release 1 changes no rights, so its policy is /1; Release 2
+    /// names policy A, which adds <c>agreed_cc_by_rederived</c>, with the owner's rulings its switches turn on (none yet).
+    /// </summary>
     public static string AdmissionPolicyOf(string ruleSet) => ruleSet switch
     {
         Release1RuleSet => LuxembourgRightsAdmissionPolicies.Policy1Sha256,
+        Release2RuleSet => LuxembourgRightsAdmissionPolicies.PolicyFor(
+            Release2RulingL1, Release2RulingL1b, Release2RulingL2, Release2LivePagesOnly),
         _ => throw new ArgumentException(
             $"Rule set '{ruleSet}' is not one this build implements ({string.Join(", ", ImplementedRuleSets)}).",
             nameof(ruleSet)),
@@ -186,8 +238,8 @@ public static class LuxembourgRederivation
         if (!string.Equals(admissionPolicySha256, policy, StringComparison.Ordinal))
         {
             throw new CustodyIntegrityException(
-                $"The re-derivation names admission policy {admissionPolicySha256}; rule set {ruleSet} names policy {policy} "
-                + "(its admission is the acquisition's), and no policy is substituted.");
+                $"The re-derivation names admission policy {admissionPolicySha256}; rule set {ruleSet} names policy {policy}, "
+                + "and no policy is substituted.");
         }
     }
 
@@ -197,7 +249,42 @@ public static class LuxembourgRederivation
     /// custody. The returned result holds no reference to R0's inventory /3 or content /1 population, so a caller that drops
     /// <paramref name="verified"/> drops them.
     /// </summary>
-    public static async Task<LuxembourgFirstMountAcquisitionResult> ApplyAsync(
+    public static Task<LuxembourgFirstMountAcquisitionResult> ApplyAsync(
+        ICustodyStore custodyStore,
+        LuxembourgFirstMountAcquisitionResult verified,
+        LuxembourgRederivationRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        RequireImplemented(request.RuleSet, request.Rules, request.AdmissionPolicySha256);
+        return ApplyCoreAsync(custodyStore, verified, request, cancellationToken);
+    }
+
+    /// <summary>
+    /// Release 2 under one of the owner's rulings before the owner gives it: the rule set's rules exactly, under a registered
+    /// policy over policy A that the rule set does not name yet (<see cref="LuxembourgRightsAdmissionPolicies.PolicyFor"/>).
+    /// What a yes would serve is measured and tested this way; the derive's path (<see cref="ApplyAsync"/>, inputs /3) never
+    /// substitutes a policy, and the record names the policy this ran under.
+    /// </summary>
+    internal static Task<LuxembourgFirstMountAcquisitionResult> ApplyUnderOwnersRulingAsync(
+        ICustodyStore custodyStore,
+        LuxembourgFirstMountAcquisitionResult verified,
+        LuxembourgRederivationRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        RequireImplemented(request.RuleSet, request.Rules, AdmissionPolicyOf(request.RuleSet));
+        if (request.RuleSet != Release2RuleSet || !LuxembourgRightsAdmissionPolicies.IsRegistered(request.AdmissionPolicySha256) ||
+            !LuxembourgRightsAdmissionPolicies.Admits(request.AdmissionPolicySha256, LuxembourgRightsChannelDisposition.AgreedCcByRederived))
+        {
+            throw new CustodyIntegrityException(
+                $"The owner's rulings are measured under Release 2 and a registered policy over policy A, not {request.AdmissionPolicySha256}.");
+        }
+
+        return ApplyCoreAsync(custodyStore, verified, request, cancellationToken);
+    }
+
+    private static async Task<LuxembourgFirstMountAcquisitionResult> ApplyCoreAsync(
         ICustodyStore custodyStore,
         LuxembourgFirstMountAcquisitionResult verified,
         LuxembourgRederivationRequest request,
@@ -207,7 +294,6 @@ public static class LuxembourgRederivation
         ArgumentNullException.ThrowIfNull(verified);
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
-        RequireImplemented(request.RuleSet, request.Rules, request.AdmissionPolicySha256);
         if (request.DerivedAt.Offset != TimeSpan.Zero || request.DerivedAt.Ticks % TimeSpan.TicksPerSecond != 0)
         {
             throw new CustodyIntegrityException("A re-derivation's derived_at is a whole UTC second.");
@@ -284,7 +370,22 @@ public static class LuxembourgRederivation
         frozenInventory = null!;
         frozenContent = null!;
 
-        // ---- The later rules over R0's own population object, through each producer's production door. ----
+        // ---- Release 2: rights re-read by reading /2 and re-resolved by resolution /2, then bound on a run of R0's own. ----
+        var acquiredDispositions = BodyCounts(population.Inputs.Select(static input => ContractWire.NameOf(input.RightsResolution!.Disposition)));
+        RightsPart? rights = null;
+        if (string.Equals(request.RuleSet, Release2RuleSet, StringComparison.Ordinal))
+        {
+            (var rebound, rights) = await RederiveRightsAsync(custodyStore, run.TypedAssertions, population, acquiredDispositions,
+                    request.AdmissionPolicySha256, resumption?.ResumedAt, cancellationToken)
+                .ConfigureAwait(false);
+
+            // 6. A run of R0's own carrying the re-bound population: the run is re-made here, at R1's one door onto it, by
+            // the run's own copy, which refuses a refused run and a population that is not its own members'.
+            run = run.WithHeldBodyDerivationPopulation(rebound);
+            population = run.HeldBodyDerivationPopulation!;
+        }
+
+        // ---- The later rules over the run's own population object, through each producer's production door. ----
         var inventory = await new LuxembourgAknArticleInventoryProducerV4(custodyStore)
             .RunAsync(run, cancellationToken).ConfigureAwait(false);
         foreach (var outcome in inventory.Outcomes)
@@ -315,7 +416,8 @@ public static class LuxembourgRederivation
             LuxembourgRederivationRecord.Schema,
             acquisition,
             verifiedUnder,
-            new RulesPart(request.RuleSet, request.Rules.ToArray(), request.AdmissionPolicySha256, RightsAsAcquired),
+            new RulesPart(request.RuleSet, request.Rules.ToArray(), request.AdmissionPolicySha256,
+                rights is null ? RightsAsAcquired : RightsReResolved),
             new OutputsPart(inventory.IdentitySha256, content.IdentitySha256),
             new CountsPart(
                 population.Inputs.Count,
@@ -325,7 +427,10 @@ public static class LuxembourgRederivation
                     outcome.Disposition == LuxembourgAknArticleInventoryDisposition.PublisherFileNamesOtherState),
                 OutcomeCounts(content.Outcomes.Select(static outcome => ContractWire.NameOf(outcome.Disposition))),
                 content.Outcomes.Count(static outcome => outcome.Disposition == LuxembourgAknLegalContentDisposition.Admitted)),
-            PublisherSession: NoPublisherSession);
+            PublisherSession: NoPublisherSession)
+        {
+            Rights = rights,
+        };
         var bytes = Encoding.UTF8.GetBytes(ContractJson.Serialize(document));
         var record = new LuxembourgRederivationRecord(
             bytes, catalog.Sha256, request.RuleSet, request.Rules, request.AdmissionPolicySha256,
@@ -391,6 +496,193 @@ public static class LuxembourgRederivation
         .Select(static group => new OutcomeCount(group.Key, group.Count()))
         .ToArray();
 
+    /// <summary>
+    /// R1 with rights (LU-DATA-DESIGN v2 §2.2, Release 2, steps 1 to 6): every held body of <paramref name="population"/>, in
+    /// ordinal order, read by its digest under reading /2; the readings held as the in-file evidence index /2; each body
+    /// re-resolved by resolution /2 against R0's own SPARQL channel for it, the rights' bound run identity and the catalogue
+    /// licences of the run's <paramref name="typedAssertions"/>; the checks; then the population re-bound. It hands back the
+    /// re-bound population, never a run: the caller re-makes R0's run around it.
+    /// </summary>
+    /// <remarks>
+    /// Refused, before anything is minted: a resolution that is not terminal evidence (<c>channel_enumeration_unproven</c>,
+    /// <c>evidence_not_independent</c>) or that is <c>non_admitting_licence_scl</c> (holding would have differed), each
+    /// naming its members; and a member the acquisition admitted that reading /2 does not agree with. A member the acquisition
+    /// admitted keeps its own resolution; every other member takes its resolution /2.
+    /// </remarks>
+    private static async Task<(LuxembourgHeldBodyDerivationPopulation Population, RightsPart Rights)> RederiveRightsAsync(
+        ICustodyStore custodyStore,
+        IReadOnlyList<LuxembourgTypedAssertion> typedAssertions,
+        LuxembourgHeldBodyDerivationPopulation population,
+        BodyCount[] acquiredDispositions,
+        string admissionPolicySha256,
+        DateTimeOffset? resumedAt,
+        CancellationToken cancellationToken)
+    {
+        // 1. Every held body under reading /2, by its digest.
+        var readings = new List<(LuxembourgHeldBodyDerivationInput Input, LuxembourgInFileRightsReadingTwo Reading)>(population.Inputs.Count);
+        foreach (var input in population.Inputs.OrderBy(static input => input.ObjectOrdinal))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var r0 = input.RightsResolution!;
+            if (!string.Equals(r0.SelectedManifestationIri, input.SelectedWemiCandidate.ManifestationIri, StringComparison.Ordinal))
+            {
+                throw new CustodyIntegrityException(
+                    $"The acquisition's rights of {input.CorpusRecord.ObjectRef.PublisherUri} resolve {r0.SelectedManifestationIri}, "
+                    + $"not its selected manifestation {input.SelectedWemiCandidate.ManifestationIri}.");
+            }
+
+            var bodySha256 = input.Receipt.Reference.ContentSha256;
+            var bodyRef = new SourceArtifactRef(
+                ContentDerivedIdentity.DeriveUuidUrn("lex-lu-in-file-body-digest/1", Encoding.UTF8.GetBytes(bodySha256)), bodySha256);
+            readings.Add((input, await LuxembourgInFileRightsReader.ReadTwoAsync(
+                custodyStore, bodyRef, input.SelectedWemiCandidate.ManifestationIri, input.Address.UserFormatToken,
+                cancellationToken).ConfigureAwait(false)));
+        }
+
+        // 2. The in-file evidence index /2: every reading, refused ones too, under the rule digests, referencing the /1 index.
+        var index = new EvidenceIndexDocument(
+            InFileEvidenceTwoSchema,
+            LuxembourgInFileRightsReader.ReadingTwoProfileSha256,
+            LuxembourgRightsChannels.ResolutionTwoProfileSha256,
+            population.Inputs.Select(static input => input.RightsResolution!.InFileObservations.EnumerationRef)
+                .Distinct().OrderBy(static reference => reference.Sha256, StringComparer.Ordinal).ToArray(),
+            readings.Select(static entry => new EvidenceReading(
+                entry.Input.ObjectOrdinal,
+                entry.Reading.ManifestationIri,
+                entry.Reading.BodyRef.Sha256,
+                ContractWire.NameOf(entry.Reading.Status),
+                entry.Reading.OwnBlockLicenceIris.ToArray(),
+                entry.Reading.DeclaredLicenceIris.ToArray(),
+                entry.Reading.NamedIdentities.Select(static named => new EvidenceNamedIdentity(named.Identity, named.LicenceIris.ToArray())).ToArray(),
+                entry.Reading.FrbrManifestationIdentities.ToArray())).ToArray());
+        var indexBytes = Encoding.UTF8.GetBytes(ContractJson.Serialize(index));
+        index = null!;
+        var (indexReceipt, indexFailure) = await CustodyHold.TryHoldAsync(custodyStore, indexBytes, cancellationToken).ConfigureAwait(false);
+        if (indexReceipt is null)
+        {
+            throw new CustodyRequiredException("The in-file rights evidence index /2 cannot be retained: " + indexFailure);
+        }
+
+        var indexRef = new SourceArtifactRef(
+            ContentDerivedIdentity.DeriveUuidUrn(InFileEvidenceTwoSchema, indexBytes), indexReceipt.Reference.ContentSha256);
+        if (!string.Equals(indexRef.Sha256, CustodyDigest.Of(indexBytes), StringComparison.Ordinal))
+        {
+            throw new CustodyIntegrityException("The in-file rights evidence index /2's receipt names other bytes.");
+        }
+
+        // 3. Resolution /2 against R0's own SPARQL channel, the bound run identity and the run's catalogue licences.
+        var catalogue = LuxembourgRightsCatalogue.From(typedAssertions
+            .Where(static assertion => assertion.FactDisposition.Predicate == LuxembourgAssertionPredicate.License)
+            .Select(static assertion => (
+                assertion.Assertion.SubjectIri,
+                assertion.Assertion.ObjectKind == LuxembourgAssertionObjectKind.Iri &&
+                assertion.Assertion.DatatypeIriOrEmpty.Length == 0 && assertion.Assertion.LanguageTagOrEmpty.Length == 0
+                    ? assertion.Assertion.ObjectIriOrLexical
+                    : (string?)null)));
+        var resolved = readings.Select(entry =>
+        {
+            var r0 = entry.Input.RightsResolution!;
+            return (entry.Input, R0: r0, Two: LuxembourgRightsChannels.ResolveTwo(
+                entry.Input.SelectedWemiCandidate.ManifestationIri, r0.BoundRunIdentity, r0.SparqlObservations,
+                r0.BoundRunIdentity, indexRef, entry.Reading, catalogue));
+        }).ToArray();
+        readings.Clear();
+
+        // 4. The checks, each naming its members.
+        Refuse(resolved.Where(static entry => entry.Two.Disposition is LuxembourgRightsChannelDisposition.ChannelEnumerationUnproven
+                or LuxembourgRightsChannelDisposition.EvidenceNotIndependent),
+            "resolves to a non-terminal disposition under resolution /2");
+        Refuse(resolved.Where(static entry => entry.Two.Disposition == LuxembourgRightsChannelDisposition.NonAdmittingLicenceScl),
+            "resolves to non_admitting_licence_scl under resolution /2, so its holding would have differed");
+        Refuse(resolved.Where(static entry => entry.R0.Disposition == LuxembourgRightsChannelDisposition.AgreedSameRunCcBy &&
+                entry.Two.Disposition != LuxembourgRightsChannelDisposition.AgreedCcByRederived),
+            "was admitted by the acquisition (agreed_same_run_cc_by) and reading /2 does not agree");
+
+        // 4b. Under one of the owner's rulings, each single-channel resolution the policy names is bound to the retained SPARQL
+        // page holding its licence row (the licence-page index), or the re-derivation refuses: no single-channel admission
+        // without its page. Under policy A alone no page is read.
+        string? licencePagesSha256 = null;
+        if (LuxembourgRightsAdmissionPolicies.AdmitsSingleChannel(admissionPolicySha256))
+        {
+            var indexes = new Dictionary<string, LuxembourgSparqlLicencePageIndex>(StringComparer.Ordinal);
+            var pageIndexDigests = new List<string>();
+            for (var position = 0; position < resolved.Length; position++)
+            {
+                var entry = resolved[position];
+                if (!LuxembourgRightsChannelResolution.IsSingleChannel(entry.Two.Disposition) ||
+                    !LuxembourgRightsAdmissionPolicies.Admits(admissionPolicySha256, entry.Two.Disposition))
+                {
+                    continue;
+                }
+
+                var rightsIndex = entry.Two.SparqlObservations.EnumerationRef.Sha256;
+                if (!indexes.TryGetValue(rightsIndex, out var pages))
+                {
+                    pages = await LuxembourgSparqlLicencePageIndex.BuildAsync(custodyStore, rightsIndex, resumedAt, cancellationToken)
+                        .ConfigureAwait(false);
+                    var (pagesReceipt, pagesFailure) = await CustodyHold.TryHoldAsync(custodyStore, pages.CanonicalBytes, cancellationToken)
+                        .ConfigureAwait(false);
+                    if (pagesReceipt is null || pagesReceipt.Reference.ContentSha256 != pages.Sha256)
+                    {
+                        throw new CustodyRequiredException("The licence-page index cannot be retained: " + pagesFailure);
+                    }
+
+                    indexes[rightsIndex] = pages;
+                    pageIndexDigests.Add(pages.Sha256);
+                }
+
+                if (pages.PageOf(entry.Two.SelectedManifestationIri) is not { } page ||
+                    !page.LicenceIris.SequenceEqual(entry.Two.SparqlObservation!.LicenceIris, StringComparer.Ordinal))
+                {
+                    throw new CustodyIntegrityException(
+                        $"The single-channel admission of {entry.Input.CorpusRecord.ObjectRef.PublisherUri} "
+                        + $"({ContractWire.NameOf(entry.Two.Disposition)}) finds no retained licence page holding exactly its SPARQL licence.");
+                }
+
+                resolved[position] = entry with { Two = entry.Two.WithLicencePage(page) };
+            }
+
+            licencePagesSha256 = string.Join(",", pageIndexDigests.Order(StringComparer.Ordinal));
+        }
+
+        // 5. The acquisition's admissions kept; every other member re-bound.
+        var final = resolved.ToDictionary(
+            static entry => entry.Input.ObjectOrdinal,
+            static entry => entry.R0.Disposition == LuxembourgRightsChannelDisposition.AgreedSameRunCcBy ? entry.R0 : entry.Two);
+        var rights = new RightsPart(
+            LuxembourgInFileRightsReader.ReadingTwoProfileSha256,
+            LuxembourgRightsChannels.ResolutionTwoProfileSha256,
+            indexRef.Sha256,
+            catalogue.Count,
+            acquiredDispositions,
+            BodyCounts(resolved.Select(static entry => ContractWire.NameOf(entry.Two.Disposition))),
+            resolved.Count(static entry => entry.R0.Disposition == LuxembourgRightsChannelDisposition.AgreedSameRunCcBy))
+        {
+            LicencePagesSha256 = licencePagesSha256,
+            SingleChannelAdmitted = licencePagesSha256 is null
+                ? null
+                : resolved.Count(entry => LuxembourgRightsChannelResolution.IsSingleChannel(entry.Two.Disposition) &&
+                    LuxembourgRightsAdmissionPolicies.Admits(admissionPolicySha256, entry.Two)),
+        };
+        return (population.WithRederivedRights(final), rights);
+
+        static void Refuse(
+            IEnumerable<(LuxembourgHeldBodyDerivationInput Input, LuxembourgRightsChannelResolution R0, LuxembourgRightsChannelResolution Two)> members,
+            string what)
+        {
+            var named = members.ToArray();
+            if (named.Length != 0)
+            {
+                throw new CustodyIntegrityException(
+                    $"{named.Length} held member(s) {what}: "
+                    + string.Join("; ", named.Take(20).Select(static entry =>
+                        $"{entry.Input.CorpusRecord.ObjectRef.PublisherUri} ({ContractWire.NameOf(entry.R0.Disposition)} -> "
+                        + $"{ContractWire.NameOf(entry.Two.Disposition)})"))
+                    + (named.Length > 20 ? "; …" : ""));
+            }
+        }
+    }
+
     // ---- The record's shape (snake_case on the wire, through ContractJson). ----
     private sealed record RecordDocument(
         string Schema,
@@ -399,7 +691,54 @@ public static class LuxembourgRederivation
         RulesPart Rules,
         OutputsPart Outputs,
         CountsPart Counts,
-        string PublisherSession);
+        string PublisherSession)
+    {
+        /// <summary>Release 2's rights re-resolution; absent from the wire under Release 1, whose record keeps its bytes.</summary>
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public RightsPart? Rights { get; init; }
+    }
+
+    /// <summary>
+    /// Release 2's rights: the reading /2 and resolution /2 digests, the in-file evidence index /2 they produced, how many
+    /// manifestations the catalogue licensed, the dispositions as acquired and under resolution /2 (every member), and how many
+    /// acquisition admissions were kept (each agreeing under /2). The final dispositions are <c>counts.rights_dispositions</c>.
+    /// </summary>
+    private sealed record RightsPart(
+        string InFileReadingProfileSha256,
+        string ResolutionProfileSha256,
+        string InFileEvidenceSha256,
+        int CatalogueManifestations,
+        BodyCount[] DispositionsAsAcquired,
+        BodyCount[] DispositionsUnderResolution2,
+        int AcquiredAdmissionsKept)
+    {
+        /// <summary>Under one of the owner's rulings: the licence-page index the single-channel admissions cite; absent otherwise.</summary>
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public string? LicencePagesSha256 { get; init; }
+
+        /// <summary>Under one of the owner's rulings: how many single-channel bodies the policy admits (within its evidence window).</summary>
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public int? SingleChannelAdmitted { get; init; }
+    }
+
+    private sealed record EvidenceIndexDocument(
+        string Schema,
+        string ReadingProfileSha256,
+        string ResolutionProfileSha256,
+        SourceArtifactRef[] InFileEvidenceV1,
+        EvidenceReading[] Readings);
+
+    private sealed record EvidenceReading(
+        int ObjectOrdinal,
+        string ManifestationIri,
+        string BodySha256,
+        string Status,
+        string[] OwnBlockLicenceIris,
+        string[] DeclaredLicenceIris,
+        EvidenceNamedIdentity[] NamedIdentities,
+        string[] FrbrManifestationIdentities);
+
+    private sealed record EvidenceNamedIdentity(string Identity, string[] LicenceIris);
 
     /// <summary>The acquisition re-derived: its catalog, query checkpoint, record set and observed set, the final manifests,
     /// run identities and rights-bound run identities its records name, and its scope manifest (null for an act range).</summary>

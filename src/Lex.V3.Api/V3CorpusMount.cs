@@ -67,6 +67,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         _generations = generations;
         _generationReaders = generationReaders ?? [];
         _freshness = FreshnessOf(reader, europeReader, report ?? throw new ArgumentNullException(nameof(report)));
+        _textYield = report.TextYield;
     }
 
     /// <summary>
@@ -165,6 +166,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             // The build report beside the mount, held to the artifacts just verified: what it says of each channel's newest
             // completed acquisition and of the commit that built the index (R87, R23); a report naming others refuses the mount.
             var report = await ReadBuildReportAsync(directory, corpus.ArtifactRef, reader, europeReader, cancellationToken).ConfigureAwait(false);
+            HoldTextYield(report.TextYield, reader, europeReader, corpus);
 
             // The names record beside the mount (R92), held to the corpus and indexes just verified: a record of another build, or
             // one that breaks a rule, refuses the mount, like every other check here (V3CorpusMount.Names.cs).
@@ -1126,11 +1128,69 @@ internal sealed partial class V3CorpusMount : IDisposable
             new V3PlatformOperationResult(request, "provenance_chain", result.RootElement));
     }
 
-    /// <summary>The one rights disposition under which a member's text enters a bundle: both channels agreed CC BY in the same run.</summary>
+    /// <summary>The rights disposition under which a member's text enters a bundle under policy /1: both channels agreed CC BY in the same run.</summary>
     private static readonly string EvidenceBundleAdmittingRightsDisposition =
         ContractWire.NameOf(LuxembourgRightsChannelDisposition.AgreedSameRunCcBy);
 
+    /// <summary>The two-channel agreement as in-file reading /2 reads the file's own block in a re-derivation (policy A).</summary>
+    private static readonly string RederivedAgreementDisposition =
+        ContractWire.NameOf(LuxembourgRightsChannelDisposition.AgreedCcByRederived);
+
     private static readonly string AcquiredOutcomeToken = ContractWire.NameOf(LexCorpus6OutcomeKind.Acquired);
+
+    /// <summary>
+    /// Whether <paramref name="rightsDisposition"/> (a member's wire token) is one the mounted corpus's admission policy admits
+    /// (its header's policy; none: policy /1, agreed_same_run_cc_by alone).
+    /// </summary>
+    private bool AdmitsRights(string? rightsDisposition) =>
+        rightsDisposition is not null &&
+        LuxembourgRightsAdmissionPolicies.AdmittingDispositions(_corpus.LuxembourgRightsAdmissionPolicy)
+            .Any(disposition => string.Equals(ContractWire.NameOf(disposition), rightsDisposition, StringComparison.Ordinal));
+
+    /// <summary>
+    /// The rights disposition a bundle says its text was served under: <c>agreed_same_run_cc_by</c> when every source is that
+    /// (every policy /1 bundle, byte for byte as before); <c>agreed_cc_by_rederived</c> when any source is, since a
+    /// re-derivation keeps an acquisition admission only once reading /2 agrees with it, so every source's two channels say CC
+    /// BY under reading /2. Each source still names its own.
+    /// </summary>
+    private static string BundleRightsDisposition(IEnumerable<string?> sourceDispositions)
+    {
+        var dispositions = sourceDispositions.ToArray();
+        // A source admitted on the catalogue alone names the bundle's disposition: the weakest evidence any of its text rests on.
+        var singleChannel = dispositions
+            .Where(static disposition => disposition is not null && SingleChannelTokens.Contains(disposition, StringComparer.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .FirstOrDefault();
+        return singleChannel
+            ?? (dispositions.Any(static disposition => string.Equals(disposition, RederivedAgreementDisposition, StringComparison.Ordinal))
+                ? RederivedAgreementDisposition
+                : EvidenceBundleAdmittingRightsDisposition);
+    }
+
+    private static readonly string[] SingleChannelTokens = Enum.GetValues<LuxembourgRightsChannelDisposition>()
+        .Where(LuxembourgRightsChannelResolution.IsSingleChannel)
+        .Select(static disposition => ContractWire.NameOf(disposition))
+        .ToArray();
+
+    /// <summary>
+    /// The bundle's rights rule under the mounted corpus's policy: policy /1's sentence, verbatim, or policy A's, with the
+    /// single-channel sentence when one of the owner's rulings is on.
+    /// </summary>
+    private string LuxembourgBundleRightsRule => (RulesByInterval
+        ? (PolicyAdmitsRederived ? EvidenceBundleRightsRuleNineA : EvidenceBundleRightsRuleNine)
+        : (PolicyAdmitsRederived ? EvidenceBundleRightsRuleA : EvidenceBundleRightsRule))
+        + (LuxembourgRightsAdmissionPolicies.AdmitsSingleChannel(_corpus.LuxembourgRightsAdmissionPolicy) ? EvidenceBundleSingleChannelRule : "");
+
+    /// <summary>The sentence a corpus under one of the owner's rulings adds to its rights rule.</summary>
+    internal const string EvidenceBundleSingleChannelRule =
+        "; under the owner's ruling the corpus's admission policy names, a file that does not state its own licence for itself " +
+        "(sparql_cc_by_in_file_names_other_identity, sparql_cc_by_in_file_silent or sparql_cc_by_in_file_own_block_empty, as the " +
+        "policy names them) is served on the publisher's SPARQL declaration of exactly CC BY 4.0 for that file alone, bound to " +
+        "the retained licence page that holds it; each such source carries rights_disclosure with that page's observation date, " +
+        "and the bundle's rights_disposition is then the single-channel one";
+
+    private bool PolicyAdmitsRederived => LuxembourgRightsAdmissionPolicies.Admits(
+        _corpus.LuxembourgRightsAdmissionPolicy, LuxembourgRightsChannelDisposition.AgreedCcByRederived);
 
     internal const string EvidenceBundleScope =
         "the evidence a reader needs to quote a Luxembourg state: for the state selected as as_of selects it, the hash-pinned permalink and stable " +
@@ -1152,10 +1212,31 @@ internal sealed partial class V3CorpusMount : IDisposable
 
     /// <summary>The rights rule on lex-v3-luxembourg-index/9, whose catalogue states without text cover their own intervals (S7a).</summary>
     internal const string EvidenceBundleRightsRuleNine =
-        EvidenceBundleRightsRule + "; on lex-v3-luxembourg-index/9 a state of the publisher's catalogue whose text this index does not " +
+        EvidenceBundleRightsRule + EvidenceBundleRightsRuleNineTail;
+
+    private const string EvidenceBundleRightsRuleNineTail =
+        "; on lex-v3-luxembourg-index/9 a state of the publisher's catalogue whose text this index does not " +
         "hold covers its own interval: a date in it refuses text_withheld when its rights withhold its text (text_status withheld_rights) " +
         "and text_not_available otherwise (a PDF, a derivation gap, a misfiled file, a state not acquired), naming the state, and no " +
         "other state's text is served in its place";
+
+    /// <summary>
+    /// The rights rule of a corpus whose admission policy is A (Release 2): the same two-channel rule, with the agreement
+    /// in-file reading /2 reads from the file's own block in a re-derivation from custody.
+    /// </summary>
+    internal const string EvidenceBundleRightsRuleA =
+        "rights are enforced when the bundle is composed, before any text is read: every corpus member the state's articles come from must have " +
+        "been acquired with its two rights channels agreeing CC BY 4.0 for the file itself: in the same run (rights_disposition " +
+        "agreed_same_run_cc_by), or as the in-file reading /2 of a re-derivation from the acquisition's custody reads the file's own " +
+        "block for that file, with nothing in the file or the publisher's catalogue disagreeing (rights_disposition agreed_cc_by_rederived), " +
+        "the corpus's admission policy " + LuxembourgRightsAdmissionPolicies.PolicyAName + "; a bundle says agreed_cc_by_rederived when " +
+        "any of its sources is, and each source names its own; under any other outcome or " +
+        "rights disposition the bundle refuses text_withheld and names the official identity, the official link and the retained body digest, so a " +
+        "derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state none of whose articles holds text refuses " +
+        "text_not_available";
+
+    /// <summary>Policy A's rights rule on lex-v3-luxembourg-index/9.</summary>
+    internal const string EvidenceBundleRightsRuleNineA = EvidenceBundleRightsRuleA + EvidenceBundleRightsRuleNineTail;
 
     internal static readonly string[][] EvidenceBundleNotHeld =
     [
@@ -1302,7 +1383,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             sourcesByState[state.StateSha256] = sources;
             var blocking = sources.FirstOrDefault(source =>
                 !string.Equals(source.Outcome, AcquiredOutcomeToken, StringComparison.Ordinal)
-                || !string.Equals(source.RightsDisposition, EvidenceBundleAdmittingRightsDisposition, StringComparison.Ordinal));
+                || !AdmitsRights(source.RightsDisposition));
             if (sources.Count == 0 || blocking is not null)
             {
                 var member = blocking is null ? null : MemberOf(blocking.ObjectRefSha256);
@@ -1317,7 +1398,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                     language = state.Language,
                     source_outcome = blocking?.Outcome,
                     rights_disposition = blocking?.RightsDisposition,
-                    rule = EvidenceBundleRightsRule,
+                    rule = PolicyAdmitsRederived ? EvidenceBundleRightsRuleA : EvidenceBundleRightsRule,
                 });
                 return V3PlatformOperationOutcome.Refused(
                     Context("refusal", observedAt),
@@ -1461,8 +1542,9 @@ internal sealed partial class V3CorpusMount : IDisposable
             requested_article = asked.Article,
             publisher = "lu-legilux",
             work_key = states[0].WorkKey,
-            rights_rule = RulesByInterval ? EvidenceBundleRightsRuleNine : EvidenceBundleRightsRule,
-            rights_disposition = EvidenceBundleAdmittingRightsDisposition,
+            rights_rule = LuxembourgBundleRightsRule,
+            rights_disposition = BundleRightsDisposition(sourcesByState.Values.SelectMany(static sources => sources)
+                .Select(static source => source.RightsDisposition)),
             page_rule = LuxembourgReadingPageRule,
             states = bundles,
             as_published = AsPublishedAnswer(asPublished),
@@ -3161,6 +3243,32 @@ internal sealed partial class V3CorpusMount : IDisposable
     private object SourceRow(LuxembourgIndexStateSource source)
     {
         var member = MemberOf(source.ObjectRefSha256);
+        // A body admitted on the publisher's catalogue alone (one of the owner's rulings) says so, with its licence page's
+        // observation date (LU-DATA-DESIGN v2 §1.2, the L5 single-channel disclosure); every other row is as it always was.
+        if (member?.LuxembourgRights?.RightsDisclosure is { } disclosure)
+        {
+            return new
+            {
+                object_ref_sha256 = source.ObjectRefSha256,
+                body_sha256 = member.BodySha256,
+                body_byte_length = member.BodyByteLength,
+                body_receipt_sha256 = member.BodyReceiptSha256,
+                outcome = source.Outcome,
+                rights_disposition = source.RightsDisposition,
+                rights_disclosure = new
+                {
+                    code = disclosure.Code,
+                    licence_page_sha256 = disclosure.LicencePage.Sha256,
+                    licence_page_observed_on = disclosure.ObservedAt[..10],
+                    licence_page_observed_live = disclosure.ObservedLive,
+                },
+                gaps = source.Gaps,
+                article_outcomes = source.ArticleOutcomes
+                    .Select(static row => new { disposition = row.Key, outcomes = row.Value })
+                    .ToArray(),
+            };
+        }
+
         return new
         {
             object_ref_sha256 = source.ObjectRefSha256,
@@ -4916,7 +5024,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             .ToArray();
         using var result = JsonSerializer.SerializeToDocument(new
         {
-            scope = CoverageScope,
+            scope = _textYield is null ? CoverageScope : CoverageScopeWithTextYield,
             counts_note = CoverageCountsNote,
             requested_language = language,
             mounted = new
@@ -4961,8 +5069,12 @@ internal sealed partial class V3CorpusMount : IDisposable
                 })
                 .ToArray(),
             operations = CoverageOperations(registered, served),
+            // The build's text yield per class (R86(4)), from its report, or null with the reason; never narrowed by language.
+            text_yield = TextYieldBlock(),
+            text_yield_note = _textYield is null ? TextYieldAbsentNote : TextYieldNote,
             not_held = CoverageNotHeld
-                .Select(row => row[0] != "build_time_and_currency" ? row
+                .Select(row => row[0] == "publisher_universe" && _textYield is not null ? CoveragePublisherUniverseWithTextYield
+                    : row[0] != "build_time_and_currency" ? row
                     : !_reader.RecordsBuilds ? CoverageLegacyBuildTimeRow
                     : _reader.RecordsCatalogueStates ? CoverageBuildTimeRowNine
                     : row)
