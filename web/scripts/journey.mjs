@@ -80,6 +80,10 @@
 // article it opens, and over no mount none (`frontDoorFailures`). On the fixture mount the derivation must find one: the
 // fixture's act's first article, cited as usual, which the exact-reference phase opens.
 //
+// Journeys J6 and J7 also walk the site's own pages (R53; `WALKS`): from the home page, the reader's question and the
+// sentence under the box, then Get help; the developer to the Developers page, which is held to the API it documents
+// (`developersPageFailures`). Each walk asks nothing once it has followed its link.
+//
 // The specification of record's R60 has runs of its own on the fixture mount (`failurePageExpectations`): an address
 // the site has no page for must arrive as the 404 page, with status 404, and its search must answer as the home page's
 // does, or with no mount show the failure panel; and the search with no mount must show the failure panel, whose retry,
@@ -2091,6 +2095,243 @@ export async function apiJourneyRuns(apiOutput, mount, { startServer = null, eve
 }
 
 /**
+ * Journeys J6 and J7 through the site's own pages (the specification of record's R53: "J6 uses search, the not-legal-advice
+ * line and Get help; J7 uses the Developers page"), each a walk from the home page, by pointer or, on a keyboard run, by the
+ * keyboard alone (Tab until the link has the focus, then Enter):
+ * - J6: the reader types their question into the home page's box and sends it (the one request the walk asks, dated today);
+ *   the sentence that says what Lex is not stands under the box; then they follow the home page's link to Get help, which
+ *   says that sentence, sends them to a lawyer or another adviser of their choice and to the official texts, and asks
+ *   nothing: no script, no form, no request to the API.
+ * - J7: the developer follows the home page's link to the Developers page, which asks nothing either; what it says is held
+ *   to the API it documents (`developersPageFailures`): its operations and which are served are the coverage answer's,
+ *   every schema it links is served as JSON, and its REST example and its MCP example, sent as printed, answer one
+ *   envelope (`envelopeIdentityFailures`).
+ */
+export const WALKS = Object.freeze([
+  Object.freeze({
+    journey: "J6",
+    name: "J6, a question, the not-legal-advice line and Get help",
+    start: "/en/",
+    typed: ADVICE_QUESTION,
+    link: '[data-home-links] a[href="/en/help.html"]',
+    to: "/en/help.html",
+    texts: Object.freeze([NOT_ADVICE_SAID, "ask a lawyer or another adviser of your choice", "What Lex does not do", "Where the official texts are"]),
+    apiRequests: 1,
+  }),
+  Object.freeze({
+    journey: "J7",
+    name: "J7, the Developers page from the home page, held to the API",
+    start: "/en/",
+    link: '[data-home-links] a[href="/en/developers.html"]',
+    to: "/en/developers.html",
+    texts: Object.freeze(["The Lex API, for programs and AI agents", "Two ways in, one answer", "The operations"]),
+    apiRequests: 0,
+  }),
+]);
+
+/** What a page's bytes hold that a page asking nothing must not: script elements that load or run code, and forms. */
+export function pageAsksNothing(bytes) {
+  return {
+    scripts: (bytes.match(/<script(?![^>]*type="application\/(?:json|ld\+json)")[^>]*>/g) ?? []).length,
+    forms: (bytes.match(/<form[\s>]/g) ?? []).length,
+  };
+}
+
+/**
+ * One walk in a browser (`WALKS`): the start page loaded and, for J6, its search typed and sent and its answer awaited; then
+ * the link followed and the page it leads to loaded. Observed: every request, what the console said, the not-advice line
+ * on the start page, where the walk ended and that page's text, and how the link was followed.
+ */
+async function observeWalk(browser, pageOrigin, walk, { keyboard = false } = {}) {
+  const profile = await mkdtemp(join(tmpdir(), "lex-journey-walk-"));
+  const { child: chrome, url } = await launchBrowser(browser, profile);
+  try {
+    const session = await Session.open(url);
+    const { targetId } = await session.send("Target.createTarget", { url: "about:blank" });
+    const { sessionId } = await session.send("Target.attachToTarget", { targetId, flatten: true });
+    const requests = [];
+    const consoleMessages = [];
+    session.on((message) => {
+      if (message.sessionId !== sessionId) return;
+      if (message.method === "Network.requestWillBeSent") {
+        requests.push({ url: message.params.request.url, method: message.params.request.method, type: message.params.type ?? null });
+      } else if (message.method === "Runtime.consoleAPICalled") {
+        consoleMessages.push(message.params.args.map((arg) => arg.value ?? arg.description ?? "").join(" "));
+      } else if (message.method === "Log.entryAdded") {
+        consoleMessages.push(`${message.params.entry.level}: ${message.params.entry.text}`);
+      } else if (message.method === "Runtime.exceptionThrown") {
+        consoleMessages.push(`exception: ${message.params.exceptionDetails.exception?.description ?? message.params.exceptionDetails.text}`);
+      }
+    });
+    for (const domain of ["Network", "Runtime", "Log", "Page"]) await session.send(`${domain}.enable`, {}, sessionId);
+    const evaluate = async (expression) => (await session.send("Runtime.evaluate", { expression, returnByValue: true }, sessionId)).result.value;
+    // Until the page at `path` has loaded, or the deadline.
+    const arrived = async (deadline, path) => {
+      while (Date.now() < deadline && ((await evaluate("location.pathname")) !== path || (await evaluate("document.readyState")) !== "complete")) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    };
+    const deadline = Date.now() + ANSWER_DEADLINE_MS;
+    await session.send("Page.navigate", { url: `${pageOrigin}${walk.start}` }, sessionId);
+    await arrived(deadline, walk.start);
+    while (Date.now() < deadline && (await evaluate("document.documentElement.dataset.hydrated ?? null")) === null) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    let keys;
+    let answerState = null;
+    if (walk.typed !== undefined) {
+      if (keyboard) keys = await keyboardTypeAndSubmit(session, sessionId, evaluate, deadline, walk.typed);
+      else await typeAndSubmit(session, sessionId, evaluate, deadline, walk.typed);
+      while (Date.now() < deadline) {
+        answerState = await evaluate("document.querySelector('[data-answer-state]')?.dataset.answerState ?? null");
+        if (answerState !== null && answerState !== "loading" && answerState !== "idle") break;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+    const notAdvice = await evaluate("[...document.querySelectorAll('main [data-not-advice]')].map((node) => node.textContent.trim())");
+    const before = requests.length;
+    // The link followed as the reader follows it: clicked, or reached by Tab and pressed with Enter.
+    let followedBy = "absent";
+    if (keyboard) {
+      keys ??= { stops: [], keyPresses: 0, characters: 0 };
+      for (let tab = 0; tab < 150; tab += 1) {
+        await pressKey(session, sessionId, "Tab");
+        const focused = await evaluate(FOCUSED);
+        if (focused !== null) keys.stops.push(focused);
+        if (await evaluate(`document.activeElement?.matches(${JSON.stringify(walk.link)}) === true`)) {
+          await pressKey(session, sessionId, "Enter");
+          followedBy = "keyboard";
+          break;
+        }
+      }
+    } else if (await evaluate(`(() => { const link = document.querySelector(${JSON.stringify(walk.link)}); if (link === null) return false; link.click(); return true; })()`)) {
+      followedBy = "pointer";
+    }
+    if (followedBy !== "absent") await arrived(Date.now() + ANSWER_DEADLINE_MS, walk.to);
+    // Let a late request or log line arrive before the observation is closed.
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    return {
+      answerState: answerState ?? "walk",
+      notAdvice,
+      followedBy,
+      location: await evaluate("location.pathname"),
+      text: await evaluate("document.body?.innerText ?? ''"),
+      requests,
+      requestsAfterFollowing: requests.slice(before),
+      console: consoleMessages,
+      cookie: await evaluate("document.cookie"),
+      hydrated: null,
+      keyboard: keys,
+    };
+  } finally {
+    chrome.kill();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await rm(profile, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/**
+ * A walk's failures (`WALKS`), from what the browser observed and the bytes of the page it ended at, as a reader with no
+ * script receives them (`destination`, `{ status, bytes }`).
+ */
+export function walkFailures(observed, walk, destination) {
+  const failures = [];
+  const toApi = (request) => new URL(request.url).pathname.startsWith("/api/") || new URL(request.url).pathname === "/mcp";
+  const apiRequests = observed.requests.filter(toApi);
+  if (apiRequests.length !== walk.apiRequests) failures.push(`the walk asked the API ${apiRequests.length} times, not ${walk.apiRequests}`);
+  const asked = observed.requestsAfterFollowing.filter(toApi);
+  if (asked.length > 0) failures.push(`following the link asked the API: ${asked.map((request) => request.url).join(", ")}`);
+  if (walk.typed !== undefined) {
+    if (observed.answerState !== "success") failures.push(`the home page's search ended in ${observed.answerState}, not an answer`);
+    if (!observed.notAdvice.includes(NOT_ADVICE_SAID)) failures.push("the home page does not say under its box what Lex is not");
+  }
+  if (observed.followedBy === "absent") failures.push(`the link ${walk.link} was not reached${observed.keyboard ? " by the keyboard" : ""}`);
+  // By the keyboard, every stop on the way shows where the focus is (WCAG 2.4.7).
+  for (const stop of observed.keyboard?.stops ?? []) if (stop.ring !== true) failures.push(`a focus stop shows no focus indicator: ${stop.tag} "${stop.label}"`);
+  if (observed.location !== walk.to) failures.push(`the walk ended at ${observed.location}, not ${walk.to}`);
+  for (const text of walk.texts) if (!observed.text.includes(text)) failures.push(`${walk.to} does not say "${text}"`);
+  if (observed.console.length > 0) failures.push(`the console said: ${observed.console.join(" | ").slice(0, 300)}`);
+  if (observed.cookie !== "") failures.push("a cookie was set");
+  if (destination.status !== 200) failures.push(`${walk.to} answered ${destination.status}`);
+  const page = pageAsksNothing(destination.bytes);
+  if (page.scripts > 0 || page.forms > 0) failures.push(`${walk.to} carries ${page.scripts} script(s) and ${page.forms} form(s), and asks nothing`);
+  if (!destination.bytes.includes('<meta name="robots" content="noindex"/>')) failures.push(`${walk.to} is not kept out of search engines`);
+  return failures;
+}
+
+/** A page's text inside an element, its markup's entities decoded as React writes them. */
+const decodedText = (text) => text.replaceAll("&quot;", '"').replaceAll("&#x27;", "'").replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
+
+/**
+ * What the Developers page (`html`, its bytes) says that the API at `origin` does not, as failures: its operations and which
+ * of them are served, against the coverage answer's; each schema it links, which must be served as JSON; and its two
+ * examples, the REST request its curl prints and the MCP tools/call message it prints, sent to this server as printed,
+ * which must answer one envelope. `post` stands for `postJson`, so a test can say what the server answers.
+ */
+export async function developersPageFailures(origin, html, { post = postJson, fetchImpl = fetch } = {}) {
+  const failures = [];
+  const listed = [...html.matchAll(/data-operation="([a-z_]+)" data-served="(true|false)"/g)].map(([, id, served]) => ({ id, served: served === "true" }));
+  const operations = (await post(`${origin}/api/v3/coverage`, { operation_id: "coverage", parameters: {} })).json?.result?.value?.operations;
+  if (operations === undefined) failures.push("the coverage answer names no operations to hold the page to");
+  else {
+    // The registry's operations are the served ones and the ones with no route, `registered` of them.
+    const registered = [...operations.served_operations, ...operations.not_served_operations].sort();
+    const ids = listed.map((one) => one.id).sort();
+    if (registered.length !== operations.registered) failures.push(`the coverage answer counts ${operations.registered} registered operations and names ${registered.length}`);
+    if (JSON.stringify(ids) !== JSON.stringify(registered)) failures.push(`the page lists the operations ${ids.join(", ")}, not the registry's ${registered.join(", ")}`);
+    const served = listed.filter((one) => one.served).map((one) => one.id).sort();
+    const answered = [...operations.served_operations].sort();
+    if (JSON.stringify(served) !== JSON.stringify(answered)) failures.push(`the page says ${served.join(", ")} are served, and the server serves ${answered.join(", ")}`);
+  }
+  const schemas = [...new Set([...html.matchAll(/<a href="(\/schemas\/v3-platform\/[a-z0-9-]+\.json)" data-schema="/g)].map(([, path]) => path))];
+  if (schemas.length === 0) failures.push("the page links no schema");
+  for (const path of schemas) {
+    const answer = await fetchImpl(`${origin}${path}`);
+    let json = true;
+    try {
+      JSON.parse(await answer.text());
+    } catch {
+      json = false;
+    }
+    if (answer.status !== 200 || !json) failures.push(`${path} answered ${answer.status}${json ? "" : ", not JSON"}`);
+  }
+  const blocks = [...html.matchAll(/<pre class="reference-code"><code>([\s\S]*?)<\/code><\/pre>/g)].map(([, text]) => decodedText(text));
+  const curl = blocks.find((block) => block.startsWith("curl "));
+  const message = blocks.find((block) => block.includes('"tools/call"'));
+  const route = /https?:\/\/[^/\s]+(\/api\/v3\/[a-z_]+)/.exec(curl ?? "")?.[1];
+  const data = /-d '(\{[\s\S]*\})'/.exec(curl ?? "")?.[1];
+  if (route === undefined || data === undefined || message === undefined) {
+    failures.push("the page prints no REST example with its route and body, or no MCP tools/call message");
+    return failures;
+  }
+  const body = JSON.parse(data);
+  if (route !== `/api/v3/${body.operation_id}`) failures.push(`the REST example posts ${body.operation_id} to ${route}`);
+  const rest = await post(`${origin}${route}`, body);
+  const mcp = await post(`${origin}/mcp`, JSON.parse(message));
+  failures.push(...envelopeIdentityFailures(rest, mcp).map((failure) => `the page's examples, sent as printed: ${failure}`));
+  return failures;
+}
+
+/** A walk (`WALKS`) over the mount, as `run` runs a step: its own API, the pages served by the live server or by the API. */
+export async function runWalk(apiOutput, mount, walk, options, browser, liveRoot) {
+  const api = await startApi(apiOutput, mount, options.servedByApi ? liveRoot : null);
+  const live = options.servedByApi ? null : createLiveServer({ root: liveRoot, apiOrigin: api.origin });
+  const pageOrigin = live === null ? api.origin : await listen(live);
+  try {
+    const observed = await observeWalk(browser, pageOrigin, walk, { keyboard: options.keyboard === true });
+    await api.fileWatch.stop();
+    const response = await fetch(`${pageOrigin}${walk.to}`);
+    const destination = { status: response.status, bytes: await response.text() };
+    const failures = walkFailures(observed, walk, destination);
+    if (walk.journey === "J7") failures.push(...await developersPageFailures(api.origin, destination.bytes));
+    return { observed: { ...observed, verifications: [], paint: null }, failures };
+  } finally {
+    if (live !== null) await new Promise((resolve) => live.close(resolve));
+    await api.close();
+  }
+}
+
+/**
  * The two-state mount (`journey-mount.json` names `later_date`): the fixture's work with a later state in which
  * one article is amended. Journey J3 compares the two states and journey J8's radar lists the later state compared
  * with the one it replaced, each showing that change (review of #915: the one-state fixture shows neither).
@@ -2249,7 +2490,11 @@ async function main(argv) {
   const servedByApi = argv.includes("--served-by-api");
   const keyboard = argv.includes("--keyboard");
   const results = [];
-  if (realMount) results.push(...await realMountRuns(apiOutput, mount, { servedByApi, keyboard, homeExamples }, browser, liveRoot));
+  if (realMount) {
+    results.push(...await realMountRuns(apiOutput, mount, { servedByApi, keyboard, homeExamples }, browser, liveRoot));
+    // Journeys J6 and J7 through the site's pages (R53), over the real mount too.
+    for (const walk of WALKS) results.push([`${walk.name}, with the real mount`, await runWalk(apiOutput, mount, walk, { servedByApi, keyboard }, browser, liveRoot)]);
+  }
   else if (licenceBlocked) results.push(...await licenceBlockedRuns(apiOutput, mount, { servedByApi, keyboard, homeExamples }, browser, liveRoot));
   else if (twoState) {
     for (const [name, expected] of twoStateExpectations(journeyMount)) {
@@ -2280,6 +2525,10 @@ async function main(argv) {
     // The specification's journeys the eight steps do not walk (J1's refusal, J2, J5).
     for (const [name, expected] of specificationJourneyExpectations()) {
       results.push([`${name}, with the fixture mount`, await run(apiOutput, mount, { servedByApi, keyboard, homeExamples, ...expected }, browser, liveRoot)]);
+    }
+    // Journeys J6 and J7 through the site's pages (R53): Get help, and the Developers page held to the API, from the home page.
+    for (const walk of WALKS) {
+      results.push([`${walk.name}, with the fixture mount`, await runWalk(apiOutput, mount, walk, { servedByApi, keyboard, homeExamples }, browser, liveRoot)]);
     }
     // The EU steps: the fixture mount holds no EU index, so the EU work is refused for the EU corpus.
     results.push(["eu search, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, homeExamples, ...EU_SEARCH_ON_FIXTURE }, browser, liveRoot)]);
