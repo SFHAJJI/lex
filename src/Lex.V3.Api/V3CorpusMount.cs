@@ -7744,6 +7744,12 @@ internal sealed partial class V3CorpusMount : IDisposable
                uri.Host.EndsWith("." + EuropeanUnionPublisherDomain, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// The context of a refusal the server gives before the mount is asked anything (<c>rate_limited</c>,
+    /// <see cref="V3ClientLimiter"/>): this mount's snapshot, freshness and commits, as every refusal of it names them.
+    /// </summary>
+    internal V3EnvelopeContext RefusalContext(DateTimeOffset observedAt) => Context("refusal", observedAt);
+
     private V3EnvelopeContext Context(
         string status,
         DateTimeOffset observedAt,

@@ -73,13 +73,17 @@ internal static class V3McpJsonRpc
         _ => throw new InvalidOperationException($"The served operation {operationId} has no MCP tool description."),
     };
 
+    /// <param name="rateLimitedRetryAfterSeconds">Set when the request is over its client's limit (<see cref="V3ClientLimiter"/>):
+    /// a <c>tools/call</c> then answers the typed refusal <c>rate_limited</c> with this wait, the envelope REST answers, and asks
+    /// the mount nothing; the protocol's own methods, which hold no law, are answered as usual.</param>
     public static async Task<byte[]?> HandleAsync(
         byte[] requestUtf8,
         V3PlatformHost host,
         V3CorpusMount? corpusMount,
         Func<DateTimeOffset> utcNow,
         string requestReference,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int? rateLimitedRetryAfterSeconds = null)
     {
         ArgumentNullException.ThrowIfNull(requestUtf8);
         ArgumentNullException.ThrowIfNull(host);
@@ -145,7 +149,7 @@ internal static class V3McpJsonRpc
                 "initialize" => Result(id, Initialize()),
                 "tools/list" => Result(id, ToolsList()),
                 "tools/call" => await ToolsCallAsync(
-                        id, parameters, host, corpusMount, utcNow, requestReference, cancellationToken)
+                        id, parameters, host, corpusMount, utcNow, requestReference, rateLimitedRetryAfterSeconds, cancellationToken)
                     .ConfigureAwait(false),
                 _ => Error(id, -32601, $"Method not found: {method}"),
             };
@@ -163,6 +167,7 @@ internal static class V3McpJsonRpc
         V3CorpusMount? corpusMount,
         Func<DateTimeOffset> utcNow,
         string requestReference,
+        int? rateLimitedRetryAfterSeconds,
         CancellationToken cancellationToken)
     {
         if (parameters.ValueKind != JsonValueKind.Object ||
@@ -202,7 +207,15 @@ internal static class V3McpJsonRpc
             // Same refusal REST gives when no corpus is mounted (V3ApiHandler.HandleRefusalAsync),
             // reached through the same host method resolve's success path uses below, so both
             // branches of this tool call go through V3PlatformHost and never hand-build an envelope.
-            var toolResult = corpusMount is null
+            // Over the client's limit (R109), the tool call answers rate_limited, as REST does, and asks the mount nothing.
+            var toolResult = rateLimitedRetryAfterSeconds is { } retryAfter
+                ? await host.CreateMcpOutcomeAsync(
+                        operationRequestUtf8,
+                        requestReference,
+                        request => V3ApiHandler.RateLimitedOutcome(corpusMount, utcNow, request, retryAfter),
+                        cancellationToken)
+                    .ConfigureAwait(false)
+                : corpusMount is null
                 ? await host.CreateMcpRefusalAsync(
                         operationRequestUtf8,
                         requestReference,

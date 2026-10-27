@@ -22,6 +22,7 @@ import { INTERFACE_LANGUAGES, lawPageLinks } from '../scripts/permalinks.mjs';
 import { jsonInScript } from '../scripts/initial-answer.mjs';
 import { CANONICAL_HOST } from '../scripts/routes.mjs';
 import { LEGAL_PAGES } from '../scripts/legal-pages.mjs';
+import { REFERENCE_PAGES } from '../scripts/reference-pages.mjs';
 import { FreshnessStripSlot, StalenessBannerSlot } from './Freshness.jsx';
 
 /** The marker that says, in the DOM, that nothing on this page is law. */
@@ -80,6 +81,8 @@ const ALTERNATE_PAGES = Object.freeze({
   'live-coverage': 'coverage.html',
   // The five legal pages (the plan's item 7.1), each the same page in each language.
   ...Object.fromEntries(LEGAL_PAGES.map((page) => [page.state, page.file])),
+  // The three reference pages (Get help, How to read Lex, Developers), likewise.
+  ...Object.fromEntries(REFERENCE_PAGES.map((page) => [page.state, page.file])),
 });
 
 /**
@@ -151,7 +154,8 @@ export function SiteHeader({ state, locale, localePage = null }) {
 
 /**
  * The footer every live page carries: what Lex is not (the specification of record's R50, word for word, which replaced
- * "Documentation, not legal advice."), which texts are authentic, and where the texts come from, then what it holds, and
+ * "Documentation, not legal advice."), which texts are authentic, and where the texts come from, then what it holds, the
+ * three reference pages (Get help, How to read Lex and Developers: the launch set's, R42, R48, R55), and
  * the five legal pages (the plan's item 7.1: "linked from every footer"), the page that is one of them marked current, and
  * last how current that is and which commits built and serve it (R87, R23; `Freshness.jsx`), from `freshness`, an answer's
  * facts (`freshnessFacts`), or as built; on a page that never asks the server (`answers` false), that it carries no answer.
@@ -169,6 +173,15 @@ export function SiteFooter({ state = null, freshness = null, answers = true }) {
       <p>
         <a href={livePath('coverage.html')}>{site.coverage}</a>
       </p>
+      <nav aria-label={copy.reference.menu} className="reference-nav" data-reference-nav="">
+        <ul>
+          {REFERENCE_PAGES.map((page) => (
+            <li key={page.key}>
+              <a href={livePath(page.file)} aria-current={page.state === state ? 'page' : undefined}>{copy[page.key].title}</a>
+            </li>
+          ))}
+        </ul>
+      </nav>
       <nav aria-label={copy.legal.menu} className="legal-nav" data-legal-nav="">
         <ul>
           {LEGAL_PAGES.map((page) => (

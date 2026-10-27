@@ -60,7 +60,9 @@ test('each entry states its required keys and cites where they come from', () =>
 
 test('retryable is stated per code rather than left to be inferred', () => {
   const html = renderRefusalCatalog();
-  assert.equal(html.split('<dt>retryable</dt>').length - 1, REFUSAL_CODES.length);
+  // Each entry's facts state it first; a payload's own `retryable` member (rate_limited's, as the platform sends it) is the
+  // example's, below its card, and is not counted here.
+  assert.equal(html.split('<dl class="catalog-facts"><div class="strip-row"><dt>retryable</dt>').length - 1, REFUSAL_CODES.length);
   assert.equal(html.split('<dd>yes</dd>').length - 1, RETRYABLE.size);
 });
 

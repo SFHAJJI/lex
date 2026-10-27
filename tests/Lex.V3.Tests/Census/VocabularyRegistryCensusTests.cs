@@ -64,6 +64,9 @@ public sealed class VocabularyRegistryCensusTests
                     + "const EuropeOrg, const EuropeType, const OfWords, const Preposition, const SiteOrigin",
                 "Lex.V3.Api.SyntheticPreviewTrustConfiguration: const EnvironmentBinding, "
                     + "const IssuerId, const KeyId, const PublicKeySha256",
+                "Lex.V3.Api.V3HostHeaders: const MachineContentSecurityPolicy, const ReferrerPolicy, "
+                    + "const StrictTransportSecurity",
+                "Lex.V3.Api.V3KeySet: Document=1985, const RawTarget, const ResourceName",
                 "Lex.V3.Api.V3McpJsonRpc: const ProtocolVersion, const ServerName",
                 "Lex.V3.Api.V3StaleIndexCopies: const CopyPattern, const PrivateTemporaryFolderVariable",
                 "Lex.V3.Artifacts.AdmissionHeaderReader: AttestationMembers=4, "

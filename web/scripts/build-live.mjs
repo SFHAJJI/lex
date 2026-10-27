@@ -18,7 +18,10 @@
 // `maintenance/{language}.html` (no script); neither server serves either at that address (`not-found.mjs`). The five legal
 // pages every footer links (the plan's item 7.1; `legal-pages.mjs`) stand under each language too, `legal-notice.html`,
 // `privacy.html`, `terms.html`, `accessibility.html` and `cookies.html`, with no script, naming no person and giving no
-// contact (the owner's decision of 2026-10-19).
+// contact (the owner's decision of 2026-10-19). The three reference pages every footer links (`reference-pages.mjs`) stand there
+// too, `help.html` (Get help), `how-to-read.html` (How to read Lex, with its glossary) and `developers.html` (Developers,
+// generated from the contracts: `developers.mjs`), with no script; the schemas the Developers page links are published
+// beside the pages, byte for byte, under `schemas/v3-platform/` at the root (`developers-contracts.mjs`).
 
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -28,6 +31,8 @@ import { CHROME_LOCALES } from "./localization.mjs";
 import { REVIEWED_CHROME_LOCALES } from "./locale-unavailable.mjs";
 import { MAINTENANCE_DIRECTORY, NOT_FOUND_DIRECTORY } from "./not-found.mjs";
 import { LEGAL_PAGES } from "./legal-pages.mjs";
+import { REFERENCE_PAGES } from "./reference-pages.mjs";
+import { publishedSchemaFiles, readDevelopersContracts } from "./developers-contracts.mjs";
 
 const source = new URL("../src/", import.meta.url);
 export const LIVE_DESTINATION = new URL("../dist-live/", import.meta.url);
@@ -50,7 +55,7 @@ const PAGES = Object.freeze([
  * `/fr/`: the specification of record's R61; the root sends a reader to one of them), each page and the
  * script that hydrates it compiled for that language.
  */
-async function buildPages(destination, { card, locale, buildTag = "" }) {
+async function buildPages(destination, { card, developers, locale, buildTag = "" }) {
   const { bundle, bundleClient } = await import("./react-build.mjs");
   const english = locale === "en";
   const options = english ? {} : { define: { __LEX_CHROME_LOCALE__: JSON.stringify(locale) } };
@@ -72,6 +77,9 @@ async function buildPages(destination, { card, locale, buildTag = "" }) {
   // The five legal pages, each a static page of this language, with no script.
   const legal = await import(pathToFileURL(await bundle("app/LegalPage.jsx", `LegalPage${suffix}.mjs`, options)).href);
   for (const { key, file } of LEGAL_PAGES) await writeFile(new URL(file, out), legal.renderLiveLegalPage(key), "utf8");
+  // The three reference pages, each a static page of this language, with no script; Developers from the contracts.
+  const reference = await import(pathToFileURL(await bundle("app/ReferencePages.jsx", `ReferencePages${suffix}.mjs`, options)).href);
+  for (const { key, file } of REFERENCE_PAGES) await writeFile(new URL(file, out), reference.renderLiveReferencePage(key, { developers }), "utf8");
   // This language's 404 page, which both servers answer a page request nothing claims with (R60; `not-found.mjs`), and its
   // maintenance page, for the deploy kit: each under a directory of its own at the root, which neither server serves.
   const notFound = await import(pathToFileURL(await bundle("app/live-not-found-page.jsx", `live-not-found-page${suffix}.mjs`, options)).href);
@@ -100,7 +108,13 @@ ${tokenCss()}`, "utf8");
   // Its own outputs in the intermediate directory, never `app.mjs` and never a reset of the
   // directory: the tests import `app.mjs` from there in parallel processes, and rewriting it under
   // them (as this build first did) fails whichever test file loads it mid-write.
-  await buildPages(destination, { card, locale: "en", buildTag });
+  // The Developers page's contracts, read once for every language, and the schemas it links, published as they are.
+  const developers = await readDevelopersContracts();
+  for (const [path, bytes] of await publishedSchemaFiles()) {
+    await mkdir(new URL(path.slice(0, path.lastIndexOf("/") + 1), destination), { recursive: true });
+    await writeFile(new URL(path, destination), bytes);
+  }
+  await buildPages(destination, { card, developers, locale: "en", buildTag });
   // The card as JSON at its stable route, for machines (36 s6): the same card the page renders.
   const { CARD_ROUTE } = await import("./evaluation-card.mjs");
   const platformCard = JSON.parse(await readFile(new URL("../../schemas/v3-platform/evaluation-card.json", import.meta.url), "utf8"));
@@ -109,7 +123,7 @@ ${tokenCss()}`, "utf8");
   // Every other reviewed interface language, under its own path, its bundles compiled for it
   // (Decision 41): French, reviewed by Claude (AI reviewer) under the owner's delegation of
   // 2026-10-02, at `/fr/`.
-  for (const locale of REVIEWED_CHROME_LOCALES.filter((code) => code !== "en")) await buildPages(destination, { card, locale, buildTag });
+  for (const locale of REVIEWED_CHROME_LOCALES.filter((code) => code !== "en")) await buildPages(destination, { card, developers, locale, buildTag });
   // One static page per chrome locale without reviewed copy: localization_unavailable, in English and
   // labelled English, with no script (Decision 41; the launch contract's DE and LB line).
   // Tagged as every other intermediate bundle is: an untagged name was one file every concurrent build rewrote, and a test

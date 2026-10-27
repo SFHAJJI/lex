@@ -79,6 +79,28 @@ test("a refusal is a state to render, not an error", async () => {
   assert.equal(answer.envelope.refusal.code, "no_corpus_mounted");
 });
 
+test("over the per-client limit, the 429 envelope is the refusal rate_limited, and nothing else sent with 429 is (R109)", async () => {
+  const refusal = census.envelopes.find((entry) => entry.operation === "coverage" && entry.envelope.refusal !== null).envelope;
+  const limited = structuredClone(refusal);
+  limited.refusal = { ...limited.refusal, code: "rate_limited", helpful_payload: { retry_after: 1, retryable: true } };
+  const over = recordingFetch(respond(429, "application/json;charset=utf-8", limited));
+  const answer = await askV3("coverage", {}, { contract, fetchImpl: over.fetchImpl });
+  assert.equal(answer.state, "refusal", "a refusal to render, as the failure panel renders an operational one");
+  assert.equal(answer.envelope.refusal.code, "rate_limited");
+  assert.deepEqual(answer.envelope.refusal.helpful_payload, { retry_after: 1, retryable: true });
+  assert.equal(over.calls.length, 1, "never retried behind the reader's back");
+
+  for (const [what, body] of [["another refusal", refusal], ["an answer", coverageEnvelope]]) {
+    const sent = recordingFetch(respond(429, "application/json", body));
+    const read = await askV3("coverage", {}, { contract, fetchImpl: sent.fetchImpl });
+    assert.equal(read.state, "invalid_envelope", `${what} sent with 429 is no answer`);
+    assert.match(read.reason, /429/);
+  }
+
+  const problem = recordingFetch(respond(429, "text/plain", "slow down"));
+  assert.equal((await askV3("coverage", {}, { contract, fetchImpl: problem.fetchImpl })).state, "invalid_envelope");
+});
+
 test("what is not an envelope is named for what it is, and never retried", async () => {
   const problem = recordingFetch(respond(404, "application/problem+json", { code: "operation_not_served" }));
   assert.deepEqual(await askV3("coverage", {}, { contract, fetchImpl: problem.fetchImpl }),

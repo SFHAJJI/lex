@@ -280,6 +280,57 @@ internal static class V3ResolveRestRoute
             cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// A request over its client's limit (<see cref="V3ClientLimiter"/>; R109): the request is read and checked as the route
+    /// reads it, so a malformed one keeps its own transport problem, and a well-formed one is answered with the outcome
+    /// <paramref name="refuse"/> gives (the typed refusal <c>rate_limited</c>), the same envelope the MCP tool call carries,
+    /// with status 429 and <c>Retry-After</c> in seconds. Nothing is asked of the mount.
+    /// </summary>
+    public static async Task HandleRateLimitedAsync(
+        V3RestRouteBinding binding,
+        HttpContext context,
+        V3PlatformHost host,
+        string requestReference,
+        Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> refuse,
+        int retryAfterSeconds,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(host);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(retryAfterSeconds);
+        try
+        {
+            RequireClaimedRequest(context, binding);
+            var request = await ReadBoundedBodyAsync(context.Request, cancellationToken).ConfigureAwait(false);
+            var bytes = host.AnswerRest(request, requestReference, binding.OperationId, refuse, cancellationToken);
+            context.Response.Headers.RetryAfter = retryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            await BufferedHttpResponse.WritePreparedJsonAsync(
+                    context.Response,
+                    StatusCodes.Status429TooManyRequests,
+                    "application/json;charset=utf-8",
+                    bytes,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (V3TransportFailureException exception)
+        {
+            await V3TransportResponse.WriteAsync(context.Response, exception.Kind, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            await V3TransportResponse.WriteAsync(
+                    context.Response,
+                    V3TransportFailureKind.InternalFailure,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
+
     private static void RequireClaimedRequest(HttpContext context, V3RestRouteBinding binding)
     {
         ArgumentNullException.ThrowIfNull(binding);

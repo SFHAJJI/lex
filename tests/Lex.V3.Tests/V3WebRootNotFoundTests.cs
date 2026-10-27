@@ -160,7 +160,8 @@ public sealed class V3WebRootNotFoundTests
                     Assert.AreEqual("application/problem+json", context.Response.ContentType, $"{label}: the platform's problem, not a page");
                     using var problem = JsonDocument.Parse(Body(context));
                     Assert.AreEqual("unknown_route", problem.RootElement.GetProperty("code").GetString(), label);
-                    Assert.AreEqual(0, context.Response.Headers.ContentSecurityPolicy.Count, $"{label}: an API answer is not a page");
+                    // An API answer is not a page: it carries the host's policy for answers that are none, never a page's (V3HostHeaders).
+                    Assert.AreEqual(V3HostHeaders.MachineContentSecurityPolicy, context.Response.Headers.ContentSecurityPolicy.ToString(), $"{label}: an API answer is not a page");
                     continue;
                 }
 

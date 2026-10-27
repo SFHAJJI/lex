@@ -179,13 +179,17 @@ internal sealed partial class V3WebRoot
     /// interface language (<see cref="PageForSitePath"/>), the page that reads it; answers the root and a law's address
     /// with no language with a redirect to the reader's language (<see cref="RedirectFor"/>); and returns true. Returns
     /// false, touching nothing, for any other path. The query string is not part of the path; a redirect keeps it.
+    /// <paramref name="mayRender"/> is asked once, only before a page would be rendered from the API's answer: null serves the
+    /// page as built (the client's render budget or its in-flight places, <see cref="V3ClientLimiter"/>), and what it gives is
+    /// held while the answer is asked and the page rendered, then disposed; with none, every page may be rendered.
     /// </summary>
     internal async Task<bool> TryServeAsync(
         HttpContext context,
         string rawTarget,
         CancellationToken cancellationToken,
         Func<V3SitePage, CancellationToken, byte[]?>? answer = null,
-        Func<string?>? today = null)
+        Func<string?>? today = null,
+        Func<IDisposable?>? mayRender = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         var queryAt = rawTarget.IndexOf('?', StringComparison.Ordinal);
@@ -264,9 +268,27 @@ internal sealed partial class V3WebRoot
 
         // A law's address under a language, rendered from the API's own answer when there is one (R67). A readable address asks
         // for today in Luxembourg (R13), which the caller's clock says; with no clock its page is served as built.
-        if (answer is not null && _renderer is not null && SitePageFor(path, today?.Invoke(), queryAt < 0 ? null : rawTarget[queryAt..]) is { } sitePage &&
-            answer(sitePage, cancellationToken) is { } envelope &&
-            await _renderer.RenderAsync(sitePage.Language, sitePage.Kind, Encoding.UTF8.GetString(envelope), path, cancellationToken).ConfigureAwait(false) is { } html)
+        // The render holds the client's place from asking the answer to the page rendered (V3ClientLimiter.AdmitRender); with
+        // no place given, the page is served as built.
+        byte[]? envelope = null;
+        string? html = null;
+        if (answer is not null && _renderer is not null && SitePageFor(path, today?.Invoke(), queryAt < 0 ? null : rawTarget[queryAt..]) is { } sitePage)
+        {
+            var place = mayRender?.Invoke();
+            try
+            {
+                if ((mayRender is null || place is not null) && (envelope = answer(sitePage, cancellationToken)) is not null)
+                {
+                    html = await _renderer.RenderAsync(sitePage.Language, sitePage.Kind, Encoding.UTF8.GetString(envelope), path, cancellationToken).ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                place?.Dispose();
+            }
+        }
+
+        if (envelope is not null && html is not null)
         {
             var page = Encoding.UTF8.GetBytes(ForSearchEngines(response, html, path));
             response.StatusCode = AnswersUnknownWork(envelope) ? StatusCodes.Status404NotFound : StatusCodes.Status200OK;

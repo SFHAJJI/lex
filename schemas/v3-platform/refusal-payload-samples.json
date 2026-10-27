@@ -4,7 +4,6 @@
     "derivation_refused",
     "not_transposable",
     "out_of_corpus_scope",
-    "rate_limited",
     "upstream_unreachable"
   ],
   "produced": [
@@ -520,6 +519,40 @@
       },
       "produced_by": [
         "diff"
+      ]
+    },
+    {
+      "code": "rate_limited",
+      "optional_payload_keys": [],
+      "payload": {
+        "retry_after": 1,
+        "retryable": true
+      },
+      "produced_by": [
+        "answer_drift",
+        "article_history",
+        "as_observed",
+        "as_of",
+        "ask",
+        "browse",
+        "changes_in_period",
+        "citation",
+        "cited_by",
+        "classification",
+        "coverage",
+        "diff",
+        "dossier",
+        "events",
+        "evidence_bundle",
+        "in_force_on",
+        "manifestation",
+        "provenance",
+        "relations",
+        "resolve",
+        "search",
+        "status_on",
+        "timeline",
+        "verify"
       ]
     },
     {
