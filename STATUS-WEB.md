@@ -78,7 +78,20 @@ UTC.
   count test and its ingress and limit paths, the refusal census and gate set, the Lex.V3.Tests census pins (two guarded
   types, two registries); web `within-limit.test.mjs` (3), `site-monitor.test.mjs` (6), `v3-client.test.mjs`'s 429 case,
   `legal-pages.test.mjs`'s pinned privacy forms and their evidence.
-- **Not done here:** the Developers page's statement of the limits (R46) is the pages lane's; a reviewed sentence for
+- **Combined with `writer/help-and-developers`** (the merge of 3d8e6f7b; one web pull request): the two 2026-10-27 sections
+  of this file and the owner's brief joined by hand, everything else merged clean. The Developers page now says the limit
+  as the server enforces it (R46: `developers.limits.rate` and the new `.pages`, their figures from `CLIENT_LIMIT` in
+  `developers.mjs`, which `reference-pages.test.mjs` holds to `V3ClientLimiter`'s constants and the 429 of
+  `HandleRateLimitedAsync`), its `anonymous` line says what the limit counts in memory, and its citing part names the key
+  set (`developers.citing.keys`; its address as printed text, since the API serves it and the pages' own server does not);
+  the French of those four forms, and of `developers.access.same`, which the review found contradicted by the 429 and which
+  now says it, reviewed in the addendum of 2026-10-27 on the Developers page's limits and the key set (3 changed, the English
+  with them: a release of Lex is a "mise en production"; "reconnu à", "refusée avec"; past the limit only an operation is
+  refused, over MCP a tool call).
+  The operating page stays a repository document (`docs/OPERATING.md`): R8 asks for a numbered page, not a public one, and
+  a link from the site to the repository would print its owner's account name, which the decision of 2026-10-19 keeps off
+  the pages (a driver decision, reversible).
+- **Not done here:** a reviewed sentence for
   `rate_limited` on each screen (the panel says the code today); latency, error-rate and restart alerts; the load test
   that re-sizes the limit.
 
@@ -115,7 +128,7 @@ as the legal pages are (`scripts/reference-pages.mjs`, `app/ReferencePages.jsx`)
   its REST path, its MCP tool, its parameters, its answer's objects and its two schemas, linked and with their digests;
   the envelope, its context and the verdicts; the refusal codes, the two presentation results and the failures below the
   envelope; quoting and citing; the limits as they are (no key, no account, nothing recorded; the request body's ceiling;
-  paging; no per-client rate limit applied yet, R109 not built; no availability promised); the events log (polling by
+  paging; the per-client limit as `writer/platform-ops` enforces it, since the two branches were combined; no availability promised); the events log (polling by
   cursor, at least once, no webhooks, the platform's own delivery statement); and the schemas. The facts only the API's
   code holds (the MCP protocol version and methods, the request ceiling, the transport failures) are named once in
   `developers.mjs` and held to the C# by `reference-pages.test.mjs`.
@@ -154,8 +167,8 @@ as the legal pages are (`scripts/reference-pages.mjs`, `app/ReferencePages.jsx`)
   is `/{lang}/developers.html`, with no unprefixed redirect; the three are never indexed, as the legal pages are, until a
   release's switch is extended to them; the header menu is unchanged (the home page holds the audience entry points, R47,
   and every footer the three), which keeps the keyboard journeys' path to each form as it is; Get help names no adviser
-  until R42's list is checked by a person; the Developers page says the rate limit as it is (none), since R109's limiter is
-  not built.
+  until R42's list is checked by a person; the Developers page says the rate limit as the server enforces it (since the combination with
+  `writer/platform-ops`, above).
 - **The L lines, against what the site serves** (the specification of record's §3 and the plan's "On opening day"): what each L line that names a screen, a page or an address asks, and
   whether the site serves it after this pull request. Each "missing" was looked for in `web/app`, `web/scripts`,
   `src/Lex.V3.Api` and `deploy/`, and is not there.
@@ -182,10 +195,12 @@ as the legal pages are (`scripts/reference-pages.mjs`, `app/ReferencePages.jsx`)
     payload, and the mandatory fields are the registry's, now listed on the page); "out of scope" with its reason and who
     to ask, and the list of what Lex never holds (6.10, J5); MCP `ping` and server instructions (8.5); the per-client rate
     limiter (R109), which `writer/platform-ops` builds: when the two branches are combined, `developers.limits.rate` (which
-    says no per-client limit is applied) must say the limit as that branch enforces it, in both languages, reviewed.
-  - Missing addresses: `/.well-known/lex-keys.json`, the published key set (R116); `/.well-known/security.txt` with a
+    says no per-client limit is applied) must say the limit as that branch enforces it, in both languages, reviewed (done
+    in the combination, above).
+  - Missing addresses: `/.well-known/lex-keys.json`, the published key set (R116; served since the combination); `/.well-known/security.txt` with a
     disclosure policy (R74), which the owner's decision of 2026-10-19 (no contact of any kind) leaves to the owner; a page
-    "Operating Lex after launch" with the hosting statement and the monthly ceiling (R8, R113, R114); R55's unprefixed
+    "Operating Lex after launch" with the hosting statement and the monthly ceiling (R8, R113, R114; `docs/OPERATING.md`
+    since the combination, a repository document); R55's unprefixed
     `/developers` (the page stands under each language, R61).
   - Missing in the journeys: J6 through Get help and J7 through the Developers page (R53); the CI journeys walk neither
     page yet.

@@ -247,6 +247,14 @@
 // wait "un instant", "à la fois ou en une minute", since the server asks for a second and caps four requests at once). The
 // notice draws its line at writing: "n’enregistre rien", "n’en écrit rien nulle part", "jamais écrite"; what it holds for a
 // moment it "garde … en mémoire vive", and `nothingHeld`'s "ensuite" keeps it true.
+// The Developers page's limits and the key set (R46, R109, R116; the combination of writer/platform-ops with
+// writer/help-and-developers): `developers.limits.anonymous`, `.limits.rate`, `.limits.pages` (new), `developers.citing.keys`
+// (new) and `developers.access.same` were reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the
+// same delegation in the addendum of 2026-10-27 "the Developers page's limits and the key set" (4 forms and the one it found
+// contradicted, 3 changed in review, the English with them: a release of Lex is a "mise en production", never
+// "publication", which on this page is a law's; a client is "reconnu à" its IP address and a refusal is "avec {code}", never
+// "par" (G22); past the limit only an operation is refused, over MCP a tool call; "la limite par client ci-dessous"; and
+// `access.same` now says the one refusal REST sends with another status).
 // The EU authenticity statement chosen by the act's date (the owner's decision of 2026-10-18 on PR #975's question, O4):
 // `citation.europe.authenticity`, one string approved in the addendum of 2026-10-17 on the citation generator, is now two
 // entries keyed by the platform's basis, `citation.europe.authenticity.electronic_edition` (that string, unchanged) and
@@ -1309,7 +1317,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       heading: 'Deux accès, une seule réponse',
       rest: 'REST : {request}, avec un corps JSON qui nomme l’opération et ses paramètres, {body}. Le chemin n’accepte aucune chaîne de requête, et toute autre méthode ne reçoit qu’un échec sous l’enveloppe.',
       mcp: 'MCP : des messages JSON-RPC envoyés par POST à {endpoint}, par le transport Streamable HTTP, version du protocole {version}. Le serveur répond à {methods} ; chaque opération qu’il sert est un outil du même nom, dont le schéma d’entrée est le membre {parameters} du schéma de requête de l’opération.',
-      same: 'Les deux donnent la même enveloppe pour la même requête : un appel d’outil est converti en document de requête REST et traité par le même code, et son résultat porte l’enveloppe comme contenu structuré. Un refus est une réponse, non une erreur : REST l’envoie comme une réponse HTTP réussie, et MCP comme un résultat d’outil avec {isError}.',
+      same: 'Les deux donnent la même enveloppe pour la même requête : un appel d’outil est converti en document de requête REST et traité par le même code, et son résultat porte l’enveloppe comme contenu structuré. Un refus est une réponse, non une erreur : REST l’envoie comme une réponse HTTP réussie, et MCP comme un résultat d’outil avec {isError} ; seul le refus d’une requête au-delà de la limite de son client a un autre statut en REST, indiqué ci-dessous.',
       restExample: 'Par exemple, le rapport de couverture, demandé avec curl :',
       mcpExample: 'La même requête en MCP, sous forme de message tools/call :',
       client: 'Un client qui prend en charge le transport Streamable HTTP reçoit l’adresse {endpoint} ; pour un client qui lit la liste de ses serveurs dans un fichier JSON, par exemple :',
@@ -1444,14 +1452,16 @@ export const LIVE_CHROME_FR = Object.freeze({
       heading: 'Citer',
       quote: 'Chaque article cité porte {text}, l’empreinte de son texte ; {body}, l’empreinte du fichier de l’éditeur dont il a été lu ; {source}, sa source officielle ; et {permalink}, qui épingle l’éditeur, l’acte, la date et l’empreinte de la version ou du libellé de l’UE, la langue et l’article : {shape}.',
       verify: '{verify} vérifie l’empreinte d’un permalien au regard de celle que détient l’index, à partir de ce que détient ce serveur : il n’interroge jamais l’éditeur.',
+      keys: 'Chaque mise en production de Lex est signée. Les clés qui les signent, chacune avec son identité, son rôle, sa validité et son statut, sont publiées à l’adresse {keySet} : vérifiez les signatures d’une mise en production au regard de cet ensemble, jamais au seul regard de la clé qu’elle contient.',
       forms: 'Sur la page de lecture, un article est cité sous trois formes, « {conventional} », « {withPermalink} » et « {evidence} », et un export porte les trois. Dans un document, citez le texte officiel par sa référence officielle.',
     }),
     limits: Object.freeze({
       heading: 'Limites',
-      anonymous: 'Il n’y a ni clé ni compte, et le serveur ne garde aucune trace d’une requête : voir la {privacyPage}.',
+      anonymous: 'Il n’y a ni clé ni compte, et le serveur ne garde aucune trace écrite d’une requête ; pour la limite par client ci-dessous, il compte les requêtes dans sa seule mémoire vive : voir la {privacyPage}.',
       size: 'Le corps d’une requête compte au plus {bytes} octets ; il est répondu à un corps plus grand par {code}.',
       paging: 'Les listes sont paginées : {limit} fixe la taille d’une page, dans les bornes qu’énonce chaque schéma de requête, et {after} reprend là où la dernière page s’est arrêtée.',
-      rate: 'Ce serveur ne fixe à ce jour aucune limite de débit par client, et le service est de petite taille, si bien qu’un usage intensif ralentit tous les lecteurs : envoyez une requête à la fois et interrogez avec modération. Le registre contient le refus {code}, qui porte {retryAfter} : un client qui le reçoit attend cette durée avant de demander de nouveau.',
+      rate: 'Chaque client, reconnu à son adresse IP, peut envoyer {perMinute} requêtes par minute à l’API, REST et MCP confondus, dont au plus {atOnce} traitées en même temps. Au-delà de l’une ou l’autre limite, une requête adressée à une opération (en MCP, un appel d’outil) est refusée avec {code}, qui porte {retryAfter}, le nombre de secondes à attendre avant de demander de nouveau, comme le fait l’en-tête {retryAfterHeader} ; en REST, son statut est {status}. Le service est de petite taille : envoyez une requête à la fois et interrogez avec modération.',
+      pages: 'Les pages que le serveur produit lui-même ont un budget distinct, de {renders} par minute pour chaque client ; au-delà, une page est envoyée telle qu’elle a été construite, et le navigateur demande alors sa réponse à l’API. Aucune page n’est refusée.',
       availability: 'Aucune disponibilité n’est garantie : voir les {termsPage}.',
     }),
     events: Object.freeze({

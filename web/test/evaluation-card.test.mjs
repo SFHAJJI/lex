@@ -135,12 +135,13 @@ test("the live build carries the card it is handed, as a release build will hand
 });
 
 test("a card whose gate fails says so above its tables, and the page will not print a card that breaks its rules", () => {
-  // The refusal set wherever the card places it (the temporal sets before it are as many as their arms): one of its 18
-  // requests answered with another code.
+  // The refusal set wherever the card places it (the temporal sets before it are as many as their arms): one of its requests
+  // (19 since the per-client limit's case, R109) answered with another code.
   const refusal = (copy) => copy.machine_gates.find((set) => set.set === "refusal");
   const failing = mutate((c) => {
     const gate = refusal(c).gates[0];
-    Object.assign(gate, { verdict: "fail", value: 0.9444, wilson_95: wilson95(17, 18) });
+    const cases = refusal(c).cases;
+    Object.assign(gate, { verdict: "fail", value: Number(((cases - 1) / cases).toFixed(4)), wilson_95: wilson95(cases - 1, cases) });
     delete gate.rule_of_three_failure_upper_95;
     c.shuffled_controls[1].verdict = "missed_the_shuffle";
   });
