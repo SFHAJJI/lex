@@ -399,10 +399,10 @@ test("the script deploys only a release that verifies, and only by the image's d
   assert.match(code, /Write-Host "  > az containerapp ingress traffic set -g \$ResourceGroup -n \$AppName --revision-weight \$LiveRevision=100"/);
   // A failed probe deactivates the candidate (the removal step) and stops; a candidate that passes while promotion refuses
   // its data's age (the probe's exit 3, R87 and O11) stays, with no traffic, and no promotion or rollback command is printed.
-  assert.match(script, /\$dataAgeRefused = \$LASTEXITCODE -eq 3\r?\nif \(\$LASTEXITCODE -ne 0 -and -not \$dataAgeRefused\) \{[\s\S]*?Disable-Candidate 'the probe failed'[\s\S]*?throw "The candidate failed its probe/);
+  assert.match(script, /\$promotionRefused = \$LASTEXITCODE -eq 3\r?\nif \(\$LASTEXITCODE -ne 0 -and -not \$promotionRefused\) \{[\s\S]*?Disable-Candidate 'the probe failed'[\s\S]*?throw "The candidate failed its probe/);
   const answered = code.slice(code.indexOf('Step "the candidate $candidate answers as the release holds"'));
-  assert.match(answered, /^Step [^\n]*\n[^\n]*\nif \(\$dataAgeRefused\) \{\n[^}]*Promotion refuses this release's data[^}]*\}\nelseif \(\[string\]::IsNullOrEmpty\(\$LiveRevision\)\) \{[^}]*\}\nelse \{\n[^}]*--revision-weight \$candidate=100"\n\}/, "the promotion command only when the data's age allows it");
-  assert.match(answered, /if \(-not \[string\]::IsNullOrEmpty\(\$LiveRevision\) -and -not \$dataAgeRefused\) \{\n    Write-Host "  After promotion, deactivate/, "and the rollback lines, which follow a promotion, only then");
+  assert.match(answered, /^Step [^\n]*\n[^\n]*\nif \(\$promotionRefused\) \{\n[^}]*Promotion refuses this release:[^}]*\}\nelseif \(\[string\]::IsNullOrEmpty\(\$LiveRevision\)\) \{[^}]*\}\nelse \{\n[^}]*--revision-weight \$candidate=100"\n\}/, "the promotion command only when the data's age allows it");
+  assert.match(answered, /if \(-not \[string\]::IsNullOrEmpty\(\$LiveRevision\) -and -not \$promotionRefused\) \{\n    Write-Host "  After promotion, deactivate/, "and the rollback lines, which follow a promotion, only then");
   // A candidate that never becomes ready fails the deployment itself, before the probe: it is deactivated too, if active,
   // and the run stops (review of #963: readiness answers 503 without the law, so Azure's deadline ends the deployment); only
   // if this deployment made it (the incident of 2026-10-27).

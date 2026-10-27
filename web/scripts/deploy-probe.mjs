@@ -11,7 +11,10 @@
 //   `frame-ancestors 'none'`, HSTS, `Referrer-Policy: no-referrer`, `nosniff`);
 // - the 404 page (R60): an address nothing claims answers 404 with the release image's own French 404 page, byte for
 //   byte, carrying the same security headers, for a reader who names no language;
-// - the card: the evaluation card at its stable route is the release's card, byte for byte, as JSON;
+// - the card: the evaluation card at its stable route is the release's card, byte for byte, as JSON; and the release's
+//   signed card is an input to promotion (R104, O20): a gate not passing, a control that missed its shuffle, or a card run
+//   over another mount than the release's refuses promotion, as the data's age does (`cardPromotionFailures`; exit 3 with
+//   `--promotion-check`);
 // - the API: `coverage` answers from the mount the release names, by its corpus digest;
 // - the server: its readiness route answers 204 (it holds the law), and the synthetic preview's route is unknown to it;
 // - the clock (plan 0.8): the instant `coverage` was answered at is within a minute of this probe's own, so the date the
@@ -52,7 +55,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findBrowser } from "./browser-evidence.mjs";
 import { cspValue } from "./csp.mjs";
-import { CARD_ROUTE } from "./evaluation-card.mjs";
+import { CARD_ROUTE, readEvaluationCard } from "./evaluation-card.mjs";
 import { layerTar, readLayout, readOciImage, readTar, servedPaths, serverFailures, v2RouteFailures } from "./image-rehearsal.mjs";
 import { invokedDirectly } from "./invoked-directly.mjs";
 import { askOperation, heldLuxembourgWorkFromAnswers, realMountRuns } from "./journey.mjs";
@@ -245,7 +248,7 @@ export async function revisionFailures(origin, options) {
  * the card at its stable route, coverage from the release's corpus, the clock and an accented title. Every one is an HTTP
  * request; none needs a browser.
  */
-export async function servedPageFailures(origin, { web, card, corpusSha256, notes = [], promotion = [], now = Date.now, ask = askOperation, opening = false, homeExamples = undefined }) {
+export async function servedPageFailures(origin, { web, card, corpusSha256, notes = [], promotion = [], now = Date.now, ask = askOperation, opening = false, homeExamples = undefined, mountReport = null }) {
   const failures = [];
   const served = servedPaths(web);
   if (!served.has("/fr/")) return ["the release image holds no live page at /fr/, so the revision has nothing to be held to"];
@@ -290,6 +293,9 @@ export async function servedPageFailures(origin, { web, card, corpusSha256, note
   } else if (!cardBytes.equals(card)) {
     failures.push(`GET ${CARD_ROUTE} is not the release's evaluation card, byte for byte`);
   }
+  // The release's signed card is an input to promotion (R104, O20): a gate that did not pass, or a control that did not catch
+  // its shuffle, refuses promotion, as the data's age does.
+  promotion.push(...cardPromotionFailures(card, { mountReport }));
 
   const asked = now();
   const coverage = await fetch(`${origin}/api/v3/coverage`, {
@@ -364,6 +370,41 @@ export async function legalPageFailures(origin, web, { policy = `${cspValue()}; 
   if (unready.length > 0) {
     if (opening) failures.push(...unready.map((failure) => `the legal pages are not ready to publish, so the site may not open: ${failure}`));
     else notes.push(`the legal pages are not ready to publish, so the site may not open (deploy.ps1 -Open and -Public refuse it): ${unready.join("; ")}`);
+  }
+  return failures;
+}
+
+/**
+ * Why promotion refuses a release for its evaluation card (the specification of record's R104; O20, the owner's yes): the
+ * release's signed card, `card` (bytes), must read by the page's rules, every machine gate on it must pass (a gate that failed
+ * or was not measured refuses), every shuffled control must have caught its shuffle, and, when the release's mount report
+ * (`mountReport`, bytes) names a corpus file, the card must say it was run over that very file (the exact tuple). Each failure
+ * names the gate, the control or the target. Empty when the card is all pass. Not a probe failure: a revision with a card that
+ * does not pass still answers as its release holds; `deploy.ps1` prints no promotion command while any of these stands.
+ */
+export function cardPromotionFailures(card, { mountReport = null } = {}) {
+  let view;
+  let parsed;
+  try {
+    parsed = JSON.parse(Buffer.from(card).toString("utf8"));
+    view = readEvaluationCard(parsed);
+  } catch (error) {
+    return [`the release's evaluation card does not read, so it cannot be shown to pass: ${error.message}`];
+  }
+  const failures = [
+    ...view.gatesNotPassing.map((gate) => `the evaluation card's ${gate.set} set (${gate.arm}) gate ${gate.gate} is ${gate.verdict}, not pass`),
+    ...view.controlsNotCaught.map((control) => `the evaluation card's ${control.set} set (${control.arm}) control ${control.control} is ${control.verdict}, not caught_the_shuffle`),
+  ];
+  if (mountReport !== null) {
+    let corpusFile = null;
+    try {
+      corpusFile = (JSON.parse(Buffer.from(mountReport).toString("utf8")).files ?? []).find((file) => file.Name === "lex-corpus-6.json")?.Sha256 ?? null;
+    } catch {
+      failures.push("the release's mount report is not JSON, so the card cannot be held to the release's mount");
+    }
+    if (corpusFile !== null && !String(parsed.target ?? "").includes(corpusFile)) {
+      failures.push(`the evaluation card was run over ${JSON.stringify(parsed.target)}, not over this release's mount (its corpus file sha256:${corpusFile})`);
+    }
   }
   return failures;
 }
@@ -591,6 +632,7 @@ export async function deployedReleaseFailures(origin, releaseDirectory, { public
   return revisionFailures(origin, {
     web: liveFilesOf(await readLargeFile(join(releaseDirectory, ASSETS.image))),
     card: await readFile(join(releaseDirectory, ASSETS.card)),
+    mountReport: await readFile(join(releaseDirectory, ASSETS.mountReport)),
     corpusSha256: manifest.corpus.sha256,
     notes,
     promotion,
@@ -750,7 +792,7 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
     console.error("usage: node scripts/deploy-probe.mjs --release <release directory> --public-key <signing identity's public key, PEM> [--signer <the release signer's identity>] [--origin <the candidate revision's URL> [--browser] [--opening] [--promotion-check] [--search-engines kept-out|indexed]]");
     console.error("       node scripts/deploy-probe.mjs --maintenance --origin <the maintenance revision's URL> --release <release directory> --public-key <PEM> [--signer <identity>]: the release's maintenance revision, over HTTP only");
     console.error("       node scripts/deploy-probe.mjs --opening --origin <the site's URL>: the opening's check of the served legal pages alone");
-    console.error("       with --promotion-check, a revision that answers as its release holds while promotion refuses its data's age exits 3");
+    console.error("       with --promotion-check, a revision that answers as its release holds while promotion refuses its data's age or its evaluation card exits 3");
     console.error("       with --signer, the release must be signed by that release signer, never a rehearsal");
     console.error("       without --origin, only the release is read back (deploy.ps1 does this before it touches Azure)");
     process.exit(2);
@@ -786,8 +828,9 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
   console.log(failures.length === 0
     ? `the revision at ${origin} answers as the release holds${withBrowser ? ", in the browser too" : ", over HTTP only (no page walked in a browser)"}`
     : `${failures.length} probe failure(s)`);
-  // The data's age at promotion (R87, O11): said whatever the probe found, and with --promotion-check its exit says it.
-  for (const refusal of promotion) console.log(`promotion refuses the data: ${refusal}`);
-  if (promotion.length === 0) console.log("the data's age allows promotion: every publisher channel's newest completed collection is within the maximum data age");
+  // The data's age (R87, O11) and the evaluation card (R104, O20) at promotion: said whatever the probe found, and with
+  // --promotion-check its exit says it.
+  for (const refusal of promotion) console.log(`promotion refuses the release: ${refusal}`);
+  if (promotion.length === 0) console.log("the data's age and the evaluation card allow promotion: every publisher channel's newest completed collection is within the maximum data age, and every gate on the release's card passes");
   process.exit(failures.length > 0 ? 1 : promotionCheck && promotion.length > 0 ? 3 : 0);
 }

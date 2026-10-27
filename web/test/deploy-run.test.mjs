@@ -517,7 +517,7 @@ test("a deployment's closing lines say how to pre-build its release's maintenanc
   // Not where promotion refuses the release's data: that release is not to serve.
   const refused = deploy(["-SignerIdentity", "signer", "-AllowedCidr", "203.0.113.7/32", "-Apply"], { RULES: PRIVATE_RULES, DATA_AGE_REFUSED: "1" });
   assert.equal(refused.result, "RESULT:returned", refused.out);
-  assert.match(refused.out, /Promotion refuses this release's data/);
+  assert.match(refused.out, /Promotion refuses this release: the probe above says why/);
   assert.doesNotMatch(refused.out, /-Maintenance -Apply/);
 });
 

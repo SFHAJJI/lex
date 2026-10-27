@@ -5,7 +5,7 @@ Offline validation of the deployment kit: no Azure, no login, no network.
 .DESCRIPTION
 - `main.json` must be exactly `main.bicep`'s build (the generator's own metadata aside), so what is reviewed is what deploys;
 - `bicep lint` must report nothing;
-- `deploy.ps1` must parse.
+- `deploy.ps1` and `backup-release.ps1` must parse.
 The static rules on the template and the script (no secret, identity pull, one server, zero-traffic candidate) are the
 web suite's `deploy-kit.test.mjs`, which reads the same committed files and runs in CI, where bicep is not installed.
 Exit 0 when everything holds; otherwise each failure is printed and the exit is 1.
@@ -34,12 +34,14 @@ finally {
 $lint = bicep lint $template 2>&1
 if ($LASTEXITCODE -ne 0 -or $lint) { $failures.Add("bicep lint reported: $lint") }
 
-$errors = $null
-[void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'deploy.ps1'), [ref]$null, [ref]$errors)
-if ($errors) { $failures.Add("deploy.ps1 does not parse: $($errors | ForEach-Object Message)") }
+foreach ($script in 'deploy.ps1', 'backup-release.ps1') {
+    $errors = $null
+    [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot $script), [ref]$null, [ref]$errors)
+    if ($errors) { $failures.Add("$script does not parse: $($errors | ForEach-Object Message)") }
+}
 
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { Write-Host "- $_" }
     exit 1
 }
-Write-Host "the deployment kit validates offline: main.json is main.bicep's build, lint is clean, deploy.ps1 parses"
+Write-Host "the deployment kit validates offline: main.json is main.bicep's build, lint is clean, deploy.ps1 and backup-release.ps1 parse"
