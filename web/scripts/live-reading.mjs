@@ -159,7 +159,7 @@ export function readingOutcome(asked) {
     const { code, helpful_payload: payload } = asked.envelope.refusal;
     const sentence = code === "no_corpus_mounted"
       ? noCorpusMountedSentence(payload)
-      : tableRefusalSentence(readingRefusalSentences(asked.envelope.context), code, unexpectedRefusalSentence);
+      : tableRefusalSentence(readingRefusalSentences(asked.envelope.context), code, unexpectedRefusalSentence, payload);
     // An EU ambiguity names wordings, which the refusal card (built on Luxembourg's states, "applicable from") cannot
     // describe: the page says its EU sentence and shows no card (review of #909).
     if (code === "ambiguous_version" && asked.envelope.context?.publisher === "eu-eurlex") {

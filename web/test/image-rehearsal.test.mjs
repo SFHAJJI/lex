@@ -146,6 +146,19 @@ test("the image must hold the API, the live pages and the mount byte for byte, a
     ["the image ships the synthetic preview: app/preview-graph/artifact.json, app/preview-trust/public-key.spki"], "the preview and its key are for tests only (plan 0.7)");
 });
 
+test("an image that carries R92's two records holds both beside the mount, byte for byte", () => {
+  const records = [["indexing-record.json", Buffer.from("{\"schema\":\"lex-v3-indexing-record/1\"}")], ["names-record.json", Buffer.from("{\"schema\":\"lex-v3-names-record/1\"}")]];
+  const held = image({ extraFiles: records.map(([name, bytes]) => [`app/v3-corpus/${name}`, bytes]) });
+  assert.deepEqual(imageFailures(readOciImage(held), { ...held.built, records }), [], "both records beside the mount pass");
+  const missing = image({ extraFiles: [[`app/v3-corpus/${records[0][0]}`, records[0][1]]] });
+  assert.deepEqual(imageFailures(readOciImage(missing), { ...missing.built, records }), ["the image holds no app/v3-corpus/names-record.json"]);
+  const other = image({ extraFiles: [[`app/v3-corpus/${records[0][0]}`, records[0][1]], [`app/v3-corpus/${records[1][0]}`, Buffer.from("{}")]] });
+  assert.deepEqual(imageFailures(readOciImage(other), { ...other.built, records }),
+    ["app/v3-corpus/names-record.json in the image differs from the R92 record it was built from"]);
+  assert.deepEqual(imageFailures(readOciImage(held), { ...held.built, records: records.slice(0, 1) }),
+    ["the release's measurement gave 1 records, not the indexing record and the names record"]);
+});
+
 test("the rehearsal signature holds for its image's manifest digest, and for nothing else", () => {
   const digest = `sha256:${"e".repeat(64)}`;
   const signed = signRehearsal({ manifestDigest: digest, reference: "lex-v3-rehearsal:rehearsal" });

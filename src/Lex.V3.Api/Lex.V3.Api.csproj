@@ -62,4 +62,10 @@
   <ItemGroup Condition="'$(LexImageMount)' != ''">
     <Content Include="$(LexImageMount)/**/*" Link="v3-corpus/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+  <!-- R92's two records (the indexing record and the names record), written by the release's own measurement of the mount
+       (Lex.V3.Tool names-records) into a directory of their own, never into the mount it reads, and published beside it in
+       v3-corpus, where the API reads them. -->
+  <ItemGroup Condition="'$(LexImageMountRecords)' != ''">
+    <Content Include="$(LexImageMountRecords)/indexing-record.json;$(LexImageMountRecords)/names-record.json" Link="v3-corpus/%(Filename)%(Extension)" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

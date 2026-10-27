@@ -668,18 +668,54 @@
     },
     {
       "code": "text_withheld",
-      "optional_payload_keys": [],
+      "more_payloads": [
+        {
+          "content_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
+          "language": "fra",
+          "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+          "official_link": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
+          "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
+          "rights_disposition": "non_admitting_licence_scl",
+          "rule": "rights are enforced when the bundle is composed, before any text is read: every corpus member the state\u0027s articles come from must have been acquired with its two rights channels agreeing CC BY in the same run (rights_disposition agreed_same_run_cc_by); under any other outcome or rights disposition the bundle refuses text_withheld and names the official identity, the official link and the retained body digest, so a derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state none of whose articles holds text refuses text_not_available",
+          "source_outcome": "acquired",
+          "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
+          "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4"
+        }
+      ],
+      "optional_payload_keys": [
+        "celex",
+        "class",
+        "evidence",
+        "language",
+        "permalink",
+        "publisher",
+        "reason",
+        "rights_disposition",
+        "source_outcome",
+        "stable_coordinate",
+        "state_sha256",
+        "state_sha256s",
+        "work_key"
+      ],
       "payload": {
-        "content_sha256": "3a6bb598a9310f8a31240c1f33ae357d6e1f7a46392ca33d223c2718cdded95c",
-        "language": "fra",
-        "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo",
+        "celex": null,
+        "class": "lu_text_names_person",
+        "content_sha256": "4bd80dcb9a65b2583379514a891ad9ba543ae5df5f307c507be19521ec0c3d8b",
+        "evidence": [
+          "birth_date",
+          "birth_place",
+          "domicile",
+          "person_named"
+        ],
+        "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
         "official_link": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
-        "permalink": "/lu-legilux/loi-1991-08-10-n3/2024-02-01--803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4/fra",
-        "rights_disposition": "non_admitting_licence_scl",
-        "rule": "rights are enforced when the bundle is composed, before any text is read: every corpus member the state\u0027s articles come from must have been acquired with its two rights channels agreeing CC BY in the same run (rights_disposition agreed_same_run_cc_by); under any other outcome or rights disposition the bundle refuses text_withheld and names the official identity, the official link and the retained body digest, so a derived, unofficial or non-redistributable body never enters a bundle as authoritative text; a state none of whose articles holds text refuses text_not_available",
-        "source_outcome": "acquired",
-        "stable_coordinate": "/lu-legilux/loi-1991-08-10-n3/2024-02-01",
-        "state_sha256": "803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4"
+        "publisher": "lu-legilux",
+        "reason": "names_private_individuals",
+        "rule": "R92: this work names private individuals, by its class or by what R92\u0027s measurement found in its served text or titles; Lex points to the publisher: its text and titles are not served, searched, quoted or exported, it is kept out of search engines, and its identity, hashes and official link stay",
+        "state_sha256s": [
+          "4bd80dcb9a65b2583379514a891ad9ba543ae5df5f307c507be19521ec0c3d8b"
+        ],
+        "work_key": "loi-1991-08-10-n3"
       },
       "produced_by": [
         "evidence_bundle"

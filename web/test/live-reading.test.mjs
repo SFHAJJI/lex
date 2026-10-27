@@ -23,6 +23,7 @@ import {
   readingParameters,
 } from "../scripts/live-reading.mjs";
 import { withoutTextAt } from "../scripts/reading-page-samples.mjs";
+import { NAMES_WITHHELD_REASON, NAMES_WITHHELD_SENTENCE } from "../scripts/live-refusals.mjs";
 
 /** A refusal's card as the screen shows it: one about this service (R60) inside the failure panel, under its line; any other alone. */
 const asShown = (outcome, card) => renderToStaticMarkup(h(FailureFrame, { outcome }, h("lex-card"))).replace("<lex-card></lex-card>", card);
@@ -153,20 +154,27 @@ test("the refusals a reading from this page can meet: cards where the card's rul
     }
   }
 
-  // The codes the fixture's envelopes do not reach, held to the payloads the platform sends for them.
+  // The codes the fixture's envelopes do not reach, held to every payload the platform sends for them (text_withheld's two:
+  // a licence's, and R92's for a work the names record withholds, which every screen says in its own sentence).
   for (const code of ["ambiguous_version", "text_withheld", "text_not_available", "language_not_available"]) {
     // text_not_available is an absence too, and its payload does carry what_would_answer and
     // asserts_absence_of_law, so its card is shown.
     const row = payloads.produced.find((entry) => entry.code === code);
     assert.ok(row, `the refusal census holds a produced ${code}`);
-    const envelope = structuredClone(envelopeOf("a date before the work's history"));
-    envelope.refusal.code = code;
-    envelope.refusal.helpful_payload = row.payload;
-    const outcome = readingOutcome({ state: "refusal", envelope });
-    assert.equal(outcome.sentence, LIVE_READING_REFUSAL_SENTENCES[code], code);
-    assert.equal(outcome.card, true, `${code}: the card's rules accept the platform's payload`);
-    assert.doesNotThrow(() => view(outcome), code);
+    for (const payload of [row.payload, ...(row.more_payloads ?? [])]) {
+      const envelope = structuredClone(envelopeOf("a date before the work's history"));
+      envelope.refusal.code = code;
+      envelope.refusal.helpful_payload = payload;
+      const outcome = readingOutcome({ state: "refusal", envelope });
+      const names = payload.reason === NAMES_WITHHELD_REASON;
+      assert.equal(outcome.sentence, names ? NAMES_WITHHELD_SENTENCE : LIVE_READING_REFUSAL_SENTENCES[code], code);
+      assert.equal(outcome.card, true, `${code}: the card's rules accept the platform's payload`);
+      assert.doesNotThrow(() => view(outcome), code);
+    }
   }
+  const withheld = payloads.produced.find((entry) => entry.code === "text_withheld");
+  assert.ok([withheld.payload, ...(withheld.more_payloads ?? [])].some((payload) => payload.reason === NAMES_WITHHELD_REASON),
+    "the census holds R92's text_withheld");
 });
 
 test("a transport failure and an unreadable answer are each a state with a sentence", async () => {

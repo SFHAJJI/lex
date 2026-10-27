@@ -45,6 +45,7 @@ public sealed class V3RefusalPayloadSamplesTests
         await ObserveLuxembourgAsync(census);
         await ObserveOneStateAsync(census);
         await ObserveRightsAsync(census);
+        await ObserveNamesAsync(census);
         await ObserveUnmountedAsync(census);
         await ObserveReferenceListsAsync(census);
         await ObserveEuropeReferencesAsync(census);
@@ -334,6 +335,19 @@ public sealed class V3RefusalPayloadSamplesTests
             await DriveAsync(observed, mount, "evidence_bundle", "a state whose articles hold no text",
                 new { identifier = $"/lu-legilux/{empty.WorkKey}", date = empty.ApplicabilityDate, language = "fra" }, "text_not_available");
         }
+    }
+
+    private static async Task ObserveNamesAsync(Census observed)
+    {
+        // R92: an act whose served text names a person (synthetic, V3CorpusNamesMountTests), measured, with the names record
+        // beside its mount: its bundle is text_withheld for the names it holds, with its identity and hashes.
+        var fixture = await MountedFixture.CreateAsync(await V3CorpusNamesMountTests.ActNamingAPersonAsync());
+        await using var cleanup = fixture;
+        Lex.V3.Ingest.Names.NamesMeasurement.WriteFiles(Lex.V3.Ingest.Names.NamesMeasurement.Measure(fixture.Directory), fixture.Directory);
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        await DriveAsync(observed, mount, "evidence_bundle", "an act the names record withholds (R92)",
+            new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = fixture.ApplicabilityDate, language = "fra" }, "text_withheld");
     }
 
     private static async Task ObserveUnmountedAsync(Census observed)

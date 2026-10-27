@@ -68,7 +68,7 @@ internal sealed partial class V3CorpusMount
 
         internal IReadOnlyList<NamesWithheldWork> Works { get; }
 
-        /// <summary>The SHA-256 of the record's bytes, which every refusal names; null with no record.</summary>
+        /// <summary>The SHA-256 of the record's bytes (a refusal's content digest only when the work has no state digest); null with no record.</summary>
         internal string? RecordSha256 { get; }
 
         internal bool Any => Works.Count > 0;
@@ -202,8 +202,7 @@ internal sealed partial class V3CorpusMount
     /// <summary>
     /// <c>text_withheld</c> for a work R92 withholds: the registry's three (its official identity, its official link, a content
     /// digest: the state the answer was about, else the work's first state digest), the reason, its class and reason codes, every
-    /// state digest the index holds of it (R64: a withheld text answers with the hashes), the record's digest and the rule. No
-    /// title and no text.
+    /// state digest the index holds of it (R64: a withheld text answers with the hashes) and the rule. No title and no text.
     /// </summary>
     private V3PlatformOperationOutcome RefuseNamesWithheld(
         V3PlatformOperationRequest request,
@@ -230,7 +229,6 @@ internal sealed partial class V3CorpusMount
             @class = work.Class,
             evidence = work.Evidence,
             state_sha256s = work.StateSha256s,
-            names_record_sha256 = _names.RecordSha256,
             rule = NamesWithheldRule,
         });
         return V3PlatformOperationOutcome.Refused(

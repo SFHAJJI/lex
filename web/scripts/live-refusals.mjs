@@ -35,8 +35,29 @@ export function noCorpusMountedSentence(payload) {
     : `This build has no ${name} index mounted.`);
 }
 
-/** The sentence a screen's table (English, keyed by code) says for a code, or the one naming a code it has none for. */
-export function tableRefusalSentence(table, code, unexpected) {
+/**
+ * What every screen says of a work R92 withholds (`text_withheld` whose payload's `reason` is `names_private_individuals`,
+ * the names record beside the mount; the plan's item 1.11): the act names private individuals, so Lex shows neither its text
+ * nor its titles and points to the publisher, through the official link the card gives. It names no person and offers no
+ * contact (the owner's order: the site names no one and gives no contact channel).
+ */
+export const NAMES_WITHHELD_SENTENCE =
+  "According to Lex's check, this act names private individuals, so Lex shows neither its text nor its titles: read it at the publisher, by following the official link.";
+
+/** The reason a `text_withheld` payload gives for a work R92 withholds. */
+export const NAMES_WITHHELD_REASON = "names_private_individuals";
+
+/** Whether a refusal is R92's for a work the names record withholds. */
+export function namesWithheld(code, payload) {
+  return code === "text_withheld" && payload?.reason === NAMES_WITHHELD_REASON;
+}
+
+/**
+ * The sentence a screen's table (English, keyed by code) says for a code, or the one naming a code it has none for; a work R92
+ * withholds is said in the one sentence every screen says of it (`NAMES_WITHHELD_SENTENCE`), never the licence's.
+ */
+export function tableRefusalSentence(table, code, unexpected, payload = null) {
+  if (namesWithheld(code, payload)) return refusalSentence(NAMES_WITHHELD_SENTENCE);
   return Object.hasOwn(table, code) ? refusalSentence(table[code]) : unexpected(code);
 }
 
