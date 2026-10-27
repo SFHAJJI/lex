@@ -95,21 +95,49 @@ A data refresh and a release are four steps, each with its own evidence:
    $vault = az keyvault list -g rg-lex-v3 --query "[0].name" -o tsv
    az keyvault secret show --vault-name $vault --name release-signing-key --query value -o tsv |
      node --expose-gc scripts/image-rehearsal.mjs --mount <the derived mount> --no-browser --keep `
-       --signing-key - --signer lex-v3-release 1> rehearsal-report.json 2> rehearsal.log
+       --signing-key - --signer lex-v3-release `
+       --serving-release <the directory of the release serving now> --serving-mount <the mount it serves> `
+       --release-explanations <this release's lex-v3-release-explanations/1 file> 1> rehearsal-report.json 2> rehearsal.log
    ```
 
-   It builds the image, verifies and signs it, builds it again from scratch to the same digest, runs every probe that
+   Before it builds anything, it runs the release path's checks over the mount (`Lex.V3.Tool release-checks`, read-only;
+   `web/scripts/release-checks.mjs`):
+   - **R106, release over release.** The mount is compared with the mount of the release serving now, which is held first
+     to that release's signed mount report. Works, versions, articles and EU annexes are counted kept, added, changed and lost
+     per publisher and class. A version lost, a version's text lost, a version whose permalink digest changed, an article
+     whose text digest changed, an article lost from a version both serve, and an EU annex lost are each listed, and each
+     needs a typed reason: the data's own (`publisher_body_changed`) or an entry of the release's explanations file
+     (`lex-v3-release-explanations/1`: `derivation_rule_changed`, `rights_withdrawn`, `withdrawn_by_publisher` or
+     `defect_corrected`, each scoped by items, by two rule profiles, or by rights dispositions, each scope checked against
+     both mounts). One change left unexplained refuses the release, naming each.
+   - **R86(2).** Every admitted consolidation file (Luxembourg consolidations and code states, EU consolidated wordings)
+     that yields no text is listed by identity and typed outcome. A typed textless outcome (misfiled, marker-only, no XML
+     main body, no package held) or a PDF's text-layer profile is explained by the data; any other outcome refuses the
+     release unless the explanations file names that file with exactly that outcome.
+   - A release signed by the release signer must name the release serving now (`--serving-release`, `--serving-mount`; its
+     key and signer default to `src/Lex.V3.Api/well-known/lex-v3-release.pem` and `lex-v3-release`, or
+     `--serving-public-key`, `--serving-signer`); a rehearsal may leave it out and runs R86(2) alone.
+
+   It then builds the image, verifies and signs it, builds it again from scratch to the same digest, runs every probe that
    needs no browser against the image (the API journeys, the served pages, V2's absence, privacy: nothing written, no
-   cookie, no other origin), publishes the release's assets and reads them back. No browser runs on this PC.
+   cookie, no other origin), publishes the release's assets and reads them back. No browser runs on this PC. The assets
+   include the checks' reports (`release-comparison.json`, `consolidation-text.json`), the explanations
+   (`release-explanations.json`) and R88's manifest diff against the release serving now (`manifest-diff.json` and the page
+   `manifest-diff.md`: every field, asset and mount file kept, added, changed or removed, the text yield per class, and every
+   drop beyond ten per cent named). The read-back refuses a release whose checks refuse it or whose diff does not describe its
+   own manifest.
 4. **Deployment and promotion**: `deploy/deploy.ps1 ... -Public -Apply` (INCIDENT-RUNBOOK.md, section 3), then the
    owner's promotion, then the previous revision deactivated so one replica is billed.
+5. **The off-machine copy** (R111): `deploy/backup-release.ps1` (section 9), once the release is published.
 
 **The deploy kit's rules** (`deploy/deploy.ps1`, held by `web/test/deploy-kit.test.mjs` and `deploy-run.test.mjs`):
 - it never signs in, never prints a secret and never promotes; without `-Apply` it only plans;
 - the release is read back under the signing key and must be signed by `lex-v3-release`, never a rehearsal;
 - the image is copied by its manifest digest and deployed by that digest, never a tag;
 - the candidate gets no traffic, is probed at its own address, and is deactivated if the probe fails or it never becomes
-  ready; a data age past the maximum stops promotion (exit 3);
+  ready; a data age past the maximum stops promotion (exit 3), and so does the release's signed evaluation card (R104, O20):
+  a gate that did not pass or was not measured, a shuffled control that missed its shuffle, or a card run over another mount
+  than the release's;
 - a bound domain is read back and kept, and a failed read stops the deployment;
 - since the opening every deployment says `-Public`, which stops if any address rule exists;
 - since #992, each deployment makes a revision of its own, `ca-lex-v3--<the release's suffix>-<8 hex digits of a SHA-256
@@ -163,8 +191,41 @@ Not yet watched from outside: latency budgets, error rates and restarts (R107); 
 
 ## 8. What is not done yet
 
-- Copies of custody and of every signed release off this PC, checked by digest, with a restore drill (R111, O15).
+- The restore drill (R111): rebuilding one release from the copy and reproducing its digests. The copy itself is section 9;
+  custody's own copy is the `custody` container the derive kit fills, kept by versioning once `-EnableProtection` has run.
 - DNS, the key set and a fallback page outside the subscription (R117, O14), and a maintenance revision that can be
   switched on at night (the plan's item 10.14).
 - A second signer with its own key (R116, O16).
 - Latency, error-rate and restart alerts (R107), and the load test that re-sizes the limit (R109).
+
+## 9. The off-machine copy of each release (R111)
+
+Each signed release is copied, once published, into the private container `releases` of the storage account
+`stlexv3soufien` (in `rg-lex-v3`), with the custody pointers it was derived from, and verified object by object. The driver
+runs it from a checkout, signed in as an identity that may list the account's keys:
+
+```powershell
+# Plan: reads the release back and prints what it would copy; changes nothing.
+pwsh -File deploy/backup-release.ps1 -Release C:\lex-v3\releases\<version> -SigningPublicKey src/Lex.V3.Api/well-known/lex-v3-release.pem
+# Copy, then verify. -CustodyPrefix names the custody container's prefixes the release was derived from; the first run on
+# the account adds -EnableProtection, which turns on blob versioning and 365 days of soft delete for blobs and containers.
+pwsh -File deploy/backup-release.ps1 -Release C:\lex-v3\releases\<version> -SigningPublicKey src/Lex.V3.Api/well-known/lex-v3-release.pem `
+  -CustodyPrefix <prefix>[,<prefix>] -Apply
+# Verify again at any time: every object downloaded and hashed against the signed manifest, every custody pointer listed again.
+pwsh -File deploy/backup-release.ps1 -Release C:\lex-v3\releases\<version> -SigningPublicKey src/Lex.V3.Api/well-known/lex-v3-release.pem -Verify
+```
+
+- The release is read back under the signing key first (`deploy-probe.mjs` without `--origin`); nothing is copied from a
+  release that does not verify, or that is a rehearsal.
+- `-Apply` refuses an account without blob versioning and soft delete for blobs and containers, unless `-EnableProtection`
+  turns them on: a copy can then be neither overwritten nor deleted for good.
+- Every asset the signed manifest lists, the manifest and its signature go to `releases/<version>/` in the Cool tier, each with
+  its SHA-256 in the blob's metadata, never over an existing blob: one with the same size and digest is kept, one with another
+  stops the run.
+- With `-CustodyPrefix`, `custody-pointers.json` (`lex-v3-custody-pointers/1`) names every custody object under those prefixes
+  by name, size, Content-MD5 and version id; custody is not copied again, versioning keeps the versions it names.
+- The verification downloads each object, one at a time, into a temporary directory, compares its SHA-256 with the signed
+  manifest's and deletes the copy; it stops when the disk would keep less than 2 GB free (`-KeepFreeBytes`).
+- The account key is read into the command's own environment for the Azure CLI, never printed or put on a command line, and
+  removed when it ends. The command deletes nothing in Azure. `web/test/backup-release.test.mjs` runs it under a made-up Azure
+  CLI.

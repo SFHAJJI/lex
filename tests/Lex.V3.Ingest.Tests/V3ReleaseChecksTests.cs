@@ -174,6 +174,20 @@ public sealed class V3ReleaseChecksTests
     }
 
     [TestMethod]
+    public void ATextlessVersionReadUnderAnotherCoordinateIsNoLossButOneGoneIs()
+    {
+        // An EU census version listed without text (by its Cellar work) whose wording the candidate now reads under its language
+        // and date: the same publisher identity, so nothing served is lost. A textless version gone with its identity is a loss.
+        var listed = Version("a", "2020-01-01", "s1", status: V3MountInventory.NoText, bodies: [], articles: 0);
+        var read = listed with { Key = listed.Key.Replace("|fra", "|eng", StringComparison.Ordinal), TextStatus = V3MountInventory.Held, BodySha256s = ["b1"], Articles = 3 };
+        var gone = Version("b", "2020-01-01", "s2", status: V3MountInventory.NoText, bodies: [], articles: 0);
+        var compared = V3ReleaseComparison.Compare(Inventory(listed, gone), Inventory(read), null);
+        Assert.AreEqual(V3ReleaseComparison.VersionLost, compared.Items.Single().Change);
+        StringAssert.Contains(compared.Items.Single().Key, "|b|");
+        Assert.AreEqual(new V3ReleaseCounts(0, 1, 1, 1), compared.Classes.Single().Versions);
+    }
+
+    [TestMethod]
     public void ArticlesAreComparedByCoordinateAndTheirTextDigestsAsAMultiset()
     {
         var version = Version("a", "2020-01-01", "s1", profiles: [ProfileBefore], bodies: ["b1"], articles: 3);

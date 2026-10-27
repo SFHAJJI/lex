@@ -56,8 +56,9 @@ public sealed record V3ComparedMount(
 /// text is lost, a version whose served identity (its permalink's digest) changed, an article whose text digest changed, an
 /// article lost from a version both serve, and an annex lost, are each listed, and each must be explained by the data (the
 /// publisher's own file changed: <see cref="PublisherBodyChanged"/>) or by an entry of the release's explanations file
-/// (<see cref="V3ReleaseExplanations"/>); any one left unexplained refuses the release. Additions, text a version gains and a
-/// textless version's changed reason are counted and never refuse.
+/// (<see cref="V3ReleaseExplanations"/>); any one left unexplained refuses the release. Additions, text a version gains, a
+/// textless version's changed reason, and a textless version the candidate lists under another coordinate of the same
+/// publisher identity (an EU census version whose wording is now read) are counted and never refuse.
 /// </summary>
 public sealed record V3ReleaseComparison(
     IReadOnlyList<V3ReleaseClassCounts> Classes,
@@ -183,6 +184,7 @@ public sealed record V3ReleaseComparison(
             };
 
         // Versions, by served identity.
+        var candidateIdentities = candidate.Versions.Values.Select(static version => (version.Publisher, version.Identity)).ToHashSet();
         foreach (var key in serving.Versions.Keys.Union(candidate.Versions.Keys, StringComparer.Ordinal).Order(StringComparer.Ordinal))
         {
             var before = serving.Versions.GetValueOrDefault(key);
@@ -204,6 +206,13 @@ public sealed record V3ReleaseComparison(
             if (before is null)
             {
                 tally.Versions[Added]++;
+            }
+            else if (after is null && !before.HasText && candidateIdentities.Contains((before.Publisher, before.Identity)))
+            {
+                // A version listed without text whose publisher identity the candidate still lists under another coordinate (an EU
+                // census version whose wording is now read, a Luxembourg catalogue state whose expression is now held): no served
+                // text or permalink is lost, so it is counted as changed and refuses nothing.
+                tally.Versions[Changed]++;
             }
             else if (after is null)
             {

@@ -142,7 +142,10 @@ probe fails; promotion is printed, never run. Since the opening, every deploymen
 - a revision that already exists (the same release with the same settings) is refused before anything changes: one that
   exists is activated and probed by hand (below), never deployed again;
 - the kit deactivates only a revision this deployment made;
-- the probe is handed `-SearchEngines` as `--search-engines`, and holds robots.txt and the sitemap to it.
+- the probe is handed `-SearchEngines` as `--search-engines`, and holds robots.txt and the sitemap to it;
+- promotion refuses (exit 3, no promotion command printed) a release whose data is past the maximum age, or whose signed
+  evaluation card has a gate that did not pass, a control that missed its shuffle, or a target that is not the release's
+  mount (R104).
 
 <!-- runbook:deploy -->
 ```powershell
@@ -230,6 +233,8 @@ do, the answer to an S1 is a rollback.
 | A candidate never becomes ready | The deployment fails at Azure's progress deadline; `/health/ready` on the candidate answers 503 (no law mounted). | The kit deactivates it; no traffic moved. Read its replica's console for the mount's refusal. |
 | The probe fails | `deploy.ps1` stops with "failed its probe". | The kit deactivated the candidate; the live revision is untouched. |
 | Promotion refused for the data's age | The probe exits 3: a publisher's newest completed collection is older than 30 days. | No promotion command is printed; a release with newer data is the way forward (OPERATING.md, "Freshness"). |
+| Promotion refused for the evaluation card (R104) | The probe exits 3 and says "promotion refuses the release: the evaluation card's ... gate ... is ..., not pass", a control that missed its shuffle, or a card run over another mount. | No promotion command is printed. A release whose card passes over its own mount is the way forward; the only override R104 allows is the owner's written break-glass waiver for a harness defect. |
+| The release path's checks refuse a release (R106, R86(2)) | `image-rehearsal.mjs` stops before building, naming each unexplained change against the release serving now, or each admitted consolidation that yields no text. | Read `release-comparison.json` and `consolidation-text.json` in its work directory. A change that is meant gets a typed reason in the release's explanations file, listed in the pull request; anything else is a defect to fix before releasing. Nothing was built or published. |
 | Data past 30 days on the live site | Every page shows the staleness banner; the monitor's `api` check fails ("stale"). | S2: a refresh run (needs the owner's per-run yes), a derive and a release. |
 | The certificate near its end | The monitor's `certificate` check fails within 21 days of the end. | The managed certificate renews itself while `law` stays a CNAME to the app; check the binding with `az containerapp hostname list -g rg-lex-v3 -n ca-lex-v3 -o table`, or rebind with `deploy/bind-domain.ps1`. |
 | The limit sees no client, or one client for everyone | After a platform change the ingress might stop forwarding each reader's own address: the limit would then count no one, or make one bucket for the whole site. | The two-address check of section 3 ("Before promoting"), against a candidate; the server's own tests cannot see the ingress. |

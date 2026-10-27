@@ -72,7 +72,7 @@ const STUBS = `
       if ($env:DAMAGED -and $name -like "*$env:DAMAGED") { [System.IO.File]::AppendAllText($file, 'x') }
       return
     }
-    if ($line -like 'storage blob list*') { return $env:CUSTODY }
+    if ($line -like 'storage blob list*') { return @($env:CUSTODY -split [char]10) }
   }`;
 
 /**
@@ -92,7 +92,7 @@ function backup(runs, env = {}) {
     const script = `${STUBS}\n${body}\nforeach ($call in $global:calls) { "CALL:$call" }`;
     const run = spawnSync("pwsh", ["-NoProfile", "-NonInteractive", "-Command", script], {
       encoding: "utf8", timeout: 120_000,
-      env: { ...process.env, STORE_DIR: store, PROTECTION: '{"versioning":true,"blobs":true,"containers":true}', READBACK_FAILS: "", EXISTING: "", DAMAGED: "", CUSTODY: "[]", ...env },
+      env: { ...process.env, STORE_DIR: store, PROTECTION: '{"versioning":true,"blobs":true,"containers":true}', READBACK_FAILS: "", EXISTING: "", DAMAGED: "", CUSTODY: "", ...env },
     });
     assert.equal(run.error, undefined, `pwsh could not run: ${run.error}`);
     const lines = run.stdout.split(/\r?\n/);
@@ -163,10 +163,11 @@ test("a blob that exists with another content stops the copy, and a damaged copy
 });
 
 test("the custody pointers name every custody object under the prefixes, and the verification lists them again", () => {
-  const custody = (md5) => JSON.stringify([
-    { name: "run15/aa.br", size: 10, md5: "bWQ1LWE=", version: "2026-10-12T00:00:00.0000000Z" },
-    { name: "run15/bb.br", size: 20, md5, version: "2026-10-12T00:00:01.0000000Z" },
-  ]);
+  // The listing as the Azure CLI writes it with -o tsv: name, size, Content-MD5 and version id, a line each.
+  const custody = (md5) => [
+    ["run15/aa.br", 10, "bWQ1LWE=", "2026-10-12T00:00:00.0000000Z"],
+    ["run15/bb.br", 20, md5, "2026-10-12T00:00:01.0000000Z"],
+  ].map((row) => row.join("\t")).join("\n");
   const run = backup([
     { parameters: ["-Apply", "-CustodyPrefix", "run15/"], env: { CUSTODY: custody("bWQ1LWI=") } },
     { parameters: ["-Verify"], env: { CUSTODY: custody("bWQ1LWI=") } },

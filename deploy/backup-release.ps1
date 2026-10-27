@@ -107,13 +107,20 @@ function Get-Blob([string] $Name) {
     return $text | ConvertFrom-Json
 }
 
+# The custody objects under the prefixes, each by name, size, Content-MD5 and version id, as text: tab-separated values, since
+# ConvertFrom-Json turns a version id (a time stamp) into a date, which no longer prints as the id (`None` for a missing value).
 function Get-CustodyListing([string[]] $Prefixes) {
     $listed = [System.Collections.Generic.List[object]]::new()
     foreach ($prefix in $Prefixes) {
-        $text = az storage blob list --container-name $CustodyContainer --prefix $prefix --num-results '*' --include v `
-            --query '[?isCurrentVersion != `false`].{name:name, size:properties.contentLength, md5:properties.contentSettings.contentMd5, version:versionId}' -o json
+        $lines = az storage blob list --container-name $CustodyContainer --prefix $prefix --num-results '*' --include v `
+            --query '[?isCurrentVersion != `false`].[name, properties.contentLength, properties.contentSettings.contentMd5, versionId]' -o tsv
         if ($LASTEXITCODE -ne 0) { throw "The custody under $prefix could not be listed." }
-        foreach ($entry in @($text | ConvertFrom-Json)) { if ($entry) { $listed.Add($entry) } }
+        foreach ($line in @($lines)) {
+            if ([string]::IsNullOrWhiteSpace($line)) { continue }
+            $parts = "$line".Split("`t")
+            if ($parts.Count -ne 4) { throw "The custody listing under $prefix has a line that is not four values." }
+            $listed.Add([pscustomobject]@{ name = $parts[0]; size = [long]$parts[1]; md5 = $parts[2]; version = $parts[3] })
+        }
     }
     return @($listed | Sort-Object -Property name -CaseSensitive)
 }
@@ -209,15 +216,26 @@ try {
         $pointersCopy = Join-Path $scratch 'custody-pointers.json'
         az storage blob download --container-name $Container --name "$version/custody-pointers.json" --file $pointersCopy --no-progress -o none
         if ($LASTEXITCODE -ne 0) { throw "The custody pointers could not be downloaded." }
-        $pointers = Get-Content -LiteralPath $pointersCopy -Raw | ConvertFrom-Json
-        $now = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::Ordinal)
-        foreach ($entry in Get-CustodyListing @($pointers.prefixes)) { $now[$entry.name] = $entry }
-        foreach ($pointer in $pointers.objects) {
-            $entry = if ($now.ContainsKey($pointer.name)) { $now[$pointer.name] } else { $null }
-            if ($null -eq $entry -or [long]$entry.size -ne [long]$pointer.size -or $entry.md5 -cne $pointer.content_md5 -or "$($entry.version)" -cne "$($pointer.version_id)") {
-                throw "The custody object $($pointer.name) is not the one the pointers name (size $($pointer.size), Content-MD5 $($pointer.content_md5), version $($pointer.version_id))."
+        # Read by System.Text.Json, so each version id stays the text the listing gave (ConvertFrom-Json would make it a date).
+        $document = [System.Text.Json.JsonDocument]::Parse([System.IO.File]::ReadAllText($pointersCopy))
+        try {
+            $prefixes = @($document.RootElement.GetProperty('prefixes').EnumerateArray() | ForEach-Object { $_.GetString() })
+            $now = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::Ordinal)
+            foreach ($entry in Get-CustodyListing $prefixes) { $now[$entry.name] = $entry }
+            foreach ($pointer in $document.RootElement.GetProperty('objects').EnumerateArray()) {
+                $name = $pointer.GetProperty('name').GetString()
+                $size = $pointer.GetProperty('size').GetInt64()
+                $md5 = $pointer.GetProperty('content_md5').GetString()
+                $versionId = $pointer.GetProperty('version_id').GetString()
+                $entry = if ($now.ContainsKey($name)) { $now[$name] } else { $null }
+                if ($null -eq $entry -or $entry.size -ne $size -or $entry.md5 -cne $md5 -or $entry.version -cne $versionId) {
+                    throw "The custody object $name is not the one the pointers name (size $size, Content-MD5 $md5, version $versionId)."
+                }
+                $pointersChecked++
             }
-            $pointersChecked++
+        }
+        finally {
+            $document.Dispose()
         }
     }
     Write-Host "verified: $verified objects of $version in $Account/$Container by SHA-256$(if ($pointersChecked -gt 0) { ", and $pointersChecked custody pointers" })"
