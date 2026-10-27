@@ -725,7 +725,7 @@ internal sealed partial class V3CorpusMount
         }
 
         var act = seed ?? celex;
-        recognition = recognition with { Work = act, HeldAct = "/eu-eurlex/" + act };
+        recognition = recognition with { Work = act, HeldAct = EuropeActAddress(act) };
 
         // A consolidated CELEX names its version's date (02016R0679-20160504); a second date that disagrees opens nothing.
         var versionDate = pinnedDate ?? (celex.Length > 11 && celex[0] == '0' && celex[^9] == '-' && IsEightDigitDay(celex[^8..]) ? DayOf(celex[^8..]) : null);
@@ -741,7 +741,7 @@ internal sealed partial class V3CorpusMount
                 page = "dossier",
                 address_kind = "dossier",
                 publisher = "eu-eurlex",
-                address = "/eu-eurlex/" + act,
+                address = EuropeActAddress(act),
                 work = act,
                 language = (string?)null,
                 state_date = (string?)null,
@@ -851,7 +851,7 @@ internal sealed partial class V3CorpusMount
             provision = opened[0];
         }
 
-        var target = readable ? $"/eu-eurlex/{act}/{textLanguage}" : permalink;
+        var target = readable ? $"{EuropeActAddress(act)}/{textLanguage}" : permalink;
         return ReferenceAnswer(request, query, language, requestedDate, mode, observedAt, recognition, new
         {
             page = "reading",
@@ -905,14 +905,14 @@ internal sealed partial class V3CorpusMount
             // An act's address (/eu-eurlex/{celex}), and the EU stable coordinate (/eu-eurlex/{celex}/{lng}/{date}).
             if (segments.Length == 3 && segments[2].Length > 0)
             {
-                return EuropeReference(request, query, language, requestedDate, mode, reference, segments[2], observedAt);
+                return EuropeReference(request, query, language, requestedDate, mode, reference, EuropeCelexOfSegment(segments[2]) ?? segments[2], observedAt);
             }
 
             if (segments.Length == 5 && segments[3].Length == 3 && segments[3].All(char.IsAsciiLetterLower) &&
                 DateOnly.TryParseExact(segments[4], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
                     System.Globalization.DateTimeStyles.None, out _))
             {
-                return EuropeReference(request, query, language, requestedDate, mode, reference, segments[2], observedAt,
+                return EuropeReference(request, query, language, requestedDate, mode, reference, EuropeCelexOfSegment(segments[2]) ?? segments[2], observedAt,
                     pinnedLanguage: segments[3], pinnedDate: segments[4]);
             }
 
@@ -920,7 +920,7 @@ internal sealed partial class V3CorpusMount
             if (segments.Length is 4 or 5 && segments[2].Length > 0 && segments[3].Length == 3 && segments[3].All(char.IsAsciiLetterLower) &&
                 (segments.Length == 4 || IsAnchorSegment(segments[4])))
             {
-                return EuropeReference(request, query, language, requestedDate, mode, reference, segments[2], observedAt,
+                return EuropeReference(request, query, language, requestedDate, mode, reference, EuropeCelexOfSegment(segments[2]) ?? segments[2], observedAt,
                     pinnedLanguage: segments[3], heldProvision: segments.Length == 5 ? Uri.UnescapeDataString(segments[4]) : null, reading: true);
             }
 

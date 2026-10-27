@@ -402,11 +402,12 @@ internal sealed partial class V3WebRoot
     /// <c>%2E%2E</c> as an article, which the live server and a browser resolve away). A readable address's article is never
     /// a calendar date, with or without a digest after it: <c>/eu-eurlex/{celex}/{lng}/{date}</c> is an EU stable coordinate
     /// and <c>/eu-eurlex/{celex}/{lng}/{date}--{sha256}</c> the EU permalink shape before R64 (<see cref="MovedFor"/>), so
-    /// neither shape names an article. A <c>#</c> (a position inside an article) never reaches a server. The end is
-    /// <c>\z</c>, not <c>$</c>, which in .NET also matches before a final newline.
+    /// neither shape names an article. A <c>{celex}</c> is one segment, a solidus written <c>%2F</c> (the Treaties' and the
+    /// Charter's <c>12016E%2FTXT</c>; <see cref="V3CorpusMount.EuropeWorkSegment"/>). A <c>#</c> (a position inside an
+    /// article) never reaches a server. The end is <c>\z</c>, not <c>$</c>, which in .NET also matches before a final newline.
     /// </summary>
     private static readonly Regex SitePath = new(
-        "^/(?:(?<locale>fr|en)/)?(?<law>lu-legilux/(?<work>[a-z0-9][a-z0-9_-]*)|eu-eurlex/(?<celex>[0-9A-Za-z][0-9A-Za-z()._-]*))" +
+        "^/(?:(?<locale>fr|en)/)?(?<law>lu-legilux/(?<work>[a-z0-9][a-z0-9_-]*)|eu-eurlex/(?<celex>[0-9A-Za-z](?:[0-9A-Za-z()._-]|%2[Ff])*))" +
         "(?:(?<pin>/(?<date>[0-9]{4}-[0-9]{2}-[0-9]{2})--(?<digest>[0-9a-f]{64})/(?<lng>[a-z]{3})" +
         "(?:/(?!(?:\\.|%2[eE]){1,2}\\z)(?:[0-9A-Za-z._~!$&'()*+,;=:@-]|%[0-9A-Fa-f]{2})+)?)" +
         "|(?<current>/(?<currentLng>[a-z]{3})" +
@@ -421,7 +422,7 @@ internal sealed partial class V3WebRoot
     /// alone: it is not matched, and is answered as any address this root does not hold.
     /// </summary>
     private static readonly Regex EuropeWordingBeforeR64 = new(
-        "^/(?:(?<locale>fr|en)/)?eu-eurlex/(?<celex>[0-9A-Za-z][0-9A-Za-z()._-]*)/(?<lng>[a-z]{3})/(?<pin>[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9a-f]{64})\\z",
+        "^/(?:(?<locale>fr|en)/)?eu-eurlex/(?<celex>[0-9A-Za-z](?:[0-9A-Za-z()._-]|%2[Ff])*)/(?<lng>[a-z]{3})/(?<pin>[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9a-f]{64})\\z",
         RegexOptions.CultureInvariant,
         TimeSpan.FromMilliseconds(100));
 
@@ -484,8 +485,10 @@ internal sealed partial class V3WebRoot
     /// <paramref name="today"/> (Luxembourg's date, R13), and the text's language it names, and with neither is not rendered;
     /// a dossier asks by the work. An interface language's home page
     /// (<c>/en/</c>, <c>/en/index.html</c>) is rendered from <c>coverage</c>, asked with no parameters, as the page as built
-    /// asks it once loaded: its coverage line and today's date in Luxembourg (R11, R13; <c>web/scripts/live-home.mjs</c>).
-    /// Null for any other path.
+    /// asks it once loaded: its coverage line and today's date in Luxembourg (R11, R13; <c>web/scripts/live-home.mjs</c>). An
+    /// interface language's Developers page (<c>/en/developers.html</c>) is rendered from <c>browse</c> for the first act this
+    /// server holds, one row, which it shows whole as its live examples (the plan's item 8.4: "live examples from the
+    /// release's own data"; <c>web/scripts/developers.mjs</c>). Null for any other path.
     /// </summary>
     /// <remarks>
     /// A reading is read one page at a time (the plan's item 3.7): an address that names an article asks the page that holds
@@ -502,6 +505,11 @@ internal sealed partial class V3WebRoot
             {
                 return new V3SitePage(home, "home", "coverage", new Dictionary<string, object>(StringComparer.Ordinal));
             }
+
+            if (string.Equals(path, $"/{home}/developers.html", StringComparison.Ordinal))
+            {
+                return new V3SitePage(home, "developers", "browse", new Dictionary<string, object>(StringComparer.Ordinal) { ["limit"] = 1 });
+            }
         }
 
         var match = SiteMatch(path);
@@ -511,7 +519,7 @@ internal sealed partial class V3WebRoot
         }
 
         var language = match.Groups["locale"].Value;
-        var work = match.Groups["work"].Success ? "/lu-legilux/" + match.Groups["work"].Value : match.Groups["celex"].Value;
+        var work = match.Groups["work"].Success ? "/lu-legilux/" + match.Groups["work"].Value : V3CorpusMount.EuropeCelexOfSegment(match.Groups["celex"].Value)!;
         if (match.Groups["pin"].Success)
         {
             var date = match.Groups["date"].Value;

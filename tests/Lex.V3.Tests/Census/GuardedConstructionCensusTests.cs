@@ -85,6 +85,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method internal static Lex.V3.Api.V3PageRenderer::Open",
                 "Lex.V3.Api.V3PlatformOperationOutcome: constructor private instance "
                     + "Lex.V3.Api.V3PlatformOperationOutcome::.ctor, "
+                    + "method internal instance Lex.V3.Api.V3CorpusMount::RefuseOutOfScope, "
+                    + "method internal instance Lex.V3.Api.V3CorpusMount::Unserved, "
                     // The names record's gate on every answer (R92; V3CorpusMount.Names.cs).
                     + "method internal instance Lex.V3.Api.V3CorpusMount::WithNamesWithheld, "
                     + "method internal static Lex.V3.Api.V3ApiHandler::ExecuteFor, "
@@ -113,16 +115,15 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNamesWithheld, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
-                    // A version an ELI names that the interval rules do not serve on the date (S7a; the review of #987, F2).
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseOutsideScope, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefusePageNotInVersion, "
-                    // The reader's interval rules on index 9 (S7a): a state without text, and a date no state covers.
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseTextless, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUncoveredNine, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUncoveredNine, "
                     + "method private instance "
                     + "Lex.V3.Api.V3CorpusMount::RefuseUnlessCursorOfThisLog, "
-                    + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUnlessPinnedOriginalWording, "
+                    + "method private instance "
+                    + "Lex.V3.Api.V3CorpusMount::RefuseUnlessPinnedOriginalWording, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUnlessPinnedState, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUnlessPinnedWording, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseUnlessWorkStates, "
@@ -165,7 +166,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Api.V3CorpusMount::Verify, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Refused, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Success, "
-                    // ExecuteFor's dispatch names each operation's method, so its one lambda is the gate's.
+                    // ExecuteFor's dispatch names each operation's method, so its one lambda is the gates'.
                     + "3 compiler-generated",
                 "Lex.V3.Api.V3PlatformSchemaDocuments: constructor private instance "
                     + "Lex.V3.Api.V3PlatformSchemaDocuments::.ctor, "

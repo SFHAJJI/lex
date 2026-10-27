@@ -370,15 +370,20 @@ public static class IndexingRecord
     public const string Schema = "lex-v3-indexing-record/1";
 
     // The site's address grammar for a work's dossier, as V3WebRoot.SitePath and the live server's routes read it: an address
-    // outside it (an EU treaty's CELEX with "/") cannot be listed, since the reader refuses the whole record for one.
+    // outside it cannot be listed, since the reader refuses the whole record for one. A CELEX is one segment, its solidus
+    // written %2F (the Treaties' and the Charter's 12016E%2FTXT; EuropeAddressOf).
     private static readonly Regex LuxembourgAddress = new("^/lu-legilux/[a-z0-9][a-z0-9_-]*\\z", RegexOptions.CultureInvariant);
 
-    private static readonly Regex EuropeAddress = new("^/eu-eurlex/[0-9A-Za-z][0-9A-Za-z()._-]*\\z", RegexOptions.CultureInvariant);
+    private static readonly Regex EuropeAddress = new("^/eu-eurlex/[0-9A-Za-z](?:[0-9A-Za-z()._-]|%2[Ff])*\\z", RegexOptions.CultureInvariant);
 
     // A consolidated version's CELEX names one wording, never a dossier: never listed.
     private static readonly Regex ConsolidatedCelex = new("^0[0-9]{4}[A-Z]{1,2}[0-9]{4,}(?:\\([0-9]{2}\\))?-[0-9]{8}\\z", RegexOptions.CultureInvariant);
 
     private static readonly Regex TextLanguage = new("^[a-z]{3}\\z", RegexOptions.CultureInvariant);
+
+    /// <summary>An EU act's dossier address, <c>/eu-eurlex/{celex}</c>, its CELEX one segment with its solidus written <c>%2F</c>.</summary>
+    public static string EuropeAddressOf(string celex) =>
+        "/eu-eurlex/" + (celex ?? throw new ArgumentNullException(nameof(celex))).Replace("/", "%2F", StringComparison.Ordinal);
 
     /// <summary>Whether a dossier address is one the record may list (the site's grammar, and never a consolidated CELEX).</summary>
     public static bool Listable(string address)

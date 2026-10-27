@@ -39,7 +39,8 @@ export function readNamesRecord(text) {
 
 /** The dossier address of a withheld work the site could open (one the index holds), or null for an act it holds no version of. */
 export function withheldAddress(work) {
-  if (work.publisher === "eu-eurlex") return work.celex ? `/eu-eurlex/${work.celex}` : null;
+  // A CELEX is one segment, its solidus written %2F, as the site addresses it (the Treaties' 12016E%2FTXT).
+  if (work.publisher === "eu-eurlex") return work.celex ? `/eu-eurlex/${work.celex.replaceAll("/", "%2F")}` : null;
   return work.work_key ? `/lu-legilux/${work.work_key}` : null;
 }
 

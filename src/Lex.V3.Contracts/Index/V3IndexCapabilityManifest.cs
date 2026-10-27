@@ -31,19 +31,23 @@ public enum V3IndexCapabilityManifestRefusal
 
 /// <summary>
 /// One registered operation the platform does not serve for the index's publisher, as the index's capability manifest states
-/// it: the operation, the typed reason a request for it answers, and the data that would serve it. The reason is
-/// <see cref="OperationNotServed"/> for an operation no route serves (<see cref="Platform.V3UnservedOperations"/>), or
-/// <see cref="RetrievalModeUnavailable"/> for an operation routed for another publisher's identifiers only
-/// (<see cref="Platform.V3EuropeRefusedOperations"/>); the builders write those tables.
+/// it: the operation, the typed reason a request for it answers, and the data that would serve it. The builders write
+/// <see cref="RetrievalModeUnavailable"/> for an operation served from no data (<see cref="Platform.V3UnservedOperations"/>) and
+/// for an operation routed for another publisher's identifiers only (<see cref="Platform.V3EuropeRefusedOperations"/>); a
+/// manifest written before 2026-10-27 states <see cref="OperationNotServed"/> for the first, and still reads.
 /// </summary>
 public sealed record V3UnservedOperation(string Operation, string Reason, string DataNeeded)
 {
-    /// <summary>The typed reason a request for a registered operation with no route answers: the transport failure.</summary>
+    /// <summary>
+    /// The reason a manifest written before 2026-10-27 states for an operation served from no data: the transport failure a
+    /// request for it answered then. Such a manifest still reads; a request for the operation now answers
+    /// <see cref="RetrievalModeUnavailable"/> inside a normal envelope (the plan's item 8.6).
+    /// </summary>
     public const string OperationNotServed = "operation_not_served";
 
     /// <summary>
-    /// The typed reason a request answers when the operation is routed but not for this publisher's identifiers: the registry's
-    /// refusal <c>retrieval_mode_unavailable</c>, naming the requested mode and the modes available.
+    /// The typed reason a request answers when the operation is served from no data, or is routed but not for this publisher's
+    /// identifiers: the registry's refusal <c>retrieval_mode_unavailable</c>, naming the requested mode and the modes available.
     /// </summary>
     public const string RetrievalModeUnavailable = "retrieval_mode_unavailable";
 }
@@ -172,9 +176,9 @@ public sealed class V3IndexCapabilityManifest
 
     /// <summary>
     /// The manifest with the operations not served stated beside the cells: each a registered operation, at most once, with
-    /// the typed reason a request for it answers (<see cref="V3UnservedOperation.OperationNotServed"/> or
-    /// <see cref="V3UnservedOperation.RetrievalModeUnavailable"/>) and non-blank data that would serve it; held in operation
-    /// order.
+    /// the typed reason a request for it answers (<see cref="V3UnservedOperation.RetrievalModeUnavailable"/>, or, in a
+    /// manifest written before 2026-10-27, <see cref="V3UnservedOperation.OperationNotServed"/>) and non-blank data that would
+    /// serve it; held in operation order.
     /// </summary>
     public static bool TryCreate(
         PublisherId publisher,

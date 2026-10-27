@@ -4687,17 +4687,17 @@ internal sealed partial class V3CorpusMount : IDisposable
         "the outcomes of members that are not acquired are not counted";
 
     internal const string CoverageOperationsNote =
-        "served_operations are the routes this mount answers and not_served_operations are registered with no route on it; " +
-        "a request for an unserved operation answers the transport failure operation_not_served (HTTP 404, below the envelope), " +
-        "which tells it apart from a path nothing names (unknown_route); not_served_data names, for each unserved operation, " +
+        "served_operations are the operations this mount answers from its data and not_served_operations are registered and " +
+        "served from no data; every registered operation has a route over REST and MCP, and a request for an unserved one answers " +
+        "inside a normal envelope with the typed refusal its row of not_served_data gives (reason: retrieval_mode_unavailable, " +
+        "naming the requested mode and the modes this server serves), never a transport failure; not_served_data names, for each, " +
         "the data that would serve it, none of which the ingest produces";
 
     /// <summary>
-    /// The data that would serve each registered operation this mount has no route for (the driver decision in STATUS:
-    /// they keep the transport failure <c>operation_not_served</c>, and the platform says, per operation, which data
-    /// would serve it). The data are the specification's own (<c>33-product-spec.md</c>: the publication-time view, the
-    /// bitemporal replay, the EuroVoc concepts and the transposition bridge). A served operation never appears here, and
-    /// an unserved one without an entry fails the coverage tests.
+    /// The data that would serve each registered operation this mount serves from no data, which answers its typed refusal
+    /// inside a normal envelope (the plan's item 8.6). The data are the specification's own (<c>33-product-spec.md</c>: the
+    /// publication-time view, the EuroVoc concepts and the transposition bridge). A served operation never appears here, and an
+    /// unserved one without an entry fails the coverage tests.
     /// </summary>
     internal static readonly IReadOnlyDictionary<string, string> NotServedDataNeeded =
         V3UnservedOperations.Rows.ToDictionary(static row => row.Operation, static row => row.DataNeeded, StringComparer.Ordinal);
@@ -4721,6 +4721,8 @@ internal sealed partial class V3CorpusMount : IDisposable
             .Select(static operation => new
             {
                 operation,
+                reason = Lex.V3.Contracts.Index.V3UnservedOperation.RetrievalModeUnavailable,
+                requested_mode = V3UnservedOperations.RequestedMode(operation),
                 data_needed = NotServedDataNeeded.TryGetValue(operation, out var needed)
                     ? needed
                     : throw new InvalidOperationException($"The unserved operation {operation} states no data that would serve it."),
@@ -4745,9 +4747,12 @@ internal sealed partial class V3CorpusMount : IDisposable
             not_served_operations = notServed,
             not_served_data = notServedData,
             note = CoverageOperationsNote,
+            // An operation served from no data is listed above, with its reason, for every identifier; a manifest written since
+            // 2026-10-27 states it with the same reason, and it is not repeated here.
             refused_for_eu = _europeReader.NotServed
-                .Where(static row => string.Equals(
-                    row.Reason, Lex.V3.Contracts.Index.V3UnservedOperation.RetrievalModeUnavailable, StringComparison.Ordinal))
+                .Where(row => string.Equals(
+                    row.Reason, Lex.V3.Contracts.Index.V3UnservedOperation.RetrievalModeUnavailable, StringComparison.Ordinal) &&
+                    !notServed.Contains(row.Operation, StringComparer.Ordinal))
                 .Select(static row => new { operation = row.Operation, reason = row.Reason, data_needed = row.DataNeeded })
                 .ToArray(),
             refused_for_eu_note = CoverageEuropeRefusedNote,
@@ -7356,7 +7361,55 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// the wording is one expression in one language, and its digest pins that language's articles.
     /// </summary>
     private static string EuropePermalink(string celex, string wordingDate, string wordingSha256, string language) =>
-        $"/{EuropePermalinkPublisher}/{celex}/{wordingDate}--{wordingSha256}/{language}";
+        $"/{EuropePermalinkPublisher}/{EuropeWorkSegment(celex)}/{wordingDate}--{wordingSha256}/{language}";
+
+    /// <summary>
+    /// A CELEX as the one path segment R64's <c>{work}</c> is: unchanged unless it carries a solidus, which RFC 3986 writes
+    /// <c>%2F</c> inside a segment. The Treaties' and the Charter's CELEX numbers carry one (<c>12016E/TXT</c>, served from
+    /// main-body profile /5 on); every other CELEX this index holds has none, so its addresses keep their bytes.
+    /// </summary>
+    internal static string EuropeWorkSegment(string celex) => celex.Replace("/", "%2F", StringComparison.Ordinal);
+
+    /// <summary>An EU act's address, <c>/eu-eurlex/{celex}</c>, its CELEX as one segment (<see cref="EuropeWorkSegment"/>).</summary>
+    internal static string EuropeActAddress(string celex) => $"/{EuropePermalinkPublisher}/{EuropeWorkSegment(celex)}";
+
+    /// <summary>
+    /// The CELEX a path segment names, or null: letters, digits and <c>( ) _ - .</c>, as before, and a solidus written
+    /// <c>%2F</c> (or <c>%2f</c>), the only escape a CELEX segment takes (<see cref="EuropeWorkSegment"/>).
+    /// </summary>
+    internal static string? EuropeCelexOfSegment(string segment)
+    {
+        if (segment.Length == 0)
+        {
+            return null;
+        }
+
+        var celex = new StringBuilder(segment.Length);
+        for (var index = 0; index < segment.Length; index++)
+        {
+            var character = segment[index];
+            if (character == '%')
+            {
+                if (index + 2 >= segment.Length || segment[index + 1] != '2' || segment[index + 2] is not ('F' or 'f'))
+                {
+                    return null;
+                }
+
+                celex.Append('/');
+                index += 2;
+            }
+            else if (char.IsAsciiLetterOrDigit(character) || character is '(' or ')' or '_' or '-' or '.')
+            {
+                celex.Append(character);
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        return celex.ToString();
+    }
 
     /// <summary>
     /// The EU stable coordinate, <c>/eu-eurlex/{celex}/{language}/{wording date}</c>, of a wording's permalink
@@ -7389,13 +7442,12 @@ internal sealed partial class V3CorpusMount : IDisposable
     {
         celex = language = wordingDate = requestedDigest = string.Empty;
         provision = null;
-        if (PermalinkSegments(value, EuropePermalinkPublisher) is not { } pin ||
-            !pin.Work.All(static character => char.IsAsciiLetterOrDigit(character) || character is '(' or ')' or '_' or '-' or '.'))
+        if (PermalinkSegments(value, EuropePermalinkPublisher) is not { } pin || EuropeCelexOfSegment(pin.Work) is not { } work)
         {
             return false;
         }
 
-        (celex, wordingDate, requestedDigest, language, provision) = (pin.Work, pin.Date, pin.Digest, pin.Language, pin.Anchor);
+        (celex, wordingDate, requestedDigest, language, provision) = (work, pin.Date, pin.Digest, pin.Language, pin.Anchor);
         return true;
     }
 

@@ -234,7 +234,9 @@ public sealed class EuFormexPackagePopulationResult
 /// against the held XHTML body and the work's PDF (one more GET), which travels on the result to
 /// the classification reconciliation. The corpus builder binds every outcome to exactly one held
 /// EU body and writes the main-body disposition per member, so an acquired English package reaches
-/// the corpus as <c>formex_main_body_admitted</c> with its articles in the Europe index.
+/// the corpus as <c>formex_main_body_admitted</c> with its articles in the Europe index. An annex-bearing package
+/// whose annex chain does not close is <c>not_acquired</c> with the admitted inventory retained, so its main body
+/// reaches the corpus as <c>formex_main_body_admitted_annexes_unclassified</c>, its annexes unclassified.
 /// </para>
 /// </remarks>
 public sealed partial class EuFormexPackagePopulationProducer

@@ -146,7 +146,12 @@ public sealed class V3NamesRecordTests
         CollectionAssert.AreEqual(new[] { "eng", "fra" }, record.Works[0].Languages.ToArray());
         Assert.IsNotNull(V3WebRoot.ReadIndexingRecord(IndexingRecord.Text(IndexingRecord.Write(null, []))), "a record of no work is a record");
 
-        // What the web root would refuse whole is never written: a treaty's CELEX with "/", a consolidated CELEX, an interface
+        // A treaty's CELEX is one segment, its solidus written %2F, as the site addresses it; the web root admits it.
+        Assert.AreEqual("/eu-eurlex/12016E%2FTXT", IndexingRecord.EuropeAddressOf("12016E/TXT"));
+        Assert.IsTrue(IndexingRecord.Listable("/eu-eurlex/12016E%2FTXT"));
+        Assert.IsNotNull(V3WebRoot.ReadIndexingRecord(IndexingRecord.Text(IndexingRecord.Write(null, [("/eu-eurlex/12016E%2FTXT", ["eng"])]))));
+
+        // What the web root would refuse whole is never written: a CELEX's bare solidus, a consolidated CELEX, an interface
         // language, a work with no language, a work twice.
         Assert.IsFalse(IndexingRecord.Listable("/eu-eurlex/12016E/TXT"));
         Assert.IsFalse(IndexingRecord.Listable("/eu-eurlex/02016R0679-20160504"));

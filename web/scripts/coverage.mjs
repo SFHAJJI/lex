@@ -511,9 +511,10 @@ function readArticleOutcomes(value, where) {
 }
 
 /**
- * What this mount answers, and what is registered with no route on it, with the data that would
- * serve each operation that has none (`not_served_data`: one row per unrouted operation, in the same
- * order, each saying what data it needs).
+ * What this mount answers, and what is registered and served from no data on it, with the typed refusal
+ * every request for such an operation answers inside the envelope and the data that would serve it
+ * (`not_served_data`: one row per unrouted operation, in the same order, each saying its reason, the mode
+ * asked and what data it needs; the plan's item 8.6).
  *
  * The producer builds `not_served_operations` as `registered.Except(served)`, so the two lists add
  * up to `registered` exactly when the served operations are a subset of the registered ones. When
@@ -560,6 +561,8 @@ function readOperations(value) {
   const notServedData = requireList(requireOwn(value, 'not_served_data', where), `${where}.not_served_data`)
     .map((row, index) => Object.freeze({
       operation: requireText(requireOwn(row, 'operation', `${where}.not_served_data[${index}]`), `${where}.not_served_data[${index}].operation`),
+      reason: requireText(requireOwn(row, 'reason', `${where}.not_served_data[${index}]`), `${where}.not_served_data[${index}].reason`),
+      requestedMode: requireText(requireOwn(row, 'requested_mode', `${where}.not_served_data[${index}]`), `${where}.not_served_data[${index}].requested_mode`),
       dataNeeded: requireText(requireOwn(row, 'data_needed', `${where}.not_served_data[${index}]`), `${where}.not_served_data[${index}].data_needed`),
     }));
   const named = notServedData.map((row) => row.operation);
@@ -1007,7 +1010,7 @@ export const COVERAGE_COPY = Object.freeze({
     articles: 'articles',
     members: 'members',
     answered: 'answered',
-    notRouted: 'registered, with no route on this mount',
+    notRouted: 'registered, served from no data and refused with a typed reason',
     snapshotsInLog: 'builds the mounted log records',
     historyBegins: 'first build recorded',
     retentionPolicy: 'retention line',
@@ -1022,7 +1025,7 @@ export const COVERAGE_COPY = Object.freeze({
     gaps: 'Gap tokens the corpus recorded, counted by member',
     articleOutcomes: 'Legal-content outcomes the corpus recorded, by disposition',
     capabilities: 'Measured capabilities, by operation, column, field, language and period',
-    notServedData: 'The data that would serve each operation with no route',
+    notServedData: 'The data that would serve each operation served from no data',
     snapshots: 'Snapshots whose text this mount holds',
   }),
   scrollable: '{caption}, scrollable',
@@ -1042,6 +1045,8 @@ export const COVERAGE_COPY = Object.freeze({
     disposition: 'disposition',
     outcomes: 'outcomes',
     operation: 'operation',
+    reason: 'typed reason',
+    requestedMode: 'mode asked',
     column: 'column',
     field: 'field',
     from: 'from',
@@ -1079,7 +1084,7 @@ export const COVERAGE_COLUMNS = Object.freeze({
   gaps: Object.freeze(['gap', 'members']),
   articleOutcomes: Object.freeze(['disposition', 'outcomes']),
   capabilities: Object.freeze(['operation', 'column', 'field', 'language', 'from', 'to', 'population']),
-  notServedData: Object.freeze(['operation', 'dataNeeded']),
+  notServedData: Object.freeze(['operation', 'reason', 'requestedMode', 'dataNeeded']),
   snapshots: Object.freeze(['snapshot', 'observation', 'builtAt', 'keptAs']),
 });
 
@@ -1217,7 +1222,7 @@ export function renderCoverage(answer) {
       caption: COVERAGE_COPY.captions.notServedData,
       head: COVERAGE_COLUMNS.notServedData.map((key) => COVERAGE_COPY.columns[key]),
       rows: view.operations.notServedData.map((row) => (
-        `<tr><td>${code(row.operation)}</td><td>${escapeHtml(row.dataNeeded)}</td></tr>`)).join(''),
+        `<tr><td>${code(row.operation)}</td><td>${code(row.reason)}</td><td>${code(row.requestedMode)}</td><td>${escapeHtml(row.dataNeeded)}</td></tr>`)).join(''),
     }))
     + `<p class="coverage-note">${escapeHtml(view.operations.note)}</p></section>`
     + historySection(view.history)

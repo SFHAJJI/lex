@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-identifier_unknown-payload/1",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "requested_identifier": {
+      "type": "string"
+    },
+    "official_search_actions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "what_would_answer": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": [
+          "corrected_identifier",
+          "new_official_observation",
+          "expanded_official_scope"
+        ]
+      }
+    }
+  },
+  "required": [
+    "requested_identifier",
+    "official_search_actions",
+    "what_would_answer"
+  ]
+}

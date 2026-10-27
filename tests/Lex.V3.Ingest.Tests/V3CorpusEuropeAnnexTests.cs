@@ -39,13 +39,28 @@ public sealed class V3CorpusEuropeAnnexTests
                 LexCorpus6Stage3Disposition.AnnexTextNotAvailable, LexCorpus6Stage3Disposition.AnnexMappingUnresolved,
                 LexCorpus6Stage3Disposition.AnnexBodyContainsText, LexCorpus6Stage3Disposition.AnnexBodyContainsNoImage,
                 LexCorpus6Stage3Disposition.AnnexMappedPageOutsideDocument,
+                // An admitted package's annexes its annex chain did not match to the PDF, and a consolidated Treaty's parts
+                // that are not its articles (the review of #996, F2).
+                LexCorpus6Stage3Disposition.AnnexUnclassified, LexCorpus6Stage3Disposition.TreatyPartNotServed,
             },
             annex);
 
         var reasons = annex.Select(V3CorpusMount.EuropeAnnexReason).ToArray();
-        foreach (var reason in reasons)
+        foreach (var disposition in annex)
         {
-            StringAssert.Contains(reason, "publisher PDF", "each reason says what the corpus found against the publisher's PDF");
+            var reason = V3CorpusMount.EuropeAnnexReason(disposition);
+            switch (disposition)
+            {
+                case LexCorpus6Stage3Disposition.AnnexUnclassified:
+                    StringAssert.Contains(reason, "could not be matched to the publisher's PDF", "an unclassified annex says the PDF it was not matched to");
+                    break;
+                case LexCorpus6Stage3Disposition.TreatyPartNotServed:
+                    StringAssert.Contains(reason, "not one of the Treaty's articles", "a Treaty's part says it is not one of the Treaty's articles");
+                    break;
+                default:
+                    StringAssert.Contains(reason, "publisher PDF", "each classified annex's reason says what the corpus found against the publisher's PDF");
+                    break;
+            }
         }
         Assert.AreEqual(reasons.Length, reasons.Distinct(StringComparer.Ordinal).Count(), "one reason per disposition");
         foreach (var other in Enum.GetValues<LexCorpus6Stage3Disposition>().Except(annex))

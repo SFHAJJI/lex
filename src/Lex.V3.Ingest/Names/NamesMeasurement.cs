@@ -395,7 +395,7 @@ public static class NamesMeasurement
                 continue;
             }
 
-            var address = "/eu-eurlex/" + act.Celex;
+            var address = IndexingRecord.EuropeAddressOf(act.Celex!);
             if (act.TextLanguages.Count == 0)
             {
                 Increment(tally.NotListed, "no_text_held");

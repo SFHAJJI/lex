@@ -11,8 +11,10 @@
 // The Developers page is laid out from the contracts it is handed (`developersModel`, `developers.mjs`): every operation of
 // the registry, served or not, with its REST path, its MCP tool, its parameters as its request schema states them, its
 // answer's objects and its two schemas, linked where this site publishes them, with their digests; the envelope's members;
-// the verdicts; the refusal codes with the fields each payload must carry; the failures below the envelope; citing, the
-// limits and the events log. It describes nothing the contracts do not hold, and throws without them.
+// the verdicts; the refusal codes with the fields each payload must carry and its payload's schema; what Lex never holds;
+// the failures below the envelope; citing, the limits, the events log, the replay guarantees and how the API changes. It
+// describes nothing the contracts do not hold, and throws without them. Both servers render it from their own answer to
+// `browse` (`ssr-entry.jsx`), which it shows as its live examples (`live`); as built it says it carries none.
 
 import { Document, SITE_ORIGIN } from './Document.jsx';
 import { Say, inEnglish } from './LiveAnswer.jsx';
@@ -23,10 +25,13 @@ import { OFFICIAL_SITES } from '../scripts/live-failure.mjs';
 import { legalPage } from '../scripts/legal-pages.mjs';
 import { REFERENCE_PAGES, glossaryRows, referencePage } from '../scripts/reference-pages.mjs';
 import {
-  CLIENT_LIMIT, KEY_SET_PATH, MAXIMUM_REQUEST_BYTES, MCP_ENDPOINT, MCP_METHODS, MCP_PROTOCOL_VERSION, PRESENTATION_RESULTS, TRANSPORT_PROBLEMS,
-  TRANSPORT_PROBLEM_SCHEMA, mcpClientExample, mcpExample, parameterSchemaText, restExample,
+  CLIENT_LIMIT, KEY_SET_PATH, LIVE_EXAMPLE_REQUEST, MAXIMUM_REQUEST_BYTES, MCP_ENDPOINT, MCP_INSTRUCTIONS, MCP_METHODS, MCP_PROTOCOL_VERSION,
+  PRESENTATION_RESULTS, PREVIOUS_REGISTRY_SCHEMA, REGISTRY_VERSION_SINCE, REPLAY_GUARANTEES, REPLAY_TESTS, RETENTION_NIGHTLY_DAYS,
+  TRANSPORT_PROBLEMS, TRANSPORT_PROBLEM_SCHEMA, liveAnswerText, liveExamples, liveNextExamples, liveRestExample, mcpClientExample,
+  mcpExample, parameterSchemaText, restExample,
 } from '../scripts/developers.mjs';
-import { CHROME_LOCALE } from '../scripts/live-chrome.mjs';
+import { longDate } from '../scripts/live-search.mjs';
+import { CHROME_LOCALE, ENGLISH_LANG } from '../scripts/live-chrome.mjs';
 
 /** A link to another page of the site, in this bundle's language, with the words given. */
 const pageLink = (file, text) => <a href={livePath(file)}>{text}</a>;
@@ -192,13 +197,13 @@ function Operation({ operation }) {
       <h3 id={`operation-${operation.id}`}><code>{operation.id}</code></h3>
       <p>{description}</p>
       {operation.served ? null : (
-        <p data-not-served="">
-          <Say template={copy.notServed} values={{ code: code('operation_not_served'), data: inEnglish(operation.dataNeeded) }} />
+        <p data-not-served="" data-refusal-code={operation.refusalCode}>
+          <Say template={copy.notServed} values={{ code: code(operation.refusalCode), mode: code(operation.requestedMode), data: inEnglish(operation.dataNeeded) }} />
         </p>
       )}
       <dl className="api-facts">
         <div className="strip-row"><dt>{copy.rest}</dt><dd><code>{`POST ${operation.rest}`}</code></dd></div>
-        <div className="strip-row"><dt>{copy.tool}</dt><dd>{operation.tool === null ? copy.notATool : <code>{operation.tool}</code>}</dd></div>
+        <div className="strip-row"><dt>{copy.tool}</dt><dd><code>{operation.tool}</code></dd></div>
         <div className="strip-row">
           <dt>{copy.parameters}</dt>
           <dd>
@@ -227,9 +232,108 @@ function Operation({ operation }) {
   );
 }
 
+/** The parts of the Developers page, in order. */
+export const DEVELOPERS_PARTS = Object.freeze(['access', 'examples', 'operations', 'envelope', 'refusals', 'citing', 'limits', 'events', 'replay', 'changes', 'schemas']);
+
 /** The parts of the Developers page, each with its id and heading, in order. */
 function developersParts(copy) {
-  return ['access', 'operations', 'envelope', 'refusals', 'citing', 'limits', 'events', 'schemas'].map((name) => [`developers-${name}`, copy[name].heading]);
+  return DEVELOPERS_PARTS.map((name) => [`developers-${name}`, copy[name].heading]);
+}
+
+/**
+ * The live examples: as the server rendered the page, the request it asked itself and its whole answer, then the next requests
+ * about the first act it holds; as built, the sentence that says the page carries none.
+ */
+function LiveExamples({ live }) {
+  const copy = liveChrome().developers.examples;
+  const request = code(JSON.stringify(LIVE_EXAMPLE_REQUEST));
+  if (live === null) return <p data-live-examples="built"><Say template={copy.built} values={{ request }} /></p>;
+  const next = live.work === null || live.refused ? null : liveNextExamples(SITE_ORIGIN, live.work);
+  return (
+    <div data-live-examples="live">
+      <p>{copy.live}</p>
+      <CodeBlock>{liveRestExample(SITE_ORIGIN)}</CodeBlock>
+      <p>{copy.answer}</p>
+      <div lang={ENGLISH_LANG}><CodeBlock>{liveAnswerText(live.envelope)}</CodeBlock></div>
+      {live.refused ? <p>{copy.refused}</p> : null}
+      {!live.refused && live.work === null ? <p>{copy.none}</p> : null}
+      {next === null ? null : (
+        <>
+          <p>
+            <Say
+              template={live.work.date === null ? copy.nextUndated : copy.next}
+              values={{ identifier: code(live.work.identifier), ...(live.work.date === null ? {} : { date: code(live.work.date) }) }}
+            />
+          </p>
+          <CodeBlock>{next.rest}</CodeBlock>
+          <CodeBlock>{next.mcp}</CodeBlock>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** What Lex never holds: each class of the out-of-scope list, with its official place and who to ask. */
+function OutOfScope({ list }) {
+  const copy = liveChrome().developers.refusals.outOfScope;
+  const link = (href, text) => <a href={href} rel="external">{text}</a>;
+  return (
+    <>
+      <h3>{copy.heading}</h3>
+      <p><Say template={copy.text} values={{ code: code('out_of_corpus_scope'), list: code(list.schema), digest: code(list.sha256) }} /></p>
+      <ul data-out-of-scope="">
+        {list.classes.map((entry) => (
+          <li key={entry.id} data-out-of-scope-class={entry.id}>
+            <Say
+              template={copy.row}
+              values={{
+                instrument: inEnglish(entry.instrument),
+                reason: inEnglish(entry.reason),
+                examples: codeList(entry.examples),
+                official: link(entry.officialSource, entry.officialSource),
+                who: link(entry.whoToAsk.link, inEnglish(entry.whoToAsk.name)),
+              }}
+            />
+          </li>
+        ))}
+      </ul>
+      <p><Say template={copy.pending} values={{ code: code('identifier_unknown') }} /></p>
+    </>
+  );
+}
+
+/** The replay guarantees, G1 to G5, each as this server supports it, with the test that holds it. */
+function Replay() {
+  const copy = liveChrome().developers.replay;
+  const values = {
+    fileReplaced: code('file_replaced'), observedAt: code('context.freshness.observed_at'), requestRef: code('request_ref'),
+    servingCommit: code('context.commits.serving_runtime_source_commit'), ageDays: code('context.freshness.channels[].age_days'),
+    channelStale: code('context.freshness.channels[].stale'), stale: code('context.freshness.stale'),
+    recognisedDate: code('result.value.reference.recognised.date'), rateLimited: code('rate_limited'),
+    asObserved: code('as_observed'), knowableOn: code('knowable_on'), provenance: code('provenance'), bundle: code('evidence_bundle'),
+    days: RETENTION_NIGHTLY_DAYS,
+  };
+  return (
+    <>
+      <p><Say template={copy.text} values={{ tests: code(REPLAY_TESTS), first: REPLAY_GUARANTEES[0].id, last: REPLAY_GUARANTEES.at(-1).id }} /></p>
+      <dl className="api-members" data-replay="">
+        {REPLAY_GUARANTEES.map((guarantee) => {
+          const said = copy.guarantees[guarantee.id];
+          if (said === undefined) throw new Error(`the replay guarantee ${guarantee.id} has no words on the Developers page`);
+          return (
+            <div key={guarantee.id} className="strip-row" data-guarantee={guarantee.id}>
+              <dt>{`${guarantee.id}: ${said.name}`}</dt>
+              <dd>
+                <Sentence template={said.text} values={values} />
+                {' '}
+                <Say template={copy.test} values={{ test: code(guarantee.test) }} />
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+    </>
+  );
 }
 
 /** A part of the Developers page, under its heading. */
@@ -242,8 +346,8 @@ function Part({ name, heading, children }) {
   );
 }
 
-/** The Developers page's content, from the contracts (`developersModel`). */
-export function DevelopersBody({ model }) {
+/** The Developers page's content, from the contracts (`developersModel`), with its live examples when the server rendered it (`live`). */
+export function DevelopersBody({ model, live = null }) {
   if (model === null || typeof model !== 'object' || !Array.isArray(model.operations)) {
     throw new Error('the Developers page is generated from the contracts, and was given none');
   }
@@ -264,12 +368,18 @@ export function DevelopersBody({ model }) {
         <p><Say template={copy.access.rest} values={{ request: code('POST /api/v3/{operation}'), body: code('{"operation_id": "…", "parameters": {…}}') }} /></p>
         <p><Say template={copy.access.mcp} values={{ endpoint, version: code(MCP_PROTOCOL_VERSION), methods: codeList(MCP_METHODS), parameters: code('parameters') }} /></p>
         <p><Say template={copy.access.same} values={{ isError: code('isError: false') }} /></p>
+        <p><Say template={copy.access.instructions} values={{ initialize: code('initialize'), instructions: code('instructions'), ping: code('ping') }} /></p>
+        <blockquote className="reference-quote" data-mcp-instructions=""><p>{inEnglish(MCP_INSTRUCTIONS)}</p></blockquote>
         <p>{copy.access.restExample}</p>
         <CodeBlock>{restExample(SITE_ORIGIN)}</CodeBlock>
         <p>{copy.access.mcpExample}</p>
         <CodeBlock>{mcpExample()}</CodeBlock>
         <p><Say template={copy.access.client} values={{ endpoint }} /></p>
         <CodeBlock>{mcpClientExample(SITE_ORIGIN)}</CodeBlock>
+      </Part>
+
+      <Part name="examples" heading={copy.examples.heading}>
+        <LiveExamples live={liveExamples(live)} />
       </Part>
 
       <Part name="operations" heading={copy.operations.heading}>
@@ -328,11 +438,16 @@ export function DevelopersBody({ model }) {
             return (
               <div key={refusal.code} id={`refusal-${refusal.code}`} className="strip-row" data-refusal={refusal.code}>
                 <dt><code>{refusal.code}</code></dt>
-                <dd>{said} <Say template={copy.refusals.fields} values={{ fields: codeList(refusal.fields) }} /></dd>
+                <dd>
+                  {said}
+                  {' '}
+                  <Say template={copy.refusals.fields} values={{ fields: codeList(refusal.fields), schema: <SchemaLink schema={refusal.payloadSchema} text={refusal.payloadSchema.id} /> }} />
+                </dd>
               </div>
             );
           })}
         </dl>
+        <OutOfScope list={model.outOfScope} />
         <h3>{copy.refusals.presentationHeading}</h3>
         <ul data-presentation-results="">
           {PRESENTATION_RESULTS.map((result) => (
@@ -397,22 +512,49 @@ export function DevelopersBody({ model }) {
         <blockquote className="reference-quote" data-events-delivery=""><p>{inEnglish(events.delivery)}</p></blockquote>
       </Part>
 
+      <Part name="replay" heading={copy.replay.heading}>
+        <Replay />
+      </Part>
+
+      <Part name="changes" heading={copy.changes.heading}>
+        <p><Say template={copy.changes.versioned} values={{ example: code(model.envelope.schema.id), registry: code(model.registry.schema) }} /></p>
+        <p>{copy.changes.additive}</p>
+        <p><Say template={copy.changes.digest} values={{ code: code('out_of_corpus_scope'), scopeList: code('scope_list'), scopeListDigest: code('scope_list_sha256') }} /></p>
+        <p><Say template={copy.changes.registryInEnvelope} values={{ member: code('registry_schema') }} /></p>
+        <p>{copy.changes.closed}</p>
+        <p>{copy.changes.notice}</p>
+        <p>
+          <Say
+            template={copy.changes.history}
+            values={{
+              code: code('out_of_corpus_scope'), registry: code(model.registry.schema), previous: code(PREVIOUS_REGISTRY_SCHEMA),
+              date: <time dateTime={REGISTRY_VERSION_SINCE}>{longDate(REGISTRY_VERSION_SINCE)}</time>,
+            }}
+          />
+        </p>
+      </Part>
+
       <Part name="schemas" heading={copy.schemas.heading}>
         <p><Say template={copy.schemas.text} values={{ dialect: code(model.envelope.schema.dialect) }} /></p>
         <ul data-schemas="">
           <li><Say template={copy.schemas.envelope} values={{ link: <SchemaLink schema={model.envelope.schema} text={model.envelope.schema.id} /> }} /></li>
           <li><Say template={copy.schemas.refusal} values={{ link: <SchemaLink schema={model.refusalSchema} text={model.refusalSchema.id} /> }} /></li>
+          <li>{copy.schemas.payloads}</li>
         </ul>
       </Part>
     </>
   );
 }
 
-/** One reference page, by its chrome section's key (`REFERENCE_PAGES`); the Developers page needs the contracts' `developers`. */
-export function renderLiveReferencePage(pageKey, { developers = null } = {}) {
+/**
+ * One reference page, by its chrome section's key (`REFERENCE_PAGES`); the Developers page needs the contracts' `developers`,
+ * and, when a server renders it, `live`, the envelope of its own answer to `browse` for the first act it holds.
+ */
+export function renderLiveReferencePage(pageKey, { developers = null, live = null } = {}) {
   const page = referencePage(pageKey);
   if (page === undefined) throw new Error(`${JSON.stringify(pageKey)} is none of the reference pages: ${REFERENCE_PAGES.map((one) => one.key).join(', ')}`);
-  const body = { help: <HelpBody />, guide: <GuideBody />, developers: <DevelopersBody model={developers} /> }[pageKey];
+  if (live !== null && pageKey !== 'developers') throw new Error(`only the Developers page is rendered from an answer, not ${pageKey}`);
+  const body = { help: <HelpBody />, guide: <GuideBody />, developers: <DevelopersBody model={developers} live={live} /> }[pageKey];
   return renderDocument(
     <Document
       state={page.state}
@@ -430,4 +572,4 @@ export function renderLiveReferencePage(pageKey, { developers = null } = {}) {
 
 export const renderLiveHelpPage = () => renderLiveReferencePage('help');
 export const renderLiveGuidePage = () => renderLiveReferencePage('guide');
-export const renderLiveDevelopersPage = ({ developers } = {}) => renderLiveReferencePage('developers', { developers });
+export const renderLiveDevelopersPage = ({ developers, live = null } = {}) => renderLiveReferencePage('developers', { developers, live });

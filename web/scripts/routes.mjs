@@ -37,6 +37,17 @@ export const PUBLISHER_HOSTS = Object.freeze({
 /** The handoff registry. Editorial, verified per counter, and currently synthetic only. */
 export const HANDOFF_HOSTS = Object.freeze(['handoff.invalid']);
 
+/**
+ * The official places the out-of-scope list names (`V3OutOfScope`, the plan's item 6.10): each institution's own site, where
+ * an instrument Lex never holds is published, and the same institution as who to ask. Closed, and held to the list the census
+ * publishes (`schemas/v3-platform/envelope-samples.json`, `contract.out_of_scope`) by `refusal-card.test.mjs`. These are not
+ * the handoff registry's advisers, which R42's list, written and checked by a person, will name.
+ */
+export const OUT_OF_SCOPE_HOSTS = Object.freeze(['www.cssf.lu', 'cnpd.public.lu', 'curia.europa.eu', 'www.lbr.lu']);
+
+/** The preview surfaces' synthetic official place, which RFC 2606 reserves so that it can never resolve (as `handoff.invalid`). */
+export const SYNTHETIC_OUT_OF_SCOPE_HOST = 'out-of-scope.invalid';
+
 // A plain lowercase host: labels of letters, digits and inner hyphens, at least two.
 const HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
 
@@ -199,6 +210,11 @@ export function publisherIdentifier({ publisher, uri }) {
 /** A human counter a refusal hands off to. */
 export function handoffUri(uri) {
   return checkedUri(uri, HANDOFF_HOSTS, 'a handoff');
+}
+
+/** The official place, or who to ask, an out_of_corpus_scope refusal names: an institution's own site on the list's hosts. */
+export function outOfScopeUri(uri) {
+  return checkedUri(uri, [...OUT_OF_SCOPE_HOSTS, SYNTHETIC_OUT_OF_SCOPE_HOST], 'an official place');
 }
 
 /**

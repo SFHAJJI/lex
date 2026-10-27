@@ -54,8 +54,26 @@ import { isCalendarDate } from './temporal.mjs';
  * with a letter or digit, as every key the publisher's catalogue yields does. A key the API refuses opens no page.
  */
 const WORK = '[a-z0-9][a-z0-9_-]*';
-/** A CELEX number as the API mints it (sector, year, type, number, and an optional suffix such as (01) or -20160504). */
-const CELEX = '[0-9A-Za-z][0-9A-Za-z()._-]*';
+/**
+ * A CELEX number as the API mints it (sector, year, type, number, and an optional suffix such as (01) or -20160504), as one
+ * path segment: a solidus is written `%2F` (the Treaties' and the Charter's `12016E/TXT` is `12016E%2FTXT`,
+ * `europeWorkSegment`), and a lower-case `%2f` reads the same.
+ */
+const CELEX = '[0-9A-Za-z](?:[0-9A-Za-z()._-]|%2[Ff])*';
+
+/**
+ * A CELEX as the one path segment R64's `{work}` is (the API's `EuropeWorkSegment`): unchanged unless it carries a solidus,
+ * which RFC 3986 writes `%2F` inside a segment. Every CELEX with none keeps its bytes, and a segment already written so is
+ * left as it is.
+ */
+export function europeWorkSegment(celex) {
+  return String(celex).replaceAll('/', '%2F');
+}
+
+/** The CELEX a path segment names (`CELEX`), its `%2F` read as the solidus it writes (the API's `EuropeCelexOfSegment`). */
+export function europeCelexOfSegment(segment) {
+  return segment.replace(/%2[Ff]/g, '/');
+}
 /** A pin: the date, `--` and the digest. */
 const PIN = '([0-9]{4}-[0-9]{2}-[0-9]{2})--([0-9a-f]{64})';
 /** The text's language: the publisher's three lower-case letters. */
@@ -108,7 +126,7 @@ export function luxembourgPermalink({ workKey, date, stateSha256, language }) {
 
 /** An EU wording's permalink, as the API mints it: the CELEX, the wording date, the wording digest and its language. */
 export function europePermalink({ celex, date, wordingSha256, language }) {
-  return `/eu-eurlex/${celex}/${date}--${wordingSha256}/${language}`;
+  return `/eu-eurlex/${europeWorkSegment(celex)}/${date}--${wordingSha256}/${language}`;
 }
 
 /** An article's (or provision's) permalink, as the API mints it: its state's (or wording's), and the id as a segment. */
@@ -122,7 +140,7 @@ export function articlePermalink(permalink, publisherId) {
  * act, the article escaped as a permalink's is.
  */
 export function currentAddress({ publisher, work, language, publisherId = null }) {
-  const act = `/${publisher === 'eu-eurlex' ? 'eu-eurlex' : 'lu-legilux'}/${work}/${language}`;
+  const act = publisher === 'eu-eurlex' ? `/eu-eurlex/${europeWorkSegment(work)}/${language}` : `/lu-legilux/${work}/${language}`;
   return publisherId === null ? act : articlePermalink(act, publisherId);
 }
 
@@ -184,7 +202,7 @@ export function parseSitePath(pathname) {
     return Object.freeze({
       kind: 'state',
       publisher,
-      identifier: publisher === 'lu-legilux' ? `/lu-legilux/${work}` : work,
+      identifier: publisher === 'lu-legilux' ? `/lu-legilux/${work}` : europeCelexOfSegment(work),
       date,
       digest,
       language,
@@ -197,7 +215,8 @@ export function parseSitePath(pathname) {
   for (const [publisher, pattern] of [['lu-legilux', PERMALINK_PATTERNS.luxembourgCurrent], ['eu-eurlex', PERMALINK_PATTERNS.europeCurrent]]) {
     const match = pattern.exec(path);
     if (match === null) continue;
-    const [, work, language, anchor = null] = match;
+    const [, segment, language, anchor = null] = match;
+    const work = publisher === 'eu-eurlex' ? europeCelexOfSegment(segment) : segment;
     // A consolidated version's readable address names no page here: it has moved to its act's (`movedFor`).
     if (publisher === 'eu-eurlex' && CONSOLIDATED_CELEX.test(work)) return null;
     return Object.freeze({
@@ -214,7 +233,7 @@ export function parseSitePath(pathname) {
   }
   if (PERMALINK_PATTERNS.luxembourgWork.test(path)) return Object.freeze({ kind: 'work', publisher: 'lu-legilux', identifier: path, locale });
   const match = PERMALINK_PATTERNS.europeWork.exec(path);
-  if (match) return Object.freeze({ kind: 'work', publisher: 'eu-eurlex', identifier: match[1], locale });
+  if (match) return Object.freeze({ kind: 'work', publisher: 'eu-eurlex', identifier: europeCelexOfSegment(match[1]), locale });
   return null;
 }
 
@@ -302,11 +321,15 @@ export function readingPageAddress(base, number, date = null) {
  * (Luxembourg's date, R13, which the server's clock gives), and the text's language it names, and with neither it is not
  * rendered (the page as built asks for itself); a dossier asks by the work. An
  * interface language's home page (`/en/`, `/en/index.html`) is rendered from `coverage`, asked with no parameters, as the
- * page as built asks it once loaded (`live-home.mjs`). Null for any other path.
+ * page as built asks it once loaded (`live-home.mjs`), and its Developers page (`/en/developers.html`) from `browse` for the
+ * first act held, one row, which it shows as its live examples (`developers.mjs`). Null for any other path.
  */
 export function sitePageFor(pathname, { today = null, search = '' } = {}) {
   const home = INTERFACE_LANGUAGES.find((language) => pathname === `/${language}/` || pathname === `/${language}/index.html`);
   if (home !== undefined) return Object.freeze({ language: home, kind: 'home', operation: 'coverage', parameters: Object.freeze({}) });
+  // The Developers page, rendered from browse for the first act held, which it shows as its live examples (`developers.mjs`).
+  const developers = INTERFACE_LANGUAGES.find((language) => pathname === `/${language}/developers.html`);
+  if (developers !== undefined) return Object.freeze({ language: developers, kind: 'developers', operation: 'browse', parameters: Object.freeze({ limit: 1 }) });
   const named = parseSitePath(pathname);
   if (named === null || named.locale === null) return null;
   if (named.kind === 'work') {

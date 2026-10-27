@@ -34,6 +34,10 @@ internal sealed partial class V3CorpusMount
             "a page of the publisher PDF the annex maps to has neither a text layer nor an image, so the annex was not classified as image-only and its text is not served",
         LexCorpus6Stage3Disposition.AnnexMappedPageOutsideDocument =>
             "the annex maps to a page beyond the end of the publisher PDF, so its body was not classified and its text is not served",
+        LexCorpus6Stage3Disposition.AnnexUnclassified =>
+            "the act's articles are read from the publisher's Formex package, but its annexes could not be matched to the publisher's PDF, so they were not classified and their text is not served",
+        LexCorpus6Stage3Disposition.TreatyPartNotServed =>
+            "a Protocol, Annex, Declaration or table of equivalences published with the consolidated Treaty is part of the publisher's document but not one of the Treaty's articles, so its text is not served here",
         _ => throw new ArgumentOutOfRangeException(nameof(disposition), disposition, "not an EU annex disposition"),
     };
 
