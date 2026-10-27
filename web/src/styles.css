@@ -1712,3 +1712,113 @@ main > * {
   padding-inline-start: var(--space-3, 0.75rem);
   margin-block: var(--space-6, 2rem);
 }
+
+/* The three reference pages (Get help, How to read Lex, Developers): each part under its heading, a long page's contents
+   as one line that wraps, the glossary's terms in bold, each operation of the Developers page set apart by a rule, its
+   facts in the strip rows the state pages use, and code whole: a block wraps rather than scrolls, so it is never a
+   scroll container and never a tab stop of its own, and a schema's digest breaks anywhere on a narrow screen. */
+.reference-section {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.reference-section h2 {
+  margin: 0;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.25rem;
+}
+
+.reference-section h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.reference-section p,
+.reference-section li,
+.reference-section dd {
+  line-height: 1.55;
+}
+
+.reference-section ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding-inline-start: 1.25rem;
+}
+
+.reference-contents ul,
+.site-footer .reference-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-footer .reference-nav a[aria-current="page"] {
+  font-weight: 700;
+}
+
+.glossary {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.glossary dt {
+  font-weight: 700;
+}
+
+.glossary dt::first-letter {
+  text-transform: uppercase;
+}
+
+.glossary dd {
+  margin: 0.15rem 0 0;
+}
+
+.api-operation {
+  display: grid;
+  gap: 0.5rem;
+  padding-block-start: 0.75rem;
+  border-block-start: 1px solid #d6cfbb;
+}
+
+.api-facts,
+.api-members {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.api-facts dd,
+.api-members dd {
+  margin: 0;
+}
+
+.reference-section ul.api-parameters {
+  padding-inline-start: 1rem;
+}
+
+.reference-code {
+  margin: 0;
+  padding: 0.75rem;
+  border-inline-start: 3px solid currentColor;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: 0.9rem;
+}
+
+.reference-quote {
+  margin: 0;
+  padding-inline-start: 0.75rem;
+  border-inline-start: 3px solid currentColor;
+}
+
+.reference-section code,
+.reference-code code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}

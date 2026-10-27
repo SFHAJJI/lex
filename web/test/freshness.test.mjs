@@ -25,6 +25,7 @@ import { dataAgeFailures, homePageFailures, withoutFreshness } from "../scripts/
 import { assertTimeVocabulary } from "../scripts/publisher-vocabulary.mjs";
 import { buildLive } from "../scripts/build-live.mjs";
 import { LEGAL_PAGE_PATHS } from "../scripts/legal-pages.mjs";
+import { REFERENCE_PAGE_PATHS } from "../scripts/reference-pages.mjs";
 
 const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const { contract } = census;
@@ -227,9 +228,10 @@ test("a page that ships no script says its strip carries no answer, in English a
         assert.ok(!html.includes("<form"), `${label}: asks nothing`);
       }
     }
-    // The pages that never ask: the ten legal pages, the maintenance page in each language and the two language pages.
+    // The pages that never ask: the ten legal pages, the six reference pages (Get help, How to read Lex and Developers, in
+    // each language), the maintenance page in each language and the two language pages.
     assert.deepEqual(quiet.sort(), [
-      ...LEGAL_PAGE_PATHS.map((path) => path.slice(1)), "locale-de.html", "locale-lb.html", "maintenance/en.html", "maintenance/fr.html",
+      ...LEGAL_PAGE_PATHS.map((path) => path.slice(1)), ...REFERENCE_PAGE_PATHS.map((path) => path.slice(1)), "locale-de.html", "locale-lb.html", "maintenance/en.html", "maintenance/fr.html",
     ].sort());
     // And the 404 page, which offers the search and so may have an answer, keeps the as-built line.
     assert.ok(pages.some(([label]) => label === "not-found/fr.html") && !quiet.includes("not-found/fr.html"));
