@@ -32,12 +32,13 @@ if (args.Length > 0 && args[0] == "derive") return await OfflineDeriveCommand.Ru
 if (args.Length > 0 && args[0] == "rederive-inputs") return await RederiveCommands.InputsAsync(args[1..]);
 if (args.Length > 0 && args[0] == "rederive-seal") return await RederiveCommands.SealAsync(args[1..]);
 if (args.Length > 0 && args[0] == "names-records") return NamesRecordsCommand.Run(args[1..]);
+if (args.Length > 0 && args[0] == "release-checks") return ReleaseChecksCommand.Run(args[1..]);
 
 const string Usage =
     "Usage: Lex.V3.Tool build --celex <CELEX[,CELEX...]|all> --lu-name <key> --lu-start <IRI> --lu-end <IRI>\n"
     + "   or: Lex.V3.Tool build --celex <CELEX[,CELEX...]|all> --lu-population <all|legislative>\n"
     + "                         --custody <directory> --out <directory> --checkout <directory> --wire-ceiling <n>\n"
-    + "   or: Lex.V3.Tool derive | rederive-inputs | rederive-seal | names-records ...  (offline; each prints its own usage)\n"
+    + "   or: Lex.V3.Tool derive | rederive-inputs | rederive-seal | names-records | release-checks ...  (offline; each prints its own usage)\n"
     + "  --celex        an Appendix A seed, comma-separated seeds, or all for the 82-seed population\n"
     + "  --eu-checkpoint  retained EU acquisition reference JSON in this custody; reuse its population and renew only the rights notice\n"
     + "  --lu-population all  all publisher IRI keys through S/A/G, with existing scope and rights rules\n"

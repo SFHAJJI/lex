@@ -2,6 +2,62 @@
 
 Updated 2026-10-27.
 
+## The release path's checks against the release serving now: R106, R88, R86(2) listed and blocking, the card at promotion (R104), the exports' disclosure, R111's copy (sole driver, 2026-10-27)
+
+The audit's gaps 6, 9 and 16 (R111), for Release 2, the first release after the opening (`data/release-checks-ops`). No
+publisher traffic, no browser, no Azure call.
+- **`Lex.V3.Tool release-checks`** (`src/Lex.V3.Ingest/Releases/`): read-only over a candidate mount, and with
+  `--serving-mount` and `--serving-report` over the mount of the release serving now, held first file by file to that
+  release's signed mount report. It reads a Luxembourg index of schema 6 to 9 and an EU index of schema 5 or 6, so Release 1's
+  derive-c (/8, /5) can be compared. Exit 4 when a check refuses; 3 when a mount does not match its report.
+  - **R106** (`release-comparison.json`): works, versions, articles and EU annexes kept, added, changed and lost per publisher
+    and class. A version's served identity is its permalink's digest (the Luxembourg state digest; for the EU a digest over
+    the wording's article identities, which the API's wording digest follows); an article's is its coordinate, with the
+    SHA-256 of its served text. A version or its text lost, a permalink digest changed, an article's text digest changed, an
+    article lost from a version both serve, and an EU annex lost are listed; each needs a typed reason, the data's
+    (`publisher_body_changed`) or an entry of the release's explanations (`lex-v3-release-explanations/1`:
+    `derivation_rule_changed`, `rights_withdrawn`, `withdrawn_by_publisher`, `defect_corrected`, scoped by items, two rule
+    profiles or rights dispositions, each scope checked against both mounts). Additions never refuse.
+  - **R86(2)** (`consolidation-text.json`): every admitted consolidation file (Luxembourg consolidation and code states, EU
+    consolidated wordings) that yields no text, by identity and typed outcome. Typed textless outcomes (misfiled,
+    marker-only, no XML main body, no package held) and a PDF's text-layer profile are explained by the data; any other is a
+    failure, explained only by an entry naming the file with exactly its outcome. EU files are listed by custody identity
+    (object and body digests): an EU member names no work.
+- **The release path** (`image-rehearsal.mjs`, `release-checks.mjs`): the checks run before anything is built; a release
+  signed by the release signer must name the release serving now (`--serving-release`, `--serving-mount`,
+  `--release-explanations`). The reports, the explanations and **R88's manifest diff** (`manifest-diff.json` and
+  `manifest-diff.md`: fields, assets, mount files, the text yield per class, drops beyond ten per cent) are release assets; the
+  read-back refuses a release whose checks refuse it or whose diff does not describe its manifest.
+- **R104**: `deploy-probe.mjs --promotion-check` exits 3 for a release whose signed card has a gate not passing, a control that
+  missed its shuffle, or a target that is not the release's mount, as for the data's age; `deploy.ps1` says why.
+- **The exports' copy of the disclosure** (#999's "not in this slice"): a single-channel admission's `rights_disclosure` is
+  in every JSON item and the export's `rights_disclosures`, a last CSV column `rights_disclosure`, and the PDF, with the reading
+  page's sentence. L1, L1b and L2 may now be switched on as far as the exports go.
+- **R111**: `deploy/backup-release.ps1` copies a signed release's assets, manifest and signature, and the custody pointers it
+  names, into the private container `releases` of `stlexv3soufien`, never over a blob, refuses an account without versioning
+  and soft delete unless `-EnableProtection`, and verifies each object by SHA-256 (OPERATING.md section 9). Not run against
+  Azure; the restore drill is not done.
+- **Measured over derive-r1 against Release 1's derive-c** (read-only, 74 s): R106 lists 1,730 Luxembourg version identity
+  changes (content /2 `dd32d9a5…` to content /3 `33bb002c…`, inventory /3 to /4), 0 article texts changed, 0 lost; the EU
+  is unchanged (173,820 articles kept). R86(2) lists 53 files: Luxembourg 1 (`code/civil/20190428`, typed misfiled), EU 52 (2
+  typed no XML main body; 48 `formex_main_body_missing` and 2 `formex_main_body_package_rejected`, failures). #996 moves the
+  48 to admitted, so Release 2 should list the 2 package-rejected EU files and whichever of the 451 consolidations policy A
+  admits yield no text (the index-stage probe held 450 states for 451 bodies).
+- **Release 2's explanations** (`C:\lex-v3\driver-scripts\release-2\`, outside the repository): one entry,
+  `derivation_rule_changed` from `dd32d9a5…` to `33bb002c…`, which explains all 1,730 over derive-r1. The 2 EU
+  package-rejected files are a reader defect and are left unexplained, so Release 2 refuses until the driver decides.
+- **Driver decisions (reversible).** Codes count as consolidations under R86(2). A textless version the candidate lists under
+  another coordinate of the same publisher identity is changed, not lost. An annex whose disposition changes is counted, not
+  listed. Drops beyond ten per cent are named, never blocking by themselves (each lost item already is).
+- **Tests.** `V3ReleaseChecksTests` (7: the reader over a fixture mount and a changed copy, every scope, the multiset, the
+  re-keyed textless version, the explanations' 17 refusals, R86(2)'s classes, the command's exits); web `release-checks` (5),
+  `backup-release` (6, under a made-up Azure CLI), `deploy-probe` (one more), `export-build` (two more), and the deploy kit's
+  pins. `dotnet build Lex.V3.slnx -c Release`: 0 warnings. `Lex.V3.Tests`: 3,375 (3,369 passed, 6 skipped). Ingest: the new
+  class and every census class, 68 (66 passed, 2 skipped). Web: `npm run build`, then `npm test` 1,466 (1,463 passed, 3
+  skipped). `deploy/validate.ps1` passes.
+- **Not in this slice**: R106's replay of the probe set (the spec's answer-level half); R88's publication on Coverage; R86(1);
+  the restore drill; running the copy against Azure.
+
 ## R92: the acts that name private individuals measured, withheld and kept out of search engines; the release carries both records (sole driver, 2026-10-27)
 
 The plan's item 1.11 and the specification of record's R92(1) and (2), O28, O27 (`data/names-r92`).

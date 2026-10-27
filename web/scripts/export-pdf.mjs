@@ -280,6 +280,8 @@ function layout(model, unsettable = null) {
   add('Lex V3 export', { size: 16, leading: 22 });
   add(`Asked: ${model.identifier}, read on ${model.date}. The answering snapshot was observed at ${model.observedAt}.`, { field: 'the identifier asked' });
   add(`Text served under ${model.rightsDisposition}. ${sentence(model.rightsRule)}`, { field: 'the rights rule' });
+  // A text served on the publisher's catalogue alone says so, as its page does (the L5 single-channel disclosure).
+  for (const disclosure of model.rightsDisclosures ?? []) add(disclosure.sentence, { field: 'the rights disclosure' });
   // An act held only as first published says so, with its later versions and its authenticity sentence (item 0.6).
   if (model.asPublished !== null) add(asPublishedParagraph(model.asPublished), { field: 'the as-published paragraph' });
   add(`${total} ${total === 1 ? 'article' : 'articles'} pinned: ${model.items.length} exported with text, ${model.excluded.length} excluded.`);
@@ -299,6 +301,9 @@ function layout(model, unsettable = null) {
     add(item.bodySha256, { font: 'mono', size: 8, label: 'body sha-256    ' });
     add(item.officialSource, { font: 'mono', size: 8, label: 'official source ', field: `${subject}'s official source` });
     add(`Rights: ${item.rightsDisposition}.`, { size: 9, field: `${subject}'s rights` });
+    if (item.rightsDisclosure) {
+      add(`${item.rightsDisclosure.sentence} Licence page sha-256 ${item.rightsDisclosure.licencePageSha256}.`, { size: 9, field: `${subject}'s rights disclosure` });
+    }
     if (item.validityConflict) {
       add(item.datedByEntryIntoForce
         ? `This article's own date is ${item.articleValidFrom}; its state is the act as published, dated by its entry into force on ${item.appliesFrom} (publisher).`

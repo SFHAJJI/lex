@@ -17,7 +17,7 @@ import { CARD_ROUTE } from "../scripts/evaluation-card.mjs";
 import { redirectFor } from "../scripts/permalinks.mjs";
 import { INDEXED, KEPT_OUT, ROBOTS_KEPT_OUT, SITEMAP_INDEX_HEAD, robotsTxt } from "../scripts/search-engines.mjs";
 import {
-  NOT_FOUND_PROBE, REMOTE_PRIVACY_NOTE, accentedTitleFailures, browserFailures, clockFailures, deployedReleaseFailures, homePageFailures,
+  NOT_FOUND_PROBE, REMOTE_PRIVACY_NOTE, accentedTitleFailures, browserFailures, cardPromotionFailures, clockFailures, deployedReleaseFailures, homePageFailures,
   legalPageFailures, liveFilesOf, luxembourgTodayNote, remoteRevision, renderedHomePage, revisionFailures,
 } from "../scripts/deploy-probe.mjs";
 import { LEGAL_PAGE_PATHS, openingFailures } from "../scripts/legal-pages.mjs";
@@ -391,6 +391,40 @@ function imageArchive() {
   const blobs = new Map([layer, config, manifest].map((bytes) => [`sha256:${sha256(bytes)}`, bytes]));
   return { archive: writeLayout({ index, blobs }, { mtime: SOURCE.epoch }), manifestDigest };
 }
+
+test("the release's signed card is an input to promotion (R104): a gate not passing, a control that missed, or a card of another mount refuses it", async () => {
+  assert.deepEqual(cardPromotionFailures(CARD), [], "the platform's card passes every gate and catches every shuffle");
+  const card = JSON.parse(CARD.toString("utf8"));
+  // A gate not measured: the card still reads, and promotion refuses it.
+  const notMeasured = structuredClone(card);
+  const gate = notMeasured.machine_gates[0].gates[0];
+  Object.assign(gate, { verdict: "not_measured", value: null, not_measured_reason: "stratum_below_floor" });
+  delete gate.wilson_95;
+  delete gate.rule_of_three_failure_upper_95;
+  assert.deepEqual(cardPromotionFailures(Buffer.from(JSON.stringify(notMeasured))),
+    [`the evaluation card's temporal set (${card.machine_gates[0].arm}) gate temporal_exactness is not_measured, not pass`]);
+  const missed = structuredClone(card);
+  missed.shuffled_controls[0].verdict = "missed_the_shuffle";
+  assert.deepEqual(cardPromotionFailures(Buffer.from(JSON.stringify(missed))),
+    [`the evaluation card's temporal set (${card.machine_gates[0].arm}) control date_shuffle is missed_the_shuffle, not caught_the_shuffle`]);
+  assert.match(cardPromotionFailures(Buffer.from("{}"))[0], /^the release's evaluation card does not read, so it cannot be shown to pass: /);
+  // The exact tuple: a card says which mount it was run over, and that must be the release's corpus file.
+  const release1 = { ...card, target: "the mount whose corpus file is sha256:bad814f77b453a836f1175a2c85866407fdccdd14bcc66a51dea02f206f993ea" };
+  const report = (sha) => Buffer.from(JSON.stringify({ files: [{ Name: "lex-corpus-6.json", Sha256: sha }] }));
+  assert.deepEqual(cardPromotionFailures(Buffer.from(JSON.stringify(release1)), { mountReport: report("bad814f77b453a836f1175a2c85866407fdccdd14bcc66a51dea02f206f993ea") }), []);
+  assert.deepEqual(cardPromotionFailures(Buffer.from(JSON.stringify(release1)), { mountReport: report("8".repeat(64)) }),
+    [`the evaluation card was run over ${JSON.stringify(release1.target)}, not over this release's mount (its corpus file sha256:${"8".repeat(64)})`]);
+
+  // Through the probe: a revision that answers as its release holds passes, and promotion says why it refuses.
+  const served = await revision();
+  try {
+    const promotion = [];
+    assert.deepEqual(await revisionFailures(served.origin, { web: WEB, card: CARD, corpusSha256: CORPUS, promotion, mountReport: report("8".repeat(64)) }), []);
+    assert.ok(promotion.some((refusal) => refusal.startsWith("the evaluation card was run over ")), promotion.join("; "));
+  } finally {
+    await served.close();
+  }
+});
 
 test("the live pages are read out of the release image", () => {
   const files = new Map(liveFilesOf(imageArchive().archive));

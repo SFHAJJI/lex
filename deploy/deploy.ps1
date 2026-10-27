@@ -578,7 +578,7 @@ if (-not $Apply -and $Maintenance) {
 if (-not $Apply) {
     Write-Host "  > wait until $AppName--$suffix is provisioned, active, running and healthy"
     Write-Host "  > node $(($nodeTrap + @('web/scripts/deploy-probe.mjs')) -join ' ') --origin https://<$AppName--$suffix's own address> --release $releasePath --public-key $keyPath $($signerProbe -join ' ') $($browserArgs -join ' ') $($openingArgs -join ' ') --promotion-check --search-engines $SearchEngines"
-    Write-Host "  (exit 3: the candidate answers as its release holds and promotion refuses its data's age; no promotion command would be printed)"
+    Write-Host "  (exit 3: the candidate answers as its release holds and promotion refuses its data's age or its evaluation card; no promotion command would be printed)"
     if (-not $BrowserProbe) { Write-Host "  (no browser probe: only the HTTP probes would run, under the browser trap, and no page of the candidate would be walked in a browser; -BrowserProbe walks them, where a browser may run)" }
     Write-Host "== planned only: run again with -Apply to deploy (the owner's decision)"
     exit 0
@@ -631,11 +631,12 @@ if (-not $BrowserProbe) { Write-Host "  no browser probe (no -BrowserProbe): onl
 & node @nodeTrap (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --origin $origin --release $releasePath --public-key $keyPath @signerProbe @browserArgs @openingArgs --promotion-check --search-engines $SearchEngines
 # The probe holds robots.txt and the sitemap to this deployment's -SearchEngines (the probe of 2026-10-27 held an indexed
 # candidate to the kept-out robots.txt, and rightly deactivated it).
-# Exit 3: the candidate answers as its release holds, and promotion refuses its data's age (R87; O11's maximum, which every
-# answer states): a publisher channel's newest completed collection is past it, or not stated. The candidate stays, with no
-# traffic, and no promotion command is printed.
-$dataAgeRefused = $LASTEXITCODE -eq 3
-if ($LASTEXITCODE -ne 0 -and -not $dataAgeRefused) {
+# Exit 3: the candidate answers as its release holds, and promotion refuses it: its data's age (R87; O11's maximum, which
+# every answer states: a publisher channel's newest completed collection is past it, or not stated), or its signed
+# evaluation card (R104, O20: a gate that did not pass, a control that missed its shuffle, or a card run over another
+# mount). The candidate stays, with no traffic, and no promotion command is printed.
+$promotionRefused = $LASTEXITCODE -eq 3
+if ($LASTEXITCODE -ne 0 -and -not $promotionRefused) {
     # 7. The removal step: the candidate never carried traffic (or only the allowed addresses'), and is deactivated, if this
     # deployment made it.
     Disable-Candidate 'the probe failed'
@@ -645,9 +646,10 @@ if ($LASTEXITCODE -ne 0 -and -not $dataAgeRefused) {
 
 Step "the candidate $candidate answers as the release holds"
 Write-Host "  Promotion is the owner's decision and is not run here."
-if ($dataAgeRefused) {
-    Write-Host "  Promotion refuses this release's data: the probe above says which publisher's data is past the maximum data age, or"
-    Write-Host "  states no completed collection. No promotion command is printed; a release with newer data is the way forward."
+if ($promotionRefused) {
+    Write-Host "  Promotion refuses this release: the probe above says why (a publisher's data past the maximum data age or with no"
+    Write-Host "  completed collection, or a gate of its evaluation card that does not pass). No promotion command is printed; a release"
+    Write-Host "  with newer data, or whose card passes, is the way forward."
 }
 elseif ([string]::IsNullOrEmpty($LiveRevision)) {
     Write-Host "  A first deployment already routes to the candidate."
@@ -661,7 +663,7 @@ if (-not $Public) {
     Write-Host "  The site stays private: ingress admits only $($AllowedCidr -join ', '). The opening, the owner's, on the opening day:"
     Write-Host "  > pwsh -File deploy/deploy.ps1 -Subscription $Subscription -ResourceGroup $ResourceGroup -AppName $AppName -Open"
 }
-if (-not [string]::IsNullOrEmpty($LiveRevision) -and -not $dataAgeRefused) {
+if (-not [string]::IsNullOrEmpty($LiveRevision) -and -not $promotionRefused) {
     # Rollback and forward again are traffic moves, the owner's like promotion: printed, never run.
     # Each active revision runs a billed replica (1 vCPU, 2 GiB: about 23 EUR a month idle), so the budget of about 30 a
     # month holds one: after a promotion the previous revision is deactivated, kept but stopped (the review of #950).
@@ -673,7 +675,7 @@ if (-not [string]::IsNullOrEmpty($LiveRevision) -and -not $dataAgeRefused) {
     Write-Host "  and forward again to the candidate:"
     Write-Host "  > az containerapp ingress traffic set -g $ResourceGroup -n $AppName --revision-weight $candidate=100"
 }
-if (-not $dataAgeRefused) {
+if (-not $promotionRefused) {
     # R60: a deployment that must take the site down shows the maintenance page. Each release's is pre-built beside the
     # revision that serves (-Maintenance), from this command's own parameters, and kept inactive until it is switched on. It
     # is run once this release is promoted, naming the revision that serves then; the line printed names the one serving as
