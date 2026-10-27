@@ -755,7 +755,8 @@ public sealed class PublicRequestRecordingTests
         // header goes straight into the pure choice of a redirect (V3WebRoot.RedirectFor, NegotiateLanguage), whose
         // answer is one of two languages, so neither it nor anything of it is kept or written anywhere (S4-A11). Since
         // R60's 404 page, it is read in one more place, for the same choice: the language of the 404 page a page request
-        // with no language in its path is answered with (V3WebRoot.NotFoundPageFor, NegotiateLanguage). Each read is
+        // with no language in its path is answered with (V3WebRoot.NotFoundPageFor, NegotiateLanguage), which is also the
+        // language of a maintenance revision's page (V3WebRoot.Maintenance.cs: the same read, not another). Each read is
         // handed whole to its pure choice, in the web root, and nowhere else.
         var reads = ApiSources()
             .SelectMany(static source => Regex.Matches(source.Code, @"\.Headers\.AcceptLanguage\b[^;]*").Select(match => (source.File, Line: match.Value)))

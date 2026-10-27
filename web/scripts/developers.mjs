@@ -55,6 +55,7 @@ export const TRANSPORT_PROBLEMS = Object.freeze([
   Object.freeze({ code: "operation_not_served", title: "Operation registered and not served", status: 404 }),
   Object.freeze({ code: "internal_response_invalid", title: "Internal response invalid", status: 500 }),
   Object.freeze({ code: "internal_failure", title: "Internal failure", status: 500 }),
+  Object.freeze({ code: "service_in_maintenance", title: "Service in maintenance", status: 503 }),
 ]);
 
 /** The two presentation results, which are not refusals (the specification of record, §3, API and MCP; D91; R61). */

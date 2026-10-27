@@ -19,9 +19,10 @@ namespace Lex.V3.Api;
 /// </para>
 /// <para>
 /// The build writes one 404 page per interface language under <c>not-found/</c> and one maintenance page per language under
-/// <c>maintenance/</c>, for the deploy kit. Neither is served at its own address: a 404 page is only ever the body of a 404,
-/// and a maintenance page is not this server's to show. A directory without 404 pages (a build before them) leaves every
-/// path nothing claims to the API's routing, as before.
+/// <c>maintenance/</c>. Neither is served at its own address: a 404 page is only ever the body of a 404, and a maintenance
+/// page only the body of a maintenance revision's answer to a page request, chosen as the 404 page is
+/// (<c>V3WebRoot.Maintenance.cs</c>); a server that is not one never shows it. A directory without 404 pages (a build before
+/// them) leaves every path nothing claims to the API's routing, as before.
 /// </para>
 /// </remarks>
 internal sealed partial class V3WebRoot
@@ -29,7 +30,7 @@ internal sealed partial class V3WebRoot
     /// <summary>Where the build writes each interface language's 404 page, <c>{language}.html</c>.</summary>
     internal const string NotFoundDirectory = "not-found";
 
-    /// <summary>Where the build writes each interface language's maintenance page, <c>{language}.html</c>, for the deploy kit.</summary>
+    /// <summary>Where the build writes each interface language's maintenance page, <c>{language}.html</c>, which a maintenance revision shows.</summary>
     internal const string MaintenanceDirectory = "maintenance";
 
     /// <summary>The paths of machines, which keep their JSON problems: the API, the MCP endpoint and the health routes.</summary>
@@ -69,15 +70,33 @@ internal sealed partial class V3WebRoot
     /// status 404 and the headers every page carries, and returns true; returns false, touching nothing, for any other
     /// request, or when this root holds no such page.
     /// </summary>
-    internal async Task<bool> TryServeNotFoundAsync(HttpContext context, string rawTarget, CancellationToken cancellationToken)
+    internal Task<bool> TryServeNotFoundAsync(HttpContext context, string rawTarget, CancellationToken cancellationToken) =>
+        TryServeBuiltPageAsync(context, rawTarget, NotFoundDirectory, _notFoundPages, StatusCodes.Status404NotFound, null, cancellationToken);
+
+    /// <summary>
+    /// Answers a page request with the build's page of <paramref name="directory"/> (one of <paramref name="pages"/>, by the
+    /// build's name, <c>{directory}/{language}.html</c>) in the language <see cref="NotFoundPageFor"/> chooses, with
+    /// <paramref name="status"/>, the headers every page carries and, when given, <c>Retry-After</c>
+    /// (<paramref name="retryAfter"/>), and returns true; returns false, touching nothing, for any other request, or when
+    /// this root holds no such page. The 404 page and the maintenance page are chosen by the one choice.
+    /// </summary>
+    private async Task<bool> TryServeBuiltPageAsync(
+        HttpContext context,
+        string rawTarget,
+        string directory,
+        IReadOnlyDictionary<string, string> pages,
+        int status,
+        string? retryAfter,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(rawTarget);
         var queryAt = rawTarget.IndexOf('?', StringComparison.Ordinal);
         var path = queryAt < 0 ? rawTarget : rawTarget[..queryAt];
         var method = context.Request.Method;
+        // The language is the 404 page's choice, whose file is named by it, as each page of the directory is.
         if (NotFoundPageFor(method, path, context.Request.Headers.AcceptLanguage.ToString()) is not { } chosen ||
-            !_notFoundPages.TryGetValue(chosen.Page, out var file))
+            !pages.TryGetValue($"{directory}/{Path.GetFileName(chosen.Page)}", out var file))
         {
             return false;
         }
@@ -90,8 +109,13 @@ internal sealed partial class V3WebRoot
             response.Headers.Vary = "Accept-Language";
         }
 
+        if (retryAfter is not null)
+        {
+            response.Headers.RetryAfter = retryAfter;
+        }
+
         var bytes = await File.ReadAllBytesAsync(file, cancellationToken).ConfigureAwait(false);
-        response.StatusCode = StatusCodes.Status404NotFound;
+        response.StatusCode = status;
         response.ContentType = ContentTypes[".html"];
         response.ContentLength = bytes.Length;
         if (HttpMethods.IsGet(method))
@@ -103,10 +127,11 @@ internal sealed partial class V3WebRoot
     }
 
     /// <summary>
-    /// Whether a file of the web directory is one of the build's pages no request names, recording a 404 page under its name:
-    /// a 404 page (<c>not-found/{language}.html</c>) or a maintenance page (<c>maintenance/{language}.html</c>).
+    /// Whether a file of the web directory is one of the build's pages no request names, recording it under its name: a 404
+    /// page (<c>not-found/{language}.html</c>) in <paramref name="notFound"/>, or a maintenance page
+    /// (<c>maintenance/{language}.html</c>) in <paramref name="maintenance"/>.
     /// </summary>
-    private static bool IsUnservedPage(string relative, string file, Dictionary<string, string> notFound)
+    private static bool IsUnservedPage(string relative, string file, Dictionary<string, string> notFound, Dictionary<string, string> maintenance)
     {
         if (relative.StartsWith(NotFoundDirectory + "/", StringComparison.Ordinal))
         {
@@ -114,6 +139,12 @@ internal sealed partial class V3WebRoot
             return true;
         }
 
-        return relative.StartsWith(MaintenanceDirectory + "/", StringComparison.Ordinal);
+        if (relative.StartsWith(MaintenanceDirectory + "/", StringComparison.Ordinal))
+        {
+            maintenance[relative] = file;
+            return true;
+        }
+
+        return false;
     }
 }
