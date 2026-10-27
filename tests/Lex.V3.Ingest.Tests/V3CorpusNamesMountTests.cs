@@ -187,6 +187,7 @@ public sealed class V3CorpusNamesMountTests
             outcome.Measured,
             [new NamesWithheldWork(NamesRecord.EuropePublisher, rootWork, null, celex, PrivateIndividuals.EuropeRestrictiveMeasures,
                 [PrivateIndividuals.ClassCode], states)]));
+        await File.WriteAllBytesAsync(Path.Combine(fixture.Directory, IndexingRecord.FileName), IndexingRecord.Write(outcome.Measured.BuiltAt, []));
         using (var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None))
         {
             Assert.IsNotNull(mount);
@@ -211,6 +212,8 @@ public sealed class V3CorpusNamesMountTests
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
         var path = Path.Combine(fixture.Directory, NamesRecord.FileName);
+        var measured = NamesMeasurement.Measure(fixture.Directory).Measured;
+        await File.WriteAllBytesAsync(Path.Combine(fixture.Directory, IndexingRecord.FileName), IndexingRecord.Write(measured.BuiltAt, []));
         var other = NamesRecord.Write(
             new NamesMeasuredMount(fixture.CorpusSha256, new string('0', 64), null, null),
             []);
@@ -218,6 +221,7 @@ public sealed class V3CorpusNamesMountTests
         {
             ("a record of another index build", other),
             ("a record of another corpus", NamesRecord.Write(new NamesMeasuredMount(new string('0', 64), fixture.IndexSha256, null, null), [])),
+            ("a record of another build time than its indexing record's", NamesRecord.Write(measured with { BuiltAt = "2001-01-01T00:00:00Z" }, [])),
             ("not JSON", "not json"u8.ToArray()),
             ("another schema", Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(NamesRecord.Write(
                 new NamesMeasuredMount(fixture.CorpusSha256, fixture.IndexSha256, null, null), [])).Replace("lex-v3-names-record/1", "lex-v3-names-record/9", StringComparison.Ordinal))),
@@ -227,9 +231,118 @@ public sealed class V3CorpusNamesMountTests
             await Assert.ThrowsExactlyAsync<InvalidDataException>(() => V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None), what);
         }
 
-        await File.WriteAllBytesAsync(path, NamesRecord.Write(new NamesMeasuredMount(fixture.CorpusSha256, fixture.IndexSha256, null, null), []));
-        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
-        Assert.IsNotNull(mount, "a record of this build that withholds nothing mounts");
+        await File.WriteAllBytesAsync(path, NamesRecord.Write(measured, []));
+        using (var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount, "a pair of this build that withholds nothing mounts");
+        }
+
+        // The two records stand together or not at all (the review of #1001), and no work is in both.
+        var indexing = Path.Combine(fixture.Directory, IndexingRecord.FileName);
+        var indexingBytes = await File.ReadAllBytesAsync(indexing);
+        File.Delete(indexing);
+        await Assert.ThrowsExactlyAsync<InvalidDataException>(() => V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None), "a names record alone");
+        await File.WriteAllBytesAsync(indexing, indexingBytes);
+        File.Delete(path);
+        await Assert.ThrowsExactlyAsync<InvalidDataException>(() => V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None), "an indexing record alone");
+        await File.WriteAllBytesAsync(indexing, "not json"u8.ToArray());
+        await File.WriteAllBytesAsync(path, NamesRecord.Write(measured, []));
+        await Assert.ThrowsExactlyAsync<InvalidDataException>(() => V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None), "a broken indexing record");
+        var states = NamesMeasurement.Measure(fixture.Directory).Indexed;
+        await File.WriteAllBytesAsync(indexing, IndexingRecord.Write(measured.BuiltAt, states));
+        await File.WriteAllBytesAsync(path, NamesRecord.Write(measured,
+            [new NamesWithheldWork(NamesRecord.LuxembourgPublisher, "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3", fixture.WorkKey, null,
+                PrivateIndividuals.LuxembourgTextNamesPerson, [PrivateIndividuals.PersonNamedCode], [fixture.StateSha256])]));
+        await Assert.ThrowsExactlyAsync<InvalidDataException>(() => V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None), "a work both indexed and withheld");
+        File.Delete(indexing);
+        File.Delete(path);
+        using (var bare = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None))
+        {
+            Assert.IsNotNull(bare, "a mount with neither record mounts, and withholds nothing");
+            Assert.IsFalse(bare.WithholdsUnderR92);
+        }
+    }
+
+    [TestMethod]
+    public async Task AWithheldWorksArticlesAreNotQuotedInAnotherActsRelationsNorCitedBy()
+    {
+        // The review of #1001, F1: relations served the same inbound edges as cited_by, with their labels, unfiltered.
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var date = DateOnly.ParseExact(fixture.ApplicabilityDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
+            .AddDays(400).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var citing = await fixture.AddStateAsync(date, "citing", workLeaf: "n9");
+        const string Label = "WITHHELD-LABEL-TEXT";
+        var tokens = "[" + JsonSerializer.Serialize(new
+        {
+            kind = "reference", text = Label, target = "/eli/etat/leg/loi/1991/08/10/n3/jo", marker = (string?)null, note_body = (object?)null,
+        }) + "]";
+        await fixture.SetArticleTokensAsync(citing.ExpressionIri, "art_1er", Label, tokens);
+        var work = $"/lu-legilux/{fixture.WorkKey}";
+        var requests = new (string Operation, Dictionary<string, object> Parameters)[]
+        {
+            ("relations", new() { ["identifier"] = work, ["direction"] = "inbound" }),
+            ("relations", new() { ["identifier"] = work, ["direction"] = "both" }),
+            ("cited_by", new() { ["identifier"] = work }),
+        };
+        using (var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount);
+            foreach (var (operation, parameters) in requests)
+            {
+                var envelope = await AskAsync(mount, operation, parameters);
+                Assert.IsTrue(envelope.Result!.Value.GetRawText().Contains(Label, StringComparison.Ordinal), $"{operation} {parameters.Count}: without the record the edge is quoted");
+            }
+        }
+
+        var measured = NamesMeasurement.Measure(fixture.Directory).Measured;
+        await File.WriteAllBytesAsync(Path.Combine(fixture.Directory, IndexingRecord.FileName), IndexingRecord.Write(measured.BuiltAt, []));
+        await File.WriteAllBytesAsync(Path.Combine(fixture.Directory, NamesRecord.FileName), NamesRecord.Write(measured,
+            [new NamesWithheldWork(NamesRecord.LuxembourgPublisher, citing.PublisherWorkIri, citing.WorkKey, null,
+                PrivateIndividuals.LuxembourgTextNamesPerson, [PrivateIndividuals.PersonNamedCode], [citing.StateSha256])]));
+        using (var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount);
+            foreach (var (operation, parameters) in requests)
+            {
+                var envelope = await AskAsync(mount, operation, parameters);
+                Assert.IsNull(envelope.Refusal, operation);
+                var value = envelope.Result!.Value;
+                Assert.IsFalse(value.GetRawText().Contains(Label, StringComparison.Ordinal), $"{operation}: a withheld work's article is never quoted");
+                Assert.IsFalse(value.GetProperty("edges").EnumerateArray()
+                    .Any(edge => string.Equals(edge.GetProperty("citing_work_key").GetString(), citing.WorkKey, StringComparison.Ordinal)), operation);
+                if (operation == "relations")
+                {
+                    Assert.AreEqual(0, value.GetProperty("edge_counts").GetProperty("inbound").GetInt32(), "the counts follow the edges served");
+                }
+            }
+
+            // The withheld work's own relations answer text_withheld.
+            Assert.AreEqual("text_withheld", (await AskAsync(mount, "relations", new() { ["identifier"] = $"/lu-legilux/{citing.WorkKey}" })).Refusal?.Code);
+        }
+    }
+
+    [TestMethod]
+    public async Task APersonNamedOnlyInAnArticlesNoteIsFound()
+    {
+        // The review of #1001: the searchable text holds no note body, and the API serves the notes; the measurement reads them.
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var tokens = "[" + string.Join(",",
+            JsonSerializer.Serialize(new { kind = "text", text = "Le présent article renvoie à la note.", target = (string?)null, marker = (string?)null, note_body = (object?)null }),
+            JsonSerializer.Serialize(new
+            {
+                kind = "note_reference", text = (string?)null, target = (string?)null, marker = "1",
+                note_body = new object[] { new { kind = "text", text = NamingProvision, target = (string?)null, marker = (string?)null } },
+            })) + "]";
+        await fixture.SetArticleTokensAsync(fixture.ExpressionIri, "art_1er", "Le présent article renvoie à la note.", tokens);
+        var outcome = NamesMeasurement.Measure(fixture.Directory);
+        var withheld = outcome.Withheld.Single();
+        Assert.AreEqual(fixture.WorkKey, withheld.WorkKey);
+        CollectionAssert.Contains(withheld.Evidence.ToArray(), PrivateIndividuals.BirthDateCode);
+        Assert.IsEmpty(outcome.Indexed);
+        CollectionAssert.AreEqual(new[] { NamingProvision }, NamesMeasurement.NoteBodies(tokens).ToArray());
+        Assert.IsEmpty(NamesMeasurement.NoteBodies("[]"));
     }
 
     /// <summary>The fixture act's document with its body replaced by two synthetic articles, one naming an invented person.</summary>

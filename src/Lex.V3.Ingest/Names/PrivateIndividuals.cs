@@ -285,12 +285,24 @@ public static class PrivateIndividuals
         return signals.ToArray();
     }
 
-    /// <summary>Whether a text names a person after an honorific (a weak signal on its own; a title's class reads it).</summary>
+    /// <summary>
+    /// Whether a title names a person (what a title's class reads; a weak signal in served text): a person named in served text's
+    /// sense, an honorific with one name ("M. Exemple", "MM. Exemple", "Mme Exemple": a title names its people by their
+    /// surname; the review of #1001, F2), people named "et consorts", or a person a grant is made "en faveur de".
+    /// </summary>
     public static bool NamesPerson(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return PersonNamed.IsMatch(text) || FavourOfPerson.IsMatch(text);
+        return PersonNamed.IsMatch(text) || TitlePersonNamed.IsMatch(text) || FavourOfPerson.IsMatch(text);
     }
+
+    /// <summary>
+    /// A person a title names by an honorific and one name, a surname alone or in capitals ("à M. Exemple", "de MM. Exemple et
+    /// consorts", "à Mme EXEMPLE"), never an office ("M. le Ministre" has a lower-case article; <see cref="Office"/>); and people
+    /// named "et consorts" (co-owners or co-heirs, always named before it).
+    /// </summary>
+    private static readonly Regex TitlePersonNamed = Pattern(
+        $@"\b{Honorific}\s+{Office}(?:{NameToken}|{CapitalToken})\b|\bet\s+consorts\b");
 
     /// <summary>"En faveur de Jean Dupont", "en faveur du sieur Dupont": a title naming the person it applies to.</summary>
     private static readonly Regex FavourOfPerson = Pattern(

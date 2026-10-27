@@ -113,14 +113,49 @@ internal sealed partial class V3CorpusMount
         CancellationToken cancellationToken)
     {
         var path = Path.Combine(directory, NamesRecord.FileName);
-        if (!File.Exists(path))
+        var indexingPath = Path.Combine(directory, V3WebRoot.IndexingRecordFile);
+        var hasNames = File.Exists(path);
+        if (hasNames != File.Exists(indexingPath))
+        {
+            // The two records are one measurement's (the review of #1001): an indexing record with no names record would offer
+            // search engines works no record was read for withholding, and a names record alone is half a measurement.
+            throw new InvalidDataException(
+                $"R92's two records stand beside a mount together or not at all: {(hasNames ? NamesRecord.FileName : V3WebRoot.IndexingRecordFile)} has no {(hasNames ? V3WebRoot.IndexingRecordFile : NamesRecord.FileName)} beside it.");
+        }
+
+        if (!hasNames)
         {
             return new NamesWithheld([], null);
         }
 
         var bytes = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
-        var works = NamesRecord.Read(bytes, new NamesMeasuredMount(corpusSha256, reader?.IndexRef.Sha256, europeReader?.IndexRef.Sha256, null));
-        return new NamesWithheld(works, Convert.ToHexStringLower(SHA256.HashData(bytes)));
+        var contents = NamesRecord.ReadContents(bytes, new NamesMeasuredMount(corpusSha256, reader?.IndexRef.Sha256, europeReader?.IndexRef.Sha256, null));
+        var names = new NamesWithheld(contents.Works, Convert.ToHexStringLower(SHA256.HashData(bytes)));
+        var indexing = V3WebRoot.ReadIndexingRecord(
+                await File.ReadAllTextAsync(indexingPath, System.Text.Encoding.UTF8, cancellationToken).ConfigureAwait(false))
+            ?? throw new InvalidDataException($"The {V3WebRoot.IndexingRecordFile} beside the mount is not an indexing record.");
+        if (!string.Equals(indexing.BuiltAt, contents.Measured.BuiltAt, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException("R92's two records name different builds: their built_at must be one.");
+        }
+
+        // No work is both offered to search engines and withheld.
+        foreach (var work in indexing.Works)
+        {
+            const string luxembourg = "/lu-legilux/";
+            const string europe = "/eu-eurlex/";
+            var withheld = work.Address.StartsWith(luxembourg, StringComparison.Ordinal)
+                ? names.ByWorkKey(work.Address[luxembourg.Length..])
+                : work.Address.StartsWith(europe, StringComparison.Ordinal)
+                    ? names.BySeedCelex(EuropeCelexOfSegment(work.Address[europe.Length..]))
+                    : null;
+            if (withheld is not null)
+            {
+                throw new InvalidDataException($"The indexing record lists {work.Address}, which the names record withholds.");
+            }
+        }
+
+        return names;
     }
 
     /// <summary>Whether this mount withholds any work under R92 (none without a names record).</summary>
@@ -236,8 +271,9 @@ internal sealed partial class V3CorpusMount
             new V3PlatformOperationRefusal(request, "text_withheld", withheld.RootElement));
     }
 
-    /// <summary>Whether search may match a Luxembourg state's text: never one of a withheld work.</summary>
-    private bool SearchMatchesUnderR92(string stateSha256) => !_names.HoldsLuxembourgState(stateSha256);
+    /// <summary>Whether search may match a Luxembourg state's text: never one of a withheld work, by its key or its digest.</summary>
+    private bool SearchMatchesUnderR92(string workKey, string stateSha256) =>
+        !_names.Any || (_names.ByWorkKey(workKey) is null && !_names.HoldsLuxembourgState(stateSha256));
 
     /// <summary>The title ladder's answer with every work R92 withholds dropped: a withheld title is never matched nor shown.</summary>
     private LuxembourgIndexWorkResolution TitleLadder(string title)

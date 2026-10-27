@@ -2839,6 +2839,8 @@ internal sealed partial class V3CorpusMount : IDisposable
                         ? state
                         : throw new InvalidDataException("An article of the index belongs to no state."),
                     Edge: edge))
+                // R92: an article of a work the names record withholds is not quoted here (its label is its text), as cited_by.
+                .Where(entry => !CitingWithheld(entry.State))
                 .OrderBy(static entry => entry.State.ApplicabilityDate, StringComparer.Ordinal)
                 .ThenBy(static entry => entry.State.WorkKey, StringComparer.Ordinal)
                 .ThenBy(static entry => entry.State.Language, StringComparer.Ordinal)
@@ -4195,8 +4197,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         // no answer says which of its articles hold a word. The rule is evidence_bundle's, applied per state.
         // The decision is evidence_bundle's, read once for every state with the population the answer counts (SearchAdmits).
         // R92 likewise: a state of a work the names record withholds is never matched (V3CorpusMount.Names.cs).
-        strict = strict.Where(hit => SearchAdmits(hit.StateSha256) && SearchMatchesUnderR92(hit.StateSha256)).ToArray();
-        relaxed = relaxed.Where(hit => SearchAdmits(hit.StateSha256) && SearchMatchesUnderR92(hit.StateSha256)).ToArray();
+        strict = strict.Where(hit => SearchAdmits(hit.StateSha256) && SearchMatchesUnderR92(hit.WorkKey, hit.StateSha256)).ToArray();
+        relaxed = relaxed.Where(hit => SearchAdmits(hit.StateSha256) && SearchMatchesUnderR92(hit.WorkKey, hit.StateSha256)).ToArray();
 
         var ambiguousWorks = new List<object>();
         if (requestedDate is not null)

@@ -66,21 +66,27 @@ public static class NamesMeasurement
         public bool FreezesListedPersons;
         public long Articles;
 
-        public void Read(string text)
+        /// <summary>
+        /// One served article: its text, and every other text of it the API serves (its notes' bodies, an EU article's heading),
+        /// each read by the detector on its own; the article counts once, under each code any of them gave.
+        /// </summary>
+        public void Read(string text, IEnumerable<string> served)
         {
             Articles++;
-            foreach (var code in PrivateIndividuals.DetectText(text))
+            var texts = served.Prepend(text).Where(static part => part.Length > 0).ToArray();
+            var findings = texts.SelectMany(PrivateIndividuals.DetectText).ToHashSet(StringComparer.Ordinal);
+            foreach (var code in findings)
             {
                 Findings.Add(code);
                 FindingArticles[code] = FindingArticles.GetValueOrDefault(code) + 1;
             }
 
-            foreach (var code in PrivateIndividuals.SignalsIn(text))
+            foreach (var code in texts.SelectMany(PrivateIndividuals.SignalsIn).ToHashSet(StringComparer.Ordinal))
             {
                 SignalArticles[code] = SignalArticles.GetValueOrDefault(code) + 1;
             }
 
-            FreezesListedPersons |= PrivateIndividuals.FreezesListedPersons(text);
+            FreezesListedPersons |= texts.Any(PrivateIndividuals.FreezesListedPersons);
         }
     }
 
@@ -255,14 +261,14 @@ public static class NamesMeasurement
         long orphans = 0;
         using (var command = connection.CreateCommand())
         {
-            command.CommandText = "SELECT expression_iri, searchable_text FROM articles";
+            command.CommandText = "SELECT expression_iri, searchable_text, tokens_json FROM articles";
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (workOfExpression.TryGetValue(reader.GetString(0), out var work))
                 {
-                    work.Read(reader.GetString(1));
+                    work.Read(reader.GetString(1), NoteBodies(reader.GetString(2)));
                 }
                 else
                 {
@@ -361,7 +367,7 @@ public static class NamesMeasurement
         long orphans = 0;
         using (var command = connection.CreateCommand())
         {
-            command.CommandText = "SELECT publisher_work_id, language, searchable_text FROM articles";
+            command.CommandText = "SELECT publisher_work_id, language, searchable_text, heading, tokens_json FROM articles";
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
@@ -369,7 +375,7 @@ public static class NamesMeasurement
                 if (actOfVersion.TryGetValue(reader.GetString(0), out var act))
                 {
                     act.TextLanguages.Add(reader.GetString(1));
-                    act.Read(reader.GetString(2));
+                    act.Read(reader.GetString(2), NoteBodies(reader.GetString(4)).Prepend(reader.GetString(3)));
                 }
                 else
                 {
@@ -457,6 +463,51 @@ public static class NamesMeasurement
     }
 
     private static void Increment(SortedDictionary<string, long> counts, string key) => counts[key] = counts.GetValueOrDefault(key) + 1;
+
+    /// <summary>
+    /// The bodies of an article's notes as the API serves them (<c>V3CorpusMount.ArticleNotes</c>): each note reference's body, its
+    /// text and reference tokens joined in order. The searchable text holds no note body, so the detector reads them apart (the
+    /// review of #1001). An article with no note reference is not parsed.
+    /// </summary>
+    internal static IReadOnlyList<string> NoteBodies(string tokensJson)
+    {
+        if (string.IsNullOrEmpty(tokensJson) || !tokensJson.Contains("note_reference", StringComparison.Ordinal))
+        {
+            return [];
+        }
+
+        using var document = JsonDocument.Parse(tokensJson);
+        if (document.RootElement.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var bodies = new List<string>();
+        foreach (var token in document.RootElement.EnumerateArray())
+        {
+            if (token.ValueKind != JsonValueKind.Object || !token.TryGetProperty("kind", out var kind) ||
+                !string.Equals(kind.GetString(), "note_reference", StringComparison.Ordinal) ||
+                !token.TryGetProperty("note_body", out var body) || body.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            var text = new System.Text.StringBuilder();
+            foreach (var nested in body.EnumerateArray())
+            {
+                if (nested.ValueKind == JsonValueKind.Object && nested.TryGetProperty("kind", out var nestedKind) &&
+                    nestedKind.GetString() is "text" or "reference" &&
+                    nested.TryGetProperty("text", out var value) && value.ValueKind == JsonValueKind.String)
+                {
+                    text.Append(value.GetString());
+                }
+            }
+
+            bodies.Add(text.ToString());
+        }
+
+        return bodies;
+    }
 
     private static byte[] WriteMeasurement(NamesMeasuredMount measured, Tally? held, Tally? catalogue, Tally? europe, byte[] indexing, byte[] names)
     {

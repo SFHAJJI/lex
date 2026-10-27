@@ -74,6 +74,22 @@ public sealed class V3NamesDetectorTests
     }
 
     [TestMethod]
+    [DataRow("Loi du 3 mars 1910 concernant l'acquisition par l'État d'un terrain sis à Testville de MM. Exemple et consorts.", PrivateIndividuals.LuxembourgPropertyOfNamedPerson)]
+    [DataRow("Loi du 3 mars 1855 qui accorde une pension viagère à M. Exemple, ancien instituteur.", PrivateIndividuals.LuxembourgGrantToNamedPerson)]
+    [DataRow("Arrêté grand-ducal du 3 mars 1900 accordant une pension à Mme Exemple.", PrivateIndividuals.LuxembourgGrantToNamedPerson)]
+    [DataRow("Loi du 3 mars 1900 accordant une pension à Mme EXEMPLE.", PrivateIndividuals.LuxembourgGrantToNamedPerson)]
+    [DataRow("Loi du 3 mars 1900 autorisant la vente d'un terrain aux héritiers Exemple et consorts.", PrivateIndividuals.LuxembourgPropertyOfNamedPerson)]
+    [DataRow("Loi du 3 mars 1900 qui accorde une pension viagère à M. le Ministre d'État honoraire.", PrivateIndividuals.LuxembourgGeneral)]
+    [DataRow("Loi du 3 mars 2020 fixant les pensions des fonctionnaires de l'État et des communes.", PrivateIndividuals.LuxembourgGeneral)]
+    [DataRow("Règlement grand-ducal du 3 mars 2020 portant nomination de M. le Président du Conseil.", PrivateIndividuals.LuxembourgGeneral)]
+    [DataRow("Loi du 3 mars 2020 relative à l'acquisition par l'État d'immeubles pour les besoins de l'Administration des Ponts.", PrivateIndividuals.LuxembourgGeneral)]
+    public void ATitleNamesAPersonByAnHonorificAndOneNameOrEtConsorts(string title, string expected)
+    {
+        // The review of #1001, F2: a title names its people by their surname ("M. Exemple", "MM. Exemple et consorts").
+        Assert.AreEqual(expected, PrivateIndividuals.LuxembourgClass([title]), title);
+    }
+
+    [TestMethod]
     public void TheDetectorFindsAPersonsParticularsNextToTheirNameOrNextToOneAnother()
     {
         var cases = new (string Text, string[] Codes)[]

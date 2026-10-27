@@ -34,6 +34,9 @@ public sealed record NamesMeasuredMount(
     string? EuropeIndexSha256,
     string? BuiltAt);
 
+/// <summary>A names record as read: what it measured and the works it withholds.</summary>
+public sealed record NamesRecordContents(NamesMeasuredMount Measured, IReadOnlyList<NamesWithheldWork> Works);
+
 /// <summary>
 /// The names record beside a mount (<c>names-record.json</c>, schema <c>lex-v3-names-record/1</c>): R92's measurement's
 /// withheld works, bound to the mount's corpus and index builds. The API reads it when the mount opens and withholds each
@@ -125,7 +128,14 @@ public static class NamesRecord
     /// once); the works in (publisher, work IRI) order, each once, and each work key and CELEX once; no member the schema does not
     /// name. Nothing is read leniently: a record that breaks a rule withholds nothing it could be trusted for.
     /// </summary>
-    public static IReadOnlyList<NamesWithheldWork> Read(ReadOnlySpan<byte> bytes, NamesMeasuredMount mount)
+    public static IReadOnlyList<NamesWithheldWork> Read(ReadOnlySpan<byte> bytes, NamesMeasuredMount mount) =>
+        ReadContents(bytes, mount).Works;
+
+    /// <summary>
+    /// The record in <paramref name="bytes"/> read as <see cref="Read"/> reads it, with what it says it measured (its build
+    /// time included, which its indexing record must name too).
+    /// </summary>
+    public static NamesRecordContents ReadContents(ReadOnlySpan<byte> bytes, NamesMeasuredMount mount)
     {
         ArgumentNullException.ThrowIfNull(mount);
         if (bytes.StartsWith("﻿"u8))
@@ -242,7 +252,7 @@ public static class NamesRecord
                 read.Add(new NamesWithheldWork(publisher, workIri, workKey, celex, workClass, evidence, states));
             }
 
-            return read.AsReadOnly();
+            return new NamesRecordContents(new NamesMeasuredMount(corpus!, luxembourg, europe, builtAt), read.AsReadOnly());
         }
     }
 
