@@ -114,7 +114,14 @@ as the legal pages are (`scripts/reference-pages.mjs`, `app/ReferencePages.jsx`)
   - Not audited by this slice, and each the subject of its own L line: the dossier's relation tabs (R29), the inline diff
     (R57), Changes' export, density notice and watch scope (R54), Coverage's text yield per class, attribution rate and
     retention rule (R86, R29, R89), Reading's notices and in-act links (R17, R68, R71, R72).
-- **Measured** (Windows, no browser, no publisher traffic): MEASURED
+- **Measured** (Windows, no browser, no publisher traffic, no Azure):
+  - `npm test` (Git Bash), on 7808a5fa: 1,368 (1,365 passed, 0 failed, 3 skipped); before the French finals, 1,367 (1,364
+    passed, 0 failed, 3 skipped). `node --test test/reference-pages.test.mjs`: 9 of 9.
+  - `npm run build`: 30 state pages (the preview build, which this slice does not change), before the French finals.
+  - `dotnet build Lex.V3.slnx -c Release`: 0 warnings, 0 errors; `Lex.V3.Tests` (Release): 3,329 (3,323 passed, 0 failed, 6
+    skipped), on the tree of 95935ef7, whose C# (`V3WebRootTests`, the site-paths table) has not changed since.
+  - `eng/verify-v3-tree.ps1`: 1,694 tracked paths.
+  - Not run here: the Ingest suite and the journeys, which CI runs (no browser on this machine).
 - **Follow-ups the review named** (driver points of the addendum): show a reading's `same_text_states` (the other versions
   held with the same text) under the text, so the guide's same-text sentence can say more; R28's collapsed details on the
   refusal card, open by default only on Developers (the card shows its code and payload inline today; the review gives the
