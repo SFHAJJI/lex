@@ -350,7 +350,9 @@
 // scan; the caption over the versions the catalogue lists says "articles servis et fichiers détenus", never "détenus"
 // of the versions; the reasons say why this site serves no text, never that the publisher's version has none; the
 // catalogue "recense"; the acts counted "et pour", so they never read as the catalogue's; each sentence names "ce
-// site", since a page may carry the EU sentence alone; "libellés originaux", as `breadcrumbs.europeOriginal` says).
+// site", since a page may carry the EU sentence alone; "libellés originaux", as `breadcrumbs.europeOriginal` says). The
+// review of #1000's repair added `noFileFormat` (2 forms, reviewed the same way: the EU's approved, the Luxembourg one's
+// "un fichier PDF", as the neighbouring forms say, the English with it).
 // Typography: a no-break space (U+00A0) stands before : ; ! ? % and » and after «, and the apostrophe is ’.
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
@@ -1007,6 +1009,10 @@ export const LIVE_CHROME_FR = Object.freeze({
     noAnnexOutcomes: Object.freeze({
       'lu-legilux': 'Le corpus ne consigne aucun résultat d’annexe pour les actes luxembourgeois ; aucune de leurs annexes n’est donc comptée ici.',
       'eu-eurlex': 'Le corpus ne consigne aucun résultat d’annexe pour les actes de l’UE ; aucune de leurs annexes n’est donc comptée ici.',
+    }),
+    noFileFormat: Object.freeze({
+      'lu-legilux': 'Le corpus ne consigne pas le format de ces fichiers luxembourgeois ; un fichier PDF sans texte servi est donc compté parmi les fichiers admis sans article servi, sous son propre motif.',
+      'eu-eurlex': 'Le corpus ne consigne pas le format des fichiers de l’UE ; un fichier PDF ou HTML sans texte servi est donc compté parmi les fichiers admis sans article servi, sous son propre motif.',
     }),
     notRecorded: 'non consigné',
   }),

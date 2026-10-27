@@ -10,8 +10,10 @@ namespace Lex.V3.Ingest;
 /// <summary>
 /// The text yield per class (the specification of record's R86(4)): per publisher and per class of act, how many versions
 /// the catalogue lists and how many have text served, the acts and articles with served text, and what became of every
-/// publisher file the mount holds: text served, text withheld (by the rights disposition, verbatim), a PDF with no text, or
-/// an admitted file from which no article is served (R86(2)'s failure, by the derivation's own dispositions, verbatim).
+/// publisher file the mount holds: text served, text withheld (by the rights disposition, verbatim), a PDF with no text
+/// (where the corpus records the file's format: Luxembourg), or an admitted file from which no article is served (R86(2)'s
+/// failure, by the derivation's own dispositions, verbatim; for the EU, whose corpus records no file format, a PDF or HTML
+/// file with no Formex main body among them, by its own disposition, such as <c>formex_main_body_not_eligible</c>).
 /// Written into the build report by <see cref="V3CorpusMountWriter"/> and served by the coverage answer, so Coverage and
 /// R26's sentence say the same figures.
 /// </summary>
@@ -163,8 +165,9 @@ public sealed record V3TextYield(string Schema, IReadOnlyList<V3TextYieldPublish
         Require(row.VersionsWithText <= row.Versions, where, "versions with text are among its versions");
         Require((row.VersionsWithText == 0) == (row.Articles == 0) && (row.FilesWithText == 0) == (row.Articles == 0),
             where, "a version or file has text exactly when an article is served");
-        Require(row.VersionsWithText <= row.FilesWithText && row.WorksWithText <= row.FilesWithText,
-            where, "a version or act with text has a file with text");
+        // An act with text has a file with text of its own; a version need not (an EU work the census lists under two seeds
+        // gives its one file's text to both seeds' versions).
+        Require(row.WorksWithText <= row.FilesWithText, where, "an act with text has a file with text");
         RequireCounts(row.FilesWithheld.Select(static withheld => (withheld.Reason, withheld.Files)), where + " withheld files");
         Require(row.FilesWithheld.All(static withheld => withheld.Pdf >= 0 && withheld.Pdf <= withheld.Files), where, "withheld PDFs are among the withheld files");
         RequireCounts(row.FilesParseFailed.Select(static failed => (failed.Reason, failed.Count)), where + " failed files");
@@ -239,6 +242,12 @@ public sealed record V3TextYield(string Schema, IReadOnlyList<V3TextYieldPublish
     /// <summary>One EU state as the yield reads it: its seed, its Cellar work, whether it is the original wording, and its consolidation date.</summary>
     internal sealed record EuropeState(string SeedCelex, string PublisherWorkIri, bool Original, string? ConsolidationDate);
 
+    /// <summary>Two Luxembourg or EU classes in ordinal order: by family, then by kind.</summary>
+    private static readonly Comparer<(string Family, string Kind)> ClassOrder = Comparer<(string Family, string Kind)>.Create(
+        static (left, right) => string.CompareOrdinal(left.Family, right.Family) is var family and not 0
+            ? family
+            : string.CompareOrdinal(left.Kind, right.Kind));
+
     /// <summary>What the EU index gives the yield: the articles served per member and per Cellar work, and its states.</summary>
     internal sealed record EuropeInputs(
         IReadOnlyDictionary<string, long> ArticlesByObject,
@@ -292,7 +301,7 @@ public sealed record V3TextYield(string Schema, IReadOnlyList<V3TextYieldPublish
         var states = new List<EuropeState>();
         using (var command = connection.CreateCommand())
         {
-            command.CommandText = "SELECT seed_celex, publisher_work_iri, date_status, publisher_consolidation_date FROM states";
+            command.CommandText = "SELECT seed_celex, publisher_work_iri, date_status, publisher_consolidation_date FROM states ORDER BY seed_celex, publisher_work_iri";
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
@@ -380,7 +389,7 @@ public sealed record V3TextYield(string Schema, IReadOnlyList<V3TextYieldPublish
 
     private static V3TextYieldPublisher CountLuxembourg(IReadOnlyList<LexCorpus6Member> members, LuxembourgInputs inputs)
     {
-        var classes = new SortedDictionary<(string Family, string Kind), Tally>();
+        var classes = new SortedDictionary<(string Family, string Kind), Tally>(ClassOrder);
         Tally ClassOf(string stateIri)
         {
             var key = (FamilyOf(stateIri), LuxembourgIndexBuilder.StateKindOf(stateIri) ?? UnrecognisedFamily);
@@ -458,7 +467,7 @@ public sealed record V3TextYield(string Schema, IReadOnlyList<V3TextYieldPublish
 
     private static V3TextYieldPublisher CountEurope(IReadOnlyList<LexCorpus6Member> members, EuropeInputs inputs)
     {
-        var classes = new SortedDictionary<(string Family, string Kind), Tally>();
+        var classes = new SortedDictionary<(string Family, string Kind), Tally>(ClassOrder);
         Tally ClassOf(string kind)
         {
             if (!classes.TryGetValue((EuropeFamily, kind), out var tally))
@@ -470,8 +479,12 @@ public sealed record V3TextYield(string Schema, IReadOnlyList<V3TextYieldPublish
             return tally;
         }
 
-        var stateOfWork = new Dictionary<string, (Tally Tally, string Version)>(StringComparer.Ordinal);
-        foreach (var state in inputs.States)
+        // A Cellar work is one class's; one the census lists under several seeds is a work of each of their versions, so a
+        // work with text gives text to every version it belongs to, whatever order the rows come in.
+        var stateOfWork = new Dictionary<string, (Tally Tally, SortedSet<string> Versions)>(StringComparer.Ordinal);
+        foreach (var state in inputs.States
+                     .OrderBy(static state => state.SeedCelex, StringComparer.Ordinal)
+                     .ThenBy(static state => state.PublisherWorkIri, StringComparer.Ordinal))
         {
             var kind = state.Original
                 ? ContractWire.NameOf(Lex.V3.Contracts.Source.Europe.EuContentClass.OriginalLegalText)
@@ -484,10 +497,17 @@ public sealed record V3TextYield(string Schema, IReadOnlyList<V3TextYieldPublish
             var tally = ClassOf(kind);
             tally.Works.Add(state.PublisherWorkIri);
             tally.Versions.Add(version);
-            if (!stateOfWork.TryAdd(state.PublisherWorkIri, (tally, version)) && stateOfWork[state.PublisherWorkIri].Tally != tally)
+            if (!stateOfWork.TryGetValue(state.PublisherWorkIri, out var listed))
+            {
+                listed = (tally, new SortedSet<string>(StringComparer.Ordinal));
+                stateOfWork.Add(state.PublisherWorkIri, listed);
+            }
+            else if (listed.Tally != tally)
             {
                 throw new InvalidDataException($"The EU index holds {state.PublisherWorkIri} as an original and as a consolidation.");
             }
+
+            listed.Versions.Add(version);
         }
 
         foreach (var (work, articles) in inputs.ArticlesByWork.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
@@ -504,7 +524,7 @@ public sealed record V3TextYield(string Schema, IReadOnlyList<V3TextYieldPublish
 
             held.Tally.Articles += articles;
             held.Tally.WorksWithText.Add(work);
-            held.Tally.VersionsWithText.Add(held.Version);
+            held.Tally.VersionsWithText.UnionWith(held.Versions);
         }
 
         var counted = 0L;
@@ -520,6 +540,8 @@ public sealed record V3TextYield(string Schema, IReadOnlyList<V3TextYieldPublish
             }
             else
             {
+                // The corpus records no format for an EU file: one with no Formex main body, a PDF or an HTML body among them,
+                // is counted here by its own disposition (formex_main_body_not_eligible, for one), never as PDF only.
                 var reason = DispositionsOf(member, LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody);
                 tally.ParseFailed[reason] = tally.ParseFailed.GetValueOrDefault(reason) + 1;
             }
@@ -677,8 +699,10 @@ public sealed record V3TextYieldPublisher(
 /// (<c>code</c>, <c>as_published</c>, <c>consolidation</c>), or the EU's content class (<c>original_legal_text</c>,
 /// <c>consolidation</c>). Each held file is in exactly one of <see cref="FilesWithText"/>, <see cref="FilesWithheld"/>,
 /// <see cref="FilesPdfOnly"/> and <see cref="FilesParseFailed"/>. <see cref="VersionsNotHeld"/> is null where the index cannot
-/// tell a version with no file held (the EU), and <see cref="FilesPdfOnly"/> where the publisher's held files are never PDFs
-/// (the EU's are Formex packages); <see cref="Annexes"/> is null where the corpus records no annex outcome (Luxembourg).
+/// tell a version with no file held (the EU), and <see cref="FilesPdfOnly"/> where the corpus records no file format (the EU:
+/// a file with no Formex main body, a PDF or HTML one among them, is counted under <see cref="FilesParseFailed"/> by its own
+/// disposition, such as <c>formex_main_body_not_eligible</c>); <see cref="Annexes"/> is null where the corpus records no
+/// annex outcome (Luxembourg).
 /// </summary>
 public sealed record V3TextYieldClass(
     string Family,

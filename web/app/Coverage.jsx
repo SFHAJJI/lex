@@ -61,6 +61,7 @@ import {
   textYieldClassLabel,
   textYieldClassRows,
   textYieldPublishersWithoutAnnexes,
+  textYieldPublishersWithoutFileFormat,
   textYieldReasonRows,
   textYieldSentences,
   unservedCapabilities,
@@ -276,6 +277,9 @@ function TextYield({ view, copy }) {
           ))}
         </FacetTable>
       )}
+      {textYieldPublishersWithoutFileFormat(textYield).map((publisher) => (
+        <p className="coverage-note" key={`format-${publisher}`}>{copy.noFileFormat[publisher]}</p>
+      ))}
       {textYieldPublishersWithoutAnnexes(textYield).map((publisher) => (
         <p className="coverage-note" key={publisher}>{copy.noAnnexOutcomes[publisher]}</p>
       ))}

@@ -1776,6 +1776,9 @@ test("R26's sentence and the class table say the same figures, which are the bui
     ]);
     const body = text(html);
     assert.ok(body.includes("The corpus records no annex outcome for Luxembourg acts, so none of their annexes is counted here."));
+    // The EU's files carry no format in the corpus: said once, and never for Luxembourg, whose files do.
+    assert.ok(body.includes("The corpus records no file format for EU files, so a PDF or HTML file with no text served is counted with the admitted files with no article served, under its own reason."));
+    assert.ok(!body.includes("these Luxembourg files"));
     assert.ok(body.includes(answer.text_yield_note), "the platform's note is reproduced verbatim");
     assert.equal(rows(html).get("counted by the build, in the block"), "lex-v3-text-yield/1");
   }

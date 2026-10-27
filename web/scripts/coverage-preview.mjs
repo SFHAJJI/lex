@@ -61,9 +61,11 @@ const TEXT_YIELD_NOTE =
   + 'versions, one per original wording and one per consolidation date of each seed) and versions_with_text those with an article served here; '
   + 'versions_not_held counts each catalogue state of which this mount holds no file, by what the catalogue says of it, and is null where the index cannot '
   + 'tell (EU); files counts the publisher files this mount holds, each in exactly one of files_with_text, files_withheld (by the rights disposition, '
-  + 'verbatim; pdf counts the PDF files among them), files_pdf_only (an admitted PDF from which no text is served; null where no held file is a PDF: EU) '
-  + "and files_parse_failed (an admitted file that is not a PDF and from which no article is served, by the derivation's own dispositions, verbatim, "
-  + "joined with +); articles counts the articles served; works counts distinct acts, so a publisher's works are not the sum of its classes', while its "
+  + 'verbatim; pdf counts the PDF files among them), files_pdf_only (an admitted PDF from which no text is served; null where the corpus records no '
+  + 'file format: EU) and files_parse_failed (an admitted file from which no article is served and that is not counted as PDF only, by the '
+  + "derivation's own dispositions, verbatim, joined with +; for the EU, a file with no Formex main body, a PDF or HTML one among them, is counted here "
+  + "by its own disposition, such as formex_main_body_not_eligible); articles counts the articles served; works counts distinct acts, so a "
+  + "publisher's works are not the sum of its classes', while its "
   + "versions, files and articles are; annexes counts the annex outcomes the corpus recorded on the class's files: image_only those of "
   + 'annex_text_not_available, with_text those served as text (none: no annex is served as an article) and failed every other, by disposition, and is '
   + 'null where the corpus records no annex outcome (Luxembourg)';

@@ -834,7 +834,8 @@ function readYieldClass(row, where) {
   };
   requireAtMost(read.worksWithText, read.works, `${where}.works_with_text`, 'the acts with text are among its acts');
   requireAtMost(read.versionsWithText, read.versions, `${where}.versions_with_text`, 'the versions with text are among its versions');
-  requireAtMost(read.versionsWithText, read.filesWithText, `${where}.versions_with_text`, 'a version with text has a file with text');
+  // An act with text has a file with text of its own. A version need not: an EU work the census lists under two seeds gives
+  // its one file's text to both seeds' versions, so the versions with text are bounded by the versions alone.
   requireAtMost(read.worksWithText, read.filesWithText, `${where}.works_with_text`, 'an act with text has a file with text');
   if ((read.articles === 0) !== (read.filesWithText === 0) || (read.articles === 0) !== (read.versionsWithText === 0)) {
     throw new Error(`${where} counts ${read.articles} articles beside ${read.filesWithText} files and ${read.versionsWithText} versions with text; a file or version has text exactly when an article is served`);
@@ -1305,6 +1306,10 @@ export const COVERAGE_COPY = Object.freeze({
     'lu-legilux': 'The corpus records no annex outcome for Luxembourg acts, so none of their annexes is counted here.',
     'eu-eurlex': 'The corpus records no annex outcome for EU acts, so none of their annexes is counted here.',
   }),
+  noFileFormat: Object.freeze({
+    'lu-legilux': 'The corpus records no file format for these Luxembourg files, so a PDF file with no text served is counted with the admitted files with no article served, under its own reason.',
+    'eu-eurlex': 'The corpus records no file format for EU files, so a PDF or HTML file with no text served is counted with the admitted files with no article served, under its own reason.',
+  }),
   notRecorded: 'not recorded',
 });
 
@@ -1329,7 +1334,8 @@ export const COVERAGE_COLUMNS = Object.freeze({
  * THE TEXT YIELD'S ROWS, decided once for both renderers: each a class's or a publisher's, its cells in
  * `COVERAGE_COLUMNS.yieldClasses` order after the class cell. A publisher's own row follows its classes:
  * its acts are its own distinct count and every other cell its classes' sum. A count the publisher does
- * not record (`null`: the EU's versions with no file held and PDF files) is null on its rows, and is
+ * not record (`null`: the EU's versions with no file held, and its PDF files, whose format its corpus does
+ * not record) is null on its rows, and is
  * said "not recorded", never zero.
  */
 export function textYieldClassRows(textYield) {
@@ -1381,6 +1387,16 @@ export function textYieldAnnexRows(textYield) {
       publisher: publisher.publisher, family: row.family, kind: row.kind,
       cells: Object.freeze([row.annexes.annexes, row.annexes.withText, row.annexes.imageOnly, row.annexes.failed]),
     })));
+}
+
+/**
+ * The publishers some of whose files the corpus records no format for (`files_pdf_only` null: the EU), each said once: a PDF
+ * of theirs with no text served is counted with the admitted files with no article served, under its own reason.
+ */
+export function textYieldPublishersWithoutFileFormat(textYield) {
+  return textYield.publishers
+    .filter((publisher) => publisher.classes.some((row) => row.filesPdfOnly === null && row.files > 0))
+    .map((publisher) => publisher.publisher);
 }
 
 /** The publishers whose files the corpus records no annex outcome for, each said once. */
@@ -1539,6 +1555,8 @@ function textYieldSection(view) {
       rows: annexes.map((annex) => (
         `<tr><td>${classCell(annex)}</td>${annex.cells.map((value) => `<td>${value}</td>`).join('')}</tr>`)).join(''),
     }))
+    + textYieldPublishersWithoutFileFormat(textYield).map((publisher) => (
+      `<p class="coverage-note">${escapeHtml(COVERAGE_COPY.noFileFormat[publisher])}</p>`)).join('')
     + textYieldPublishersWithoutAnnexes(textYield).map((publisher) => (
       `<p class="coverage-note">${escapeHtml(COVERAGE_COPY.noAnnexOutcomes[publisher])}</p>`)).join('')
     + note

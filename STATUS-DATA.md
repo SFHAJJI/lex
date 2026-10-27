@@ -20,8 +20,11 @@ Updated 2026-10-27.
     which no file is held, by what the catalogue says of them (`catalogue_licence_scl`, `catalogue_licence_scl_in_part`,
     `catalogue_no_expression`, `catalogue_cc_by_not_acquired`, ...; the licence is read from the XML and PDF manifestations
     only); and every held file in exactly one of: with text, withheld (by its rights disposition's own wire name, with how
-    many are PDFs), PDF only, or failed (an admitted non-PDF file with no article served, by its derivation dispositions'
-    own names). EU classes carry R84's annex counts (with text, image-only, failed, by disposition); Luxembourg records none.
+    many are PDFs), PDF only, or failed (an admitted file with no article served, by its derivation dispositions' own
+    names: for Luxembourg a non-PDF file; the EU's corpus records no file format, so `files_pdf_only` is null there and an EU
+    file with no Formex main body, a PDF or HTML one among them, is failed by its own disposition, such as
+    `formex_main_body_not_eligible`). EU classes carry R84's annex counts (with text, image-only, failed, by disposition);
+    Luxembourg records none.
   - **No closed list of reasons.** A rights disposition is counted under `ContractWire.NameOf`, so Release 2's
     `agreed_cc_by_rederived` and policy A (#999) need no change here: an admitted file counts by its articles, a withheld
     one by its token.
@@ -58,6 +61,13 @@ Updated 2026-10-27.
   Every Luxembourg withheld file reads `typed_quarantine_in_file_reading_rejected` (reading /1); no admitted PDF is held
   (the 368 PDF files are all withheld). Luxembourg: 2,690 of 28,356 versions, 2,572 of 24,621 acts, 137,632 articles;
   the EU: 274 of 377 versions, 173,820 articles.
+- **Review and repair (#1000).** REPAIR, every figure confirmed by an independent count over derive-r1. F1 (medium): the note
+  and the class doc said the EU holds no PDF, and two EU consolidation bodies of `02003R0001-20040501`
+  (`formex_main_body_not_eligible`) are PDFs in run 16's custody. The claims are corrected, not the count: `files_pdf_only`
+  is null where the corpus records no file format, and Coverage says so for the EU in English and French (2 forms
+  reviewed, 1 changed). Determinism: the classes sort by an ordinal comparer, and an EU work the census lists under two
+  seeds gives its text to both seeds' versions whatever order the rows come in (none in derive-r1; the bound "versions
+  with text are no more than the files with text" is dropped for it).
 - **What a new D1 needs.** Nothing new as input: inputs /3 stay valid, and a derive at this head writes report /2 with the
   yield (about a minute more, reading the two placed indexes). Deploy the API at this head or later to serve it; Release 1's
   mount keeps answering with none.

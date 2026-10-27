@@ -251,7 +251,7 @@ public sealed class V3TextYieldTests
         var original = ClassOf(eu, V3TextYield.EuropeFamily, "original_legal_text");
         Assert.AreEqual((2L, 1L, 2L, 1L, 99L, 2L, 1L), (original.Works, original.WorksWithText, original.Versions, original.VersionsWithText, original.Articles, original.Files, original.FilesWithText));
         Assert.IsNull(original.VersionsNotHeld, "the EU index cannot tell a version of which no file is held");
-        Assert.IsNull(original.FilesPdfOnly, "no EU file held is a PDF");
+        Assert.IsNull(original.FilesPdfOnly, "the corpus records no EU file's format, so no EU file is counted as PDF only");
         Assert.HasCount(0, original.FilesWithheld);
         CollectionAssert.AreEquivalent(new Dictionary<string, long> { ["formex_main_body_package_not_acquired"] = 1 }, Counts(original.FilesParseFailed));
         Assert.AreEqual((4L, 0L, 1L, 3L), (original.Annexes!.Annexes, original.Annexes.WithText, original.Annexes.ImageOnly, original.Annexes.Failed));
@@ -289,6 +289,39 @@ public sealed class V3TextYieldTests
         Assert.HasCount(0, row.FilesWithheld);
         Assert.HasCount(0, row.FilesParseFailed);
         CollectionAssert.AreEquivalent(new Dictionary<string, long> { [V3TextYield.NotHeldNoExpression] = 1 }, Counts(row.VersionsNotHeld));
+    }
+
+    [TestMethod]
+    public void TheCountIsTheSameInWhateverOrderItsRowsComeAndItsClassesAreInOrdinalOrder()
+    {
+        // A work the census lists under two seeds gives text to both seeds' versions, whichever row comes first.
+        var served = Eu(EuContentClass.Consolidation, LexCorpus6Stage3Disposition.FormexMainBodyAdmitted);
+        var pdf = Eu(EuContentClass.Consolidation, LexCorpus6Stage3Disposition.FormexMainBodyNotEligible);
+        var states = new[]
+        {
+            new V3TextYield.EuropeState("32016R0679", "work:shared", false, "2018-05-25"),
+            new V3TextYield.EuropeState("32014L0065", "work:shared", false, "2018-05-25"),
+            new V3TextYield.EuropeState("32014L0065", "work:other", false, "2019-01-01"),
+        };
+        string Written(IEnumerable<V3TextYield.EuropeState> rows, IReadOnlyList<LexCorpus6Member> members) =>
+            JsonSerializer.Serialize(V3TextYield.Count(members, null, new V3TextYield.EuropeInputs(
+                new Dictionary<string, long> { [served.ObjectRefSha256] = 5 },
+                new Dictionary<string, long> { ["work:shared"] = 5 },
+                rows.ToArray())), V3TextYield.JsonOptions);
+        var forward = Written(states, [served, pdf]);
+        Assert.AreEqual(forward, Written(states.Reverse(), [pdf, served]), "the same rows in another order write the same block");
+        var row = V3TextYield.Read(JsonDocument.Parse(forward).RootElement).Publishers.Single().Classes.Single();
+        Assert.AreEqual((3L, 2L, 2L, 1L), (row.Versions, row.VersionsWithText, row.Works, row.WorksWithText),
+            "the shared work's text is both its seeds' versions'");
+        // An EU file with no Formex main body (a PDF, as 02003R0001-20040501's are) is counted by its own disposition.
+        CollectionAssert.AreEquivalent(new Dictionary<string, long> { ["formex_main_body_not_eligible"] = 1 }, Counts(row.FilesParseFailed));
+        Assert.IsNull(row.FilesPdfOnly);
+
+        // Luxembourg classes by family and kind in ordinal order, where a culture's order would differ ("Zz" before "aa").
+        var upper = Eli + "Zz/2020/01/01/a1/jo";
+        var lower = Eli + "aa/2020/01/01/a1/jo";
+        var luxembourg = V3TextYield.Count([], new V3TextYield.LuxembourgInputs(new Dictionary<string, long>(), [lower, upper], []), null);
+        CollectionAssert.AreEqual(new[] { "Zz", "aa" }, luxembourg.Publishers.Single().Classes.Select(static yieldRow => yieldRow.Family).ToArray());
     }
 
     [TestMethod]
