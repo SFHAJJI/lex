@@ -95,7 +95,8 @@ public sealed class V3CorpusLegacySchema8MountTests
     /// 30. Recorded again at 9b28c5c3 (the API's gaps, the plan's items 6.10 and 8.6, 2026-10-27): all 38 rows, each by its
     /// registry identity alone (`lex-v3-operation-registry/2` and its digest), and the two coverage answers by their operations
     /// note and rows too (an operation served from no data refuses inside the envelope, its row naming the reason and the mode);
-    /// no other member moved. The answers are those production sends: recorded on Linux, as the release image
+    /// no other member moved. Recorded again at 320c0f20 (the same branch over v3/integration 473a9fae, #995: `rate_limited`'s
+    /// payload schema typed as the limit sends it): all 38 rows by the registry digest alone. The answers are those production sends: recorded on Linux, as the release image
     /// runs (globalization-invariant, UTC; the language library changes no byte), and every system is held to them. Resolve
     /// of a rooted path was the one answer Windows sent otherwise, until a rooted path was read as an identifier on every
     /// system (<c>LooksLikeIdentifier</c>).
@@ -106,7 +107,7 @@ public sealed class V3CorpusLegacySchema8MountTests
         using var recorded = JsonDocument.Parse(Fixture("base-answers.json"));
         var root = recorded.RootElement;
         Assert.AreEqual("3b7913ec", root.GetProperty("written_at_commit").GetString());
-        Assert.AreEqual("9b28c5c3", root.GetProperty("recorded_at_commit").GetString());
+        Assert.AreEqual("320c0f20", root.GetProperty("recorded_at_commit").GetString());
         Assert.AreEqual(IndexFileSha256, root.GetProperty("index_sha256").GetString());
         Assert.AreEqual(StateSha256, root.GetProperty("state_sha256").GetString());
 

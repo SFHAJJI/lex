@@ -78,7 +78,8 @@ per-client limit, merged before it was handed back: both sides kept).
     24.04.4, .NET 10.0.11, `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1`, `TZ=UTC`), with the gated recorders, from an archive of
     9b28c5c3. A script checked all 53 rows (29, 9, 15): the same request, trace and status, and each body equal to the
     fixture's once the registry identity is put back, coverage's operations note and `not_served_data` aside;
-    `refused_for_eu` did not move. Windows replays the same bytes (12 of 12).
+    `refused_for_eu` did not move. Recorded again at 320c0f20, after the merge of #995 (the `rate_limited` payload schema
+    moved the digest once more): every row by the registry digest alone. Windows replays the same bytes (12 of 12).
 - **Tests.** New: `V3OutOfScopeTests` (3: every class's examples and J5, nothing held refused, institutions and links),
   `V3CorpusScopeMountTests` (3: the three refusing operations over REST and MCP with identical envelopes, on a Luxembourg and
   an EU-only mount; the circular refused by all 23 operations that take an identifier, identically over both), and in
