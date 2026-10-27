@@ -591,12 +591,20 @@ public sealed record LuxembourgIndexInterval(
 public static partial class LuxembourgIndexBuilder
 {
     /// <summary>
+    /// Index 10: index 9's tables, unchanged, and the publisher's relation records (<see cref="PublisherRelationsDdl"/>): the
+    /// act-level relations modifies, repeals, rectifies and modifiedTempBy, the LegalResourceImpact records, and each relation
+    /// predicate's acquisition state. Its event log is index 9's, log /3, so an index 10 build carries an index 9 log forward.
+    /// </summary>
+    public const string Schema = "lex-v3-luxembourg-index/10";
+
+    /// <summary>
     /// Index 9: the catalogue's states of every served work (held or textless), dated by role, with the publisher's ends,
     /// boundary kinds, publication dates, text status, in-file evidence and translations; the interval transitions
     /// between them (<c>intervals</c>); titles keyed by work key; state digest /2; and the event log /3, whose
-    /// observations record a derivation time and whose sightings carry each state's own publisher facts.
+    /// observations record a derivation time and whose sightings carry each state's own publisher facts. The reader still
+    /// serves an index of it exactly as schema 9 checked it, with no relation record claimed.
     /// </summary>
-    public const string Schema = "lex-v3-luxembourg-index/9";
+    internal const string LegacySchema9 = "lex-v3-luxembourg-index/9";
 
     /// <summary>
     /// The event log's own schema, stamped apart from the index's (<c>log_stamp</c>), so a later build can verify a
@@ -615,7 +623,10 @@ public static partial class LuxembourgIndexBuilder
     /// </summary>
     internal const string BuiltAtFormat = "yyyy-MM-ddTHH:mm:ssZ";
     private const int ApplicationId = 0x4c563306;
-    private const string Ddl = TablesDdl + "\n" + EventLogDdl;
+    private const string Ddl = TablesDdl + "\n" + PublisherRelationsDdl + "\n" + EventLogDdl;
+
+    /// <summary>Schema 9's tables: index 10's without the relation tables.</summary>
+    internal const string LegacyDdl9 = TablesDdl + "\n" + EventLogDdl;
 
     /// <summary>
     /// Schema 8, the last before index 9: its states are the held ones only, dated by the inventory, with state digest /1,
@@ -1049,7 +1060,7 @@ public static partial class LuxembourgIndexBuilder
     /// <summary>Why a predecessor cannot be carried forward by this build's log schema, or null when it can (or there is none).</summary>
     private static string? PredecessorSchemaRefusal(LuxembourgIndexPredecessor? predecessor) =>
         predecessor is not null && !string.Equals(predecessor.LogSchema, EventLogSchema, StringComparison.Ordinal)
-            ? $"The predecessor's event log is {predecessor.LogSchema} (index 8); an index 9 build starts a new genesis log "
+            ? $"The predecessor's event log is {predecessor.LogSchema} (index 8); an index 10 build starts a new genesis log "
               + $"and carries only {EventLogSchema} forward."
             : null;
 
@@ -1098,21 +1109,23 @@ public static partial class LuxembourgIndexBuilder
 
         return WriteFile(
             path, corpus.ArtifactRef, rows.Members, rows.Articles, rows.States, rows.Intervals, rows.WorkTitles, rows.WorkFacts,
-            BodiesByObjectRef(corpus.VerifiedSet), predecessor, builtAtText, derivedAtText, out refusal, out detail);
+            BodiesByObjectRef(corpus.VerifiedSet), predecessor, builtAtText, derivedAtText, out refusal, out detail,
+            publisher: rows.PublisherRelations);
     }
 
-    /// <summary>The rows <see cref="TryProjectRows"/> made, as one value.</summary>
+    /// <summary>The rows <see cref="TryProjectRows"/> and <see cref="ProjectPublisherRelations"/> made, as one value.</summary>
     internal sealed record ProjectedRows(
         MemberRow[] Members,
         ArticleRow[] Articles,
         StateRow[] States,
         IntervalRow[] Intervals,
         WorkTitleRow[] WorkTitles,
-        WorkFactRow[] WorkFacts);
+        WorkFactRow[] WorkFacts,
+        PublisherRelationRows PublisherRelations);
 
     /// <summary>
-    /// <see cref="TryProjectRows"/>, with a projection that throws on the publisher's data (an <see cref="InvalidDataException"/>)
-    /// refused as a derivation mismatch, as the build refuses it.
+    /// <see cref="TryProjectRows"/> and index 10's relation rows, with a projection that throws on the publisher's data (an
+    /// <see cref="InvalidDataException"/>) refused as a derivation mismatch, as the build refuses it.
     /// </summary>
     internal static bool TryProjectRowsCatching(
         ProjectionInputs inputs,
@@ -1121,7 +1134,7 @@ public static partial class LuxembourgIndexBuilder
         out LuxembourgIndexBuildRefusal refusal,
         out string? detail)
     {
-        rows = new([], [], [], [], [], []);
+        rows = new([], [], [], [], [], [], PublisherRelationRows.None);
         try
         {
             if (!TryProjectRows(
@@ -1131,7 +1144,8 @@ public static partial class LuxembourgIndexBuilder
                 return false;
             }
 
-            rows = new(members, articles, states, intervals, workTitles, workFacts);
+            rows = new(members, articles, states, intervals, workTitles, workFacts,
+                ProjectPublisherRelations(inputs.Relations ?? [], inputs.RelationFamilies ?? [], workFacts));
             return true;
         }
         catch (InvalidDataException exception)
@@ -1162,14 +1176,15 @@ public static partial class LuxembourgIndexBuilder
         string? derivedAtText,
         Action<LuxembourgIndexReader>? verifyWithCorpus,
         out LuxembourgIndexBuildRefusal refusal,
-        out string? detail)
+        out string? detail,
+        PublisherRelationRows? publisher = null)
     {
         var path = TemporaryIndexPath();
         try
         {
             var written = WriteFile(
                 path, corpusRef, members, articles, states, intervals, workTitles, workFacts, bodyByObjectRef, predecessor, builtAtText,
-                derivedAtText, out refusal, out detail);
+                derivedAtText, out refusal, out detail, publisher: publisher);
             return written is null ? null : ReadAndVerify(written, corpusRef, verifyWithCorpus, out refusal, out detail);
         }
         finally
@@ -1211,7 +1226,8 @@ public static partial class LuxembourgIndexBuilder
     /// The build's tail, from the projected rows to the file at <paramref name="path"/>: the relations and the event log (a
     /// genesis log, or the predecessor's carried forward and this observation's events appended), the stamps, the database,
     /// its digest read from the file, and the measured capability manifest. Nothing here reads the database back: each caller
-    /// verifies the file its own way (<see cref="ReadAndVerify"/>, <see cref="TryBuildFileAsync"/>).
+    /// verifies the file its own way (<see cref="ReadAndVerify"/>, <see cref="TryBuildFileAsync"/>). <paramref name="publisher"/>
+    /// is index 10's relation rows (none when null: a build whose envelope holds no relation record writes empty tables).
     /// </summary>
     internal static V3BuiltIndexFile? WriteFile(
         string path,
@@ -1228,10 +1244,12 @@ public static partial class LuxembourgIndexBuilder
         string? derivedAtText,
         out LuxembourgIndexBuildRefusal refusal,
         out string? detail,
-        Action<string, int, SqliteException>? refusedRow = null)
+        Action<string, int, SqliteException>? refusedRow = null,
+        PublisherRelationRows? publisher = null)
     {
         refusal = LuxembourgIndexBuildRefusal.None;
         detail = null;
+        publisher ??= PublisherRelationRows.None;
         var relations = ProjectRelations(articles);
         IReadOnlyDictionary<string, string[]> sourceBodies;
         try
@@ -1272,12 +1290,12 @@ public static partial class LuxembourgIndexBuilder
             ];
         }
 
-        var logicalRowsSha256 = HashLogicalRows(members, articles, states, workTitles, relations, workFacts, events, intervals);
+        var logicalRowsSha256 = HashLogicalRows(members, articles, states, workTitles, relations, workFacts, events, intervals, publisher);
         try
         {
             BuildDatabase(
                 path, corpusRef.Sha256, logicalRowsSha256, members, articles, states, intervals, workTitles, relations, workFacts, events, observations,
-                refusedRow);
+                publisher, refusedRow);
             var (digest, length) = V3BuiltIndexFile.Sha256OfFile(path);
             var indexRef = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
             var manifest = MeasureCapabilities(digest, articles, states, workTitles);
@@ -2557,6 +2575,7 @@ public static partial class LuxembourgIndexBuilder
         IReadOnlyList<WorkFactRow> workFacts,
         IReadOnlyList<EventRow> events,
         IReadOnlyList<ObservationRow> observations,
+        PublisherRelationRows publisher,
         Action<string, int, SqliteException>? refusedRow = null)
     {
         using var connection = Open(path, SqliteOpenMode.ReadWriteCreate);
@@ -2567,7 +2586,7 @@ public static partial class LuxembourgIndexBuilder
         Execute(connection, "PRAGMA synchronous=FULL");
         Execute(connection, "PRAGMA foreign_keys=ON");
         Execute(connection, $"PRAGMA application_id={ApplicationId}");
-        Execute(connection, "PRAGMA user_version=9");
+        Execute(connection, "PRAGMA user_version=10");
         using var transaction = connection.BeginTransaction();
         Execute(connection, Ddl, transaction);
         // A row the database refuses stops the build, unless the caller collects refusals (the run-15 probe): then each
@@ -2652,6 +2671,30 @@ public static partial class LuxembourgIndexBuilder
                 fact.SubjectIri, fact.Predicate, fact.FactKind, fact.ObjectKind, fact.ObjectValue,
                 fact.DatatypeIri, fact.LanguageTag, fact.EvidenceSha256);
         }
+        for (var index = 0; index < publisher.Relations.Length; index++)
+        {
+            var relation = publisher.Relations[index];
+            Row("publisher_relations", index,
+                "INSERT INTO publisher_relations VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6)",
+                relation.EdgeType, relation.SourcePredicate, relation.SubjectIri, relation.ObjectIri,
+                relation.ActingPublicationDate, relation.ActingEntryIntoForce, relation.EvidenceSha256);
+        }
+        for (var index = 0; index < publisher.Impacts.Length; index++)
+        {
+            var impact = publisher.Impacts[index];
+            Row("publisher_impacts", index,
+                "INSERT INTO publisher_impacts VALUES($p0,$p1,$p2,$p3,$p4,$p5,$p6,$p7,$p8,$p9,$p10)",
+                impact.ImpactIri, impact.FromLegalResourceIri, impact.ToLegalResourceIri, impact.ToExpressionIri,
+                impact.ImpactTypeIri, impact.ConsolidatedByIri, impact.ConsolidatedByExpressionIri, impact.AmbiguousPartsJson,
+                impact.ActingPublicationDate, impact.ActingEntryIntoForce, impact.EvidenceSha256);
+        }
+        for (var index = 0; index < publisher.Families.Length; index++)
+        {
+            var family = publisher.Families[index];
+            Row("relation_families", index,
+                "INSERT INTO relation_families VALUES($p0,$p1,$p2,$p3)",
+                family.Predicate, family.State, family.FamilyKeysJson, family.Reason);
+        }
         for (var index = 0; index < events.Count; index++)
         {
             var value = events[index];
@@ -2678,7 +2721,8 @@ public static partial class LuxembourgIndexBuilder
 
     /// <summary>
     /// The index of a fixed logical input, whose bytes a test pins: one held act and a textless consolidation of its work
-    /// that the publisher ends, so every column of index 9's states, an interval transition and a derivation time are written.
+    /// that the publisher ends, so every column of index 9's states, an interval transition and a derivation time are written;
+    /// and one relation record of each of index 10's kinds, with the acting act's dates from the facts, and two family states.
     /// </summary>
     internal static byte[] BuildFixedInputDeterminismEvidence()
     {
@@ -2727,6 +2771,28 @@ public static partial class LuxembourgIndexBuilder
         var titles = new[] { new WorkTitleRow(
             "loi-2024-01-01-n1", article.ExpressionIri, "fra", "Titre fixe", "titre fixe",
             "2024-01-01", "title", new string('3', 64)) };
+        const string Amended = "http://data.legilux.public.lu/eli/etat/leg/loi/2023/01/01/n1/jo";
+        const string Impact = Work + "/legal-analysis/LegalResourceImpact/1";
+        var evidence = new string('8', 64);
+        ProjectionRelation Relation(string subject, string predicate, string target) => new(subject, JoluxNamespace + predicate, target, evidence);
+        var publisher = ProjectPublisherRelations(
+            [
+                Relation(Act, "modifies", Amended),
+                Relation(Act, "repeals", "http://data.legilux.public.lu/eli/etat/leg/rgd/2020/01/01/n1/jo"),
+                Relation(Act, "rectifies", "http://data.legilux.public.lu/eli/etat/leg/loi/2023/06/01/n2/jo"),
+                Relation(Act, "modifiedTempBy", "http://data.legilux.public.lu/eli/etat/leg/loi/2024/06/01/n2/jo"),
+                Relation(Act, "cites", Amended),
+                Relation(Impact, "impactFromLegalResource", Act),
+                Relation(Impact, "impactToLegalResource", Amended),
+                Relation(Impact, "impactToExpression", Amended + "/fr"),
+                Relation(Impact, "legalResourceImpactHasType", "http://data.legilux.public.lu/resource/authority/impact-type/1"),
+                Relation(Impact, "impactConsolidatedBy", "http://data.legilux.public.lu/eli/etat/leg/loi/2023/01/01/n1/consolide/20240201"),
+            ],
+            [
+                new(JoluxNamespace + "modifies", "acquired_complete", ["legislative-loi-g"], null),
+                new(JoluxNamespace + "repeals", "unacquired", [], "no relation-assertions family was designated for this run"),
+            ],
+            facts);
         var path = Path.Combine(Path.GetTempPath(), $"lex-v3-lu-index-pin-{Guid.NewGuid():N}.sqlite");
         try
         {
@@ -2735,9 +2801,10 @@ public static partial class LuxembourgIndexBuilder
             {
                 [member.ObjectRefSha256] = new string('7', 64),
             }));
-            BuildDatabase(path, new string('a', 64), HashLogicalRows(members, articles, states, titles, relations, facts, events, intervals),
+            BuildDatabase(path, new string('a', 64), HashLogicalRows(members, articles, states, titles, relations, facts, events, intervals, publisher),
                 members, articles, states, intervals, titles, relations, facts, events,
-                ProjectGenesisObservations(new string('a', 64), events.Length, "2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z"));
+                ProjectGenesisObservations(new string('a', 64), events.Length, "2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z"),
+                publisher);
             return File.ReadAllBytes(path);
         }
         finally
@@ -2824,7 +2891,28 @@ public static partial class LuxembourgIndexBuilder
         return manifest!;
     }
 
-    /// <summary>The logical rows' digest the stamp records: index 9's rows with the interval transitions.</summary>
+    /// <summary>
+    /// The logical rows' digest the stamp of index 10 records: index 9's rows with the three relation tables' rows after them,
+    /// in one record of their own (index 9's record, hashed by the overload without <paramref name="publisher"/>, is unchanged).
+    /// </summary>
+    internal static string HashLogicalRows(
+        IReadOnlyList<MemberRow> members,
+        IReadOnlyList<ArticleRow> articles,
+        IReadOnlyList<StateRow> states,
+        IReadOnlyList<WorkTitleRow> workTitles,
+        IReadOnlyList<RelationRow> relations,
+        IReadOnlyList<WorkFactRow> workFacts,
+        IReadOnlyList<EventRow> events,
+        IReadOnlyList<IntervalRow> intervals,
+        PublisherRelationRows publisher)
+    {
+        ArgumentNullException.ThrowIfNull(publisher);
+        return ContractJson.Sha256OfDefaultJson(new LogicalRowsTen(
+            members, articles, states, workTitles, relations, workFacts, events, intervals,
+            publisher.Relations, publisher.Impacts, publisher.Families));
+    }
+
+    /// <summary>The logical rows' digest the stamp of index 9 records: its rows with the interval transitions.</summary>
     internal static string HashLogicalRows(
         IReadOnlyList<MemberRow> members,
         IReadOnlyList<ArticleRow> articles,
@@ -2909,15 +2997,17 @@ public static partial class LuxembourgIndexBuilder
     }
 
     /// <summary>
-    /// The readable schema an index's tables are exactly, by its <c>user_version</c>: this schema (9), schema 8 (the last
-    /// before the catalogue's states), or schema 6 (the last before the event log recorded builds). Any other version, or
-    /// tables that are not exactly that version's, refuses: no schema in between is read, and none is read loosely.
+    /// The readable schema an index's tables are exactly, by its <c>user_version</c>: this schema (10), schema 9 (the last
+    /// before the relation records), schema 8 (the last before the catalogue's states), or schema 6 (the last before the
+    /// event log recorded builds). Any other version, or tables that are not exactly that version's, refuses: no schema in
+    /// between is read, and none is read loosely.
     /// </summary>
     internal static int ExactReadableSchemaVersion(SqliteConnection actual, int userVersion)
     {
         var ddl = userVersion switch
         {
-            9 => Ddl,
+            10 => Ddl,
+            9 => LegacyDdl9,
             8 => LegacyDdl8,
             6 => LegacyDdl6,
             _ => throw new InvalidDataException("The Luxembourg index schema differs from the exact terminal schema."),
@@ -3034,15 +3124,19 @@ public static partial class LuxembourgIndexBuilder
     /// <summary>
     /// What <see cref="TryProjectRows"/> reads, in the envelope's and the corpus's own orders: the corpus's Luxembourg members,
     /// the corpus record set's records, the legal-content and inventory outcomes with each body's object reference digest,
-    /// and the typed assertions as their <c>work_facts</c> rows. <see cref="Of"/> reads them from a build's envelope and
-    /// corpus; the run-15 probe gives them from custody and the retained derive's corpus, so both run one projection.
+    /// and the typed assertions as their <c>work_facts</c> rows; and what <see cref="ProjectPublisherRelations"/> reads, the
+    /// resolved publisher relations and the relation families' states (none when null). <see cref="Of"/> reads them from a
+    /// build's envelope and corpus; the run-15 probe gives them from custody and the retained derive's corpus, so both run one
+    /// projection.
     /// </summary>
     internal sealed record ProjectionInputs(
         IReadOnlyList<LexCorpus6Member> Members,
         IReadOnlyList<ProjectionRecord> Records,
         IReadOnlyList<ProjectionContent> Content,
         IReadOnlyList<ProjectionInventory> Inventory,
-        IReadOnlyList<ProjectionAssertion> Assertions)
+        IReadOnlyList<ProjectionAssertion> Assertions,
+        IReadOnlyList<ProjectionRelation>? Relations = null,
+        IReadOnlyList<ProjectionRelationFamily>? RelationFamilies = null)
     {
         /// <summary>A build's inputs: the corpus's Luxembourg members and the envelope's populations and assertions.</summary>
         internal static ProjectionInputs Of(Stage3DerivationProfileEnvelope envelope, LexCorpus6BuildResult corpus)
@@ -3072,7 +3166,9 @@ public static partial class LuxembourgIndexBuilder
                     .ToArray(),
                 luxembourg.Luxembourg.TypedAssertions
                     .Select(static assertion => new ProjectionAssertion(assertion.FactDisposition.Predicate, WorkFactOf(assertion)))
-                    .ToArray());
+                    .ToArray(),
+                ProjectionRelationsOf(luxembourg.Luxembourg.ResolvedRelations),
+                ProjectionFamiliesOf(luxembourg.Luxembourg.RelationFamilyAcquisitions));
         }
     }
 
@@ -3313,6 +3409,20 @@ public static partial class LuxembourgIndexBuilder
         IReadOnlyList<EventRow> Events,
         IReadOnlyList<IntervalRow> Intervals);
 
+    /// <summary>Index 10's logical rows: index 9's, then the relation tables'.</summary>
+    private sealed record LogicalRowsTen(
+        IReadOnlyList<MemberRow> Members,
+        IReadOnlyList<ArticleRow> Articles,
+        IReadOnlyList<StateRow> States,
+        IReadOnlyList<WorkTitleRow> WorkTitles,
+        IReadOnlyList<RelationRow> Relations,
+        IReadOnlyList<WorkFactRow> WorkFacts,
+        IReadOnlyList<EventRow> Events,
+        IReadOnlyList<IntervalRow> Intervals,
+        IReadOnlyList<PublisherRelationRow> PublisherRelations,
+        IReadOnlyList<PublisherImpactRow> PublisherImpacts,
+        IReadOnlyList<RelationFamilyRow> RelationFamilies);
+
     /// <summary>Schema 8's and 6's logical rows, exactly as they hashed them.</summary>
     private sealed record LegacyLogicalRows8(
         IReadOnlyList<MemberRow> Members,
@@ -3359,7 +3469,14 @@ public sealed partial class LuxembourgIndexReader : IDisposable
     private readonly object _coverageGate = new();
     private LuxembourgIndexCoverage? _coverage;
 
+    /// <summary>
+    /// The generation of the index's states and log tables: 9 for an index of schema 9 or 10 (whose states and log are
+    /// schema 9's, so every reading of them is), 8 or 6. Whether the relation records are held is <see cref="_relations"/>.
+    /// </summary>
     private readonly int _version;
+
+    /// <summary>Whether the index holds index 10's relation tables.</summary>
+    private readonly bool _relations;
 
     private LuxembourgIndexReader(
         string path,
@@ -3368,6 +3485,7 @@ public sealed partial class LuxembourgIndexReader : IDisposable
         SourceArtifactRef indexRef,
         SourceArtifactRef corpusRef,
         int version,
+        bool relations,
         bool deleteOnDispose)
     {
         _path = path;
@@ -3376,17 +3494,26 @@ public sealed partial class LuxembourgIndexReader : IDisposable
         IndexRef = indexRef;
         CorpusRef = corpusRef;
         _version = version;
-        SchemaIdentity = SchemaOfVersion(version);
+        _relations = relations;
+        SchemaIdentity = SchemaOf(version, relations);
         _deleteOnDispose = deleteOnDispose;
     }
 
     public SourceArtifactRef IndexRef { get; }
 
     /// <summary>
-    /// The schema the index's stamp names: <see cref="LuxembourgIndexBuilder.Schema"/> (9),
-    /// <see cref="LuxembourgIndexBuilder.LegacySchema8"/> or <see cref="LuxembourgIndexBuilder.LegacySchema6"/>.
+    /// The schema the index's stamp names: <see cref="LuxembourgIndexBuilder.Schema"/> (10),
+    /// <see cref="LuxembourgIndexBuilder.LegacySchema9"/>, <see cref="LuxembourgIndexBuilder.LegacySchema8"/> or
+    /// <see cref="LuxembourgIndexBuilder.LegacySchema6"/>.
     /// </summary>
     public string SchemaIdentity { get; }
+
+    /// <summary>
+    /// Whether the index holds the publisher's relation records (schema 10): the act-level relations modifies, repeals,
+    /// rectifies and modifiedTempBy, the LegalResourceImpact records and each relation predicate's acquisition state. An index of
+    /// schema 9, 8 or 6 holds none, so nothing about them is said from it.
+    /// </summary>
+    public bool RecordsPublisherRelations => _relations;
 
     /// <summary>
     /// Whether the index's event log records its builds: observations with their build times and corpora, the source
@@ -3407,11 +3534,12 @@ public sealed partial class LuxembourgIndexReader : IDisposable
     /// <summary>The event log schema the index holds: log /3 for schema 9, log /2 for schema 8; schema 6 stamps none.</summary>
     internal string LogSchema => _version == 9 ? LuxembourgIndexBuilder.EventLogSchema : LuxembourgIndexBuilder.LegacyEventLogSchema8;
 
-    private static string SchemaOfVersion(int version) => version switch
+    private static string SchemaOf(int version, bool relations) => (version, relations) switch
     {
-        9 => LuxembourgIndexBuilder.Schema,
-        8 => LuxembourgIndexBuilder.LegacySchema8,
-        6 => LuxembourgIndexBuilder.LegacySchema6,
+        (9, true) => LuxembourgIndexBuilder.Schema,
+        (9, false) => LuxembourgIndexBuilder.LegacySchema9,
+        (8, false) => LuxembourgIndexBuilder.LegacySchema8,
+        (6, false) => LuxembourgIndexBuilder.LegacySchema6,
         _ => throw new InvalidDataException("The Luxembourg index schema differs from the exact terminal schema."),
     };
 
@@ -3542,9 +3670,12 @@ public sealed partial class LuxembourgIndexReader : IDisposable
         try
         {
             connection = LuxembourgIndexBuilder.Open(path, SqliteOpenMode.ReadOnly);
-            var version = LuxembourgIndexBuilder.ExactReadableSchemaVersion(
+            var userVersion = LuxembourgIndexBuilder.ExactReadableSchemaVersion(
                 connection, Convert.ToInt32(Scalar(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture));
-            var schemaIdentity = SchemaOfVersion(version);
+            // Index 10 is index 9's tables and the relation tables: its states and log are read as index 9's.
+            var publisherRelations = userVersion == 10;
+            var version = publisherRelations ? 9 : userVersion;
+            var schemaIdentity = SchemaOf(version, publisherRelations);
             if (!string.Equals(Scalar(connection, "PRAGMA integrity_check"), "ok", StringComparison.Ordinal) ||
                 Convert.ToInt32(Scalar(connection, "PRAGMA application_id"), CultureInfo.InvariantCulture) != 0x4c563306)
             {
@@ -3614,13 +3745,21 @@ public sealed partial class LuxembourgIndexReader : IDisposable
                 // Schema 6's own check: its log is exactly the genesis log of its states, as schema 6 wrote it.
                 throw new InvalidDataException("The Luxembourg index event rows are not the genesis log of its states.");
             }
+            // Index 10's relation rows: their acting dates are the ones the index's own facts state (after the facts are hashed).
+            var publisher = publisherRelations ? ReadPublisherRelationRows(connection) : null;
             if (!string.Equals(
-                    version == 9
+                    publisher is not null
+                        ? LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, workTitles, relations, workFacts, events, intervals, publisher)
+                        : version == 9
                         ? LuxembourgIndexBuilder.HashLogicalRows(members, articles, states, workTitles, relations, workFacts, events, intervals)
                         : LuxembourgIndexBuilder.HashLegacyLogicalRows8(members, articles, states, workTitles, relations, workFacts, events),
                     expectedLogical,
                     StringComparison.Ordinal))
                 throw new InvalidDataException("The Luxembourg index logical rows do not match their stamp.");
+            if (publisher is not null)
+            {
+                LuxembourgIndexBuilder.VerifyActingDates(publisher, ReadActingFacts(connection));
+            }
 
             // Measured by the state dates search serves, or by the earlier article dates an index built before 2026-10-13
             // states: either is a measurement of these rows, and a retained generation keeps opening.
@@ -3637,6 +3776,7 @@ public sealed partial class LuxembourgIndexReader : IDisposable
                 indexRef,
                 corpusRef,
                 version,
+                publisherRelations,
                 deleteOnDispose);
         }
         catch

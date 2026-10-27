@@ -2431,7 +2431,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             edges = rows,
             target_note = CitationTargetNote,
             available_languages = availableLanguages,
-            not_held = CitationNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            not_held = WithStructuredRelations(CitationNotHeld, ReferencesStructuredRelationsTen).Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader.IndexRef.Sha256,
         });
@@ -2472,6 +2472,26 @@ internal sealed partial class V3CorpusMount : IDisposable
         "outbound edges first, in citation's order (by the citing article's publisher id, then its identity, then the order the references occur in it, for " +
         "each language in turn), then inbound edges in cited_by's order (by the citing state's publisher date, then its work key, language and expression, " +
         "then the citing article's publisher id and identity, then the order the references occur in it)";
+
+    /// <summary>On lex-v3-luxembourg-index/10, <c>relations</c>' row for the publisher's structured relation records.</summary>
+    internal const string RelationsStructuredRelationsTen =
+        "the publisher's relation records modifies, repeals, rectifies, modifiedTempBy and LegalResourceImpact are served under " +
+        "publisher_relations, apart from this index's edge table, whose one edge type is cites; its other relation records (based on, " +
+        "transposes, consolidates, is part of, is realized by) are not served";
+
+    /// <summary>On lex-v3-luxembourg-index/10, <c>citation</c>'s and <c>cited_by</c>'s row for the publisher's structured relation records.</summary>
+    internal const string ReferencesStructuredRelationsTen =
+        "the publisher's structured relation records are not among these edges, which are only the references written in the text; " +
+        "relations serves its modifies, repeals, rectifies, modifiedTempBy and LegalResourceImpact records";
+
+    /// <summary>
+    /// A fixed not-held list, with its <c>structured_relations</c> row's reason replaced by <paramref name="tenReason"/> on
+    /// lex-v3-luxembourg-index/10, which holds some of those records; on an index of schema 9, 8 or 6 the list as it is.
+    /// </summary>
+    private string[][] WithStructuredRelations(string[][] rows, string tenReason) =>
+        !RecordsPublisherRelations
+            ? rows
+            : rows.Select(row => string.Equals(row[0], "structured_relations", StringComparison.Ordinal) ? new[] { row[0], tenReason } : row).ToArray();
 
     internal static readonly string[][] RelationsNotHeld =
     [
@@ -3009,7 +3029,8 @@ internal sealed partial class V3CorpusMount : IDisposable
 
         var page = edges.Skip(start).Take(limit).ToArray();
         var truncated = start + page.Length < edges.Count;
-        using var result = JsonSerializer.SerializeToDocument(new
+        // On index 10, the publisher's relation records of the work beside the references (WithPublisherRelations).
+        using var result = JsonSerializer.SerializeToDocument(WithPublisherRelations(new
         {
             scope = RelationsScope,
             requested_identifier = identifier,
@@ -3045,10 +3066,10 @@ internal sealed partial class V3CorpusMount : IDisposable
             edges = page.Select(static entry => entry.Row).ToArray(),
             target_note = CitationTargetNote,
             available_languages = availableLanguages,
-            not_held = RelationsNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            not_held = WithStructuredRelations(RelationsNotHeld, RelationsStructuredRelationsTen).Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader.IndexRef.Sha256,
-        });
+        }, workKey, direction));
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "relation_edge", result.RootElement));
@@ -3208,7 +3229,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             continue_after = truncated ? Cursor(page[^1]) : null,
             page_is = CitedByPageIs,
             edges = rows,
-            not_held = CitedByNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            not_held = WithStructuredRelations(CitedByNotHeld, ReferencesStructuredRelationsTen).Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader.IndexRef.Sha256,
         });
@@ -6279,8 +6300,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         var rows = scope.Select(state => WithCatalogueFacts(DossierStateRow(state, NextDateInLanguage(scope, state), notAdmitted), state)).ToArray();
         var asPublished = AsPublishedOf(states, scope);
 
-        // The act's force, as the publisher asserts it (R79), on index 9.
-        using var result = JsonSerializer.SerializeToDocument(WithDossierForce(WithCatalogueChain(new
+        // The act's force, as the publisher asserts it (R79), on index 9; its relation records and R72's notice on index 10.
+        using var result = JsonSerializer.SerializeToDocument(WithPublisherRelations(WithDossierForce(WithCatalogueChain(new
         {
             scope = DossierScope,
             requested_identifier = identifier,
@@ -6299,7 +6320,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             not_held = NotHeldRows(RulesByInterval ? DossierNotHeldNine : DossierNotHeld, asPublished),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader!.IndexRef.Sha256,
-        }, states[0].WorkKey, requestedLanguage), states));
+        }, states[0].WorkKey, requestedLanguage), states), states[0].WorkKey));
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "work_record", result.RootElement));
