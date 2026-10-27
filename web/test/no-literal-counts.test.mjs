@@ -135,6 +135,22 @@ test("no live page, as built or rendered from the census answers, says a pack fi
   }
 });
 
+/**
+ * The coverage answer's text yield moved with its totals, as the producer holds the build report's yield to the mount
+ * (its Luxembourg articles are the index's): served articles where there are any, and none where the mount serves none,
+ * its one file then counted as an admitted file with no article.
+ */
+function yieldServing(value, articles) {
+  const publisher = value.text_yield.publishers[0];
+  const row = publisher.classes[0];
+  const served = articles > 0;
+  for (const node of [publisher, row]) {
+    node.articles = articles;
+    if (!served) Object.assign(node, { files_with_text: 0, versions_with_text: 0, works_with_text: 0 });
+  }
+  if (!served) row.files_parse_failed = [{ reason: "akn_unsupported_content_shape", count: row.files }];
+}
+
 /** An answer given long after any build the census records: its index is older than today, so today is said beside it. */
 const LATER = "2026-12-01T10:00:00.0000000Z";
 
@@ -147,6 +163,7 @@ test("the home page's coverage line says the counts the coverage answer serves, 
     if (later) envelope.context.freshness.observed_at = LATER;
     const value = envelope.result.value;
     value.totals = { ...value.totals, works, states, articles };
+    yieldServing(value, articles);
     value.languages = value.languages.map((row) => ({ ...row, works, states, articles, articles_with_searchable_text: Math.min(row.articles_with_searchable_text, articles), searchable_text_held: Math.min(row.articles_with_searchable_text, articles) > 0 }));
     value.capability_cells = articles === 0 ? [] : value.capability_cells;
     const facts = homeFacts(envelope, LIVE_CONTRACT);

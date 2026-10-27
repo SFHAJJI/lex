@@ -322,6 +322,18 @@
 // "publié avec" the Treaty, never "annexé au"; it is an "élément", never a "partie", the TFUE's own division; "le
 // libellé en {language} du traité", one Treaty in equally authentic languages; "tableau de correspondance", the
 // official term; and "ou" in the plural, since a count may be of Protocols only).
+// The text yield per class and R26's sentence on Trust and Coverage (R86(4), R26; data/yield-per-class): every new form of
+// `coverageAnswer` (`headings.textYield`, `facts.textYieldBlock`, the three `captions.yield*`, the twenty `columns.yield*`,
+// `textYieldPublishers`, `textYieldClasses`, `textYieldFamilies`, `textYieldAllClasses`, `textYieldOutcomes`, the two list
+// templates, `textYieldLuxembourg`, `textYieldEurope`, `noTextYield`, `noTextYieldReasons`, `noAnnexOutcomes` and
+// `notRecorded`) was reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the same delegation in
+// the addendum of 2026-10-27 "the text yield per class" (11 forms changed in review, the English with five of them: a
+// withheld text "n’est pas communiqué", never "retenu", which this table keeps for what is chosen, as in "les actes que
+// ce site a retenus"; a file "sans texte servi" or "sans article servi", never "sans texte", which would call the PDF a
+// scan; the caption over the versions the catalogue lists says "articles servis et fichiers détenus", never "détenus"
+// of the versions; the reasons say why this site serves no text, never that the publisher's version has none; the
+// catalogue "recense"; the acts counted "et pour", so they never read as the catalogue's; each sentence names "ce
+// site", since a page may carry the EU sentence alone; "libellés originaux", as `breadcrumbs.europeOriginal` says).
 // Typography: a no-break space (U+00A0) stands before : ; ! ? % and » and after «, and the apostrophe is ’.
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
@@ -845,6 +857,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       about: 'L’objet de cette page',
       counted: 'Comment ces décomptes sont établis',
       holds: 'Ce que ce montage contient',
+      textYield: 'Le texte que ce site sert, par catégorie d’actes',
       recorded: 'Ce que le corpus a consigné pour ses membres',
       asked: 'Ce qui peut être demandé à ce montage',
       history: 'Ce que ce montage conserve de son historique',
@@ -868,6 +881,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       nightlyDays: 'jours de conservation de la dernière construction de chaque jour',
       retentionEvaluatedAt: 'conservation décidée au',
       snapshotsWithoutText: 'constructions nommées par le journal dont ce montage ne détient pas le texte',
+      textYieldBlock: 'compté par la construction, dans le bloc',
     }),
     languagesHeld: 'Langues détenues : {languages}',
     captions: Object.freeze({
@@ -878,6 +892,9 @@ export const LIVE_CHROME_FR = Object.freeze({
       capabilities: 'Capacités mesurées, par opération, colonne, champ, langue et période',
       notServedData: 'Les données qui serviraient chaque opération sans route',
       snapshots: 'Instantanés dont ce montage détient le texte',
+      yieldClasses: 'Versions, actes, articles servis et fichiers détenus, par catégorie d’actes',
+      yieldReasons: 'Pourquoi ce site ne sert pas le texte d’une version ou d’un fichier, par catégorie d’actes',
+      yieldAnnexes: 'Résultats d’annexes consignés par le corpus, par catégorie d’actes',
     }),
     scrollable: '{caption}, zone défilante',
     columns: Object.freeze({
@@ -906,6 +923,25 @@ export const LIVE_CHROME_FR = Object.freeze({
       observation: 'observation',
       builtAt: 'construit le',
       keptAs: 'conservé au titre de',
+      yieldClass: 'catégorie',
+      yieldVersions: 'versions',
+      yieldVersionsWithText: 'versions avec texte',
+      yieldActs: 'actes',
+      yieldActsWithText: 'actes avec texte',
+      yieldArticles: 'articles servis',
+      yieldVersionsNotHeld: 'versions sans fichier détenu',
+      yieldFiles: 'fichiers détenus',
+      yieldFilesWithText: 'fichiers avec texte',
+      yieldFilesWithheld: 'fichiers dont le texte n’est pas communiqué',
+      yieldFilesPdfOnly: 'fichiers PDF sans texte servi',
+      yieldFilesParseFailed: 'fichiers admis sans article servi',
+      yieldOutcome: 'objet',
+      yieldReason: 'motif, tel que les données l’indiquent',
+      yieldCount: 'nombre',
+      yieldAnnexes: 'résultats d’annexes',
+      yieldAnnexesWithText: 'avec texte',
+      yieldAnnexesImageOnly: 'image seule',
+      yieldAnnexesFailed: 'en échec',
     }),
     held: Object.freeze({ true: 'oui', false: 'non' }),
     none: 'aucune',
@@ -923,6 +959,37 @@ export const LIVE_CHROME_FR = Object.freeze({
     narrowed: 'Cette réponse a été restreinte à {language} lors de la demande. Seules les lignes par langue et les capacités mesurées sont celles de cette langue. Les totaux, les membres ci-dessous et tout le reste de cette page concernent l’ensemble du montage.',
     unserved: 'L’index a mesuré une capacité pour {operations}, que ce montage ne sert pas. Ce que l’index a mesuré et ce que le montage sert sont deux faits distincts, et ici ils divergent.',
     notHeldRow: '{item} : {reason}',
+    textYieldPublishers: Object.freeze({ 'lu-legilux': 'Luxembourg', 'eu-eurlex': 'Union européenne' }),
+    textYieldClasses: Object.freeze({
+      'code/code': 'Codes',
+      'loi/as_published': 'Lois, telles que publiées',
+      'loi/consolidation': 'Lois, versions consolidées',
+      'rgd/as_published': 'Règlements grand-ducaux, tels que publiés',
+      'rgd/consolidation': 'Règlements grand-ducaux, versions consolidées',
+      'eu/original_legal_text': 'Actes de l’UE, libellés originaux',
+      'eu/consolidation': 'Actes de l’UE, libellés consolidés',
+    }),
+    textYieldFamilies: Object.freeze({ code: 'codes', loi: 'lois', rgd: 'règlements grand-ducaux' }),
+    textYieldAllClasses: '{publisher}, toutes catégories',
+    textYieldOutcomes: Object.freeze({
+      notHeld: 'version sans fichier détenu',
+      withheld: 'fichier dont le texte n’est pas communiqué',
+      withheldPdf: 'parmi ces fichiers, des PDF',
+      pdfOnly: 'fichier PDF sans texte servi',
+      parseFailed: 'fichier admis sans article servi',
+      annex: 'résultat d’annexe',
+    }),
+    textYieldListLast: '{items} et {last}',
+    textYieldListNext: '{items}, {item}',
+    textYieldLuxembourg: 'Ce site détient les {families} que publie Legilux : du texte pour {versionsWithText} des {versions} versions que recense son catalogue et pour {worksWithText} de ses {works} actes, soit {articles} articles en tout.',
+    textYieldEurope: 'Ce site détient des actes de l’Union européenne en anglais et en français : du texte pour {versionsWithText} des {versions} libellés que l’Office des publications recense pour les actes que ce site a retenus, soit {articles} articles en tout.',
+    noTextYield: 'Le rapport de construction de ce montage ne compte pas le texte servi par catégorie d’actes ; cette page n’en montre donc aucun décompte.',
+    noTextYieldReasons: 'Aucune version ni aucun fichier n’est compté ici sans texte.',
+    noAnnexOutcomes: Object.freeze({
+      'lu-legilux': 'Le corpus ne consigne aucun résultat d’annexe pour les actes luxembourgeois ; aucune de leurs annexes n’est donc comptée ici.',
+      'eu-eurlex': 'Le corpus ne consigne aucun résultat d’annexe pour les actes de l’UE ; aucune de leurs annexes n’est donc comptée ici.',
+    }),
+    notRecorded: 'non consigné',
   }),
   shell: Object.freeze({
     title: '{title} - Lex',
