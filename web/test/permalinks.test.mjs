@@ -142,6 +142,24 @@ test('an EU wording permalink names the act, the wording date, the digest and th
   assert.equal(parseSitePath(`/eu-eurlex/32016R0679/fra/2016-05-04--${DIGEST}`), null, 'the shape before R64 is moved, not read');
 });
 
+test("an EU act whose CELEX carries a solidus is one segment, the solidus written %2F, and is asked by the CELEX itself (review of #996, F1)", () => {
+  const path = `/eu-eurlex/12016E%2FTXT/2025-03-15--${DIGEST}/eng`;
+  assert.equal(europePermalink({ celex: '12016E/TXT', date: '2025-03-15', wordingSha256: DIGEST, language: 'eng' }), path, 'as the API mints it');
+  assert.equal(europePermalink({ celex: '12016E%2FTXT', date: '2025-03-15', wordingSha256: DIGEST, language: 'eng' }), path, 'a segment already written so is left as it is');
+  assert.deepEqual({ ...parseSitePath(`/fr${path}/001`) }, {
+    kind: 'state', publisher: 'eu-eurlex', identifier: '12016E/TXT', date: '2025-03-15', digest: DIGEST, language: 'eng', anchor: '001', locale: 'fr',
+    permalink: path, address: `${path}/001`,
+  });
+  assert.equal(currentAddress({ publisher: 'eu-eurlex', work: '12016P/TXT', language: 'fra', publisherId: '001' }), '/eu-eurlex/12016P%2FTXT/fra/001');
+  assert.equal(parseSitePath('/en/eu-eurlex/12016P%2FTXT/fra/001').work, '12016P/TXT');
+  assert.equal(parseSitePath('/en/eu-eurlex/12016M%2fTXT').identifier, '12016M/TXT', 'a lower-case escape reads the same');
+  for (const value of ['/en/eu-eurlex/12016E/TXT', '/en/eu-eurlex/12016E%2/TXT', '/en/eu-eurlex/12016E%2ETXT', `/eu-eurlex/12016E/TXT/2025-03-15--${DIGEST}/eng`]) {
+    assert.equal(parseSitePath(value), null, `${value}: a raw solidus or another escape names no address`);
+  }
+  assert.equal(europePermalink({ celex: '32016R0679', date: '2016-05-04', wordingSha256: DIGEST, language: 'fra' }), `/eu-eurlex/32016R0679/2016-05-04--${DIGEST}/fra`,
+    'every CELEX with no solidus keeps its bytes');
+});
+
 test("a work's address names the work, asked by its coordinate", () => {
   assert.deepEqual({ ...parseSitePath('/lu-legilux/loi-2017-03-14-a439') }, { kind: 'work', publisher: 'lu-legilux', identifier: '/lu-legilux/loi-2017-03-14-a439', locale: null });
   assert.deepEqual({ ...parseSitePath('/fr/eu-eurlex/32016R0679') }, { kind: 'work', publisher: 'eu-eurlex', identifier: '32016R0679', locale: 'fr' }, 'an EU act by its CELEX, as the API resolves it');

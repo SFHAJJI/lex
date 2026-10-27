@@ -47,7 +47,7 @@ Updated 2026-10-27.
   - `CONS.OTH`: one `CONS.OTH.DOC`, its own `BIB.INSTANCE` for language and date, and the one `ENACTING.TERMS` reached
     through `CONS.DOC.GEN` parts only (the TFEU's sits in a part beside its Protocols, the TEU's in the top part). The
     Protocols, Annexes and Declarations sit under `CONTENTS` with `ENACTING.TERMS` of their own and stay out, as an act's
-    annexes do. Over the 48 retained packages: the TFEU's 358 articles and the TEU's 55 in every one, no duplicate identifier.
+    annexes do, each listed as a typed row since the review of #996 (below). Over the 48 retained packages: the TFEU's 358 articles and the TEU's 55 in every one, no duplicate identifier.
   - `GENERAL`: the main body only of a package with no act root, the one `GENERAL` unit that carries an `ENACTING.TERMS`
     (the Charter's contents page carries none); a `GENERAL` unit beside an act (a Commission statement) is never read.
   - The package is read in two passes (every XML entry checked as before, then the one main unit read again), so no more
@@ -58,10 +58,10 @@ Updated 2026-10-27.
   16's package and population checkpoints reopen unchanged. The producer reads the main body as
   `admitted_annexes_unclassified` (corpus `formex_main_body_admitted_annexes_unclassified`), and the EU index serves its
   articles as an acquired package's. The annexes stay unclassified for the stated reason and never enter the main body; the
-  dossier's `annexes_not_served` stays empty for them, which its note already says is not a claim that the act has none.
+  dossier and the reading list them as one typed row, `annex_unclassified`, since the review of #996 (below).
 - **Driver decisions (reversible).**
   - **A Treaty's own articles are its text; its Protocols and Declarations are not**, as an act's annexes are not: they are
-    left out, not merged, and stay readable at the official source.
+    left out, not merged, listed as typed rows, and stay readable at the official source.
   - **A package's main body does not wait on its annexes.** The annex chain classifies annexes against the PDF; its failure
     says nothing about the act's articles, which the admitted package holds as it holds an annex-free act's.
   - **The 2012 Treaty package is not guessed.** It holds both Treaties, a draft decision and the Protocols as separate act
@@ -147,12 +147,14 @@ Updated 2026-10-27.
   `formex_main_body_package_not_acquired` to `formex_main_body_admitted_annexes_unclassified`); every EU member's main-body
   semantic identity moves, because profile /5 is in it. The article identity and text digest do not name the profile, so the
   173,820 articles served today keep their permalinks: the probe derives every one with the same identity and text digest. The EU capability
-  manifest's cells grow with the new articles.
-- **Corpus lex-corpus/6, same schema:** the EU profile digest in its profile identities, the members above, and one new
-  disposition token in its closed vocabulary. Its digest moves, so the Luxembourg index's stamp and capability manifest move
+  manifest's cells grow with the new articles. With the review's repair, the member rows also carry the parts not served
+  (below).
+- **Corpus lex-corpus/6, same schema:** the EU profile digest in its profile identities, the members above, and three new
+  disposition tokens in its closed vocabulary (one main-body and, with the review's repair, two annex ones). Its digest moves, so the Luxembourg index's stamp and capability manifest move
   with it; no Luxembourg row changes.
 - **D1's inputs stay valid:** inputs /3 name only the Luxembourg re-derivation's rules, which this slice does not touch; a
-  rerun at this head with the same inputs gives the new EU half. Nothing in the API or the web changes.
+  rerun at this head with the same inputs gives the new EU half. The API and the web change only as the review's repair
+  says (below): a CELEX's solidus is written `%2F` in every address, and the two new annex rows have their reasons and lines.
 - **The EU index alone, locally.** The derive builds it from the combined corpus, which needs the Luxembourg R0 and R1 (D1's
   34 GiB). The EU half alone (the acquisition reopened and the main-body producer) runs here in 31 minutes at a peak
   working set of 2.6 GB, which is what the probe does, and gives the EU index's whole content (the index projects exactly
@@ -200,6 +202,90 @@ Updated 2026-10-27.
     failed, in 15 minutes.
   - The custody counts above: read by digest from run 16's custody (Python, brotli, SHA-256 checked) and from derive-r1's
     index opened `immutable=1`.
+
+### Review and repair (#996)
+
+- **The review** (the other model family, Decision 95): REPAIR, two findings and two low notes, each reproduced. One
+  repair round; all four are answered here.
+- **F1 (high): a CELEX with a solidus broke every address of its act.** Profile /5 serves four CELEX with a solidus
+  (`12016E/TXT`, `12016M/TXT`, `12016P/TXT`, `12012P/TXT`, with the consolidated `02016E/TXT-…` and `02016M/TXT-…`): 10,128
+  of the 17,850 articles a re-derivation adds (the Treaties' 9,912 and the Charter's 216). Their permalinks had six
+  segments, so no reader parsed them back.
+  - **Fixed: the CELEX is one path segment everywhere, its solidus written `%2F`.** The API mints every EU address through
+    `V3CorpusMount.EuropeWorkSegment` (the permalink, the article permalink, the stable coordinate, the act's address, the
+    readable address and the reference reader's addresses) and reads one back through `EuropeCelexOfSegment` (letters,
+    digits, `( ) . _ -` and `%2F` or `%2f`; any other escape, or a bare solidus, is no CELEX segment). The same in the web
+    (`permalinks.mjs`: `europeWorkSegment`, `europeCelexOfSegment`, `europePermalink`, `currentAddress`, `parseSitePath`;
+    `search-engines.mjs`; `reading-answer.mjs`'s stable coordinate), in the server's site paths (`V3WebRoot`, its EU
+    pattern before R64 too) and in the sitemap's dossier identifiers. The shared site-paths table gains 9 rows: a slash
+    CELEX's dossier (with the lower-case escape too), its permalink and article permalink, its readable address at an
+    article, its bare address redirected, its permalink before R64 moved to R64's, and a bare solidus and a broken escape,
+    which serve no page.
+  - **Driver decision (reversible): `%2F`.** R64 fixes the permalink as `/{publisher}/{work}/{date}--{digest}/{language}`
+    with the work one segment; percent-encoding is the one way RFC 3986 gives to carry a reserved `/` inside a segment, and
+    ASP.NET Core keeps `%2F` undecoded in the request path. A substitute character would be ambiguous: `_`, `-` and `.`
+    are CELEX characters already.
+  - **Byte-identical elsewhere.** Only `/` is replaced, so a CELEX without one keeps its bytes: derive-r1's EU index serves
+    173,820 articles and none has a solidus in its CELEX (read `immutable=1`), so no served permalink moves; the answer
+    samples and the legacy answers are unchanged, and their tests pass.
+- **F2 (medium): the parts left out had no row.** The annexes of an admitted package whose annex chain did not close, and
+  the Treaties' Protocols, Annexes, Declarations and tables of equivalences, were left out with nothing listed.
+  - **Fixed: each is a typed row of `annexes_not_served`**, on the dossier and on the reading, with its count, identities,
+    `served_as` `text_not_available`, reason and official source, as an annex the corpus classified is. The producer
+    names them (`EuFormexMainBodyLegalContentOutcome.PartsNotServed`, kind `annex_unclassified` or
+    `treaty_part_not_served`, in the outcome's semantic identity); the corpus writes each as a `europe_annex_body` outcome
+    on the member the articles are read from (dispositions `annex_unclassified` 30, `treaty_part_not_served` 31); the EU
+    index copies them into its member rows; the API gives each its fixed reason; the web's closed list
+    (`europe-annexes.mjs`) admits both, and `LiveAnswer` says a Treaty's parts with their own line
+    (`common.europeTreatyParts`), an unclassified annex with the annex line.
+  - **Counted.** An unclassified annex: one identity per member of the retained inventory (the expression, the package
+    entry, the inventory's identity, the member's sequence and the reason); 86 expressions at a re-derivation (76
+    `annex_xhtml_not_inventoried`, 10 `annex_pdf_not_served`), from at most 464 annex units in the class's 92 retained
+    packages. A Treaty's parts: each `CONS.DOC.GEN` part beside the Treaty's own, unit by unit (each child of its
+    `CONTENTS`): the TFEU's 48 (41 Protocols, 2 Annexes, 3 groups of Declarations, 2 tables), the TEU's 46, 45 to 47 in four
+    packages; 2,252 over the 48 packages (counted read-only from run 16's custody).
+  - **Wording.** The two reasons and the four forms of `common.europeTreatyParts` were reviewed by one independent reviewer
+    (Claude, AI reviewer, not the author) under the owner's delegation (Decision 41), in the addendum of 2026-10-27 in
+    `C:\lex-v3\lanes\fr-review\review.md`: 6 forms, all changed, the English too. The Declarations are annexed to the
+    Final Act and the tables of equivalences to the Treaty of Lisbon, so an item is "published with" the Treaty, never
+    "annexed to" it; "item", never "part"; "the {language} wording of the Treaty"; "or" in the plural. The finals are
+    applied byte for byte (a script checks each).
+  - **R84 and R59.** Met by these rows: nothing is called image-only without positive evidence, each part left out is
+    listed with a typed reason, and each is `text_not_available`, officially linked and out of search, quotes and exports.
+    Not met, and not this slice: R84's annexes served as provisions with their text and Coverage's annex counts per
+    publisher, and R59's "annex N of act X" opening the annex's card (the rows carry no number or heading in the API; the
+    producer keeps each part's title).
+- **Low note: TFEU identifier `001` 31 times.** Those are the Protocols' own articles, which profile /5 never reads: the
+  Treaty's one `ENACTING.TERMS` holds unique identifiers (the TFEU's 358 and the TEU's 55 in each of the 48 packages), an
+  article's identity hashes its expression, package entry, identifier, heading, language, date, text and tokens, and a
+  duplicate identity refuses the package. The Treaty test now asserts every identifier distinct and the Protocols one
+  `treaty_part_not_served` part.
+- **Low note: a checkpoint reopen with a retained inventory.** `EuFormexPopulationCheckpointTests` gains shape 5 (an annex
+  package whose held body has no annex convention): the reopened outcome's retained inventory and receipt equal the
+  captured ones, with no annex classified.
+- **Tests** (new or changed): `EuropeSlashCelexMountTests` (`12016P/TXT`, `12016E/TXT`, `32016R0679`, through the API:
+  dossier, evidence_bundle by CELEX, by article and by permalink, verify of the permalink and the article permalink, search
+  opening each of the five addresses, and as_of naming no bare solidus); `EuropeNotServedPartsMountTests` (each new
+  disposition through the corpus, the index and the API, on the dossier and the reading); the producer, checkpoint, annex
+  reason and census tests above; web `permalinks.test.mjs` (a slash CELEX encoded, idempotent, read back, the lower-case
+  escape, a bare solidus and other escapes refused, a CELEX without one unchanged) and `live-dossier.test.mjs` (both lines).
+- **Measured** (Windows, no browser, no publisher traffic, no Azure; custody and derive-r1 read only; free disk 5.0 to 5.4 GB):
+  - `dotnet build` of `tests/Lex.V3.Ingest.Tests` and `tests/Lex.V3.Tests` (Release): 0 warnings, 0 errors.
+  - The producer, checkpoint, census and the two new mount classes: 34, 31 passed and 3 failed: the new slash test asked
+    `resolve`, which takes no EU permalink for any CELEX (the GDPR's neither); it now searches each address, and passes 3 of 3.
+  - The censuses, `V3EuropePermalinkTests`, `EuropeIndexBuilderTests`, `LexCorpus6BuilderTests`,
+    `EuFormexPackageOutcomePopulationTests`, `EuAnnexControlCaseTests`: 120, 115 passed, 3 skipped (env-gated), 2 failed
+    (the partition and declaration totals for the new closed vocabulary, pinned 278, 107 and 87); the censuses again: 38,
+    36 passed, 2 skipped.
+  - The EU mount classes (`V3CorpusEurope*`), pinned permalinks, verify, reference, resolve, `EuConsolidatedFirstMountTests`
+    and the legacy schema 6 and 8 mounts: 159, 156 passed, 2 skipped, 1 failed (the annex reasons' closed list, now seven).
+  - `V3CorpusEuropeAnnexTests` (now seven dispositions), `EuFormexPackagePopulationProducerTests` (with the two new mount
+    classes), `LexCorpus6MountViewTests`, `EuFormexAnnexClassificationReconciliationTests`: 113, 112 passed, 1 skipped
+    (env-gated).
+  - `Lex.V3.Tests` `V3WebRoot*` (the site-paths table, the search engines, the 404): 22 passed.
+  - Web: `node scripts/build.mjs`, then `node --test` over 17 files (permalinks, live dossier, dossier answer, the chrome
+    and its scan, localization, search engines, reading answer, the EU reading, live, pinned and pages readings, evidence
+    bundle, dossier, legal pages, live SSR): 186 passed.
 
 ## The PDF layout reads no host font: a Windows and a Linux derive write the same PDF artefacts (sole driver, 2026-10-27)
 

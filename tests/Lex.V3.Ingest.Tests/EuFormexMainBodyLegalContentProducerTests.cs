@@ -106,6 +106,14 @@ public sealed class EuFormexMainBodyLegalContentProducerTests
         Assert.IsTrue(outcome.Articles.All(a => a.Language == "EN" && a.PublisherDate == "20160504"));
         Assert.IsFalse(outcome.Articles.Any(a => a.SearchableText.Contains("PROTOCOL_SENTINEL", StringComparison.Ordinal)),
             "a Protocol's articles are not the Treaty's.");
+        // The identity of an article is its whole coordinate, and its identifier is unique in the Treaty's own text: the
+        // Protocol's own Article 1 (identifier "001", as the GDPR's first) is left out, so no two served articles share one.
+        Assert.HasCount(99, outcome.Articles.Select(static a => a.PublisherIdentifier).Distinct(StringComparer.Ordinal));
+        // The left-out Protocol is a typed part not served (review of #996, F2), titled by its group.
+        var part = outcome.PartsNotServed.Single();
+        Assert.AreEqual(EuFormexMainBodyPartKind.TreatyPartNotServed, part.Kind);
+        Assert.AreEqual("PROTOCOLS", part.Title);
+        Assert.AreEqual(64, part.IdentitySha256.Length);
     }
 
     [TestMethod]
@@ -198,6 +206,9 @@ public sealed class EuFormexMainBodyLegalContentProducerTests
         AssertDigests(bytes, outcome.Articles);
         Assert.IsTrue(outcome.Articles.All(static article => article.PackageEntry == "L_202601965EN.000101.fmx.xml"));
         StringAssert.Contains(outcome.Detail, "1 annex member(s) are not classified: annex_xhtml_not_inventoried");
+        var annex = outcome.PartsNotServed.Single();
+        Assert.AreEqual(EuFormexMainBodyPartKind.AnnexUnclassified, annex.Kind);
+        Assert.AreEqual(inventory.Inventory.Members[0].Title, annex.Title);
         Assert.IsTrue(EuFormexMainBodyLegalContentProducer.CarriesArticles(outcome.Disposition));
         Assert.AreEqual(LexCorpus6Stage3Disposition.FormexMainBodyAdmittedAnnexesUnclassified,
             LexCorpus6Builder.FormexMainBodyDisposition(outcome.Disposition));
@@ -208,12 +219,13 @@ public sealed class EuFormexMainBodyLegalContentProducerTests
             EuFormexAnnexClassificationReconciliationTests.Reconciliation(run, [withoutInventory]), CancellationToken.None);
         Assert.AreEqual(EuFormexMainBodyLegalContentDisposition.PackageNotAcquired, typed.Outcomes.Single().Disposition);
         Assert.HasCount(0, typed.Outcomes.Single().Articles);
+        Assert.HasCount(0, typed.Outcomes.Single().PartsNotServed);
 
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => EuFormexPackageOutcome.NotAcquired(expression,
             EuFormexPackageNotAcquiredReason.BodyNotHeld, "no body", inventory.Inventory));
     }
 
-    private static void AsConsolidatedTreaty(XElement root, string shape)
+    internal static void AsConsolidatedTreaty(XElement root, string shape)
     {
         root.Name = "CONS.OTH";
         var document = root.Element("CONS.DOC")!;
@@ -271,10 +283,10 @@ public sealed class EuFormexMainBodyLegalContentProducerTests
         return PortableZip.Normalise(output.ToArray());
     }
 
-    private static Task<byte[]> ReadConsolidatedPackage(string language) => File.ReadAllBytesAsync(Path.Combine(
+    internal static Task<byte[]> ReadConsolidatedPackage(string language) => File.ReadAllBytesAsync(Path.Combine(
         AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", $"gdpr-consolidated-{language}-fmx4-body.bin"));
 
-    private static byte[] RewriteConsolidated(byte[] package, Action<XElement> rewrite)
+    internal static byte[] RewriteConsolidated(byte[] package, Action<XElement> rewrite)
     {
         using var input = new MemoryStream(package);
         using var archive = new ZipArchive(input, ZipArchiveMode.Read);

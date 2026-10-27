@@ -124,18 +124,37 @@ public sealed class EuFormexMainBodyArticle
     }
 }
 
+/// <summary>What a part of an admitted main body's document that is not served as text is (review of #996, F2).</summary>
+public enum EuFormexMainBodyPartKind
+{
+    /// <summary>An annex unit of an admitted package whose annex chain did not close: not classified against the PDF.</summary>
+    [JsonStringEnumMemberName("annex_unclassified")] AnnexUnclassified = 1,
+
+    /// <summary>A Protocol, Annex, Declaration or table of equivalences published with a consolidated Treaty, which is not one of the Treaty's articles.</summary>
+    [JsonStringEnumMemberName("treaty_part_not_served")] TreatyPartNotServed = 2,
+}
+
+/// <summary>
+/// One part of an admitted main body's package that is not served as text, typed and counted so that no reader takes the
+/// act for one without it: its identity (the kind, the expression, the package entry, the part's place and its own text's
+/// digest), its kind and the publisher's title for it.
+/// </summary>
+public sealed record EuFormexMainBodyPartNotServed(string IdentitySha256, EuFormexMainBodyPartKind Kind, string Title);
+
 public sealed class EuFormexMainBodyLegalContentOutcome
 {
     internal EuFormexMainBodyLegalContentOutcome(
         EuFormexPackageOutcome source,
         EuFormexMainBodyLegalContentDisposition disposition,
         IReadOnlyList<EuFormexMainBodyArticle> articles,
-        string? detail)
+        string? detail,
+        IReadOnlyList<EuFormexMainBodyPartNotServed>? partsNotServed = null)
     {
         Source = source;
         Disposition = disposition;
         Articles = Array.AsReadOnly(articles.ToArray());
         Detail = detail;
+        PartsNotServed = Array.AsReadOnly((partsNotServed ?? []).ToArray());
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         EuFormexMainBodyArticle.Append(hash, "lex-v3-eu-formex-main-body-outcome/1");
         EuFormexMainBodyArticle.Append(hash, EuFormexMainBodyLegalContentProducer.Profile);
@@ -144,10 +163,18 @@ public sealed class EuFormexMainBodyLegalContentOutcome
         EuFormexMainBodyArticle.Append(hash, ((int)disposition).ToString(System.Globalization.CultureInfo.InvariantCulture));
         foreach (var article in Articles) EuFormexMainBodyArticle.Append(hash, article.IdentitySha256);
         EuFormexMainBodyArticle.Append(hash, detail ?? "");
+        foreach (var part in PartsNotServed)
+        {
+            EuFormexMainBodyArticle.Append(hash, ((int)part.Kind).ToString(System.Globalization.CultureInfo.InvariantCulture));
+            EuFormexMainBodyArticle.Append(hash, part.IdentitySha256);
+        }
         SemanticIdentitySha256 = Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
     public EuFormexPackageOutcome Source { get; }
+
+    /// <summary>The parts of the admitted package that are not served as text, each typed; empty for every other outcome.</summary>
+    public IReadOnlyList<EuFormexMainBodyPartNotServed> PartsNotServed { get; }
     public EuFormexMainBodyLegalContentDisposition Disposition { get; }
     public IReadOnlyList<EuFormexMainBodyArticle> Articles { get; }
     public string? Detail { get; }
@@ -237,12 +264,19 @@ public sealed class EuFormexMainBodyLegalContentProducer
             var parsed = Parse(source, bytes, cancellationToken);
             if (annexChainOpen && parsed.Disposition == EuFormexMainBodyLegalContentDisposition.Admitted)
             {
+                // Each annex unit the admitted inventory names stays a typed part: not classified, never text.
+                var reason = ContractWireName(source.NotAcquiredReason);
+                var annexes = inventory.Members.Select(member => new EuFormexMainBodyPartNotServed(
+                        PartIdentity(EuFormexMainBodyPartKind.AnnexUnclassified, source.ExpressionIdentity.PublisherExpressionId,
+                            member.PackageEntry, inventory.IdentitySha256, member.Sequence, reason),
+                        EuFormexMainBodyPartKind.AnnexUnclassified, member.Title))
+                    .ToArray();
                 outcomes.Add(new(source, EuFormexMainBodyLegalContentDisposition.AdmittedAnnexesUnclassified, parsed.Articles,
-                    $"the package's {inventory.Members.Count} annex member(s) are not classified: {ContractWireName(source.NotAcquiredReason)}"));
+                    $"the package's {inventory.Members.Count} annex member(s) are not classified: {reason}", annexes));
                 continue;
             }
 
-            outcomes.Add(new(source, parsed.Disposition, parsed.Articles, parsed.Detail));
+            outcomes.Add(new(source, parsed.Disposition, parsed.Articles, parsed.Detail, parsed.Parts));
         }
         return new EuFormexMainBodyLegalContentPopulation(formex, outcomes);
     }
@@ -274,7 +308,7 @@ public sealed class EuFormexMainBodyLegalContentProducer
     };
 
     private static (EuFormexMainBodyLegalContentDisposition Disposition,
-        IReadOnlyList<EuFormexMainBodyArticle> Articles, string? Detail) Parse(
+        IReadOnlyList<EuFormexMainBodyArticle> Articles, string? Detail, IReadOnlyList<EuFormexMainBodyPartNotServed> Parts) Parse(
         EuFormexPackageOutcome source,
         ReadOnlyMemory<byte> packageBytes,
         CancellationToken cancellationToken)
@@ -349,7 +383,7 @@ public sealed class EuFormexMainBodyLegalContentProducer
                     .Where(static value => value.Name.LocalName == "BIB.INSTANCE").ToArray();
                 // A consolidated act's operative text is its document's own ENACTING.TERMS. A consolidated Treaty's is the
                 // one ENACTING.TERMS reached through CONS.DOC.GEN parts only: the Protocols, Annexes and Declarations
-                // annexed to it sit under CONTENTS, each with ENACTING.TERMS of its own, and are not the Treaty's articles.
+                // published with it sit under CONTENTS, each with ENACTING.TERMS of its own, and are not the Treaty's articles.
                 var operative = rootName == "CONS.ACT"
                     ? documents[0].Elements().Where(static value => value.Name.LocalName == "ENACTING.TERMS").ToArray()
                     : documents[0].Descendants().Where(value => value.Name.LocalName == "ENACTING.TERMS" &&
@@ -434,8 +468,11 @@ public sealed class EuFormexMainBodyLegalContentProducer
             if (articles.Count == 0)
                 return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
                     "the retained Formex main body contains no ARTICLE unit");
+            // A consolidated Treaty's Protocols, Annexes, Declarations and tables are left out of its articles, and are
+            // typed and counted as parts not served (Art. 51 TEU makes the Protocols and Annexes integral to the Treaties).
+            var parts = rootName == "CONS.OTH" ? TreatyPartsNotServed(source, mainEntry.FullName, document.Root!, articleRoot) : [];
             return (EuFormexMainBodyLegalContentDisposition.Admitted,
-                Array.AsReadOnly(articles.ToArray()), null);
+                Array.AsReadOnly(articles.ToArray()), null, parts);
         }
         catch (InvalidDataException exception)
         {
@@ -621,7 +658,60 @@ public sealed class EuFormexMainBodyLegalContentProducer
         name.Split('/').All(static part => part.Length != 0 && part != "." && part != "..");
 
     private static (EuFormexMainBodyLegalContentDisposition Disposition,
-        IReadOnlyList<EuFormexMainBodyArticle> Articles, string Detail) Refused(
+        IReadOnlyList<EuFormexMainBodyArticle> Articles, string Detail, IReadOnlyList<EuFormexMainBodyPartNotServed> Parts) Refused(
         EuFormexMainBodyLegalContentDisposition disposition,
-        string detail) => (disposition, Array.Empty<EuFormexMainBodyArticle>(), detail);
+        string detail) => (disposition, Array.Empty<EuFormexMainBodyArticle>(), detail, Array.Empty<EuFormexMainBodyPartNotServed>());
+
+    /// <summary>
+    /// The parts of a consolidated Treaty's document that are not its own text: each <c>CONS.DOC.GEN</c> part that neither is
+    /// nor holds the Treaty's own <c>ENACTING.TERMS</c> (the Protocols, the Annexes, the Declarations, the tables of
+    /// equivalences), counted unit by unit (each child of its <c>CONTENTS</c>, or the part when it has none), in the
+    /// document's order. Each is titled by its own <c>TITLE</c>, else its group's.
+    /// </summary>
+    private static IReadOnlyList<EuFormexMainBodyPartNotServed> TreatyPartsNotServed(
+        EuFormexPackageOutcome source, string entry, XElement root, XElement operative)
+    {
+        var held = operative.AncestorsAndSelf().ToHashSet();
+        var parts = new List<EuFormexMainBodyPartNotServed>();
+        var groups = root.Descendants().Where(value => value.Name.LocalName == "CONS.DOC.GEN" && !held.Contains(value) &&
+                value.Parent is { } parent && parent.Name.LocalName == "CONS.DOC.GEN" && held.Contains(parent))
+            .ToArray();
+        for (var group = 0; group < groups.Length; group++)
+        {
+            var groupTitle = TitleOf(groups[group]);
+            var contents = groups[group].Elements().FirstOrDefault(static value => value.Name.LocalName == "CONTENTS");
+            var units = contents?.Elements().ToArray() is { Length: > 0 } listed ? listed : [groups[group]];
+            for (var unit = 0; unit < units.Length; unit++)
+            {
+                var title = TitleOf(units[unit]);
+                parts.Add(new EuFormexMainBodyPartNotServed(
+                    PartIdentity(EuFormexMainBodyPartKind.TreatyPartNotServed, source.ExpressionIdentity.PublisherExpressionId, entry,
+                        group.ToString(System.Globalization.CultureInfo.InvariantCulture), unit.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(NormalizedText(units[unit]))))),
+                    EuFormexMainBodyPartKind.TreatyPartNotServed,
+                    title.Length > 0 ? title : groupTitle));
+            }
+        }
+
+        return Array.AsReadOnly(parts.ToArray());
+    }
+
+    private static string TitleOf(XElement element) =>
+        element.Elements().FirstOrDefault(static value => value.Name.LocalName == "TITLE") is { } title ? NormalizedText(title) : string.Empty;
+
+    private static string NormalizedText(XElement element) =>
+        string.Join(' ', string.Concat(element.DescendantNodes().OfType<XText>().Select(static text => text.Value))
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+    /// <summary>A part's identity: its kind, the expression, the package entry and the coordinates that place it.</summary>
+    private static string PartIdentity(EuFormexMainBodyPartKind kind, string expression, string entry, params string[] coordinates)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        EuFormexMainBodyArticle.Append(hash, "lex-v3-eu-formex-main-body-part/1");
+        EuFormexMainBodyArticle.Append(hash, ((int)kind).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        EuFormexMainBodyArticle.Append(hash, expression);
+        EuFormexMainBodyArticle.Append(hash, entry);
+        foreach (var coordinate in coordinates) EuFormexMainBodyArticle.Append(hash, coordinate);
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
 }

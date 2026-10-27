@@ -114,6 +114,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "NotEligible, PackageUnavailable, PackageRefused, RetainedBytesUnavailable, "
                     + "PackageUnreadable, XmlRejected, MainBodyMissing, UnsupportedContentShape, "
                     + "PackageNotAcquired, RouteRefused, PackageRejected, AdmittedAnnexesUnclassified",
+                "Lex.V3.Ingest.Europe.EuFormexMainBodyPartKind: AnnexUnclassified, TreatyPartNotServed",
                 "Lex.V3.Ingest.Europe.EuFormexMainBodyTokenKind: Text, Reference, Footnote",
                 "Lex.V3.Ingest.Europe.EuFormexManifestationEnumerationRefusal: None, EnumerationRefused, Enumeratio"
                     + "nProofRefused, VerifiedRowsRefused, RowNotAdmitted, RowNamesAnotherExpression, ManifestationBindin"
@@ -226,7 +227,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "FormexMainBodyMissing, FormexMainBodyUnsupportedContentShape, "
                     + "AknMarkerOnlyEvidence, FormexMainBodyPackageNotAcquired, "
                     + "FormexMainBodyRouteRefused, FormexMainBodyPackageRejected, "
-                    + "FormexMainBodyAdmittedAnnexesUnclassified",
+                    + "FormexMainBodyAdmittedAnnexesUnclassified, AnnexUnclassified, TreatyPartNotServed",
                 "Lex.V3.Ingest.LexCorpus6Stage3OutcomeDomain: LuxembourgAknLegalContent, "
                     + "LuxembourgPublisherPdfActScope, EuropeAnnexBody, EuropeFormexMainBody",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgAknArticleInventoryDisposition: Inventoried, "

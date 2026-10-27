@@ -78,6 +78,10 @@ public enum LexCorpus6Stage3Disposition
     [JsonStringEnumMemberName("akn_marker_only_evidence")] AknMarkerOnlyEvidence = 25,
     /// <summary>An admitted Formex package's main body, read while its annexes stay unclassified (its annex chain did not close).</summary>
     [JsonStringEnumMemberName("formex_main_body_admitted_annexes_unclassified")] FormexMainBodyAdmittedAnnexesUnclassified = 29,
+    /// <summary>An annex unit of an admitted package whose annex chain did not close: not classified, never served as text.</summary>
+    [JsonStringEnumMemberName("annex_unclassified")] AnnexUnclassified = 30,
+    /// <summary>A Protocol, Annex, Declaration or table of equivalences published with a consolidated Treaty: not one of the Treaty's articles, never served as text.</summary>
+    [JsonStringEnumMemberName("treaty_part_not_served")] TreatyPartNotServed = 31,
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -109,7 +113,8 @@ public sealed record LexCorpus6Stage3Outcome(
                 LexCorpus6Stage3Disposition.PdfActScopeUnproven,
             LexCorpus6Stage3OutcomeDomain.EuropeAnnexBody => disposition is >=
                 LexCorpus6Stage3Disposition.AnnexTextNotAvailable and <=
-                LexCorpus6Stage3Disposition.AnnexMappedPageOutsideDocument,
+                LexCorpus6Stage3Disposition.AnnexMappedPageOutsideDocument
+                or LexCorpus6Stage3Disposition.AnnexUnclassified or LexCorpus6Stage3Disposition.TreatyPartNotServed,
             LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody => disposition is >=
                 LexCorpus6Stage3Disposition.FormexMainBodyAdmitted and <=
                 LexCorpus6Stage3Disposition.FormexMainBodyUnsupportedContentShape
@@ -1460,6 +1465,22 @@ public static class LexCorpus6Builder
                     LexCorpus6Stage3OutcomeDomain.EuropeFormexMainBody,
                     outcome.SemanticIdentitySha256,
                     FormexMainBodyDisposition(outcome.Disposition)));
+
+            // The parts of the admitted package that are not served as text, each typed on the member its articles are
+            // read from, where the answers list annexes not served (review of #996, F2).
+            foreach (var part in outcome.PartsNotServed)
+            {
+                Add(pair.Value,
+                    new LexCorpus6Stage3Outcome(
+                        LexCorpus6Stage3OutcomeDomain.EuropeAnnexBody,
+                        part.IdentitySha256,
+                        part.Kind switch
+                        {
+                            Europe.EuFormexMainBodyPartKind.AnnexUnclassified => LexCorpus6Stage3Disposition.AnnexUnclassified,
+                            Europe.EuFormexMainBodyPartKind.TreatyPartNotServed => LexCorpus6Stage3Disposition.TreatyPartNotServed,
+                            _ => throw new InvalidOperationException("Unknown EU main-body part."),
+                        }));
+            }
         }
 
         return collected.ToDictionary(
