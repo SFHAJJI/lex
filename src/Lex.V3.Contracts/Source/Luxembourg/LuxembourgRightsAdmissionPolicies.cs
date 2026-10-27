@@ -157,7 +157,7 @@ public static class LuxembourgRightsAdmissionPolicies
     public static bool Admits(string? sha256, LuxembourgRightsChannelResolution resolution)
     {
         ArgumentNullException.ThrowIfNull(resolution);
-        return Admits(sha256, resolution.Disposition, resolution.LicencePage?.ObservedLive);
+        return Admits(sha256, resolution.Disposition, resolution.LicencePage()?.ObservedLive);
     }
 
     /// <summary>Whether the registered policy <paramref name="sha256"/> admits any single-channel disposition (one of the owner's rulings is on).</summary>

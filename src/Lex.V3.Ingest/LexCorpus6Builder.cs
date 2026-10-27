@@ -356,7 +356,7 @@ public sealed record LexCorpus6LuxembourgRights(
 {
     /// <summary>
     /// The SHA-256 of the resolution rule a re-derivation re-bound these rights under (resolution /2,
-    /// <see cref="LuxembourgRightsChannels.ResolutionV2ProfileSha256"/>); null, and absent on the wire, for rights as the
+    /// <see cref="LuxembourgRightsChannels.ResolutionTwoProfileSha256"/>); null, and absent on the wire, for rights as the
     /// acquisition resolved them, whose block and binding are what they always were.
     /// </summary>
     public string? ResolutionRule { get; init; }
@@ -389,7 +389,7 @@ public sealed record LexCorpus6LuxembourgRights(
         ArgumentNullException.ThrowIfNull(BoundRunIdentity);
         ArgumentNullException.ThrowIfNull(memberRunIdentity);
         if (ResolutionRule is not null &&
-            !string.Equals(ResolutionRule, LuxembourgRightsChannels.ResolutionV2ProfileSha256, StringComparison.Ordinal))
+            !string.Equals(ResolutionRule, LuxembourgRightsChannels.ResolutionTwoProfileSha256, StringComparison.Ordinal))
         {
             throw new ArgumentException(
                 "The Luxembourg rights name a resolution rule this build does not implement.", nameof(ResolutionRule));
@@ -421,7 +421,7 @@ public sealed record LexCorpus6LuxembourgRights(
                 nameof(Disposition));
         }
 
-        if (ResolutionRule is null && IsResolutionV2Only(Disposition))
+        if (ResolutionRule is null && IsResolutionTwoOnly(Disposition))
         {
             throw new ArgumentException(
                 "A disposition only resolution /2 makes is carried only by rights re-bound under it.", nameof(Disposition));
@@ -512,10 +512,10 @@ public sealed record LexCorpus6LuxembourgRights(
             or LuxembourgRightsChannelDisposition.TypedQuarantineInFileReadingRejected
             or LuxembourgRightsChannelDisposition.Conflict
             or LuxembourgRightsChannelDisposition.Multiple
-            || IsResolutionV2Only(disposition);
+            || IsResolutionTwoOnly(disposition);
 
     /// <summary>The six dispositions only resolution /2 makes.</summary>
-    internal static bool IsResolutionV2Only(LuxembourgRightsChannelDisposition disposition) =>
+    internal static bool IsResolutionTwoOnly(LuxembourgRightsChannelDisposition disposition) =>
         disposition is LuxembourgRightsChannelDisposition.AgreedCcByRederived
             or LuxembourgRightsChannelDisposition.SparqlCcByInFileNamesOtherIdentity
             or LuxembourgRightsChannelDisposition.SparqlCcByInFileSilent
@@ -993,7 +993,7 @@ public sealed record LexCorpus6ManifestSet(
                     rights.BindingSha256,
                     LexCorpus6LuxembourgRights.ComputeBindingSha256(
                         member.RunIdentity, rights.BoundRunIdentity, rights.SelectedWemi.IdentitySha256, rights.ResolutionRule,
-                        Luxembourg.LuxembourgInFileRightsReader.ReadingV2ProfileSha256, LuxembourgRightsAdmissionPolicy!,
+                        Luxembourg.LuxembourgInFileRightsReader.ReadingTwoProfileSha256, LuxembourgRightsAdmissionPolicy!,
                         LuxembourgRederivation!),
                     StringComparison.Ordinal))
             {
@@ -1294,7 +1294,7 @@ public static class LexCorpus6Builder
             // disposition admits only with its licence page, under option (b) only one observed live.
             var policy = profileEnvelope.LuxembourgRederivation?.AdmissionPolicySha256;
             var admitted = LuxembourgRightsAdmissionPolicies.Admits(policy, rights);
-            if (rights.ResolutionRuleSha256 is not null && profileEnvelope.LuxembourgRederivation is null)
+            if (rights.ResolutionRuleSha256() is not null && profileEnvelope.LuxembourgRederivation is null)
             {
                 refusal = LexCorpus6BuildRefusal.LuxembourgRightsEvidenceIncomplete;
                 detail = $"{record.ObjectRef.PublisherUri}: rights re-bound under resolution /2 without a re-derivation record";
@@ -1312,7 +1312,7 @@ public static class LexCorpus6Builder
             // single-channel body the policy names but whose page is outside its evidence window is withheld, saying why.
             LexCorpus6LuxembourgRightsDisclosure? disclosure = null;
             var gaps = admitted ? new List<string>() : [rights.ReasonCode];
-            if (rights.LicencePage is { } page && LuxembourgRightsChannelResolution.IsSingleChannel(rights.Disposition))
+            if (rights.LicencePage() is { } page && LuxembourgRightsChannelResolution.IsSingleChannel(rights.Disposition))
             {
                 if (admitted)
                 {
@@ -1334,17 +1334,17 @@ public static class LexCorpus6Builder
                 new LexCorpus6LuxembourgRights(
                     selectedWemi,
                     rights.BoundRunIdentity,
-                    rights.ResolutionRuleSha256 is null
+                    rights.ResolutionRuleSha256() is null
                         ? LexCorpus6LuxembourgRights.ComputeBindingSha256(
                             record.RunIdentity, rights.BoundRunIdentity, selectedWemi.IdentitySha256)
                         : LexCorpus6LuxembourgRights.ComputeBindingSha256(
-                            record.RunIdentity, rights.BoundRunIdentity, selectedWemi.IdentitySha256, rights.ResolutionRuleSha256,
-                            Luxembourg.LuxembourgInFileRightsReader.ReadingV2ProfileSha256,
+                            record.RunIdentity, rights.BoundRunIdentity, selectedWemi.IdentitySha256, rights.ResolutionRuleSha256(),
+                            Luxembourg.LuxembourgInFileRightsReader.ReadingTwoProfileSha256,
                             profileEnvelope.LuxembourgRederivation!.AdmissionPolicySha256, profileEnvelope.LuxembourgRederivation.Sha256),
                     rights.Disposition,
                     SortArtifacts(rightsEvidence))
                 {
-                    ResolutionRule = rights.ResolutionRuleSha256,
+                    ResolutionRule = rights.ResolutionRuleSha256(),
                     RightsDisclosure = disclosure,
                 },
                 Stage3OutcomesFor(stage3Outcomes, record.ObjectRef),

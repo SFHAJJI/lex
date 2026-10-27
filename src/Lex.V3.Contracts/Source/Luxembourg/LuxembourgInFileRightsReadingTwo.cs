@@ -8,7 +8,7 @@ namespace Lex.V3.Contracts.Source.Luxembourg;
 /// what the file states for the fetched manifestation; the last four are rejections, each for a reason the reader names, and a
 /// rejection outranks anything the SPARQL channel carries (resolution /2, rule 3).
 /// </summary>
-public enum LuxembourgInFileRightsReadingV2Status
+public enum LuxembourgInFileRightsReadingTwoStatus
 {
     /// <summary>One <c>scl:JOLUXManifestation</c> of the document's own identification names the fetched manifestation and states a licence.</summary>
     [JsonStringEnumMemberName("bound")]
@@ -52,7 +52,7 @@ public sealed record LuxembourgInFileNamedIdentity
     public LuxembourgInFileNamedIdentity(string identity, IReadOnlyList<string> licenceIris)
     {
         Identity = LuxembourgSourceValidation.RequireScalarString(identity, nameof(identity));
-        LicenceIris = LuxembourgInFileRightsReadingV2.SortedLicences(licenceIris, nameof(licenceIris));
+        LicenceIris = LuxembourgInFileRightsReadingTwo.SortedLicences(licenceIris, nameof(licenceIris));
     }
 
     /// <summary>The block's <c>uriThis</c> as the file writes it; never normalized.</summary>
@@ -67,14 +67,14 @@ public sealed record LuxembourgInFileNamedIdentity
 /// manifestation, every licence the file declares anywhere, and every identity its blocks name. Reading /1
 /// (<c>LuxembourgInFileRightsReader.ReadAsync</c>) stays as the acquisition ran it; this is the later rule a re-derivation
 /// runs. The record states what the file says; whether the licence is cleared is resolution /2's question
-/// (<see cref="LuxembourgRightsChannels.ResolveV2"/>), and whether that admits is the policy's.
+/// (<see cref="LuxembourgRightsChannels.ResolveTwo"/>), and whether that admits is the policy's.
 /// </summary>
-public sealed record LuxembourgInFileRightsReadingV2
+public sealed record LuxembourgInFileRightsReadingTwo
 {
-    public LuxembourgInFileRightsReadingV2(
+    public LuxembourgInFileRightsReadingTwo(
         string manifestationIri,
         SourceArtifactRef bodyRef,
-        LuxembourgInFileRightsReadingV2Status status,
+        LuxembourgInFileRightsReadingTwoStatus status,
         IReadOnlyList<string> ownBlockLicenceIris,
         IReadOnlyList<string> declaredLicenceIris,
         IReadOnlyList<LuxembourgInFileNamedIdentity> namedIdentities,
@@ -96,10 +96,10 @@ public sealed record LuxembourgInFileRightsReadingV2
 
         var consistent = Status switch
         {
-            LuxembourgInFileRightsReadingV2Status.Bound => OwnBlockLicenceIris.Count > 0,
-            LuxembourgInFileRightsReadingV2Status.OwnBlockEmpty => OwnBlockLicenceIris.Count == 0,
-            LuxembourgInFileRightsReadingV2Status.Unbound => OwnBlockLicenceIris.Count == 0 && DeclaredLicenceIris.Count > 0,
-            LuxembourgInFileRightsReadingV2Status.Silent => OwnBlockLicenceIris.Count == 0 && DeclaredLicenceIris.Count == 0,
+            LuxembourgInFileRightsReadingTwoStatus.Bound => OwnBlockLicenceIris.Count > 0,
+            LuxembourgInFileRightsReadingTwoStatus.OwnBlockEmpty => OwnBlockLicenceIris.Count == 0,
+            LuxembourgInFileRightsReadingTwoStatus.Unbound => OwnBlockLicenceIris.Count == 0 && DeclaredLicenceIris.Count > 0,
+            LuxembourgInFileRightsReadingTwoStatus.Silent => OwnBlockLicenceIris.Count == 0 && DeclaredLicenceIris.Count == 0,
             _ => OwnBlockLicenceIris.Count == 0 && DeclaredLicenceIris.Count == 0 && NamedIdentities.Count == 0,
         };
         if (!consistent)
@@ -114,7 +114,7 @@ public sealed record LuxembourgInFileRightsReadingV2
     /// <summary>The retained body read, by digest.</summary>
     public SourceArtifactRef BodyRef { get; }
 
-    public LuxembourgInFileRightsReadingV2Status Status { get; }
+    public LuxembourgInFileRightsReadingTwoStatus Status { get; }
 
     /// <summary>The licence values of the own block: the block of the document's own identification whose <c>uriThis</c> is the fetched manifestation.</summary>
     public IReadOnlyList<string> OwnBlockLicenceIris { get; }
@@ -129,10 +129,10 @@ public sealed record LuxembourgInFileRightsReadingV2
     public IReadOnlyList<string> FrbrManifestationIdentities { get; }
 
     /// <summary>Whether the reader refused the file (malformed, a rejected root, an ambiguous binding or an invalid licence value).</summary>
-    public bool IsRejected => Status is LuxembourgInFileRightsReadingV2Status.MalformedXml
-        or LuxembourgInFileRightsReadingV2Status.RootRejected
-        or LuxembourgInFileRightsReadingV2Status.AmbiguousBinding
-        or LuxembourgInFileRightsReadingV2Status.InvalidLicenceIri;
+    public bool IsRejected => Status is LuxembourgInFileRightsReadingTwoStatus.MalformedXml
+        or LuxembourgInFileRightsReadingTwoStatus.RootRejected
+        or LuxembourgInFileRightsReadingTwoStatus.AmbiguousBinding
+        or LuxembourgInFileRightsReadingTwoStatus.InvalidLicenceIri;
 
     /// <summary>
     /// Whether <paramref name="value"/> is one exact absolute IRI, as the rights channels require of a licence: no

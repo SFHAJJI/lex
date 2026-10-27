@@ -59,20 +59,20 @@ public sealed class LuxembourgRightsReleaseTwoTests
         Assert.AreEqual(0L, outcome.BaselineArticles, "policy /1: no text of it is indexed");
         Assert.AreEqual(NoRow, outcome.BaselineTextStatus, "index 9 records the states of works with a served state only");
         Assert.AreEqual(LuxembourgRightsChannelDisposition.AgreedCcByRederived, outcome.Rederived.Disposition);
-        Assert.AreEqual(LuxembourgRightsChannels.ResolutionV2ProfileSha256, outcome.Rederived.ResolutionRuleSha256);
-        var reading = outcome.Rederived.InFileReadingV2!;
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.Bound, reading.Status);
+        Assert.AreEqual(LuxembourgRightsChannels.ResolutionTwoProfileSha256, outcome.Rederived.ResolutionRuleSha256());
+        var reading = outcome.Rederived.InFileReadingTwo()!;
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.Bound, reading.Status);
         CollectionAssert.AreEqual(new[] { CcBy }, reading.OwnBlockLicenceIris.ToArray());
         CollectionAssert.AreEqual(new[] { Xml, Pdf }, reading.NamedIdentities.Select(static named => named.Identity).ToArray(),
             "the PDF twin is a named identity, never the held body's licence");
 
         Assert.AreEqual(LexCorpus6OutcomeKind.Acquired, outcome.Member.Outcome, "policy A admits it");
         Assert.AreEqual(LuxembourgRightsChannelDisposition.AgreedCcByRederived, outcome.Member.LuxembourgRights!.Disposition);
-        Assert.AreEqual(LuxembourgRightsChannels.ResolutionV2ProfileSha256, outcome.Member.LuxembourgRights.ResolutionRule);
+        Assert.AreEqual(LuxembourgRightsChannels.ResolutionTwoProfileSha256, outcome.Member.LuxembourgRights.ResolutionRule);
         Assert.AreEqual(
             LexCorpus6LuxembourgRights.ComputeBindingSha256(outcome.Member.RunIdentity, outcome.Member.LuxembourgRights.BoundRunIdentity,
-                outcome.Member.LuxembourgRights.SelectedWemi.IdentitySha256, LuxembourgRightsChannels.ResolutionV2ProfileSha256,
-                LuxembourgInFileRightsReaderV2Tests.PinnedReadingV2ProfileSha256, LuxembourgRightsAdmissionPolicies.PolicyASha256,
+                outcome.Member.LuxembourgRights.SelectedWemi.IdentitySha256, LuxembourgRightsChannels.ResolutionTwoProfileSha256,
+                LuxembourgInFileRightsReaderTwoTests.PinnedReadingTwoProfileSha256, LuxembourgRightsAdmissionPolicies.PolicyASha256,
                 outcome.Record.Sha256),
             outcome.Member.LuxembourgRights.BindingSha256, "binding /2: the rules, the policy and the record");
 
@@ -87,7 +87,7 @@ public sealed class LuxembourgRightsReleaseTwoTests
         Assert.ThrowsExactly<ArgumentException>(() => LexCorpus6MountView.ParseCanonicalAndVerify(Encoding.UTF8.GetBytes(otherRecord)));
         CollectionAssert.AreEqual(Array.Empty<string>(), outcome.Member.Gaps.ToArray());
         Assert.AreEqual(LuxembourgRightsAdmissionPolicies.PolicyASha256, outcome.Policy);
-        StringAssert.Contains(outcome.CorpusText, $"\"resolution_rule\":\"{LuxembourgRightsChannels.ResolutionV2ProfileSha256}\"");
+        StringAssert.Contains(outcome.CorpusText, $"\"resolution_rule\":\"{LuxembourgRightsChannels.ResolutionTwoProfileSha256}\"");
         Assert.AreEqual("held", outcome.TextStatus);
         Assert.AreEqual(2L, outcome.Articles, "both articles' text is indexed");
 
@@ -114,7 +114,7 @@ public sealed class LuxembourgRightsReleaseTwoTests
         Assert.AreEqual(LuxembourgRightsAdmissionPolicies.PolicyASha256, rules.GetProperty("admission_policy_sha256").GetString());
         Assert.AreEqual("re_resolved_reading_2_keeping_agreed_admissions", rules.GetProperty("rights_resolution").GetString());
         var rights = record.RootElement.GetProperty("rights");
-        Assert.AreEqual(LuxembourgRightsChannels.ResolutionV2ProfileSha256, rights.GetProperty("resolution_profile_sha256").GetString());
+        Assert.AreEqual(LuxembourgRightsChannels.ResolutionTwoProfileSha256, rights.GetProperty("resolution_profile_sha256").GetString());
         Assert.AreEqual("typed_quarantine_in_file_reading_rejected",
             rights.GetProperty("dispositions_as_acquired")[0].GetProperty("disposition").GetString());
         Assert.AreEqual("agreed_cc_by_rederived",
@@ -139,7 +139,7 @@ public sealed class LuxembourgRightsReleaseTwoTests
         Assert.AreEqual(LuxembourgRightsChannelDisposition.AgreedSameRunCcBy, outcome.Acquired);
         Assert.AreEqual(LexCorpus6OutcomeKind.Acquired, outcome.BaselineOutcome);
         Assert.AreSame(outcome.AcquiredResolution, outcome.Rederived, "the acquisition's resolution, kept");
-        Assert.IsNull(outcome.Rederived.ResolutionRuleSha256);
+        Assert.IsNull(outcome.Rederived.ResolutionRuleSha256());
         Assert.AreEqual(LexCorpus6OutcomeKind.Acquired, outcome.Member.Outcome);
         Assert.IsNull(outcome.Member.LuxembourgRights!.ResolutionRule, "a kept admission writes no rule");
         Assert.AreEqual(
@@ -164,7 +164,7 @@ public sealed class LuxembourgRightsReleaseTwoTests
         var outcome = await DeriveAsync(Body(Block(Xml, CcBy), Block(Pdf, Scl)));
         AssertWithheld(outcome, LuxembourgRightsChannelDisposition.Conflict, "rights_conflict");
         CollectionAssert.AreEqual(new[] { CcBy, Scl }.Order(StringComparer.Ordinal).ToArray(),
-            outcome.Rederived.InFileReadingV2!.DeclaredLicenceIris.ToArray());
+            outcome.Rederived.InFileReadingTwo()!.DeclaredLicenceIris.ToArray());
     }
 
     /// <summary>
@@ -190,7 +190,7 @@ public sealed class LuxembourgRightsReleaseTwoTests
         Assert.AreEqual(LuxembourgRightsChannelDisposition.TypedQuarantineInFileReadingRejected, unknown.Acquired, "reading /1 refuses it");
         AssertWithheld(unknown, LuxembourgRightsChannelDisposition.TypedQuarantineInFileIdentityUnknown,
             "rights_typed_quarantine_in_file_identity_unknown");
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.Unbound, unknown.Rederived.InFileReadingV2!.Status);
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.Unbound, unknown.Rederived.InFileReadingTwo()!.Status);
 
         var known = await DeriveAsync(Body(Block(ActXml, CcBy)), catalogue: [(ActXml, CcBy)]);
         AssertWithheld(known, LuxembourgRightsChannelDisposition.SparqlCcByInFileNamesOtherIdentity,
@@ -259,7 +259,7 @@ public sealed class LuxembourgRightsReleaseTwoTests
         var outcome = await DeriveAsync(Body(Block(Xml, null), Block(Pdf, CcBy)), openMount: true, policy: policy);
 
         Assert.AreEqual(LuxembourgRightsChannelDisposition.SparqlCcByInFileOwnBlockEmpty, outcome.Rederived.Disposition);
-        var page = outcome.Rederived.LicencePage!;
+        var page = outcome.Rederived.LicencePage()!;
         Assert.AreEqual(Xml, page.ManifestationIri);
         CollectionAssert.AreEqual(new[] { CcBy }, page.LicenceIris.ToArray());
         Assert.IsTrue(page.ObservedLive, "an acquisition that did not resume observed every page live");
@@ -300,7 +300,7 @@ public sealed class LuxembourgRightsReleaseTwoTests
 
         // The corpus holds every admission to its own policy: under policy A, or under option (b) with a page not observed
         // live, the disclosed member contradicts it and the corpus does not read. (The option windows themselves are
-        // LuxembourgRightsResolutionV2Tests'.)
+        // LuxembourgRightsResolutionTwoTests'.)
         var optionB = LuxembourgRightsAdmissionPolicies.PolicyFor(l1: false, l1b: true, l2: false, livePagesOnly: true);
         foreach (var (what, altered) in new[]
                  {
@@ -334,7 +334,7 @@ public sealed class LuxembourgRightsReleaseTwoTests
         var silent = Body();
         var withheld = await DeriveAsync(silent);
         AssertWithheld(withheld, LuxembourgRightsChannelDisposition.SparqlCcByInFileSilent, "rights_sparql_cc_by_in_file_silent");
-        Assert.IsNull(withheld.Rederived.LicencePage, "policy A reads no licence page");
+        Assert.IsNull(withheld.Rederived.LicencePage(), "policy A reads no licence page");
         Assert.IsNull(withheld.Member.LuxembourgRights!.RightsDisclosure);
 
         var policy = LuxembourgRightsAdmissionPolicies.PolicyFor(l1: true, l1b: false, l2: false, livePagesOnly: true);
@@ -474,11 +474,11 @@ public sealed class LuxembourgRightsReleaseTwoTests
                 [input.ObjectOrdinal] = input.RightsResolution!,
                 [input.ObjectOrdinal + 1000] = input.RightsResolution!,
             }), "an added member");
-        var moved = LuxembourgRightsChannels.ResolveV2(
+        var moved = LuxembourgRightsChannels.ResolveTwo(
             Pdf, input.RightsResolution!.BoundRunIdentity, input.RightsResolution.SparqlObservations, input.RightsResolution.BoundRunIdentity,
             input.RightsResolution.InFileObservations.EnumerationRef,
-            new LuxembourgInFileRightsReadingV2(Pdf, new SourceArtifactRef("urn:uuid:00000000-0000-4000-8000-000000000001", new string('1', 64)),
-                LuxembourgInFileRightsReadingV2Status.Silent, [], [], [], []),
+            new LuxembourgInFileRightsReadingTwo(Pdf, new SourceArtifactRef("urn:uuid:00000000-0000-4000-8000-000000000001", new string('1', 64)),
+                LuxembourgInFileRightsReadingTwoStatus.Silent, [], [], [], []),
             LuxembourgRightsCatalogue.Empty);
         Assert.ThrowsExactly<CustodyIntegrityException>(() => population.WithRederivedRights(
             new Dictionary<int, LuxembourgRightsChannelResolution> { [input.ObjectOrdinal] = moved }), "a moved member");

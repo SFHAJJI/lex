@@ -11,7 +11,7 @@ Updated 2026-10-27.
   each CC BY 4.0; reading /1 calls it `typed_quarantine_in_file_reading_rejected`. Reading /1 does not change: R0's replay
   runs it byte for byte.
 - **The rules, as LU-DATA-DESIGN v2 §1.1, §1.2 and §2.2 state them.**
-  - **In-file reading /2** (`ReadV2Async`, `lex-lu-in-file-rights-reading/2`, `eb3b6d96…`). It binds the
+  - **In-file reading /2** (`ReadTwoAsync`, `lex-lu-in-file-rights-reading/2`, `eb3b6d96…`). It binds the
     `scl:JOLUXManifestation` of the document's own identification whose `uriThis` is exactly the fetched XML
     manifestation, the one custody holds. A sibling block (the PDF twin) is a named identity, never the held body's
     licence. FRBR is recorded, never required, and a leading `scl:postit` is tolerated. Every `license` value anywhere in
@@ -20,7 +20,7 @@ Updated 2026-10-27.
     markup in a value, or a value that is not one exact IRI (`invalid_licence_iri`); a root that is not one Akoma Ntoso
     document (`root_rejected`); `malformed_xml`. Its other statuses are `bound`, `own_block_empty`, `unbound`, `silent` and
     `not_applicable` (a PDF).
-  - **Resolution /2** (`LuxembourgRightsChannels.ResolveV2`, `lex-lu-rights-resolution/2`, `05ed311f…` since the review): /1's order, then
+  - **Resolution /2** (`LuxembourgRightsChannels.ResolveTwo`, `lex-lu-rights-resolution/2`, `05ed311f…` since the review): /1's order, then
     rules 8 to 15. A conflict is any declared value, in any block, that is not the SPARQL value, or any identity a block
     names that the catalogue (the run's typed `jolux:license` assertions) licenses otherwise. An own block of exactly CC
     BY with nothing disagreeing is `agreed_cc_by_rederived`. Six dispositions are new: that one, the four single-channel
@@ -52,7 +52,7 @@ Updated 2026-10-27.
     sentence with the page's date, in English and French (drafts the owner revises). Under (b), a body whose page was
     replayed is withheld, with the gap `rights_licence_page_outside_evidence_window`.
   - L3 (PDFs) and L4 (conflicts) have no entry; no entry can admit `not_applicable` or a conflict.
-- **Measured over run 15** (`LuxembourgInFileRightsReadingV2Run15Probe`, new, opt-in `LEX_LU_RIGHTS2_PROBE=1`, read-only,
+- **Measured over run 15** (`LuxembourgInFileRightsReadingTwoRun15Probe`, new, opt-in `LEX_LU_RIGHTS2_PROBE=1`, read-only,
   never a CI test). Custody was read by digest through S2's read-only decorator; derive-c's work facts were the catalogue;
   no derive ran and nothing went over the network. It took 12.5 minutes, with a peak working set of 2,044 MiB, and found
   0 failures.
@@ -109,13 +109,13 @@ Updated 2026-10-27.
 - **Tests** (Windows; no browser, no publisher traffic, no Azure; custody read only; targeted classes only, CI runs the
   suites): - `dotnet build -c Release`: `Lex.V3.Tool`, `Lex.V3.Api` and both test projects, 0 warnings and 0 errors. Rebased on
     473a9fae (#994, #995), whose census counts are combined with this slice's.
-  - Contracts (`Lex.V3.Tests`), 132 tests, 0 failed: `LuxembourgRightsResolutionV2Tests` (new, 13: every rule of
+  - Contracts (`Lex.V3.Tests`), 132 tests, 0 failed: `LuxembourgRightsResolutionTwoTests` (new, 13: every rule of
     resolution /2, the policies' texts and digests, the switches and their windows, licence-page binding, a policy
     naming a never-admissible disposition cannot be built), `LuxembourgRightsChannelsTests` (the /1 pins, unchanged),
     the gazette, body-join and scope-resolver classes, and every census.
   - Ingest (`Lex.V3.Ingest.Tests`), 301 tests (299 passed, 0 failed, 2 skipped: the opt-in writers) before the rebase, and
     87 again after it.
-    - `LuxembourgInFileRightsReaderV2Tests` (new, 15): reading /2 rule by rule, the licence rows of a SPARQL page, and
+    - `LuxembourgInFileRightsReaderTwoTests` (new, 15): reading /2 rule by rule, the licence rows of a SPARQL page, and
       reading /1 still refusing the twin-block file.
     - `LuxembourgRightsReleaseTwoTests` (new, 12): the derive's own path. Each fixture consolidation is acquired by the
       fixture, built under policy /1, re-derived under `lu-release-2`, built, written, verified and mounted:
@@ -145,17 +145,18 @@ Updated 2026-10-27.
   - R1 reads each held body three more times (reading /2, inventory /4, content /3) and holds the evidence index /2 and the
     record. Under policy A it reads no licence page. Its memory peak should stay Release 1's, which is in R0's replay.
 - **Review of #999 (an independent reviewer: REPAIR) and the repair.**
-  - **F1, high: R0 could no longer replay run 15.** The resolution gained three public members (`InFileReadingV2`,
+  - **F1, high: R0 could no longer replay run 15.** The resolution gained three public members (`InFileReadingTwo`,
     `ResolutionRuleSha256`, `LicencePage`). ContractJson wrote them as nulls on every resolution /1, and the Gazette
     checkpoint's input and result digests and the query checkpoint's result digest hash the body joins and Gazette sets
     that carry one. A derive over run 15 would have refused at the Gazette checkpoint, before R1.
-    - Fixed: each member is `JsonIgnore(WhenWritingNull)`. No other type this slice touched is hashed through ContractJson:
+    - Fixed: each is now a no-argument method over private state (`JsonIgnore` at first, which CI refused). No other type
+      this slice touched is hashed through ContractJson:
       the corpus member's rights block has its own canonical writer, which writes the new fields only when set; the record
       and its rights part omit theirs when null; the Gazette rights digests are field by field.
     - `LuxembourgRightsResolutionWirePinTests` (new) pins `ContractJson.Sha256` of a resolution /1 (agreed, and refused
       for a PDF), a body join, a Gazette disposition and a Gazette set. The values were computed with 473a9fae's Contracts,
       built in a scratch worktree outside the repository, by an F# script making the same objects. The branch gives the
-      same five values. With one `JsonIgnore` removed the pin fails, which was run once to check.
+      same five values. With a public property exposing one of the three the pin fails, which was run once to check.
     - Not checked: the stored checkpoint digests of run 15 themselves. They hash R0's in-memory resolution, which only the
       query phase's full replay (about 34 GiB) rebuilds, so no read-only check over custody can recompute them on this PC.
       The pin holds the bytes those digests were made from to 473a9fae's.
@@ -184,6 +185,19 @@ Updated 2026-10-27.
   - **The rights probe again** (12.4 minutes, peak 2,124 MiB, 0 failures): the moves above, nothing else.
   - **D1's commands do not change.** `lu-release-2` and policy A (`b9687998…`) are the same; the inputs name resolution
     /2's new digest through `RulesOf`.
+  - **CI at 07930fec was red (5 of 6,926 tests) and is repaired.**
+    - `WireIgnoredMemberTests`: resolution /2's three facts are no-argument methods over private state,
+      `InFileReadingTwo()`, `ResolutionRuleSha256()` and `LicencePage()`. The type has no deserializing constructor, so it
+      is not in that test's corpus. The wire pin still gives 473a9fae's five values.
+    - `RetiredGenerationBoundaryTests`: every V2 name is now Two (`LuxembourgInFileRightsReadingTwo`, `ReadTwoAsync`,
+      `ResolveTwo`, `ReadingTwoProfileSha256`, `ResolutionTwoProfileSha256`, `InFileEvidenceTwoSchema`), and four files
+      are renamed. No digest moved: reading /2 `eb3b6d96…`, resolution /2 `05ed311f…`, policy A `b9687998…`.
+    - `LuxembourgQueryExecutionAdapterConstructionSurfaceTests` (2): R1's rights step hands back the re-bound population,
+      not a run. R1's main door re-makes the run through the run's internal copy `WithHeldBodyDerivationPopulation`, which
+      is pinned with the reason it cannot leak an unrefused result.
+    - Tests: the whole `Lex.V3.Tests` project, 3,375 (3,369 passed, 0 failed, 6 skipped: the image-conditions lane and
+      Windows symbolic links); ingest 230 passed (every construction-surface class, the censuses, the rights classes, the
+      corpus builder, mount view, bundle, search and answer samples); `eng/verify-v3-tree.ps1` 1,760 tracked paths.
 - **Driver decisions (reversible).**
   - Policy A, as the design proposes.
   - Rule 8 applies to every reading, bound ones included: an identity the catalogue licenses otherwise is a conflict,

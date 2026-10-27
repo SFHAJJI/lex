@@ -243,8 +243,8 @@ public sealed class VocabularyRegistryCensusTests
                     + "const SingleChannelAdmission, const WindowEveryPage, const WindowLivePages, "
                     + "static property Policy1Sha256, static property PolicyASha256",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannels: const "
-                    + "ResolutionV2ProfileName, const ResolutionV2ProfileText, "
-                    + "static property ResolutionV2ProfileSha256",
+                    + "ResolutionTwoProfileName, const ResolutionTwoProfileText, "
+                    + "static property ResolutionTwoProfileSha256",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgScopeResolver: AccTypes=1, "
                     + "AdmittedNonShelfTypes=23, MetadataSupportClasses=10, NeverFormats=3, "
                     + "NeverTypes=2, OrdinaryCandidateTypes=17, PointFormats=3, "

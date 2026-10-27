@@ -85,7 +85,7 @@ public enum LuxembourgRightsChannelDisposition
     /// Both channels say exactly CC BY 4.0 for the fetched manifestation, the in-file one as in-file reading /2 reads the
     /// file's own block (the <c>scl:JOLUXManifestation</c> whose <c>uriThis</c> is the fetched manifestation) in a
     /// re-derivation from custody, and nothing either channel holds disagrees (resolution /2,
-    /// <see cref="LuxembourgRightsChannels.ResolveV2"/>). The same two-channel agreement as
+    /// <see cref="LuxembourgRightsChannels.ResolveTwo"/>). The same two-channel agreement as
     /// <see cref="AgreedSameRunCcBy"/>, read by a later rule; whether it admits is the admission policy's question
     /// (<see cref="LuxembourgRightsAdmissionPolicies"/>).
     /// </summary>
@@ -351,31 +351,34 @@ public sealed record LuxembourgRightsChannelResolution
         _ => throw new InvalidOperationException("Unknown rights-channel disposition."),
     };
 
+    // Resolution /2's own facts are private state read through methods, never properties: a method is invisible to the
+    // serializer, so a resolution /1 serializes exactly as it did before reading /2 existed (the acquisition's Gazette and
+    // query checkpoints hash body joins and Gazette dispositions that carry one), and no name opens on the closed wire
+    // (WireIgnoredMemberTests).
+    private LuxembourgInFileRightsReadingTwo? _inFileReadingTwo;
+    private string? _resolutionRuleSha256;
+    private LuxembourgSparqlLicencePage? _licencePage;
+
     /// <summary>
-    /// The in-file reading /2 this resolution was made from (<see cref="LuxembourgRightsChannels.ResolveV2"/>); null for a
+    /// The in-file reading /2 this resolution was made from (<see cref="LuxembourgRightsChannels.ResolveTwo"/>); null for a
     /// resolution /1, whose in-file channel is the acquisition's reading /1.
     /// </summary>
-    /// <remarks>Absent from the wire when null, so a resolution /1 serializes exactly as before reading /2 existed: the
-    /// acquisition's gazette and query checkpoints hash body joins and gazette dispositions that carry one.</remarks>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public LuxembourgInFileRightsReadingV2? InFileReadingV2 { get; private init; }
+    public LuxembourgInFileRightsReadingTwo? InFileReadingTwo() => _inFileReadingTwo;
 
     /// <summary>
     /// The SHA-256 of the resolution rule this resolution was made under: null for resolution /1 (the acquisition's), and
-    /// <see cref="LuxembourgRightsChannels.ResolutionV2ProfileSha256"/> for resolution /2.
+    /// <see cref="LuxembourgRightsChannels.ResolutionTwoProfileSha256"/> for resolution /2.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? ResolutionRuleSha256 { get; private init; }
+    public string? ResolutionRuleSha256() => _resolutionRuleSha256;
 
-    internal LuxembourgRightsChannelResolution AsResolutionV2(LuxembourgInFileRightsReadingV2 reading) =>
-        this with { InFileReadingV2 = reading, ResolutionRuleSha256 = LuxembourgRightsChannels.ResolutionV2ProfileSha256 };
+    internal LuxembourgRightsChannelResolution AsResolutionTwo(LuxembourgInFileRightsReadingTwo reading) =>
+        this with { _inFileReadingTwo = reading, _resolutionRuleSha256 = LuxembourgRightsChannels.ResolutionTwoProfileSha256 };
 
     /// <summary>
     /// The retained SPARQL page that holds the fetched manifestation's licence row, bound to a single-channel resolution /2
     /// (<see cref="WithLicencePage"/>): what its admission cites and discloses. Null otherwise.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public LuxembourgSparqlLicencePage? LicencePage { get; private init; }
+    public LuxembourgSparqlLicencePage? LicencePage() => _licencePage;
 
     /// <summary>
     /// This single-channel resolution /2 bound to <paramref name="page"/>, the retained SPARQL page holding the licence row of
@@ -385,7 +388,7 @@ public sealed record LuxembourgRightsChannelResolution
     public LuxembourgRightsChannelResolution WithLicencePage(LuxembourgSparqlLicencePage page)
     {
         ArgumentNullException.ThrowIfNull(page);
-        if (ResolutionRuleSha256 is null || !IsSingleChannel(Disposition) || LicencePage is not null)
+        if (_resolutionRuleSha256 is null || !IsSingleChannel(Disposition) || _licencePage is not null)
         {
             throw new ArgumentException("Only a single-channel resolution /2 is bound to a licence page, once.", nameof(page));
         }
@@ -398,7 +401,7 @@ public sealed record LuxembourgRightsChannelResolution
                 nameof(page));
         }
 
-        return this with { LicencePage = page };
+        return this with { _licencePage = page };
     }
 
     /// <summary>The four single-channel dispositions: the file does not speak for the fetched manifestation.</summary>
@@ -438,7 +441,7 @@ public sealed record LuxembourgSparqlLicencePage
     {
         ManifestationIri = LuxembourgSourceValidation.RequireExactResourceIri(manifestationIri, nameof(manifestationIri));
         PageRef = pageRef ?? throw new ArgumentNullException(nameof(pageRef));
-        LicenceIris = LuxembourgInFileRightsReadingV2.SortedLicences(licenceIris, nameof(licenceIris));
+        LicenceIris = LuxembourgInFileRightsReadingTwo.SortedLicences(licenceIris, nameof(licenceIris));
         if (observedAt.Offset != TimeSpan.Zero)
         {
             throw new ArgumentException("A licence page's observation time is UTC.", nameof(observedAt));
@@ -463,14 +466,14 @@ public sealed record LuxembourgSparqlLicencePage
 public static class LuxembourgRightsChannels
 {
     /// <summary>The first line of resolution /2's canonical text: its name.</summary>
-    public const string ResolutionV2ProfileName = "lex-lu-rights-resolution/2";
+    public const string ResolutionTwoProfileName = "lex-lu-rights-resolution/2";
 
     /// <summary>
     /// Resolution /2's rules, as canonical text (LU-DATA-DESIGN v2 §1.1, "Resolution"): /1's order, then the outcomes reading
-    /// /2 makes possible. Each line is one rule, in the order <see cref="ResolveV2"/> applies them; the first that holds wins.
+    /// /2 makes possible. Each line is one rule, in the order <see cref="ResolveTwo"/> applies them; the first that holds wins.
     /// </summary>
-    private const string ResolutionV2ProfileText =
-        ResolutionV2ProfileName + "\n" +
+    private const string ResolutionTwoProfileText =
+        ResolutionTwoProfileName + "\n" +
         "in-file-channel=lex-lu-in-file-rights-reading/2;run-identity=the-rights-bound-run-identity;evidence=the-retained-body-and-the-reading-2-evidence-index\n" +
         "catalogue=the-run's-typed-jolux:license-assertions-per-manifestation;an-assertion-whose-object-is-not-one-exact-iri-is-unrepresentable\n" +
         "1=stale:either-channel's-run-identity-is-not-the-bound-run-identity\n" +
@@ -491,11 +494,11 @@ public static class LuxembourgRightsChannels
         "single-channel=11,13,14,15:the-file-does-not-speak-for-the-fetched-manifestation;only-a-policy-naming-them-admits-them\n";
 
     /// <summary>The SHA-256 of resolution /2's canonical text, lowercase hex.</summary>
-    public static string ResolutionV2ProfileSha256 { get; } = Convert.ToHexStringLower(
-        System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(ResolutionV2ProfileText)));
+    public static string ResolutionTwoProfileSha256 { get; } = Convert.ToHexStringLower(
+        System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(ResolutionTwoProfileText)));
 
     /// <summary>Resolution /2's canonical text, as UTF-8 bytes (a copy).</summary>
-    public static byte[] CopyResolutionV2ProfileBytes() => System.Text.Encoding.UTF8.GetBytes(ResolutionV2ProfileText);
+    public static byte[] CopyResolutionTwoProfileBytes() => System.Text.Encoding.UTF8.GetBytes(ResolutionTwoProfileText);
 
     /// <summary>
     /// Resolution /2 (LU-DATA-DESIGN v2 §1.1): the SPARQL channel the acquisition observed for the fetched manifestation
@@ -509,13 +512,13 @@ public static class LuxembourgRightsChannels
     /// SPARQL value, or an identity it names that the catalogue licenses otherwise, is a conflict (rule 8), so a CC BY own
     /// block beside a licenceSCL sibling never admits.
     /// </remarks>
-    public static LuxembourgRightsChannelResolution ResolveV2(
+    public static LuxembourgRightsChannelResolution ResolveTwo(
         string selectedManifestationIri,
         SourceArtifactRef boundRunIdentity,
         LuxembourgSparqlRightsChannelObservations sparqlObservations,
         SourceArtifactRef inFileRunIdentity,
         SourceArtifactRef inFileEvidenceIndexRef,
-        LuxembourgInFileRightsReadingV2 reading,
+        LuxembourgInFileRightsReadingTwo reading,
         LuxembourgRightsCatalogue catalogue)
     {
         selectedManifestationIri = LuxembourgSourceValidation.RequireExactResourceIri(
@@ -534,8 +537,8 @@ public static class LuxembourgRightsChannels
 
         // The in-file channel /2: a row for the fetched manifestation when the own block was bound (with or without a
         // licence), a named refusal when the reader rejected the file, and nothing otherwise.
-        var ownBlock = reading.Status is LuxembourgInFileRightsReadingV2Status.Bound
-            or LuxembourgInFileRightsReadingV2Status.OwnBlockEmpty;
+        var ownBlock = reading.Status is LuxembourgInFileRightsReadingTwoStatus.Bound
+            or LuxembourgInFileRightsReadingTwoStatus.OwnBlockEmpty;
         var inFileObservations = new LuxembourgInFileRightsChannelObservations(
             inFileRunIdentity,
             inFileEvidenceIndexRef,
@@ -547,7 +550,7 @@ public static class LuxembourgRightsChannels
             rejectedManifestationIris: reading.IsRejected ? [selectedManifestationIri] : []);
         var sparql = sparqlObservations.Find(selectedManifestationIri);
         var inFile = inFileObservations.Find(selectedManifestationIri);
-        var disposition = ResolveDispositionV2(
+        var disposition = ResolveDispositionTwo(
             boundRunIdentity, sparqlObservations, inFileObservations, sparql, reading, catalogue);
         return new LuxembourgRightsChannelResolution(
             selectedManifestationIri,
@@ -556,15 +559,15 @@ public static class LuxembourgRightsChannels
             inFileObservations,
             sparql,
             inFile,
-            disposition).AsResolutionV2(reading);
+            disposition).AsResolutionTwo(reading);
     }
 
-    private static LuxembourgRightsChannelDisposition ResolveDispositionV2(
+    private static LuxembourgRightsChannelDisposition ResolveDispositionTwo(
         SourceArtifactRef boundRunIdentity,
         LuxembourgSparqlRightsChannelObservations sparqlObservations,
         LuxembourgInFileRightsChannelObservations inFileObservations,
         LuxembourgRightsChannelObservation? sparql,
-        LuxembourgInFileRightsReadingV2 reading,
+        LuxembourgInFileRightsReadingTwo reading,
         LuxembourgRightsCatalogue catalogue)
     {
         // 1. Both channels carry the rights' bound run identity.
@@ -635,24 +638,24 @@ public static class LuxembourgRightsChannels
         return reading.Status switch
         {
             // 10. The own block states exactly CC BY (rule 8 has ruled out any other value in it).
-            LuxembourgInFileRightsReadingV2Status.Bound when reading.OwnBlockLicenceIris.Count == 1 &&
+            LuxembourgInFileRightsReadingTwoStatus.Bound when reading.OwnBlockLicenceIris.Count == 1 &&
                 string.Equals(reading.OwnBlockLicenceIris[0], licence, StringComparison.Ordinal) =>
                 LuxembourgRightsChannelDisposition.AgreedCcByRederived,
             // 11. The own block states no licence, whatever its siblings say.
-            LuxembourgInFileRightsReadingV2Status.OwnBlockEmpty => LuxembourgRightsChannelDisposition.SparqlCcByInFileOwnBlockEmpty,
+            LuxembourgInFileRightsReadingTwoStatus.OwnBlockEmpty => LuxembourgRightsChannelDisposition.SparqlCcByInFileOwnBlockEmpty,
             // 12. No own block, and something the file names cannot be checked: it names no identity, or one the catalogue
             // does not know. A file naming one CC BY identity and one unknown one never reaches rule 13 (design §5: every
             // identity the block names is itself CC BY in the same catalogue).
-            LuxembourgInFileRightsReadingV2Status.Unbound when reading.NamedIdentities.Count == 0 ||
+            LuxembourgInFileRightsReadingTwoStatus.Unbound when reading.NamedIdentities.Count == 0 ||
                 reading.NamedIdentities.Any(named => !catalogue.Knows(named.Identity)) =>
                 LuxembourgRightsChannelDisposition.TypedQuarantineInFileIdentityUnknown,
             // 13. No own block; every identity the file names is known and, by rule 8, licensed exactly CC BY; the file's
             // declared values are exactly [CC BY] (rule 8).
-            LuxembourgInFileRightsReadingV2Status.Unbound => LuxembourgRightsChannelDisposition.SparqlCcByInFileNamesOtherIdentity,
+            LuxembourgInFileRightsReadingTwoStatus.Unbound => LuxembourgRightsChannelDisposition.SparqlCcByInFileNamesOtherIdentity,
             // 14. Nothing stated.
-            LuxembourgInFileRightsReadingV2Status.Silent => LuxembourgRightsChannelDisposition.SparqlCcByInFileSilent,
+            LuxembourgInFileRightsReadingTwoStatus.Silent => LuxembourgRightsChannelDisposition.SparqlCcByInFileSilent,
             // 15. A representation the channel cannot read.
-            LuxembourgInFileRightsReadingV2Status.NotApplicable => LuxembourgRightsChannelDisposition.SparqlCcByInFileNotApplicable,
+            LuxembourgInFileRightsReadingTwoStatus.NotApplicable => LuxembourgRightsChannelDisposition.SparqlCcByInFileNotApplicable,
             _ => throw new InvalidOperationException($"Reading /2 status {reading.Status} has no resolution /2 rule."),
         };
     }

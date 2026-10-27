@@ -1689,7 +1689,7 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelResolution::.ctor, "
                     + "method internal instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelResolution::AsReso"
-                    + "lutionV2, "
+                    + "lutionTwo, "
                     + "method public instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelResolution::<Clone"
                     + ">$, "
@@ -1699,7 +1699,7 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannels::Resolve, "
                     + "method public static "
-                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannels::ResolveV2",
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannels::ResolveTwo",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgTranspositionIdentityDiscoveryPlan: "
                     + "constructor private instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgTranspositionIdentityDiscoveryP"

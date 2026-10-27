@@ -34,8 +34,8 @@ namespace Lex.V3.Ingest.Tests;
 /// WHAT IT RUNS, through the production code. The licence-page index (<see cref="LuxembourgSparqlLicencePageIndex"/>) over the
 /// rights evidence index, live from the catalog's <c>resume.resumed_at</c>. For each body, in the order of
 /// <c>run15-held.jsonl</c>: <see cref="LuxembourgInFileRightsReader.ReadAsync"/> (reading /1, which for a body the acquisition
-/// admitted must still read <c>Observed</c>) and <see cref="LuxembourgInFileRightsReader.ReadV2Async"/>, then
-/// <see cref="LuxembourgRightsChannels.ResolveV2"/> with a SPARQL row made from the catalogue's licences for the fetched
+/// admitted must still read <c>Observed</c>) and <see cref="LuxembourgInFileRightsReader.ReadTwoAsync"/>, then
+/// <see cref="LuxembourgRightsChannels.ResolveTwo"/> with a SPARQL row made from the catalogue's licences for the fetched
 /// manifestation; a single-channel resolution is bound to its page (<see cref="LuxembourgRightsChannelResolution.WithLicencePage"/>).
 /// The final disposition is R1's: the acquisition's own for a body it admitted, once /2 agrees; resolution /2's otherwise.
 /// Each policy's admission is <see cref="LuxembourgRightsAdmissionPolicies.Admits(string?, LuxembourgRightsChannelResolution)"/>.
@@ -51,7 +51,7 @@ namespace Lex.V3.Ingest.Tests;
 /// </remarks>
 [TestClass]
 [DoNotParallelize]
-public sealed class LuxembourgInFileRightsReadingV2Run15Probe
+public sealed class LuxembourgInFileRightsReadingTwoRun15Probe
 {
     private const string EnableVariable = "LEX_LU_RIGHTS2_PROBE";
     private const string RootVariable = "LEX_LU_RIGHTS2_PROBE_ROOT";
@@ -188,25 +188,25 @@ public sealed class LuxembourgInFileRightsReadingV2Run15Probe
                 ContentDerivedIdentity.DeriveUuidUrn("lex-lu-in-file-body-digest/1", Encoding.UTF8.GetBytes(digest)), digest);
 
             var one = await LuxembourgInFileRightsReader.ReadAsync(store, bodyRef, manifestation, run, format, CancellationToken.None);
-            var two = await LuxembourgInFileRightsReader.ReadV2Async(store, bodyRef, manifestation, format, CancellationToken.None);
+            var two = await LuxembourgInFileRightsReader.ReadTwoAsync(store, bodyRef, manifestation, format, CancellationToken.None);
             var (licences, unrepresentable) = licencesOf.GetValueOrDefault(manifestation, ([], 0));
             // The acquisition's SPARQL channel holds a row for every held body's manifestation (R1 refuses one without: no
             // run-15 body is channel_enumeration_unproven), empty when the catalogue states no licence for it.
             var sparql = new LuxembourgSparqlRightsChannelObservations(
                 run, enumeration, [new LuxembourgRightsChannelObservation(manifestation, run, sparqlRow, licences, unrepresentable)]);
-            var v2 = LuxembourgRightsChannels.ResolveV2(manifestation, run, sparql, run, inFileIndex, two, catalogue);
+            var resolutionTwo = LuxembourgRightsChannels.ResolveTwo(manifestation, run, sparql, run, inFileIndex, two, catalogue);
             var page = "none";
-            if (LuxembourgRightsChannelResolution.IsSingleChannel(v2.Disposition))
+            if (LuxembourgRightsChannelResolution.IsSingleChannel(resolutionTwo.Disposition))
             {
                 if (pages.PageOf(manifestation) is { } found && found.LicenceIris.SequenceEqual(licences, StringComparer.Ordinal))
                 {
-                    v2 = v2.WithLicencePage(found);
+                    resolutionTwo = resolutionTwo.WithLicencePage(found);
                     page = found.ObservedLive ? "live" : "replayed";
                 }
             }
 
-            var resolved = ContractWire.NameOf(v2.Disposition);
-            var keepsAdmission = acquired == Agreed1 && v2.Disposition == LuxembourgRightsChannelDisposition.AgreedCcByRederived;
+            var resolved = ContractWire.NameOf(resolutionTwo.Disposition);
+            var keepsAdmission = acquired == Agreed1 && resolutionTwo.Disposition == LuxembourgRightsChannelDisposition.AgreedCcByRederived;
             var final = keepsAdmission ? Agreed1 : resolved;
             if (acquired == Agreed1 && !keepsAdmission)
             {
@@ -220,14 +220,14 @@ public sealed class LuxembourgInFileRightsReadingV2Run15Probe
 
             var admittedBy = Policies.Select(policy => keepsAdmission
                 ? LuxembourgRightsAdmissionPolicies.Admits(policy.Sha256, LuxembourgRightsChannelDisposition.AgreedSameRunCcBy)
-                : LuxembourgRightsAdmissionPolicies.Admits(policy.Sha256, v2)).ToArray();
+                : LuxembourgRightsAdmissionPolicies.Admits(policy.Sha256, resolutionTwo)).ToArray();
             Count($"bodies|{kind}");
             Count($"reading_1|{kind}|{one.Status}");
             Count($"reading_2|{kind}|{ContractWire.NameOf(two.Status)}", rootIri);
             Count($"acquired|{kind}|{acquired}");
             Count($"resolution_2|{kind}|{resolved}", rootIri);
             Count($"transition|{kind}|{acquired} -> {final}", acquired == final ? null : rootIri);
-            if (LuxembourgRightsChannelResolution.IsSingleChannel(v2.Disposition))
+            if (LuxembourgRightsChannelResolution.IsSingleChannel(resolutionTwo.Disposition))
             {
                 Count($"single_channel_licence_page|{kind}|{resolved}|{page}", page == "none" ? rootIri : null);
             }
@@ -320,8 +320,8 @@ public sealed class LuxembourgInFileRightsReadingV2Run15Probe
         var summary = new JsonObject
         {
             ["schema"] = "lex-v3-lu-rights2-run15-probe/2",
-            ["reading_2_profile_sha256"] = LuxembourgInFileRightsReader.ReadingV2ProfileSha256,
-            ["resolution_2_profile_sha256"] = LuxembourgRightsChannels.ResolutionV2ProfileSha256,
+            ["reading_2_profile_sha256"] = LuxembourgInFileRightsReader.ReadingTwoProfileSha256,
+            ["resolution_2_profile_sha256"] = LuxembourgRightsChannels.ResolutionTwoProfileSha256,
             ["resumed_at"] = resumedAt?.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
             ["catalogue_manifestations"] = catalogue.Count,
             ["licence_pages"] = new JsonObject

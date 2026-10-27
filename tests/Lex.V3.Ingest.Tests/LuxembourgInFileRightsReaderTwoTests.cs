@@ -14,7 +14,7 @@ namespace Lex.V3.Ingest.Tests;
 /// </summary>
 /// <remarks>LEGAL CARE. Every file here is written in this file; the identities are run 15's shapes, the wording invented.</remarks>
 [TestClass]
-public sealed class LuxembourgInFileRightsReaderV2Tests
+public sealed class LuxembourgInFileRightsReaderTwoTests
 {
     private const string Akn = "http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13";
     private const string Expression = "http://data.legilux.public.lu/eli/etat/leg/loi/2021/01/22/a45/consolide/20211217/fr";
@@ -27,20 +27,20 @@ public sealed class LuxembourgInFileRightsReaderV2Tests
     [TestMethod]
     public void TheReadingProfileIsItsPinnedTextAndDigest()
     {
-        var text = Encoding.UTF8.GetString(LuxembourgInFileRightsReader.CopyReadingV2ProfileBytes());
+        var text = Encoding.UTF8.GetString(LuxembourgInFileRightsReader.CopyReadingTwoProfileBytes());
         StringAssert.StartsWith(text, "lex-lu-in-file-rights-reading/2\n");
-        Assert.AreEqual(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text))), LuxembourgInFileRightsReader.ReadingV2ProfileSha256);
-        Assert.AreEqual(PinnedReadingV2ProfileSha256, LuxembourgInFileRightsReader.ReadingV2ProfileSha256);
+        Assert.AreEqual(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text))), LuxembourgInFileRightsReader.ReadingTwoProfileSha256);
+        Assert.AreEqual(PinnedReadingTwoProfileSha256, LuxembourgInFileRightsReader.ReadingTwoProfileSha256);
     }
 
     /// <summary>Recomputed in Python from the profile text (<c>hashlib.sha256(text.encode()).hexdigest()</c>).</summary>
-    internal const string PinnedReadingV2ProfileSha256 = "eb3b6d96bdd719a810c1b976d6affccbccbdc72c4947bf407e9c44d81bd84bc7";
+    internal const string PinnedReadingTwoProfileSha256 = "eb3b6d96bdd719a810c1b976d6affccbccbdc72c4947bf407e9c44d81bd84bc7";
 
     [TestMethod]
     public void TwinBlocksBindTheOwnBlock()
     {
         var reading = Read(File(Identification(Frbr(Xml), Block(Xml, CcBy), Block(Pdf, CcBy))));
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.Bound, reading.Status);
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.Bound, reading.Status);
         CollectionAssert.AreEqual(new[] { CcBy }, reading.OwnBlockLicenceIris.ToArray());
         CollectionAssert.AreEqual(new[] { CcBy }, reading.DeclaredLicenceIris.ToArray());
         CollectionAssert.AreEqual(new[] { Xml, Pdf }, reading.NamedIdentities.Select(static named => named.Identity).ToArray());
@@ -51,7 +51,7 @@ public sealed class LuxembourgInFileRightsReaderV2Tests
     public void AStaleJoIdentityIsUnboundWithItsNamedIdentity()
     {
         var reading = Read(File(Identification(Frbr(Xml), Block(ActXml, CcBy))));
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.Unbound, reading.Status);
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.Unbound, reading.Status);
         Assert.AreEqual(0, reading.OwnBlockLicenceIris.Count);
         Assert.AreEqual(ActXml, reading.NamedIdentities.Single().Identity);
         CollectionAssert.AreEqual(new[] { CcBy }, reading.NamedIdentities.Single().LicenceIris.ToArray());
@@ -62,7 +62,7 @@ public sealed class LuxembourgInFileRightsReaderV2Tests
     {
         var reading = Read(File(Identification(Frbr(Xml),
             "<scl:JOLUXManifestation><scl:jolux scl:name=\"uriThis\"></scl:jolux><scl:jolux scl:name=\"userFormat\"></scl:jolux></scl:JOLUXManifestation>")));
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.Silent, reading.Status);
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.Silent, reading.Status);
         Assert.AreEqual(0, reading.NamedIdentities.Count, "an empty uriThis names nothing");
     }
 
@@ -70,7 +70,7 @@ public sealed class LuxembourgInFileRightsReaderV2Tests
     public void AnOwnBlockWithoutALicenceIsOwnBlockEmptyEvenBesideACcBySibling()
     {
         var reading = Read(File(Identification(Frbr(Xml), Block(Xml, null), Block(Pdf, CcBy))));
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.OwnBlockEmpty, reading.Status);
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.OwnBlockEmpty, reading.Status);
         CollectionAssert.AreEqual(new[] { CcBy }, reading.DeclaredLicenceIris.ToArray());
     }
 
@@ -78,14 +78,14 @@ public sealed class LuxembourgInFileRightsReaderV2Tests
     public void ALeadingPostitIsTolerated()
     {
         var reading = Read(File(Identification(Frbr(Xml), Block(Xml, CcBy)), postit: true));
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.Bound, reading.Status);
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.Bound, reading.Status);
     }
 
     [TestMethod]
     public void AFrbrMismatchIsRecordedAndIgnored()
     {
         var reading = Read(File(Identification(Frbr(ActXml), Block(Xml, CcBy))));
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.Bound, reading.Status);
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.Bound, reading.Status);
         CollectionAssert.AreEqual(new[] { ActXml }, reading.FrbrManifestationIdentities.ToArray());
     }
 
@@ -93,12 +93,12 @@ public sealed class LuxembourgInFileRightsReaderV2Tests
     public void SclInASiblingOrAComponentBlockIsDeclared()
     {
         var sibling = Read(File(Identification(Frbr(Xml), Block(Xml, CcBy), Block(Pdf, Scl))));
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.Bound, sibling.Status);
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.Bound, sibling.Status);
         CollectionAssert.AreEqual(new[] { CcBy, Scl }.Order(StringComparer.Ordinal).ToArray(), sibling.DeclaredLicenceIris.ToArray());
 
         var component = Read(File(Identification(Frbr(Xml), Block(Xml, CcBy)),
             attachment: $"<attachments><attachment><doc name=\"annexe\"><meta><identification source=\"#s\">{Block(Expression + "/annexe/xml", Scl)}</identification></meta></doc></attachment></attachments>"));
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.Bound, component.Status, "a component block never binds");
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.Bound, component.Status, "a component block never binds");
         CollectionAssert.AreEqual(new[] { CcBy }, component.OwnBlockLicenceIris.ToArray());
         CollectionAssert.Contains(component.DeclaredLicenceIris.ToArray(), Scl);
     }
@@ -109,22 +109,22 @@ public sealed class LuxembourgInFileRightsReaderV2Tests
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         var bytes = "%PDF-1.4 synthetic"u8.ToArray();
         var receipt = await store.CreateAsync(bytes, CustodyClass.NightlyFloor90d, CancellationToken.None);
-        var reading = await LuxembourgInFileRightsReader.ReadV2Async(
+        var reading = await LuxembourgInFileRightsReader.ReadTwoAsync(
             store, BodyRef(receipt.Reference.ContentSha256), Pdf, LuxembourgUserFormatToken.Pdf, CancellationToken.None);
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.NotApplicable, reading.Status);
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.NotApplicable, reading.Status);
         Assert.IsFalse(reading.IsRejected);
     }
 
     [TestMethod]
     public void MalformedXmlAndMarkupInsideALicenceValueAreRejected()
     {
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.MalformedXml,
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.MalformedXml,
             Read(Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(File(Identification(Frbr(Xml), Block(Xml, CcBy)))) + "<trailing")).Status);
         var markup = Read(File(Identification(Frbr(Xml),
             $"<scl:JOLUXManifestation><scl:jolux scl:name=\"uriThis\">{Xml}</scl:jolux><scl:jolux scl:name=\"license\"><b>{CcBy}</b></scl:jolux></scl:JOLUXManifestation>")));
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.InvalidLicenceIri, markup.Status);
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.InvalidLicenceIri, markup.Status);
         Assert.IsTrue(markup.IsRejected);
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.InvalidLicenceIri,
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.InvalidLicenceIri,
             Read(File(Identification(Frbr(Xml), Block(Xml, " " + CcBy)))).Status, "a value is never trimmed");
     }
 
@@ -132,15 +132,15 @@ public sealed class LuxembourgInFileRightsReaderV2Tests
     public void LicenceLikeBodyTextIsNotADeclaration()
     {
         var reading = Read(File(Identification(Frbr(Xml)), body: $"<p>license {CcBy} licenceSCL</p>"));
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.Silent, reading.Status);
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.Silent, reading.Status);
     }
 
     [TestMethod]
     public void TwoBlocksNamingTheFetchedFileAreAnAmbiguousBinding()
     {
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.AmbiguousBinding,
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.AmbiguousBinding,
             Read(File(Identification(Frbr(Xml), Block(Xml, CcBy), Block(Xml, CcBy)))).Status);
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.AmbiguousBinding,
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.AmbiguousBinding,
             Read(File(Identification(Frbr(Xml),
                 $"<scl:JOLUXManifestation><scl:jolux scl:name=\"uriThis\">{Xml}</scl:jolux><scl:jolux scl:name=\"uriThis\">{Pdf}</scl:jolux>"
                 + $"<scl:jolux scl:name=\"license\">{CcBy}</scl:jolux></scl:JOLUXManifestation>"))).Status,
@@ -152,8 +152,8 @@ public sealed class LuxembourgInFileRightsReaderV2Tests
     {
         var two = Encoding.UTF8.GetString(File(Identification(Frbr(Xml), Block(Xml, CcBy))))
             .Replace("</act>\n", "</act>\n<act name=\"second\"/>\n", StringComparison.Ordinal);
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.RootRejected, Read(Encoding.UTF8.GetBytes(two)).Status);
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.RootRejected,
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.RootRejected, Read(Encoding.UTF8.GetBytes(two)).Status);
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.RootRejected,
             Read("<?xml version=\"1.0\"?><html xmlns=\"http://www.w3.org/1999/xhtml\"/>"u8.ToArray()).Status);
     }
 
@@ -168,8 +168,8 @@ public sealed class LuxembourgInFileRightsReaderV2Tests
         var one = await LuxembourgInFileRightsReader.ReadAsync(
             store, bodyRef, Xml, bodyRef, LuxembourgUserFormatToken.XmlAkomaNtoso, CancellationToken.None);
         Assert.AreEqual(LuxembourgInFileRightsReadStatus.ManifestationIdentityMismatch, one.Status);
-        var two = await LuxembourgInFileRightsReader.ReadV2Async(store, bodyRef, Xml, LuxembourgUserFormatToken.XmlAkomaNtoso, CancellationToken.None);
-        Assert.AreEqual(LuxembourgInFileRightsReadingV2Status.Bound, two.Status);
+        var two = await LuxembourgInFileRightsReader.ReadTwoAsync(store, bodyRef, Xml, LuxembourgUserFormatToken.XmlAkomaNtoso, CancellationToken.None);
+        Assert.AreEqual(LuxembourgInFileRightsReadingTwoStatus.Bound, two.Status);
     }
 
     /// <summary>
@@ -199,8 +199,8 @@ public sealed class LuxembourgInFileRightsReaderV2Tests
 
     // ---- Synthetic files in the publisher's shape. ----
 
-    private static LuxembourgInFileRightsReadingV2 Read(byte[] bytes) =>
-        LuxembourgInFileRightsReader.ReadV2(bytes, BodyRef(Convert.ToHexStringLower(SHA256.HashData(bytes))), Xml);
+    private static LuxembourgInFileRightsReadingTwo Read(byte[] bytes) =>
+        LuxembourgInFileRightsReader.ReadTwo(bytes, BodyRef(Convert.ToHexStringLower(SHA256.HashData(bytes))), Xml);
 
     private static SourceArtifactRef BodyRef(string sha256) => new(
         ContentDerivedIdentity.DeriveUuidUrn("lex-lu-in-file-body-digest/1", Encoding.UTF8.GetBytes(sha256)), sha256);

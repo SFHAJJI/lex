@@ -68,10 +68,14 @@ public sealed class LuxembourgRightsResolutionWirePinTests
         Assert.AreEqual(DispositionSha256, ContractJson.Sha256(disposition));
         Assert.AreEqual(SetSha256, ContractJson.Sha256(set), "the Gazette and query result digests hash Gazette sets");
 
-        foreach (var member in new[] { "in_file_reading_v2", "resolution_rule_sha256", "licence_page" })
+        foreach (var member in new[] { "in_file_reading", "resolution_rule", "licence_page" })
         {
-            StringAssert.DoesNotMatch(ContractJson.Serialize(refused), new System.Text.RegularExpressions.Regex("\"" + member + "\""),
-                "a resolution /1 carries no /2 member on the wire");
+            foreach (var resolution in new[] { agreed, refused })
+            {
+                StringAssert.DoesNotMatch(ContractJson.Serialize(resolution),
+                    new System.Text.RegularExpressions.Regex("\"" + member),
+                    "a resolution /1 carries no /2 member on the wire");
+            }
         }
     }
 

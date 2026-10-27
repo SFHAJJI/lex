@@ -117,8 +117,8 @@ public sealed class LuxembourgRederivationTests
         CollectionAssert.AreEqual(
             new[]
             {
-                new LuxembourgRederivationRule("lex-lu-in-file-rights-reading/2", LuxembourgInFileRightsReaderV2Tests.PinnedReadingV2ProfileSha256),
-                new LuxembourgRederivationRule("lex-lu-rights-resolution/2", LuxembourgRightsChannels.ResolutionV2ProfileSha256),
+                new LuxembourgRederivationRule("lex-lu-in-file-rights-reading/2", LuxembourgInFileRightsReaderTwoTests.PinnedReadingTwoProfileSha256),
+                new LuxembourgRederivationRule("lex-lu-rights-resolution/2", LuxembourgRightsChannels.ResolutionTwoProfileSha256),
                 new LuxembourgRederivationRule("lex-v3-luxembourg-akn-article-inventory-profile/4", Inventory4RuleSha256),
                 new LuxembourgRederivationRule("lex-v3-luxembourg-akn-legal-content-profile/3", Content3RuleSha256),
                 new LuxembourgRederivationRule("lex-v3-luxembourg-expression-state/2", State2RuleSha256),

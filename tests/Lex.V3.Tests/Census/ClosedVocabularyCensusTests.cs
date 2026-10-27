@@ -567,7 +567,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "WemiTupleTypedQuarantine, WemiRootMismatch, BodyNotRetained",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgGazetteBodyOutcome: Admitted, "
                     + "Rejected, TypedGap",
-                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgInFileRightsReadingV2Status: Bound, "
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgInFileRightsReadingTwoStatus: Bound, "
                     + "OwnBlockEmpty, Unbound, Silent, NotApplicable, MalformedXml, RootRejected, "
                     + "AmbiguousBinding, InvalidLicenceIri",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgLiteralDisposition: Accepted, "

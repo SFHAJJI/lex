@@ -28,7 +28,7 @@ namespace Lex.V3.Ingest.Tests;
 /// them; nothing goes over the network.
 /// </para>
 /// <para>
-/// RELEASE 2. With <c>held</c> naming <c>run15-held-release2.jsonl</c> (what <see cref="LuxembourgInFileRightsReadingV2Run15Probe"/>
+/// RELEASE 2. With <c>held</c> naming <c>run15-held-release2.jsonl</c> (what <see cref="LuxembourgInFileRightsReadingTwoRun15Probe"/>
 /// writes: each held body's disposition under reading /2 and resolution /2) and <c>admission_policy</c> <c>A</c>, a body is
 /// acquired when policy A admits its disposition, and each corpus member whose disposition the file changes is re-bound as R1
 /// re-binds it (resolution /2, binding /2, the policy's outcome; derive-c's evidence references stand in for the /2 evidence
@@ -161,7 +161,7 @@ public sealed class LuxembourgIndexNineBuildRun15Probe
         var rightsByObjectRef = new Dictionary<string, string>(StringComparer.Ordinal);
         var mismatchedObjectRefs = 0;
         // Release 1 reads the acquisition's rights (run15-held.jsonl, policy /1); Release 2 reads the dispositions
-        // LuxembourgInFileRightsReadingV2Run15Probe wrote (run15-held-release2.jsonl) under policy A.
+        // LuxembourgInFileRightsReadingTwoRun15Probe wrote (run15-held-release2.jsonl) under policy A.
         var heldFile = (string?)settings["held"] ?? "run15-held.jsonl";
         var admissionPolicy = (string?)settings["admission_policy"] switch
         {
@@ -265,7 +265,7 @@ public sealed class LuxembourgIndexNineBuildRun15Probe
 
                 var disposition = Disposition(wire);
                 var admitted = LuxembourgRightsAdmissionPolicies.Admits(admissionPolicy, disposition);
-                var rule = LuxembourgRightsChannels.ResolutionV2ProfileSha256;
+                var rule = LuxembourgRightsChannels.ResolutionTwoProfileSha256;
                 rebound++;
                 return (member with
                 {
@@ -277,7 +277,7 @@ public sealed class LuxembourgIndexNineBuildRun15Probe
                         // stand-in digest, never verified here (the probe builds no corpus).
                         BindingSha256 = LexCorpus6LuxembourgRights.ComputeBindingSha256(
                             member.RunIdentity, rights.BoundRunIdentity, rights.SelectedWemi.IdentitySha256, rule,
-                            LuxembourgInFileRightsReader.ReadingV2ProfileSha256, admissionPolicy, new string('0', 64)),
+                            LuxembourgInFileRightsReader.ReadingTwoProfileSha256, admissionPolicy, new string('0', 64)),
                         ResolutionRule = rule,
                     },
                     Gaps = admitted ? [] : [LuxembourgRightsChannelResolution.ReasonCodeOf(disposition)],

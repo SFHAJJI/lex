@@ -674,7 +674,9 @@ public sealed class GuardedConstructionCensusTests
                     + "thFinalRights, "
                     + "method private static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationPopulation::TryCreateCo"
-                    + "re",
+                    + "re, "
+                    + "method private static "
+                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRederivation::RederiveRightsAsync",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder+CatalogueFacts: constructor private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder+CatalogueFacts::.ctor, "
                     + "method internal static "
@@ -937,8 +939,6 @@ public sealed class GuardedConstructionCensusTests
                     + "sync, "
                     + "method private instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunCoreAsync, "
-                    + "method private static "
-                    + "Lex.V3.Ingest.Luxembourg.LuxembourgRederivation::RederiveRightsAsync, "
                     + "method public instance "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionAdapter::RunAdaptiveScopedA"
                     + "sync, "

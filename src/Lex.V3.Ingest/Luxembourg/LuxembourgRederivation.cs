@@ -136,7 +136,7 @@ public static class LuxembourgRederivation
     private const string RightsReResolved = "re_resolved_reading_2_keeping_agreed_admissions";
 
     /// <summary>The schema of the in-file rights evidence index /2 Release 2 holds (every reading, refused ones too).</summary>
-    internal const string InFileEvidenceV2Schema = "lex-lu-in-file-rights-evidence/2";
+    internal const string InFileEvidenceTwoSchema = "lex-lu-in-file-rights-evidence/2";
 
     /// <summary>
     /// The record's <c>publisher_session</c>: the path holds no transport and builds no session. A statement of the path,
@@ -157,11 +157,11 @@ public static class LuxembourgRederivation
         Release2RuleSet => Array.AsReadOnly(new[]
         {
             new LuxembourgRederivationRule(
-                FirstLine(LuxembourgInFileRightsReader.CopyReadingV2ProfileBytes()),
-                LuxembourgInFileRightsReader.ReadingV2ProfileSha256),
+                FirstLine(LuxembourgInFileRightsReader.CopyReadingTwoProfileBytes()),
+                LuxembourgInFileRightsReader.ReadingTwoProfileSha256),
             new LuxembourgRederivationRule(
-                FirstLine(LuxembourgRightsChannels.CopyResolutionV2ProfileBytes()),
-                LuxembourgRightsChannels.ResolutionV2ProfileSha256),
+                FirstLine(LuxembourgRightsChannels.CopyResolutionTwoProfileBytes()),
+                LuxembourgRightsChannels.ResolutionTwoProfileSha256),
         }.Concat(ProfileRules()).ToArray()),
         _ => throw new ArgumentException(
             $"Rule set '{ruleSet}' is not one this build implements ({string.Join(", ", ImplementedRuleSets)}).",
@@ -375,9 +375,13 @@ public static class LuxembourgRederivation
         RightsPart? rights = null;
         if (string.Equals(request.RuleSet, Release2RuleSet, StringComparison.Ordinal))
         {
-            (run, rights) = await RederiveRightsAsync(custodyStore, run, population, acquiredDispositions,
+            (var rebound, rights) = await RederiveRightsAsync(custodyStore, run.TypedAssertions, population, acquiredDispositions,
                     request.AdmissionPolicySha256, resumption?.ResumedAt, cancellationToken)
                 .ConfigureAwait(false);
+
+            // 6. A run of R0's own carrying the re-bound population: the run is re-made here, at R1's one door onto it, by
+            // the run's own copy, which refuses a refused run and a population that is not its own members'.
+            run = run.WithHeldBodyDerivationPopulation(rebound);
             population = run.HeldBodyDerivationPopulation!;
         }
 
@@ -495,8 +499,9 @@ public static class LuxembourgRederivation
     /// <summary>
     /// R1 with rights (LU-DATA-DESIGN v2 §2.2, Release 2, steps 1 to 6): every held body of <paramref name="population"/>, in
     /// ordinal order, read by its digest under reading /2; the readings held as the in-file evidence index /2; each body
-    /// re-resolved by resolution /2 against R0's own SPARQL channel for it, the rights' bound run identity and the run's
-    /// catalogue licences; the checks; then the population re-bound and a run of R0's own carrying it.
+    /// re-resolved by resolution /2 against R0's own SPARQL channel for it, the rights' bound run identity and the catalogue
+    /// licences of the run's <paramref name="typedAssertions"/>; the checks; then the population re-bound. It hands back the
+    /// re-bound population, never a run: the caller re-makes R0's run around it.
     /// </summary>
     /// <remarks>
     /// Refused, before anything is minted: a resolution that is not terminal evidence (<c>channel_enumeration_unproven</c>,
@@ -504,9 +509,9 @@ public static class LuxembourgRederivation
     /// naming its members; and a member the acquisition admitted that reading /2 does not agree with. A member the acquisition
     /// admitted keeps its own resolution; every other member takes its resolution /2.
     /// </remarks>
-    private static async Task<(LuxembourgQueryExecutionResult Run, RightsPart Rights)> RederiveRightsAsync(
+    private static async Task<(LuxembourgHeldBodyDerivationPopulation Population, RightsPart Rights)> RederiveRightsAsync(
         ICustodyStore custodyStore,
-        LuxembourgQueryExecutionResult run,
+        IReadOnlyList<LuxembourgTypedAssertion> typedAssertions,
         LuxembourgHeldBodyDerivationPopulation population,
         BodyCount[] acquiredDispositions,
         string admissionPolicySha256,
@@ -514,7 +519,7 @@ public static class LuxembourgRederivation
         CancellationToken cancellationToken)
     {
         // 1. Every held body under reading /2, by its digest.
-        var readings = new List<(LuxembourgHeldBodyDerivationInput Input, LuxembourgInFileRightsReadingV2 Reading)>(population.Inputs.Count);
+        var readings = new List<(LuxembourgHeldBodyDerivationInput Input, LuxembourgInFileRightsReadingTwo Reading)>(population.Inputs.Count);
         foreach (var input in population.Inputs.OrderBy(static input => input.ObjectOrdinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -529,16 +534,16 @@ public static class LuxembourgRederivation
             var bodySha256 = input.Receipt.Reference.ContentSha256;
             var bodyRef = new SourceArtifactRef(
                 ContentDerivedIdentity.DeriveUuidUrn("lex-lu-in-file-body-digest/1", Encoding.UTF8.GetBytes(bodySha256)), bodySha256);
-            readings.Add((input, await LuxembourgInFileRightsReader.ReadV2Async(
+            readings.Add((input, await LuxembourgInFileRightsReader.ReadTwoAsync(
                 custodyStore, bodyRef, input.SelectedWemiCandidate.ManifestationIri, input.Address.UserFormatToken,
                 cancellationToken).ConfigureAwait(false)));
         }
 
         // 2. The in-file evidence index /2: every reading, refused ones too, under the rule digests, referencing the /1 index.
         var index = new EvidenceIndexDocument(
-            InFileEvidenceV2Schema,
-            LuxembourgInFileRightsReader.ReadingV2ProfileSha256,
-            LuxembourgRightsChannels.ResolutionV2ProfileSha256,
+            InFileEvidenceTwoSchema,
+            LuxembourgInFileRightsReader.ReadingTwoProfileSha256,
+            LuxembourgRightsChannels.ResolutionTwoProfileSha256,
             population.Inputs.Select(static input => input.RightsResolution!.InFileObservations.EnumerationRef)
                 .Distinct().OrderBy(static reference => reference.Sha256, StringComparer.Ordinal).ToArray(),
             readings.Select(static entry => new EvidenceReading(
@@ -559,14 +564,14 @@ public static class LuxembourgRederivation
         }
 
         var indexRef = new SourceArtifactRef(
-            ContentDerivedIdentity.DeriveUuidUrn(InFileEvidenceV2Schema, indexBytes), indexReceipt.Reference.ContentSha256);
+            ContentDerivedIdentity.DeriveUuidUrn(InFileEvidenceTwoSchema, indexBytes), indexReceipt.Reference.ContentSha256);
         if (!string.Equals(indexRef.Sha256, CustodyDigest.Of(indexBytes), StringComparison.Ordinal))
         {
             throw new CustodyIntegrityException("The in-file rights evidence index /2's receipt names other bytes.");
         }
 
         // 3. Resolution /2 against R0's own SPARQL channel, the bound run identity and the run's catalogue licences.
-        var catalogue = LuxembourgRightsCatalogue.From(run.TypedAssertions
+        var catalogue = LuxembourgRightsCatalogue.From(typedAssertions
             .Where(static assertion => assertion.FactDisposition.Predicate == LuxembourgAssertionPredicate.License)
             .Select(static assertion => (
                 assertion.Assertion.SubjectIri,
@@ -577,20 +582,20 @@ public static class LuxembourgRederivation
         var resolved = readings.Select(entry =>
         {
             var r0 = entry.Input.RightsResolution!;
-            return (entry.Input, R0: r0, V2: LuxembourgRightsChannels.ResolveV2(
+            return (entry.Input, R0: r0, Two: LuxembourgRightsChannels.ResolveTwo(
                 entry.Input.SelectedWemiCandidate.ManifestationIri, r0.BoundRunIdentity, r0.SparqlObservations,
                 r0.BoundRunIdentity, indexRef, entry.Reading, catalogue));
         }).ToArray();
         readings.Clear();
 
         // 4. The checks, each naming its members.
-        Refuse(resolved.Where(static entry => entry.V2.Disposition is LuxembourgRightsChannelDisposition.ChannelEnumerationUnproven
+        Refuse(resolved.Where(static entry => entry.Two.Disposition is LuxembourgRightsChannelDisposition.ChannelEnumerationUnproven
                 or LuxembourgRightsChannelDisposition.EvidenceNotIndependent),
             "resolves to a non-terminal disposition under resolution /2");
-        Refuse(resolved.Where(static entry => entry.V2.Disposition == LuxembourgRightsChannelDisposition.NonAdmittingLicenceScl),
+        Refuse(resolved.Where(static entry => entry.Two.Disposition == LuxembourgRightsChannelDisposition.NonAdmittingLicenceScl),
             "resolves to non_admitting_licence_scl under resolution /2, so its holding would have differed");
         Refuse(resolved.Where(static entry => entry.R0.Disposition == LuxembourgRightsChannelDisposition.AgreedSameRunCcBy &&
-                entry.V2.Disposition != LuxembourgRightsChannelDisposition.AgreedCcByRederived),
+                entry.Two.Disposition != LuxembourgRightsChannelDisposition.AgreedCcByRederived),
             "was admitted by the acquisition (agreed_same_run_cc_by) and reading /2 does not agree");
 
         // 4b. Under one of the owner's rulings, each single-channel resolution the policy names is bound to the retained SPARQL
@@ -604,13 +609,13 @@ public static class LuxembourgRederivation
             for (var position = 0; position < resolved.Length; position++)
             {
                 var entry = resolved[position];
-                if (!LuxembourgRightsChannelResolution.IsSingleChannel(entry.V2.Disposition) ||
-                    !LuxembourgRightsAdmissionPolicies.Admits(admissionPolicySha256, entry.V2.Disposition))
+                if (!LuxembourgRightsChannelResolution.IsSingleChannel(entry.Two.Disposition) ||
+                    !LuxembourgRightsAdmissionPolicies.Admits(admissionPolicySha256, entry.Two.Disposition))
                 {
                     continue;
                 }
 
-                var rightsIndex = entry.V2.SparqlObservations.EnumerationRef.Sha256;
+                var rightsIndex = entry.Two.SparqlObservations.EnumerationRef.Sha256;
                 if (!indexes.TryGetValue(rightsIndex, out var pages))
                 {
                     pages = await LuxembourgSparqlLicencePageIndex.BuildAsync(custodyStore, rightsIndex, resumedAt, cancellationToken)
@@ -626,44 +631,43 @@ public static class LuxembourgRederivation
                     pageIndexDigests.Add(pages.Sha256);
                 }
 
-                if (pages.PageOf(entry.V2.SelectedManifestationIri) is not { } page ||
-                    !page.LicenceIris.SequenceEqual(entry.V2.SparqlObservation!.LicenceIris, StringComparer.Ordinal))
+                if (pages.PageOf(entry.Two.SelectedManifestationIri) is not { } page ||
+                    !page.LicenceIris.SequenceEqual(entry.Two.SparqlObservation!.LicenceIris, StringComparer.Ordinal))
                 {
                     throw new CustodyIntegrityException(
                         $"The single-channel admission of {entry.Input.CorpusRecord.ObjectRef.PublisherUri} "
-                        + $"({ContractWire.NameOf(entry.V2.Disposition)}) finds no retained licence page holding exactly its SPARQL licence.");
+                        + $"({ContractWire.NameOf(entry.Two.Disposition)}) finds no retained licence page holding exactly its SPARQL licence.");
                 }
 
-                resolved[position] = entry with { V2 = entry.V2.WithLicencePage(page) };
+                resolved[position] = entry with { Two = entry.Two.WithLicencePage(page) };
             }
 
             licencePagesSha256 = string.Join(",", pageIndexDigests.Order(StringComparer.Ordinal));
         }
 
-        // 5 and 6. The acquisition's admissions kept; every other member re-bound; a run of R0's own carrying them.
+        // 5. The acquisition's admissions kept; every other member re-bound.
         var final = resolved.ToDictionary(
             static entry => entry.Input.ObjectOrdinal,
-            static entry => entry.R0.Disposition == LuxembourgRightsChannelDisposition.AgreedSameRunCcBy ? entry.R0 : entry.V2);
+            static entry => entry.R0.Disposition == LuxembourgRightsChannelDisposition.AgreedSameRunCcBy ? entry.R0 : entry.Two);
         var rights = new RightsPart(
-            LuxembourgInFileRightsReader.ReadingV2ProfileSha256,
-            LuxembourgRightsChannels.ResolutionV2ProfileSha256,
+            LuxembourgInFileRightsReader.ReadingTwoProfileSha256,
+            LuxembourgRightsChannels.ResolutionTwoProfileSha256,
             indexRef.Sha256,
             catalogue.Count,
             acquiredDispositions,
-            BodyCounts(resolved.Select(static entry => ContractWire.NameOf(entry.V2.Disposition))),
+            BodyCounts(resolved.Select(static entry => ContractWire.NameOf(entry.Two.Disposition))),
             resolved.Count(static entry => entry.R0.Disposition == LuxembourgRightsChannelDisposition.AgreedSameRunCcBy))
         {
             LicencePagesSha256 = licencePagesSha256,
             SingleChannelAdmitted = licencePagesSha256 is null
                 ? null
-                : resolved.Count(entry => LuxembourgRightsChannelResolution.IsSingleChannel(entry.V2.Disposition) &&
-                    LuxembourgRightsAdmissionPolicies.Admits(admissionPolicySha256, entry.V2)),
+                : resolved.Count(entry => LuxembourgRightsChannelResolution.IsSingleChannel(entry.Two.Disposition) &&
+                    LuxembourgRightsAdmissionPolicies.Admits(admissionPolicySha256, entry.Two)),
         };
-        var rebound = run.WithHeldBodyDerivationPopulation(population.WithRederivedRights(final));
-        return (rebound, rights);
+        return (population.WithRederivedRights(final), rights);
 
         static void Refuse(
-            IEnumerable<(LuxembourgHeldBodyDerivationInput Input, LuxembourgRightsChannelResolution R0, LuxembourgRightsChannelResolution V2)> members,
+            IEnumerable<(LuxembourgHeldBodyDerivationInput Input, LuxembourgRightsChannelResolution R0, LuxembourgRightsChannelResolution Two)> members,
             string what)
         {
             var named = members.ToArray();
@@ -673,7 +677,7 @@ public static class LuxembourgRederivation
                     $"{named.Length} held member(s) {what}: "
                     + string.Join("; ", named.Take(20).Select(static entry =>
                         $"{entry.Input.CorpusRecord.ObjectRef.PublisherUri} ({ContractWire.NameOf(entry.R0.Disposition)} -> "
-                        + $"{ContractWire.NameOf(entry.V2.Disposition)})"))
+                        + $"{ContractWire.NameOf(entry.Two.Disposition)})"))
                     + (named.Length > 20 ? "; …" : ""));
             }
         }
