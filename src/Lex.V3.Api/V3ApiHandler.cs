@@ -97,7 +97,10 @@ internal sealed class V3ApiHandler
         // Every answer carries the host's security headers; a page replaces the policy with its own (V3HostHeaders).
         V3HostHeaders.Apply(context.Response);
         var rawTarget = context.Features.Get<IHttpRequestFeature>()?.RawTarget ?? string.Empty;
-        var binding = V3RestRouteBinding.Served.FirstOrDefault(served => served.Claims(rawTarget));
+        // Every registered operation has a route (the specification of record, §3: "All 27 registered operations are served, or
+        // refuse with the typed reason their capability manifest states"): the served ones answer from the mount, and the ones
+        // served from no data refuse inside a normal envelope (V3RestRouteBinding.Refusing).
+        var binding = V3RestRouteBinding.Routed.FirstOrDefault(routed => routed.Claims(rawTarget));
         if (binding is not null || string.Equals(rawTarget, McpRawTarget, StringComparison.Ordinal))
         {
             // An operation, over REST or MCP: counted against its client's limit (R109), and holding one of the client's
@@ -221,18 +224,9 @@ internal sealed class V3ApiHandler
     {
         if (rawTarget.StartsWith("/api/v3/", StringComparison.Ordinal))
         {
-            // A registered operation this mount has no route for is a typed answer of its own
-            // (operation_not_served), so a client cannot take it for a path nothing names; the path
-            // segment is compared with the reviewed registry's ids exactly, and a query or a trailing
-            // segment keeps it a path nothing names, as the served routes' own claim does.
-            var operationId = rawTarget["/api/v3/".Length..];
-            var registeredAndNotServed =
-                V3OperationRegistry.Reviewed.Operations.Any(operation => string.Equals(operation.OperationId, operationId, StringComparison.Ordinal)) &&
-                !V3RestRouteBinding.Served.Any(served => string.Equals(served.OperationId, operationId, StringComparison.Ordinal));
-            await V3TransportResponse.WriteAsync(
-                    context.Response,
-                    registeredAndNotServed ? V3TransportFailureKind.OperationNotServed : V3TransportFailureKind.UnknownRoute,
-                    cancellationToken)
+            // Every registered operation is routed above, so a path here names nothing: a typo, a case variant or a trailing
+            // segment, which is the unknown route.
+            await V3TransportResponse.WriteAsync(context.Response, V3TransportFailureKind.UnknownRoute, cancellationToken)
                 .ConfigureAwait(false);
             return;
         }
@@ -319,11 +313,11 @@ internal sealed class V3ApiHandler
     internal const string McpRawTarget = "/mcp";
 
     /// <summary>
-    /// The one dispatch from a served operation id to the mount's method, used by the REST routes and
+    /// The one dispatch from a routed operation id to the mount's method, used by the REST routes and
     /// by every MCP tool call, so the two transports cannot run different code for one operation
     /// (LAUNCH-CONTRACT: REST and MCP derive identical envelopes). Only ids in
-    /// <see cref="V3RestRouteBinding.Served"/> are dispatched; any other id is a programming error
-    /// here, never a fall-through to resolve.
+    /// <see cref="V3RestRouteBinding.Routed"/> are dispatched (the served ones and the ones served from no data, which refuse);
+    /// any other id is a programming error here, never a fall-through to resolve.
     /// </summary>
     internal static Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> ExecuteFor(
         V3CorpusMount corpusMount,
@@ -332,7 +326,7 @@ internal sealed class V3ApiHandler
     {
         ArgumentNullException.ThrowIfNull(corpusMount);
         ArgumentNullException.ThrowIfNull(utcNow);
-        return operationId switch
+        Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> execute = operationId switch
         {
             "resolve" => request => corpusMount.Resolve(request, utcNow()),
             "as_of" => request => corpusMount.AsOf(request, utcNow()),
@@ -358,8 +352,13 @@ internal sealed class V3ApiHandler
             "events" => request => corpusMount.Events(request, utcNow()),
             "answer_drift" => request => corpusMount.AnswerDrift(request, utcNow()),
             "as_observed" => request => corpusMount.AsObserved(request, utcNow()),
-            _ => throw new ArgumentOutOfRangeException(nameof(operationId), operationId, "Not a served operation."),
+            "concepts" or "knowable_on" or "transposition" => request => corpusMount.Unserved(request, utcNow()),
+            _ => throw new ArgumentOutOfRangeException(nameof(operationId), operationId, "Not a routed operation."),
         };
+
+        // An identifier the out-of-scope list names (V3OutOfScope) is refused out_of_corpus_scope by every operation that takes
+        // one, before the mount is read, so its official place and who to ask are said the same way everywhere.
+        return request => corpusMount.RefuseOutOfScope(request, utcNow()) ?? execute(request);
     }
 
     /// <summary>

@@ -143,6 +143,13 @@ public sealed class V3EnvelopeSamplesTests
         {
             await CaptureAsync(fixture, mount, "coverage", "the whole mount: an answer", new { }),
             await CaptureAsync(fixture, mount, "ask", "any question: the contained assistant's card under the point verdict", new { question = "Can I be fired while on sick leave?" }),
+            // The request the Developers page shows the served release's own answer to (the plan's item 8.4: live examples from the
+            // release's own data): the first held work, one row.
+            await CaptureAsync(fixture, mount, "browse", "the first held work, one row: the answer the Developers page is rendered from", new { limit = 1 }),
+            // An operation served from no data refuses with its typed reason inside the envelope (the plan's item 8.6).
+            await CaptureAsync(fixture, mount, "concepts", "an operation served from no data: a refusal naming the mode asked, the modes served and the data that would serve it", new { identifier = $"/lu-legilux/{fixture.WorkKey}" }),
+            // An instrument the out-of-scope list names (the plan's item 6.10; J5).
+            await CaptureAsync(fixture, mount, "dossier", "a CSSF circular asked for by its name (J5): a refusal naming its official place and who to ask", new { identifier = "Circulaire CSSF 20/747" }),
             await CaptureAsync(fixture, null, "coverage", "no corpus mounted: a refusal", new { }),
             await CaptureAsync(fixture, mount, "search", "a language the mount holds no text in: a refusal with a payload", new { query = "loyer", language = "deu" }),
             await CaptureAsync(fixture, mount, "search", "a phrase the held text carries: an answer with hits in both lanes", new { query = "assemblée générale", language = "fra" }),
@@ -244,7 +251,16 @@ public sealed class V3EnvelopeSamplesTests
             {
                 ["code"] = code,
                 ["mandatory_payload_fields"] = new JsonArray(registry.MandatoryPayloadFields(code).Select(static field => (JsonNode)field).ToArray()),
+                ["payload_schema"] = registry.RefusalPayloadSchema(code),
+                ["payload_schema_sha256"] = registry.RefusalPayloadSchemaSha256(code),
             }).ToArray()),
+            // The checked-in list of what Lex never holds (the plan's item 6.10), whose digest every out_of_corpus_scope names.
+            ["out_of_scope"] = new JsonObject
+            {
+                ["schema"] = V3OutOfScope.Schema,
+                ["sha256"] = V3OutOfScope.Sha256,
+                ["classes"] = JsonNode.Parse(V3OutOfScope.CanonicalUtf8())!["classes"]!.DeepClone(),
+            },
         };
     }
 

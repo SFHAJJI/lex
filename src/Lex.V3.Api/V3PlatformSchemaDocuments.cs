@@ -40,8 +40,17 @@ internal sealed class V3PlatformSchemaDocuments : IV3PlatformSchemaDocuments
         Validate(operation.ResultSchema, document, "result");
     }
 
-    public void ValidateRefusal(JsonElement document) =>
+    /// <summary>
+    /// The refusal against the refusal schema, and its payload against its code's payload schema (<c>lex-v3-{code}-payload/1</c>,
+    /// the plan's item 6.10), each the document the registry's digest names, so a payload that lacks a mandated field or sends
+    /// one in another type never leaves the server as an answer.
+    /// </summary>
+    public void ValidateRefusal(JsonElement document)
+    {
         Validate(V3OperationRegistry.RefusalSchema, document, "refusal");
+        var code = document.GetProperty("code").GetString()!;
+        Validate(V3OperationRegistry.Reviewed.RefusalPayloadSchema(code), document.GetProperty("helpful_payload"), "refusal payload");
+    }
 
     private void Validate(string schemaId, JsonElement document, string role)
     {
@@ -90,6 +99,17 @@ internal sealed class V3PlatformSchemaDocuments : IV3PlatformSchemaDocuments
             V3OperationRegistry.RefusalSchema,
             "refusal.schema.json",
             V3OperationRegistry.Reviewed.RefusalSchemaSha256);
+        foreach (var code in V3OperationRegistry.Reviewed.RefusalCodes)
+        {
+            var schemaId = V3OperationRegistry.Reviewed.RefusalPayloadSchema(code);
+            Add(
+                schemas,
+                assembly,
+                schemaId,
+                V3PlatformSchemaExporter.FileNameFor(schemaId),
+                V3OperationRegistry.Reviewed.RefusalPayloadSchemaSha256(code));
+        }
+
         return new V3PlatformSchemaDocuments(schemas);
     }
 

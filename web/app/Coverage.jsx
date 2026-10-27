@@ -399,6 +399,8 @@ export function Coverage({ answer, copy = COVERAGE_COPY }) {
             {view.operations.notServedData.map((row) => (
               <tr key={row.operation}>
                 <td><Evidence value={row.operation} /></td>
+                <td><Evidence value={row.reason} /></td>
+                <td><Evidence value={row.requestedMode} /></td>
                 <td lang={ENGLISH_LANG}>{row.dataNeeded}</td>
               </tr>
             ))}

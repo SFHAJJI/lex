@@ -144,11 +144,11 @@ const ARTICLE_OUTCOMES = Object.freeze([
 ]);
 
 const OPERATIONS_NOTE =
-  'served_operations are the routes this mount answers and not_served_operations are registered '
-  + 'with no route on it; a request for an unserved operation answers the transport failure '
-  + 'operation_not_served (HTTP 404, below the envelope), which tells it apart from a path nothing '
-  + 'names (unknown_route); not_served_data names, for each unserved operation, the data that would '
-  + 'serve it, none of which the ingest produces';
+  'served_operations are the operations this mount answers from its data and not_served_operations are registered and '
+  + 'served from no data; every registered operation has a route over REST and MCP, and a request for an unserved one answers '
+  + 'inside a normal envelope with the typed refusal its row of not_served_data gives (reason: retrieval_mode_unavailable, '
+  + 'naming the requested mode and the modes this server serves), never a transport failure; not_served_data names, for each, '
+  + 'the data that would serve it, none of which the ingest produces';
 
 const SERVED = Object.freeze([
   'answer_drift', 'article_history', 'as_observed', 'as_of', 'ask', 'browse', 'changes_in_period',
@@ -167,6 +167,8 @@ const NOT_SERVED_DATA = Object.freeze([
     data_needed: 'the concept data attached to EU works: EuroVoc descriptors, EU directory codes and '
       + 'subject matters as the Publications Office records them; the EU index holds none of them',
     operation: 'concepts',
+    reason: 'retrieval_mode_unavailable',
+    requested_mode: 'r5_concepts',
   }),
   Object.freeze({
     data_needed: 'each held state\'s publication date beside its observation time (observed_from), so a '
@@ -174,12 +176,16 @@ const NOT_SERVED_DATA = Object.freeze([
       + "valid-from date; the observation times need each Luxembourg body's capture time in the "
       + "corpus, which no build records yet: a build's time bounds observation only from above",
     operation: 'knowable_on',
+    reason: 'retrieval_mode_unavailable',
+    requested_mode: 'r6_knowable_on',
   }),
   Object.freeze({
     data_needed: 'the transposition links: Legilux\'s transposes and draftTransposes assertions and the '
       + 'Publications Office\'s national implementing measures for Luxembourg, each kept as its '
       + 'publisher asserts it and never merged; neither is acquired',
     operation: 'transposition',
+    reason: 'retrieval_mode_unavailable',
+    requested_mode: 'r4_transposition',
   }),
 ]);
 

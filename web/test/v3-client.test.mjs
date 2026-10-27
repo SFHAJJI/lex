@@ -102,9 +102,9 @@ test("over the per-client limit, the 429 envelope is the refusal rate_limited, a
 });
 
 test("what is not an envelope is named for what it is, and never retried", async () => {
-  const problem = recordingFetch(respond(404, "application/problem+json", { code: "operation_not_served" }));
+  const problem = recordingFetch(respond(404, "application/problem+json", { code: "unknown_route" }));
   assert.deepEqual(await askV3("coverage", {}, { contract, fetchImpl: problem.fetchImpl }),
-    { state: "transport_failure", code: "operation_not_served", status: 404 });
+    { state: "transport_failure", code: "unknown_route", status: 404 });
   assert.equal(problem.calls.length, 1);
 
   const network = recordingFetch(() => { throw new TypeError("Failed to fetch"); });

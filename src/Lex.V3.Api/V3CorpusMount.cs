@@ -4677,17 +4677,17 @@ internal sealed partial class V3CorpusMount : IDisposable
         "the outcomes of members that are not acquired are not counted";
 
     internal const string CoverageOperationsNote =
-        "served_operations are the routes this mount answers and not_served_operations are registered with no route on it; " +
-        "a request for an unserved operation answers the transport failure operation_not_served (HTTP 404, below the envelope), " +
-        "which tells it apart from a path nothing names (unknown_route); not_served_data names, for each unserved operation, " +
+        "served_operations are the operations this mount answers from its data and not_served_operations are registered and " +
+        "served from no data; every registered operation has a route over REST and MCP, and a request for an unserved one answers " +
+        "inside a normal envelope with the typed refusal its row of not_served_data gives (reason: retrieval_mode_unavailable, " +
+        "naming the requested mode and the modes this server serves), never a transport failure; not_served_data names, for each, " +
         "the data that would serve it, none of which the ingest produces";
 
     /// <summary>
-    /// The data that would serve each registered operation this mount has no route for (the driver decision in STATUS:
-    /// they keep the transport failure <c>operation_not_served</c>, and the platform says, per operation, which data
-    /// would serve it). The data are the specification's own (<c>33-product-spec.md</c>: the publication-time view, the
-    /// bitemporal replay, the EuroVoc concepts and the transposition bridge). A served operation never appears here, and
-    /// an unserved one without an entry fails the coverage tests.
+    /// The data that would serve each registered operation this mount serves from no data, which answers its typed refusal
+    /// inside a normal envelope (the plan's item 8.6). The data are the specification's own (<c>33-product-spec.md</c>: the
+    /// publication-time view, the EuroVoc concepts and the transposition bridge). A served operation never appears here, and an
+    /// unserved one without an entry fails the coverage tests.
     /// </summary>
     internal static readonly IReadOnlyDictionary<string, string> NotServedDataNeeded =
         V3UnservedOperations.Rows.ToDictionary(static row => row.Operation, static row => row.DataNeeded, StringComparer.Ordinal);
@@ -4711,6 +4711,8 @@ internal sealed partial class V3CorpusMount : IDisposable
             .Select(static operation => new
             {
                 operation,
+                reason = Lex.V3.Contracts.Index.V3UnservedOperation.RetrievalModeUnavailable,
+                requested_mode = V3UnservedOperations.RequestedMode(operation),
                 data_needed = NotServedDataNeeded.TryGetValue(operation, out var needed)
                     ? needed
                     : throw new InvalidOperationException($"The unserved operation {operation} states no data that would serve it."),
@@ -4735,9 +4737,12 @@ internal sealed partial class V3CorpusMount : IDisposable
             not_served_operations = notServed,
             not_served_data = notServedData,
             note = CoverageOperationsNote,
+            // An operation served from no data is listed above, with its reason, for every identifier; a manifest written since
+            // 2026-10-27 states it with the same reason, and it is not repeated here.
             refused_for_eu = _europeReader.NotServed
-                .Where(static row => string.Equals(
-                    row.Reason, Lex.V3.Contracts.Index.V3UnservedOperation.RetrievalModeUnavailable, StringComparison.Ordinal))
+                .Where(row => string.Equals(
+                    row.Reason, Lex.V3.Contracts.Index.V3UnservedOperation.RetrievalModeUnavailable, StringComparison.Ordinal) &&
+                    !notServed.Contains(row.Operation, StringComparer.Ordinal))
                 .Select(static row => new { operation = row.Operation, reason = row.Reason, data_needed = row.DataNeeded })
                 .ToArray(),
             refused_for_eu_note = CoverageEuropeRefusedNote,

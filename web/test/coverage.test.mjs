@@ -323,7 +323,7 @@ test("the page renders the answer the platform really sends", async () => {
   assert.equal(shown.get("members"), String(answer.totals.members));
   assert.equal(shown.get("answered"), answer.operations.served_operations.join(" "));
   assert.equal(
-    shown.get("registered, with no route on this mount"),
+    shown.get("registered, served from no data and refused with a typed reason"),
     answer.operations.not_served_operations.join(" "),
   );
 
@@ -1344,8 +1344,8 @@ test("each unrouted operation says the data that would serve it, in its own row,
   assert.ok(view.operations.notServedData.every((row) => row.dataNeeded.length > 0));
   const html = renderCoverage(captured);
   assert.deepEqual(
-    tableRows(html, "The data that would serve each operation with no route"),
-    captured.operations.not_served_data.map((row) => [row.operation, row.data_needed]),
+    tableRows(html, "The data that would serve each operation served from no data"),
+    captured.operations.not_served_data.map((row) => [row.operation, row.reason, row.requested_mode, row.data_needed]),
     "each operation beside its data, in the table captioned for them");
 
   for (const [what, change, reason] of [
@@ -1520,7 +1520,7 @@ test("a mount that serves every registered operation says none where the unroute
     "the fixture must serve every registered operation for this to mean anything");
   for (const [renderer, html] of [["string", string(every)], ["react", react(every)]]) {
     assert.equal(
-      rows(html).get("registered, with no route on this mount"), "none",
+      rows(html).get("registered, served from no data and refused with a typed reason"), "none",
       `${renderer} left the empty list blank`);
   }
 });

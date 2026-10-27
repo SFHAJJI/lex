@@ -321,11 +321,15 @@ export function readingPageAddress(base, number, date = null) {
  * (Luxembourg's date, R13, which the server's clock gives), and the text's language it names, and with neither it is not
  * rendered (the page as built asks for itself); a dossier asks by the work. An
  * interface language's home page (`/en/`, `/en/index.html`) is rendered from `coverage`, asked with no parameters, as the
- * page as built asks it once loaded (`live-home.mjs`). Null for any other path.
+ * page as built asks it once loaded (`live-home.mjs`), and its Developers page (`/en/developers.html`) from `browse` for the
+ * first act held, one row, which it shows as its live examples (`developers.mjs`). Null for any other path.
  */
 export function sitePageFor(pathname, { today = null, search = '' } = {}) {
   const home = INTERFACE_LANGUAGES.find((language) => pathname === `/${language}/` || pathname === `/${language}/index.html`);
   if (home !== undefined) return Object.freeze({ language: home, kind: 'home', operation: 'coverage', parameters: Object.freeze({}) });
+  // The Developers page, rendered from browse for the first act held, which it shows as its live examples (`developers.mjs`).
+  const developers = INTERFACE_LANGUAGES.find((language) => pathname === `/${language}/developers.html`);
+  if (developers !== undefined) return Object.freeze({ language: developers, kind: 'developers', operation: 'browse', parameters: Object.freeze({ limit: 1 }) });
   const named = parseSitePath(pathname);
   if (named === null || named.locale === null) return null;
   if (named.kind === 'work') {

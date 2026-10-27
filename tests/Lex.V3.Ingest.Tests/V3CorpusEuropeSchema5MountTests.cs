@@ -20,7 +20,8 @@ namespace Lex.V3.Ingest.Tests;
 /// without force dates sends, whole envelope for whole envelope: no <c>force_dates</c> member, and the not-held row that says
 /// no force date is held. A later change that moves one of those answers on purpose records them again at its base: the
 /// answers were recorded again at v3/integration e504d188 (#989 gives every answer its freshness and commits context), by
-/// that code with this class alone added, on Linux, the files unchanged.
+/// that code with this class alone added, on Linux, the files unchanged; and again at 9b28c5c3 (the API's gaps, the plan's
+/// items 6.10 and 8.6), on Linux, each row moving by its registry identity alone and coverage by its operations note and rows.
 /// </summary>
 [TestClass]
 public sealed class V3CorpusEuropeSchema5MountTests
@@ -31,8 +32,10 @@ public sealed class V3CorpusEuropeSchema5MountTests
     private const string CorpusFileSha256 = "7665cc484a2808c89313b2a6f7e5ef8cdf2e995dc363090958d63a564648753d";
     private const string Act = "32016R0679";
 
-    // The base the answers were last recorded at: the code without force dates, as the integration branch holds it.
-    private const string RecordedAtCommit = "e504d188";
+    // The commit the answers were last recorded at, on Linux: e504d188, the code without force dates, then 9b28c5c3 (the API's
+    // gaps, 2026-10-27), where every row moved by its registry identity alone (lex-v3-operation-registry/2 and its digest) and
+    // coverage by its operations note and rows too, then 320c0f20 (over #995: the registry digest alone).
+    private const string RecordedAtCommit = "320c0f20";
 
     private static byte[] Fixture(string name) =>
         File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuSchema5Mount", name));
@@ -85,7 +88,7 @@ public sealed class V3CorpusEuropeSchema5MountTests
 
     /// <summary>
     /// Every recorded request, asked again of the same committed files, answers the same bytes. The answers were recorded at
-    /// the base (24118293 on Windows, again at e504d188 on Linux); nothing in an EU answer reads the system (paths, culture or
+    /// the base (24118293 on Windows, again at e504d188, 9b28c5c3 and 320c0f20 on Linux); nothing in an EU answer reads the system (paths, culture or
     /// clock: the handler answers at one fixed observation time), and every system is held to them.
     /// </summary>
     [TestMethod]

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-language_not_available-payload/1",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "requested_language": {
+      "type": "string"
+    },
+    "available_languages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "requested_language",
+    "available_languages"
+  ]
+}
