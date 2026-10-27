@@ -71,11 +71,12 @@ back).
 - **For the data lane** (the review's point 3): 12,040 of the 16,330 expressions whose XML and PDF files are licenceSCL also
   carry an HTML or DOCX file under CC BY 4.0 in the catalogue. Whether Lex could admit those files is a question for R83 and
   the data lane; nothing here claims it.
-- **Counts** (this PC, one heavy step at a time, at 6d4c4c02 over v3/integration 404bfc9a): `dotnet build Lex.V3.slnx -c
-  Release`, 0 warnings. Lex.V3.Tests, whole: 3,375, 3,369 pass, 6 skip. Lex.V3.Ingest.Tests, every mount class
+- **Counts** (this PC, one heavy step at a time, after the repair, at c3c838c3 over v3/integration 404bfc9a): `dotnet build
+  Lex.V3.slnx -c Release`, 0 warnings. Lex.V3.Tests, whole: 3,375, 3,369 pass, 6 skip. Lex.V3.Ingest.Tests, every mount class
   (`V3Corpus*`), the text yield, the three sample censuses, the machine gates, the EU predicate census, PublicRequestRecording,
-  the index builder and #1002's release checks: 632, 627 pass, 5 skip (33 min). `npm run build`; `npm test`: 1,471, 1,468
-  pass, 3 skip (the real-browser tests). `eng/verify-v3-tree.ps1`: 1,788 tracked paths verified.
+  the index builder and #1002's release checks: 639, 634 pass, 5 skip (28 min). `npm run build`; `npm test`: 1,473, 1,470
+  pass, 3 skip (the real-browser tests). `eng/verify-v3-tree.ps1`: 1,788 tracked paths verified. (Before the repair, at
+  6d4c4c02: 3,375; 632; 1,471.)
 - **Review and repair (#1003, one round; the review by the other model family).**
   - **F1 (truth):** the record said "not acquired" of acts whose file the corpus holds (derive-r1: 5,707 of them). The mount now
     reads the corpus's held Luxembourg files by work once, and the record gives such a version its file's bucket with its
