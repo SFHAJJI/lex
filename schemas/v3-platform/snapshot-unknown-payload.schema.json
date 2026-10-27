@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-snapshot_unknown-payload/1",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "snapshot_id": {
+      "type": "string"
+    },
+    "what_would_answer": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "snapshot_id",
+    "what_would_answer"
+  ]
+}

@@ -31,6 +31,9 @@ public sealed class V3OperationRegistryTests
         Assert.IsTrue(registry.DeclaresRefusal("pinned_digest_mismatch"));
         Assert.IsTrue(registry.DeclaresRefusal("advice_boundary"));
         Assert.AreEqual(64, registry.Sha256.Length);
+        // Raised to 2 on 2026-10-27 (the plan's item 6.10): each refusal code names its payload schema, and out_of_corpus_scope
+        // carries its reason and who to ask.
+        StringAssert.StartsWith(Encoding.UTF8.GetString(registry.CanonicalUtf8), "{\"schema\":\"lex-v3-operation-registry/2\"");
     }
 
     [TestMethod]

@@ -37,6 +37,20 @@ internal sealed record V3RestRouteBinding(string RawTarget, string OperationId)
     public static readonly V3RestRouteBinding AnswerDrift = new("/api/v3/answer_drift", "answer_drift");
     public static readonly IReadOnlyList<V3RestRouteBinding> Served = [Resolve, AsOf, Timeline, ArticleHistory, Diff, ChangesInPeriod, InForceOn, Search, Coverage, Provenance, Dossier, Citation, CitedBy, Verify, Relations, EvidenceBundle, Classification, Manifestation, StatusOn, Browse, Ask, Events, AnswerDrift, AsObserved];
 
+    public static readonly V3RestRouteBinding Concepts = new("/api/v3/concepts", "concepts");
+    public static readonly V3RestRouteBinding KnowableOn = new("/api/v3/knowable_on", "knowable_on");
+    public static readonly V3RestRouteBinding Transposition = new("/api/v3/transposition", "transposition");
+
+    /// <summary>
+    /// The routes of the operations served from no data (<see cref="V3UnservedOperations"/>; the plan's item 8.6): each answers
+    /// every request with its typed refusal inside a normal envelope, <c>retrieval_mode_unavailable</c>, over REST and MCP alike.
+    /// They are not <see cref="Served"/>: <c>coverage</c> names them as not served, with the data that would serve each.
+    /// </summary>
+    public static readonly IReadOnlyList<V3RestRouteBinding> Refusing = [Concepts, KnowableOn, Transposition];
+
+    /// <summary>Every registered operation's route: the 24 served and the 3 that refuse, so no registered name is a transport failure.</summary>
+    public static readonly IReadOnlyList<V3RestRouteBinding> Routed = [.. Served, .. Refusing];
+
     public bool Claims(string rawTarget) =>
         string.Equals(rawTarget, RawTarget, StringComparison.Ordinal) ||
         rawTarget.StartsWith(RawTarget + "?", StringComparison.Ordinal);

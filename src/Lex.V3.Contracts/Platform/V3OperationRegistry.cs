@@ -76,9 +76,21 @@ public sealed class V3OperationDefinition
     }
 }
 
+/// <summary>
+/// The reviewed registry every envelope is bound to by its digest: the 27 operations with their request and result schemas, the
+/// envelope and refusal schemas, and the closed set of 20 refusal codes, each with the fields its payload must carry and the
+/// published schema its payload is held to.
+/// </summary>
+/// <remarks>
+/// Version 2 (2026-10-27; the plan's item 6.10): each refusal code names its payload's schema
+/// (<c>lex-v3-{code}-payload/1</c>) and that schema's digest, and <c>out_of_corpus_scope</c> carries the four elements
+/// <c>36-ideal-evaluation.md</c> §4 mandates for it: the instrument asked for (<c>requested_identifier</c>), its official place
+/// (<c>official_source</c>), a one-sentence <c>reason</c> and who to ask (<c>who_to_ask</c>, an institution or an official
+/// service, never a person). Version 1 named neither.
+/// </remarks>
 public sealed class V3OperationRegistry
 {
-    public const string Schema = "lex-v3-operation-registry/1";
+    public const string Schema = "lex-v3-operation-registry/2";
     public const string Version = "v3";
     public const string RefusalSchema = "lex-v3-refusal/1";
 
@@ -154,7 +166,7 @@ public sealed class V3OperationRegistry
             ["no_version_for_date"] =
                 ["requested_date", "history_begins", "nearest_earlier", "nearest_later"],
             ["not_transposable"] = ["instrument_type", "explanation"],
-            ["out_of_corpus_scope"] = ["requested_identifier", "official_source"],
+            ["out_of_corpus_scope"] = ["requested_identifier", "official_source", "reason", "who_to_ask"],
             ["pinned_digest_mismatch"] =
                 ["requested_digest", "current_digest", "stable_coordinate", "current_hash_pinned_url"],
             ["profiles_differ"] = ["left_profile", "right_profile"],
@@ -268,6 +280,34 @@ public sealed class V3OperationRegistry
         return Array.AsReadOnly(fields.ToArray());
     }
 
+    /// <summary>The identity of the schema a refusal code's payload is held to: <c>lex-v3-{code}-payload/1</c>.</summary>
+    public string RefusalPayloadSchema(string refusalCode)
+    {
+        if (!DeclaresRefusal(refusalCode))
+        {
+            throw new ArgumentException("The refusal code is not declared by the registry.", nameof(refusalCode));
+        }
+
+        return V3PlatformSchemaExporter.RefusalPayloadSchemaId(refusalCode);
+    }
+
+    /// <summary>The SHA-256 of the schema document a refusal code's payload is held to, which the registry's digest covers.</summary>
+    public string RefusalPayloadSchemaSha256(string refusalCode) =>
+        V3PlatformSchemaExporter.Sha256(V3PlatformSchemaExporter.ExportRefusalPayloadUtf8(RequireDeclared(refusalCode)));
+
+    private string RequireDeclared(string refusalCode) => DeclaresRefusal(refusalCode)
+        ? refusalCode
+        : throw new ArgumentException("The refusal code is not declared by the registry.", nameof(refusalCode));
+
+    /// <summary>The reviewed refusal codes, in order, for the schema exporter, which writes the refusal schema's closed list.</summary>
+    internal static IReadOnlyList<string> ReviewedRefusalCodes => RequiredRefusalCodes;
+
+    /// <summary>The fields a reviewed refusal code's payload must carry, for the schema exporter, which writes them as required.</summary>
+    internal static IReadOnlyList<string> ReviewedPayloadFields(string refusalCode) =>
+        MandatoryRefusalPayloadFields.TryGetValue(refusalCode, out var fields)
+            ? fields
+            : throw new ArgumentException("The refusal code is not declared by the registry.", nameof(refusalCode));
+
     private static IEnumerable<V3OperationDefinition> CreateReviewedOperations()
     {
         var objectTypes = new Dictionary<string, string[]>(StringComparer.Ordinal)
@@ -366,6 +406,10 @@ public sealed class V3OperationRegistry
                 }
 
                 writer.WriteEndArray();
+                writer.WriteString("payload_schema", V3PlatformSchemaExporter.RefusalPayloadSchemaId(refusalCode));
+                writer.WriteString(
+                    "payload_schema_sha256",
+                    V3PlatformSchemaExporter.Sha256(V3PlatformSchemaExporter.ExportRefusalPayloadUtf8(refusalCode)));
                 writer.WriteEndObject();
             }
 

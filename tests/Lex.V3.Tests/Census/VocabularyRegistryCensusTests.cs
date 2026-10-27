@@ -64,7 +64,8 @@ public sealed class VocabularyRegistryCensusTests
                     + "const EuropeOrg, const EuropeType, const OfWords, const Preposition, const SiteOrigin",
                 "Lex.V3.Api.SyntheticPreviewTrustConfiguration: const EnvironmentBinding, "
                     + "const IssuerId, const KeyId, const PublicKeySha256",
-                "Lex.V3.Api.V3McpJsonRpc: const ProtocolVersion, const ServerName",
+                "Lex.V3.Api.V3McpJsonRpc: const Instructions, const ProtocolVersion, "
+                    + "const ServerName",
                 "Lex.V3.Api.V3StaleIndexCopies: const CopyPattern, const PrivateTemporaryFolderVariable",
                 "Lex.V3.Artifacts.AdmissionHeaderReader: AttestationMembers=4, "
                     + "ContractReferenceMembers=3, ContractSetMembers=4, EnvironmentMembers=2, "
@@ -126,6 +127,8 @@ public sealed class VocabularyRegistryCensusTests
                     + "const GenesisBasis, const IntervalClosed, const MetadataRevised, "
                     + "const RelationAsserted, const RelationRetracted, const Resighted, "
                     + "const ValidityRevised, const WithdrawnFromSource",
+                "Lex.V3.Contracts.Platform.V3OutOfScope: Compiled=4, Classes=4, const Schema, "
+                    + "static property Sha256",
                 "Lex.V3.Contracts.Platform.V3PlatformSchemaExporter: const EnvelopeSchemaId, "
                     + "const RefusalSchemaId",
                 "Lex.V3.Contracts.Platform.V3UnservedOperations: Rows=3",

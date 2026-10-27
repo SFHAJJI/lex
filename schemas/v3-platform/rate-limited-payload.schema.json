@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-rate_limited-payload/1",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "retry_after": {
+      "type": "integer",
+      "minimum": 0,
+      "$comment": "no operation produces this refusal at launch (the refusal census\u0027s not_produced); the type is the registry\u0027s meaning"
+    },
+    "retryable": {
+      "const": true,
+      "$comment": "no operation produces this refusal at launch (the refusal census\u0027s not_produced); the type is the registry\u0027s meaning"
+    }
+  },
+  "required": [
+    "retry_after",
+    "retryable"
+  ]
+}

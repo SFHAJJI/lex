@@ -70,8 +70,27 @@ internal static class V3McpJsonRpc
         "events" => "The Luxembourg event log, polled by cursor, at least once: a genesis log holds one first_sighting per held state; a chained log adds each later build's comparison events; each build's time, never an observation time.",
         "answer_drift" => "The past dated answers a publisher revision invalidated, enumerated from the log's revising events; a genesis log holds none, and the answer says why rather than asserting that nothing drifted.",
         "as_observed" => "The state of a Luxembourg act applicable on a date (publisher) as one build of the mounted log held it, named by that build's index digest, with its build time as an upper bound on observation; a time refuses, since no observation time is held.",
-        _ => throw new InvalidOperationException($"The served operation {operationId} has no MCP tool description."),
+        "concepts" => "Not served: the EuroVoc descriptors, directory codes and subject matters of EU works, which no index holds; every call answers the typed refusal retrieval_mode_unavailable, naming the modes this server serves and the data that would serve it.",
+        "knowable_on" => "Not served: what a reader could have known on a date, from publication and observation times, which no build records; every call answers the typed refusal retrieval_mode_unavailable, naming the modes this server serves (as_of, as_observed) and the data that would serve it.",
+        "transposition" => "Not served: the transposition links between EU directives and Luxembourg measures, which are not acquired; every call answers the typed refusal retrieval_mode_unavailable, naming the modes this server serves (citation, cited_by, relations) and the data that would serve it.",
+        _ => throw new InvalidOperationException($"The routed operation {operationId} has no MCP tool description."),
     };
+
+    /// <summary>
+    /// What the server tells a client at <c>initialize</c> (the MCP specification's <c>instructions</c>, 2025-06-18: how to use
+    /// the server, which a client may hand its model): that every tool answers one Lex V3 envelope, that a refusal is an answer
+    /// and not an error, how dates are said, and that nothing here is legal advice (the plan's item 8.5).
+    /// </summary>
+    internal const string Instructions =
+        "Lex answers from the Luxembourg and EU legal texts this server holds, and every tool returns one Lex V3 envelope " +
+        "(lex-v3-envelope/1) as structuredContent, the same envelope the REST route POST /api/v3/{operation} returns. " +
+        "A refusal is an answer, not an error: its verdict is refuse, isError stays false, and its refusal names one code of the " +
+        "registry's closed twenty with a payload saying what was asked, what this server holds and what would answer; read the " +
+        "payload rather than retrying another way. A transport or protocol failure is a JSON-RPC error, never an envelope. " +
+        "A Luxembourg date is the publisher's applicability date; an EU wording date is never an applicability date; the two are " +
+        "never merged. An absence in this server is not evidence that a law does not exist. Every envelope names the registry " +
+        "digest it is bound to (registry_sha256) and its context says how current the data is. Lex shows the published text of " +
+        "the law; it does not say whether or how it applies to anyone's situation and is not legal advice.";
 
     public static async Task<byte[]?> HandleAsync(
         byte[] requestUtf8,
@@ -143,6 +162,8 @@ internal static class V3McpJsonRpc
             return method switch
             {
                 "initialize" => Result(id, Initialize()),
+                // The MCP specification's ping (2025-06-18, basic utilities): the receiver answers promptly with an empty result.
+                "ping" => Result(id, EmptyResult()),
                 "tools/list" => Result(id, ToolsList()),
                 "tools/call" => await ToolsCallAsync(
                         id, parameters, host, corpusMount, utcNow, requestReference, cancellationToken)
@@ -173,17 +194,14 @@ internal static class V3McpJsonRpc
         }
 
         var name = nameElement.GetString();
+        // Every registered operation is a tool, as every one has a REST route: the served ones and the ones served from no data,
+        // which answer their typed refusal inside a normal envelope (V3RestRouteBinding.Refusing).
         var binding = name is null
             ? null
-            : V3RestRouteBinding.Served.FirstOrDefault(served => string.Equals(served.OperationId, name, StringComparison.Ordinal));
+            : V3RestRouteBinding.Routed.FirstOrDefault(routed => string.Equals(routed.OperationId, name, StringComparison.Ordinal));
         if (binding is null)
         {
-            // The REST namespace tells a registered operation with no route apart from a name nothing
-            // has (operation_not_served against unknown_route); the tool call says the same in words.
-            return Error(id, -32602,
-                name is not null && V3OperationRegistry.Reviewed.Operations.Any(operation => string.Equals(operation.OperationId, name, StringComparison.Ordinal))
-                    ? $"Tool not served: {name} is a registered operation this mount does not serve"
-                    : $"Unknown tool: {name}");
+            return Error(id, -32602, $"Unknown tool: {name}");
         }
 
         var hasArguments = parameters.TryGetProperty("arguments", out var argumentsElement);
@@ -246,16 +264,29 @@ internal static class V3McpJsonRpc
 
     private static JsonElement Initialize()
     {
-        using var document = JsonDocument.Parse(
-            $$"""
-            {
-              "protocolVersion": "{{ProtocolVersion}}",
-              "capabilities": { "tools": { "listChanged": false } },
-              "serverInfo": { "name": "{{ServerName}}", "version": "1" }
-            }
-            """);
+        var writer = new ArrayBufferWriter<byte>();
+        using (var jsonWriter = new Utf8JsonWriter(writer))
+        {
+            jsonWriter.WriteStartObject();
+            jsonWriter.WriteString("protocolVersion", ProtocolVersion);
+            jsonWriter.WriteStartObject("capabilities");
+            jsonWriter.WriteStartObject("tools");
+            jsonWriter.WriteBoolean("listChanged", false);
+            jsonWriter.WriteEndObject();
+            jsonWriter.WriteEndObject();
+            jsonWriter.WriteStartObject("serverInfo");
+            jsonWriter.WriteString("name", ServerName);
+            jsonWriter.WriteString("version", "1");
+            jsonWriter.WriteEndObject();
+            jsonWriter.WriteString("instructions", Instructions);
+            jsonWriter.WriteEndObject();
+        }
+
+        using var document = JsonDocument.Parse(writer.WrittenMemory);
         return Clone(document.RootElement);
     }
+
+    private static JsonElement EmptyResult() => Empty();
 
     private static JsonElement ToolsList()
     {
@@ -265,7 +296,7 @@ internal static class V3McpJsonRpc
             jsonWriter.WriteStartObject();
             jsonWriter.WritePropertyName("tools");
             jsonWriter.WriteStartArray();
-            foreach (var binding in V3RestRouteBinding.Served)
+            foreach (var binding in V3RestRouteBinding.Routed)
             {
                 using var requestSchema = JsonDocument.Parse(V3PlatformSchemaExporter.ExportRequestUtf8(binding.OperationId));
                 jsonWriter.WriteStartObject();

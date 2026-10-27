@@ -420,27 +420,38 @@ public sealed class V3PlatformHostTests
     }
 
     [TestMethod]
-    public async Task ARegisteredOperationWithNoRouteIsToldApartFromAPathNothingNames()
+    public async Task EveryRegisteredOperationHasARouteAndAnOperationServedFromNoDataRefusesInsideAnEnvelope()
     {
-        // Every registered id that no route serves answers operation_not_served; the exact segment only,
-        // so a query, a trailing segment or a served id keep their own answers.
+        // The specification of record, §3: "All 27 registered operations are served, or refuse with the typed reason their
+        // capability manifest states." Every registered id is routed, so none is a transport failure of its own; the three served
+        // from no data are routed apart from the served ones, and with no corpus mounted refuse as every operation does, inside
+        // an envelope. A trailing segment, a case variant or the bare prefix names nothing.
+        CollectionAssert.AreEqual(
+            V3OperationRegistry.Reviewed.Operations.Select(static operation => operation.OperationId).ToArray(),
+            V3RestRouteBinding.Routed.Select(static binding => binding.OperationId).Order(StringComparer.Ordinal).ToArray());
+        CollectionAssert.AreEqual(
+            V3UnservedOperations.Rows.Select(static row => row.Operation).ToArray(),
+            V3RestRouteBinding.Refusing.Select(static binding => binding.OperationId).ToArray());
+        Assert.IsEmpty(V3RestRouteBinding.Served.Intersect(V3RestRouteBinding.Refusing).ToArray());
+        Assert.IsFalse(Enum.GetNames<V3TransportFailureKind>().Contains("OperationNotServed"), "no registered operation is a transport failure");
+
         var application = new V3ApiHandler(
             SyntheticApiState.Unavailable,
             static () => DateTimeOffset.Parse("2026-09-18T00:00:00Z"));
-        var unserved = V3OperationRegistry.Reviewed.Operations
-            .Select(static operation => operation.OperationId)
-            .Except(V3RestRouteBinding.Served.Select(static binding => binding.OperationId), StringComparer.Ordinal)
-            .ToArray();
-        Assert.IsNotEmpty(unserved, "the registry still names operations no route serves; when it does not, this test retires with the kind.");
-        foreach (var operationId in unserved)
+        foreach (var binding in V3RestRouteBinding.Refusing)
         {
-            var route = RouteContext(Encoding.UTF8.GetBytes("{}"));
-            route.Features.Get<IHttpRequestFeature>()!.RawTarget = "/api/v3/" + operationId;
+            var route = RouteContext(Encoding.UTF8.GetBytes($"{{\"operation_id\":\"{binding.OperationId}\",\"parameters\":{{}}}}"));
+            route.Features.Get<IHttpRequestFeature>()!.RawTarget = binding.RawTarget;
             await application.HandleAsync(route, CancellationToken.None);
-            AssertTransportProblem(route, "operation_not_served", StatusCodes.Status404NotFound);
+            Assert.AreEqual(StatusCodes.Status200OK, route.Response.StatusCode, binding.OperationId);
+            using var envelope = JsonDocument.Parse(((MemoryStream)route.Response.Body).ToArray());
+            Assert.AreEqual(binding.OperationId, envelope.RootElement.GetProperty("operation_id").GetString());
+            Assert.AreEqual("refuse", envelope.RootElement.GetProperty("verdict").GetString());
+            Assert.AreEqual("no_corpus_mounted", envelope.RootElement.GetProperty("refusal").GetProperty("code").GetString());
         }
 
-        foreach (var rawTarget in new[] { "/api/v3/" + unserved[0] + "?x=1", "/api/v3/" + unserved[0] + "/more", "/api/v3/" + unserved[0].ToUpperInvariant(), "/api/v3/" })
+        var unserved = V3RestRouteBinding.Refusing[0].OperationId;
+        foreach (var rawTarget in new[] { "/api/v3/" + unserved + "/more", "/api/v3/" + unserved.ToUpperInvariant(), "/api/v3/", "/api/v3/no_such_operation" })
         {
             var route = RouteContext(Encoding.UTF8.GetBytes("{}"));
             route.Features.Get<IHttpRequestFeature>()!.RawTarget = rawTarget;
