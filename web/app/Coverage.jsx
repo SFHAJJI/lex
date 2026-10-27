@@ -56,7 +56,7 @@ import {
   europeLanguagesSentence,
   gapsSentence,
   narrowedNote,
-  observationSentences,
+  publisherSiteLabel,
   readCoverage,
   scopeClassLabel,
   servedSentence,
@@ -299,12 +299,19 @@ function DeclaredScope({ view, copy }) {
   const declared = view.declaredScope;
   if (declared === null) return null;
   const languages = europeLanguagesSentence(declared, copy);
+  const columns = copy.observationColumns;
   return (
     <section className="coverage-block">
       <h2>{copy.declaredHeading}</h2>
-      {observationSentences(declared, copy).map((sentence) => (
-        <p className="coverage-held" data-observations-begin="" key={sentence}>{sentence}</p>
-      ))}
+      <FacetTable caption={copy.observationsCaption} head={[columns.publisher, columns.begins, columns.basis]} copy={copy}>
+        {declared.observationsBegin.map((begins) => (
+          <tr key={begins.publisher}>
+            <td>{publisherSiteLabel(begins.publisher, copy)}{' '}<Evidence value={begins.publisher} /></td>
+            <td>{begins.date === null ? <span className="coverage-not-stated">{NOT_STATED}</span> : begins.date}</td>
+            <td>{copy.observationBases[begins.basis]}{' '}<Evidence value={begins.basis} /></td>
+          </tr>
+        ))}
+      </FacetTable>
       {languages === null ? null : <p className="coverage-held" data-europe-languages="">{languages}</p>}
       <FacetTable caption={copy.classesCaption} head={[copy.classColumns.scopeClass, copy.classColumns.scopeDisposition]} copy={copy}>
         {declared.classes.map((row) => {
@@ -312,7 +319,7 @@ function DeclaredScope({ view, copy }) {
           return (
             <tr key={row.class}>
               <td>{label === null ? <Evidence value={row.class} /> : <>{label}{' '}<Evidence value={row.class} /></>}</td>
-              <td>{copy.classDispositions[row.disposition]}</td>
+              <td>{copy.classDispositions[row.disposition]}{' '}<Evidence value={row.disposition} /></td>
             </tr>
           );
         })}

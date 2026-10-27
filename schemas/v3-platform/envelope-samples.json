@@ -684,11 +684,11 @@
                 },
                 {
                   "class": "ACCA",
-                  "disposition": "no_ruling_admits_it"
+                  "disposition": "out_of_scope"
                 },
                 {
                   "class": "RC",
-                  "disposition": "no_ruling_admits_it"
+                  "disposition": "out_of_scope"
                 },
                 {
                   "class": "DIV",
@@ -697,17 +697,24 @@
                 {
                   "class": "PA",
                   "disposition": "no_ruling_admits_it"
+                },
+                {
+                  "class": "RECUEIL",
+                  "disposition": "no_ruling_admits_it"
+                },
+                {
+                  "class": "CODE_RECUEIL",
+                  "disposition": "no_ruling_admits_it"
                 }
               ],
               "observations_begin": [
                 {
-                  "at": "2026-10-01T08:00:00Z",
                   "basis": "first_build_in_log",
                   "date": "2026-10-01",
                   "publisher": "lu-legilux"
                 }
               ],
-              "rule": "luxembourg_classes_not_held declares, once per class and by the publisher\u0027s legal-type code where it has one, each Luxembourg class this mount does not hold, with its disposition: awaiting_a_run (not admitted or refused by a ruling yet, and a bounded run the owner authorises would collect it), admitted_awaiting_a_run, admitted_first_awaiting_a_run (among the first after launch), admitted_where_regulatory_awaiting_a_run (only an act a role rule shows is regulatory), documentation_awaiting_a_run, corrective_awaiting_a_run and constitutional_review_awaiting_a_run (admitted, under that label only, never as statutory text), out_of_scope (not held and not planned), no_ruling_admits_it (not collected, and no ruling admits it yet); the families held are the text yield\u0027s; europe_languages names the languages the EU index holds wording in, of the EU\u0027s official languages; observations_begin gives, per publisher, when Lex\u0027s own observations held here begin: the first build the Luxembourg log records (first_build_in_log), and for the EU the completion of the one acquisition the mount holds, as its build report states it (acquisition_completed), or not_stated; date is that instant\u0027s calendar date in Luxembourg, and nothing earlier is held here"
+              "rule": "luxembourg_classes_not_held declares, once per class and by the publisher\u0027s legal-type code where it has one, each Luxembourg class this mount does not hold, with its disposition: awaiting_a_run (not admitted or refused by a ruling yet, and a bounded run the owner authorises would collect it), admitted_awaiting_a_run, admitted_first_awaiting_a_run (among the first after launch), admitted_where_regulatory_awaiting_a_run (only an act a role rule shows is regulatory), documentation_awaiting_a_run, corrective_awaiting_a_run and constitutional_review_awaiting_a_run (admitted, under that label only, never as statutory text), out_of_scope (not held and not planned), no_ruling_admits_it (not collected, and no ruling admits it yet); the families held are the text yield\u0027s; europe_languages names the languages the EU index holds wording in, of the EU\u0027s official languages; observations_begin gives, per publisher, when Lex\u0027s own observations held here begin: the first build the Luxembourg log records (first_build_in_log), and for the EU the completion of the one acquisition the mount holds, as its build report states it (acquisition_completed), or not_stated with a null date; date is that instant\u0027s calendar date in Luxembourg (the instant itself is history\u0027s first build time, or the EU channel\u0027s newest completed observation in the envelope\u0027s freshness)"
             },
             "history": {
               "history_begins": "2026-10-01T08:00:00Z",

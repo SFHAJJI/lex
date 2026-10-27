@@ -217,8 +217,8 @@ const EN = Object.freeze({
     forceStatusNone: "The publisher's record gives no status for this act.",
     forceEntry: "Entry into force: {date} (the publisher's record).",
     forceEntryNone: "The publisher's record gives no entry-into-force date for this act.",
-    forceEnd: "No longer in force from: {date} (the publisher's record).",
-    forceOtherForms: "The publisher's record also gives a force date in a form that is not a calendar date; it is not shown here.",
+    forceEnd: "End of force: {date} (the publisher's record).",
+    forceOtherForms: "The publisher's record also gives an entry-into-force or end-of-force date in a form that is not a calendar date; it is not shown here.",
     forceNote: "These are the publisher's own statements about the act as a whole, shown as it gives them. They say nothing of a particular article or version, and Lex does not say whether or how the act applies to anyone's situation.",
     // A state dated by its entry into force (S7a; R21), in the date column, and what that mark means, said once under the table.
     entryIntoForceDate: "no date stated (entry into force: {date})",
@@ -316,8 +316,8 @@ const EN = Object.freeze({
     // The copy button beside each citation form (R65), which only a browser running the page's script shows.
     copyCitation: "Copy",
     copyCitationLabel: "Copy: {form}",
-    citationCopied: "Copied.",
-    citationNotCopied: "This browser did not copy it; select the text instead.",
+    citationCopied: "Citation copied.",
+    citationNotCopied: "This browser did not copy the citation; select its text instead.",
     // Reading by page (the plan's item 3.7): a long version's contents, by page, the pages shown, and the links to the pages
     // before and after them, which the page loads in place when it can.
     contents: "Contents",
@@ -1183,7 +1183,7 @@ const EN = Object.freeze({
         row: "{instrument}: {reason} For example {examples}. Official place: {official}. Who to ask: {who}.",
         pending: "Not listed yet: communal regulations, whose official place is each commune's own, and the decisions of Luxembourg's courts, which no identifier names exactly. Each still answers {code}.",
         // R80: an EU act outside the mounted EU population, refused by the mount itself, not by the list.
-        population: "An EU act outside the EU population this site holds, named by its CELEX, is refused with {code} too, though it is on no list: whether an act is outside depends on the EU index the server mounts. The refusal names the rule that population follows, with the number of acts on its seed list, and gives the act's page on EUR-Lex as its official place; it names no list and no list digest.",
+        population: "An EU act outside the EU population this site holds, named by its CELEX, is refused with {code} too, though it is on no list: whether an act is outside depends on the EU index the server mounts. The refusal names the rule that population follows, with the number of acts on its seed list, and gives the act's page on EUR-Lex as its official place; it names neither the out-of-scope list nor its digest.",
       }),
       presentationHeading: "Two answers that are not refusals",
       presentation: Object.freeze({
@@ -1246,7 +1246,7 @@ const EN = Object.freeze({
         }),
         G3: Object.freeze({
           name: "Nothing is deleted from the log",
-          text: "Each build's events are the start of the next build's log, row for row. The code can keep earlier builds beside the one a server mounts, by a retention rule: every build listed as referenced by a published permalink, the last build of each day for {days} days and the first of each month. Lex does not keep them yet: the storage this needs is not funded, and the release this site serves holds only the build it mounts. So a version the log names is re-verifiable only while a kept build holds its text, which today means the mounted build; one whose text no kept build holds is still named by the log, without its text, and a permalink to it no longer verifies.",
+          text: "Each build's events are the start of the next build's log, row for row. The code can keep earlier builds beside the one a server mounts, by a retention rule: every build listed as referenced by a published permalink, the last build of each day for {days} days and the first of each month. Lex does not keep them yet: the release this site serves holds only the build its server mounts. So a version the log names is re-verifiable only while a kept build holds its text, which today means the mounted build; one whose text no kept build holds is still named by the log, without its text, and a permalink to it no longer verifies.",
         }),
         G4: Object.freeze({
           name: "Answers as one build held them",

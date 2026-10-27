@@ -101,3 +101,18 @@ test("on paper the page is black on white whatever the colour scheme, at its ful
   assert.match(block, /code\s*\{[^}]*overflow-wrap:\s*anywhere;/);
   assert.match(block, /\[data-quote-evidence\],\s*\[data-citation-form\],\s*\.breadcrumbs\s*\{[^}]*break-inside:\s*avoid;/);
 });
+
+test("a touch target is at least 44 by 44 CSS pixels, links in lists, summaries, controls and the info control alike (R62)", () => {
+  const rule = (selector) => {
+    const at = css.indexOf(selector);
+    assert.ok(at >= 0, selector);
+    return css.slice(at, css.indexOf("}", at));
+  };
+  for (const selector of ["li > a,\nsummary,\n.verify-cluster a {", "input[type='date'] {", ".check-official {", ".info-control {"]) {
+    assert.match(rule(selector), /min-block-size: 44px;/, selector);
+  }
+  for (const selector of ["li > a,\nsummary,\n.verify-cluster a {", "input[type='date'] {", ".info-control {"]) {
+    assert.match(rule(selector), /min-inline-size: 44px;/, selector);
+  }
+  assert.doesNotMatch(css, /min-(?:block|inline)-size: 24px;/, "no target keeps the 24 pixel floor");
+});

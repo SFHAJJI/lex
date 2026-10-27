@@ -9,6 +9,8 @@
 // The card's own sentences (its target, reasons, notes, rows and results) are the platform's English,
 // marked English on a page in another language (`inEnglish`).
 
+import { Fragment } from 'react';
+
 import { Say, inEnglish } from './LiveAnswer.jsx';
 import { fillCounted, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { CARD_ROUTE } from '../scripts/evaluation-card.mjs';
@@ -26,7 +28,7 @@ const COMMON = liveChrome().common;
  */
 function Scope({ view }) {
   const gates = [...new Set(view.sets.flatMap((set) => set.gates.map((gate) => gate.gate)))];
-  const listed = (names) => names.map((name, index) => <span key={name}>{index === 0 ? '' : COMMON.listSeparator}<code>{name}</code></span>);
+  const listed = (names) => names.map((name, index) => <Fragment key={name}>{index === 0 ? '' : COMMON.listSeparator}<code>{name}</code></Fragment>);
   return <p data-card-scope=""><Say template={CARD.scope} values={{ gates: listed(gates), codes: listed(UNSENT_CODES) }} /></p>;
 }
 

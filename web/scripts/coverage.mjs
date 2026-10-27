@@ -938,8 +938,8 @@ export const OBSERVATION_BASES = Object.freeze(['first_build_in_log', 'acquisiti
  * What the mount declares beside its counts (R78, R82, R12; the platform's `declared_scope`, index 9 only), or null on an
  * answer that carries none: each Luxembourg class it does not hold, once, with its disposition; how many of the EU's official
  * languages its EU index holds wording in, or null without an EU index; and, per publisher, the date Lex's own observations
- * held here begin, with what dates it. A date is exactly a calendar date with its instant, or both are null and the basis says
- * it is not stated; the EU's held languages are a distinct list no longer than the official one.
+ * held here begin, with what dates it. A date is exactly a calendar date, or null exactly when the basis says it is not
+ * stated; the EU's held languages are a distinct list no longer than the official one.
  */
 export function readDeclaredScope(value) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new Error('declared_scope is an object');
@@ -969,14 +969,8 @@ export function readDeclaredScope(value) {
     const basis = requireOwn(row, 'basis', at);
     if (!OBSERVATION_BASES.includes(basis)) throw new Error(`${at} has the basis ${JSON.stringify(basis)}, which is not one of ${OBSERVATION_BASES.join(', ')}`);
     const date = requireOwn(row, 'date', at);
-    const instant = requireOwn(row, 'at', at);
-    if ((basis === 'not_stated') !== (date === null) || (date === null) !== (instant === null)) {
-      throw new Error(`${at} states a date and an instant exactly when its basis is stated`);
-    }
-    if (date !== null) {
-      requireDate(date, `${at}.date`);
-      requireInstant(instant, `${at}.at`);
-    }
+    if ((basis === 'not_stated') !== (date === null)) throw new Error(`${at} states a date exactly when its basis is stated`);
+    if (date !== null) requireDate(date, `${at}.date`);
     return Object.freeze({ publisher, date, basis });
   });
   requireDistinct(begins.map((row) => row.publisher), 'the publishers whose observations begin');
@@ -1382,12 +1376,14 @@ export const COVERAGE_COPY = Object.freeze({
   // languages it holds, and each Luxembourg class it does not hold with what is decided for it.
   declaredHeading: 'Since when Lex observes, and what it does not collect',
   publisherSites: Object.freeze({ 'lu-legilux': 'Legilux', 'eu-eurlex': 'EUR-Lex' }),
-  observationsBegin: Object.freeze({
-    first_build_in_log: '{publisher}: Lex’s own observations begin with the first build its log records, on {date}.',
-    acquisition_completed: '{publisher}: Lex’s own observations begin with the one collection this site holds, completed on {date}.',
-    not_stated: '{publisher}: this site does not state when Lex’s own observations begin.',
+  observationsCaption: 'When Lex’s own observations begin, by publisher',
+  observationColumns: Object.freeze({ publisher: 'publisher', begins: 'Lex’s own observations begin on', basis: 'what dates it' }),
+  observationBases: Object.freeze({
+    first_build_in_log: 'the first build the mounted log records',
+    acquisition_completed: 'the end of the one collection this site holds',
+    not_stated: 'not stated',
   }),
-  europeLanguages: 'Lex holds EU acts in {count} of the EU’s {official} official languages ({languages}); EUR-Lex publishes them in the others.',
+  europeLanguages: 'Lex holds EU acts in {count} of the EU’s {official} official languages ({languages}); EUR-Lex publishes their texts in the other languages where these exist.',
   classesCaption: 'Luxembourg classes this site does not hold, and what is decided for each',
   classColumns: Object.freeze({ scopeClass: 'class', scopeDisposition: 'what is decided' }),
   classNames: Object.freeze({
@@ -1405,28 +1401,22 @@ export const COVERAGE_COPY = Object.freeze({
     communal_regulations: 'communal regulations',
   }),
   classDispositions: Object.freeze({
-    awaiting_a_run: 'not collected: a bounded collection run the owner authorises would add it',
-    admitted_awaiting_a_run: 'admitted, and not collected yet: a later run the owner authorises adds it',
-    admitted_first_awaiting_a_run: 'admitted, and not collected yet: among the first classes a later run the owner authorises adds',
+    awaiting_a_run: 'not collected: a bounded collection run, once authorised, would add it',
+    admitted_awaiting_a_run: 'admitted, and not collected yet: a later collection run, once authorised, adds it',
+    admitted_first_awaiting_a_run: 'admitted, and not collected yet: among the first classes a later collection run, once authorised, adds',
     admitted_where_regulatory_awaiting_a_run: 'admitted only where a rule shows the act is regulatory, and not collected yet',
     documentation_awaiting_a_run: 'admitted as documentation, never as the text of the law, and not collected yet',
     corrective_awaiting_a_run: 'admitted as corrective material, under that label only, and not collected yet',
     constitutional_review_awaiting_a_run: 'admitted as constitutional review, never as statutory text, and not collected yet',
     out_of_scope: 'not held, and not planned',
-    no_ruling_admits_it: 'not collected: no ruling admits this class yet',
+    no_ruling_admits_it: 'not collected: no ruling of Lex admits this class yet',
   }),
   classesHeld: 'The classes this site holds are counted, class by class, in the text yield above.',
 });
 
-/**
- * R12's sentences, one per publisher, in the order the answer gives them: when Lex's own observations held here begin, and
- * what dates it, or that the site does not state it.
- */
-export function observationSentences(declared, copy = COVERAGE_COPY) {
-  return declared.observationsBegin.map((row) => fill(copy.observationsBegin[row.basis], {
-    publisher: copy.publisherSites[row.publisher] ?? row.publisher,
-    date: row.date ?? '',
-  }));
+/** A publisher's site name in the copy (Legilux, EUR-Lex), or its token. */
+export function publisherSiteLabel(publisher, copy = COVERAGE_COPY) {
+  return Object.hasOwn(copy.publisherSites, publisher) ? copy.publisherSites[publisher] : publisher;
 }
 
 /** R82's sentence: how many of the EU's official languages the EU index holds wording in, which, or null with no EU index. */
@@ -1700,9 +1690,17 @@ function declaredScopeSection(view) {
   const declared = view.declaredScope;
   if (declared === null) return '';
   const languages = europeLanguagesSentence(declared);
+  const columns = COVERAGE_COPY.observationColumns;
   return (
     `<section class="coverage-block"><h2>${escapeHtml(COVERAGE_COPY.declaredHeading)}</h2>`
-    + observationSentences(declared).map((sentence) => `<p class="coverage-held" data-observations-begin="">${escapeHtml(sentence)}</p>`).join('')
+    + table({
+      caption: COVERAGE_COPY.observationsCaption,
+      head: [columns.publisher, columns.begins, columns.basis],
+      rows: declared.observationsBegin.map((begins) => (
+        `<tr><td>${escapeHtml(publisherSiteLabel(begins.publisher))} ${code(begins.publisher)}</td>`
+        + `<td>${cell(begins.date, escapeHtml)}</td>`
+        + `<td>${escapeHtml(COVERAGE_COPY.observationBases[begins.basis])} ${code(begins.basis)}</td></tr>`)).join(''),
+    })
     + (languages === null ? '' : `<p class="coverage-held" data-europe-languages="">${escapeHtml(languages)}</p>`)
     + table({
       caption: COVERAGE_COPY.classesCaption,
@@ -1710,7 +1708,7 @@ function declaredScopeSection(view) {
       rows: declared.classes.map((scopeRow) => {
         const label = scopeClassLabel(scopeRow);
         return `<tr><td>${label === null ? code(scopeRow.class) : `${escapeHtml(label)} ${code(scopeRow.class)}`}</td>`
-          + `<td>${escapeHtml(COVERAGE_COPY.classDispositions[scopeRow.disposition])}</td></tr>`;
+          + `<td>${escapeHtml(COVERAGE_COPY.classDispositions[scopeRow.disposition])} ${code(scopeRow.disposition)}</td></tr>`;
       }).join(''),
     })
     + `<p class="coverage-note">${escapeHtml(COVERAGE_COPY.classesHeld)}</p>`

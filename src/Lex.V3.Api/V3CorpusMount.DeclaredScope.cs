@@ -16,8 +16,9 @@ internal sealed partial class V3CorpusMount
 {
     /// <summary>
     /// The Luxembourg classes not held, by the publisher's own legal-type code where it has one (the resource-type authority's
-    /// suffix, <c>LuxembourgActClassManifest</c>), in R78's order, each with its disposition. Run 15's families (codes, lois and
-    /// grand-ducal regulations) are held and are not declared here: the text yield counts them.
+    /// suffix, <c>LuxembourgActClassManifest</c>), in R78's order, each with its disposition, then every other code the build's
+    /// resolver recognizes (the resolver's never types, ACCA and RC, are out of scope). Run 15's families (codes, lois and grand-ducal
+    /// regulations: CODE, LOI and RGD) are held and are not declared here: the text yield counts them.
     /// </summary>
     internal static readonly IReadOnlyList<(string Class, string Disposition)> LuxembourgClassesNotHeld = Array.AsReadOnly(new[]
     {
@@ -43,10 +44,12 @@ internal sealed partial class V3CorpusMount
         ("RGC", "no_ruling_admits_it"),
         ("RI", "no_ruling_admits_it"),
         ("ST", "no_ruling_admits_it"),
-        ("ACCA", "no_ruling_admits_it"),
-        ("RC", "no_ruling_admits_it"),
+        ("ACCA", "out_of_scope"),
+        ("RC", "out_of_scope"),
         ("DIV", "no_ruling_admits_it"),
         ("PA", "no_ruling_admits_it"),
+        ("RECUEIL", "no_ruling_admits_it"),
+        ("CODE_RECUEIL", "no_ruling_admits_it"),
     });
 
     /// <summary>The dispositions a class not held may have, closed (R78).</summary>
@@ -70,7 +73,8 @@ internal sealed partial class V3CorpusMount
         "the text yield's; europe_languages names the languages the EU index holds wording in, of the EU's official languages; " +
         "observations_begin gives, per publisher, when Lex's own observations held here begin: the first build the Luxembourg log " +
         "records (first_build_in_log), and for the EU the completion of the one acquisition the mount holds, as its build report states " +
-        "it (acquisition_completed), or not_stated; date is that instant's calendar date in Luxembourg, and nothing earlier is held here";
+        "it (acquisition_completed), or not_stated with a null date; date is that instant's calendar date in Luxembourg (the instant itself is " +
+        "history's first build time, or the EU channel's newest completed observation in the envelope's freshness)";
 
     /// <summary>A coverage answer with its <c>declared_scope</c> member on index 9; on an index of schema 8 or 6 it is unchanged.</summary>
     private object WithDeclaredScope(object result)
@@ -123,7 +127,6 @@ internal sealed partial class V3CorpusMount
     {
         publisher,
         date = at is { } day ? LuxembourgCalendar.DateAt(day).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : null,
-        at = at?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture),
         basis = at is null ? "not_stated" : basis,
     };
 }

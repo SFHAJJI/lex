@@ -19,7 +19,7 @@
 // Today, the calendar date in Luxembourg on the day the server answered (R13; the plan's item 3.4), is said under the
 // count of the versions held, so a reader holds each version's dates against today, never against a day assumed.
 
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { DOSSIER_LANGUAGES, LIVE_DOSSIER_IDLE, createDossierSession, dossierOutcome } from '../scripts/live-dossier.mjs';
@@ -167,9 +167,9 @@ function CatalogueChain({ chain }) {
  */
 function ForceFacts({ force }) {
   if (force === null) return null;
-  const codes = (values) => values.map((value, index) => <span key={value}>{index === 0 ? '' : COMMON.listSeparator}<code>{value}</code></span>);
+  const codes = (values) => values.map((value, index) => <Fragment key={value}>{index === 0 ? '' : COMMON.listSeparator}<code>{value}</code></Fragment>);
   const dated = (values) => values.map((value, index) => (
-    <span key={value}>{index === 0 ? '' : COMMON.listSeparator}<time dateTime={value}>{value}</time></span>
+    <Fragment key={value}>{index === 0 ? '' : COMMON.listSeparator}<time dateTime={value}>{value}</time></Fragment>
   ));
   return (
     <section data-force="">

@@ -361,6 +361,18 @@
 // 2026-10-18 for this same check (never "particuliers" nor "personnes physiques", which a countersigning minister is too); the
 // claim is tied to the check ("D’après la vérification de Lex" / "According to Lex's check"), since a class is withheld whole
 // and an office holder named with an honorific is counted; and the link is the act's ("en suivant le lien officiel").
+// The truth-and-coverage forms (the audit of 2026-10-27: the six overclaims narrowed; R80, R79, R78, R82, R12 and R65) were
+// reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the same delegation in the addendum of
+// 2026-10-27 "truth and coverage" and its supplement (58 forms, 19 changed in French; the English of 9, 21e and 24 changed for
+// truth): `card.scope`; `developers.replay.guarantees.G3.text` ("re-verifiable" is "peut être vérifiée de nouveau", never
+// "revérifiable"; a release "contient" the build its server "monte"; no funding claim); `privacy.sections.reading.kept`;
+// `guide.sections.textless.text`; `home.intro`; `developers.refusals.codes.out_of_corpus_scope`, `outOfScope.pending` and
+// `outOfScope.population` (a request is refused, never an act; "la règle qui délimite cette population", "liste de départ");
+// `developers.changes.digest` ("un refus fondé sur la liste"); the dossier's `force*` forms ("la vigueur de l’acte", "fin de
+// vigueur"); Coverage's `textYieldEurope`, `declaredHeading`, the observations table ("le journal monté"), `europeLanguages`
+// ("lorsqu’ils existent": not every act exists in every official language), the class names and dispositions ("catégorie",
+// "à titre rectificatif", "texte de la loi", "décision de Lex", "une fois autorisée", no role named) and `classesHeld`; the copy
+// button's four forms ("Citation copiée"); and the French of `OUTSIDE_EU_POPULATION_SENTENCE` in `REFUSALS_FR.sentences`.
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
 
@@ -519,8 +531,8 @@ export const LIVE_CHROME_FR = Object.freeze({
     forceStatusNone: 'Les données de l’éditeur n’indiquent aucun statut pour cet acte.',
     forceEntry: 'Entrée en vigueur : {date} (données de l’éditeur).',
     forceEntryNone: 'Les données de l’éditeur n’indiquent aucune date d’entrée en vigueur pour cet acte.',
-    forceEnd: 'N’est plus en vigueur depuis le : {date} (données de l’éditeur).',
-    forceOtherForms: 'Les données de l’éditeur indiquent aussi une date relative à la vigueur sous une forme qui n’est pas une date du calendrier ; elle n’est pas reprise ici.',
+    forceEnd: 'Fin de vigueur : {date} (données de l’éditeur).',
+    forceOtherForms: 'Les données de l’éditeur indiquent aussi une date d’entrée en vigueur ou de fin de vigueur sous une forme qui n’est pas une date du calendrier ; elle n’est pas reprise ici.',
     forceNote: 'Ce sont les déclarations de l’éditeur sur l’acte dans son ensemble, reprises telles qu’il les donne. Elles ne disent rien d’un article ou d’une version en particulier, et Lex ne dit pas si ni comment l’acte s’applique à la situation de quiconque.',
     entryIntoForceDate: 'aucune date indiquée (entrée en vigueur : {date})',
     entryIntoForceNote: 'La mention « aucune date indiquée » signifie que le fichier de l’acte n’indique aucune date d’applicabilité exacte ; la date entre parenthèses est celle de l’entrée en vigueur de l’acte dans les données de l’éditeur, et non une date d’applicabilité.',
@@ -600,8 +612,8 @@ export const LIVE_CHROME_FR = Object.freeze({
     citeNotComposed: 'Lex ne compose pas de citation usuelle pour cet article ; son permalien le cite.',
     copyCitation: 'Copier',
     copyCitationLabel: 'Copier : {form}',
-    citationCopied: 'Copié.',
-    citationNotCopied: 'Ce navigateur ne l’a pas copié ; sélectionnez plutôt le texte.',
+    citationCopied: 'Citation copiée.',
+    citationNotCopied: 'Ce navigateur n’a pas copié la citation ; sélectionnez-en plutôt le texte.',
     contents: 'Sommaire',
     contentsPage: 'Page {number} : {first} à {last}',
     contentsPageOne: 'Page {number} : {first}',
@@ -790,7 +802,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     heading: 'Fiche d’évaluation',
     target: 'Portée de l’exécution : {target}',
     machineReadable: 'La même fiche pour les machines, en JSON',
-    scope: 'Cette fiche ne porte que les critères automatiques énumérés ci-dessous ({gates}). Elle ne porte pas les critères relatifs aux données (que chaque décompte corresponde à celui de l’éditeur et que chaque fichier admis produise un texte), à la qualité des réponses, à la rapidité ni à l’obtention du même index sur deux systèmes, et elle ne teste aucun des codes de refus qu’aucune opération n’envoie ({codes}).',
+    scope: 'Cette fiche ne porte que les critères automatiques énumérés ci-dessous ({gates}). Elle ne porte pas les critères relatifs aux données (que chaque décompte corresponde à celui de l’éditeur et que chaque fichier admis produise du texte), à la qualité des réponses, à la rapidité ni à l’obtention du même index sur deux systèmes, et elle ne teste aucun des codes de refus qu’aucune opération n’envoie ({codes}).',
     clean: 'Chaque critère automatique de cette fiche est satisfait, et chaque contrôle par permutation a détecté sa permutation.',
     notClean: '{gates}, et {controls}.',
     gatesNotPassing: Object.freeze({
@@ -1040,14 +1052,16 @@ export const LIVE_CHROME_FR = Object.freeze({
       'eu-eurlex': 'Le corpus ne consigne pas le format des fichiers de l’UE ; un fichier PDF ou HTML sans texte servi est donc compté parmi les fichiers admis sans article servi, sous son propre motif.',
     }),
     notRecorded: 'non consigné',
-    declaredHeading: 'Depuis quand Lex observe, et ce qu’il ne collecte pas',
+    declaredHeading: 'Depuis quand Lex observe les éditeurs, et ce qu’il ne collecte pas',
     publisherSites: Object.freeze({ 'lu-legilux': 'Legilux', 'eu-eurlex': 'EUR-Lex' }),
-    observationsBegin: Object.freeze({
-      first_build_in_log: '{publisher} : les observations propres de Lex commencent avec la première construction que consigne son journal, le {date}.',
-      acquisition_completed: '{publisher} : les observations propres de Lex commencent avec la seule collecte que détient ce site, achevée le {date}.',
-      not_stated: '{publisher} : ce site n’indique pas quand commencent les observations propres de Lex.',
+    observationsCaption: 'Début des observations propres de Lex, par éditeur',
+    observationColumns: Object.freeze({ publisher: 'éditeur', begins: 'les observations propres de Lex commencent le', basis: 'ce qui fixe cette date' }),
+    observationBases: Object.freeze({
+      first_build_in_log: 'la première construction que consigne le journal monté',
+      acquisition_completed: 'la fin de la seule collecte dont ce site détient le résultat',
+      not_stated: 'non indiqué',
     }),
-    europeLanguages: 'Lex détient des actes de l’UE dans {count} des {official} langues officielles de l’UE ({languages}) ; EUR-Lex les publie dans les autres.',
+    europeLanguages: 'Lex détient des actes de l’UE dans {count} des {official} langues officielles de l’UE ({languages}) ; EUR-Lex publie leurs textes dans les autres langues lorsqu’ils existent.',
     classesCaption: 'Catégories d’actes luxembourgeois que ce site ne détient pas, et ce qui est décidé pour chacune',
     classColumns: Object.freeze({ scopeClass: 'catégorie', scopeDisposition: 'ce qui est décidé' }),
     classNames: Object.freeze({
@@ -1065,17 +1079,17 @@ export const LIVE_CHROME_FR = Object.freeze({
       communal_regulations: 'règlements communaux',
     }),
     classDispositions: Object.freeze({
-      awaiting_a_run: 'non collectée : une collecte limitée qu’autorise le propriétaire l’ajouterait',
-      admitted_awaiting_a_run: 'admise, et pas encore collectée : une collecte ultérieure qu’autorise le propriétaire l’ajoute',
-      admitted_first_awaiting_a_run: 'admise, et pas encore collectée : parmi les premières catégories qu’ajoute une collecte ultérieure qu’autorise le propriétaire',
+      awaiting_a_run: 'non collectée : une collecte limitée, une fois autorisée, l’ajouterait',
+      admitted_awaiting_a_run: 'admise, et pas encore collectée : une collecte ultérieure, une fois autorisée, l’ajoutera',
+      admitted_first_awaiting_a_run: 'admise, et pas encore collectée : parmi les premières catégories qu’ajoutera une collecte ultérieure, une fois autorisée',
       admitted_where_regulatory_awaiting_a_run: 'admise seulement lorsqu’une règle montre que l’acte est réglementaire, et pas encore collectée',
-      documentation_awaiting_a_run: 'admise comme documentation, jamais comme texte du droit, et pas encore collectée',
-      corrective_awaiting_a_run: 'admise comme matière rectificative, sous ce seul intitulé, et pas encore collectée',
+      documentation_awaiting_a_run: 'admise comme documentation, jamais comme texte de la loi, et pas encore collectée',
+      corrective_awaiting_a_run: 'admise à titre rectificatif, sous cette seule qualification, et pas encore collectée',
       constitutional_review_awaiting_a_run: 'admise comme contrôle de constitutionnalité, jamais comme texte législatif, et pas encore collectée',
       out_of_scope: 'non détenue, et non prévue',
-      no_ruling_admits_it: 'non collectée : aucune décision n’admet encore cette catégorie',
+      no_ruling_admits_it: 'non collectée : aucune décision de Lex n’admet encore cette catégorie',
     }),
-    classesHeld: 'Les catégories que ce site détient sont comptées, catégorie par catégorie, dans le texte servi ci-dessus.',
+    classesHeld: 'Les catégories que ce site détient sont comptées, catégorie par catégorie, dans la section ci-dessus sur le texte qu’il sert.',
   }),
   shell: Object.freeze({
     title: '{title} - Lex',
@@ -1137,7 +1151,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Le droit luxembourgeois et de l’UE à la date de votre choix',
     eyebrow: 'Rechercher dans le droit',
     heading: 'Le droit luxembourgeois et de l’UE à la date de votre choix',
-    intro: 'Recherchez dans les textes que ce site détient, ouvrez un acte tel qu’il se présentait à la date de votre choix et exportez avec des citations que chacun peut vérifier auprès de la source officielle. Pour un acte luxembourgeois dont ce site détient plus d’une version, voyez si le libellé de chaque article a changé d’une version à la suivante, et quels articles diffèrent entre les versions de deux dates. Lorsque ce site ne détient pas un texte ou une date, il le dit.',
+    intro: 'Recherchez dans les textes que ce site détient, ouvrez un acte tel qu’il se présentait à la date de votre choix et exportez avec des citations que chacun peut vérifier auprès de la source officielle. Pour un acte luxembourgeois dont ce site détient plus d’une version, voyez si le libellé de chaque article a changé d’une version à la suivante, et quels articles diffèrent entre ses versions à deux dates. Lorsque ce site ne détient pas un texte ou une date, il le dit.',
     aboutHeading: 'Ce qu’est Lex et ce qu’il n’est pas',
     coverage: 'Ce site détient {acts} du droit luxembourgeois, en {versions} comptant {articles}, d’après l’index construit le {date}.',
     coverageUndated: 'Ce site détient {acts} du droit luxembourgeois, en {versions} comptant {articles} ; l’index qu’il détient ne consigne aucune date de construction.',
@@ -1630,7 +1644,7 @@ export const LIVE_CHROME_FR = Object.freeze({
         text: 'Un identifiant qui désigne l’un de ces instruments est refusé avec {code} par toute opération qui en accepte un, avant toute recherche. La liste, {list}, nomme pour chacun son lieu officiel de publication et à qui s’adresser, une institution ou un service officiel et jamais une personne ; chaque refus nomme l’empreinte de la liste, {digest}.',
         row: '{instrument} : {reason} Par exemple {examples}. Lieu officiel : {official}. À qui s’adresser : {who}.',
         pending: 'Pas encore listés : les règlements communaux, dont le lieu officiel de publication est propre à chaque commune, et les décisions des juridictions luxembourgeoises, qu’aucun identifiant ne désigne exactement. Une requête qui désigne l’un d’eux reçoit encore {code}.',
-        population: 'Un acte de l’UE extérieur à la population d’actes de l’UE que détient ce site, désigné par son numéro CELEX, reçoit lui aussi le refus {code}, bien qu’il ne figure sur aucune liste : qu’un acte en soit extérieur dépend de l’index de l’UE que monte le serveur. Le refus énonce la règle que suit cette population, avec le nombre d’actes de sa liste de départ, et donne comme lieu officiel la page de l’acte sur EUR-Lex ; il ne nomme aucune liste ni aucune empreinte de liste.',
+        population: 'Une requête qui désigne un acte de l’UE par son numéro CELEX est elle aussi refusée avec {code}, bien que cet acte ne figure sur aucune liste, lorsqu’il est extérieur à la population d’actes de l’UE que détient ce site : qu’un acte soit extérieur à cette population dépend de l’index de l’UE que monte le serveur. Le refus énonce la règle qui délimite cette population, avec le nombre d’actes de sa liste de départ, et donne comme lieu officiel la page de l’acte sur EUR-Lex ; il ne nomme ni la liste de ce que Lex ne détient jamais ni son empreinte.',
       }),
       presentationHeading: 'Deux réponses qui ne sont pas des refus',
       presentation: Object.freeze({
@@ -1691,7 +1705,7 @@ export const LIVE_CHROME_FR = Object.freeze({
         }),
         G3: Object.freeze({
           name: 'Rien n’est supprimé du journal',
-          text: 'Les événements de chaque construction forment le début du journal de la construction suivante, ligne pour ligne. Le code peut conserver des constructions antérieures à côté de celle qu’un serveur monte, selon une règle de conservation : chaque construction listée comme référencée par un permalien publié, la dernière construction de chaque jour pendant {days} jours et la première de chaque mois. Lex ne les conserve pas encore : le stockage nécessaire n’est pas financé, et la mise en production que sert ce site ne détient que la construction qu’elle monte. Une version que nomme le journal n’est donc revérifiable que tant qu’une construction conservée en détient le texte, c’est-à-dire aujourd’hui la construction montée ; une version dont aucune construction conservée ne détient le texte reste nommée par le journal, sans son texte, et un permalien vers elle ne se vérifie plus.',
+          text: 'Les événements de chaque construction forment le début du journal de la construction suivante, ligne pour ligne. Le code peut conserver des constructions antérieures à côté de celle qu’un serveur monte, selon une règle de conservation : chaque construction listée comme référencée par un permalien publié, la dernière construction de chaque jour pendant {days} jours et la première de chaque mois. Lex ne les conserve pas encore : la mise en production déployée sur ce site ne contient que la construction que monte son serveur. Une version que nomme le journal ne peut donc être vérifiée de nouveau que tant qu’une construction conservée en détient le texte, c’est-à-dire aujourd’hui la construction montée ; une version dont aucune construction conservée ne détient le texte reste nommée par le journal, sans son texte, et un permalien vers elle ne se vérifie plus.',
         }),
         G4: Object.freeze({
           name: 'Répondre par ce que détenait une construction',
@@ -1707,7 +1721,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       heading: 'Comment l’API évolue',
       versioned: 'L’identité de chaque schéma se termine par sa version, comme {example}, et il en va de même de celle du registre, {registry}. Une modification qui retire ou renomme un membre, ou qui change ce qu’il signifie, fait monter cette version ; l’enveloppe n’admet aucun membre qu’elle ne liste pas, si bien qu’un nouveau membre de l’enveloppe fait aussi monter sa version.',
       additive: 'L’objet d’une réponse, et la charge utile d’un refus, peuvent gagner des membres au sein d’une même version de leur schéma : un programme ne tient pas compte des membres qu’il ne connaît pas. Au sein d’une version du registre, une charge utile ne perd jamais un champ que le registre exige de son code.',
-      digest: 'Toute modification apportée à la définition d’une opération, à un schéma que nomme le registre ou à un code de refus change l’empreinte du registre, que porte chaque enveloppe : un programme qui conserve cette empreinte apprend la modification dès la première réponse qui la suit. Une correction apportée au comportement d’une opération sans modifier sa définition laisse l’empreinte inchangée : l’empreinte indique donc quand le contrat de l’API change, et non quand une réponse change. La liste de ce que Lex ne détient jamais ne fait pas partie du registre : chaque refus {code} que décide la liste nomme l’identité de la liste, {scopeList}, et son empreinte, {scopeListDigest}, qui change à chaque modification de la liste.',
+      digest: 'Toute modification apportée à la définition d’une opération, à un schéma que nomme le registre ou à un code de refus change l’empreinte du registre, que porte chaque enveloppe : un programme qui conserve cette empreinte apprend la modification dès la première réponse qui la suit. Une correction apportée au comportement d’une opération sans modifier sa définition laisse l’empreinte inchangée : l’empreinte indique donc quand le contrat de l’API change, et non quand une réponse change. La liste de ce que Lex ne détient jamais ne fait pas partie du registre : chaque refus {code} fondé sur la liste nomme l’identité de la liste, {scopeList}, et son empreinte, {scopeListDigest}, qui change à chaque modification de la liste.',
       registryInEnvelope: 'Un membre de l’enveloppe nomme la version du registre, {member} : une nouvelle version du registre change la seule valeur que ce membre admet, et donc le schéma de l’enveloppe et son empreinte, sans faire monter la version propre de l’enveloppe. Un programme qui conserve le schéma de l’enveloppe le récupère de nouveau lorsque la version du registre change, et le vérifie au regard de l’empreinte que nomme le registre.',
       closed: 'Les opérations et les codes de refus forment des ensembles fermés, qui ne changent que par une décision de la spécification. Une opération non servie faute de données devient servie sans nouvelle version du registre : son refus cède la place à des réponses.',
       notice: 'Il n’y a ni préavis ni période d’abandon progressif : une modification est publiée avec la mise en production qui l’apporte, sur cette page et dans les schémas auxquels elle renvoie.',
