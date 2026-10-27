@@ -123,11 +123,26 @@ public sealed class V3MountedGatesOracleTests
         var harness = RepairFixture();
         await using var fixture = await IntervalMount.CreateAsync(harness);
         var timelines = V3MountedGatesTests.Timelines(fixture.Directory);
-        var (set, derived) = V3MountedGatesTests.RunRefusalGate(fixture.Mount, fixture.Directory, timelines);
+        var (set, derived) = V3MountedGatesTests.RunRefusalGate(fixture.Mount, fixture.Directory, timelines, harness.MemberOutcomes);
         var report = string.Join("; ", derived.Requests.Select(static pair => $"{pair.Key}={pair.Value.Gold}"));
         Assert.AreEqual(GateVerdict.Pass, set.Gates.Single().Verdict, report);
         Assert.AreEqual("ambiguous_version", derived.Requests["twin-states"].Gold, "the 2021 pair of two wordings");
         StringAssert.Contains(System.Text.Json.JsonSerializer.Serialize(derived.Requests["twin-states"].Parameters), "loi-2021-05-05-n1");
+
+        // A date a state without text covers is as_of's refusal with the state's reason, so index 9 produces both codes from its
+        // catalogue (derive-r1 holds 609 states withheld by their rights and 13 without text for another reason, which the
+        // release's set named as not produced, with a reason that was not true there).
+        Assert.AreEqual("text_withheld", derived.Requests["state-text-withheld"].Gold);
+        Assert.AreEqual("text_not_available", derived.Requests["state-text-not-available"].Gold);
+        using var oracle = V3MountedGatesTests.IntervalOracle.Open(fixture.Directory, harness.MemberOutcomes)!;
+        foreach (var id in new[] { "state-text-withheld", "state-text-not-available" })
+        {
+            var parameters = System.Text.Json.JsonSerializer.SerializeToElement(derived.Requests[id].Parameters);
+            var work = parameters.GetProperty("identifier").GetString()!["/lu-legilux/".Length..];
+            Assert.AreEqual("refusal:" + derived.Requests[id].Gold, oracle.AsOf(work, parameters.GetProperty("language").GetString(), Day(parameters.GetProperty("date").GetString()!)), id);
+        }
+
+        Assert.IsFalse(derived.NotProduced.ContainsKey("text_withheld") || derived.NotProduced.ContainsKey("text_not_available"), report);
     }
 
     [TestMethod]

@@ -44,7 +44,7 @@ public sealed partial class V3MountedGatesTests
     private static readonly string[] CandidateLanguages = ["eng", "deu", "fra", "ltz"];
     private static readonly string[] CandidateFormats = ["docx", "epub", "odt", "rtf"];
 
-    internal static RefusalSet RefusalCases(string mountDirectory, IReadOnlyList<Timeline> timelines)
+    internal static RefusalSet RefusalCases(string mountDirectory, IReadOnlyList<Timeline> timelines, IReadOnlyDictionary<(string Root, string Expression), string>? memberOutcomes = null)
     {
         // Coverage answers about the Luxembourg index, and refuses no_corpus_mounted when the mount holds none (an EU index
         // alone): the handler's own rule (its Luxembourg reader is null).
@@ -68,7 +68,7 @@ public sealed partial class V3MountedGatesTests
         // the rules serve alone on its own date, a date before the history is before the catalogue's first state (a state
         // without text may begin before the first held one), and two states of one date are ambiguous only when the oracle
         // says so (one wording is served once). On an index of schema 8 or 6 the timelines say it (the R1 gates, 2026-10-26).
-        using var oracle = IntervalOracle.Open(mountDirectory);
+        using var oracle = IntervalOracle.Open(mountDirectory, memberOutcomes);
         bool ServedAlone(string work, string language, DateOnly date, string state) =>
             oracle is null || oracle.AsOf(work, language, date) == state;
 
@@ -197,8 +197,46 @@ public sealed partial class V3MountedGatesTests
             notProduced["text_not_available"] = "every state whose text is admitted holds text";
         }
 
+        // On index 9 a date a state without text covers is refused by as_of with the state's own reason (the specification's
+        // R83 and R77, and the data design's §3.5): text_withheld when its member's rights withhold it, else text_not_available. Each is
+        // asked on the first such state the oracle says as_of refuses so on its own date. A not-produced reason says what the
+        // catalogue holds, since index 9 holds states without text (the R1 gates, 2026-10-27).
+        if (oracle is not null)
+        {
+            foreach (var (code, id) in new[] { ("text_withheld", "state-text-withheld"), ("text_not_available", "state-text-not-available") })
+            {
+                if (TextlessStateRefused(connection, oracle, code) is { } refused)
+                {
+                    requests[id] = new("as_of", new { identifier = $"/lu-legilux/{refused.Work}", date = refused.Date, language = refused.Language }, code);
+                }
+            }
+
+            ReasonOnIndexNine(notProduced, "text_withheld", "no state without text that as_of refuses on its own date is withheld by its rights, and every held state's sources were acquired under the one admitting rights disposition");
+            ReasonOnIndexNine(notProduced, "text_not_available", "no state without text that as_of refuses on its own date lacks it for a reason other than its rights, and every held state whose text is admitted holds text");
+            ReasonOnIndexNine(notProduced, "ambiguous_version", "no date on which two states of a sampled work begin in one language is one the rules call ambiguous (states of one wording are served once)");
+            ReasonOnIndexNine(notProduced, "profiles_differ", "no two held states of one work, each served alone on its own date, differ in rule profile");
+        }
+
         return Finished(mountDirectory, requests, notProduced);
     }
+
+    private static void ReasonOnIndexNine(IDictionary<string, string> notProduced, string code, string reason)
+    {
+        if (notProduced.ContainsKey(code))
+        {
+            notProduced[code] = reason;
+        }
+    }
+
+    /// <summary>
+    /// The first state without text, in the catalogue's order, on whose own date the interval oracle says <c>as_of</c> refuses
+    /// with <paramref name="code"/> (no held state of its language covers that date beside it).
+    /// </summary>
+    private static (string Work, string Date, string Language)? TextlessStateRefused(SqliteConnection connection, IntervalOracle oracle, string code) =>
+        Rows(connection, "SELECT work_key, applicability_date, language FROM states WHERE article_identities_json = '[]' AND language <> '' ORDER BY work_key, applicability_date, language, state_sha256")
+            .Where(row => oracle.AsOf(row[0], row[2], Day(row[1])) == "refusal:" + code)
+            .Select(static row => ((string Work, string Date, string Language)?)(row[0], row[1], row[2]))
+            .FirstOrDefault();
 
     /// <summary>
     /// The set with the EU requests the mount's EU index gives, and without a not-produced entry for a code some request
@@ -362,9 +400,10 @@ public sealed partial class V3MountedGatesTests
     }
 
     /// <summary>The refusal gate over a mount: every request answered with its one code, and the verdict control.</summary>
-    internal static (EvaluationCardSet Set, RefusalSet Cases) RunRefusalGate(V3CorpusMount mount, string mountDirectory, IReadOnlyList<Timeline> timelines)
+    internal static (EvaluationCardSet Set, RefusalSet Cases) RunRefusalGate(
+        V3CorpusMount mount, string mountDirectory, IReadOnlyList<Timeline> timelines, IReadOnlyDictionary<(string Root, string Expression), string>? memberOutcomes = null)
     {
-        var derived = RefusalCases(mountDirectory, timelines);
+        var derived = RefusalCases(mountDirectory, timelines, memberOutcomes);
         var cases = derived.Requests.Select(static pair => new VerdictCase(pair.Key, pair.Value.Gold)).ToArray();
         VerdictArm arm = caseId =>
         {
