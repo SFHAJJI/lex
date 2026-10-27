@@ -271,7 +271,8 @@ public sealed class V3FreshnessMountTests
                 ? new SourceArtifactRef(named.GetProperty("resourceId").GetString()!, named.GetProperty("Sha256").GetString()!)
                 : null;
         var facts = V3CorpusMount.ReadBuildReport(bytes, Named("corpus")!, Named("luxembourgIndex"), Named("europeIndex"));
-        Console.WriteLine($"luxembourg completed at {facts.LuxembourgCompletedAt:O}; europe completed at {facts.EuropeCompletedAt:O}; index built from {facts.IndexBuilderSourceCommit ?? "(not recorded)"}");
+        Console.WriteLine($"luxembourg completed at {facts.LuxembourgCompletedAt:O}; europe completed at {facts.EuropeCompletedAt:O}; index built from {facts.IndexBuilderSourceCommit ?? "(not recorded)"}; " +
+            $"text yield {(facts.TextYield is null ? "not stated (report " + report.RootElement.GetProperty("schema").GetString() + ")" : "stated")}");
     }
 
     [TestMethod]

@@ -50,6 +50,8 @@ public sealed class V3EnvelopeSamplesTests
     {
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
+        // The build report a derive writes beside its mount states the text yield per class (R86(4)), which coverage serves.
+        await V3TextYieldTests.WriteYieldReportAsync(fixture);
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
         Assert.IsNotNull(mount);
 

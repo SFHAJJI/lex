@@ -2,6 +2,308 @@
 
 Updated 2026-10-27.
 
+## The text yield per class: the build reports it, Coverage and R26's sentence say it (R86(4); sole driver, 2026-10-27)
+
+- **What was asked.** R86(4): "The build reports the text yield per class: works and articles with served text; text
+  withheld, by reason (licenceSCL, conflict); parse failures; PDF-only bodies. Coverage and R26's sentence show the same
+  figures." Branch `data/yield-per-class`, from `data/text-yield` (#996). No publisher traffic, no browser, no Azure.
+- **The build reports it.** `V3TextYield` (new, `src/Lex.V3.Ingest/V3TextYield.cs`) counts, per publisher and per class, from
+  what the derive already writes and nothing else: the corpus's members, the Luxembourg index's articles and catalogue facts
+  (`work_facts`), the EU index's articles and states. The mount writer puts it in the build report as `textYield`
+  (`lex-v3-text-yield/1`); the report's schema is now `lex-v3-first-mount-report/2`. Every count is ordered by ordinal
+  comparison, so a second derive writes the same bytes (the two-process offline test compares every file, the report
+  included).
+  - **Classes.** Luxembourg: the ELI family (`code`, `loi`, `rgd`) and the state kind (`code`, `as_published`,
+    `consolidation`), read from the state IRI, so a family the catalogue adds becomes a class with no change. EU: the
+    content class (`original_legal_text`, `consolidation`).
+  - **Per class.** Versions the catalogue lists and versions with text; acts and acts with text; articles served; versions of
+    which no file is held, by what the catalogue says of them (`catalogue_licence_scl`, `catalogue_licence_scl_in_part`,
+    `catalogue_no_expression`, `catalogue_cc_by_not_acquired`, ...; the licence is read from the XML and PDF manifestations
+    only); and every held file in exactly one of: with text, withheld (by its rights disposition's own wire name, with how
+    many are PDFs), PDF only, or failed (an admitted file with no article served, by its derivation dispositions' own
+    names: for Luxembourg a non-PDF file; the EU's corpus records no file format, so `files_pdf_only` is null there and an EU
+    file with no Formex main body, a PDF or HTML one among them, is failed by its own disposition, such as
+    `formex_main_body_not_eligible`). EU classes carry R84's annex counts (with text, image-only, failed, by disposition);
+    Luxembourg records none.
+  - **No closed list of reasons.** A rights disposition is counted under `ContractWire.NameOf`, so Release 2's
+    `agreed_cc_by_rederived` and policy A (#999) need no change here: an admitted file counts by its articles, a withheld
+    one by its token.
+- **The API serves it.** `V3CorpusMount` reads `textYield` from the report beside the mount, holds it to its arithmetic and
+  to the mount (a publisher exactly when its index is mounted, its articles the index's, its files the corpus's held
+  files; anything else refuses the mount, as a report naming other artifacts does), and the coverage answer carries
+  `text_yield` and `text_yield_note`; with a yield, its `scope` and `publisher_universe` row say the catalogue is counted.
+- **A mount without the figures answers as before** (driver decision, reversible): derive-r1 and derive-c carry report /1,
+  so their coverage answers `text_yield: null` with a note saying why, and every other member is unchanged. Refusing such
+  a mount would take the live release down for a figure it never claimed; computing the yield in the server would serve a
+  figure the build did not report. An API before this slice reading a /2 report ignores the new member.
+- **The web says the same figures.** Coverage has a section "How much text this site serves, class by class": R26's
+  sentence per publisher, every number its publisher row's (versions with text, versions, acts with text, acts,
+  articles), the class table with each publisher's own row, why a version or file has no text (each reason the data's
+  token), the annex counts, and the platform's note; for a mount with no yield, the sentence saying so. `readCoverage`
+  holds the block to the same arithmetic, and to the mount (its Luxembourg articles are `totals.articles`, its files the
+  members acquired or withheld). English and French: the French forms were reviewed by an independent reviewer against
+  the table's vocabulary (11 changed, the English with 5: a withheld text "n'est pas communiqué", a file "sans texte
+  servi", the catalogue "recense"; recorded in `live-chrome-fr.mjs`). No count is typed in copy.
+- **Measured over derive-r1, read-only** (`V3TextYieldMountProbe`, opt-in, the production count over the mount's own
+  files; 45 seconds, nothing written beside the mount). These are the figures a derive at this head writes for those
+  inputs; they equal the ones #996 measured from custody by other means.
+
+  | Class | Versions (with text) | Acts (with text) | Articles | Not held | Files: withheld (PDF) / failed |
+  |---|---|---|---|---|---|
+  | Codes | 914 (126) | 17 (8) | 119,730 | 724 CC BY not acquired (the nine code recueils); 1 no expression | 62 (30) / 1 `akn_upstream_not_inventoried` |
+  | Lois, as published | 9,238 (689) | 9,238 (689) | 7,586 | 6,129 licenceSCL; 1 no expression | 2,398 (9) / 19 `akn_unsupported_content_shape`, 2 `akn_upstream_not_inventoried` |
+  | Lois, consolidations | 1,594 (0) | 595 (0) | 0 | 60 no expression | 1,534 (105) / 0 |
+  | RGD, as published | 15,366 (1,875) | 15,366 (1,875) | 10,316 | 10,201 licenceSCL; 1 CC BY not acquired; 1 no expression | 3,275 (175) / 12 `akn_unsupported_content_shape`, 1 `akn_upstream_not_inventoried` |
+  | RGD, consolidations | 1,244 (0) | 660 (0) | 0 | 33 no expression | 1,211 (49) / 0 |
+  | EU, consolidated wordings | 295 (245) | 1,088 works (482) | 171,664 | not recorded | 0 / 48 `formex_main_body_missing`, 2 not eligible, 2 package rejected |
+  | EU, original wordings | 82 (29) | 82 works (29) | 2,156 | not recorded | 0 / 4 missing, 10 not eligible, 86 package not acquired, 6 rejected; 16 annexes failed (`annex_mapping_unresolved`) |
+
+  Every Luxembourg withheld file reads `typed_quarantine_in_file_reading_rejected` (reading /1); no admitted PDF is held
+  (the 368 PDF files are all withheld). Luxembourg: 2,690 of 28,356 versions, 2,572 of 24,621 acts, 137,632 articles;
+  the EU: 274 of 377 versions, 173,820 articles.
+- **Review and repair (#1000).** REPAIR, every figure confirmed by an independent count over derive-r1. F1 (medium): the note
+  and the class doc said the EU holds no PDF, and two EU consolidation bodies of `02003R0001-20040501`
+  (`formex_main_body_not_eligible`) are PDFs in run 16's custody. The claims are corrected, not the count: `files_pdf_only`
+  is null where the corpus records no file format, and Coverage says so for the EU in English and French (2 forms
+  reviewed, 1 changed). Determinism: the classes sort by an ordinal comparer, and an EU work the census lists under two
+  seeds gives its text to both seeds' versions whatever order the rows come in (none in derive-r1; the bound "versions
+  with text are no more than the files with text" is dropped for it).
+- **What a new D1 needs.** Nothing new as input: inputs /3 stay valid, and a derive at this head writes report /2 with the
+  yield (about a minute more, reading the two placed indexes). Deploy the API at this head or later to serve it; Release 1's
+  mount keeps answering with none.
+- **Tests.** `V3TextYieldTests` (every class and reason over synthetic rows, every rights disposition by its own name, the EU
+  classes and annexes, the zero cases, an article of no held file refused, the block's arithmetic, the coverage answer with,
+  without and with a yield that does not hold); the full build test now holds the report's yield to the written mount and
+  to coverage; the census pin (`V3CorpusMountWriter`'s `ReportSchema`); the answer and envelope censuses re-rendered (a
+  coverage answer with the yield, and one without); the legacy schema-8 and schema-6 answers re-recorded (each coverage
+  answer gained `text_yield: null` and its note, nothing else moved); web: `coverage.test.mjs` (both renderers, both
+  languages, R26's sentence against the table, every refusal), and the home and no-literal-counts tests move the yield
+  with the totals.
+- **Measured** (Windows, no browser, no publisher traffic, no Azure; targeted classes, CI runs the suites):
+  - `dotnet build Lex.V3.slnx -c Release`: 0 warnings, 0 errors.
+  - The mount, report and coverage classes with the offline two-process derive (`V3FirstMountBuildTests` and its eight
+    offline rows, `V3CorpusCoverageMountTests`, `V3MountBuildFileTests`, `EuFirstMountAcquisitionResumeTests`,
+    `V3IndexNineServingTests`, `V3CorpusGenerationQuoteTests`, `V3CorpusLegacySchema8MountTests`, three Luxembourg mount
+    classes, `V3CorpusEuropeTimeViewTests`): 93, of which 2 failed on the first run and are repaired (the legacy answers and
+    the declared coverage paths), 2 opt-in.
+  - Then `V3TextYieldTests`, the censuses, both sample censuses, the coverage, legacy and freshness classes: 84 (80 passed,
+    4 opt-in); the mount-writing classes again after the last change: 7 and 36 passed; `Lex.V3.Tests` censuses and
+    vocabulary: 45 passed.
+  - Web (`npm run build`, then `node --test`): `coverage`, `live-chrome`, `live-chrome-scan`, `no-literal-counts`,
+    `live-home`, `live-french`, `live-coverage`: 85 of 85; 31 other files that read a coverage answer: 343 of 343.
+  - `eng/verify-v3-tree.ps1`: passes.
+
+## Release 2's rights: reading /2, resolution /2, policy A and R1 with rights; the owner's rulings L1, L1b and L2 built and switched off (sole driver, 2026-10-27)
+
+- **The defect (the text-yield slice's finding).** On the Release 1 mount (`derive-r1`), R86(2) fails: no consolidation is
+  served. Reading /1 (`LuxembourgInFileRightsReader.ReadAsync`) admits a file only when its identification holds exactly
+  one `scl:JOLUXManifestation`, the file fetched, and the publisher's consolidations carry a second block, the PDF twin.
+  Run 15's `loi/2021/01/22/a45/consolide/20211217` has one `FRBRthis` (`…/fr/xml`) and two blocks (`…/fr/xml`, `…/fr/pdf`),
+  each CC BY 4.0; reading /1 calls it `typed_quarantine_in_file_reading_rejected`. Reading /1 does not change: R0's replay
+  runs it byte for byte.
+- **The rules, as LU-DATA-DESIGN v2 §1.1, §1.2 and §2.2 state them.**
+  - **In-file reading /2** (`ReadTwoAsync`, `lex-lu-in-file-rights-reading/2`, `eb3b6d96…`). It binds the
+    `scl:JOLUXManifestation` of the document's own identification whose `uriThis` is exactly the fetched XML
+    manifestation, the one custody holds. A sibling block (the PDF twin) is a named identity, never the held body's
+    licence. FRBR is recorded, never required, and a leading `scl:postit` is tolerated. Every `license` value anywhere in
+    the document is declared.
+  - Reading /2's refusals: two blocks naming the file, or one naming it and another identity (`ambiguous_binding`);
+    markup in a value, or a value that is not one exact IRI (`invalid_licence_iri`); a root that is not one Akoma Ntoso
+    document (`root_rejected`); `malformed_xml`. Its other statuses are `bound`, `own_block_empty`, `unbound`, `silent` and
+    `not_applicable` (a PDF).
+  - **Resolution /2** (`LuxembourgRightsChannels.ResolveTwo`, `lex-lu-rights-resolution/2`, `05ed311f…` since the review): /1's order, then
+    rules 8 to 15. A conflict is any declared value, in any block, that is not the SPARQL value, or any identity a block
+    names that the catalogue (the run's typed `jolux:license` assertions) licenses otherwise. An own block of exactly CC
+    BY with nothing disagreeing is `agreed_cc_by_rederived`. Six dispositions are new: that one, the four single-channel
+    ones and `typed_quarantine_in_file_identity_unknown`.
+  - **Policy A** (`lex-lu-rights-admission-policy/A`, `b9687998…`, a driver decision, §3.3 item 11): admits
+    `agreed_same_run_cc_by` and `agreed_cc_by_rederived`, and no single-channel disposition. The registry refuses to compose
+    a policy that names a disposition no policy may admit. Policy /1 is unchanged (`a477f4f2…`).
+  - **R1 with rights**, rule set `lu-release-2`: reading /2 and resolution /2, then Release 1's inventory /4, content /3
+    and state digest /2. Each held body is read by digest. The in-file evidence index `lex-lu-in-file-rights-evidence/2`
+    holds every reading, refused ones too, and names the /1 index. Resolution /2 runs against R0's own SPARQL channel.
+  - R1 refuses on a non-terminal resolution, on `non_admitting_licence_scl`, and on an acquisition admission that /2 does
+    not agree with. An admission it keeps keeps its own resolution; every other member is re-bound (`WithRederivedRights`,
+    a run of R0's own via `WithHeldBodyDerivationPopulation`). The record gains a `rights` part; Release 1's record bytes
+    do not change.
+  - **Corpus, mount and web.** The corpus admits what its header's policy admits. Conflict, Multiple and the six new
+    dispositions are terminal. Re-bound rights carry `resolution_rule` and binding /2, and the set and the mount view each
+    hold every member to the policy.
+  - The bundle and search admit by the corpus's policy. A bundle says `agreed_cc_by_rederived` when any of its sources is,
+    and states policy A's rule; a policy /1 corpus answers byte for byte as before. The web reads both agreements.
+- **The owner's rulings (§5), built and off.** L2, L1 and L1b are registered entries over policy A, each with option (a)
+  (every licence page) or (b) (only pages run 15 observed live, from its resumption at 2026-10-11T12:28:45Z): 14 entries,
+  `PolicyFor(l1, l1b, l2, livePagesOnly)`. Four constant switches in `LuxembourgRederivation` are false, so `lu-release-2`
+  names policy A. A yes sets the switch and puts the owner's words, dated, on the entry's ruling line; the rule set's policy
+  entry and its digest change, and nothing else.
+  - A single-channel admission is bound to the retained SPARQL page that holds its licence row, from the licence-page index
+    `lex-lu-sparql-licence-pages/1` (held, and named in the record). R1 refuses an admission without its page.
+  - The admitted member carries `rights_disclosure` (its code, the page, the page's observation time) beside its gaps, and
+    cites the page. The bundle carries it, with the rule's single-channel sentence, and the reading screen says the L5
+    sentence with the page's date, in English and French (drafts the owner revises). Under (b), a body whose page was
+    replayed is withheld, with the gap `rights_licence_page_outside_evidence_window`.
+  - L3 (PDFs) and L4 (conflicts) have no entry; no entry can admit `not_applicable` or a conflict.
+- **Measured over run 15** (`LuxembourgInFileRightsReadingTwoRun15Probe`, new, opt-in `LEX_LU_RIGHTS2_PROBE=1`, read-only,
+  never a CI test). Custody was read by digest through S2's read-only decorator; derive-c's work facts were the catalogue;
+  no derive ran and nothing went over the network. It took 12.5 minutes, with a peak working set of 2,044 MiB, and found
+  0 failures.
+  - The licence-page index: 4,721 pages, 194,828 licence rows, 96,984 manifestations (3 whose pages disagree or are not
+    exact). That is the design's scan, figure for figure.
+  - Under resolution /2, the 11,205 held bodies split as follows:
+    - every one of the 2,725 the acquisition admitted agrees (2,598 acts, 127 codes);
+    - `agreed_cc_by_rederived` 702 (451 consolidations, 250 acts, 1 code state, `code/procedure_civile/20230201`);
+    - single channel: names another identity 1,043 (1,012 consolidations, 31 code states), silent 2,196 (1,934 acts, 262
+      consolidations), own block empty 31 acts, not applicable 368 (the PDFs);
+    - withheld under every policy: conflict 4,012 (3,201 acts, 811 consolidations), multiple 71, missing value 1,
+      identity unknown 54 (1 act, 53 consolidations), rejected 2.
+  - Two acts differ from the design's simulation, and both stay withheld:
+    - `loi/1997/07/27/n6/jo`: its own block says CC BY, but the catalogue licenses its PDF twin both CC BY and
+      licenceSCL. Rule 8, as the design writes it, makes that a conflict; the simulation had applied that check to
+      unbound files only. That is why there are 702 agreements, not 703.
+    - `loi/2001/12/21/n8/jo` holds a second root element, `components`, beside `act`, so its root is rejected. Its own
+      block says licenceSCL, so it is withheld either way.
+  - Admitted bodies, bodies with text, and articles content /3 admits, by policy:
+
+    | Policy | Bodies | With text | Articles | Over policy A |
+    |---|---|---|---|---|
+    | /1 (Release 1) | 2,725 | 2,690 | 137,632 | |
+    | A (this slice) | 3,427 | 3,387 | 152,031 | 451 consolidations (9,700 articles), 250 acts, 1 code state: +14,399 articles |
+    | A + L2 (a) | 4,470 | 4,425 | 215,466 | +1,043 (1,012 consolidations, 31 code states), +63,435 articles; 5 refused as misfiled |
+    | A + L2 (b) | 3,857 | 3,816 | 158,821 | +430 consolidations, +6,790 articles; no code state (all 31 rest on run-14 pages) |
+    | A + L1 (a) | 5,623 | 5,561 | 173,072 | +2,196 (1,934 acts, 262 consolidations), +21,041 articles |
+    | A + L1 (b) | 4,877 | 4,837 | 161,311 | +1,450 (1,306 acts, 144 consolidations), +9,280 articles |
+    | A + L1b (a) | 3,458 | 3,418 | 152,614 | +31 acts, +583 articles |
+    | A + L1b (b) | 3,450 | 3,410 | 152,356 | +23 acts, +325 articles |
+    | A + all three (a) | 6,697 | 6,630 | 237,090 | +3,270, +85,059 articles |
+    | A + all three (b) | 5,330 | 5,289 | 168,426 | +1,903, +16,395 articles |
+
+  - Content /3 admits 9,700 articles of the 451 consolidations, the design's figure. The file counts are the design's
+    (§1.1, §5), with the live-page splits 430 / 1,450 / 23, except L2: 12 of the design's 1,055 name an identity the
+    catalogue does not know (rule 12 since the review). The articles are content /3's, so they are above the design's
+    content /2 estimates (L2 (a): 57,661).
+  - A body is a text here; the index's states, and "6 codes current" under L2, come from index /9.
+- **The index stage under policy A** (`LuxembourgIndexNineBuildRun15Probe` with `held: run15-held-release2.jsonl` and
+  `admission_policy: A`): the projection and the first write ran. Then free disk fell to 2.25 GB: the page file grew to cover the probe's 2.7 GB
+  of private memory while other agents ran. The probe was stopped there, as this slice's limits require (3 GB), so the
+  reader's file door and the second write did not run.
+  - The written file was read back before it was deleted (SQLite, read-only and immutable). `quick_check` is ok.
+  - Its rows: 152,031 articles (21,212 acts, 121,119 code states, 9,700 consolidations); held states 2,810 as published,
+    127 code and 450 consolidation; 518 consolidation and 61 code states `withheld_rights`.
+  - Its members: 702 `agreed_cc_by_rederived` and 2,725 `agreed_same_run_cc_by` acquired, every other disposition
+    withheld.
+  - The file was 1,455,538,176 bytes (Release 1's index is 1,378,668,544).
+  - Under Release 1 the same probe gave 2,690 held states and 137,632 articles. The index builds with the consolidations'
+    text, and its article count is the rights probe's to the article.
+  - The probe now deletes its first file before the second write, so one index is on disk at a time.
+  - The full run (reader door, double build) waits for a machine with headroom, or for D1 on Azure, which runs every one
+    of those checks.
+- **Tests** (Windows; no browser, no publisher traffic, no Azure; custody read only; targeted classes only, CI runs the
+  suites): - `dotnet build -c Release`: `Lex.V3.Tool`, `Lex.V3.Api` and both test projects, 0 warnings and 0 errors. Rebased on
+    473a9fae (#994, #995), whose census counts are combined with this slice's.
+  - Contracts (`Lex.V3.Tests`), 132 tests, 0 failed: `LuxembourgRightsResolutionTwoTests` (new, 13: every rule of
+    resolution /2, the policies' texts and digests, the switches and their windows, licence-page binding, a policy
+    naming a never-admissible disposition cannot be built), `LuxembourgRightsChannelsTests` (the /1 pins, unchanged),
+    the gazette, body-join and scope-resolver classes, and every census.
+  - Ingest (`Lex.V3.Ingest.Tests`), 301 tests (299 passed, 0 failed, 2 skipped: the opt-in writers) before the rebase, and
+    87 again after it.
+    - `LuxembourgInFileRightsReaderTwoTests` (new, 15): reading /2 rule by rule, the licence rows of a SPARQL page, and
+      reading /1 still refusing the twin-block file.
+    - `LuxembourgRightsReleaseTwoTests` (new, 12): the derive's own path. Each fixture consolidation is acquired by the
+      fixture, built under policy /1, re-derived under `lu-release-2`, built, written, verified and mounted:
+      - two agreeing blocks: withheld under /1, served under A (corpus, index and evidence bundle);
+      - the held block alone: the acquisition's admission is kept, with binding /1;
+      - disagreeing blocks: a conflict;
+      - a twin the catalogue licenses licenceSCL: a conflict;
+      - no block naming the file: an unknown identity, or `names_other_identity`, withheld;
+      - a licenceSCL own block: a conflict;
+      - an own block without a licence: withheld under A;
+      - an annex block's licenceSCL behind an acquisition admission: R1 refuses;
+      - a changed member set: the re-binding door refuses;
+      - Release 2's inputs through `rederive-inputs`, `derive` and `rederive-seal`: zero network operations and the same
+        files;
+      - L1b and L1 switched on through the rulings' door: served with the disclosure, while a corpus whose policy would
+        not admit them refuses to read.
+    - `LuxembourgRederivationTests`, `LexCorpus6BuilderTests` (the terminal set), `V3CorpusEvidenceBundleMountTests`,
+      `V3CorpusSearchResultsMountTests`, `V3AnswerSamplesTests` (the samples unchanged), `V3FirstMountBuildTests`,
+      `V3MountedGatesTests`, `LuxembourgIndexBuilderTests`, the frozen replay and the censuses.
+  - Web: `npm run build`, then the 309 tests of every file touching the reading screen, its copy or the number allowlist:
+    0 failed. That includes the policy-A bundle, the single-channel bundle with and without its disclosure, and the
+    French and English disclosure sentences.
+- **What a new D1 does.** No new acquisition: every body is in run 15's custody.
+  - `rederive-inputs --custody … --base mount-inputs-b306a972….json --rules lu-release-2 --policy b9687998dcde76930137a913f54b753d3f496a13da1c7d827d3f1573dcf3dc41 --derived-at <utc> --custody-encoding brotli`
+  - then `derive` over the inputs it writes, `rederive-seal` with the `luxembourg_rederivation` it prints, and a second
+    derive of the sealed inputs, which must be byte-equal.
+  - R1 reads each held body three more times (reading /2, inventory /4, content /3) and holds the evidence index /2 and the
+    record. Under policy A it reads no licence page. Its memory peak should stay Release 1's, which is in R0's replay.
+- **Review of #999 (an independent reviewer: REPAIR) and the repair.**
+  - **F1, high: R0 could no longer replay run 15.** The resolution gained three public members (`InFileReadingTwo`,
+    `ResolutionRuleSha256`, `LicencePage`). ContractJson wrote them as nulls on every resolution /1, and the Gazette
+    checkpoint's input and result digests and the query checkpoint's result digest hash the body joins and Gazette sets
+    that carry one. A derive over run 15 would have refused at the Gazette checkpoint, before R1.
+    - Fixed: each is now a no-argument method over private state (`JsonIgnore` at first, which CI refused). No other type
+      this slice touched is hashed through ContractJson:
+      the corpus member's rights block has its own canonical writer, which writes the new fields only when set; the record
+      and its rights part omit theirs when null; the Gazette rights digests are field by field.
+    - `LuxembourgRightsResolutionWirePinTests` (new) pins `ContractJson.Sha256` of a resolution /1 (agreed, and refused
+      for a PDF), a body join, a Gazette disposition and a Gazette set. The values were computed with 473a9fae's Contracts,
+      built in a scratch worktree outside the repository, by an F# script making the same objects. The branch gives the
+      same five values. With a public property exposing one of the three the pin fails, which was run once to check.
+    - Not checked: the stored checkpoint digests of run 15 themselves. They hash R0's in-memory resolution, which only the
+      query phase's full replay (about 34 GiB) rebuilds, so no read-only check over custody can recompute them on this PC.
+      The pin holds the bytes those digests were made from to 473a9fae's.
+  - **F2: rule 12** now quarantines an unbound file that names no identity, or any identity the catalogue does not know
+    (the design's L2 condition: every identity the block names is itself CC BY in the same catalogue). It is re-pinned,
+    and a new test covers a file naming one CC BY and one unknown identity.
+    - Over run 15, 12 consolidations move from `names_other_identity` to `typed_quarantine_in_file_identity_unknown`
+      (1,024 to 1,012; 41 to 53). L2 (a) adds 1,043 files and 63,435 articles; (b) adds 430 and 6,790. Policy A and every
+      other figure are unchanged.
+  - **F3: binding /2** hashes the reading /2 rule, the admission policy and the re-derivation record besides the resolution
+    rule. The set checks it against its header, and a header naming another record or another policy does not read
+    (tested).
+  - **F4: the L2 disclosure** now says the file's licence statement names another publication, not this file, in English
+    and French; the code does not check "the same act".
+  - **F5: R1's other refusals are tested**: a non-terminal resolution (no SPARQL row), `non_admitting_licence_scl` (a
+    silent file whose SPARQL channel says licenceSCL), and a single-channel admission under L1 whose rights evidence
+    index lists no page. Policy A reads no page for the same body, which is withheld.
+  - **Tests after the repair and the merge of v3/integration at 562d12e7** (#996, #997):
+    - contracts 162 passed;
+    - ingest 320 (318 passed, 0 failed, 2 opt-in skipped);
+    - web 331 passed over 39 files;
+    - `eng/verify-v3-tree.ps1` 1,736 tracked paths.
+    - After merging f7f1f80d (#998) too: contracts 113 passed (the censuses, combined: candidates 630, registries 90),
+      ingest 95 passed (the censuses, the rights classes, the bundle, search and the answer samples), web 334 passed,
+      `eng/verify-v3-tree.ps1` 1,760 tracked paths.
+  - **The rights probe again** (12.4 minutes, peak 2,124 MiB, 0 failures): the moves above, nothing else.
+  - **D1's commands do not change.** `lu-release-2` and policy A (`b9687998…`) are the same; the inputs name resolution
+    /2's new digest through `RulesOf`.
+  - **CI at 07930fec was red (5 of 6,926 tests) and is repaired.**
+    - `WireIgnoredMemberTests`: resolution /2's three facts are no-argument methods over private state,
+      `InFileReadingTwo()`, `ResolutionRuleSha256()` and `LicencePage()`. The type has no deserializing constructor, so it
+      is not in that test's corpus. The wire pin still gives 473a9fae's five values.
+    - `RetiredGenerationBoundaryTests`: every V2 name is now Two (`LuxembourgInFileRightsReadingTwo`, `ReadTwoAsync`,
+      `ResolveTwo`, `ReadingTwoProfileSha256`, `ResolutionTwoProfileSha256`, `InFileEvidenceTwoSchema`), and four files
+      are renamed. No digest moved: reading /2 `eb3b6d96…`, resolution /2 `05ed311f…`, policy A `b9687998…`.
+    - `LuxembourgQueryExecutionAdapterConstructionSurfaceTests` (2): R1's rights step hands back the re-bound population,
+      not a run. R1's main door re-makes the run through the run's internal copy `WithHeldBodyDerivationPopulation`, which
+      is pinned with the reason it cannot leak an unrefused result.
+    - Tests: the whole `Lex.V3.Tests` project, 3,375 (3,369 passed, 0 failed, 6 skipped: the image-conditions lane and
+      Windows symbolic links); ingest 230 passed (every construction-surface class, the censuses, the rights classes, the
+      corpus builder, mount view, bundle, search and answer samples); `eng/verify-v3-tree.ps1` 1,760 tracked paths.
+- **Driver decisions (reversible).**
+  - Policy A, as the design proposes.
+  - Rule 8 applies to every reading, bound ones included: an identity the catalogue licenses otherwise is a conflict,
+    which withholds `loi/1997/07/27/n6/jo`.
+  - Rule 12 quarantines an unbound file naming no identity or any unknown one (the review of #999).
+  - A root-level element beside the document element is a rejected root (`loi/2001/12/21/n8/jo`).
+  - A binding block that names a second identity is ambiguous.
+  - A single-channel page is the latest page holding the row; (b) asks that page to be live.
+  - The disclosure sits in the member's rights block, not in a member field.
+  - The owner's switches and their 14 entries exist before the answer, so a yes changes the release rule set's policy
+    entry and its digest only.
+- **Not in this slice.** The exports' copy of the disclosure (needed before a switch is turned on), the reading /2 identity
+  class of an unbound block's named identities (diagnostic only), and `measure-lu-rights` as a tool step (the probe
+  measures it). The new D1 on Azure is the driver's, at the merged head, as Release 1's was.
+
 ## The text yield, measured from custody: why 659 EU works and every Luxembourg consolidation have no text; the EU main body reads the Treaties, the Charter and the packages whose annexes are unclassified (sole driver, 2026-10-27)
 
 - **What was asked.** The served EU index (derive-r1, index /6) holds text for 511 of the 1,170 Cellar works the census

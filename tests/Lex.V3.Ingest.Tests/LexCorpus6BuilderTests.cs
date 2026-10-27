@@ -536,6 +536,15 @@ public sealed class LexCorpus6BuilderTests
             Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.TypedQuarantineUnruledLicence,
             Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.TypedQuarantineUnrepresentableLicenceShape,
             Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.TypedQuarantineInFileReadingRejected,
+            // Resolution /2 (LU-DATA-DESIGN v2 §1.2): Conflict and Multiple first occur under it, and its six dispositions.
+            Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.Conflict,
+            Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.Multiple,
+            Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.AgreedCcByRederived,
+            Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.SparqlCcByInFileNamesOtherIdentity,
+            Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.SparqlCcByInFileSilent,
+            Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.SparqlCcByInFileOwnBlockEmpty,
+            Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.SparqlCcByInFileNotApplicable,
+            Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.TypedQuarantineInFileIdentityUnknown,
         }.ToHashSet();
         foreach (var disposition in Enum.GetValues<Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition>())
         {

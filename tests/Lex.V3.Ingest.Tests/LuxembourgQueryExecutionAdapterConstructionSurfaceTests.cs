@@ -501,7 +501,13 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
     /// never neither" -- and the constructor now also carries the completion field fold-in one
     /// added: a third factory, or a public setter, is a line in this diff. #419 slice 6c adds
     /// three delivered-only slots: the Gazette body sets by manifest row, the per-listing fetch
-    /// refusals beside them, and the listings whose legal value the publisher stated twice.
+    /// refusals beside them, and the listings whose legal value the publisher stated twice. R1 with
+    /// rights (LU-DATA-DESIGN v2 section 2.2, step 6) adds one internal copy,
+    /// <c>WithHeldBodyDerivationPopulation</c>, beside the three checkpoint copies: it cannot leak an
+    /// unrefused result, because it throws on a refused run and on a run without a population, and
+    /// accepts only a population over the same record set object whose members are the run's own
+    /// records, receipts and selected candidates in the same order, so every other field, the
+    /// refusal and every checkpoint is the delivered run's own.
     /// </summary>
     [TestMethod]
     public void QueryExecutionResultIsDeliveredOrRefusedByConstruction()
@@ -549,6 +555,7 @@ public sealed class LuxembourgQueryExecutionAdapterConstructionSurfaceTests
                 "method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::WithAcquisitionCheckpoint(Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
                 "method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::WithDocumentCheckpoint(Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
                 "method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::WithGazetteCheckpoint(Lex.V3.Contracts.Source.Core.SourceArtifactRef) -> Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
+                "method internal instance Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::WithHeldBodyDerivationPopulation(Lex.V3.Ingest.Luxembourg.LuxembourgHeldBodyDerivationPopulation) -> Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult",
                 "method public static "
                     + "Lex.V3.Ingest.Luxembourg.LuxembourgQueryExecutionResult::Delivered(Lex.V3.Co"
                     + "ntracts.Source.Core.SourceProfileTopology, "
