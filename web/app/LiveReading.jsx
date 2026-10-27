@@ -522,7 +522,7 @@ export function EuropeReadingView({ view, paging = {}, onNext = null, readableFo
     <>
       <p data-acknowledgement="" lang={ENGLISH_LANG}>{view.acknowledgement}</p>
       <p data-authenticity="" lang={ENGLISH_LANG}>{view.authenticity}</p>
-      {/* The statement's info control (R48): what a wording is and which edition is authentic, in How to read Lex. */}
+      {/* The statement's info control (R48): which texts are authentic, in How to read Lex's section on texts as published and consolidated. */}
       <p data-guide-note=""><GuideLink section="versions" /></p>
       {/* The act's dates lead the reading, before its wordings, each said with its role: none of them is a wording's date. */}
       <EuropeForceDates forceDates={view.forceDates ?? null} notWording />

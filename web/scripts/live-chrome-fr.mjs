@@ -288,6 +288,17 @@
 // what this site holds, never "the act's dates", which the wording headings use for the Formex date; MA is "mise en
 // application"; an end of validity is said "totale ou partielle", since 20 of run 16's 24 are partial; the qualifier is
 // "la mention de l’éditeur", in parentheses after its date; and `notWording` says that no date above chooses a wording).
+// The breadcrumbs, the banners' info control and the home page's example searches (R48, R47): `breadcrumbs.label`, the two
+// `breadcrumbs.publishers`, `breadcrumbs.state`, `breadcrumbs.stateEntryIntoForce`, `breadcrumbs.europeOriginal`,
+// `breadcrumbs.europeConsolidated`, `reference.info`, `reference.infoNamed`, `home.examplesHeading` and `home.examplesIntro`
+// were reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the same delegation in the addendum
+// of 2026-10-27 "breadcrumbs, the banners' info controls and the home page's example searches" (11 forms, 1 changed in
+// review: `home.examplesIntro`; the optional pair of `stateEntryIntoForce`, its heading's "(éditeur)", taken in both
+// languages), and with them, from its point 1, `search.opensReading` and `search.opensDossier` (both changed, the English
+// too: a search read from an address does not go to the act by itself, so the line says what the reference opens, never
+// "Ouverture"). Vocabulary: a breadcrumb is a "Fil d’Ariane"; a version crumb says its reading heading's words; an info
+// control is "Comment lire ceci"; the usual citation is the "citation usuelle" ("telle qu’on l’écrit d’ordinaire"), never
+// "d’habitude"; an example "lance la recherche", never "recherche".
 // Typography: a no-break space (U+00A0) stands before : ; ! ? % and » and after «, and the apostrophe is ’.
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
@@ -345,8 +356,8 @@ export const LIVE_CHROME_FR = Object.freeze({
     recognisedArticleDate: 'Référence reconnue : {act}, article {article}, au {date}.',
     recognisedToday: 'Aucune date n’a été indiquée : la date lue est celle d’aujourd’hui au Luxembourg, le {date}.',
     recognisedSearchDate: 'La référence n’indique aucune date : la date lue est celle de la recherche, le {date}.',
-    opensReading: 'Ouverture de la lecture : {link}',
-    opensDossier: 'Ouverture du dossier : {link}',
+    opensReading: 'Cette référence ouvre la lecture : {link}',
+    opensDossier: 'Cette référence ouvre le dossier : {link}',
     notOpenedDate: '« {date} » ne désigne aucun jour du calendrier ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
     notOpenedTwoDates: 'La référence indique deux dates qui ne concordent pas ; rien n’a donc été ouvert, et aucun mot n’a été recherché.',
     titleNotHeld: 'Ce site ne détient aucun acte sous l’intitulé que cite l’expression ; ses mots ont donc été recherchés.',
@@ -918,7 +929,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       'eu-eurlex': 'Droit de l’UE',
     }),
     state: 'Version applicable à partir du {date}',
-    stateEntryIntoForce: 'Acte tel que publié, daté de son entrée en vigueur le {date}',
+    stateEntryIntoForce: 'Acte tel que publié, daté de son entrée en vigueur le {date} (éditeur)',
     europeOriginal: 'Libellé original du {date}',
     europeConsolidated: 'Libellé consolidé du {date}',
   }),
@@ -969,7 +980,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     }),
     links: 'Ailleurs sur ce site',
     examplesHeading: 'Exemples de recherche',
-    examplesIntro: 'Chacun recherche un article que ce site détient, cité comme on l’écrit d’habitude, et mène à son texte.',
+    examplesIntro: 'Chaque exemple lance la recherche d’un article que ce site détient, désigné par sa citation usuelle, et mène à son texte.',
   }),
   failure: Object.freeze({
     line: 'Lex n’a pas pu mener à bien cette demande. Ce n’est pas une réponse sur le droit.',

@@ -175,3 +175,26 @@ test("How to read Lex holds every section a banner points to, in both languages"
   const html = renderLiveGuidePage();
   for (const section of GUIDE_LINK_SECTIONS) assert.match(html, new RegExp(`<h2 id="guide-${section}">`), section);
 });
+
+test("the forms the French review of 2026-10-27 pinned (breadcrumbs, info controls, example searches) say what it settled", () => {
+  const fr = LIVE_CHROME.fr;
+  assert.equal(fr.breadcrumbs.label, "Fil d’Ariane");
+  assert.equal(fr.home.examplesIntro, "Chaque exemple lance la recherche d’un article que ce site détient, désigné par sa citation usuelle, et mène à son texte.");
+  for (const refused of ["d’habitude", "on l’écrit", "Chacun recherche"]) assert.ok(!fr.home.examplesIntro.includes(refused), refused);
+  // A link's name begins with the words it shows (WCAG 2.5.3), in each language.
+  for (const language of ["en", "fr"]) {
+    const { info, infoNamed } = LIVE_CHROME[language].reference;
+    assert.ok(infoNamed.startsWith(info), `${language}: ${infoNamed}`);
+  }
+  // A version crumb says its reading heading's words, the publisher's mark with them where the heading has it.
+  assert.ok(fr.reading.stateHeadingEntryIntoForce.includes("l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur)"));
+  assert.equal(fr.breadcrumbs.stateEntryIntoForce, "Acte tel que publié, daté de son entrée en vigueur le {date} (éditeur)");
+  assert.equal(LIVE_CHROME.en.breadcrumbs.stateEntryIntoForce, "Act as published, dated by its entry into force on {date} (publisher)");
+  // A search read from an address shows the act's link and does not go there by itself: the line says what it opens.
+  assert.equal(fr.search.opensReading, "Cette référence ouvre la lecture : {link}");
+  assert.equal(fr.search.opensDossier, "Cette référence ouvre le dossier : {link}");
+  assert.equal(LIVE_CHROME.en.search.opensReading, "This reference opens the reading: {link}");
+  for (const [language, refused] of [["en", "Opening"], ["fr", "Ouverture"]]) {
+    for (const key of ["opensReading", "opensDossier"]) assert.ok(!LIVE_CHROME[language].search[key].includes(refused), `${language} search.${key}`);
+  }
+});
