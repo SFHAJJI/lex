@@ -48,6 +48,8 @@ export { DossierAnswerView, DossierTitles, DossierView, EuropeDossierView, LiveD
 export { LIVE_DOSSIER_ROOT, liveDossierTree, renderLiveDossierPage } from './live-dossier-page.jsx';
 export { LiveReading, ReadingAnswerView, ReadingView, readingHolds } from './LiveReading.jsx';
 export { FailureFrame, OfficialSites, Permalink, TableRegion } from './LiveAnswer.jsx';
+export { Breadcrumbs } from './Breadcrumbs.jsx';
+export { GUIDE_LINK_SECTIONS, GuideLink, guideSectionHref } from './GuideLink.jsx';
 export { LIVE_READING_ROOT, liveReadingTree, readingLawPath, readingTitle, renderLiveReadingPage } from './live-reading-page.jsx';
 export { ArticleNotHeld, Citations, NotToday, PageNotHeld, PinnedLead, citedArticle, citedTitle, versionShown } from './PinnedReading.jsx';
 export { HistoryAnswerView, HistoryView, LiveHistory } from './LiveHistory.jsx';

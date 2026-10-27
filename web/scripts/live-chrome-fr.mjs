@@ -911,6 +911,17 @@ export const LIVE_CHROME_FR = Object.freeze({
     authenticity: 'Les textes consolidés n’ont aucun effet juridique : seuls font foi les textes publiés au Journal officiel du Grand-Duché de Luxembourg (Mémorial A) et au Journal officiel de l’Union européenne.',
     sources: 'Les textes proviennent de Legilux et de l’Office des publications de l’Union européenne, tels que ce site les détient ; chaque article cité indique sa source officielle.',
   }),
+  breadcrumbs: Object.freeze({
+    label: 'Fil d’Ariane',
+    publishers: Object.freeze({
+      'lu-legilux': 'Droit luxembourgeois',
+      'eu-eurlex': 'Droit de l’UE',
+    }),
+    state: 'Version applicable à partir du {date}',
+    stateEntryIntoForce: 'Acte tel que publié, daté de son entrée en vigueur le {date}',
+    europeOriginal: 'Libellé original du {date}',
+    europeConsolidated: 'Libellé consolidé du {date}',
+  }),
   freshness: Object.freeze({
     heading: 'Mise à jour des données',
     asBuilt: 'Chaque réponse du serveur indique quand l’index a été construit, quand les textes de chaque éditeur ont été collectés pour la dernière fois, ainsi que le code qui a construit l’index et celui qui le sert ; cette page affiche ces indications dès qu’elle a reçu une réponse.',
@@ -1141,6 +1152,8 @@ export const LIVE_CHROME_FR = Object.freeze({
       guide: 'Comment lire Lex',
       developers: 'page Développeurs',
     }),
+    info: 'Comment lire ceci',
+    infoNamed: 'Comment lire ceci : {section}',
   }),
   help: Object.freeze({
     title: 'Obtenir de l’aide',

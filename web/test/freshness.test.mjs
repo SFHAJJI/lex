@@ -19,7 +19,7 @@ import {
 } from "../.react-build/app.mjs";
 import { ANSWER_EVENT, FRESHNESS_CHANNELS, announceAnswer, freshnessFacts, freshnessKey, staleChannels } from "../scripts/freshness.mjs";
 import { readV3Envelope } from "../scripts/v3-envelope.mjs";
-import { countedEntry, fillCounted, liveChrome } from "../scripts/live-chrome.mjs";
+import { countedEntry, fillCounted, fillText, liveChrome } from "../scripts/live-chrome.mjs";
 import { homeFacts } from "../scripts/live-home.mjs";
 import { dataAgeFailures, homePageFailures, withoutFreshness } from "../scripts/deploy-probe.mjs";
 import { assertTimeVocabulary } from "../scripts/publisher-vocabulary.mjs";
@@ -35,6 +35,12 @@ const READING = envelopeOf("evidence_bundle", "the work on its state's date");
 const EN = liveChrome("en").freshness;
 const FR = liveChrome("fr").freshness;
 const escaped = (text) => text.replaceAll("&", "&amp;").replaceAll("'", "&#x27;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
+/** The strip's last line in a language: its info control, the section of How to read Lex on freshness (R48, `GuideLink.jsx`). */
+const guideNote = (language) => {
+  const copy = liveChrome(language);
+  const name = fillText(copy.reference.infoNamed, { section: copy.guide.sections.freshness.heading });
+  return `<p data-guide-note=""><a class="info-control" href="/${language}/how-to-read.html#guide-freshness" aria-label="${escaped(name)}" data-guide-link="freshness">${escaped(copy.reference.info)}</a></p>`;
+};
 
 /**
  * The coverage answer as the population's mount would state it on 2026-11-06: Luxembourg collected on 2026-10-12 (24 whole
@@ -148,6 +154,7 @@ test("the strip says the build date, each channel's last complete collection and
   assert.ok(html.includes(`<dt>${EN.indexCommit}</dt><dd><code class="commit">${"1".repeat(40)}</code></dd>`), html);
   assert.ok(html.includes(`<dt>${EN.serviceCommit}</dt><dd><code class="commit">${"2".repeat(40)}</code></dd>`), html);
   assert.ok(!html.includes("<section", 1), "the strip holds no section inside it (the deploy probe sets it aside by its end)");
+  assert.ok(html.endsWith(`${guideNote("en")}</section>`), "the strip ends with its info control (R48)");
   // "lag not yet measured" for every channel, and never a lag of its own.
   assert.equal(html.split("lag not yet measured").length - 1, 2);
 
@@ -158,10 +165,10 @@ test("the strip says the build date, each channel's last complete collection and
   assert.equal(EN.commitUnstated, "(not recorded)");
   assert.ok(!census.includes("data-stale=\"true\""));
   const asBuilt = renderToStaticMarkup(h(FreshnessStrip, {}));
-  assert.equal(asBuilt, `<section class="freshness-strip" aria-label="${EN.heading}" data-freshness="as-built"><p>${escaped(EN.asBuilt)}</p></section>`);
+  assert.equal(asBuilt, `<section class="freshness-strip" aria-label="${EN.heading}" data-freshness="as-built"><p>${escaped(EN.asBuilt)}</p>${guideNote("en")}</section>`);
   // A page that never asks the server says it carries no answer, never the as-built line's "once it has an answer" (the
   // review of #990); an answer's facts, had it any, would still be said.
-  assert.equal(renderToStaticMarkup(h(FreshnessStrip, { answers: false })), `<section class="freshness-strip" aria-label="${EN.heading}" data-freshness="no-answer"><p>${escaped(EN.noAnswer)}</p></section>`);
+  assert.equal(renderToStaticMarkup(h(FreshnessStrip, { answers: false })), `<section class="freshness-strip" aria-label="${EN.heading}" data-freshness="no-answer"><p>${escaped(EN.noAnswer)}</p>${guideNote("en")}</section>`);
   assert.ok(renderToStaticMarkup(h(FreshnessStrip, { facts: freshnessFacts(stale()), answers: false })).includes('data-freshness="answered"'));
 
   // An index that records no build date says so.
@@ -218,7 +225,7 @@ test("a page that ships no script says its strip carries no answer, in English a
       const html = await readFile(join(destination, label), "utf8");
       const copy = liveChrome(language).freshness;
       const strip = html.slice(html.indexOf(`<div id="${FRESHNESS_STRIP_ID}"`), html.indexOf("</footer>"));
-      const line = (said) => `<section class="freshness-strip" aria-label="${escaped(copy.heading)}" data-freshness="${said === copy.noAnswer ? "no-answer" : "as-built"}"><p>${escaped(said)}</p></section>`;
+      const line = (said) => `<section class="freshness-strip" aria-label="${escaped(copy.heading)}" data-freshness="${said === copy.noAnswer ? "no-answer" : "as-built"}"><p>${escaped(said)}</p>${guideNote(language)}</section>`;
       if (/<script src="/.test(html)) {
         // A script that asks the server, and redraws the strip from each answer (`client.jsx`): the as-built line is true.
         assert.equal(strip, `<div id="${FRESHNESS_STRIP_ID}" data-freshness-key="as-built">${line(copy.asBuilt)}</div>`, label);

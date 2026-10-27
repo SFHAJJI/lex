@@ -574,6 +574,21 @@ const EN = Object.freeze({
     authenticity: "Consolidated texts have no legal effect: the authentic texts are those published in the Journal officiel du Grand-Duché de Luxembourg (Mémorial A) and in the Official Journal of the European Union.",
     sources: "The texts come from Legilux and from the Publications Office of the European Union, as this site holds them; every quote names its official source.",
   }),
+  // The breadcrumbs of a law's pages (the specification of record's R48: "breadcrumbs (publisher, act, article, version)";
+  // `breadcrumbs.mjs`): the menu's name, the law each publisher publishes, and a version said by its date's role (R21): a
+  // Luxembourg state as applying from its date, or the act as published dated by its entry into force, never as applying
+  // from it; an EU wording by its own date, never with a Luxembourg word. The act and the article are the page's own codes.
+  breadcrumbs: Object.freeze({
+    label: "Breadcrumb",
+    publishers: Object.freeze({
+      "lu-legilux": "Luxembourg law",
+      "eu-eurlex": "EU law",
+    }),
+    state: "State applying from {date}",
+    stateEntryIntoForce: "Act as published, dated by its entry into force on {date}",
+    europeOriginal: "Original wording of {date}",
+    europeConsolidated: "Consolidated wording of {date}",
+  }),
   // How current the law this site holds is, and the commits behind an answer (the specification of record's R87 and R23;
   // the plan's items 6.1 and 6.5; `freshness.mjs`, `Freshness.jsx`): the strip in every page's footer and the staleness
   // banner under its header, each said from the server's answer and nothing else. Every date is the server's, in
@@ -844,6 +859,10 @@ const EN = Object.freeze({
       guide: "How to read Lex",
       developers: "Developers page",
     }),
+    // A banner's info control (R48: the guide "linked from each banner's info control"; `GuideLink.jsx`): a link to the
+    // section of How to read Lex that explains the banner, whose name holds that section's heading.
+    info: "How to read this",
+    infoNamed: "How to read this: {section}",
   }),
   help: Object.freeze({
     title: "Get help",
