@@ -59,6 +59,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { readLargeFile, sha256Hex } from "./large-bytes.mjs";
+import { luxembourgDate } from "./temporal.mjs";
 import { pageForSitePath, redirectFor } from "./permalinks.mjs";
 import { INDEXED, KEPT_OUT, ROBOTS_PATH, SITEMAP_INDEX_HEAD, SITEMAP_PATH, robotsTxt } from "./search-engines.mjs";
 import { UNSERVED_DIRECTORIES } from "./not-found.mjs";
@@ -544,18 +545,29 @@ async function mountedCard({ mountPath, into, log }) {
 }
 
 /**
- * The home page's example searches over the mount the image carries (R47; `home-examples.mjs`): the API published from this
- * checkout into its own directory, started over the mount as the journeys start it, asked through its own answers, and
- * closed; the directory is removed whatever happens. The record, or null when the mount counts no corpus.
+ * The day a release derives its home page's example searches on: its source's date in Luxembourg (the commit's time, or
+ * SOURCE_DATE_EPOCH), never the build's clock, so two builds of one commit over one mount carry the same record (the review
+ * of writer/screens-gaps, F5).
  */
-async function mountHomeExamples({ mountPath, into, log }) {
+export function examplesDay(source) {
+  return luxembourgDate(new Date(source.epoch * 1000).toISOString());
+}
+
+/**
+ * The home page's example searches over the mount the image carries (R47; `home-examples.mjs`): the API published from this
+ * checkout into its own directory, started over the mount as the journeys start it (the mount linked, not copied), asked
+ * through its own answers on the source's day (`examplesDay`), among the acts the indexing record beside the mount admits
+ * (none without one), and closed; the directory is removed whatever happens. The record, or null when the mount counts no
+ * corpus.
+ */
+async function mountHomeExamples({ mountPath, into, source, log }) {
   log("deriving the home page's example searches over the mount, through the API's own answers (home-examples-run.mjs)");
   const output = join(into, "api");
   try {
     run("dotnet", ["publish", join(repository, "src", "Lex.V3.Api", "Lex.V3.Api.csproj"), "-c", "Release", "-o", output, "-m:1", "-nodeReuse:false", "-v", "q"]);
     spawnSync("dotnet", ["build-server", "shutdown"], { encoding: "utf8" });
     const { homeExamplesOverMount } = await import("./home-examples-run.mjs");
-    return await homeExamplesOverMount({ apiOutput: output, mount: mountPath, log: (line) => log(`  ${line}`) });
+    return await homeExamplesOverMount({ apiOutput: output, mount: mountPath, today: examplesDay(source), log: (line) => log(`  ${line}`) });
   } finally {
     await rm(into, { recursive: true, force: true });
   }
@@ -760,7 +772,7 @@ export async function rehearse({ mount, keep = false, probe = true, browser, rep
       controls: cardView.controls.map((control) => `${control.set}, ${control.arm}: ${control.verdict}`),
     };
     // The home page's example searches over this mount (R47), derived once for both images.
-    const homeExamples = await mountHomeExamples({ mountPath, into: join(work, "examples"), log });
+    const homeExamples = await mountHomeExamples({ mountPath, into: join(work, "examples"), source, log });
     result.homeExamples = homeExamples === null ? null : { indexSha256: homeExamples.index_sha256, derivedOn: homeExamples.derived_on, examples: homeExamples.examples };
     let { webRoot, archive, image } = await buildImage({ into: join(work, "first"), mountPath, epoch: source.epoch, card, examples: homeExamples, log });
     result.archiveBytes = (await stat(archive)).size;

@@ -94,9 +94,9 @@
 
 import { spawn } from "node:child_process";
 import { watch } from "node:fs";
-import { cp, mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
+import { cp, mkdtemp, readFile, readdir, rm, stat, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve as resolvePath } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { buildLive } from "./build-live.mjs";
@@ -932,23 +932,42 @@ export async function startDeadlineMs(mount) {
   return 60_000 + Math.ceil((indexMebibytes / 1024) * 60_000);
 }
 
-export async function startApi(apiOutput, mount, webRoot = null) {
+/**
+ * The API's build output started over `mount` (or none) and `webRoot` (or none), from a directory of its own and with a
+ * temporary folder of its own, both removed when it closes, and both removed too when it cannot be set up or started (the
+ * review of writer/screens-gaps, F3: a copy that failed left them behind). With `linkMount`, the mount is linked into place
+ * (a junction on Windows, a symbolic link elsewhere) rather than copied: the API only reads it, and removing the directory
+ * removes the link and never follows it, so a 2.5 GB population mount is not copied once more. The journeys copy it, as
+ * they always have; the example searches' derivation links it (`home-examples-run.mjs`).
+ */
+export async function startApi(apiOutput, mount, webRoot = null, { linkMount = false } = {}) {
   const home = await mkdtemp(join(tmpdir(), "lex-journey-api-"));
   // The API's own temporary folder, beside its directory and removed with it: mounting copies each index there, and a run
   // that ends the process would otherwise leave the copies (2.3 GB a start for the population mount).
-  const temporary = await mkdtemp(join(tmpdir(), "lex-journey-tmp-"));
-  await cp(apiOutput, home, { recursive: true });
-  await rm(join(home, "v3-corpus"), { recursive: true, force: true });
-  await rm(join(home, "v3-web"), { recursive: true, force: true });
-  if (mount) await cp(mount, join(home, "v3-corpus"), { recursive: true });
-  if (webRoot) await cp(webRoot, join(home, "v3-web"), { recursive: true });
-  const port = await freePort();
-  const origin = `http://127.0.0.1:${port}`;
-  const child = spawn("dotnet", [join(home, "Lex.V3.Api.dll")], {
-    cwd: home,
-    env: { ...process.env, ASPNETCORE_URLS: origin, DOTNET_NOLOGO: "1", TMP: temporary, TEMP: temporary, TMPDIR: temporary },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  let temporary = null;
+  let child;
+  let origin;
+  try {
+    temporary = await mkdtemp(join(tmpdir(), "lex-journey-tmp-"));
+    await cp(apiOutput, home, { recursive: true });
+    await rm(join(home, "v3-corpus"), { recursive: true, force: true });
+    await rm(join(home, "v3-web"), { recursive: true, force: true });
+    if (mount && linkMount) await symlink(resolvePath(mount), join(home, "v3-corpus"), process.platform === "win32" ? "junction" : "dir");
+    else if (mount) await cp(mount, join(home, "v3-corpus"), { recursive: true });
+    if (webRoot) await cp(webRoot, join(home, "v3-web"), { recursive: true });
+    const port = await freePort();
+    origin = `http://127.0.0.1:${port}`;
+    child = spawn("dotnet", [join(home, "Lex.V3.Api.dll")], {
+      cwd: home,
+      env: { ...process.env, ASPNETCORE_URLS: origin, DOTNET_NOLOGO: "1", TMP: temporary, TEMP: temporary, TMPDIR: temporary },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    // Nothing is left behind: the directory (a link in it removed, never followed) and the temporary folder.
+    await rm(home, { recursive: true, force: true }).catch(() => {});
+    if (temporary !== null) await rm(temporary, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
   // Both outputs, from the first byte: what the process records is measured, not assumed.
   let stderr = "";
   let output = "";
@@ -2462,6 +2481,15 @@ export async function fixtureMountRuns(apiOutput, mount, options, browser, liveR
   return runs;
 }
 
+/**
+ * The indexing record a fixture mount is given for the example searches (R47, R92): its one act, in French, as a record of
+ * R92's measurement would list it. The fixture is the test suite's own act, which names no one; a real mount is held to the
+ * record beside it, and with none features no act.
+ */
+export function fixtureIndexingRecord(journeyMount) {
+  return Object.freeze({ builtAt: null, works: Object.freeze([Object.freeze({ address: `/lu-legilux/${journeyMount.work_key}`, languages: Object.freeze(["fra"]) })]) });
+}
+
 async function main(argv) {
   const argument = (name) => {
     const index = argv.indexOf(name);
@@ -2482,9 +2510,12 @@ async function main(argv) {
   const longAct = journeyMount?.long_act !== undefined;
   // `--live-root` serves a directory built elsewhere instead of building one: how a deliberately
   // broken page is shown to fail the journey.
-  // The home page's example searches, derived over this mount through the API's answers, then built in (R47).
+  // The home page's example searches, derived over this mount through the API's answers, then built in (R47), among the
+  // acts an indexing record admits: a real mount's own (none, and none is featured); for a fixture mount, its one act,
+  // which is the test fixture's and names no one (`fixtureIndexingRecord`).
   const { homeExamplesOverMount } = await import("./home-examples-run.mjs");
-  const homeExamples = argv.includes("--live-root") ? undefined : await homeExamplesOverMount({ apiOutput, mount, log: (line) => console.log(`  example searches: ${line}`) });
+  const indexingRecord = journeyMount === null ? undefined : fixtureIndexingRecord(journeyMount);
+  const homeExamples = argv.includes("--live-root") ? undefined : await homeExamplesOverMount({ apiOutput, mount, indexingRecord, log: (line) => console.log(`  example searches: ${line}`) });
   if (homeExamples !== undefined) console.log(`example searches over the mount: ${JSON.stringify(homeExamples?.examples ?? [])}`);
   const liveRoot = argv.includes("--live-root") ? argument("--live-root") : await buildLive(undefined, { examples: homeExamples ?? null });
   const browser = await findBrowser();

@@ -14,12 +14,27 @@
 // exactly its examples. The release's image probe asks it.
 
 import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
 import { deriveHomeExamples, exampleHref } from "./home-examples.mjs";
 import { readSearchFragment } from "./search-address.mjs";
 import { searchParameters } from "./live-search.mjs";
 import { luxembourgDate } from "./temporal.mjs";
 import { invokedDirectly } from "./invoked-directly.mjs";
+import { INDEXING_RECORD_FILE, readIndexingRecord } from "./search-engines.mjs";
+import { fetchWithinLimit } from "./within-limit.mjs";
+
+/**
+ * The indexing record beside a mount (`v3-corpus/indexing-record.json`, R92's measurement; `search-engines.mjs`), as the
+ * API reads it: the record, or null when there is none or it is not one, and then no act may be featured.
+ */
+export async function indexingRecordOf(mount) {
+  try {
+    return readIndexingRecord(await readFile(join(mount, INDEXING_RECORD_FILE), "utf8"));
+  } catch {
+    return null;
+  }
+}
 
 /** The contract the API's envelopes are read against: the census's, as the pages read them. */
 async function censusContract() {
@@ -28,15 +43,19 @@ async function censusContract() {
 
 /**
  * The record of example searches over `mount`, through the API built at `apiOutput` (or null when it counts no corpus), on
- * `today` in Luxembourg (by default, today by this machine's clock). `log` hears each act read.
+ * `today` in Luxembourg (the release's source date; by default, today by this machine's clock), among the acts the
+ * indexing record admits: `indexingRecord`, or by default the one beside the mount (none, and no act is featured). The
+ * mount is linked into the API's directory, not copied (`startApi`'s `linkMount`). `log` hears each act read.
  */
-export async function homeExamplesOverMount({ apiOutput, mount, today = luxembourgDate(new Date().toISOString()), log = () => {} }) {
+export async function homeExamplesOverMount({ apiOutput, mount, today = luxembourgDate(new Date().toISOString()), indexingRecord = undefined, log = () => {} }) {
   if (!mount) return null;
+  const record = indexingRecord === undefined ? await indexingRecordOf(mount) : indexingRecord;
+  const admitted = record === null ? null : record.works.map((work) => work.address);
   const { askOperation, startApi } = await import("./journey.mjs");
   const contract = await censusContract();
-  const api = await startApi(apiOutput, mount);
+  const api = await startApi(apiOutput, mount, null, { linkMount: true });
   try {
-    return await deriveHomeExamples({ ask: (operation, parameters) => askOperation(api.origin, operation, parameters), contract, today, log });
+    return await deriveHomeExamples({ ask: (operation, parameters) => askOperation(api.origin, operation, parameters), contract, today, admitted, log });
   } finally {
     await api.close();
   }
@@ -53,7 +72,7 @@ export function examplesListed(html) {
  * must open the article the page says it opens; with `expected` (the record the build carried, or null for none), the page
  * must list exactly those examples. `fetchImpl` stands for `fetch`.
  */
-export async function homeExampleFailures(origin, { expected = undefined, languages = ["fr", "en"], fetchImpl = fetch } = {}) {
+export async function homeExampleFailures(origin, { expected = undefined, languages = ["fr", "en"], fetchImpl = fetchWithinLimit } = {}) {
   const failures = [];
   for (const language of languages) {
     const response = await fetchImpl(`${origin}/${language}/`);

@@ -2,6 +2,9 @@
 // searches"; R47; the plan's item 4.1: "example searches that land on served text"), derived from the mounted corpus
 // through the API's own answers (`home-examples.mjs`), here the census's.
 //
+// - Admitted: only the acts the release's indexing record admits (R92's measurement) are read, and with no record none is
+//   (a driver decision of the review of writer/screens-gaps); the day is the derivation's alone (F5), so two derivations on
+//   one day over one mount give the same record, whatever the API's clock says.
 // - Derived: the census's one act gives one example, its first article's usual citation, the act named by its type and date
 //   and never its title (R92), kept because the exact-reference phase opens Reading at that very article; a citation the
 //   phase does not open at its article is dropped; with no corpus counted there is no record.
@@ -22,6 +25,8 @@ import {
 import { coverageLineOf, homeFacts } from "../scripts/live-home.mjs";
 import { LIVE_CHROME } from "../scripts/live-chrome.mjs";
 import { readSearchFragment } from "../scripts/search-address.mjs";
+import { readingOutcome } from "../scripts/live-reading.mjs";
+import { citationForms } from "../scripts/citation.mjs";
 
 const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
 const answers = JSON.parse(await readFile(new URL("../../schemas/v3-platform/answer-samples.json", import.meta.url), "utf8"));
@@ -35,6 +40,8 @@ const USUAL = answers.sampled.find((row) => row.operation === "search" && row.an
 const SEARCH_CONTEXT = envelopeOf("search", "the phrase as the site asks it");
 const INDEX = COVERAGE.result.value.mounted.index_sha256;
 const TODAY = "2026-10-27";
+/** The indexing record's addresses the derivations admit: the census's one act. */
+const ADMITTED = Object.freeze([BROWSE.works[0].identifier]);
 
 /**
  * The search answer the exact-reference phase gives a usual citation of `article` (the census's answer for art_15, said of
@@ -69,7 +76,7 @@ function census_ask(searchFor, { coverage = COVERAGE } = {}) {
 
 test("the census's one act gives one example: its first article's usual citation, by the act's type and date, opening that article", async () => {
   const { ask, asked } = census_ask((parameters) => opensArticle(parameters.query, "art_1er", "1"));
-  const record = await deriveHomeExamples({ ask, contract, today: TODAY });
+  const record = await deriveHomeExamples({ ask, contract, today: TODAY, admitted: ADMITTED });
   assert.equal(record.schema, HOME_EXAMPLES_SCHEMA);
   assert.equal(record.index_sha256, INDEX, "the examples are the counted index's");
   assert.equal(record.derived_on, TODAY);
@@ -82,32 +89,92 @@ test("the census's one act gives one example: its first article's usual citation
   const search = asked.find(([operation]) => operation === "search")[1];
   assert.deepEqual(search, { query: example.query, language: "fra", mode: "strict" });
   assert.deepEqual(asked.find(([operation]) => operation === "evidence_bundle")[1], { identifier: BROWSE.works[0].identifier, date: TODAY });
+  assert.ok(!asked.some(([operation]) => operation === "browse"), "the acts read are the indexing record's, never a listing's");
+});
+
+test("only the acts the indexing record admits are featured, and with no record none is (R92; a driver decision of the review)", async () => {
+  // No record: the coverage is asked (the record keeps the index's digest), and no act is read.
+  const none = census_ask((parameters) => opensArticle(parameters.query, "art_1er", "1"));
+  const unrecorded = await deriveHomeExamples({ ask: none.ask, contract, today: TODAY, admitted: null });
+  assert.deepEqual(unrecorded.examples, []);
+  assert.equal(unrecorded.index_sha256, INDEX);
+  assert.deepEqual(none.asked.map(([operation]) => operation), ["coverage"]);
+  // A record that admits only another act, which the index does not hold (the API refuses its reading), an EU act, or none:
+  // the census's act is never read, and no example is derived.
+  const UNHELD = envelopeOf("evidence_bundle", "a work the index does not hold");
+  for (const admitted of [["/lu-legilux/loi-2000-01-01-n1"], ["/eu-eurlex/32016R0679"], []]) {
+    const read = [];
+    const ask = async (operation, parameters) => {
+      if (operation === "evidence_bundle") {
+        read.push(parameters.identifier);
+        return parameters.identifier === ADMITTED[0] ? READING : UNHELD;
+      }
+      return census_ask((asked) => opensArticle(asked.query, "art_1er", "1")).ask(operation, parameters);
+    };
+    assert.deepEqual((await deriveHomeExamples({ ask, contract, today: TODAY, admitted })).examples, [], JSON.stringify(admitted));
+    assert.ok(!read.includes(ADMITTED[0]), `${JSON.stringify(admitted)}: the census's act is not read`);
+    assert.ok(read.every((identifier) => identifier.startsWith("/lu-legilux/")), `${JSON.stringify(admitted)}: an EU act is not read`);
+  }
+  // The admitted are what the caller says, never guessed: anything but a list or null is refused.
+  await assert.rejects(deriveHomeExamples({ ask: none.ask, contract, today: TODAY }), /indexing record's addresses, or null/);
+});
+
+test("the day is the derivation's alone: one day over one mount gives one record, whatever the API's clock says (F5)", async () => {
+  const onDay = (observedAt) => {
+    const reading = structuredClone(READING);
+    reading.context.freshness.observed_at = observedAt;
+    return async (operation, parameters) => (operation === "evidence_bundle" ? reading : census_ask((asked) => opensArticle(asked.query, "art_1er", "1")).ask(operation, parameters));
+  };
+  const first = await deriveHomeExamples({ ask: onDay("2026-10-27T08:00:00.0000000Z"), contract, today: TODAY, admitted: ADMITTED });
+  const later = await deriveHomeExamples({ ask: onDay("2027-03-01T21:00:00.0000000Z"), contract, today: TODAY, admitted: ADMITTED });
+  assert.equal(JSON.stringify(later), JSON.stringify(first), "the same record, byte for byte");
+  assert.equal(first.derived_on, TODAY);
+  // A release derives on its source's date: its commit's time, in Luxembourg.
+  const { examplesDay } = await import("../scripts/image-rehearsal.mjs");
+  assert.equal(examplesDay({ epoch: Date.parse("2026-10-26T23:30:00Z") / 1000 }), "2026-10-27", "half past midnight in Luxembourg");
+  assert.equal(examplesDay({ epoch: Date.parse("2026-10-26T12:00:00Z") / 1000 }), "2026-10-26");
 });
 
 test("the act is named by its type and date, never by its title, even when the publisher's title starts with them (R92)", async () => {
   const titled = structuredClone(READING);
   const value = titled.result.value;
   const state = value.states[0];
-  value.citation_facts.titles = [{ expression_iri: state.expression_iri, language: state.language, titles: [{ title: "Loi du 10 août 1991 portant naturalisation de Madame Une Personne.", title_kind: "title", evidence_sha256: "a".repeat(64) }] }];
+  // A title group as the reading reader requires it (its titles and short titles, each with its evidence), so the reading is
+  // read and the title is one the generator would put in the usual citation (the review of writer/screens-gaps, F4: the
+  // fixture lacked short_titles, the reading was refused, and the test asserted nothing).
+  value.citation_facts.titles = [{
+    expression_iri: state.expression_iri,
+    language: state.language,
+    titles: [{ title: "Loi du 10 août 1991 portant naturalisation de Madame Une Personne.", evidence_sha256: "a".repeat(64) }],
+    short_titles: [{ title: "Naturalisation Une Personne", evidence_sha256: "b".repeat(64) }],
+  }];
+  const reading = readingOutcome({ state: "success", envelope: titled });
+  assert.equal(reading.state, "success", "the titled reading is read");
+  // With the title held, the generator itself would name the person in the act's usual citation.
+  const titledForms = citationForms({ view: reading.view, version: reading.view.states[0], article: reading.view.states[0].articles[0], observedAt: `${TODAY}T12:00:00Z` });
+  assert.match(titledForms.conventional, /portant naturalisation de Madame Une Personne/, titledForms.conventional);
   const record = await deriveHomeExamples({
     ask: async (operation, parameters) => (operation === "evidence_bundle" ? titled : census_ask((asked) => opensArticle(asked.query, "art_1er", "1")).ask(operation, parameters)),
     contract,
     today: TODAY,
+    admitted: ADMITTED,
   });
-  for (const example of record?.examples ?? []) assert.doesNotMatch(example.query, /naturalisation|Personne/, example.query);
+  assert.equal(record.examples.length, 1, "exactly one example is derived");
+  assert.match(record.examples[0].query, /^Art\. 1er de la loi du 10 août 1991/, record.examples[0].query);
+  assert.doesNotMatch(record.examples[0].query, /naturalisation|Personne|Madame/, "and it holds no title word");
 });
 
 test("a citation the phase does not open at its article is dropped, and with no corpus counted there is no record", async () => {
-  const another = await deriveHomeExamples({ ask: census_ask((parameters) => opensArticle(parameters.query, "art_2", "2")).ask, contract, today: TODAY });
+  const another = await deriveHomeExamples({ ask: census_ask((parameters) => opensArticle(parameters.query, "art_2", "2")).ask, contract, today: TODAY, admitted: ADMITTED });
   assert.deepEqual(another.examples, [], "it opens another article: no example");
-  const noHit = await deriveHomeExamples({ ask: census_ask(() => envelopeOf("search", "a word no held article carries")).ask, contract, today: TODAY });
+  const noHit = await deriveHomeExamples({ ask: census_ask(() => envelopeOf("search", "a word no held article carries")).ask, contract, today: TODAY, admitted: ADMITTED });
   assert.deepEqual(noHit.examples, [], "a search with no reference read: no example");
-  assert.equal(await deriveHomeExamples({ ask: census_ask(() => null, { coverage: UNMOUNTED }).ask, contract, today: TODAY }), null);
-  await assert.rejects(deriveHomeExamples({ ask: census_ask(() => null).ask, contract, today: "27/10/2026" }), /calendar date/);
+  assert.equal(await deriveHomeExamples({ ask: census_ask(() => null, { coverage: UNMOUNTED }).ask, contract, today: TODAY, admitted: ADMITTED }), null);
+  await assert.rejects(deriveHomeExamples({ ask: census_ask(() => null).ask, contract, today: "27/10/2026", admitted: ADMITTED }), /calendar date/);
 });
 
 test("a record is held to its shape, and a page shows its examples only over the very index they were derived from", async () => {
-  const record = await deriveHomeExamples({ ask: census_ask((parameters) => opensArticle(parameters.query, "art_1er", "1")).ask, contract, today: TODAY });
+  const record = await deriveHomeExamples({ ask: census_ask((parameters) => opensArticle(parameters.query, "art_1er", "1")).ask, contract, today: TODAY, admitted: ADMITTED });
   assert.deepEqual(readHomeExamplesValue(JSON.parse(JSON.stringify(record))), record);
   for (const broken of [
     null, [], { ...record, schema: "lex-v3-home-examples/2" }, { ...record, index_sha256: "b".repeat(63) }, { ...record, derived_on: "today" },
@@ -128,7 +195,7 @@ test("a record is held to its shape, and a page shows its examples only over the
 });
 
 test("the home page lists the examples under its coverage line, each a link to the search page with the search in its address", async () => {
-  const record = await deriveHomeExamples({ ask: census_ask((parameters) => opensArticle(parameters.query, "art_1er", "1")).ask, contract, today: TODAY });
+  const record = await deriveHomeExamples({ ask: census_ask((parameters) => opensArticle(parameters.query, "art_1er", "1")).ask, contract, today: TODAY, admitted: ADMITTED });
   const facts = homeFacts(COVERAGE, contract);
   const html = renderToStaticMarkup(h(LiveHome, { contract, facts, examples: record }));
   const copy = LIVE_CHROME.en.home;
@@ -160,7 +227,7 @@ test("a build handed the record compiles it into the home page's bundles: the se
   const { join } = await import("node:path");
   const vm = await import("node:vm");
   const { buildLive } = await import("../scripts/build-live.mjs");
-  const record = await deriveHomeExamples({ ask: census_ask((parameters) => opensArticle(parameters.query, "art_1er", "1")).ask, contract, today: TODAY });
+  const record = await deriveHomeExamples({ ask: census_ask((parameters) => opensArticle(parameters.query, "art_1er", "1")).ask, contract, today: TODAY, admitted: ADMITTED });
   await assert.rejects(buildLive(new URL("file:///nowhere/"), { examples: { ...record, schema: "another" } }), /not a record of lex-v3-home-examples\/1/);
   const destination = await mkdtemp(join(tmpdir(), "lex-home-examples-"));
   try {
@@ -183,7 +250,7 @@ test("a build handed the record compiles it into the home page's bundles: the se
 test("the journeys and the image probe hold a served home page to its examples, each asked of the same server", async () => {
   const { frontDoorFailures, frontDoorOf } = await import("../scripts/journey.mjs");
   const { examplesListed, homeExampleFailures } = await import("../scripts/home-examples-run.mjs");
-  const record = await deriveHomeExamples({ ask: census_ask((parameters) => opensArticle(parameters.query, "art_1er", "1")).ask, contract, today: TODAY });
+  const record = await deriveHomeExamples({ ask: census_ask((parameters) => opensArticle(parameters.query, "art_1er", "1")).ask, contract, today: TODAY, admitted: ADMITTED });
   const facts = homeFacts(COVERAGE, contract);
   const page = (examples, language = "en") => `<main>${renderToStaticMarkup(h(LiveHome, { contract, facts, examples }))}</main>`.replaceAll("/en/search.html", `/${language}/search.html`);
   const [example] = record.examples;
@@ -212,4 +279,37 @@ test("the journeys and the image probe hold a served home page to its examples, 
   assert.deepEqual(searched[0], { operation_id: "search", parameters: { query: example.query, language: "fra", mode: "strict" } });
   assert.equal((await homeExampleFailures("http://image", { expected: record, fetchImpl: serve("/lu-legilux/elsewhere") })).length, 2, "an example that opens another article, on each page");
   assert.equal((await homeExampleFailures("http://image", { expected: null, fetchImpl: serve(example.opens) })).filter((failure) => failure.includes("not the build's")).length, 2, "a page listing examples the build did not carry");
+});
+
+test("an API that cannot be set up leaves no directory behind, and a mount linked into place is never removed with it (F3)", async () => {
+  const { mkdtemp, mkdir, readdir, rm, writeFile } = await import("node:fs/promises");
+  const { existsSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { startApi } = await import("../scripts/journey.mjs");
+  const { homeExamplesOverMount, indexingRecordOf } = await import("../scripts/home-examples-run.mjs");
+  const ours = async () => (await readdir(tmpdir())).filter((name) => /^lex-journey-(?:api|tmp)-/.test(name)).sort();
+  const before = await ours();
+  const base = await mkdtemp(join(tmpdir(), "lex-examples-leak-"));
+  try {
+    const mount = join(base, "mount");
+    await mkdir(mount);
+    await writeFile(join(mount, "build-report.json"), "{}");
+    const api = join(base, "api");
+    await mkdir(api);
+    await writeFile(join(api, "Lex.V3.Api.dll"), "not run");
+    // The reviewer's case: the build output cannot be copied (none there).
+    await assert.rejects(homeExamplesOverMount({ apiOutput: join(base, "no-such-api"), mount, indexingRecord: null }));
+    assert.deepEqual(await ours(), before, "the copy failed: both temporary directories removed");
+    // The mount linked, then the web root's copy fails: the directory goes, the link with it, and the mount stays whole.
+    await assert.rejects(startApi(api, mount, join(base, "no-such-web-root"), { linkMount: true }));
+    assert.deepEqual(await ours(), before, "both temporary directories removed");
+    assert.ok(existsSync(join(mount, "build-report.json")), "the linked mount is whole");
+    // No record beside a mount is no record.
+    assert.equal(await indexingRecordOf(mount), null);
+    await writeFile(join(mount, "indexing-record.json"), JSON.stringify({ schema: "lex-v3-indexing-record/1", built_at: null, works: [{ address: "/lu-legilux/loi-1991-08-10-n3", languages: ["fra"] }] }));
+    assert.deepEqual((await indexingRecordOf(mount)).works.map((work) => work.address), ["/lu-legilux/loi-1991-08-10-n3"]);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
 });

@@ -6,8 +6,10 @@
 // The rule, fixed, so that builds over one mount derive the same examples:
 // 1. The mount is the one `coverage` counts. Its Luxembourg index's digest is the examples' own: a page shows them only
 //    over that index (`examplesShown`), so a build's examples never stand over another mount, or over none.
-// 2. Its acts in the order `browse` lists them (by work key), at most HOME_EXAMPLE_CANDIDATES of them, each read as of
-//    today in Luxembourg (`evidence_bundle`, R13), Luxembourg acts only (no answer lists the EU acts an index holds).
+// 2. Only the acts the release's indexing record admits (R92's measurement of which acts name no private individual, the
+//    record the search-engine switch opens pages by: `search-engines.mjs`), Luxembourg acts, in the record's order, at most
+//    HOME_EXAMPLE_CANDIDATES of them; with no record, none (a driver decision of the review of writer/screens-gaps: an act
+//    whose text may name a person is never featured). Each is read as of the derivation's day (`evidence_bundle`, R13).
 // 3. In each, the first article quoted with its text whose usual citation the site's generator composes (`citationForms`,
 //    R65), the act named by its type and date alone, never by its title, since a title can name a person (R92).
 // 4. That citation asked as the search page asks a search its address holds (`search`, the strict lane, in the text's
@@ -17,7 +19,9 @@
 // 5. One example per act, at most HOME_EXAMPLES_AT_MOST.
 //
 // The examples a build carries are a record (`lex-v3-home-examples/1`): the index's digest, the date they were derived on,
-// and each example's query, its text's language and the address the search opens. `build-live.mjs` compiles the record
+// and each example's query, its text's language and the address the search opens. The day is the derivation's alone, never
+// the API's clock: the reading is asked on it and the citation composed on it, so a release derives on its source's date and
+// two builds of one commit over one mount carry the same record, byte for byte (the review's F5). `build-live.mjs` compiles the record
 // into the home page's bundles (`__LEX_HOME_EXAMPLES__`), so the page the servers render and the page the browser hydrates
 // say the same examples; a build handed none (the web suite's, CI's web job) carries none, and the page shows none.
 //
@@ -35,7 +39,7 @@ import { answerHandedWith } from "./v3-client.mjs";
 /** The record's schema. */
 export const HOME_EXAMPLES_SCHEMA = "lex-v3-home-examples/1";
 
-/** How many acts the derivation reads, in `browse`'s order, before it stops: each costs a reading and a search. */
+/** How many acts the derivation reads, in the indexing record's order, before it stops: each costs a reading and a search. */
 export const HOME_EXAMPLE_CANDIDATES = 24;
 
 /** How many examples the home page shows at most. */
@@ -63,35 +67,41 @@ function firstCitation(view, observedAt) {
   return null;
 }
 
+/** The instant a citation is composed at on `day`: noon in UTC, which is the same calendar day in Luxembourg. */
+const noonOf = (day) => `${day}T12:00:00Z`;
+
 /**
  * The home page's examples over the API `ask` answers for (`contract`, the census's, reads its envelopes), derived on
- * `today` (the calendar date in Luxembourg, `yyyy-mm-dd`): the record, or null when no corpus is counted (the page then
- * shows none). `log` hears one line per act read.
+ * `today` (a calendar date in Luxembourg, `yyyy-mm-dd`: the release's source date, or the journeys' day), among the acts
+ * `admitted` names (the indexing record's dossier addresses, `/lu-legilux/{work}`, in its order; null when the release
+ * carries no record): the record, with no example when nothing is admitted, or null when no corpus is counted (the page
+ * shows none either way). `log` hears one line per act read.
  */
-export async function deriveHomeExamples({ ask, contract, today, candidates = HOME_EXAMPLE_CANDIDATES, atMost = HOME_EXAMPLES_AT_MOST, log = () => {} }) {
+export async function deriveHomeExamples({ ask, contract, today, admitted, candidates = HOME_EXAMPLE_CANDIDATES, atMost = HOME_EXAMPLES_AT_MOST, log = () => {} }) {
   if (typeof ask !== "function") throw new Error("the examples are derived through the API's answers: ask(operation, parameters)");
   if (!isCalendarDate(today)) throw new Error(`the examples are derived on a calendar date, not ${JSON.stringify(today)}`);
+  if (admitted !== null && !Array.isArray(admitted)) throw new Error("the acts an example may feature are the indexing record's addresses, or null for no record");
   const coverage = await ask("coverage", {});
   const indexSha256 = coverage?.refusal === null ? coverage?.result?.value?.mounted?.index_sha256 : undefined;
   if (typeof indexSha256 !== "string" || !DIGEST.test(indexSha256)) {
     log("no corpus counted: no example searches");
     return null;
   }
-  const browsed = await ask("browse", { limit: candidates });
-  const works = (browsed?.refusal === null ? browsed?.result?.value?.works : null) ?? [];
   const examples = [];
-  for (const work of works.slice(0, candidates)) {
+  if (admitted === null) log("the release carries no indexing record: no act may be featured, so no example searches");
+  const works = (admitted ?? []).filter((address) => typeof address === "string" && address.startsWith("/lu-legilux/"));
+  for (const identifier of works.slice(0, candidates)) {
     if (examples.length >= atMost) break;
-    if (typeof work?.identifier !== "string") continue;
-    const reading = await ask("evidence_bundle", { identifier: work.identifier, date: today });
+    const reading = await ask("evidence_bundle", { identifier, date: today });
     const outcome = readingOutcome(answerHandedWith("evidence_bundle", reading, { contract, objectType: "evidence_bundle" }));
     if (outcome.state !== "success" || outcome.view.publisher === "eu-eurlex") {
-      log(`${work.identifier}: no reading on ${today} (${outcome.state})`);
+      log(`${identifier}: no reading on ${today} (${outcome.state})`);
       continue;
     }
-    const forms = firstCitation(withoutTitles(outcome.view), reading.context.freshness.observed_at);
+    // Composed on the derivation's day, never the API's clock (F5): the same day gives the same citation.
+    const forms = firstCitation(withoutTitles(outcome.view), noonOf(today));
     if (forms === null) {
-      log(`${work.identifier}: no article with text and a usual citation`);
+      log(`${identifier}: no article with text and a usual citation`);
       continue;
     }
     const parameters = searchParameters({ query: forms.conventional, language: forms.language });
@@ -100,10 +110,10 @@ export async function deriveHomeExamples({ ask, contract, today, candidates = HO
     const view = answered.state === "success" ? readSearchAnswer(searched.result.value) : null;
     const verdict = usualVerdict(forms, view);
     if (verdict !== "matches") {
-      log(`${work.identifier}: "${forms.conventional}" does not open its article (${verdict})`);
+      log(`${identifier}: "${forms.conventional}" does not open its article (${verdict})`);
       continue;
     }
-    log(`${work.identifier}: "${forms.conventional}" opens ${view.opens.address}`);
+    log(`${identifier}: "${forms.conventional}" opens ${view.opens.address}`);
     examples.push(Object.freeze({ query: forms.conventional, language: forms.language, opens: view.opens.address }));
   }
   return Object.freeze({ schema: HOME_EXAMPLES_SCHEMA, index_sha256: indexSha256, derived_on: today, examples: Object.freeze(examples) });
