@@ -4,6 +4,48 @@ Updated 2026-10-27. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Review and repair (#998): G2 exact, the change policy's digest, MCP failures, the out-of-scope forms (sole driver, 2026-10-27)
+
+The review of #998 (`writer/api-gaps` at 0bb59e65, the other model family, Decision 95) said REPAIR, with its scripts in the
+driver's scratch folder (`g2.ps1`, `oos.ps1`, `validate.ps1`, `legacy_diff.py`). The one repair round, and v3/integration at
+05965f14 (#997: the screens' gaps, the deploy safeguards, the maintenance revision) merged in, both sides kept (the transport
+failures hold #997's `ServiceInMaintenance` and not the retired `OperationNotServed`; the owner's brief is integration's).
+- **F1 (medium), G2 overclaimed.** It said the same request gives the same bytes apart from `observed_at` and `request_ref`,
+  but each channel's `age_days` and `stale` and the envelope's `stale` count to the moment asked, and a search that reads an
+  exact reference naming no date reads it at today in Luxembourg, so the date, the version it selects and the readable
+  address or permalink move with the day. G2 now names each of these, says a server built from the same commit
+  (`serving_runtime_source_commit`), and that a request past its client's limit is refused `rate_limited`. Its test,
+  `EveryServedOperationAnswersTheSameBytesFromTheSameSnapshotFromACopyOfItAndLater`, now runs on a mount whose build report
+  dates its channel (20 days old at the first answer, 50 a month later, past the maximum) with a version whose date falls
+  between the two answers' days, adds the undated reference and the home page box's date, copies the build report with the
+  mount, and holds the members that move a month later to exactly the set G2 names.
+- **F2 (low), the change policy.** "Any change to an operation" is now "an operation's definition"; a fix to how an
+  operation behaves that leaves its definition as it is keeps the digest; the out-of-scope list is not part of the registry,
+  and every `out_of_corpus_scope` refusal names its identity and digest (`scope_list`, `scope_list_sha256`).
+- **F3 (low), MCP.** The instructions said every failure is a JSON-RPC error; an HTTP request the endpoint refuses or cannot
+  answer (not a POST, a body over the limit, a failure of the server's, maintenance) is an HTTP status with a problem
+  document. They now say both. An answer the server's own schema refuses on the way out was JSON-RPC -32602 "Invalid params"; it is now
+  -32603 "Internal error" (`V3TransportResponse.IsServerFailure`: a kind REST answers 5xx), and a request its schema refuses
+  stays -32602 (`V3McpJsonRpcTests`).
+- **F4 (low), out-of-scope forms that slipped through.** An identifier is read as typed: the dashes U+2010 to U+2015 and the
+  minus sign as the hyphen, a "CELEX:" before it or an EUR-Lex address as the CELEX it names, a closing full stop dropped.
+  Recognised now: "Circ. CSSF", "telle que modifiée" / "as amended", CSSF-CPDI circulars, IML circulars (the CSSF's
+  predecessor, published by the CSSF; the class's instrument and reason say so), "CSSF-Rundschreiben", "Délibération n° …
+  de la CNPD", case names after the number, joined cases, "affaires jointes", a curia case address. Driver decisions: a
+  numbered "Délibération n° 36FR/2021" that does not name the CNPD stays unrefused (the list names the issuing body, and a
+  commune numbers its délibérations too); "C-1/16", which the review's script listed among held forms, is a Court of Justice
+  case number and is refused as `eu_case_law`; a RESA reference is `RESA_{year}_{number}`, so "resa" and "RESA 2016" are no
+  longer refused, and "RESA" alone (the recueil) still is. Every form of the review's script is in `V3OutOfScopeTests`, both
+  ways; nothing held is refused. The list's digest moved (`d473256c…`), so the envelope and refusal censuses are
+  re-rendered; the registry's digest did not, so no legacy answer moved (replays unchanged).
+- **F5 (optional), the real validator.** `V3PlatformHostTests` holds the published payload schemas themselves refusing a
+  payload that breaks its code's schema (who to ask in words, an http official place, no reason, `retry_after` 0, not
+  retryable, no modes) over REST (500 `internal_response_invalid`, no envelope) and MCP (the host's failure), and passing the
+  payload as produced.
+- **French** (Decision 41): the two changed French forms (G2, `developers.changes.digest`) are drafts; one independent
+  reviewer (Claude, AI reviewer, not the author) is reviewing them, and its finals and addendum are still to be applied and
+  appended to `C:\lex-v3\lanes\fr-review\review.md`.
+
 ## The API's gaps: every operation routed, a schema per refusal payload, what Lex never holds, MCP ping, and the Developers page's guarantees and live examples (sole driver, 2026-10-27)
 
 The owner's order of 2026-10-27 (finish V3 to the specification of record within 72 hours, at high quality): the plan's items
