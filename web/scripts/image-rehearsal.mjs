@@ -668,10 +668,8 @@ export async function probeImage({ startServer, mountPath, mountKind, web, card,
       const notes = [];
       // What promotion would say of the data's age (R87, O11), recorded beside the probes and never one of their failures.
       const promotion = [];
-      // The home pages' example searches (R47), when the rehearsal derived them: exactly the build's, each opening its article.
-      const { homeExampleFailures } = await import("./home-examples-run.mjs");
-      const examples = homeExamples === undefined ? [] : await homeExampleFailures(server.origin, { expected: homeExamples });
-      const servedPages = { failures: [...await servedPageFailures(server.origin, { web, card, corpusSha256, notes, promotion }), ...examples], notes, promotion };
+      // The home pages' example searches (R47) are held among them: when the rehearsal derived them, exactly the build's.
+      const servedPages = { failures: await servedPageFailures(server.origin, { web, card, corpusSha256, notes, promotion, homeExamples }), notes, promotion };
       const v2Routes = { routesAsked: V2_ROUTES.length, routeFailures: await v2RouteFailures(server.origin, { v3Files: servedPaths(web) }) };
       // Ready with its mount, and no synthetic preview (plan 0.7).
       const serverAnswers = { failures: await serverFailures(server.origin) };

@@ -87,7 +87,12 @@ internal sealed partial class V3WebRoot
         }
 
         // The MCP endpoint names its protocol version on every answer, transport failures included, as when it serves.
-        Action<HttpResponse> afterClear = string.Equals(rawTarget, V3ApiHandler.McpRawTarget, StringComparison.Ordinal) ? RetryLaterOverMcp : RetryLater;
+        Action<HttpResponse> afterClear = RetryLater;
+        if (string.Equals(rawTarget, V3ApiHandler.McpRawTarget, StringComparison.Ordinal))
+        {
+            afterClear = RetryLaterOverMcp;
+        }
+
         await V3TransportResponse.WriteAsync(context.Response, V3TransportFailureKind.ServiceInMaintenance, afterClear, cancellationToken)
             .ConfigureAwait(false);
     }

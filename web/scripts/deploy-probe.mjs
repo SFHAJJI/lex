@@ -28,6 +28,8 @@
 //   holds none of them. `--opening` with no `--release` is the opening's own check (`deploy.ps1 -Open`): the site's served
 //   legal pages, each 200, without a cookie and showing none of those, or the site is not opened (`openingFailures`);
 // - no cookie: neither the home page nor a legal page sets one (the cookies page says no page does);
+// - the home page's example searches (R47): each one a home page lists, asked of the revision as the search page asks it,
+//   opens the article the page says it opens (`homeExampleFailures`);
 // - the browser probes (`--browser`): the journey's real-mount steps through a browser against the revision, each
 //   page held to what the API answers its request, its hydration, console, paint and security headers, and every
 //   citation verified. Privacy cannot be observed on a remote revision (its process and files are not ours to watch),
@@ -208,7 +210,7 @@ export async function revisionFailures(origin, options) {
  * the card at its stable route, coverage from the release's corpus, the clock and an accented title. Every one is an HTTP
  * request; none needs a browser.
  */
-export async function servedPageFailures(origin, { web, card, corpusSha256, notes = [], promotion = [], now = Date.now, ask = askOperation, opening = false }) {
+export async function servedPageFailures(origin, { web, card, corpusSha256, notes = [], promotion = [], now = Date.now, ask = askOperation, opening = false, homeExamples = undefined }) {
   const failures = [];
   const served = servedPaths(web);
   if (!served.has("/fr/")) return ["the release image holds no live page at /fr/, so the revision has nothing to be held to"];
@@ -291,6 +293,11 @@ export async function servedPageFailures(origin, { web, card, corpusSha256, note
   if (page.status === 200) {
     failures.push(...homePageFailures(body, served.get("/fr/"), { renderer: new Map(web).get("ssr/fr.js") ?? null, coverage: envelope }));
   }
+  // The home page's example searches (R47; `home-examples-run.mjs`): each one a home page lists, asked of this revision as
+  // the search page asks it, must open the article the page says it opens; with the record the build carried
+  // (`homeExamples`, the release rehearsal's), the page must list exactly its examples. Each home page the image holds.
+  const { homeExampleFailures } = await import("./home-examples-run.mjs");
+  failures.push(...await homeExampleFailures(origin, { expected: homeExamples, languages: ["fr", "en"].filter((language) => served.has(`/${language}/`)) }));
   failures.push(...await legalPageFailures(origin, web, { policy, notes, opening }));
   return failures;
 }
