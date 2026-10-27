@@ -515,11 +515,13 @@ export function remoteRevision(origin) {
  * build report they read, and the Luxembourg work they ask for chosen from the revision's own answers (`held`; the
  * revision's index is not at hand). Failures, each prefixed with its step; empty when every step passes.
  */
-export async function browserFailures(origin, releaseDirectory, { browser, runs = realMountRuns, held = heldLuxembourgWorkFromAnswers }) {
+export async function browserFailures(origin, releaseDirectory, { browser, runs = realMountRuns, held = heldLuxembourgWorkFromAnswers, searchEngines = KEPT_OUT }) {
   const work = await mkdtemp(join(tmpdir(), "lex-deploy-browser-"));
   try {
     await writeFile(join(work, "build-report.json"), await readFile(join(releaseDirectory, ASSETS.mountReport)));
-    const results = await runs(null, work, { servedByApi: true, keyboard: false, startServer: async () => remoteRevision(origin) }, browser, null,
+    // The walk holds each page's robots elements and X-Robots-Tag to the deployment's own switch (`journey.mjs`, its
+    // `expected.searchEngines`), as the HTTP probe holds robots.txt and the sitemap (the review of #993, its F1).
+    const results = await runs(null, work, { servedByApi: true, keyboard: false, searchEngines, startServer: async () => remoteRevision(origin) }, browser, null,
       { held: await held(origin) });
     return results.flatMap(([label, { failures }]) => failures.map((failure) => `${label}: ${failure}`));
   } finally {
@@ -596,7 +598,7 @@ if (invokedDirectly(import.meta.url, process.argv[1])) {
   const failures = await deployedReleaseFailures(target, release, { publicKeyPem, identity, notes, promotion, opening, searchEngines });
   for (const note of notes) console.log(note);
   if (failures.length === 0 && withBrowser) {
-    failures.push(...await browserFailures(target, release, { browser: await findBrowser() }));
+    failures.push(...await browserFailures(target, release, { browser: await findBrowser(), searchEngines }));
     console.log(REMOTE_PRIVACY_NOTE);
   }
   if (!withBrowser) console.log(NOT_WALKED_NOTE);

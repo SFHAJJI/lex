@@ -463,7 +463,11 @@ test("the browser probes run the journey's real-mount steps against the revision
     assert.ok(seen.report.equals(report), "the release's mount report stands as the build report the steps read");
     assert.equal(seen.server.origin, "https://candidate.example");
     assert.equal(seen.options.servedByApi, true, "the revision serves its own pages, so the security headers are held");
+    assert.equal(seen.options.searchEngines, KEPT_OUT, "unsaid, the walk holds the pages to the kept-out switch");
     assert.equal(seen.browser, "the browser");
+    // Told the deployment's switch, the walk holds each page's robots elements to it (the review of #993, its F1).
+    await browserFailures("https://candidate.example", release, { browser: "the browser", runs, held, searchEngines: INDEXED });
+    assert.equal(seen.options.searchEngines, INDEXED, "an indexed deployment's walk is held to the indexed switch");
     const { existsSync } = await import("node:fs");
     assert.ok(!existsSync(seen.mount), "the temporary mount report is removed");
   } finally {
