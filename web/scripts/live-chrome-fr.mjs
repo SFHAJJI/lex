@@ -671,7 +671,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Comparer',
     eyebrow: 'Comparer',
     heading: 'Deux versions, article par article',
-    intro: 'Les versions d’un acte luxembourgeois applicables à deux dates, comparées selon les identifiants d’article et le libellé de l’éditeur, sans rien affirmer sur l’effet juridique. L’identifiant et les dates sont envoyés à ce serveur dans la requête et nulle part ailleurs, et cette page ne conserve rien.',
+    intro: 'Les versions d’un acte luxembourgeois applicables à deux dates, comparées selon les identifiants d’article et le libellé de l’éditeur, sans rien affirmer sur l’effet juridique ; le libellé modifié est affiché, les mots supprimés barrés et les mots insérés soulignés. L’identifiant et les dates sont envoyés à ce serveur dans la requête et figurent dans l’adresse de cette page, afin qu’une comparaison puisse être partagée et lue sans JavaScript ; cette page ne conserve rien.',
     idle: 'Saisissez un identifiant d’acte et deux dates pour comparer les versions applicables à ces dates.',
     summary: '{work} : {from} comparé au {to}.',
     summaryIn: '{work} : {from} comparé au {to}, en {language}.',
@@ -702,6 +702,20 @@ export const LIVE_CHROME_FR = Object.freeze({
     }),
     bound: Object.freeze({ from: 'de départ', to: 'd’arrivée' }),
     notCompared: '{language} n’est pas comparé : {reason} (date {bound}).',
+    deletedStart: '[supprimé :',
+    deletedEnd: ']',
+    insertedStart: '[inséré :',
+    insertedEnd: ']',
+    jumpHeading: 'Les modifications',
+    jumpItem: '{article} : {status}',
+    previousChange: 'Modification précédente',
+    nextChange: 'Modification suivante',
+    wordingNotServed: Object.freeze({
+      from: 'Le libellé de cet article n’est pas affiché : ce site ne communique pas le texte de la version antérieure.',
+      to: 'Le libellé de cet article n’est pas affiché : ce site ne communique pas le texte de la version postérieure.',
+      both: 'Le libellé de cet article n’est pas affiché : ce site ne communique le texte d’aucune des deux versions.',
+    }),
+    wordingWhole: 'Cet article a trop changé pour être comparé ici mot à mot : son texte antérieur est affiché comme supprimé et son texte postérieur comme inséré, chacun en entier.',
   }),
   radar: Object.freeze({
     title: 'Radar',
@@ -882,6 +896,28 @@ export const LIVE_CHROME_FR = Object.freeze({
     }),
     textless: 'La version qui couvre cette date, {version}, figure dans le catalogue de l’éditeur, et ce site n’en détient aucun texte : {why}. Aucune autre version n’est présentée à sa place.',
     textlessNamed: 'Cette version, {version}, figure dans le catalogue de l’éditeur, et ce site n’en détient aucun texte : {why}.',
+    catalogue: Object.freeze({
+      held: 'Cet acte figure dans le catalogue de l’éditeur, et ce site n’en détient aucun texte : {why}.',
+      heldRead: 'Cet acte figure dans le catalogue de l’éditeur, tel que ce site l’a lu au plus tard le {read}, et ce site n’en détient aucun texte : {why}.',
+      reasons: Object.freeze({
+        catalogue_licence_scl: 'l’éditeur place tous les fichiers de son texte français sous la licence licenceSCL, sous laquelle ce site ne reproduit aucun texte',
+        catalogue_licence_scl_in_part: 'l’éditeur place certains fichiers de son texte français sous la licence licenceSCL et les autres sous une autre licence, et ce site n’en détient aucun',
+        catalogue_cc_by_not_acquired: 'l’éditeur place les fichiers de son texte français sous la licence CC BY 4.0, et ce site ne les a pas acquis',
+        catalogue_no_or_other_licence: 'le catalogue de l’éditeur n’indique aucune licence pour les fichiers de son texte français, ou en indique une autre, et ce site n’en détient aucun',
+        catalogue_no_xml_or_pdf_manifestation: 'le catalogue de l’éditeur ne nomme aucun fichier XML ou PDF de son texte français',
+        catalogue_translations_only: 'le catalogue de l’éditeur ne nomme son texte que dans d’autres langues que le français',
+        catalogue_no_expression: 'le catalogue de l’éditeur n’en nomme aucun texte',
+      }),
+      type: 'Son type dans les données de l’éditeur : {type} (typeDocument).',
+      documentDate: 'Les données de l’éditeur indiquent le {dates} comme date de l’acte (dateDocument).',
+      publicationDate: 'Les données de l’éditeur indiquent le {dates} comme date de publication (publicationDate).',
+      memorial: 'Les données de l’éditeur le situent au Mémorial A n° {number} de {year} (isPartOf).',
+      entryIntoForce: 'Les données de l’éditeur indiquent le {dates} comme date d’entrée en vigueur (dateEntryInForce).',
+      status: 'Son statut dans les données de l’éditeur : {status} (inForceStatus).',
+      historicalId: 'Son identifiant historique dans les données de l’éditeur : {id} (historicalLegalId).',
+      versions: 'Le catalogue de l’éditeur en recense {count} versions, et ce site ne détient le texte d’aucune.',
+      record: 'Sa notice sur ce site : {address}',
+    }),
   }),
   coverageAnswer: Object.freeze({
     headings: Object.freeze({
@@ -1865,6 +1901,9 @@ export const REFUSALS_FR = Object.freeze({
     // R92 (the plan's item 1.11): a work the names record withholds, said on every screen that asks about one work.
     "According to Lex's check, this act names private individuals, so Lex shows neither its text nor its titles: read it at the publisher, by following the official link.":
       'D’après la vérification de Lex, cet acte nomme des personnes privées ; Lex n’en communique donc ni le texte ni les intitulés : lisez-le chez l’éditeur, en suivant le lien officiel.',
+    // R77: an act the publisher's catalogue holds and Lex holds no version of, said on every screen that asks about one work.
+    "This act is in the publisher's catalogue, and Lex holds none of its text: its record follows.":
+      'Cet acte figure dans le catalogue de l’éditeur, et Lex n’en détient aucun texte : sa notice suit.',
     'This index holds this state but no text for it.':
       'Cet index contient cette version, mais aucun texte de celle-ci.',
     "This index cannot read this work's text.":

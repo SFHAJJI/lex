@@ -11,6 +11,7 @@
 // wording, never the English in its place.
 
 import { fillParts, fillText, englishRun, refusalHint, refusalSentence, refusalTemplate, statement } from "./live-chrome.mjs";
+import { catalogueRecord } from "./refusal-card.mjs";
 
 const CORPUS_NAMES = Object.freeze({ lu: "Luxembourg", eu: "EU" });
 
@@ -53,11 +54,20 @@ export function namesWithheld(code, payload) {
 }
 
 /**
+ * What every screen says of an act the publisher's catalogue holds and Lex holds no version of (R77; `text_not_available`
+ * whose payload's `record_kind` is `catalogue_only`): it is in the catalogue, Lex holds none of its text, and its record
+ * follows, in the card (`refusal-card.mjs`, `catalogueRecord`), which says why.
+ */
+export const CATALOGUE_RECORD_SENTENCE = "This act is in the publisher's catalogue, and Lex holds none of its text: its record follows.";
+
+/**
  * The sentence a screen's table (English, keyed by code) says for a code, or the one naming a code it has none for; a work R92
- * withholds is said in the one sentence every screen says of it (`NAMES_WITHHELD_SENTENCE`), never the licence's.
+ * withholds is said in the one sentence every screen says of it (`NAMES_WITHHELD_SENTENCE`), never the licence's, and an act
+ * held only in the publisher's catalogue in its own (`CATALOGUE_RECORD_SENTENCE`).
  */
 export function tableRefusalSentence(table, code, unexpected, payload = null) {
   if (namesWithheld(code, payload)) return refusalSentence(NAMES_WITHHELD_SENTENCE);
+  if (catalogueRecord(code, payload)) return refusalSentence(CATALOGUE_RECORD_SENTENCE);
   return Object.hasOwn(table, code) ? refusalSentence(table[code]) : unexpected(code);
 }
 

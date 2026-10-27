@@ -139,6 +139,15 @@ public sealed class V3EnvelopeSamplesTests
             Directory.Delete(datedRoot, recursive: true);
         }
 
+        // An act the publisher's catalogue holds and the index holds no version of (R77; the audit of 2026-10-27, gap 1): the
+        // fixture's day with a second act its catalogue names, licensed licenceSCL, which every page says from its record.
+        var catalogued = await MountedFixture.CreateAsync();
+        await using var cleanupCatalogued = catalogued;
+        await V3CorpusCatalogueRecordMountTests.AddCatalogueActAsync(catalogued);
+        using var cataloguedMount = await V3CorpusMount.OpenAsync(catalogued.Directory, CancellationToken.None);
+        Assert.IsNotNull(cataloguedMount);
+        const string catalogueAddress = "/lu-legilux/" + V3CorpusCatalogueRecordMountTests.Key;
+
         var envelopes = new JsonArray
         {
             await CaptureAsync(fixture, mount, "coverage", "the whole mount: an answer", new { }),
@@ -164,6 +173,9 @@ public sealed class V3EnvelopeSamplesTests
             await CaptureAsync(europe.CorpusSha256, europe.IndexSha256, europeMount, "search", "an EU identifier the EU index does not hold: a refusal with a payload", new { query = "joint controllers", language = "eng", identifier = "32099R9999" }),
             await CaptureAsync(fixture, mount, "dossier", "the work, in the language it is held in: an answer", new { identifier = $"/lu-legilux/{fixture.WorkKey}", language = "fra" }),
             await CaptureAsync(fixture, mount, "dossier", "a work the index does not hold: a refusal with a payload", new { identifier = "/lu-legilux/no-such-work" }),
+            await CaptureAsync(catalogued, cataloguedMount, "dossier", "an act the publisher's catalogue holds and the index holds no version of (R77): a refusal with its record", new { identifier = catalogueAddress }),
+            await CaptureAsync(catalogued, cataloguedMount, "evidence_bundle", "the same act read at its address in French: a refusal with its record", new { identifier = catalogueAddress, date = catalogued.ApplicabilityDate, language = "fra" }),
+            await CaptureAsync(catalogued, cataloguedMount, "search", "a reference naming the same act by its type, date and title words: a refusal with its record and what was recognised", new { query = "loi du 10 août 1991 portant approbation de la Convention de La Haye", language = "fra" }),
             await CaptureAsync(fixture, mount, "dossier", "a language the work is not held in: a refusal with a payload", new { identifier = $"/lu-legilux/{fixture.WorkKey}", language = "deu" }),
             await CaptureAsync(fixture, mount, "dossier", "an EU identifier on a mount without the EU index: a refusal with a payload", new { identifier = "32016R0679" }),
             await CaptureAsync(europe.CorpusSha256, europe.IndexSha256, europeMount, "dossier", "one EU work by its CELEX: an answer whose expression carries its pinned wording", new { identifier = "32016R0679" }),

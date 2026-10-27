@@ -7,6 +7,7 @@ using Lex.V3.Contracts;
 using Lex.V3.Contracts.Platform;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using static Lex.V3.Ingest.Tests.V3CorpusClassificationMountTests;
 using static Lex.V3.Ingest.Tests.V3CorpusResolveMountTests;
 
 namespace Lex.V3.Ingest.Tests;
@@ -264,6 +265,25 @@ public sealed class V3CorpusDiffMountTests
         var ids = comparison.GetProperty("articles").EnumerateArray().Select(static row => row.GetProperty("publisher_id").GetString()!).ToArray();
         CollectionAssert.AreEqual(ids.Order(StringComparer.Ordinal).ToArray(), ids);
 
+        // R57: what changed carries its text on each side as evidence_bundle serves it, with its digest; an unchanged article
+        // carries none. The status is still the digests'.
+        StringAssert.StartsWith(body.GetProperty("text_rule").GetString(), "R57: ");
+        static string Digest(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+        var changedFrom = byId[changedId].GetProperty("from").EnumerateArray().Single();
+        var changedTo = byId[changedId].GetProperty("to").EnumerateArray().Single();
+        Assert.AreEqual(own[0].Text, changedFrom.GetProperty("text").GetString());
+        Assert.AreEqual(own[0].Text + " amended", changedTo.GetProperty("text").GetString());
+        Assert.AreEqual(Digest(own[0].Text + " amended"), changedTo.GetProperty("text_sha256").GetString());
+        Assert.AreEqual(own[1].Text, byId[renamedId].GetProperty("from").EnumerateArray().Single().GetProperty("text").GetString(), "a removed article's text");
+        Assert.AreEqual(own[1].Text, byId[renamedId + "-new"].GetProperty("to").EnumerateArray().Single().GetProperty("text").GetString(), "an added article's text");
+        Assert.IsFalse(byId[keptId].GetProperty("from").EnumerateArray().Single().TryGetProperty("text", out _), "an unchanged article carries no text");
+        var evidence = await EnvelopeAsync(mount, "/api/v3/evidence_bundle", "evidence_bundle",
+            new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = Shift(laterDate, 10), language = "fra" });
+        var served = evidence.Result!.Value.GetProperty("states").EnumerateArray().Single().GetProperty("articles").EnumerateArray()
+            .Single(article => article.GetProperty("publisher_id").GetString() == changedId);
+        Assert.AreEqual(served.GetProperty("text").GetString(), changedTo.GetProperty("text").GetString(), "the text reading serves, byte for byte");
+        Assert.AreEqual(served.GetProperty("text_sha256").GetString(), changedTo.GetProperty("text_sha256").GetString());
+
         // The bounds swapped: added and removed swap, changed stays changed.
         var reversed = await DiffAsync(mount, $"/lu-legilux/{fixture.WorkKey}", Shift(laterDate, 10), Shift(fixture.ApplicabilityDate, 10));
         var reversedById = reversed.Result!.Value.GetProperty("comparisons").EnumerateArray().Single().GetProperty("articles").EnumerateArray()
@@ -271,6 +291,34 @@ public sealed class V3CorpusDiffMountTests
         Assert.AreEqual("added", reversedById[renamedId]);
         Assert.AreEqual("removed", reversedById[renamedId + "-new"]);
         Assert.AreEqual("changed", reversedById[changedId]);
+    }
+
+    [TestMethod]
+    public async Task TheTextOfASideWhoseRightsDoNotAdmitItIsNotServedAndTheDigestsStand()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var own = fixture.ArticlesOfOwnState();
+        var laterDate = Shift(fixture.ApplicabilityDate, 400);
+        var later = await fixture.AddStateAsync(laterDate, "later");
+        await fixture.RewriteArticleTextAsync(later.ExpressionIri, own[0].PublisherId, own[0].Text + " withheld-wording-r57");
+        await fixture.SetMemberRightsDispositionAsync("non_admitting_licence_scl");
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var envelope = await DiffAsync(mount, $"/lu-legilux/{fixture.WorkKey}", Shift(fixture.ApplicabilityDate, 10), Shift(laterDate, 10));
+        var row = envelope.Result!.Value.GetProperty("comparisons").EnumerateArray().Single().GetProperty("articles").EnumerateArray()
+            .Single(article => article.GetProperty("publisher_id").GetString() == own[0].PublisherId);
+        Assert.AreEqual("changed", row.GetProperty("status").GetString(), "the digests still decide");
+        foreach (var side in new[] { "from", "to" })
+        {
+            var entry = row.GetProperty(side).EnumerateArray().Single();
+            Assert.AreEqual(JsonValueKind.Null, entry.GetProperty("text").ValueKind, side);
+            Assert.AreEqual(JsonValueKind.Null, entry.GetProperty("text_sha256").ValueKind, side);
+            Assert.AreEqual(64, entry.GetProperty("wording_sha256").GetString()!.Length, side);
+        }
+
+        Assert.IsFalse(envelope.Result.Value.GetRawText().Contains("withheld-wording-r57", StringComparison.Ordinal), "no text its rights did not admit");
     }
 
     [TestMethod]

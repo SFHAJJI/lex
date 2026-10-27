@@ -1210,6 +1210,28 @@ summary {
   text-decoration: underline;
 }
 
+/* A changed article's wording on the live compare page (R57): one column, the words deleted struck through and the words
+   inserted underlined, each also said in hidden words, so no change is shown by colour alone; the text's own paragraph
+   breaks are kept. */
+.wording-diff {
+  white-space: pre-wrap;
+}
+
+.wording-diff del {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+
+.wording-diff ins {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.15em;
+}
+
+.change-nav {
+  font-size: 0.875em;
+}
+
 .compare-note {
   font-weight: 600;
 }

@@ -330,6 +330,12 @@ export function sitePageFor(pathname, { today = null, search = '' } = {}) {
   // The Developers page, rendered from browse for the first act held, which it shows as its live examples (`developers.mjs`).
   const developers = INTERFACE_LANGUAGES.find((language) => pathname === `/${language}/developers.html`);
   if (developers !== undefined) return Object.freeze({ language: developers, kind: 'developers', operation: 'browse', parameters: Object.freeze({ limit: 1 }) });
+  // A comparison's address (R57): the compare page with the work and the two dates its query names, rendered from diff.
+  const compare = INTERFACE_LANGUAGES.find((language) => pathname === `/${language}/compare.html`);
+  if (compare !== undefined) {
+    const parameters = compareOfQuery(search);
+    return parameters === null ? null : Object.freeze({ language: compare, kind: 'compare', operation: 'diff', parameters });
+  }
   const named = parseSitePath(pathname);
   if (named === null || named.locale === null) return null;
   if (named.kind === 'work') {
@@ -338,6 +344,56 @@ export function sitePageFor(pathname, { today = null, search = '' } = {}) {
   const parameters = readingRequestFor(named, dateOfQuery(search) ?? today, pageOfQuery(search));
   if (parameters === null) return null;
   return Object.freeze({ language: named.locale, kind: 'reading', operation: 'evidence_bundle', parameters });
+}
+
+/** The text languages the compare page's form offers besides any (`COMPARE_LANGUAGES`, `live-compare.mjs`). */
+const COMPARE_QUERY_LANGUAGES = Object.freeze(['deu', 'eng', 'fra']);
+
+/**
+ * A query value form-decoded as `URLSearchParams` reads a well-formed one: `+` a space, each `%HH` a byte, the bytes UTF-8;
+ * null for a malformed escape, a character outside ASCII written raw, or bytes that are not UTF-8 (`V3WebRoot.FormDecoded`).
+ */
+function formDecoded(raw) {
+  if (/[^\x00-\x7f]/.test(raw) || /%(?![0-9A-Fa-f]{2})/.test(raw)) return null;
+  try {
+    return decodeURIComponent(raw.replace(/\+/g, ' '));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The comparison a compare page's query names (`?work=…&from=yyyy-mm-dd&to=yyyy-mm-dd[&language=fra]`, as its form sends it
+ * with no script; R57), as the request the page would send (`diff`'s `identifier`, `date_from`, `date_to` and `language`), or
+ * null: each of `work`, `from` and `to` once and `language` at most once, each value form-decoded; the work not blank, at most
+ * 1,024 characters and no control character, sent as written; two calendar dates; a language the form offers, or none
+ * (empty). Any other name is ignored. As `V3WebRoot.CompareOfQuery` (a test holds the two to one table).
+ */
+export function compareOfQuery(search) {
+  if (typeof search !== 'string' || search.length < 2 || search[0] !== '?') return null;
+  const values = new Map();
+  for (const part of search.slice(1).split('&')) {
+    const equals = part.indexOf('=');
+    const name = equals < 0 ? part : part.slice(0, equals);
+    if (!['work', 'from', 'to', 'language'].includes(name)) continue;
+    const value = formDecoded(equals < 0 ? '' : part.slice(equals + 1));
+    if (values.has(name) || value === null) return null;
+    values.set(name, value);
+  }
+  const work = values.get('work');
+  const from = values.get('from');
+  const to = values.get('to');
+  if (typeof work !== 'string' || work.trim().length === 0 || work.length > 1024 || /[\x00-\x1f\x7f]/.test(work)) return null;
+  if (!isCalendarDate(from) || !isCalendarDate(to)) return null;
+  const language = values.get('language') ?? '';
+  if (language !== '' && !COMPARE_QUERY_LANGUAGES.includes(language)) return null;
+  return Object.freeze({ identifier: work, date_from: from, date_to: to, ...(language === '' ? {} : { language }) });
+}
+
+/** A comparison's address under an interface language (`/en/compare.html?work=…`), as the compare form writes it. */
+export function compareAddress(locale, { identifier, dateFrom, dateTo, language = '' }) {
+  const query = new URLSearchParams({ work: identifier, from: dateFrom, to: dateTo, ...(language === '' ? {} : { language }) });
+  return `/${locale}/compare.html?${query.toString()}`;
 }
 
 /**

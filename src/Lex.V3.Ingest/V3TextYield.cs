@@ -635,6 +635,39 @@ public sealed record V3TextYield(string Schema, IReadOnlyList<V3TextYieldPublish
     }
 
     /// <summary>
+    /// The reason this block counts a catalogue version of which no file is held under (<see cref="NotHeldNoExpression"/> and its
+    /// siblings), read from the catalogue's facts as given (each a subject, a predicate and its value, as <c>work_facts</c> holds
+    /// them): what the catalogue states of it, never why the acquisition did not fetch it. The API's record of an act the index
+    /// holds no version of says each of its versions' reasons with this one rule (R77), so Coverage and the record agree.
+    /// </summary>
+    public static string CatalogueNotHeldReason(IEnumerable<(string Subject, string Predicate, string Value)> facts, string state)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        ArgumentException.ThrowIfNullOrEmpty(state);
+        return NotHeldReason(FactsBySubject(facts.Where(static fact => CataloguePredicates.Contains(fact.Predicate, StringComparer.Ordinal))), state);
+    }
+
+    /// <summary>
+    /// The versions of one work among catalogue subjects, as this block counts them (each subject an ELI state of the work: its act
+    /// as published <c>{work}/jo</c>, a consolidation <c>{work}/consolide/{yyyymmdd}</c> or a code's <c>{work}/{yyyymmdd}</c>), each
+    /// once, in ordinal order.
+    /// </summary>
+    public static IReadOnlyList<string> CatalogueVersionsOf(IEnumerable<string> subjects, string work)
+    {
+        ArgumentNullException.ThrowIfNull(subjects);
+        ArgumentException.ThrowIfNullOrEmpty(work);
+        return subjects
+            .Where(subject => LuxembourgIndexBuilder.StateKindOf(subject) is not null &&
+                              string.Equals(LuxembourgEliState.WorkOf(subject), work, StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    /// <summary>A catalogue version's kind as the index names a state's (<c>as_published</c>, <c>consolidation</c>, <c>code</c>), or null.</summary>
+    public static string? CatalogueVersionKindOf(string subject) => LuxembourgIndexBuilder.StateKindOf(subject);
+
+    /// <summary>
     /// What the catalogue says of a state of which no file is held: that it names no expression, or translations only; that
     /// its French expressions have no XML or PDF manifestation (the formats this site reads); or how the catalogue licenses
     /// their XML and PDF manifestations.

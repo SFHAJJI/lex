@@ -294,6 +294,29 @@ export const INTERVAL_KEYS = Object.freeze({
   ]),
 });
 
+/**
+ * The record of an act the publisher's catalogue holds and this site holds no version of (R77; `record_kind`
+ * `catalogue_only`), which `text_not_available` carries beside its mandated keys (`V3CorpusMount.CatalogueRecords.cs`), every
+ * member a scalar or a list of scalars: its identity and the address this site gives it, its title, its type, its dates by
+ * role, its status in the publisher's vocabulary, its Mémorial issue, its historical identifier, its official PDF, its
+ * versions with each one's kind and reason, the evidence its facts were read from, and the reason no text of it is held.
+ * This card says them in its own words above them (`reasonView`).
+ */
+export const CATALOGUE_RECORD_KEYS = Object.freeze([
+  'record_kind', 'reason', 'reason_rule', 'work_iri', 'work_key', 'record_address', 'act_iri', 'title', 'title_language',
+  'document_type', 'date_document', 'publication_date', 'entry_into_force', 'no_longer_in_force', 'in_force_status',
+  'memorial_issue', 'historical_legal_id', 'official_pdf', 'versions', 'version_kinds', 'version_reasons',
+  'record_evidence_sha256s', 'catalogue_read_no_later_than', 'rule',
+]);
+
+/** The kind a catalogue record names itself by. */
+export const CATALOGUE_RECORD_KIND = 'catalogue_only';
+
+/** Whether a refusal is R77's record of an act the catalogue holds and this site holds no version of. */
+export function catalogueRecord(code, payload) {
+  return code === 'text_not_available' && payload?.record_kind === CATALOGUE_RECORD_KIND;
+}
+
 export const REQUIRED_PAYLOAD = Object.freeze({
   no_version_for_date: Object.freeze({
     // `requested_date` is OPTIONAL here and required nowhere, which is a smaller answer than the
@@ -382,7 +405,7 @@ export const REQUIRED_PAYLOAD = Object.freeze({
     // and that is what `evidence_bundle` produces for a state whose articles hold no text. The
     // coordinate, the permalink, the language and the article count travel beside them.
     keys: Object.freeze(['official_identity', 'official_source', 'retained_transport_evidence']),
-    optional: Object.freeze(['articles_held', 'language', 'permalink', 'stable_coordinate', ...RECOGNISED_KEYS, ...INTERVAL_KEYS.textless]),
+    optional: Object.freeze(['articles_held', 'language', 'permalink', 'stable_coordinate', ...RECOGNISED_KEYS, ...INTERVAL_KEYS.textless, ...CATALOGUE_RECORD_KEYS]),
     // TWO producers reach this card and they share no key. This surface's own reading view says it
     // for one provision it holds no text for, with that provision's official file and gazette
     // chain (`reading.mjs`), and it is held to exactly that set until it is rebuilt on
@@ -1006,6 +1029,73 @@ const TEXT_NOT_HELD = Object.freeze({
 /** The version a textless refusal names: the one covering the date asked, or the one a permalink names (no date asked). */
 const TEXTLESS = "The version that covers this date, {version}, is in the publisher's catalogue, and this site holds none of its text: {why}. No other version is shown in its place.";
 const TEXTLESS_NAMED = "This version, {version}, is in the publisher's catalogue, and this site holds none of its text: {why}.";
+/**
+ * R77: an act the publisher's catalogue holds and this site holds no version of, said from its record (`catalogueRecord`):
+ * that it is there and why no text of it is held (its reason, as Coverage counts it), then each fact the record states, by
+ * its role (R21: the act's date, its publication, its entry into force and its end of force, each the publisher's, never
+ * merged), its status in the publisher's own word, its Mémorial issue and its historical identifier. A reason outside this
+ * set is refused, so a new one is worded before it is shown.
+ */
+const CATALOGUE_RECORD_COPY = Object.freeze({
+  held: "This act is in the publisher's catalogue, and this site holds none of its text: {why}.",
+  heldRead: "This act is in the publisher's catalogue, as this site read it no later than {read}, and this site holds none of its text: {why}.",
+  reasons: Object.freeze({
+    catalogue_licence_scl: 'the publisher licenses every file of its French text under licenceSCL, which this site does not reproduce',
+    catalogue_licence_scl_in_part: 'the publisher licenses some files of its French text under licenceSCL and the others otherwise, and this site holds none of them',
+    catalogue_cc_by_not_acquired: 'the publisher licenses the files of its French text under CC BY 4.0, and this site has not acquired them',
+    catalogue_no_or_other_licence: "the publisher's catalogue gives the files of its French text no licence, or another one, and this site holds none of them",
+    catalogue_no_xml_or_pdf_manifestation: "the publisher's catalogue names no XML or PDF file of its French text",
+    catalogue_translations_only: "the publisher's catalogue names its text in languages other than French only",
+    catalogue_no_expression: "the publisher's catalogue names no text of it",
+  }),
+  type: "Its type in the publisher's record: {type} (typeDocument).",
+  documentDate: "The publisher's record gives {dates} as the act's date (dateDocument).",
+  publicationDate: "The publisher's record gives {dates} as its publication date (publicationDate).",
+  memorial: "The publisher's record places it in Mémorial A no. {number} of {year} (isPartOf).",
+  entryIntoForce: "The publisher's record gives {dates} as its entry-into-force date (dateEntryInForce).",
+  status: "Its status in the publisher's record: {status} (inForceStatus).",
+  historicalId: "Its historical identifier in the publisher's record: {id} (historicalLegalId).",
+  versions: "The publisher's catalogue lists {count} versions of it, and this site holds the text of none of them.",
+  record: 'Its record on this site: {address}',
+});
+
+/** The last segment of a publisher's vocabulary IRI (`…/resource-type/LOI` is `LOI`): the publisher's own word for it. */
+function vocabularyToken(iri) {
+  return typeof iri === 'string' && iri.includes('/') ? iri.slice(iri.lastIndexOf('/') + 1) : String(iri);
+}
+
+/** A Mémorial A issue's year and number from its ELI (`…/eli/etat/leg/memorial/1981/a15`), or null for any other IRI. */
+function memorialIssue(iri) {
+  const match = /\/eli\/etat\/leg\/memorial\/([0-9]{4})\/a([0-9]+)$/.exec(typeof iri === 'string' ? iri : '');
+  return match === null ? null : { year: match[1], number: String(Number(match[2])) };
+}
+
+/** The card's own sentences above a catalogue record (R77), each a copy key and its text filled with the record's values. */
+function catalogueRecordView(payload, copy) {
+  const said = copy.catalogue;
+  const reason = payload.reason;
+  if (!Object.hasOwn(said.reasons, reason)) {
+    throw new Error(`a catalogue record names the reason ${JSON.stringify(reason)}; this card words ${Object.keys(said.reasons).join(', ')}`);
+  }
+  const list = (key) => (Array.isArray(payload[key]) ? payload[key] : []);
+  const read = payload.catalogue_read_no_later_than;
+  const lines = [{
+    key: 'catalogue.held',
+    text: fillCard(typeof read === 'string' && read.length > 0 ? said.heldRead : said.held, { read, why: said.reasons[reason] }),
+  }];
+  const add = (key, template, values) => lines.push({ key: `catalogue.${key}`, text: fillCard(template, values) });
+  if (list('document_type').length > 0) add('type', said.type, { type: list('document_type').map(vocabularyToken).join(', ') });
+  if (list('date_document').length > 0) add('documentDate', said.documentDate, { dates: list('date_document').join(', ') });
+  if (list('publication_date').length > 0) add('publicationDate', said.publicationDate, { dates: list('publication_date').join(', ') });
+  for (const issue of list('memorial_issue').map(memorialIssue).filter((one) => one !== null)) add('memorial', said.memorial, issue);
+  if (list('entry_into_force').length > 0) add('entryIntoForce', said.entryIntoForce, { dates: list('entry_into_force').join(', ') });
+  if (list('no_longer_in_force').length > 0) add('endOfForce', copy.baseActEndOfForce, { dates: list('no_longer_in_force').join(', ') });
+  if (list('in_force_status').length > 0) add('status', said.status, { status: list('in_force_status').map(vocabularyToken).join(', ') });
+  if (list('historical_legal_id').length > 0) add('historicalId', said.historicalId, { id: list('historical_legal_id').join(', ') });
+  if (list('versions').length > 1) add('versions', said.versions, { count: list('versions').length });
+  return Object.freeze(lines.map(Object.freeze));
+}
+
 const PUBLISHED = 'published {date}';
 /** The same said of an act as published (a language may agree it with "act" where it agrees the other with "version"). */
 const PUBLISHED_ACT = 'published {date}';
@@ -1060,6 +1150,8 @@ export const REFUSAL_CARD_COPY = Object.freeze({
   textNotHeld: TEXT_NOT_HELD,
   textless: TEXTLESS,
   textlessNamed: TEXTLESS_NAMED,
+  // R77: an act the publisher's catalogue holds and this site holds no version of, said from its record.
+  catalogue: CATALOGUE_RECORD_COPY,
 });
 
 /** The key of `VERSION_NAMED` a version is named by: its kind, and for an act as published its date's role. */
@@ -1105,6 +1197,7 @@ export function reasonView(code, payload, copy = REFUSAL_CARD_COPY) {
     }
     return Object.freeze(lines.map(Object.freeze));
   }
+  if (catalogueRecord(code, payload)) return catalogueRecordView(payload, copy);
   if ((code === 'text_withheld' || code === 'text_not_available') && Object.hasOwn(payload ?? {}, 'text_status')) {
     const status = payload.text_status;
     if (!Object.hasOwn(TEXT_NOT_HELD, status)) {
@@ -1326,6 +1419,9 @@ function candidateDateRoles(payload) {
   return new Map(digests.map((digest, index) => [digest, roles[index]]));
 }
 
+/** The language tag of a title a catalogue record gives, by its ISO 639-2 code. */
+const TITLE_LANGUAGE_TAGS = Object.freeze({ fra: 'fr', deu: 'de', eng: 'en', ltz: 'lb' });
+
 export function payloadParts(code, payload) {
   const nullable = NULLABLE_KEYS.get(code) ?? new Set();
   // A declared null renders as its sentence rather than being filtered away. Dropping the row
@@ -1356,6 +1452,9 @@ export function payloadParts(code, payload) {
     } else if (code === 'out_of_corpus_scope' && key === 'who_to_ask' && typeof value === 'object') {
       // Who to ask: the institution by its name, linked to its site.
       rows.push({ key, value: value.name, href: outOfScopeUri(value.link) });
+    } else if (catalogueRecord(code, payload) && key === 'title' && typeof value === 'string') {
+      // A catalogue record's title is the act's own words, marked in their language (R77; the statute-language line).
+      rows.push({ key, value, lang: TITLE_LANGUAGE_TAGS[payload.title_language] ?? undefined });
     } else if (value === null) {
       rows.push({ key, value: NULL_SENTENCE.get(key), declaredNull: true });
     } else {
@@ -1385,9 +1484,9 @@ function renderPayload(code, payload) {
     ? '<dl class="refusal-payload">' +
       parts.rows
         .map(
-          ({ key, value, href }) =>
+          ({ key, value, href, lang }) =>
             `<div class="strip-row"><dt>${escapeHtml(key)}</dt>` +
-            `<dd>${href === undefined ? escapeHtml(value) : `<a href="${escapeHtml(href)}" rel="external">${escapeHtml(value)}</a>`}</dd></div>`,
+            `<dd${lang === undefined ? '' : ` lang="${escapeHtml(lang)}"`}>${href === undefined ? escapeHtml(value) : `<a href="${escapeHtml(href)}" rel="external">${escapeHtml(value)}</a>`}</dd></div>`,
         )
         .join('') +
       '</dl>'

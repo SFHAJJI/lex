@@ -25,13 +25,17 @@
 //    (`sameTextHeldNote`), "the one text held" only when no other state of the language is in sight;
 //  - otherwise every article of each side appears in exactly one row, the rows are in the ids'
 //    ordinal order, and each row's status is its sides': added, removed, unchanged when the ordered
-//    wording digests are equal, changed when they are not; the counts are the rows'.
+//    wording digests are equal, changed when they are not; the counts are the rows';
+//  - a changed, added or removed article carries its text on each side as served (R57, `text_rule`), or null for a side
+//    whose rights do not admit it; from which the row's wording is read, word by word (`word-diff.mjs`): the status is
+//    still the digests', and a row with no text served says which side it is not shown for.
 
 import { isCalendarDate } from './temporal.mjs';
 import { SAME_STATE_ENTRY_INTO_FORCE_SENTENCE, SAME_STATE_SENTENCE } from './publisher-vocabulary.mjs';
 import { readCatalogueFacts } from './date-role.mjs';
 import { laterVersionFactsBetween, readAsPublished, sameTextHeldNote } from './as-published.mjs';
 import { luxembourgPermalink } from './permalinks.mjs';
+import { wordDiff } from './word-diff.mjs';
 
 const DIGEST = /^[0-9a-f]{64}$/;
 
@@ -154,10 +158,52 @@ function readSide(side, where, context) {
 }
 
 function readEntries(value, where) {
-  return Object.freeze(requireList(value, where).map((entry, index) => Object.freeze({
-    articleIdentitySha256: requireDigest(requireOwn(entry, 'article_identity_sha256', `${where}[${index}]`), `${where}[${index}].article_identity_sha256`),
-    wordingSha256: requireDigest(requireOwn(entry, 'wording_sha256', `${where}[${index}]`), `${where}[${index}].wording_sha256`),
-  })));
+  return Object.freeze(requireList(value, where).map((entry, index) => {
+    const at = `${where}[${index}]`;
+    // The served text of an article that changed (R57's `text_rule`): a string with its digest, or null for both where that
+    // side's rights do not admit its text; absent from an unchanged article, and from an answer of a server before R57.
+    let text;
+    if (entry !== null && typeof entry === 'object' && Object.hasOwn(entry, 'text')) {
+      const digest = requireOwn(entry, 'text_sha256', at);
+      if (entry.text === null) {
+        if (digest !== null) throw new Error(`${at} has no text and a text digest`);
+        text = null;
+      } else {
+        if (typeof entry.text !== 'string') throw new Error(`${at}.text is not a text`);
+        requireDigest(digest, `${at}.text_sha256`);
+        text = entry.text;
+      }
+    }
+    return Object.freeze({
+      articleIdentitySha256: requireDigest(requireOwn(entry, 'article_identity_sha256', at), `${at}.article_identity_sha256`),
+      wordingSha256: requireDigest(requireOwn(entry, 'wording_sha256', at), `${at}.wording_sha256`),
+      ...(text === undefined ? {} : { text }),
+    });
+  }));
+}
+
+/**
+ * What a row shows of its wording (R57): for a changed article, its earlier text against its later one, word by word
+ * (`word-diff.mjs`); for an added one, its text inserted; for a removed one, its text deleted; each side the texts of its
+ * entries in order, a paragraph apart. `{ parts, complete }`, or `{ notServed }` naming the side or sides whose text the
+ * answer does not serve (its rights did not admit it), or null when the answer carries no text for the row (an unchanged
+ * article, or a server before R57).
+ */
+function wordingOf(status, from, to, where) {
+  if (status === 'unchanged') {
+    if ([...from, ...to].some((entry) => Object.hasOwn(entry, 'text'))) throw new Error(`${where} is unchanged and carries a text`);
+    return null;
+  }
+  const entries = [...from, ...to];
+  const carried = entries.filter((entry) => Object.hasOwn(entry, 'text')).length;
+  if (carried === 0) return null;
+  if (carried !== entries.length) throw new Error(`${where} carries the text of some of its entries and not of others`);
+  const notServed = [['from', from], ['to', to]].filter(([, side]) => side.some((entry) => entry.text === null)).map(([bound]) => bound);
+  if (notServed.length > 0) return Object.freeze({ notServed: Object.freeze(notServed) });
+  const textOf = (side) => side.map((entry) => entry.text).join('\n\n');
+  if (status === 'added') return Object.freeze({ parts: Object.freeze([Object.freeze({ kind: 'ins', text: textOf(to) })]), complete: true });
+  if (status === 'removed') return Object.freeze({ parts: Object.freeze([Object.freeze({ kind: 'del', text: textOf(from) })]), complete: true });
+  return wordDiff(textOf(from), textOf(to));
 }
 
 function statusOf(from, to) {
@@ -197,7 +243,7 @@ function readComparison(comparison, index, context) {
     if (status !== statusOf(rowFrom, rowTo)) {
       throw new Error(`${at} (${publisherId}) says ${JSON.stringify(status)}, and its sides make it ${statusOf(rowFrom, rowTo)}`);
     }
-    return Object.freeze({ publisherId, status, from: rowFrom, to: rowTo });
+    return Object.freeze({ publisherId, status, from: rowFrom, to: rowTo, wording: wordingOf(status, rowFrom, rowTo, `${at} (${publisherId})`) });
   });
   for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
     if (!(rows[rowIndex - 1].publisherId < rows[rowIndex].publisherId)) {
@@ -378,6 +424,8 @@ export function readDiff(answer) {
     asPublished,
     laterVersionsBetween: between,
     wordingRule: requireText(requireOwn(answer, 'wording_rule', where), 'wording_rule'),
+    // R57's rule for the texts the rows carry; null from a server before it.
+    textRule: Object.hasOwn(answer, 'text_rule') ? requireText(answer.text_rule, 'text_rule') : null,
     validityConflictRule: requireText(requireOwn(answer, 'validity_conflict_rule', where), 'validity_conflict_rule'),
     articlesNotAdmittedNote: requireText(requireOwn(answer, 'articles_not_admitted_note', where), 'articles_not_admitted_note'),
     corpusSha256: requireDigest(requireOwn(answer, 'corpus_sha256', where), 'corpus_sha256'),

@@ -29,7 +29,7 @@ import { ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/liv
 import { parseSitePath } from '../scripts/permalinks.mjs';
 import { answerHandedWith } from '../scripts/v3-client.mjs';
 import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
-import { fillCard, versionNameKey } from '../scripts/refusal-card.mjs';
+import { catalogueRecord, fillCard, versionNameKey } from '../scripts/refusal-card.mjs';
 import { todayAt } from '../scripts/initial-answer.mjs';
 import { TodayLine } from './Today.jsx';
 import { Breadcrumbs } from './Breadcrumbs.jsx';
@@ -290,6 +290,14 @@ export function DossierAnswerView({ outcome, onRetry }) {
   if (outcome.state === 'refusal' && outcome.card) {
     return (
       <section data-answer-state="refusal">
+        {/* An act the publisher's catalogue holds and this site holds no version of (R77): its work and its title, in the
+            title's own language, above its record. */}
+        {catalogueRecord(outcome.code, outcome.payload) ? (
+          <>
+            <h2 data-catalogue-record="">{outcome.payload.work_key}</h2>
+            {typeof outcome.payload.title === 'string' ? <p lang={quotationLanguageTag(outcome.payload.title_language)}>{outcome.payload.title}</p> : null}
+          </>
+        ) : null}
         <FailureFrame outcome={outcome} onRetry={onRetry}>
           <RefusalCard code={outcome.code} sentence={outcome.sentence} payload={outcome.payload} copy={refusalCardCopyFor(outcome.context)} />
         </FailureFrame>

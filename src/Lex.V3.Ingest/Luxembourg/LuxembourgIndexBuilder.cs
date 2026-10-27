@@ -2450,7 +2450,12 @@ public static partial class LuxembourgIndexBuilder
         return ("unparsed", null);
     }
 
-    internal static string WorkKeyOf(string publisherWid)
+    /// <summary>
+    /// The product work key a Luxembourg publisher work IRI mints (its segments after <c>eli/etat/leg/</c>, joined by hyphens),
+    /// or <see cref="InvalidDataException"/> for an IRI that mints none. Public so that the API names an act the catalogue holds
+    /// and the index holds no version of at the address the index would give it (R77).
+    /// </summary>
+    public static string WorkKeyOf(string publisherWid)
     {
         if (!Uri.TryCreate(publisherWid, UriKind.Absolute, out var uri) ||
             !string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.Ordinal) ||

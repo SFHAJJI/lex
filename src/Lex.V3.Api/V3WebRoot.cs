@@ -285,7 +285,9 @@ internal sealed partial class V3WebRoot
             {
                 if ((mayRender is null || place is not null) && (envelope = answer(sitePage, cancellationToken)) is not null)
                 {
-                    html = await _renderer.RenderAsync(sitePage.Language, sitePage.Kind, Encoding.UTF8.GetString(envelope), path, cancellationToken).ConfigureAwait(false);
+                    // A comparison is rendered at its address with its query, which names what it compares (R57).
+                    var rendered = string.Equals(sitePage.Kind, "compare", StringComparison.Ordinal) && queryAt >= 0 ? path + rawTarget[queryAt..] : path;
+                    html = await _renderer.RenderAsync(sitePage.Language, sitePage.Kind, Encoding.UTF8.GetString(envelope), rendered, cancellationToken).ConfigureAwait(false);
                 }
             }
             finally
@@ -510,6 +512,13 @@ internal sealed partial class V3WebRoot
             {
                 return new V3SitePage(home, "developers", "browse", new Dictionary<string, object>(StringComparer.Ordinal) { ["limit"] = 1 });
             }
+
+            // A comparison's address (R57; the audit of 2026-10-27, gap 2): the compare page with the work and the two dates its
+            // query names, rendered from diff, so its wording is read without JavaScript.
+            if (string.Equals(path, $"/{home}/compare.html", StringComparison.Ordinal))
+            {
+                return CompareOfQuery(query) is { } compare ? new V3SitePage(home, "compare", "diff", compare) : null;
+            }
         }
 
         var match = SiteMatch(path);
@@ -688,6 +697,114 @@ internal sealed partial class V3WebRoot
     }
 
     private static readonly Regex CalendarDate = new("^[0-9]{4}-[0-9]{2}-[0-9]{2}\\z", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+
+    /// <summary>The text languages the compare page's form offers besides any (<c>COMPARE_LANGUAGES</c>, <c>live-compare.mjs</c>).</summary>
+    private static readonly string[] CompareLanguages = ["deu", "eng", "fra"];
+
+    /// <summary>
+    /// The comparison a compare page's query names (<c>?work=…&amp;from=yyyy-mm-dd&amp;to=yyyy-mm-dd[&amp;language=fra]</c>, as its form
+    /// sends it with no script; R57), as the request the page would send (<c>diff</c>'s <c>identifier</c>, <c>date_from</c>,
+    /// <c>date_to</c> and <c>language</c>), or null: each of <c>work</c>, <c>from</c> and <c>to</c> once and <c>language</c> at most
+    /// once, a value form-decoded (<c>+</c> a space, <c>%HH</c> UTF-8 bytes; a malformed escape or bytes that are not UTF-8 name
+    /// nothing); the work not blank, at most 1,024 characters and no control character, sent as written; two calendar dates; a
+    /// language the form offers, or none (empty). Any other name is ignored. As <c>compareOfQuery</c> in
+    /// <c>web/scripts/permalinks.mjs</c> (a test holds the two to one table).
+    /// </summary>
+    internal static Dictionary<string, object>? CompareOfQuery(string? query)
+    {
+        if (query is null || query.Length < 2 || query[0] != '?')
+        {
+            return null;
+        }
+
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var part in query[1..].Split('&'))
+        {
+            var equals = part.IndexOf('=', StringComparison.Ordinal);
+            var name = equals < 0 ? part : part[..equals];
+            if (name is not ("work" or "from" or "to" or "language"))
+            {
+                continue;
+            }
+
+            if (values.ContainsKey(name) || FormDecoded(equals < 0 ? string.Empty : part[(equals + 1)..]) is not { } value)
+            {
+                return null;
+            }
+
+            values[name] = value;
+        }
+
+        if (!values.TryGetValue("work", out var work) || !values.TryGetValue("from", out var from) || !values.TryGetValue("to", out var to) ||
+            string.IsNullOrWhiteSpace(work) || work.Length > 1024 || work.Any(static character => character < ' ' || character == '\u007f') ||
+            !IsCalendarDate(from) || !IsCalendarDate(to))
+        {
+            return null;
+        }
+
+        var parameters = new Dictionary<string, object>(StringComparer.Ordinal) { ["identifier"] = work, ["date_from"] = from, ["date_to"] = to };
+        if (values.TryGetValue("language", out var language) && language.Length > 0)
+        {
+            if (!CompareLanguages.Contains(language, StringComparer.Ordinal))
+            {
+                return null;
+            }
+
+            parameters["language"] = language;
+        }
+
+        return parameters;
+    }
+
+    private static bool IsCalendarDate(string value) =>
+        CalendarDate.IsMatch(value) &&
+        DateOnly.TryParseExact(value, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _);
+
+    /// <summary>
+    /// A query value form-decoded as a browser's <c>URLSearchParams</c> reads a well-formed one: <c>+</c> a space, each
+    /// <c>%HH</c> a byte, the bytes UTF-8; null for a malformed escape, a character outside ASCII written raw, or bytes that are
+    /// not UTF-8, which name nothing here.
+    /// </summary>
+    private static string? FormDecoded(string raw)
+    {
+        var bytes = new List<byte>(raw.Length);
+        for (var index = 0; index < raw.Length; index++)
+        {
+            var character = raw[index];
+            if (character == '%')
+            {
+                if (index + 2 >= raw.Length || !Uri.IsHexDigit(raw[index + 1]) || !Uri.IsHexDigit(raw[index + 2]))
+                {
+                    return null;
+                }
+
+                bytes.Add((byte)Convert.ToInt32(raw.Substring(index + 1, 2), 16));
+                index += 2;
+            }
+            else if (character == '+')
+            {
+                bytes.Add((byte)' ');
+            }
+            else if (character < 0x80)
+            {
+                bytes.Add((byte)character);
+            }
+            else
+            {
+                // A browser escapes every character outside ASCII in a query; one written raw names nothing here.
+                return null;
+            }
+        }
+
+        try
+        {
+            return new UTF8Encoding(false, true).GetString(bytes.ToArray());
+        }
+        catch (DecoderFallbackException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>Whether an envelope is the refusal of a work the API does not know: its page is a 404, as an absent page is.</summary>
     private static bool AnswersUnknownWork(byte[] envelope)

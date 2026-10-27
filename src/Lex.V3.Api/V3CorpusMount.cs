@@ -296,7 +296,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         {
             if (LooksLikeIdentifier(identifier))
             {
-                return Unknown(request, identifier, observedAt);
+                // R77: an act the catalogue holds and this index holds no version of is answered with its record.
+                return CatalogueOnlyRefusal(request, identifier, observedAt) ?? Unknown(request, identifier, observedAt);
             }
 
             var workResolution = _reader is null ? null : TitleLadder(identifier);
@@ -3425,8 +3426,10 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// ambiguity or a profile mismatch in any served language refuses the whole answer, the first found in
     /// language order when both apply, while a language with no state at a bound is listed as not
     /// compared; both bounds are resolved before a language is classified, so a missing bound never masks
-    /// an ambiguity on the other. No text is diffed, no legal effect is
-    /// asserted: a changed article is a changed digest, and the note says so.
+    /// an ambiguity on the other. No text is diffed here and no legal effect is
+    /// asserted: a changed article is a changed digest, and the note says so; each changed, added or removed article carries
+    /// its served text on each side where that state's rights admit it (<see cref="DiffTextRule"/>, R57), from which a page
+    /// shows the wording that changed.
     /// </summary>
     public V3PlatformOperationOutcome Diff(
         V3PlatformOperationRequest request,
@@ -3516,8 +3519,10 @@ internal sealed partial class V3CorpusMount : IDisposable
                 continue;
             }
 
+            // The wording of what changed (R57), from each side's text as served, where its rights admit it (evidence_bundle's rule).
             var (articles, counts, _) = CompareArticles(
-                _reader!.ResolveStateArticles(from.StateSha256), _reader.ResolveStateArticles(to.StateSha256));
+                _reader!.ResolveStateArticles(from.StateSha256), _reader.ResolveStateArticles(to.StateSha256),
+                texts: true, fromAdmitted: SearchAdmits(from.StateSha256), toAdmitted: SearchAdmits(to.StateSha256));
             compared.Add((language, from, fromNext, to, toNext, ofLanguage.Length == 1, (articles, counts)));
         }
 
@@ -3589,6 +3594,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             articles_not_admitted_note = ArticlesNotAdmittedNote,
             available_languages = availableLanguages,
             wording_rule = WordingRule,
+            text_rule = DiffTextRule,
             validity_conflict_rule = ValidityConflictRule,
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader!.IndexRef.Sha256,
@@ -3616,21 +3622,40 @@ internal sealed partial class V3CorpusMount : IDisposable
             : cover.Reason ?? "no state covers the date";
     }
 
+    internal const string DiffTextRule =
+        "R57: each entry of a changed, added or removed article carries the article's text as evidence_bundle serves it (text, and " +
+        "text_sha256, the SHA-256 of its UTF-8 bytes) when that side's state's rights admit its text, and null for both when they " +
+        "do not, so a reader can show the wording that changed; an unchanged article carries no text; the text is the publisher's " +
+        "as served, and its status is still decided by the wording digests alone";
+
     /// <summary>
     /// Article-level comparison of two states by publisher-minted id: present in both with the same
     /// wording digests is unchanged, with different digests changed; only in the later state added;
     /// only in the earlier removed. An id minted twice in one state compares as its ordered digests.
+    /// With <paramref name="texts"/> (<c>diff</c>, R57), each entry of a row that is not unchanged carries its served text
+    /// when <paramref name="fromAdmitted"/> or <paramref name="toAdmitted"/> says that side's rights admit it, else nulls
+    /// (<see cref="DiffTextRule"/>).
     /// </summary>
     private static (IReadOnlyList<object> Articles, object Counts, bool Differs) CompareArticles(
-        IReadOnlyList<LuxembourgIndexStateArticle> from, IReadOnlyList<LuxembourgIndexStateArticle> to)
+        IReadOnlyList<LuxembourgIndexStateArticle> from, IReadOnlyList<LuxembourgIndexStateArticle> to,
+        bool texts = false, bool fromAdmitted = false, bool toAdmitted = false)
     {
         static Dictionary<string, LuxembourgIndexStateArticle[]> ById(IReadOnlyList<LuxembourgIndexStateArticle> articles) =>
             articles.GroupBy(static article => article.PublisherId, StringComparer.Ordinal)
                 .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
-        static object[] Side(LuxembourgIndexStateArticle[]? side) =>
+        static object Entry(LuxembourgIndexStateArticle article) =>
+            new { article_identity_sha256 = article.ArticleIdentitySha256, wording_sha256 = article.WordingSha256 };
+        static object EntryWithText(LuxembourgIndexStateArticle article, bool admitted) => new
+        {
+            article_identity_sha256 = article.ArticleIdentitySha256,
+            wording_sha256 = article.WordingSha256,
+            text = admitted ? article.Text : null,
+            text_sha256 = admitted ? Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(article.Text))) : null,
+        };
+        object[] Side(LuxembourgIndexStateArticle[]? side, bool withText, bool admitted) =>
             side is null
                 ? []
-                : side.Select(static article => (object)new { article_identity_sha256 = article.ArticleIdentitySha256, wording_sha256 = article.WordingSha256 }).ToArray();
+                : side.Select(article => withText ? EntryWithText(article, admitted) : Entry(article)).ToArray();
 
         var left = ById(from);
         var right = ById(to);
@@ -3659,7 +3684,8 @@ internal sealed partial class V3CorpusMount : IDisposable
                 status = "changed"; changed++;
             }
 
-            rows.Add(new { publisher_id = id, status, from = Side(before), to = Side(after) });
+            var withText = texts && status != "unchanged";
+            rows.Add(new { publisher_id = id, status, from = Side(before, withText, fromAdmitted), to = Side(after, withText, toAdmitted) });
         }
 
         return (rows, new { unchanged, changed, added, removed }, changed + added + removed > 0);
@@ -7037,9 +7063,11 @@ internal sealed partial class V3CorpusMount : IDisposable
         var located = _reader.ResolveWorkStates(workIdentifier);
         if (located.Count == 0)
         {
+            // R77: an act the publisher's catalogue holds and this index holds no version of answers text_not_available with its
+            // record, never identifier_unknown (V3CorpusMount.CatalogueRecords.cs).
             return IsEuropeanUnionShaped(identifier)
                 ? ModeUnavailable(request, observedAt, PublisherId.EuEurLex, requestedMode)
-                : Unknown(request, identifier, observedAt, PublisherId.LuLegilux,
+                : CatalogueOnlyRefusal(request, identifier, observedAt) ?? Unknown(request, identifier, observedAt, PublisherId.LuLegilux,
                     isStableWorkCoordinate || IsLuxembourgShaped(identifier)
                         ? "a Luxembourg work identifier present in the mounted index"
                         : ShapelessIdentifierWhatWouldAnswer);

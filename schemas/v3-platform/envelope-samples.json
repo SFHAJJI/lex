@@ -1613,7 +1613,7 @@
               "phase": "exact_reference",
               "reason": null,
               "recognised": null,
-              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
             },
             "requested_after": null,
             "requested_date": null,
@@ -2006,7 +2006,7 @@
               "phase": "exact_reference",
               "reason": null,
               "recognised": null,
-              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
             },
             "requested_after": null,
             "requested_date": null,
@@ -2147,7 +2147,7 @@
               "phase": "exact_reference",
               "reason": null,
               "recognised": null,
-              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
             },
             "requested_after": null,
             "requested_date": null,
@@ -2360,7 +2360,7 @@
               "phase": "exact_reference",
               "reason": null,
               "recognised": null,
-              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
             },
             "requested_after": null,
             "requested_date": null,
@@ -2604,7 +2604,7 @@
               "phase": "exact_reference",
               "reason": null,
               "recognised": null,
-              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
             },
             "requested_after": null,
             "requested_date": null,
@@ -2751,7 +2751,7 @@
               "phase": "exact_reference",
               "reason": null,
               "recognised": null,
-              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
+              "rule": "before any word is searched, the query is read as an exact reference: an ELI, a CELEX (consolidated forms included), a Memorial or Journal officiel A citation, a historical identifier of the publisher\u0027s catalogue, an address of this site for law, an act by its type and date or an EU act by its conventional name, or a citation of an article of an act and of a date; a reference the indexes hold opens its act, at the article and date it names (the date defaults to the search\u0027s date, else to today in Luxembourg), or its dossier when it names neither, and no word is searched; an identifier, an EU act\u0027s name or a type and date that names no act the indexes or the publisher\u0027s catalogue hold is refused identifier_unknown, with no list; one act the publisher\u0027s catalogue holds and the indexes hold no version of is refused text_not_available with its record (R77); a day, an issue or a name that names several acts is refused ambiguous_identifier with every one, held or not, and none is chosen; a title the index does not hold, and words after a type and date that name none of that day\u0027s acts, open nothing on their own: a title is searched as words, and the day\u0027s acts are listed; a date in a date\u0027s shape that names no calendar day opens nothing; a query that is no reference is searched as words"
             },
             "requested_after": null,
             "requested_date": null,
@@ -3070,6 +3070,356 @@
               "expanded_official_scope"
             ],
             "what_would_answer_detail": "a Luxembourg work identifier present in the mounted index"
+          },
+          "schema": "lex-v3-refusal/1"
+        },
+        "registry_schema": "lex-v3-operation-registry/2",
+        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": null,
+        "schema": "lex-v3-envelope/1",
+        "verdict": "refuse",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "dossier",
+      "scenario": "an act the publisher\u0027s catalogue holds and the index holds no version of (R77): a refusal with its record",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
+          "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "lu",
+          "provisional": false,
+          "publisher": "lu-legilux",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "refusal",
+          "timeline_semantics": "publisher_applicability"
+        },
+        "object_type": "envelope",
+        "operation_id": "dossier",
+        "refusal": {
+          "code": "text_not_available",
+          "helpful_payload": {
+            "act_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo",
+            "asserts_absence_of_law": false,
+            "catalogue_read_no_later_than": "2026-10-01T08:00:00Z",
+            "date_document": [
+              "1991-08-10"
+            ],
+            "document_type": [
+              "http://data.legilux.public.lu/resource/authority/resource-type/LOI"
+            ],
+            "entry_into_force": [
+              "1991-08-27"
+            ],
+            "historical_legal_id": [
+              "1991A10580"
+            ],
+            "in_force_status": [
+              "http://data.legilux.public.lu/resource/authority/application-status/no-longer-in-force"
+            ],
+            "memorial_issue": [
+              "http://data.legilux.public.lu/eli/etat/leg/memorial/1991/a58"
+            ],
+            "no_longer_in_force": [
+              "2010-01-01"
+            ],
+            "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo",
+            "official_pdf": [
+              "http://data.legilux.public.lu/filestore/eli/etat/leg/memorial/1991/a58/fr/pdf/eli-etat-leg-memorial-1991-a58-fr-pdf.pdf"
+            ],
+            "official_source": "http://data.legilux.public.lu/filestore/eli/etat/leg/memorial/1991/a58/fr/pdf/eli-etat-leg-memorial-1991-a58-fr-pdf.pdf",
+            "publication_date": [
+              "1991-08-23"
+            ],
+            "reason": "catalogue_licence_scl",
+            "reason_rule": "each reason says what the publisher\u0027s catalogue states of a version of which this site holds no file, as Coverage counts it, and never why the acquisition did not fetch it: catalogue_licence_scl, every XML and PDF file of its French text is licensed licenceSCL, which this site does not reproduce; catalogue_licence_scl_in_part, some are licensed licenceSCL and some otherwise; catalogue_cc_by_not_acquired, every one is licensed CC BY 4.0 and none was acquired; catalogue_no_or_other_licence, they carry no licence or another one; catalogue_no_xml_or_pdf_manifestation, its French text has no XML or PDF file; catalogue_translations_only, the catalogue names its text in other languages than French only; catalogue_no_expression, the catalogue names no text of it; reason is the act as published\u0027s, else its first version\u0027s",
+            "record_address": "/lu-legilux/loi-1991-08-10-n5",
+            "record_evidence_sha256s": [
+              "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+            ],
+            "record_kind": "catalogue_only",
+            "retained_transport_evidence": "none",
+            "rule": "R77: the publisher\u0027s catalogue holds this act and this index holds no version of it, so it is answered text_not_available with its record, read from the catalogue\u0027s facts in the index as they stand: official_identity is the act as published (the work followed by /jo) where the catalogue names it, else its first version; official_source is the publisher\u0027s PDF file of that act\u0027s French text where the catalogue names one, else the same identity; document_type, date_document, publication_date, entry_into_force, no_longer_in_force, in_force_status, memorial_issue and historical_legal_id are the act\u0027s own typeDocument, dateDocument, publicationDate, dateEntryInForce, dateNoLongerInForce, inForceStatus, isPartOf and historicalLegalId facts, verbatim, each a list that is empty when the catalogue states none; in_force_status is the act\u0027s, never a consolidation\u0027s; each date is the publisher\u0027s and has the role its fact names, and none is an applicability date; title is the act\u0027s French title as the catalogue states it, or null; versions lists the act\u0027s versions in the catalogue (as published, consolidated, a code\u0027s), with each one\u0027s kind and the reason no text of it is held here (reason_rule); record_address is the address this site gives the act, where this record is its page; nothing here is the act\u0027s text, and an absence of text here is not an absence of law",
+            "title": "Loi du 10 ao\u00FBt 1991 portant approbation de la Convention de La Haye",
+            "title_language": "fra",
+            "version_kinds": [
+              "as_published"
+            ],
+            "version_reasons": [
+              "catalogue_licence_scl"
+            ],
+            "versions": [
+              "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo"
+            ],
+            "what_would_answer": [
+              "new_official_observation"
+            ],
+            "work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5",
+            "work_key": "loi-1991-08-10-n5"
+          },
+          "schema": "lex-v3-refusal/1"
+        },
+        "registry_schema": "lex-v3-operation-registry/2",
+        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": null,
+        "schema": "lex-v3-envelope/1",
+        "verdict": "refuse",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "evidence_bundle",
+      "scenario": "the same act read at its address in French: a refusal with its record",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
+          "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "lu",
+          "provisional": false,
+          "publisher": "lu-legilux",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "refusal",
+          "timeline_semantics": "publisher_applicability"
+        },
+        "object_type": "envelope",
+        "operation_id": "evidence_bundle",
+        "refusal": {
+          "code": "text_not_available",
+          "helpful_payload": {
+            "act_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo",
+            "asserts_absence_of_law": false,
+            "catalogue_read_no_later_than": "2026-10-01T08:00:00Z",
+            "date_document": [
+              "1991-08-10"
+            ],
+            "document_type": [
+              "http://data.legilux.public.lu/resource/authority/resource-type/LOI"
+            ],
+            "entry_into_force": [
+              "1991-08-27"
+            ],
+            "historical_legal_id": [
+              "1991A10580"
+            ],
+            "in_force_status": [
+              "http://data.legilux.public.lu/resource/authority/application-status/no-longer-in-force"
+            ],
+            "memorial_issue": [
+              "http://data.legilux.public.lu/eli/etat/leg/memorial/1991/a58"
+            ],
+            "no_longer_in_force": [
+              "2010-01-01"
+            ],
+            "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo",
+            "official_pdf": [
+              "http://data.legilux.public.lu/filestore/eli/etat/leg/memorial/1991/a58/fr/pdf/eli-etat-leg-memorial-1991-a58-fr-pdf.pdf"
+            ],
+            "official_source": "http://data.legilux.public.lu/filestore/eli/etat/leg/memorial/1991/a58/fr/pdf/eli-etat-leg-memorial-1991-a58-fr-pdf.pdf",
+            "publication_date": [
+              "1991-08-23"
+            ],
+            "reason": "catalogue_licence_scl",
+            "reason_rule": "each reason says what the publisher\u0027s catalogue states of a version of which this site holds no file, as Coverage counts it, and never why the acquisition did not fetch it: catalogue_licence_scl, every XML and PDF file of its French text is licensed licenceSCL, which this site does not reproduce; catalogue_licence_scl_in_part, some are licensed licenceSCL and some otherwise; catalogue_cc_by_not_acquired, every one is licensed CC BY 4.0 and none was acquired; catalogue_no_or_other_licence, they carry no licence or another one; catalogue_no_xml_or_pdf_manifestation, its French text has no XML or PDF file; catalogue_translations_only, the catalogue names its text in other languages than French only; catalogue_no_expression, the catalogue names no text of it; reason is the act as published\u0027s, else its first version\u0027s",
+            "record_address": "/lu-legilux/loi-1991-08-10-n5",
+            "record_evidence_sha256s": [
+              "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+            ],
+            "record_kind": "catalogue_only",
+            "retained_transport_evidence": "none",
+            "rule": "R77: the publisher\u0027s catalogue holds this act and this index holds no version of it, so it is answered text_not_available with its record, read from the catalogue\u0027s facts in the index as they stand: official_identity is the act as published (the work followed by /jo) where the catalogue names it, else its first version; official_source is the publisher\u0027s PDF file of that act\u0027s French text where the catalogue names one, else the same identity; document_type, date_document, publication_date, entry_into_force, no_longer_in_force, in_force_status, memorial_issue and historical_legal_id are the act\u0027s own typeDocument, dateDocument, publicationDate, dateEntryInForce, dateNoLongerInForce, inForceStatus, isPartOf and historicalLegalId facts, verbatim, each a list that is empty when the catalogue states none; in_force_status is the act\u0027s, never a consolidation\u0027s; each date is the publisher\u0027s and has the role its fact names, and none is an applicability date; title is the act\u0027s French title as the catalogue states it, or null; versions lists the act\u0027s versions in the catalogue (as published, consolidated, a code\u0027s), with each one\u0027s kind and the reason no text of it is held here (reason_rule); record_address is the address this site gives the act, where this record is its page; nothing here is the act\u0027s text, and an absence of text here is not an absence of law",
+            "title": "Loi du 10 ao\u00FBt 1991 portant approbation de la Convention de La Haye",
+            "title_language": "fra",
+            "version_kinds": [
+              "as_published"
+            ],
+            "version_reasons": [
+              "catalogue_licence_scl"
+            ],
+            "versions": [
+              "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo"
+            ],
+            "what_would_answer": [
+              "new_official_observation"
+            ],
+            "work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5",
+            "work_key": "loi-1991-08-10-n5"
+          },
+          "schema": "lex-v3-refusal/1"
+        },
+        "registry_schema": "lex-v3-operation-registry/2",
+        "registry_sha256": "befb867f362ad3a9f44fd4c88f7eb7a75a626307c06cc4f4d6a4247a5f5c90b7",
+        "request_ref": "http_fb09fb7191e84f40f48d21b4532a48ef36c84efacd236a30abd075a5a2b2c639",
+        "result": null,
+        "schema": "lex-v3-envelope/1",
+        "verdict": "refuse",
+        "version": "v3"
+      }
+    },
+    {
+      "operation": "search",
+      "scenario": "a reference naming the same act by its type, date and title words: a refusal with its record and what was recognised",
+      "http_status": 200,
+      "content_type": "application/json;charset=utf-8",
+      "envelope": {
+        "context": {
+          "commits": {
+            "index_builder_source_commit": null,
+            "serving_runtime_source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
+          "freshness": {
+            "channels": [
+              {
+                "age_days": null,
+                "lag_days": null,
+                "lag_observations": 0,
+                "newest_completed_observation": null,
+                "publisher": "lu-legilux",
+                "stale": null
+              }
+            ],
+            "index_built_at": "2026-10-01T08:00:00Z",
+            "last_checked_against_publisher": null,
+            "maximum_data_age_days": 30,
+            "observed_at": "2026-09-18T07:00:00.0000000Z",
+            "stale": false,
+            "upstream_health": "stale"
+          },
+          "jurisdiction": "lu",
+          "provisional": false,
+          "publisher": "lu-legilux",
+          "snapshot": {
+            "snapshot_id": "corpus-aaaaaaaaaaaaaaaa",
+            "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "status": "refusal",
+          "timeline_semantics": "publisher_applicability"
+        },
+        "object_type": "envelope",
+        "operation_id": "search",
+        "refusal": {
+          "code": "text_not_available",
+          "helpful_payload": {
+            "act_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo",
+            "asserts_absence_of_law": false,
+            "catalogue_read_no_later_than": "2026-10-01T08:00:00Z",
+            "date_document": [
+              "1991-08-10"
+            ],
+            "document_type": [
+              "http://data.legilux.public.lu/resource/authority/resource-type/LOI"
+            ],
+            "entry_into_force": [
+              "1991-08-27"
+            ],
+            "historical_legal_id": [
+              "1991A10580"
+            ],
+            "in_force_status": [
+              "http://data.legilux.public.lu/resource/authority/application-status/no-longer-in-force"
+            ],
+            "memorial_issue": [
+              "http://data.legilux.public.lu/eli/etat/leg/memorial/1991/a58"
+            ],
+            "no_longer_in_force": [
+              "2010-01-01"
+            ],
+            "official_identity": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo",
+            "official_pdf": [
+              "http://data.legilux.public.lu/filestore/eli/etat/leg/memorial/1991/a58/fr/pdf/eli-etat-leg-memorial-1991-a58-fr-pdf.pdf"
+            ],
+            "official_source": "http://data.legilux.public.lu/filestore/eli/etat/leg/memorial/1991/a58/fr/pdf/eli-etat-leg-memorial-1991-a58-fr-pdf.pdf",
+            "publication_date": [
+              "1991-08-23"
+            ],
+            "reason": "catalogue_licence_scl",
+            "reason_rule": "each reason says what the publisher\u0027s catalogue states of a version of which this site holds no file, as Coverage counts it, and never why the acquisition did not fetch it: catalogue_licence_scl, every XML and PDF file of its French text is licensed licenceSCL, which this site does not reproduce; catalogue_licence_scl_in_part, some are licensed licenceSCL and some otherwise; catalogue_cc_by_not_acquired, every one is licensed CC BY 4.0 and none was acquired; catalogue_no_or_other_licence, they carry no licence or another one; catalogue_no_xml_or_pdf_manifestation, its French text has no XML or PDF file; catalogue_translations_only, the catalogue names its text in other languages than French only; catalogue_no_expression, the catalogue names no text of it; reason is the act as published\u0027s, else its first version\u0027s",
+            "recognised_act": "loi du 10 ao\u00FBt 1991 portant approbation de la Convention de La Haye",
+            "recognised_article": null,
+            "recognised_catalogue_works": [
+              "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5"
+            ],
+            "recognised_date": null,
+            "recognised_date_source": null,
+            "recognised_held_act": null,
+            "recognised_held_version": null,
+            "recognised_kind": "citation",
+            "recognised_title": "Loi du 10 ao\u00FBt 1991 portant approbation de la Convention de La Haye",
+            "record_address": "/lu-legilux/loi-1991-08-10-n5",
+            "record_evidence_sha256s": [
+              "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+            ],
+            "record_kind": "catalogue_only",
+            "retained_transport_evidence": "none",
+            "rule": "R77: the publisher\u0027s catalogue holds this act and this index holds no version of it, so it is answered text_not_available with its record, read from the catalogue\u0027s facts in the index as they stand: official_identity is the act as published (the work followed by /jo) where the catalogue names it, else its first version; official_source is the publisher\u0027s PDF file of that act\u0027s French text where the catalogue names one, else the same identity; document_type, date_document, publication_date, entry_into_force, no_longer_in_force, in_force_status, memorial_issue and historical_legal_id are the act\u0027s own typeDocument, dateDocument, publicationDate, dateEntryInForce, dateNoLongerInForce, inForceStatus, isPartOf and historicalLegalId facts, verbatim, each a list that is empty when the catalogue states none; in_force_status is the act\u0027s, never a consolidation\u0027s; each date is the publisher\u0027s and has the role its fact names, and none is an applicability date; title is the act\u0027s French title as the catalogue states it, or null; versions lists the act\u0027s versions in the catalogue (as published, consolidated, a code\u0027s), with each one\u0027s kind and the reason no text of it is held here (reason_rule); record_address is the address this site gives the act, where this record is its page; nothing here is the act\u0027s text, and an absence of text here is not an absence of law",
+            "title": "Loi du 10 ao\u00FBt 1991 portant approbation de la Convention de La Haye",
+            "title_language": "fra",
+            "version_kinds": [
+              "as_published"
+            ],
+            "version_reasons": [
+              "catalogue_licence_scl"
+            ],
+            "versions": [
+              "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5/jo"
+            ],
+            "what_would_answer": [
+              "new_official_observation"
+            ],
+            "work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5",
+            "work_key": "loi-1991-08-10-n5"
           },
           "schema": "lex-v3-refusal/1"
         },
@@ -10831,6 +11181,7 @@
             "requested_date_to": "2024-02-01",
             "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
             "requested_language": "fra",
+            "text_rule": "R57: each entry of a changed, added or removed article carries the article\u0027s text as evidence_bundle serves it (text, and text_sha256, the SHA-256 of its UTF-8 bytes) when that side\u0027s state\u0027s rights admit its text, and null for both when they do not, so a reader can show the wording that changed; an unchanged article carries no text; the text is the publisher\u0027s as served, and its status is still decided by the wording digests alone",
             "validity_conflict_rule": "article_valid_from is the publisher\u0027s article-level applicability date; validity_conflict is true when it is stated and differs from the state\u0027s applicability_date",
             "wording_rule": "wording_sha256 is the SHA-256 of a canonical JSON array of [kind, text, target] for the Text and Reference tokens of the article\u0027s stored token stream, in order, with consecutive text merged into one entry (reference labels and targets included; note references, note bodies and modification markers excluded); wording_changed is true when it differs from the previous state of the same language, and any byte difference in the merged text or in a reference counts; paragraph and inline-formatting boundaries and whitespace-only nodes are not compared; wording_runs counts the first state and every change per language; distinct_wordings counts distinct digests per language",
             "work_key": "loi-1991-08-10-n3"

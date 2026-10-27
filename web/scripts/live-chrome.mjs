@@ -390,7 +390,8 @@ const EN = Object.freeze({
     title: "Compare",
     eyebrow: "Compare",
     heading: "Two states, article by article",
-    intro: "The states of one Luxembourg work applicable on two dates, compared by the publisher's article ids and wording, with nothing said about legal effect. The identifier and the dates go to this server in the request and nowhere else, and this page keeps nothing.",
+    // R57 (the audit of 2026-10-27, gap 2): the wording that changed is shown, and a comparison has an address of its own.
+    intro: "The states of one Luxembourg work applicable on two dates, compared by the publisher's article ids and wording, with nothing said about legal effect; the wording that changed is shown, the words deleted struck through and the words inserted underlined. The identifier and the dates go to this server in the request and in this page's address, so that a comparison can be shared and read without JavaScript; this page keeps nothing.",
     idle: "Type a work identifier and two dates to compare the states applicable on them.",
     summary: "{work}: {from} against {to}.",
     summaryIn: "{work}: {from} against {to} in {language}.",
@@ -427,6 +428,24 @@ const EN = Object.freeze({
     }),
     bound: Object.freeze({ from: "from", to: "to" }),
     notCompared: "{language} is not compared: {reason} ({bound} date).",
+    // A changed article's wording, inline (R57): what a screen reader, or a reader without the page's styles, hears around
+    // each deletion and insertion, which the eye sees struck through and underlined.
+    deletedStart: "[deleted:",
+    deletedEnd: "]",
+    insertedStart: "[inserted:",
+    insertedEnd: "]",
+    // R57's jump list, and the links from each change to the previous and the next.
+    jumpHeading: "The changes",
+    jumpItem: "{article}: {status}",
+    previousChange: "Previous change",
+    nextChange: "Next change",
+    // A side whose text this site does not serve (its rights did not admit it): the digests stand, and no wording is shown.
+    wordingNotServed: Object.freeze({
+      from: "The wording of this article is not shown: this site does not serve the text of the earlier version.",
+      to: "The wording of this article is not shown: this site does not serve the text of the later version.",
+      both: "The wording of this article is not shown: this site serves the text of neither version.",
+    }),
+    wordingWhole: "This article changed too much to be compared word by word here: its earlier text is shown deleted and its later text inserted, each whole.",
   }),
   radar: Object.freeze({
     title: "Radar",

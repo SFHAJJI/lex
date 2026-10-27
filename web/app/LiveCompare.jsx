@@ -1,7 +1,17 @@
 // The compare screen, asked of the live API: two states of one work, article by article.
 //
-// The server renders the form and the idle state, and the browser asks only when the reader
-// submits. What an answer means is decided elsewhere: `scripts/live-compare.mjs` builds the request
+// The server renders the form and the idle state, or, at a comparison's address (`/en/compare.html?work=…&from=…&to=…`,
+// the specification of record's R57 and R67; the audit of 2026-10-27, gap 2), the comparison itself from its own answer,
+// readable without JavaScript; the browser then asks only when the reader submits, and writes the comparison's address in
+// place of the page's. The form's controls carry names so that, with no script, the browser asks that address itself: a
+// work identifier and two dates, an address of law as a permalink is, never a phrase (a driver decision, STATUS-WEB.md).
+//
+// A changed article shows its wording inline (R57): one column, in reading order, the words deleted struck through and the
+// words inserted underlined, each also said in words hidden from sight, so a screen reader reads it linearly and nothing is
+// said by colour alone; an added article is its text inserted, a removed one its text deleted. A jump list leads to each
+// change, and each change to the previous and the next. The wording is the text each side serves (`diff`'s `text_rule`),
+// compared word by word (`scripts/word-diff.mjs`); the status is still the digests'. What an answer means is decided
+// elsewhere: `scripts/live-compare.mjs` builds the request
 // and maps the answer to a view state, `scripts/compare-answer.mjs` reads and recomputes the
 // comparison, and `RefusalCard` lays out a refusal. This file lays the view out and marks the state
 // on the answer (`data-answer-state`).
@@ -14,21 +24,24 @@
 // record dates between the two dates, each named (`compare.betweenNamed`, `compare.betweenEndOfForce`), and nothing
 // said of whether the text changed. It is linear, not a colour-coded diff:
 // each status is a word, and the changed, added and removed articles are listed before the unchanged
-// ones, which are one disclosure away. The form's controls carry no `name`, and every permalink
-// is a link to its page (`Permalink`).
+// ones, which are one disclosure away. Every permalink is a link to its page (`Permalink`).
 
 import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
-import { COMPARE_LANGUAGES, LIVE_COMPARE_IDLE, createCompareSession } from '../scripts/live-compare.mjs';
-import { ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
+import { COMPARE_LANGUAGES, LIVE_COMPARE_IDLE, compareOutcome, createCompareSession } from '../scripts/live-compare.mjs';
+import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
 import { AsPublished, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import { todayAt } from '../scripts/initial-answer.mjs';
 import { TodayHint, useLuxembourgToday } from './Today.jsx';
+import { quotationLanguageTag } from '../scripts/live-reading.mjs';
+import { compareAddress, compareOfQuery } from '../scripts/permalinks.mjs';
+import { answerHandedWith } from '../scripts/v3-client.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
 const COPY = liveChrome().compare;
+const COMMON_LIST_SEPARATOR = liveChrome().common.listSeparator;
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_COMPARE_IDLE });
 
@@ -63,13 +76,73 @@ function Side({ label, side }) {
   );
 }
 
-function Row({ row }) {
+/**
+ * A changed article's wording, inline (R57): one column, in reading order, the words deleted struck through (`del`) and the
+ * words inserted underlined (`ins`), each said in words for a screen reader and for any reader without the page's styles
+ * (`COPY.deletedStart` … `COPY.insertedEnd`, hidden from sight), so nothing is said by colour or decoration alone. The
+ * quotation is marked in the text's language, the words around each change in the page's.
+ */
+function Wording({ wording, language }) {
+  if (wording === null) return null;
+  if (wording.notServed !== undefined) {
+    return <p data-wording-not-served={wording.notServed.join(' ')}>{COPY.wordingNotServed[wording.notServed.length === 2 ? 'both' : wording.notServed[0]]}</p>;
+  }
+  const said = (text) => <span className="visually-hidden" lang={CHROME_LOCALE}>{text}</span>;
+  return (
+    <>
+      <p className="wording-diff" lang={quotationLanguageTag(language)} data-wording={wording.complete ? 'words' : 'whole'}>
+        {wording.parts.map((part, index) => {
+          if (part.kind === 'same') return <span key={index}>{part.text}</span>;
+          if (part.kind === 'del') return <del key={index}>{said(`${COPY.deletedStart} `)}{part.text}{said(COPY.deletedEnd)}</del>;
+          return <ins key={index}>{said(`${COPY.insertedStart} `)}{part.text}{said(COPY.insertedEnd)}</ins>;
+        })}
+      </p>
+      {wording.complete ? null : <p data-wording-whole="">{COPY.wordingWhole}</p>}
+    </>
+  );
+}
+
+/** The anchor of the n-th change (from 1) of a comparison in one language, which the jump list and each change link to. */
+function changeId(language, index) {
+  return `change-${language}-${index + 1}`;
+}
+
+function Row({ row, language, change = null }) {
   // The whole digest, never a prefix: a prefix is not the digest a reader can check (review of #783).
   const digest = (entries) => (entries.length === 0 ? COPY.noWording : <code>{entries.map((entry) => entry.wordingSha256).join(', ')}</code>);
   return (
-    <li data-status={row.status}>
+    <li id={change === null ? undefined : changeId(language, change.index)} data-status={row.status}>
       <Say template={COPY.row} values={{ article: <strong>{row.publisherId}</strong>, status: COPY.status[row.status], from: digest(row.from), to: digest(row.to) }} />
+      <Wording wording={row.wording} language={language} />
+      {change === null ? null : (
+        // The previous and next change (R57), as links any reader can follow, the keyboard's included.
+        <p className="change-nav" data-change-nav="">
+          {change.index > 0 ? <a href={`#${changeId(language, change.index - 1)}`}>{COPY.previousChange}</a> : null}
+          {change.index > 0 && change.index < change.count - 1 ? COMMON_LIST_SEPARATOR : null}
+          {change.index < change.count - 1 ? <a href={`#${changeId(language, change.index + 1)}`}>{COPY.nextChange}</a> : null}
+        </p>
+      )}
     </li>
+  );
+}
+
+/** The changes of one comparison, each a link to its row (R57's jump list). */
+function JumpList({ moved, language }) {
+  if (moved.length < 2) return null;
+  const heading = `jump-${language}`;
+  return (
+    <nav aria-labelledby={heading} data-jump-list={moved.length}>
+      <h3 id={heading}>{COPY.jumpHeading}</h3>
+      <ol>
+        {moved.map((row, index) => (
+          <li key={row.publisherId}>
+            <a href={`#${changeId(language, index)}`}>
+              <Say template={COPY.jumpItem} values={{ article: row.publisherId, status: COPY.status[row.status] }} />
+            </a>
+          </li>
+        ))}
+      </ol>
+    </nav>
   );
 }
 
@@ -155,16 +228,17 @@ function Comparison({ comparison, between }) {
               values={{ changed: comparison.counts.changed, added: comparison.counts.added, removed: comparison.counts.removed, unchanged: comparison.counts.unchanged }}
             />
           </p>
+          <JumpList moved={moved} language={comparison.language} />
           {moved.length > 0 ? (
             <ol data-moved={moved.length}>
-              {moved.map((row) => <Row key={row.publisherId} row={row} />)}
+              {moved.map((row, index) => <Row key={row.publisherId} row={row} language={comparison.language} change={{ index, count: moved.length }} />)}
             </ol>
           ) : null}
           {kept.length > 0 ? (
             <details>
               <summary><Say template={countedEntry(COPY.kept, kept.length)} values={{ count: kept.length }} /></summary>
               <ol data-kept={kept.length}>
-                {kept.map((row) => <Row key={row.publisherId} row={row} />)}
+                {kept.map((row) => <Row key={row.publisherId} row={row} language={comparison.language} />)}
               </ol>
             </details>
           ) : null}
@@ -198,6 +272,7 @@ export function CompareView({ view }) {
         </ul>
       ) : null}
       <p lang={ENGLISH_LANG}>{asSentence(view.wordingRule)}</p>
+      {view.textRule === null ? null : <p lang={ENGLISH_LANG}>{asSentence(view.textRule)}</p>}
       <p lang={ENGLISH_LANG}>{asSentence(view.validityConflictRule)}</p>
     </>
   );
@@ -241,12 +316,32 @@ const COMPARE_TODAY_HINT = 'compare-today';
  * asked, and unmounting cancels whatever is left. Today in Luxembourg is said beside the two dates: the day the last
  * answer was given on, else this browser's clock once hydrated (R13).
  */
-export function LiveCompare({ contract, fetchImpl }) {
-  const [identifier, setIdentifier] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [language, setLanguage] = useState('');
-  const [outcome, setOutcome] = useState(IDLE);
+/** The form's fields a comparison's address names (`compareOfQuery`), or empty ones. */
+function fieldsOf(search) {
+  const asked = compareOfQuery(search ?? '');
+  return asked === null
+    ? { identifier: '', dateFrom: '', dateTo: '', language: '' }
+    : { identifier: asked.identifier, dateFrom: asked.date_from, dateTo: asked.date_to, language: asked.language ?? '' };
+}
+
+/** The query of a path the page was rendered at (`/en/compare.html?work=…`), with its `?`, or empty. */
+function searchOf(path) {
+  const at = (path ?? '').indexOf('?');
+  return at < 0 ? '' : path.slice(at);
+}
+
+export function LiveCompare({ contract, fetchImpl, initial = null }) {
+  // A page the server rendered from its own answer (`initial`, R57 and R67: the comparison at its address, readable
+  // without JavaScript) starts with that comparison and the form filled from its address; the browser reads the same
+  // answer from the page, so both render one tree.
+  const start = initial === null ? null : fieldsOf(searchOf(initial.path));
+  const [identifier, setIdentifier] = useState(start?.identifier ?? '');
+  const [dateFrom, setDateFrom] = useState(start?.dateFrom ?? '');
+  const [dateTo, setDateTo] = useState(start?.dateTo ?? '');
+  const [language, setLanguage] = useState(start?.language ?? '');
+  const [outcome, setOutcome] = useState(() => (initial === null
+    ? IDLE
+    : compareOutcome(answerHandedWith('diff', initial.envelope, { contract, objectType: 'diff' }))));
   const session = useRef(null);
   if (session.current === null) {
     session.current = createCompareSession({ contract, fetchImpl, onOutcome: setOutcome });
@@ -255,32 +350,54 @@ export function LiveCompare({ contract, fetchImpl }) {
 
   useEffect(() => () => session.current.cancel(), []);
 
+  // Opened at a comparison's address the server did not render: ask it, once, after hydration.
+  useEffect(() => {
+    if (initial !== null) return;
+    const fields = fieldsOf(window.location.search);
+    if (fields.identifier === '') return;
+    setIdentifier(fields.identifier);
+    setDateFrom(fields.dateFrom);
+    setDateTo(fields.dateTo);
+    setLanguage(fields.language);
+    session.current.ask(fields);
+  }, []);
+
   return (
     <div>
+      {/* Without a script, the form asks this page at the comparison's address, which the server renders (R57, R67); with
+          one, the screen asks the API and writes the comparison's address in place of the page's, so it can be shared. */}
       <form
         role="search"
+        method="get"
         onSubmit={(event) => {
           event.preventDefault();
-          session.current.ask({ identifier, dateFrom, dateTo, language });
+          const request = { identifier, dateFrom, dateTo, language };
+          if (session.current.ask(request)) {
+            try {
+              window.history.replaceState(null, '', compareAddress(CHROME_LOCALE, request));
+            } catch {
+              // An address that cannot be written leaves the page's as it was.
+            }
+          }
         }}
       >
         <label>
           {FORM.workIdentifier}{' '}
-          <input type="text" value={identifier} autoComplete="off" spellCheck={false} onChange={(event) => setIdentifier(event.target.value)} />
+          <input type="text" name="work" value={identifier} autoComplete="off" spellCheck={false} onChange={(event) => setIdentifier(event.target.value)} />
         </label>{' '}
         <label>
           {FORM.from}{' '}
-          <input type="text" inputMode="numeric" placeholder={FORM.datePlaceholder} value={dateFrom} autoComplete="off" aria-describedby={today === null ? undefined : COMPARE_TODAY_HINT} onChange={(event) => setDateFrom(event.target.value)} />
+          <input type="text" name="from" inputMode="numeric" placeholder={FORM.datePlaceholder} value={dateFrom} autoComplete="off" aria-describedby={today === null ? undefined : COMPARE_TODAY_HINT} onChange={(event) => setDateFrom(event.target.value)} />
         </label>{' '}
         <label>
           {FORM.to}{' '}
-          <input type="text" inputMode="numeric" placeholder={FORM.datePlaceholder} value={dateTo} autoComplete="off" aria-describedby={today === null ? undefined : COMPARE_TODAY_HINT} onChange={(event) => setDateTo(event.target.value)} />
+          <input type="text" name="to" inputMode="numeric" placeholder={FORM.datePlaceholder} value={dateTo} autoComplete="off" aria-describedby={today === null ? undefined : COMPARE_TODAY_HINT} onChange={(event) => setDateTo(event.target.value)} />
         </label>{' '}
         {/* Today in Luxembourg, beside the two dates (R13; the plan's item 3.4). */}
         <TodayHint id={COMPARE_TODAY_HINT} today={today} />
         <label>
           {FORM.language}{' '}
-          <select value={language} onChange={(event) => setLanguage(event.target.value)}>
+          <select name="language" value={language} onChange={(event) => setLanguage(event.target.value)}>
             <option value="">{FORM.anyLanguage}</option>
             {COMPARE_LANGUAGES.map((offered) => (
               <option key={offered.code} value={offered.code}>
