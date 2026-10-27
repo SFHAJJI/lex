@@ -46,6 +46,13 @@ code does. Branch `writer/truth-and-coverage`, from v3/integration a0958bb9 (#10
 - **French** (Decision 41): one independent reviewer (Claude, AI reviewer, not the author), the addendum of 2026-10-27 "truth
   and coverage" and its supplement in `C:\lex-v3\lanes\fr-review\review.md`: 58 forms, 19 changed in French, applied byte for
   byte; the English changed for truth in three (EUR-Lex publishes the other languages only where they exist).
+- **Counts** (this PC, Windows, no browser, no publisher traffic, no Azure). `dotnet build Lex.V3.slnx -c Release`: 0 warnings,
+  0 errors. `Lex.V3.Tests`, whole: 3,375 (3,369 passed, 0 failed, 6 skipped). `Lex.V3.Ingest.Tests`, whole, once: 3,592 (3,536
+  passed, 11 failed, 45 skipped); the eleven held an unheld EU CELEX to `identifier_unknown` and now hold R80's
+  `out_of_corpus_scope`; then the classes touched or found failing and every census class: 203 (199 passed, 1 failed, 3
+  skipped), that one updated likewise, and the seven EU identifier classes: 52 (51 passed, 0 failed, 1 skipped). `npm run
+  build` (30 state pages); `npm test`: 1,459 (1,456 passed, 0 failed, 3 skipped). `eng/verify-v3-tree.ps1`: 1,776 tracked
+  paths.
 
 ## Review and repair (#998): G2 exact, the change policy's digest, MCP failures, the out-of-scope forms (sole driver, 2026-10-27)
 
