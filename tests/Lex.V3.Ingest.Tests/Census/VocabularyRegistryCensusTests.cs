@@ -79,6 +79,8 @@ public sealed class VocabularyRegistryCensusTests
                     + "const SourceDdl, const SourceSchema, const StatesDdl, static readonly StatesFullDdl, "
                     + "const StatesSchema, const TypeOfDateIri",
                 "Lex.V3.Ingest.LexCorpus6Builder: Domain=13, const Schema",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgInFileRightsReader: const ReadingTwoProfileName, "
+                    + "const ReadingTwoProfileText, static property ReadingTwoProfileSha256",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder: StatePredicates=8, "
                     + "const ArticleDateBasic, const ArticleDateExtended, const ArticleDateNone, "
                     + "const ArticleDateNotRead, const BoundaryDerived, const BoundaryHalfOpen, "
@@ -111,8 +113,10 @@ public sealed class VocabularyRegistryCensusTests
                     + "AdministrativeMemorialPrefix, const ExpectedResourceHost, "
                     + "const LegislativeMemorialPrefix, const RuleProfile, "
                     + "static property RuleProfileSha256",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgRederivation: ImplementedRuleSets=1, "
-                    + "const NoPublisherSession, const Release1RuleSet, const RightsAsAcquired",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgRederivation: ImplementedRuleSets=2, "
+                    + "const InFileEvidenceTwoSchema, const NoPublisherSession, "
+                    + "const Release1RuleSet, const Release2RuleSet, const RightsAsAcquired, "
+                    + "const RightsReResolved",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgReferralDateComposition: const HasOpinion, "
                     + "const IriKind, const ReferralDate",
                 "Lex.V3.Ingest.V3CorpusMountWriter: GenerationFiles=6, "

@@ -83,6 +83,19 @@ public sealed class LuxembourgHeldBodyDerivationInput
         RightsResolution = rightsResolution;
     }
 
+    /// <summary>The same held body, record, receipt, address and selected WEMI, with another final rights resolution.</summary>
+    private LuxembourgHeldBodyDerivationInput(LuxembourgHeldBodyDerivationInput source, LuxembourgRightsChannelResolution rightsResolution)
+    {
+        CorpusRecord = source.CorpusRecord;
+        Address = source.Address;
+        SelectedWemiCandidate = source.SelectedWemiCandidate;
+        Receipt = source.Receipt;
+        RightsResolution = rightsResolution;
+    }
+
+    internal LuxembourgHeldBodyDerivationInput WithRightsResolution(LuxembourgRightsChannelResolution rightsResolution) =>
+        new(this, rightsResolution ?? throw new ArgumentNullException(nameof(rightsResolution)));
+
     public int ObjectOrdinal => CorpusRecord.ObjectOrdinal;
 
     public CorpusRecord CorpusRecord { get; }
@@ -118,6 +131,42 @@ public sealed class LuxembourgHeldBodyDerivationPopulation
     public VerifiedCorpusRecordSet CorpusRecordSet { get; }
 
     public IReadOnlyList<LuxembourgHeldBodyDerivationInput> Inputs { get; }
+
+    /// <summary>
+    /// R1's door for re-bound rights (LU-DATA-DESIGN v2 §2.2, R1 with rights, step 5): the same corpus record set object and
+    /// the same members, in the same order, each with the same record, receipt, address and selected WEMI, and the rights
+    /// resolution <paramref name="resolutionsByOrdinal"/> gives it. A map that adds, drops or moves a member (a resolution of
+    /// another manifestation than the member's selected one) refuses.
+    /// </summary>
+    internal LuxembourgHeldBodyDerivationPopulation WithRederivedRights(
+        IReadOnlyDictionary<int, LuxembourgRightsChannelResolution> resolutionsByOrdinal)
+    {
+        ArgumentNullException.ThrowIfNull(resolutionsByOrdinal);
+        if (resolutionsByOrdinal.Count != Inputs.Count ||
+            Inputs.Any(input => !resolutionsByOrdinal.ContainsKey(input.ObjectOrdinal)))
+        {
+            throw new CustodyIntegrityException(
+                $"A re-bound rights map covers exactly the held members: {resolutionsByOrdinal.Count} resolutions for "
+                + $"{Inputs.Count} members.");
+        }
+
+        var inputs = new List<LuxembourgHeldBodyDerivationInput>(Inputs.Count);
+        foreach (var input in Inputs)
+        {
+            var resolution = resolutionsByOrdinal[input.ObjectOrdinal] ?? throw new CustodyIntegrityException(
+                $"The re-bound rights map holds no resolution for {input.CorpusRecord.ObjectRef.PublisherUri}.");
+            if (!string.Equals(resolution.SelectedManifestationIri, input.SelectedWemiCandidate.ManifestationIri, StringComparison.Ordinal))
+            {
+                throw new CustodyIntegrityException(
+                    $"The re-bound rights of {input.CorpusRecord.ObjectRef.PublisherUri} resolve {resolution.SelectedManifestationIri}, "
+                    + $"not its selected manifestation {input.SelectedWemiCandidate.ManifestationIri}.");
+            }
+
+            inputs.Add(input.WithRightsResolution(resolution));
+        }
+
+        return new LuxembourgHeldBodyDerivationPopulation(CorpusRecordSet, inputs);
+    }
 
     internal static LuxembourgHeldBodyDerivationPopulation? TryCreate(
         VerifiedCorpusRecordSet corpusRecordSet,

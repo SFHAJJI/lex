@@ -31,6 +31,7 @@ public sealed class LexCorpus6MountView
         EuropeSourceSetRef = header.EuropeSourceSetRef;
         LuxembourgSourceSetRef = header.LuxembourgSourceSetRef;
         EuropeRightsMatrix = header.EuropeRightsMatrix;
+        LuxembourgRightsAdmissionPolicy = header.LuxembourgRightsAdmissionPolicy;
         MemberCount = memberCount;
         HeldMembers = held;
         _held = held.ToDictionary(static member => (member.Publisher, member.ObjectRefSha256));
@@ -43,6 +44,13 @@ public sealed class LexCorpus6MountView
     public SourceArtifactRef LuxembourgSourceSetRef { get; }
 
     public LexCorpus6EuropeRightsMatrix EuropeRightsMatrix { get; }
+
+    /// <summary>
+    /// The registered rights admission policy the corpus names (its header's <c>luxembourg_rights_admission_policy</c>); null
+    /// for a corpus without a re-derivation, which reads as policy /1. Every Luxembourg member's outcome was checked against
+    /// it when the corpus was read.
+    /// </summary>
+    public string? LuxembourgRightsAdmissionPolicy { get; }
 
     /// <summary>How many members the corpus holds, every one of them verified.</summary>
     public int MemberCount { get; }
@@ -74,6 +82,8 @@ public sealed class LexCorpus6MountView
         {
             header = ContractJson.DeserializeUtf8<LexCorpus6ManifestSet>(canonicalBytes, [members]);
             header.ValidateHeader();
+            // Every Luxembourg member with rights is kept, so the policy is checked over all of them.
+            header.ValidateLuxembourgAdmission(members.Held);
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException)
         {
