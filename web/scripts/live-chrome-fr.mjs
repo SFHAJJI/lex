@@ -1081,7 +1081,6 @@ export const LIVE_CHROME_FR = Object.freeze({
     classDispositions: Object.freeze({
       awaiting_a_run: 'non collectée : une collecte limitée, une fois autorisée, l’ajouterait',
       admitted_awaiting_a_run: 'admise, et pas encore collectée : une collecte ultérieure, une fois autorisée, l’ajoutera',
-      admitted_first_awaiting_a_run: 'admise, et pas encore collectée : parmi les premières catégories qu’ajoutera une collecte ultérieure, une fois autorisée',
       admitted_where_regulatory_awaiting_a_run: 'admise seulement lorsqu’une règle montre que l’acte est réglementaire, et pas encore collectée',
       documentation_awaiting_a_run: 'admise comme documentation, jamais comme texte de la loi, et pas encore collectée',
       corrective_awaiting_a_run: 'admise à titre rectificatif, sous cette seule qualification, et pas encore collectée',
@@ -1442,7 +1441,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       }),
       textless: Object.freeze({
         heading: 'Versions dont Lex ne détient pas les textes',
-        text: 'Lex peut savoir, par le catalogue de l’éditeur, qu’une version existe sans en détenir le texte : son fichier peut être un PDF, que Lex ne lit pas ; sa licence peut ne pas permettre à Lex de le montrer ; ou Lex peut ne pas l’avoir collecté. Lorsque Lex détient le texte d’une autre version du même acte, il nomme la version et dit pourquoi il n’en détient pas le texte. Il ne montre jamais le texte d’une autre version à sa place.',
+        text: 'Lex peut savoir, par le catalogue de l’éditeur, qu’une version existe sans en détenir le texte : son fichier peut être un PDF, que Lex ne lit pas ; sa licence peut ne pas permettre à Lex de le montrer ; ou Lex peut ne pas l’avoir collecté. Lex ne montre jamais le texte d’une autre version à sa place.',
         article: 'Un article détenu sans texte est nommé à part, sous la mention « {withoutText} », et n’est jamais cité, interrogé ni exporté comme texte.',
         annexes: 'Une annexe d’un acte de l’UE que l’éditeur ne fournit que sous forme d’images n’est jamais communiquée sous forme de texte, interrogée, citée ni exportée ; Lex en donne la source officielle.',
       }),

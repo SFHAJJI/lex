@@ -616,11 +616,11 @@
                 },
                 {
                   "class": "RCSF",
-                  "disposition": "admitted_first_awaiting_a_run"
+                  "disposition": "admitted_awaiting_a_run"
                 },
                 {
                   "class": "RBCL",
-                  "disposition": "admitted_first_awaiting_a_run"
+                  "disposition": "admitted_awaiting_a_run"
                 },
                 {
                   "class": "RILR",
@@ -701,10 +701,6 @@
                 {
                   "class": "RECUEIL",
                   "disposition": "no_ruling_admits_it"
-                },
-                {
-                  "class": "CODE_RECUEIL",
-                  "disposition": "no_ruling_admits_it"
                 }
               ],
               "observations_begin": [
@@ -714,7 +710,7 @@
                   "publisher": "lu-legilux"
                 }
               ],
-              "rule": "luxembourg_classes_not_held declares, once per class and by the publisher\u0027s legal-type code where it has one, each Luxembourg class this mount does not hold, with its disposition: awaiting_a_run (not admitted or refused by a ruling yet, and a bounded run the owner authorises would collect it), admitted_awaiting_a_run, admitted_first_awaiting_a_run (among the first after launch), admitted_where_regulatory_awaiting_a_run (only an act a role rule shows is regulatory), documentation_awaiting_a_run, corrective_awaiting_a_run and constitutional_review_awaiting_a_run (admitted, under that label only, never as statutory text), out_of_scope (not held and not planned), no_ruling_admits_it (not collected, and no ruling admits it yet); the families held are the text yield\u0027s; europe_languages names the languages the EU index holds wording in, of the EU\u0027s official languages; observations_begin gives, per publisher, when Lex\u0027s own observations held here begin: the first build the Luxembourg log records (first_build_in_log), and for the EU the completion of the one acquisition the mount holds, as its build report states it (acquisition_completed), or not_stated with a null date; date is that instant\u0027s calendar date in Luxembourg (the instant itself is history\u0027s first build time, or the EU channel\u0027s newest completed observation in the envelope\u0027s freshness)"
+              "rule": "luxembourg_classes_not_held declares, once per class and by the publisher\u0027s legal-type code where it has one, each Luxembourg class this mount does not hold, with its disposition: awaiting_a_run (not admitted or refused by a ruling yet, and a bounded run, once authorised, would collect it), admitted_awaiting_a_run (admitted, and a later run, once authorised, collects it), admitted_where_regulatory_awaiting_a_run (only an act a role rule shows is regulatory), documentation_awaiting_a_run, corrective_awaiting_a_run and constitutional_review_awaiting_a_run (admitted, under that label only, never as statutory text), out_of_scope (not held and not planned), no_ruling_admits_it (not collected, and no ruling admits it yet); the families held are the text yield\u0027s; europe_languages names the languages the EU index holds wording in, of the EU\u0027s official languages; observations_begin gives, per publisher, when Lex\u0027s own observations held here begin: the first build the Luxembourg log records (first_build_in_log), and for the EU the completion of the one acquisition the mount holds, as its build report states it (acquisition_completed), or not_stated with a null date; date is that instant\u0027s calendar date in Luxembourg (the instant itself is history\u0027s first build time, or the EU channel\u0027s newest completed observation in the envelope\u0027s freshness)"
             },
             "history": {
               "history_begins": "2026-10-01T08:00:00Z",
@@ -2956,7 +2952,7 @@
             "official_source": "https://eur-lex.europa.eu/legal-content/AUTO/?uri=CELEX:32099R9999",
             "out_of_scope_class": "eu_act_outside_population",
             "population_seed_acts": 1,
-            "reason": "Lex holds the EU acts its population rule selects, the 1 act of its seed list (Decision 84), each with its original wording and the consolidated versions EUR-Lex lists of it, and 32099R9999 is not one of them.",
+            "reason": "The EU population Lex\u0027s rule selects is the 1 act of its seed list (Decision 84), and 32099R9999 is not one of them.",
             "requested_identifier": "32099R9999",
             "what_would_answer": [
               "expanded_official_scope"

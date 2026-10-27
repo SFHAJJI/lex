@@ -979,7 +979,7 @@ const EN = Object.freeze({
       }),
       textless: Object.freeze({
         heading: "Versions whose text Lex does not hold",
-        text: "Lex can know from the publisher's catalogue that a version exists without holding its text: its file may be a PDF, which Lex does not read; its licence may not allow Lex to show it; or Lex may not have collected it. When Lex holds the text of another version of the same act, it names the version and says why it does not hold its text. It never shows another version's text in its place.",
+        text: "Lex can know from the publisher's catalogue that a version exists without holding its text: its file may be a PDF, which Lex does not read; its licence may not allow Lex to show it; or Lex may not have collected it. Lex never shows another version's text in its place.",
         article: "An article held without text is named apart, under “{withoutText}”, and is never quoted, searched or exported as text.",
         annexes: "An EU annex the publisher provides only as images is never shown as text, searched, quoted or exported; Lex gives its official source.",
       }),

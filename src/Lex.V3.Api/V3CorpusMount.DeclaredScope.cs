@@ -18,7 +18,9 @@ internal sealed partial class V3CorpusMount
     /// The Luxembourg classes not held, by the publisher's own legal-type code where it has one (the resource-type authority's
     /// suffix, <c>LuxembourgActClassManifest</c>), in R78's order, each with its disposition, then every other code the build's
     /// resolver recognizes (the resolver's never types, ACCA and RC, are out of scope). Run 15's families (codes, lois and grand-ducal
-    /// regulations: CODE, LOI and RGD) are held and are not declared here: the text yield counts them.
+    /// regulations: CODE, LOI and RGD) are held and are not declared here: the text yield counts them; nor is CODE_RECUEIL, whose
+    /// catalogue records run 15 collected with the codes (the review of #1004, F4: "not collected" was not true of it). No class is
+    /// said to come first: the order of later runs is the owner's (O7), still open.
     /// </summary>
     internal static readonly IReadOnlyList<(string Class, string Disposition)> LuxembourgClassesNotHeld = Array.AsReadOnly(new[]
     {
@@ -27,8 +29,8 @@ internal sealed partial class V3CorpusMount
         ("ARGD", "admitted_awaiting_a_run"),
         ("RMIN", "admitted_awaiting_a_run"),
         ("AMIN", "admitted_where_regulatory_awaiting_a_run"),
-        ("RCSF", "admitted_first_awaiting_a_run"),
-        ("RBCL", "admitted_first_awaiting_a_run"),
+        ("RCSF", "admitted_awaiting_a_run"),
+        ("RBCL", "admitted_awaiting_a_run"),
         ("RILR", "admitted_awaiting_a_run"),
         ("TC", "documentation_awaiting_a_run"),
         ("RECT", "corrective_awaiting_a_run"),
@@ -49,13 +51,12 @@ internal sealed partial class V3CorpusMount
         ("DIV", "no_ruling_admits_it"),
         ("PA", "no_ruling_admits_it"),
         ("RECUEIL", "no_ruling_admits_it"),
-        ("CODE_RECUEIL", "no_ruling_admits_it"),
     });
 
     /// <summary>The dispositions a class not held may have, closed (R78).</summary>
     internal static readonly IReadOnlyList<string> LuxembourgClassDispositions = Array.AsReadOnly(new[]
     {
-        "awaiting_a_run", "admitted_awaiting_a_run", "admitted_where_regulatory_awaiting_a_run", "admitted_first_awaiting_a_run",
+        "awaiting_a_run", "admitted_awaiting_a_run", "admitted_where_regulatory_awaiting_a_run",
         "documentation_awaiting_a_run", "corrective_awaiting_a_run", "constitutional_review_awaiting_a_run", "out_of_scope",
         "no_ruling_admits_it",
     });
@@ -65,8 +66,8 @@ internal sealed partial class V3CorpusMount
 
     internal const string DeclaredScopeRule =
         "luxembourg_classes_not_held declares, once per class and by the publisher's legal-type code where it has one, each Luxembourg " +
-        "class this mount does not hold, with its disposition: awaiting_a_run (not admitted or refused by a ruling yet, and a bounded run " +
-        "the owner authorises would collect it), admitted_awaiting_a_run, admitted_first_awaiting_a_run (among the first after launch), " +
+        "class this mount does not hold, with its disposition: awaiting_a_run (not admitted or refused by a ruling yet, and a bounded run, " +
+        "once authorised, would collect it), admitted_awaiting_a_run (admitted, and a later run, once authorised, collects it), " +
         "admitted_where_regulatory_awaiting_a_run (only an act a role rule shows is regulatory), documentation_awaiting_a_run, " +
         "corrective_awaiting_a_run and constitutional_review_awaiting_a_run (admitted, under that label only, never as statutory text), " +
         "out_of_scope (not held and not planned), no_ruling_admits_it (not collected, and no ruling admits it yet); the families held are " +

@@ -926,7 +926,7 @@ export function readTextYield(value) {
  */
 /** The dispositions a Luxembourg class this site does not hold may have (R78; `V3CorpusMount.LuxembourgClassDispositions`). */
 export const CLASS_DISPOSITIONS = Object.freeze([
-  'awaiting_a_run', 'admitted_awaiting_a_run', 'admitted_where_regulatory_awaiting_a_run', 'admitted_first_awaiting_a_run',
+  'awaiting_a_run', 'admitted_awaiting_a_run', 'admitted_where_regulatory_awaiting_a_run',
   'documentation_awaiting_a_run', 'corrective_awaiting_a_run', 'constitutional_review_awaiting_a_run', 'out_of_scope',
   'no_ruling_admits_it',
 ]);
@@ -1403,7 +1403,6 @@ export const COVERAGE_COPY = Object.freeze({
   classDispositions: Object.freeze({
     awaiting_a_run: 'not collected: a bounded collection run, once authorised, would add it',
     admitted_awaiting_a_run: 'admitted, and not collected yet: a later collection run, once authorised, adds it',
-    admitted_first_awaiting_a_run: 'admitted, and not collected yet: among the first classes a later collection run, once authorised, adds',
     admitted_where_regulatory_awaiting_a_run: 'admitted only where a rule shows the act is regulatory, and not collected yet',
     documentation_awaiting_a_run: 'admitted as documentation, never as the text of the law, and not collected yet',
     corrective_awaiting_a_run: 'admitted as corrective material, under that label only, and not collected yet',

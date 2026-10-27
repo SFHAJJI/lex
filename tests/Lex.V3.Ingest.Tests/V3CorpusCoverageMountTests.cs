@@ -718,7 +718,8 @@ public sealed class V3CorpusCoverageMountTests
         var declared = V3CorpusMount.LuxembourgClassesNotHeld.Select(static row => row.Class).ToArray();
         CollectionAssert.AllItemsAreUnique(declared);
         CollectionAssert.AreEquivalent(
-            recognized.Except(new[] { "CODE", "LOI", "RGD" }).ToArray(),
+            // CODE_RECUEIL's catalogue records are collected with the codes (the review of #1004, F4), so it is not declared.
+            recognized.Except(new[] { "CODE", "LOI", "RGD", "CODE_RECUEIL" }).ToArray(),
             declared.Except(new[] { "memorial_b", "communal_regulations" }).ToArray(),
             "every recognized class but the held families is declared, once");
         foreach (var row in V3CorpusMount.LuxembourgClassesNotHeld)

@@ -1913,7 +1913,7 @@ test("what the mount declares beside its counts, in both renderers: when Lex's o
     assert.deepEqual(classes.map((row) => row[0].split(" ").at(-1)), captured.declared_scope.luxembourg_classes_not_held.map((row) => row.class));
     assert.deepEqual(classes.find((row) => row[0].endsWith(" RCSF")), [
       "regulations of the CSSF RCSF",
-      "admitted, and not collected yet: among the first classes a later collection run, once authorised, adds admitted_first_awaiting_a_run",
+      "admitted, and not collected yet: a later collection run, once authorised, adds it admitted_awaiting_a_run",
     ]);
     assert.ok(text(html).includes(captured.declared_scope.rule), "the platform's rule, verbatim");
   }

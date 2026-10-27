@@ -621,11 +621,12 @@ test("the home page and How to read Lex claim no more than each publisher's page
   // (an EU act's history and comparison refuse, and most Luxembourg acts are held as first published only).
   assert.doesNotMatch(EN.home.intro, /see how each article changed|compare two dates/);
   assert.ok(EN.home.intro.includes("For a Luxembourg act of which the site holds more than one version, see whether each article's wording changed from one version to the next, and which articles differ between the versions of two dates."));
-  // How to read Lex: a version Lex knows of without its text is named, and why, where Lex holds another version of the act; an
-  // act none of whose versions Lex holds is not promised a reason.
+  // How to read Lex: no promise that a textless version is named, or why, since index 8 (the live release) names none and R77's
+  // records may or may not exist (the review of #1004, F2); only what holds on every index: no other version's text in its place.
   const textless = EN.guide.sections.textless.text;
-  assert.ok(textless.includes("When Lex holds the text of another version of the same act, it names the version and says why it does not hold its text."));
-  assert.doesNotMatch(textless, /Lex then names the version/);
+  assert.ok(textless.endsWith("or Lex may not have collected it. Lex never shows another version's text in its place."), textless);
+  assert.doesNotMatch(textless, /names the version|says why/);
+  assert.doesNotMatch(LIVE_CHROME.fr.guide.sections.textless.text, /nomme la version|dit pourquoi/);
   for (const language of ["en", "fr"]) {
     assert.ok(LIVE_CHROME[language].home.intro.length > 0 && LIVE_CHROME[language].guide.sections.textless.text.length > 0, language);
   }

@@ -957,9 +957,12 @@ summary,
  *
  * The floor is set on the elements rather than on a class, because a control added later should
  * be large enough by default and not by remembering. Padding sets the comfortable size; the two
- * min-* properties are the floor that cannot be styled away by a shorter line height. */
+ * min-* properties are the floor that cannot be styled away by a shorter line height. The select and the checkbox are
+ * controls too (the review of #1004, F5: a select in a form was about 40 pixels tall). */
 button,
 .filter-chip,
+select,
+input[type='checkbox'],
 input[type='text'],
 input[type='search'],
 input[type='date'] {

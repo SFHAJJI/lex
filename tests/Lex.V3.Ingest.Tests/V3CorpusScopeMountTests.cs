@@ -177,7 +177,7 @@ public sealed class V3CorpusScopeMountTests
                 Assert.AreEqual("eu_act_outside_population", payload.GetProperty("out_of_scope_class").GetString(), what);
                 Assert.AreEqual(1, payload.GetProperty("population_seed_acts").GetInt32(), what);
                 Assert.AreEqual(
-                    "Lex holds the EU acts its population rule selects, the 1 act of its seed list (Decision 84), each with its original wording and the consolidated versions EUR-Lex lists of it, and 32019R1150 is not one of them.",
+                    "The EU population Lex's rule selects is the 1 act of its seed list (Decision 84), and 32019R1150 is not one of them.",
                     payload.GetProperty("reason").GetString(), what);
                 Assert.AreEqual("https://eur-lex.europa.eu/legal-content/AUTO/?uri=CELEX:32019R1150", payload.GetProperty("official_source").GetString(), what);
                 var who = payload.GetProperty("who_to_ask");
@@ -204,6 +204,18 @@ public sealed class V3CorpusScopeMountTests
         // A document of a sector that holds no acts (a Commission proposal) stays unknown; a case is the list's, not the rule's.
         var (proposal, _) = await BothAsync(mount, "dossier", new { identifier = "52020PC0825" });
         Assert.AreEqual("identifier_unknown", proposal.GetProperty("refusal").GetProperty("code").GetString());
+        // A treaty (sector 1), its CELEX alone, after "CELEX:" or with an article number, is never read as an act outside the
+        // population: the index holds a treaty by its "/TXT" part, so a held treaty would be refused (the review of #1004, F1).
+        foreach (var treaty in new[] { "12016E", "CELEX:12016P", "12016E101", "12016P047", "12012E" })
+        {
+            foreach (var operation in new[] { "dossier", "resolve", "timeline" })
+            {
+                var (rest, _) = await BothAsync(mount, operation, new { identifier = treaty });
+                Assert.AreEqual("identifier_unknown", rest.GetProperty("refusal").GetProperty("code").GetString(), $"{operation} {treaty}");
+            }
+
+            Assert.IsNull(V3CorpusMount.EuropeActCelexOf(treaty), treaty);
+        }
         var (judgment, _) = await BothAsync(mount, "dossier", new { identifier = "62012CJ0131" });
         Assert.AreEqual("eu_case_law", judgment.GetProperty("refusal").GetProperty("helpful_payload").GetProperty("out_of_scope_class").GetString());
 

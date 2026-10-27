@@ -115,4 +115,13 @@ test("a touch target is at least 44 by 44 CSS pixels, links in lists, summaries,
     assert.match(rule(selector), /min-inline-size: 44px;/, selector);
   }
   assert.doesNotMatch(css, /min-(?:block|inline)-size: 24px;/, "no target keeps the 24 pixel floor");
+  // Every control stands in the controls' rule, the select and the checkbox too (the review of #1004, F5: a select in a form was
+  // about 40 pixels tall), and nothing after it lowers a select's or a checkbox's block size.
+  const head = css.indexOf("button,\n.filter-chip,");
+  const controls = css.slice(head, css.indexOf("{", head)).split(",").map((selector) => selector.trim());
+  for (const control of ["button", ".filter-chip", "select", "input[type='checkbox']", "input[type='text']", "input[type='search']", "input[type='date']"]) {
+    assert.ok(controls.includes(control), control);
+  }
+  assert.match(css.slice(head, css.indexOf("}", head)), /min-block-size: 44px;/);
+  assert.doesNotMatch(css, /(?:select|checkbox[^{]*)\{[^}]*(?:min-block-size|block-size|height):\s*(?:[0-3]?\d|4[0-3])px/, "no rule lowers a select or a checkbox");
 });

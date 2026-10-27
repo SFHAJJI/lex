@@ -343,7 +343,7 @@ function declaredScope() {
     europe_languages: null,
     luxembourg_classes_not_held: [
       { class: 'communal_regulations', disposition: 'out_of_scope' },
-      { class: 'RCSF', disposition: 'admitted_first_awaiting_a_run' },
+      { class: 'RCSF', disposition: 'admitted_awaiting_a_run' },
     ],
     // The history's first build, 2026-08-31T23:00:00Z, is 1 September in Luxembourg.
     observations_begin: [{ basis: 'first_build_in_log', date: '2026-09-01', publisher: 'lu-legilux' }],

@@ -70,20 +70,23 @@ internal sealed partial class V3CorpusMount
         "Legilux links to, then primary law (TEU, TFEU, Charter); the official place and who_to_ask name where the act is published";
 
     /// <summary>
-    /// The one-sentence reason: the rule, with the count of seed acts the mounted EU index holds, and the act asked for.
+    /// The one-sentence reason: the population the rule selects, with the count of seed acts the mounted EU index states, and the act
+    /// asked for. It names the population only: what of each seed act Lex holds is the act's own dossier's (the review of #1004, F3:
+    /// some seed acts hold no wording in any language).
     /// </summary>
     internal static string EuropePopulationReason(int seeds, string act) =>
-        "Lex holds the EU acts its population rule selects, " + (seeds == 1 ? "the 1 act" : $"the {seeds.ToString(CultureInfo.InvariantCulture)} acts") +
-        " of its seed list (Decision 84), each with its original wording and the consolidated versions EUR-Lex lists of it, and " + act +
-        " is not one of them.";
+        "The EU population Lex's rule selects is " + (seeds == 1 ? "the 1 act" : $"the {seeds.ToString(CultureInfo.InvariantCulture)} acts") +
+        " of its seed list (Decision 84), and " + act + " is not one of them.";
 
     /// <summary>
     /// <c>out_of_corpus_scope</c> for an EU act the mounted EU population does not hold (the specification of record's R80: "An unheld EU
     /// act answers out_of_corpus_scope, naming the rule and linking EUR-Lex"), or null. Only the request's own <c>identifier</c> is
     /// read, as the out-of-scope list reads it, so a search's text is never refused; only when the EU index states its population
     /// (its census, with at least one seed act); and only for an act named by its CELEX (as typed, after "CELEX:", or in an
-    /// EUR-Lex or Publications Office address) in a sector of acts (0 to 4), when the index holds nothing of it or of the act it
-    /// belongs to (a consolidated version's or a corrigendum's). Every other identifier keeps <c>identifier_unknown</c>.
+    /// EUR-Lex or Publications Office address) in a sector of acts (0, 2, 3 or 4), when the index holds nothing of it or of the act
+    /// it belongs to (a consolidated version's or a corrigendum's, or the act's "/TXT" part). Every other identifier keeps
+    /// <c>identifier_unknown</c>, a treaty's (sector 1) included: the index holds a treaty as its "/TXT" part, and a treaty's own
+    /// CELEX or an article of it is not read as an act outside the population (the review of #1004, F1).
     /// </summary>
     private V3PlatformOperationOutcome? RefuseOutsideEuropePopulation(
         V3PlatformOperationRequest request,
@@ -137,13 +140,16 @@ internal sealed partial class V3CorpusMount
 
     /// <summary>Whether the mounted EU index holds anything of the act a CELEX names: a seed's census, or a work it resolves.</summary>
     private bool EuropeActHeld(string celex) =>
-        EuropeSeedsOf(celex).Count > 0 || _europeReader!.ResolveExact(celex).Count > 0;
+        EuropeSeedsOf(celex).Count > 0 || _europeReader!.ResolveExact(celex).Count > 0 ||
+        EuropeSeedsOf(celex + "/TXT").Count > 0 || _europeReader.ResolveExact(celex + "/TXT").Count > 0;
 
     /// <summary>
     /// The CELEX an identifier names, as typed, after "CELEX:", or in an EUR-Lex (<c>uri=CELEX:</c>) or Publications Office
     /// (<c>/resource/celex/</c>) address, and the act it belongs to: a consolidated version's (sector 0, its date dropped) is its
-    /// act's in sector 3, and a corrigendum's (<c>R(nn)</c>) is its act's. Null for anything else, and for the sectors that hold
-    /// no acts (5 and above: preparatory documents, case law, national measures, questions).
+    /// act's in sector 3, and a corrigendum's (<c>R(nn)</c>) is its act's. Null for anything else, for the treaties (sector 1, whose
+    /// acts the index holds by their "/TXT" part and whose articles a CELEX numbers without a separator, so a held treaty or an
+    /// article of one cannot be told from an act outside the population by its CELEX alone), and for the sectors that hold no acts
+    /// (5 and above: preparatory documents, case law, national measures, questions).
     /// </summary>
     internal static (string Celex, string Act)? EuropeActCelexOf(string identifier)
     {
@@ -178,7 +184,7 @@ internal sealed partial class V3CorpusMount
             celex = written;
         }
 
-        if (celex is null || celex.Length is < 6 or > 40 || celex[0] is < '0' or > '4' || OfficialIdentifier.ProfileOf(celex) is null)
+        if (celex is null || celex.Length is < 6 or > 40 || celex[0] is < '0' or > '4' || celex[0] == '1' || OfficialIdentifier.ProfileOf(celex) is null)
         {
             return null;
         }
