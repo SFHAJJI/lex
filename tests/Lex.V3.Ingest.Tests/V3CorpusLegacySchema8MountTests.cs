@@ -96,9 +96,19 @@ public sealed class V3CorpusLegacySchema8MountTests
     /// registry identity alone (`lex-v3-operation-registry/2` and its digest), and the two coverage answers by their operations
     /// note and rows too (an operation served from no data refuses inside the envelope, its row naming the reason and the mode);
     /// no other member moved. Recorded again at 320c0f20 (the same branch over v3/integration 473a9fae, #995: `rate_limited`'s
-    /// payload schema typed as the limit sends it): all 38 rows by the registry digest alone. Recorded again at e6962f40 (search with
-    /// capitals and accents ignored, the plan's item 4.4): the two schema-8 searches by their matching, lanes and extract
-    /// sentences alone, no hit moved. The answers are those production sends: recorded on Linux, as the release image
+    /// payload schema typed as the limit sends it): all 38 rows by the registry digest alone. Recorded again at ee44bf68 (R77 and
+    /// R57, writer/catalogue-and-compare): the two schema-8 searches by the exact-reference rule's text alone (it names the
+    /// record of an act only the catalogue holds), the schema-8 diff by its new text_rule alone (R57: what changed carries its
+    /// served text), and the five schema-6 answers about loi-2017-03-14-a439, which that index's catalogue names and whose
+    /// states it does not hold, from identifier_unknown to text_not_available with the act's record (R77); no other row and no
+    /// other member moved. Recorded again at a9179b39: the same five schema-6 answers by the record's two new members alone
+    /// (document_type_codes, in_force_status_codes: the publisher's own word for its type and status). Recorded again at caaff24d
+    /// (the review of #1003): all 38 rows by the registry digest (diff's request schema gained `page`, F4), the schema-8 diff by
+    /// its text_rule and text_page too (the wording in pages), and the five schema-6 answers about loi-2017-03-14-a439 by the
+    /// record's reason too (F1: its file is held and the index holds its four articles and no state, file_articles_no_state, as
+    /// Coverage counts it, in place of catalogue_cc_by_not_acquired), its body receipt as retained_transport_evidence, its
+    /// disposition members and its rules' text; no other member moved. The answers are those
+    /// production sends: recorded on Linux, as the release image
     /// runs (globalization-invariant, UTC; the language library changes no byte), and every system is held to them. Resolve
     /// of a rooted path was the one answer Windows sent otherwise, until a rooted path was read as an identifier on every
     /// system (<c>LooksLikeIdentifier</c>).
@@ -109,7 +119,7 @@ public sealed class V3CorpusLegacySchema8MountTests
         using var recorded = JsonDocument.Parse(Fixture("base-answers.json"));
         var root = recorded.RootElement;
         Assert.AreEqual("3b7913ec", root.GetProperty("written_at_commit").GetString());
-        Assert.AreEqual("e6962f40", root.GetProperty("recorded_at_commit").GetString());
+        Assert.AreEqual("caaff24d", root.GetProperty("recorded_at_commit").GetString());
         Assert.AreEqual(IndexFileSha256, root.GetProperty("index_sha256").GetString());
         Assert.AreEqual(StateSha256, root.GetProperty("state_sha256").GetString());
 
@@ -183,6 +193,62 @@ public sealed class V3CorpusLegacySchema8MountTests
         };
         await File.WriteAllTextAsync(output!, recorded.ToJsonString());
         Assert.Fail($"V3_RECORD_LEGACY_ANSWERS recorded {output} and checked nothing: run again without the variable, which is the only run that checks anything.");
+    }
+
+    /// <summary>
+    /// The review of #1003, F1, on the real bounded first mount (schema 6): its one act, <c>loi/2017/03/14/a439/jo</c>, whose file
+    /// the corpus holds (acquired, <c>agreed_same_run_cc_by</c>) and whose four admitted articles its index holds with no state of
+    /// it, is recorded with the reason Coverage counts that file under, counted here over the same committed files: a file with
+    /// text, of which no state is served, with the receipt of the file's body as its retained transport evidence; never as a
+    /// version of which no file is held (<c>catalogue_cc_by_not_acquired</c>, which the record said before the repair).
+    /// </summary>
+    [TestMethod]
+    public async Task TheSchema6ActsRecordGivesTheReasonCoverageCountsItsHeldFileUnder()
+    {
+        var corpusBytes = Schema6("lex-corpus-6.json");
+        var directory = Path.Combine(Path.GetTempPath(), $"lex-v3-legacy6-record-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            await File.WriteAllBytesAsync(Path.Combine(directory, V3CorpusMount.CorpusFileName), corpusBytes);
+            await File.WriteAllBytesAsync(Path.Combine(directory, V3CorpusMount.IndexFileName), Schema6("luxembourg-index.sqlite3"));
+            await File.WriteAllBytesAsync(Path.Combine(directory, V3CorpusMount.CapabilityManifestFileName), Schema6("luxembourg-capability-manifest.json"));
+            const string Act = "http://data.legilux.public.lu/eli/etat/leg/loi/2017/03/14/a439/jo";
+            var members = VerifiedLexCorpus6ManifestSet.ParseCanonicalAndVerify(corpusBytes).Set.Members;
+            var file = members.Single(member => member.LuxembourgRights?.SelectedWemi.RootIri == Act);
+            Assert.AreEqual(LexCorpus6OutcomeKind.Acquired, file.Outcome, "the fixture's act is acquired");
+            var coverage = V3TextYield.FromMount(members, Path.Combine(directory, V3CorpusMount.IndexFileName), null)
+                .Publishers.Single().Classes.Single(static row => row.Family == "loi" && row.Kind == "as_published");
+            Assert.HasCount(0, coverage.VersionsNotHeld!, "Coverage counts the act's file, not a version of which no file is held");
+            Assert.AreEqual((1L, 1L, 4L), (coverage.Files, coverage.FilesWithText, coverage.Articles), "a file with text: its four articles");
+
+            using (var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None))
+            {
+                Assert.IsNotNull(mount);
+                foreach (var identifier in new[] { "/lu-legilux/loi-2017-03-14-a439", Act })
+                {
+                    var request = JsonSerializer.Serialize(new { operation_id = "dossier", parameters = new { identifier } });
+                    var (status, body) = await LegacyMountAnswers.RespondAsync(mount, "dossier", request, "schema6-record");
+                    Assert.AreEqual(200, status, identifier);
+                    using var envelope = JsonDocument.Parse(body);
+                    var refusal = envelope.RootElement.GetProperty("refusal");
+                    Assert.AreEqual("text_not_available", refusal.GetProperty("code").GetString(), identifier);
+                    var payload = refusal.GetProperty("helpful_payload");
+                    Assert.AreEqual(V3CorpusMount.FileArticlesNoState, payload.GetProperty("reason").GetString(), identifier);
+                    Assert.AreEqual(JsonValueKind.Null, payload.GetProperty("disposition").ValueKind, identifier);
+                    CollectionAssert.AreEqual(new[] { V3CorpusMount.FileArticlesNoState },
+                        payload.GetProperty("version_reasons").EnumerateArray().Select(static value => value.GetString()).ToArray(), identifier);
+                    Assert.AreEqual(JsonValueKind.Null, payload.GetProperty("version_dispositions").EnumerateArray().Single().ValueKind, identifier);
+                    Assert.AreEqual(file.BodyReceiptSha256, payload.GetProperty("retained_transport_evidence").GetString(), identifier);
+                    CollectionAssert.AreEqual(new[] { "new_official_observation" },
+                        payload.GetProperty("what_would_answer").EnumerateArray().Select(static value => value.GetString()).ToArray(), identifier);
+                }
+            }
+        }
+        finally
+        {
+            try { Directory.Delete(directory, recursive: true); } catch (IOException) { }
+        }
     }
 
     private static async Task ReplayAsync(

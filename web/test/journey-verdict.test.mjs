@@ -655,7 +655,8 @@ test("a compare run types the identifier and two dates and is held to all three 
     { url: `${ORIGIN}/en/compare.html`, method: "GET", headers: {} },
     { url: `${ORIGIN}/api/v3/diff`, method: "POST", headers: {}, headersSent: true, postData: JSON.stringify(JOURNEY_STEPS.compare.body) },
   ];
-  observed.location = `${ORIGIN}/en/compare.html`;
+  // The page writes the comparison's own address (R57): this site's address of the act and the two dates, nothing else.
+  observed.location = `${ORIGIN}/en/compare.html?work=%2Flu-legilux%2Floi-1991-08-10-n3&from=${READING_DATE}&to=${READING_DATE}`;
   observed.text = `Both dates select the one text held, the act as published, applicable from ${READING_DATE} (publisher); later versions are not held.`;
   const expected = { origin: ORIGIN, step: JOURNEY_STEPS.compare, state: "success", texts: [`Both dates select the one text held, the act as published, applicable from ${READING_DATE} (publisher); later versions are not held.`] };
   assert.deepEqual(journeyVerdict(observed, expected), []);
@@ -967,6 +968,17 @@ test("a page ends at its own address with what it writes there: a search after #
   for (const step of [JOURNEY_STEPS.permalink, JOURNEY_STEPS.dossier, JOURNEY_STEPS.reading, JOURNEY_STEPS.coverage]) {
     assert.deepEqual(endAddressesOf(step, ["2026-10-18"]), [step.path], step.path);
   }
+  // A comparison ends at its own address (R57), held exactly: this site's address of the act and the two dates, nothing else
+  // (R109: never a word typed); a work typed in another form leaves the address as it was.
+  assert.deepEqual(endAddressesOf(JOURNEY_STEPS.compare, ["2026-10-18"]),
+    [`/en/compare.html?work=%2Flu-legilux%2Floi-1991-08-10-n3&from=${READING_DATE}&to=${READING_DATE}`]);
+  const held = journeyStepsFor({ identifier: "/lu-legilux/rgd-2017-12-13-a1050", date: "2018-01-01", anchor: "art_2", language: "deu" });
+  assert.deepEqual(endAddressesOf(held.compare, ["2026-10-18"]), ["/en/compare.html?work=%2Flu-legilux%2Frgd-2017-12-13-a1050&from=2018-01-01&to=2018-01-01"]);
+  const named = { ...JOURNEY_STEPS.compare, body: { ...JOURNEY_STEPS.compare.body, parameters: { ...JOURNEY_STEPS.compare.body.parameters, identifier: "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3" } } };
+  assert.deepEqual(endAddressesOf(named, ["2026-10-18"]), ["/en/compare.html"], "an ELI is never written into the address");
+  const ended = { ...goodSearch(), location: `${ORIGIN}/en/compare.html` };
+  assert.ok(journeyVerdict(ended, { ...addressExpectations()[0][1], step: JOURNEY_STEPS.compare }).some((failure) => /the page ended at .*compare\.html, not at .*\?work=%2Flu-legilux%2Floi-1991-08-10-n3&from=2024-02-01&to=2024-02-01$/.test(failure)),
+    "the bare page is no longer where a comparison ends");
   // The kept search's run is one request, its body the fragment's search, ending where it began.
   const [[name, expected]] = addressExpectations();
   assert.equal(name, "a search kept in the address");

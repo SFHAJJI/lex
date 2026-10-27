@@ -344,6 +344,17 @@ public sealed class V3RefusalPayloadSamplesTests
             await DriveAsync(observed, mount, "evidence_bundle", "a state whose articles hold no text",
                 new { identifier = $"/lu-legilux/{empty.WorkKey}", date = empty.ApplicabilityDate, language = "fra" }, "text_not_available");
         }
+
+        // R77: an act the publisher's catalogue holds, licensed licenceSCL, and the index holds no version of: its record.
+        var catalogued = await MountedFixture.CreateAsync();
+        await using var cleanupCatalogued = catalogued;
+        await V3CorpusCatalogueRecordMountTests.AddCatalogueActAsync(catalogued);
+        using (var mount = await V3CorpusMount.OpenAsync(catalogued.Directory, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount);
+            await DriveAsync(observed, mount, "dossier", "an act the publisher's catalogue holds and the index holds no version of (R77)",
+                new { identifier = "/lu-legilux/" + V3CorpusCatalogueRecordMountTests.Key }, "text_not_available");
+        }
     }
 
     private static async Task ObserveNamesAsync(Census observed)

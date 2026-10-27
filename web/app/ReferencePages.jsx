@@ -298,6 +298,7 @@ function OutOfScope({ list }) {
         ))}
       </ul>
       <p><Say template={copy.pending} values={{ code: code('identifier_unknown') }} /></p>
+      <p data-out-of-scope-population=""><Say template={copy.population} values={{ code: code('out_of_corpus_scope') }} /></p>
     </>
   );
 }

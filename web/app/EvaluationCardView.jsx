@@ -9,13 +9,28 @@
 // The card's own sentences (its target, reasons, notes, rows and results) are the platform's English,
 // marked English on a page in another language (`inEnglish`).
 
+import { Fragment } from 'react';
+
 import { Say, inEnglish } from './LiveAnswer.jsx';
 import { fillCounted, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { CARD_ROUTE } from '../scripts/evaluation-card.mjs';
+// The refusal codes no operation sends, as the refusal census records them (`not_produced`): the card tests none of them.
+import { not_produced as UNSENT_CODES } from '../../schemas/v3-platform/refusal-payload-samples.json';
 
 /** The card's words, from the interface copy table. */
 const CARD = liveChrome().card;
 const COMMON = liveChrome().common;
+
+/**
+ * What the card holds and what it does not (the audit of 2026-10-27, overclaim 3), said before its verdict whatever it is: the
+ * gates it carries, by name, from the card itself, and the gates and refusal codes it does not carry, so a card that passes is
+ * never read as every gate Lex has passing.
+ */
+function Scope({ view }) {
+  const gates = [...new Set(view.sets.flatMap((set) => set.gates.map((gate) => gate.gate)))];
+  const listed = (names) => names.map((name, index) => <Fragment key={name}>{index === 0 ? '' : COMMON.listSeparator}<code>{name}</code></Fragment>);
+  return <p data-card-scope=""><Say template={CARD.scope} values={{ gates: listed(gates), codes: listed(UNSENT_CODES) }} /></p>;
+}
 
 function Summary({ view }) {
   if (view.gatesNotPassing.length === 0 && view.controlsNotCaught.length === 0) {
@@ -62,6 +77,7 @@ export function EvaluationCardView({ view }) {
       <h2>{CARD.heading}</h2>
       <p data-card-target=""><Say template={CARD.target} values={{ target: inEnglish(view.target) }} /></p>
       <p data-card-json=""><a href={CARD_ROUTE}>{CARD.machineReadable}</a></p>
+      <Scope view={view} />
       <Summary view={view} />
       {/* Each table in its own labelled scroll region, as Trust and Coverage's tables are: seven columns do not fit a
           phone, and a scrollable region is a keyboard stop that must say what it scrolls. */}

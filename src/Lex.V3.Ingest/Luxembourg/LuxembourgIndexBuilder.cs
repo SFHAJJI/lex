@@ -2450,7 +2450,12 @@ public static partial class LuxembourgIndexBuilder
         return ("unparsed", null);
     }
 
-    internal static string WorkKeyOf(string publisherWid)
+    /// <summary>
+    /// The product work key a Luxembourg publisher work IRI mints (its segments after <c>eli/etat/leg/</c>, joined by hyphens),
+    /// or <see cref="InvalidDataException"/> for an IRI that mints none. Public so that the API names an act the catalogue holds
+    /// and the index holds no version of at the address the index would give it (R77).
+    /// </summary>
+    public static string WorkKeyOf(string publisherWid)
     {
         if (!Uri.TryCreate(publisherWid, UriKind.Absolute, out var uri) ||
             !string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.Ordinal) ||
@@ -4660,6 +4665,33 @@ public sealed partial class LuxembourgIndexReader : IDisposable
 
             return Array.AsReadOnly(values.ToArray());
         }
+    }
+
+    /// <summary>
+    /// How many articles the index holds of each of <paramref name="objectRefs"/> (corpus members by object reference), each
+    /// counted by the articles' object index; a member it holds none of is left out. The record of an act the index holds no
+    /// version of reads it for the few files the corpus holds of that act (R77), as the text yield counts them.
+    /// </summary>
+    public IReadOnlyDictionary<string, long> ResolveArticleCountsOfObjects(IReadOnlyList<string> objectRefs)
+    {
+        ArgumentNullException.ThrowIfNull(objectRefs);
+        var counts = new Dictionary<string, long>(StringComparer.Ordinal);
+        lock (_gate)
+        {
+            foreach (var objectRef in objectRefs.Distinct(StringComparer.Ordinal))
+            {
+                using var command = _connection.CreateCommand();
+                command.CommandText = "SELECT COUNT(*) FROM articles WHERE object_ref_sha256=$object";
+                command.Parameters.AddWithValue("$object", objectRef);
+                var count = Convert.ToInt64(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
+                if (count > 0)
+                {
+                    counts.Add(objectRef, count);
+                }
+            }
+        }
+
+        return counts;
     }
 
     /// <summary>

@@ -156,7 +156,7 @@ public sealed class V3CorpusEuropeEvidenceBundleMountTests
         CollectionAssert.AreEqual(new[] { "eng" }, german.Refusal!.HelpfulPayload.GetProperty("available_languages").EnumerateArray().Select(static value => value.GetString()).ToArray());
 
         var unknown = await EnvelopeAsync(mount, Route, "evidence_bundle", new { identifier = "32099R9999", date = wordingDate });
-        Assert.AreEqual("identifier_unknown", unknown.Refusal?.Code, "an EU-shaped identifier the EU index does not hold");
+        Assert.AreEqual("out_of_corpus_scope", unknown.Refusal?.Code, "an EU act outside the population the EU index states (R80)");
         Assert.AreEqual(PublisherId.EuEurLex, unknown.Context.Publisher);
     }
 

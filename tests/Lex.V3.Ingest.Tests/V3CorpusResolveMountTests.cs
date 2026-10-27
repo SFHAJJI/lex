@@ -672,8 +672,9 @@ public sealed class V3CorpusResolveMountTests
 
         var envelope = await ResolveAsync(mount, "32099R9999");
 
+        // An EU act outside the population the mounted EU index states is out of the corpus's scope (R80), still the EU's.
         Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict);
-        Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code);
+        Assert.AreEqual("out_of_corpus_scope", envelope.Refusal!.Code);
         Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher);
         Assert.AreEqual("eu", envelope.Context.Jurisdiction);
         Assert.AreEqual(TimelineSemantics.OfficialConsolidationState,
@@ -713,7 +714,8 @@ public sealed class V3CorpusResolveMountTests
         {
             var envelope = await ResolveAsync(mount, identifier);
             Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict, identifier);
-            Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code, identifier);
+            // A CELEX the mounted EU population does not hold is out of the corpus's scope (R80); a Cellar coordinate stays unknown.
+            Assert.AreEqual(identifier.EndsWith("/celex/32099R9999", StringComparison.Ordinal) ? "out_of_corpus_scope" : "identifier_unknown", envelope.Refusal!.Code, identifier);
             Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher, identifier);
             Assert.AreEqual("eu", envelope.Context.Jurisdiction, identifier);
             Assert.AreEqual(TimelineSemantics.OfficialConsolidationState,
@@ -746,7 +748,9 @@ public sealed class V3CorpusResolveMountTests
         {
             var envelope = await ResolveAsync(mount, identifier);
             Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict, identifier);
-            Assert.AreEqual("identifier_unknown", envelope.Refusal!.Code, identifier);
+            // An address naming a CELEX the mounted EU population does not hold is out of scope (R80); a held act's address, which
+            // exact lookup does not read, stays unknown.
+            Assert.AreEqual(identifier.Contains("32099R9999", StringComparison.Ordinal) ? "out_of_corpus_scope" : "identifier_unknown", envelope.Refusal!.Code, identifier);
             Assert.AreEqual(identifier,
                 envelope.Refusal.HelpfulPayload.GetProperty("requested_identifier").GetString());
             Assert.AreEqual(PublisherId.EuEurLex, envelope.Context.Publisher, identifier);

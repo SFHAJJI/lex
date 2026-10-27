@@ -11,6 +11,7 @@
 // wording, never the English in its place.
 
 import { fillParts, fillText, englishRun, refusalHint, refusalSentence, refusalTemplate, statement } from "./live-chrome.mjs";
+import { catalogueRecord } from "./refusal-card.mjs";
 
 const CORPUS_NAMES = Object.freeze({ lu: "Luxembourg", eu: "EU" });
 
@@ -53,11 +54,38 @@ export function namesWithheld(code, payload) {
 }
 
 /**
+ * What every screen says of an act the publisher's catalogue holds and Lex holds no version of (R77; `text_not_available`
+ * whose payload's `record_kind` is `catalogue_only`): it is in the catalogue, Lex shows none of its text, and its record
+ * follows, in the card (`refusal-card.mjs`, `catalogueRecord`), which says why.
+ */
+export const CATALOGUE_RECORD_SENTENCE = "This act is in the publisher's catalogue, and Lex shows none of its text: its record follows.";
+
+/**
+ * What every screen says of an EU act outside the EU population the server holds (`out_of_corpus_scope` whose payload's class is
+ * `eu_act_outside_population`; R80): unlike the list's classes, it is not a kind of instrument Lex never holds, so the screen's
+ * sentence for the list's refusals would be false of it. The card then names the rule, EUR-Lex and who to ask.
+ */
+export const OUTSIDE_EU_POPULATION_SENTENCE =
+  "Lex does not hold this EU act: it is outside the EU acts Lex's population rule selects. Where it is published, and who to ask, follow.";
+
+/** The class an `out_of_corpus_scope` payload gives an EU act outside the EU population (`V3CorpusMount.EuropePopulationClass`). */
+export const OUTSIDE_EU_POPULATION_CLASS = "eu_act_outside_population";
+
+/** Whether a refusal is R80's, for an EU act outside the EU population. */
+export function outsideEuropePopulation(code, payload) {
+  return code === "out_of_corpus_scope" && payload?.out_of_scope_class === OUTSIDE_EU_POPULATION_CLASS;
+}
+
+/**
  * The sentence a screen's table (English, keyed by code) says for a code, or the one naming a code it has none for; a work R92
- * withholds is said in the one sentence every screen says of it (`NAMES_WITHHELD_SENTENCE`), never the licence's.
+ * withholds is said in the one sentence every screen says of it (`NAMES_WITHHELD_SENTENCE`), never the licence's, an act held
+ * only in the publisher's catalogue in its own (`CATALOGUE_RECORD_SENTENCE`), and an EU act outside the EU population in its
+ * own (`OUTSIDE_EU_POPULATION_SENTENCE`), never the out-of-scope list's.
  */
 export function tableRefusalSentence(table, code, unexpected, payload = null) {
   if (namesWithheld(code, payload)) return refusalSentence(NAMES_WITHHELD_SENTENCE);
+  if (catalogueRecord(code, payload)) return refusalSentence(CATALOGUE_RECORD_SENTENCE);
+  if (outsideEuropePopulation(code, payload)) return refusalSentence(OUTSIDE_EU_POPULATION_SENTENCE);
   return Object.hasOwn(table, code) ? refusalSentence(table[code]) : unexpected(code);
 }
 

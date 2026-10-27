@@ -582,3 +582,52 @@ test("G2 names what moves with the moment of the answer, as its replay test hold
     assert.ok(page.includes(`<code>${member}</code>`), `the page shows ${member}`);
   }
 });
+
+test("the Developers page claims no more than the server keeps or refuses: G3 re-verifiable from the mounted build, and an EU act outside the population out of scope (the audit of 2026-10-27; R89, R80)", async () => {
+  const [EN, FR] = [LIVE_CHROME.en, LIVE_CHROME.fr];
+  // G3 (R89, O12): what the release keeps is the build it mounts; the retention rule is the code's, not funded, and a version
+  // is "re-verifiable", never replayed, while a kept build holds its text.
+  const g3 = EN.developers.replay.guarantees.G3.text;
+  assert.ok(g3.includes("Lex does not keep them yet: the release this site serves holds only the build its server mounts."), g3);
+  assert.ok(g3.includes("re-verifiable only while a kept build holds its text, which today means the mounted build"), g3);
+  assert.doesNotMatch(`${g3} ${FR.developers.replay.guarantees.G3.text}`, /\breplay|\brejou/i, "G3 says re-verifiable, never replay");
+  assert.ok(FR.developers.replay.guarantees.G3.text.includes("ne peut donc être vérifiée de nouveau que tant qu’une construction conservée en détient le texte"));
+  // The review's refused forms (the addendum of 2026-10-27, truth and coverage): no funding claim, no role named, and the
+  // French words it replaced.
+  const forms = [EN, FR].flatMap((table) => [table.developers.replay.guarantees.G3.text, ...Object.values(table.coverageAnswer.classDispositions), table.coverageAnswer.europeLanguages]);
+  for (const said of forms) assert.doesNotMatch(said, /funded|financé|owner|propriétaire|revérifiable|publishes them in the others|les publie dans les autres/, said);
+  const french = JSON.stringify(FR);
+  for (const refused of ["reçoit lui aussi le refus", "que décide la liste", "texte servi ci-dessus", "matière rectificative", "ne l’a pas copié", "produise un texte", "qu’autorise le propriétaire", "que consigne son journal"]) {
+    assert.ok(!french.includes(refused), refused);
+  }
+  // No release script chains a build on the one before it, so no release keeps an earlier build beside its own.
+  const release = await repository("src/Lex.V3.Tool/Program.cs");
+  assert.ok(release.includes("Only a chained build keeps generations."));
+  // R80: the population's refusal is the mount's, said apart from the list, which names no EU act still answering unknown.
+  const main = mainOf(app.renderLiveReferencePage("developers", { developers: DEVELOPERS }));
+  assert.ok(main.includes("data-out-of-scope-population"));
+  for (const copy of [EN, FR]) assert.doesNotMatch(copy.developers.refusals.outOfScope.pending, /EU|UE/, "no EU act is pending: the mount refuses it");
+  assert.ok(EN.developers.refusals.outOfScope.population.includes("it names neither the out-of-scope list nor its digest"));
+  assert.ok(EN.developers.changes.digest.includes("every {code} refusal the list decides names the list's identity"));
+  const scope = await repository("src/Lex.V3.Api/V3CorpusMount.Scope.cs");
+  assert.ok(scope.includes("out_of_scope_class = EuropePopulationClass") && !/EuropePopulationClass[\s\S]{0,2000}scope_list = /.test(scope.slice(scope.indexOf("RefuseOutsideEuropePopulation("))), "the population's refusal names no list");
+  // Every out-of-scope sentence the page says is true of both kinds: "does not hold", never "never holds".
+  assert.doesNotMatch(EN.developers.refusals.codes.out_of_corpus_scope, /never holds/);
+});
+
+test("the home page and How to read Lex claim no more than each publisher's pages do (the audit of 2026-10-27, overclaims 5 and 6)", () => {
+  const EN = LIVE_CHROME.en;
+  // The home page: history and comparison are said of a Luxembourg act of which more than one version is held, never of every act
+  // (an EU act's history and comparison refuse, and most Luxembourg acts are held as first published only).
+  assert.doesNotMatch(EN.home.intro, /see how each article changed|compare two dates/);
+  assert.ok(EN.home.intro.includes("For a Luxembourg act of which the site holds more than one version, see whether each article's wording changed from one version to the next, and which articles differ between the versions of two dates."));
+  // How to read Lex: no promise that a textless version is named, or why, since index 8 (the live release) names none and R77's
+  // records may or may not exist (the review of #1004, F2); only what holds on every index: no other version's text in its place.
+  const textless = EN.guide.sections.textless.text;
+  assert.ok(textless.endsWith("or Lex may not have collected it. Lex never shows another version's text as that version's."), textless);
+  assert.doesNotMatch(textless, /names the version|says why/);
+  assert.doesNotMatch(LIVE_CHROME.fr.guide.sections.textless.text, /nomme la version|dit pourquoi/);
+  for (const language of ["en", "fr"]) {
+    assert.ok(LIVE_CHROME[language].home.intro.length > 0 && LIVE_CHROME[language].guide.sections.textless.text.length > 0, language);
+  }
+});

@@ -31,6 +31,7 @@ import {
   startLiveSearch,
 } from "../scripts/live-search.mjs";
 import { REFUSAL_EXAMPLES } from "../scripts/refusal-catalog.mjs";
+import { OUTSIDE_EU_POPULATION_SENTENCE } from "../scripts/live-refusals.mjs";
 import { OFFICIAL_SEARCH_PAGES } from "../scripts/live-failure.mjs";
 import { publisherSourceUri } from "../scripts/routes.mjs";
 
@@ -427,7 +428,8 @@ test("the refusals a search from this page can meet are refusal cards, an EU wor
     ["no corpus mounted", "no_corpus_mounted", REQUEST],
     ["a language the mount holds no text in", "language_not_available", { ...REQUEST, language: "deu" }],
     ["one EU work in a language it is not held in", "language_not_available", { ...EU_REQUEST, language: "fra" }],
-    ["an EU identifier the EU index does not hold", "identifier_unknown", { ...EU_REQUEST, identifier: "32099R9999" }],
+    // An EU act outside the EU population the index holds is out of the corpus's scope, with the rule and EUR-Lex (R80).
+    ["an EU identifier the EU index does not hold", "out_of_corpus_scope", { ...EU_REQUEST, identifier: "32099R9999" }],
   ]) {
     const envelope = envelopeOf(scenario);
     const { fetchImpl } = answering(200, "application/json", envelope);
@@ -437,7 +439,8 @@ test("the refusals a search from this page can meet are refusal cards, an EU wor
     assert.equal(outcome.card, true, `${code}: the card's rules accept the payload the platform sent`);
     // A refusal within an EU act is said with the EU's sentences (an EU date is a wording's), the others with Luxembourg's.
     const table = envelope.context.publisher === "eu-eurlex" ? LIVE_SEARCH_EUROPE_REFUSAL_SENTENCES : LIVE_SEARCH_REFUSAL_SENTENCES;
-    assert.equal(outcome.sentence, code === "no_corpus_mounted" ? "This build has no Luxembourg index mounted." : table[code]);
+    assert.equal(outcome.sentence, code === "no_corpus_mounted" ? "This build has no Luxembourg index mounted."
+      : code === "out_of_corpus_scope" ? OUTSIDE_EU_POPULATION_SENTENCE : table[code]);
     const card = renderToStaticMarkup(h(RefusalCard, { code, sentence: outcome.sentence, payload: outcome.payload }));
     assert.equal(view(outcome), `<section data-answer-state="refusal">${asShown(outcome, card)}</section>`);
   }

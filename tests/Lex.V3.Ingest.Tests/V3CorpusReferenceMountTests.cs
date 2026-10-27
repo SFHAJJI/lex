@@ -276,11 +276,16 @@ public sealed class V3CorpusReferenceMountTests
         // Title words choose among the day's acts: the held one opens; the other is named, held by the catalogue and not here.
         Assert.AreEqual($"/lu-legilux/{fixture.WorkKey}",
             Opened(await SearchAsync(mount, "loi du 10 août 1991 sur la profession d'avocat"), "held").GetProperty("opens").GetProperty("address").GetString());
+        // R77: the act the catalogue holds and the index holds no version of is answered with its record, never as unknown.
         const string notHeld = "loi du 10 août 1991 portant approbation de la Convention de La Haye";
-        var unknown = Refused(await SearchAsync(mount, notHeld), "identifier_unknown", notHeld);
-        Assert.AreEqual(System.Text.Json.JsonValueKind.Null, unknown.GetProperty("recognised_held_act").ValueKind, "an act this site does not hold");
-        CollectionAssert.AreEqual(new[] { other }, Strings(unknown.GetProperty("recognised_catalogue_works")));
-        StringAssert.Contains(unknown.GetProperty("what_would_answer_detail").GetString(), "the publisher's catalogue names this one");
+        var record = Refused(await SearchAsync(mount, notHeld), "text_not_available", notHeld);
+        Assert.AreEqual(System.Text.Json.JsonValueKind.Null, record.GetProperty("recognised_held_act").ValueKind, "an act this site does not hold");
+        CollectionAssert.AreEqual(new[] { other }, Strings(record.GetProperty("recognised_catalogue_works")));
+        Assert.AreEqual("catalogue_only", record.GetProperty("record_kind").GetString());
+        Assert.AreEqual(other + "/jo", record.GetProperty("official_identity").GetString());
+        Assert.AreEqual("catalogue_no_expression", record.GetProperty("reason").GetString(), "the catalogue names no text of it here");
+        Assert.AreEqual("Loi du 10 août 1991 portant approbation de la Convention de La Haye", record.GetProperty("title").GetString());
+        CollectionAssert.AreEqual(new[] { issue }, Strings(record.GetProperty("memorial_issue")));
     }
 
     [TestMethod]

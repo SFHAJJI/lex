@@ -298,6 +298,8 @@ public sealed class V3CorpusDossierMountTests
             "as_published.later_version_facts.sentence", "as_published.rule",
             "available_languages",
             "corpus_sha256",
+            // Index 9's force facts of the act (R79): the work's and its act as published's own assertions, verbatim.
+            "force", "force.entry_into_force", "force.in_force_status", "force.no_longer_in_force", "force.rule", "force.subjects",
             "history_begins",
             "index_sha256",
             "latest_applicability_date",
@@ -326,6 +328,7 @@ public sealed class V3CorpusDossierMountTests
         }.Concat(fact.Select(static name => "as_published.authenticity.publication_dates[]." + name))
             .Concat(fact.Select(static name => "as_published.authenticity.served_manifestations[].legal_values[]." + name))
             .Concat(fact.Select(static name => "as_published.later_version_facts.end_of_force[]." + name))
+            .Concat(fact.Select(static name => "force.no_longer_in_force[]." + name))
             .Order(StringComparer.Ordinal).ToArray();
         CollectionAssert.AreEqual(declared, paths.ToArray(), "The answer carries a property that is not declared, or lost one that is.");
         // Every array the paths walked held a row, so a missing row-shape is not hiding behind an empty list.
@@ -336,6 +339,16 @@ public sealed class V3CorpusDossierMountTests
 
         // The document date the index stores beside a title is not the publisher's, and is not served.
         Assert.IsFalse(paths.Any(static path => path.Contains("document_date", StringComparison.Ordinal)));
+
+        // R79: the act's own force facts, verbatim, on its work and its act as published; none read into a date.
+        var force = body.GetProperty("force");
+        CollectionAssert.AreEqual(new[] { work, work + "/jo" }, force.GetProperty("subjects").EnumerateArray().Select(static subject => subject.GetString()).ToArray());
+        var end = force.GetProperty("no_longer_in_force").EnumerateArray().Single();
+        Assert.AreEqual(work + "/jo", end.GetProperty("subject_iri").GetString());
+        Assert.AreEqual("2026-01-04", end.GetProperty("value").GetString());
+        Assert.AreEqual(0, force.GetProperty("in_force_status").GetArrayLength());
+        Assert.AreEqual(0, force.GetProperty("entry_into_force").GetArrayLength());
+        Assert.AreEqual(V3CorpusMount.DossierForceRule, force.GetProperty("rule").GetString());
     }
 
     [TestMethod]

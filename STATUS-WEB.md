@@ -44,6 +44,201 @@ The audit of 2026-10-27, gaps 3 and 5; the plan's item 4.4; R59, R21, R107. `wri
 - **Not done**: exact-accent matches ranked first (no ranker; the order is still the stated one); quotation marks not
   stripped; ’ and ', and a no-break space and a space, stay different (measured on /9: "l'article" 9,168 passages,
   "l’article" 23,940): folding them is a change to the documented rule, for the owner's or the next slice's decision.
+## The combine's two layout failures in CI's journeys (sole driver, 2026-10-27)
+
+CI's journeys at dfb8d82f failed two layout checks, both from #1004's changes:
+- **Coverage at 320 CSS pixels** scrolled sideways (main at 331 px in a 305 px window): the declared scope's rule names its
+  disposition tokens in plain text, and an auto grid column took the longest as its floor. Each `.coverage-block` is now one
+  `minmax(0, 1fr)` column, and the platform's sentences (`.coverage-scope`, `.coverage-note`, `.coverage-held`) wrap
+  anywhere; tables still scroll inside their own regions.
+- **The home page's sentence under the box** ended at 720 px, below the first 640 (with and without a mount), once the menu's
+  and the languages' links grew to 44 px. On a phone the targets stay 44 px and the rest gives way: the tagline steps out (the
+  heading says the same), the header's and main's gaps and padding close, the menu's words step down to 0.8rem with a 0.5rem
+  gap so its links take two rows rather than three, the labels' and the form's gaps narrow, and the sentence's line height is
+  1.4.
+- No browser here: the fix is reasoned from the walk's measurement (320 by 640, `REFLOW`, `FIRST_SCREEN` in `journey.mjs`), and
+  `print-view.test.mjs` holds the rules (the coverage column and wrapping; the phone rules, and that no phone rule sizes a
+  target). `npm run build`; `npm test`: 1,482 (1,479 passed, 0 failed, 3 skipped); `eng/verify-v3-tree.ps1`: 1,790 tracked
+  paths. CI's journeys measure the result.
+
+## R77's records of the acts only the catalogue holds, and R57's wording on Compare (sole driver, 2026-10-27)
+
+The audit of 2026-10-27 (`C:\lex-v3\AUDIT-2026-10-27.md`), gaps 1 and 2, as one pull request (`writer/catalogue-and-compare`,
+on v3/integration a0958bb9, #1001's names record included; v3/integration 404bfc9a, #1002, merged before it was handed
+back).
+- **R77.** An act the Luxembourg catalogue holds and the index holds no version of answered `identifier_unknown`, with no
+  record. It now answers `text_not_available`, the code R77 names (no registry change), with its record read from the
+  catalogue's facts the index already holds (`work_facts`; `V3CorpusMount.CatalogueRecords.cs`): its identity and the address
+  this site gives it (`/lu-legilux/{key}`, as the index would mint it), its type, its dates by role (dateDocument,
+  publicationDate, dateEntryInForce, dateNoLongerInForce, each the publisher's, R21), its status in the publisher's word
+  (the act's `inForceStatus`, never a consolidation's), its Mémorial issue, historicalLegalId, official PDF, title, its
+  versions, and why no text of each is shown, by the reason Coverage counts it under (one rule, `V3TextYield.HeldFile` and
+  `CatalogueNotHeldReason`): for a version whose file the corpus holds, that file's bucket (`file_withheld` with its rights
+  disposition, `file_pdf_only`, `file_no_article_served` with its dispositions, `file_articles_no_state`), and for one of which
+  no file is held, what the catalogue states (`catalogue_licence_scl`, `catalogue_cc_by_not_acquired`, …), never why the
+  acquisition did not fetch it; and the publisher's own word for its type and status (`document_type_codes`,
+  `in_force_status_codes`, the last segment of each authority IRI), which a page says. Every per-work operation (the dossier,
+  reading and the rest), `resolve` and search's exact reference (a reference, or this site's address of the act) answer it;
+  it needs no new derive and reads index /9 and /8 alike.
+  - **R92 first:** an act the names record withholds answers `text_withheld` (`names_private_individuals`) with no title and
+    no record, as every answer about it does (a test measures a catalogue act whose title grants naturalisation).
+  - **Screens:** every screen says one sentence (`CATALOGUE_RECORD_SENTENCE`), and the card says why no text is held and each
+    fact by its role, in English and French (`refusal-card.mjs`, `catalogueRecord`); the dossier shows the act and its title
+    in its language, and links the record's page.
+  - **Measured, read-only** (after the repair, by the act as published's reason, else the first version's): derive-r1, 22,049
+    acts gain a record: 16,330 `catalogue_licence_scl`, 5,673 `file_withheld` (each `typed_quarantine_in_file_reading_rejected`),
+    34 `file_no_article_served`, 10 `catalogue_cc_by_not_acquired`, 2 `catalogue_no_expression`; R92's record withholds 974 of
+    the catalogue's acts (STATUS-DATA). derive-c, 22,891: 16,330, 5,675 `file_withheld`, 665 `file_no_article_served`, 209
+    `file_articles_no_state`, 10, 2. Of derive-r1's, 22,040 state their dates, status and issue, 19,679 a historical
+    identifier, 6,467 an end of force.
+- **R57.** `diff` carries the served text of each changed, added or removed article, where that side's rights admit it, and
+  null otherwise (`text_rule`; the digests still decide the status). The compare page shows each change inline, word by
+  word (`word-diff.mjs`): the text deleted struck through, the text inserted underlined, each also said in hidden words,
+  a jump list and the previous and next change; the digests, permalinks and date roles stay. A comparison has its own
+  address (`/{lang}/compare.html?work=/lu-legilux/{key}&from=…&to=…[&language=…]`), which both servers render from `diff`
+  (`SitePageFor`/`sitePageFor`, one table), so it reads without JavaScript. EU diff, article_history and changes_in_period
+  stay typed refusals.
+  - **Driver decision (reversible), the compare form and R109:** the first draft named the form's controls and made it a GET
+    so a submit with no script would ask the comparison's address; the web suite's R109 hold ("no word a reader types
+    reaches an address a server could record") refused it, and the decision is reversed. The form's controls carry no name,
+    as every form's do. Once a comparison is asked, the screen writes its address into the page's query only when its work
+    is this site's address of an act, in any form the API reads as one (`/lu-legilux/{key}`, under an interface language
+    or this origin, written as `/lu-legilux/{key}`: `compareQueryOf`), with the two dates and the language: a law's address,
+    never a word, pinned in `request-addresses.test.mjs`. The server renders a comparison's address for such a work alone.
+    The page's introduction says so (the French review's supplement).
+- **Pins moved.** The envelope, answer and refusal-payload samples re-rendered (`V3_RENDER_*`) and verified without: three
+  new envelopes (the record by the dossier, reading and search), the payload census samples the record, the two-state
+  diff carries its texts. The legacy base answers recorded again on Linux at ee44bf68 (9 of 53 rows, each by R77 or R57
+  alone), at a9179b39 (the five schema-6 records by their two code members alone) and at caaff24d (the repair: all 38
+  legacy rows and the 15 EU schema-5 rows by the registry digest, since diff's request schema gained `page`; the schema-8
+  diff by its `text_page`; the five schema-6 records by F1's reason); Windows replays the same bytes.
+- **French** (Decision 41): the 32 new or changed forms were reviewed by an independent reviewer (Claude, AI reviewer, not the
+  author) in the addendum of 2026-10-27 "R77's catalogue records and R57's compare wording" (`C:\lex-v3\lanes\fr-review\review.md`):
+  20 approved, 12 changed in French and 8 of them in English too, 5 blocking and each a truth finding (a compared side is named
+  by its date's label, since the page does not order its dates; a comparison shown whole keeps the beginning and end its
+  texts share; a licence reason names the XML and PDF files it reads, never every file; an entry into force is a labelled
+  line, since two records carry two dates). Every final applied byte for byte and read back (0 differ); the English taken:
+  the blocking finals, the recommended ones of 17 to 19 and the optional one of the intro. Not taken (reversible): ordering
+  the two dates, setting the status token apart, a spoken end marker. Its supplement (the intro after R109, and the English
+  "This article's wording", since "wording of" is the EU's) changed the intro in French with its recommended English, and its
+  blocking point was taken by the preferred fix (every form of an act's site address written as the bare one). Its
+  supplement 2 (the repair) reviewed 13 forms: 8 approved, 5 changed in French, 2 blocking in English ("The wording of the
+  changes" spoke the EU's "wording of": "The wording that changed"); every final applied byte for byte, the optional English
+  of A4 and A7 taken, and on its advice `refusalCard.textless` and `textlessNamed` say "shows" too.
+- **For the data lane** (the review's point 3): 12,040 of the 16,330 expressions whose XML and PDF files are licenceSCL also
+  carry an HTML or DOCX file under CC BY 4.0 in the catalogue. Whether Lex could admit those files is a question for R83 and
+  the data lane; nothing here claims it.
+- **Counts** (this PC, one heavy step at a time, after the repair, at c3c838c3 over v3/integration 404bfc9a): `dotnet build
+  Lex.V3.slnx -c Release`, 0 warnings. Lex.V3.Tests, whole: 3,375, 3,369 pass, 6 skip. Lex.V3.Ingest.Tests, every mount class
+  (`V3Corpus*`), the text yield, the three sample censuses, the machine gates, the EU predicate census, PublicRequestRecording,
+  the index builder and #1002's release checks: 639, 634 pass, 5 skip (28 min). `npm run build`; `npm test`: 1,473, 1,470
+  pass, 3 skip (the real-browser tests). `eng/verify-v3-tree.ps1`: 1,788 tracked paths verified. (Before the repair, at
+  6d4c4c02: 3,375; 632; 1,471.)
+- **Review and repair (#1003, one round; the review by the other model family).**
+  - **F1 (truth):** the record said "not acquired" of acts whose file the corpus holds (derive-r1: 5,707 of them). The mount now
+    reads the corpus's held Luxembourg files by work once, and the record gives such a version its file's bucket with its
+    disposition, by the rule Coverage counts it with (`V3TextYield.HeldFile`, shared), and the held file's body receipt as
+    `retained_transport_evidence`; `catalogue_*` reasons stay for versions of which no file is held. `what_would_answer`:
+    `expanded_official_scope` for `catalogue_cc_by_not_acquired` alone, `new_official_observation` otherwise. A test holds the
+    record and Coverage equal over every case (`V3TextYieldTests`), one the schema-6 fixture's act (acquired, its four
+    articles held and no state: `file_articles_no_state`, as Coverage counts it with text). The card and the census sentence
+    say "shows none of its text", not "holds".
+  - **F2 (performance):** an address with no work's shape (`/lu-legilux/rgd`, a year, a day) is `identifier_unknown` before any
+    read of the catalogue (`IsWorkShape`, R92's `LuxembourgWorkIriOf`), by the record and by the exact reference's catalogue
+    names; a counter proves no range is read.
+  - **F3 (truth):** a work with no act as published (a code) has empty act-level lists; `CatalogueRecordRule` says so.
+  - **F4:** `diff`'s texts are cut into pages as a reading's (50 articles, 98,304 bytes of both sides' texts): `page` asks one
+    (the request schema gained it, so the registry digest is `627879b6…`, was `befb867f…`; the envelope test's pin moved with it), `text_page` names it, and a page past the last is `anchor_not_in_version` (with no page cut,
+    its nearest anchor is `page=1`). Compare names the page by its first and last article, links the pages around it
+    (`page=N` in the comparison's address, which both servers render; a button where the comparison has no address), and says
+    of a change on another page that its wording is there.
+  - **Driver decisions (reversible):** `file_articles_no_state` is the record's name for Coverage's `files_with_text` where the
+    index holds a file's articles and no state (derive-c: 209, derive-r1: none); Coverage still counts those articles as
+    served, which is Coverage's wording and outside this round. The textless forms say "shows" too (the French review's point).
+- **Carries #1004** (`writer/truth-and-coverage` at 85b0e595, merged at 27a36a09; its sections follow): both slices' meaning
+  kept (R80's `out_of_corpus_scope` for an EU act outside the population, a treaty never; its 404 law pages with the card;
+  R77's records and R57's paged diff), each refusal its own sentence (R92, then R77, then R80), both reviews' French byte for
+  byte, #1004's narrowed How to read Lex kept (R77 does not make its removed promise true; a narrower sentence for acts Lex
+  holds no version of would need R92's exception and new French: not added, a reversible driver decision). Samples
+  re-rendered (equal to the merge); on Linux at 27a36a09 the 38 legacy rows equal caaff24d's, and 3 EU schema-5 rows move,
+  each by a slice. Counts at 04e18046: build 0 warnings; Lex.V3.Tests 3,375 (3,369 pass, 6 skip); Lex.V3.Ingest.Tests whole
+  3,611 (3,566 pass, 45 skip, 61 min); `npm test` 1,480 (1,477 pass, 3 skip); verify-v3-tree 1,790 paths.
+- **Not done:** R57's side-by-side view and its swap control; R56's gap rows on the reading's version list.
+## Review and repair (#1004): treaties never out of the population, How to read Lex as narrow as index 8 (sole driver, 2026-10-27)
+
+The independent review of #1004 (`writer/truth-and-coverage` at b02c978a) said REPAIR. The one repair round:
+- **F1 (high).** Over derive-c, a held treaty (`12016E`, `CELEX:12016P`, `12012E`) and an article of one (`12016E101`) answered
+  `out_of_corpus_scope`: the index holds a treaty by its "/TXT" part. A sector-1 CELEX is now never read as an act outside the
+  population (`identifier_unknown`, as before this branch), and any act held by its "/TXT" part counts as held. The scope test
+  holds five treaty forms over dossier, resolve and timeline.
+- **F2 (medium).** How to read Lex said Lex names a textless version and why where it holds another version; index 8, which
+  the live release mounts, names none. The sentence is dropped, and the last says "Lex never shows another version's text
+  as that version's" (on index 8 an act held as published answers later dates, labelled as published): only what holds on
+  every index, with or without R77's records.
+- **F3.** The R80 reason names the population only ("The EU population Lex's rule selects is the N acts of its seed list
+  (Decision 84), and X is not one of them."): 12 of derive-c's 82 seed acts hold no wording.
+- **F4.** CODE_RECUEIL is no longer declared "not collected" (run 15 collected its catalogue records with the codes); RCSF and
+  RBCL are admitted and awaiting a run, with no order claimed (O7, the owner's, is open); `admitted_first_awaiting_a_run` is
+  retired, and the rule names no role.
+- **F5.** The select and the checkbox stand in the controls' 44 px rule.
+- **Also said in the PR**: every `out_of_corpus_scope` law page is a 404 in both servers, the out-of-scope list's classes
+  included, and both still render the refusal card.
+- **French**: the one changed form reviewed by one independent reviewer (the supplement "the review of #1004, F2" in the
+  record), its recommended pair taken in both languages, byte for byte.
+- **Counts**: `dotnet build Lex.V3.slnx -c Release` 0 warnings; `Lex.V3.Tests` whole 3,375 (3,369 passed, 0 failed, 6 skipped);
+  the Ingest classes touched with every census class and the legacy replays 194 (191 passed, 0 failed, 3 skipped);
+  `Lex.V3.Ingest.Tests` whole 3,592 (3,547 passed, 0 failed, 45 skipped); `npm run build`, `npm test` 1,459 (1,456 passed,
+  0 failed, 3 skipped); `eng/verify-v3-tree.ps1` 1,776 tracked paths. No legacy row moved.
+
+## Truth and coverage: the six overclaims narrowed, R80, R79, R78/R82/R12 on Coverage, R62 and R65 (sole driver, 2026-10-27)
+
+The audit of 2026-10-27 (`C:\lex-v3\AUDIT-2026-10-27.md`, "Overclaims") found six public sentences that claimed more than the
+code does. Branch `writer/truth-and-coverage`, from v3/integration a0958bb9 (#1001 merged in at the start).
+- **The six overclaims**, each narrowed to what is true, in English and French:
+  - EU dossier and search: the other-languages row no longer says French is not acquired; it says Lex acquires the English and
+    French expressions of EU acts only (Decision 89) and EUR-Lex publishes an act's other language versions where they
+    exist (`V3CorpusMount`).
+  - Developers G3: the code can keep earlier builds by a retention rule; Lex does not keep them yet, the release holds only the
+    build its server mounts, so a version is re-verifiable only while a kept build holds its text (R89; no funding claim).
+  - Evaluation card: above its verdict, a line names the gates it holds (from the card) and what it does not hold: the data
+    gates, answer quality, speed, two systems, and the refusal codes no operation sends (from the refusal census).
+  - Privacy notice: the no-logging test runs on the server's own code before deployment; the hosting is set up from a template
+    with no log store; its settings once deployed are not tested this way. Driver decision (reversible): narrowed rather than
+    pinned in `main.bicep` with a probe check, which needs the managed environment in the template and Azure to test.
+  - How to read Lex: no longer promises that a textless version is named, or why (the review's F2, above); it keeps the
+    reasons a version can lack text and that Lex never shows another version's text as that version's.
+  - Home page: history and comparison are said of a Luxembourg act of which more than one version is held.
+- **R80**: an EU act the mounted EU population does not hold, named by its CELEX (as typed, after "CELEX:", in an EUR-Lex or
+  Publications Office address; sectors 0 to 4; a consolidated version or corrigendum read as its act), answers
+  `out_of_corpus_scope` (class `eu_act_outside_population`): the rule with the number of seed acts the index holds, the act's
+  EUR-Lex page, the Publications Office as who to ask, no list or digest (`V3CorpusMount.Scope.cs`). Only the request's
+  `identifier` is read; a sector-5 document stays `identifier_unknown`; a case stays the list's `eu_case_law`. Every screen
+  says it in its own sentence (`OUTSIDE_EU_POPULATION_SENTENCE`), never "a kind Lex never holds". A law page whose answer is that refusal
+  is a 404, as an unknown work's is, in both servers (`V3WebRoot.AnswersUnknownWork`, `serve-live.mjs`).
+- **R79 (E3)**: the Luxembourg dossier on index 9 carries `force`, the work's and its act as published's own `inForceStatus`,
+  `dateEntryInForce` and `dateNoLongerInForce`, verbatim (`V3CorpusMount.Force.cs`); the page says the status token, "Entry into
+  force" and "End of force" with the publisher's record, and that this is not a reading for anyone's situation (R21 held).
+- **R78, R82, R12**: coverage on index 9 carries `declared_scope`: every recognized Luxembourg class not held (the publisher's
+  codes but CODE, LOI and RGD, with the Mémorial B and communal regulations), each with a closed disposition; the EU languages
+  held of the 24 official ones; when Lex's own observations begin per publisher (the mounted log's first build, or the EU
+  collection's end from the build report, or not stated). Shown in both renderers; R26's EU sentence names no language.
+- **R62**: touch targets of 44 px (links in lists, summaries, controls, the info control). **R65**: a copy button under each
+  citation form, rendered only after the script finds `navigator.clipboard.writeText`; the server renders none.
+- **Not done**: the home page's robots marker per state in the deploy probe (#993's F2): `data/release-checks-ops` owns the
+  probe, and the driver's instruction kept this slice out of `deploy-probe.mjs`. ARGD has no name on Coverage (token only).
+- **Legacy answers**: the EU schema-5 answers recorded again on Linux (WSL Ubuntu 24.04.4, .NET 10.0.400, invariant
+  globalization, UTC) at 81fc8ac1: 15 rows, 3 moved by the other-languages sentence alone. Schema 8 and 6 did not move (the new
+  members are index 9's).
+- **French** (Decision 41): one independent reviewer (Claude, AI reviewer, not the author), the addendum of 2026-10-27 "truth
+  and coverage" and its supplement in `C:\lex-v3\lanes\fr-review\review.md`: 58 forms, 19 changed in French, applied byte for
+  byte; the English changed for truth in three (EUR-Lex publishes the other languages only where they exist).
+- **Counts** (this PC, Windows, no browser, no publisher traffic, no Azure). `dotnet build Lex.V3.slnx -c Release`: 0 warnings,
+  0 errors. `Lex.V3.Tests`, whole: 3,375 (3,369 passed, 0 failed, 6 skipped). `Lex.V3.Ingest.Tests`, whole, once: 3,592 (3,536
+  passed, 11 failed, 45 skipped); the eleven held an unheld EU CELEX to `identifier_unknown` and now hold R80's
+  `out_of_corpus_scope`; then the classes touched or found failing and every census class: 203 (199 passed, 1 failed, 3
+  skipped), that one updated likewise, and the seven EU identifier classes: 52 (51 passed, 0 failed, 1 skipped). `npm run
+  build` (30 state pages); `npm test`: 1,459 (1,456 passed, 0 failed, 3 skipped). `eng/verify-v3-tree.ps1`: 1,776 tracked
+  paths.
 
 ## Review and repair (#998): G2 exact, the change policy's digest, MCP failures, the out-of-scope forms (sole driver, 2026-10-27)
 

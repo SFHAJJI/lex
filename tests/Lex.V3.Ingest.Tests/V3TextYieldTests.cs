@@ -427,6 +427,137 @@ public sealed class V3TextYieldTests
         return report.ToJsonString();
     }
 
+    /// <summary>
+    /// The review of #1003, F1: the API's record of an act the index holds no version of (R77) gives each of its versions the
+    /// reason Coverage counts it under, over every case: a held file withheld by each of three rights dispositions (a PDF among
+    /// them), an admitted PDF with no text, an admitted file with no article (by its dispositions, or none recorded), and a version
+    /// of which no file is held, by each thing the catalogue states of it; a work with versions of both; and a file whose articles
+    /// the index holds while it holds no state of the version (Coverage counts it with text; the record says no state is served).
+    /// Every version's record reason, put in Coverage's bucket, is Coverage's count, class by class and reason by reason.
+    /// </summary>
+    [TestMethod]
+    public void TheRecordOfAnActTheIndexHoldsNoVersionOfGivesEachVersionTheReasonCoverageCountsItUnder()
+    {
+        const LuxembourgRightsChannelDisposition Agreed = LuxembourgRightsChannelDisposition.AgreedSameRunCcBy;
+        const LuxembourgRightsChannelDisposition Rejected = LuxembourgRightsChannelDisposition.TypedQuarantineInFileReadingRejected;
+        var members = new[]
+        {
+            Lu(Eli + "loi/2019/01/01/a1/jo", "xml", Rejected, LexCorpus6Stage3Disposition.AknAdmitted),
+            Lu(Eli + "loi/2019/01/02/a1/jo", "pdf", LuxembourgRightsChannelDisposition.NonAdmittingLicenceScl),
+            Lu(Eli + "loi/2019/01/03/a1/jo", "xml", LuxembourgRightsChannelDisposition.Conflict),
+            Lu(Eli + "loi/2019/01/04/a1/jo", "pdf", Agreed, LexCorpus6Stage3Disposition.PdfUpstreamTextLayerGap),
+            Lu(Eli + "loi/2019/01/05/a1/jo", "xml", Agreed, LexCorpus6Stage3Disposition.AknUnsupportedContentShape),
+            Lu(Eli + "loi/2019/01/06/a1/jo", "xml", Agreed, LexCorpus6Stage3Disposition.AknAdmitted, LexCorpus6Stage3Disposition.AknXmlRejected),
+            Lu(Eli + "loi/2019/01/07/a1/jo", "xml", Agreed),
+            Lu(Eli + "loi/2019/01/01/a1/consolide/20200101", "xml", Rejected, LexCorpus6Stage3Disposition.AknAdmitted),
+            Lu(Eli + "code/exemple/20200101", "xml", Agreed, LexCorpus6Stage3Disposition.AknUpstreamNotInventoried),
+            Lu(Eli + "rgd/2019/01/01/a1/jo", "pdf", Rejected),
+            Lu(Eli + "loi/2019/01/08/a1/jo", "xml", Agreed, LexCorpus6Stage3Disposition.AknAdmitted),
+        };
+        // The index holds three articles of the last file, and (as every act here) no state of its version.
+        var articles = new Dictionary<string, long>(StringComparer.Ordinal) { [members[^1].ObjectRefSha256] = 3 };
+        var notHeld = new Dictionary<string, IEnumerable<(string, string, string)>>
+        {
+            [Eli + "loi/2019/02/01/a2/jo"] = [],
+            [Eli + "loi/2019/02/02/a2/jo"] = [(Eli + "loi/2019/02/02/a2/jo", "isRealizedBy", Eli + "loi/2019/02/02/a2/jo/en"), (Eli + "loi/2019/02/02/a2/jo/en", "language", English)],
+            [Eli + "loi/2019/02/03/a2/jo"] = State(Eli + "loi/2019/02/03/a2/jo", ("html", V3TextYield.LicenceCcBy)),
+            [Eli + "loi/2019/02/04/a2/jo"] = State(Eli + "loi/2019/02/04/a2/jo", ("xml", V3TextYield.LicenceScl), ("pdf", V3TextYield.LicenceScl)),
+            [Eli + "loi/2019/02/05/a2/jo"] = State(Eli + "loi/2019/02/05/a2/jo", ("xml", V3TextYield.LicenceScl), ("pdf", V3TextYield.LicenceCcBy)),
+            [Eli + "loi/2019/02/06/a2/jo"] = State(Eli + "loi/2019/02/06/a2/jo", ("xml", V3TextYield.LicenceCcBy), ("pdf", V3TextYield.LicenceCcBy)),
+            [Eli + "loi/2019/02/07/a2/jo"] = State(Eli + "loi/2019/02/07/a2/jo", ("xml", null)),
+            // A version of which no file is held, of a work one of whose versions' file is held (as published, and a code).
+            [Eli + "loi/2019/01/01/a1/consolide/20210101"] = State(Eli + "loi/2019/01/01/a1/consolide/20210101", ("xml", V3TextYield.LicenceScl)),
+            [Eli + "code/exemple/20210101"] = State(Eli + "code/exemple/20210101", ("pdf", V3TextYield.LicenceCcBy)),
+        };
+        var subjects = members.Select(static member => member.LuxembourgRights!.SelectedWemi.RootIri).Concat(notHeld.Keys).ToArray();
+        var facts = notHeld.Values.SelectMany(static value => value).ToArray();
+        var coverage = V3TextYield.Count(members, new V3TextYield.LuxembourgInputs(articles, subjects, facts), null).Publishers.Single();
+
+        var expected = new Dictionary<(string Class, string Bucket, string? Reason), long>();
+        foreach (var row in coverage.Classes)
+        {
+            var at = row.Family + "/" + row.Kind;
+            if (row.FilesWithText > 0)
+            {
+                expected[(at, "with_text", null)] = row.FilesWithText;
+            }
+
+            foreach (var withheld in row.FilesWithheld)
+            {
+                expected[(at, "withheld", withheld.Reason)] = withheld.Files;
+            }
+
+            if (row.FilesPdfOnly is > 0)
+            {
+                expected[(at, "pdf_only", null)] = row.FilesPdfOnly.Value;
+            }
+
+            foreach (var failed in row.FilesParseFailed)
+            {
+                expected[(at, "parse_failed", failed.Reason)] = failed.Count;
+            }
+
+            foreach (var count in row.VersionsNotHeld ?? [])
+            {
+                expected[(at, "not_held", count.Reason)] = count.Count;
+            }
+        }
+
+        // The record's reasons, work by work and version by version, as the record of each act gives them.
+        var recorded = new Dictionary<(string Class, string Bucket, string? Reason), long>();
+        foreach (var work in subjects.Select(static subject => V3TextYield.CatalogueVersionWorkOf(subject)!).Distinct(StringComparer.Ordinal))
+        {
+            var files = members.Where(member => V3TextYield.CatalogueVersionWorkOf(member.LuxembourgRights!.SelectedWemi.RootIri) == work).ToArray();
+            foreach (var version in V3TextYield.CatalogueVersionsOf(subjects, work))
+            {
+                var (reason, disposition) = V3CorpusMount.VersionWithoutText(version, files, facts, articles);
+                var (bucket, counted) = reason switch
+                {
+                    V3CorpusMount.FileArticlesNoState => ("with_text", disposition),
+                    V3CorpusMount.FileWithheld => ("withheld", disposition),
+                    V3CorpusMount.FilePdfOnly => ("pdf_only", disposition),
+                    V3CorpusMount.FileNoArticleServed => ("parse_failed", disposition),
+                    _ => ("not_held", (string?)reason),
+                };
+                var at = (V3TextYield.FamilyOf(version) + "/" + V3TextYield.CatalogueVersionKindOf(version), bucket, counted);
+                recorded[at] = recorded.GetValueOrDefault(at) + 1;
+            }
+        }
+
+        CollectionAssert.AreEquivalent(expected, recorded, "the record and Coverage give every version the same reason");
+        Assert.AreEqual(20L, recorded.Values.Sum(), "every version of every work, once");
+        Assert.AreEqual(1L, recorded[("loi/as_published", "with_text", null)], "the file whose articles the index holds");
+        foreach (var reason in new[] { "typed_quarantine_in_file_reading_rejected", "non_admitting_licence_scl", "conflict" })
+        {
+            Assert.IsTrue(recorded.ContainsKey(("loi/as_published", "withheld", reason)), reason);
+        }
+
+        Assert.IsTrue(recorded.ContainsKey(("loi/as_published", "pdf_only", null)));
+        foreach (var reason in new[] { "akn_unsupported_content_shape", "akn_admitted+akn_xml_rejected", V3TextYield.NoLegalContentOutcome })
+        {
+            Assert.IsTrue(recorded.ContainsKey(("loi/as_published", "parse_failed", reason)), reason);
+        }
+
+        foreach (var reason in new[]
+                 {
+                     V3TextYield.NotHeldNoExpression, V3TextYield.NotHeldTranslationsOnly, V3TextYield.NotHeldNoReadableManifestation,
+                     V3TextYield.NotHeldLicenceScl, V3TextYield.NotHeldLicenceSclInPart, V3TextYield.NotHeldCcByNotAcquired, V3TextYield.NotHeldOtherLicence,
+                 })
+        {
+            Assert.IsTrue(recorded.ContainsKey(("loi/as_published", "not_held", reason)), reason);
+        }
+
+        // The held file of a work with a version not held keeps its own reason, and the version not held its catalogue's.
+        Assert.AreEqual((V3CorpusMount.FileWithheld, (string?)"typed_quarantine_in_file_reading_rejected"),
+            V3CorpusMount.VersionWithoutText(Eli + "loi/2019/01/01/a1/consolide/20200101", members, facts, articles));
+        Assert.AreEqual((V3TextYield.NotHeldLicenceScl, (string?)null),
+            V3CorpusMount.VersionWithoutText(Eli + "loi/2019/01/01/a1/consolide/20210101", members, facts, articles));
+        Assert.AreEqual((V3CorpusMount.FileNoArticleServed, (string?)"akn_upstream_not_inventoried"),
+            V3CorpusMount.VersionWithoutText(Eli + "code/exemple/20200101", members, facts, articles));
+        Assert.AreEqual((V3CorpusMount.FileArticlesNoState, (string?)null),
+            V3CorpusMount.VersionWithoutText(Eli + "loi/2019/01/08/a1/jo", members, facts, articles));
+    }
+
     /// <summary>The fixture mount's own yield, counted as the mount writer counts it.</summary>
     internal static V3TextYield FixtureYield(MountedFixture fixture) =>
         V3TextYield.FromMount(

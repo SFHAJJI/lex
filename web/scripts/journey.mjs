@@ -107,7 +107,7 @@ import { EXPORT_WATERMARK } from "./export-build.mjs";
 import { EUROPE_TEXT_ACKNOWLEDGEMENT } from "./reading-answer.mjs";
 import { LIVE_DOSSIER_REFUSAL_SENTENCES } from "./live-dossier.mjs";
 import { TMP_MARGIN_MEBIBYTES, tmpMebibytesFor } from "./image-run.mjs";
-import { INTERFACE_LANGUAGES, anchorText, articlePermalink, currentAddress, dateOfQuery, escapeSegment, parseSitePath, sameAddressIn, withDateQuery } from "./permalinks.mjs";
+import { INTERFACE_LANGUAGES, anchorText, articlePermalink, compareQueryOf, currentAddress, dateOfQuery, escapeSegment, parseSitePath, sameAddressIn, withDateQuery } from "./permalinks.mjs";
 import { searchFragment } from "./search-address.mjs";
 import { INDEXED, X_ROBOTS_TAG } from "./search-engines.mjs";
 import { CANONICAL_HOST } from "./routes.mjs";
@@ -156,7 +156,10 @@ export function bodyOn(body, today) {
  * address once it has asked (the plan's items 3.4 and 3.5). A search typed into a page that keeps its search in its address
  * (the home and search pages; not the 404 page's box, `notFound`) ends with that search after "#" (`searchFragment`, R109),
  * built from the very request the step must send; an act's readable address ends with the date it read the act at
- * (`?date=`, R13), unless its address keeps one already. Any other step ends where it began.
+ * (`?date=`, R13), unless its address keeps one already; a comparison typed into the compare page ends at its own address
+ * (R57: `?work=/lu-legilux/{key}&from=…&to=…[&language=…]`, `compareQueryOf`), built from the very request the step must
+ * send, which names this site's address of the act and the two dates and nothing else (R109: never a word typed), or where
+ * it began when its work is no such address. Any other step ends where it began.
  */
 export function endAddressesOf(step, todays) {
   const [path, hash = null] = step.path.split("#");
@@ -165,6 +168,10 @@ export function endAddressesOf(step, todays) {
     const parameters = bodyOn(step.body ?? null, today)?.parameters ?? {};
     if (step.operation === "search" && step.typed !== undefined && step.notFound !== true && hash === null) {
       return `${path}${searchFragment({ query: parameters.query, language: parameters.language, identifier: parameters.identifier ?? "", date: parameters.date ?? "" })}`;
+    }
+    if (step.operation === "diff" && step.typed !== undefined && query === null && hash === null) {
+      const comparison = compareQueryOf({ identifier: parameters.identifier, dateFrom: parameters.date_from, dateTo: parameters.date_to, language: parameters.language ?? "" });
+      return comparison === null ? path : `${pathname}${comparison}`;
     }
     if (parseSitePath(pathname)?.kind === "current" && typeof parameters.date === "string") {
       const search = query === null ? "" : `?${query}`;

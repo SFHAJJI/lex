@@ -1,5 +1,6 @@
 // The server renderer: the dossier and reading pages at a law's address, rendered by the API from its own answer (the
-// specification of record's R67: complete HTML from the server, readable without JavaScript, then enhanced), the home
+// specification of record's R67: complete HTML from the server, readable without JavaScript, then enhanced), a comparison
+// at its address (R57: the compare page from diff, its wording readable without JavaScript), the home
 // page, rendered from its coverage answer (`live-home.mjs`), and the Developers page, from its answer to browse for the
 // first act it holds, its live examples (`developers.mjs`).
 //
@@ -10,6 +11,7 @@
 
 import { renderLiveDossierPage } from './live-dossier-page.jsx';
 import { renderLiveReadingPage } from './live-reading-page.jsx';
+import { renderLiveComparePage } from './live-compare-page.jsx';
 import { renderLiveHomePage } from './live-home-page.jsx';
 import { LIVE_CONTRACT } from './live-coverage-page.jsx';
 import { renderLiveReferencePage } from './ReferencePages.jsx';
@@ -26,6 +28,8 @@ globalThis.lexSsr = Object.freeze({
     const initial = { envelope: JSON.parse(envelopeJson), path };
     if (kind === 'reading') return renderLiveReadingPage({ initial });
     if (kind === 'dossier') return renderLiveDossierPage({ initial });
+    // A comparison at its address (R57): `path` is the address with its query, which names the work and the two dates.
+    if (kind === 'compare') return renderLiveComparePage({ initial });
     if (kind === 'home') return renderLiveHomePage({ facts: homeFacts(initial.envelope, LIVE_CONTRACT), freshness: freshnessFacts(initial.envelope) });
     // The Developers page, with its live examples from this server's own answer to browse (the plan's item 8.4).
     if (kind === 'developers') return renderLiveReferencePage('developers', { developers: DEVELOPERS, live: initial.envelope });

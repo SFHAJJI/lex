@@ -7,6 +7,7 @@ using Lex.V3.Contracts;
 using Lex.V3.Contracts.Platform;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using static Lex.V3.Ingest.Tests.V3CorpusClassificationMountTests;
 using static Lex.V3.Ingest.Tests.V3CorpusResolveMountTests;
 
 namespace Lex.V3.Ingest.Tests;
@@ -264,6 +265,25 @@ public sealed class V3CorpusDiffMountTests
         var ids = comparison.GetProperty("articles").EnumerateArray().Select(static row => row.GetProperty("publisher_id").GetString()!).ToArray();
         CollectionAssert.AreEqual(ids.Order(StringComparer.Ordinal).ToArray(), ids);
 
+        // R57: what changed carries its text on each side as evidence_bundle serves it, with its digest; an unchanged article
+        // carries none. The status is still the digests'.
+        StringAssert.StartsWith(body.GetProperty("text_rule").GetString(), "R57: ");
+        static string Digest(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+        var changedFrom = byId[changedId].GetProperty("from").EnumerateArray().Single();
+        var changedTo = byId[changedId].GetProperty("to").EnumerateArray().Single();
+        Assert.AreEqual(own[0].Text, changedFrom.GetProperty("text").GetString());
+        Assert.AreEqual(own[0].Text + " amended", changedTo.GetProperty("text").GetString());
+        Assert.AreEqual(Digest(own[0].Text + " amended"), changedTo.GetProperty("text_sha256").GetString());
+        Assert.AreEqual(own[1].Text, byId[renamedId].GetProperty("from").EnumerateArray().Single().GetProperty("text").GetString(), "a removed article's text");
+        Assert.AreEqual(own[1].Text, byId[renamedId + "-new"].GetProperty("to").EnumerateArray().Single().GetProperty("text").GetString(), "an added article's text");
+        Assert.IsFalse(byId[keptId].GetProperty("from").EnumerateArray().Single().TryGetProperty("text", out _), "an unchanged article carries no text");
+        var evidence = await EnvelopeAsync(mount, "/api/v3/evidence_bundle", "evidence_bundle",
+            new { identifier = $"/lu-legilux/{fixture.WorkKey}", date = Shift(laterDate, 10), language = "fra" });
+        var served = evidence.Result!.Value.GetProperty("states").EnumerateArray().Single().GetProperty("articles").EnumerateArray()
+            .Single(article => article.GetProperty("publisher_id").GetString() == changedId);
+        Assert.AreEqual(served.GetProperty("text").GetString(), changedTo.GetProperty("text").GetString(), "the text reading serves, byte for byte");
+        Assert.AreEqual(served.GetProperty("text_sha256").GetString(), changedTo.GetProperty("text_sha256").GetString());
+
         // The bounds swapped: added and removed swap, changed stays changed.
         var reversed = await DiffAsync(mount, $"/lu-legilux/{fixture.WorkKey}", Shift(laterDate, 10), Shift(fixture.ApplicabilityDate, 10));
         var reversedById = reversed.Result!.Value.GetProperty("comparisons").EnumerateArray().Single().GetProperty("articles").EnumerateArray()
@@ -271,6 +291,109 @@ public sealed class V3CorpusDiffMountTests
         Assert.AreEqual("added", reversedById[renamedId]);
         Assert.AreEqual("removed", reversedById[renamedId + "-new"]);
         Assert.AreEqual("changed", reversedById[changedId]);
+    }
+
+    [TestMethod]
+    public async Task TheTextOfASideWhoseRightsDoNotAdmitItIsNotServedAndTheDigestsStand()
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var own = fixture.ArticlesOfOwnState();
+        var laterDate = Shift(fixture.ApplicabilityDate, 400);
+        var later = await fixture.AddStateAsync(laterDate, "later");
+        await fixture.RewriteArticleTextAsync(later.ExpressionIri, own[0].PublisherId, own[0].Text + " withheld-wording-r57");
+        await fixture.SetMemberRightsDispositionAsync("non_admitting_licence_scl");
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        var envelope = await DiffAsync(mount, $"/lu-legilux/{fixture.WorkKey}", Shift(fixture.ApplicabilityDate, 10), Shift(laterDate, 10));
+        var row = envelope.Result!.Value.GetProperty("comparisons").EnumerateArray().Single().GetProperty("articles").EnumerateArray()
+            .Single(article => article.GetProperty("publisher_id").GetString() == own[0].PublisherId);
+        Assert.AreEqual("changed", row.GetProperty("status").GetString(), "the digests still decide");
+        foreach (var side in new[] { "from", "to" })
+        {
+            var entry = row.GetProperty(side).EnumerateArray().Single();
+            Assert.AreEqual(JsonValueKind.Null, entry.GetProperty("text").ValueKind, side);
+            Assert.AreEqual(JsonValueKind.Null, entry.GetProperty("text_sha256").ValueKind, side);
+            Assert.AreEqual(64, entry.GetProperty("wording_sha256").GetString()!.Length, side);
+        }
+
+        Assert.IsFalse(envelope.Result.Value.GetRawText().Contains("withheld-wording-r57", StringComparison.Ordinal), "no text its rights did not admit");
+    }
+
+    /// <summary>
+    /// The review of #1003, F4: the wording of what changed (R57) is bounded as a reading's page is (R73, R107): the changed,
+    /// added and removed articles are cut into pages of at most 50 articles and 98,304 bytes of their texts, both sides, in the
+    /// rows' order; page asks one, text_page names it, only its articles carry texts, every row and count is on every page, each
+    /// changed article's wording is on exactly one page, and a page past the last is refused as a reading's is. A synthetic act of
+    /// 130 articles: 60 small changes first, so the first page is cut by its 50 articles, then 70 of about 3,300 bytes, so the next
+    /// pages are cut by their bytes.
+    /// </summary>
+    [TestMethod]
+    public async Task TheWordingOfWhatChangedIsServedInPagesBoundedAsAReadingsAre()
+    {
+        var fixture = await MountedFixture.CreateAsync(await SyntheticLongAct.DocumentAsync(130, textBytes: 300, lean: true));
+        await using var cleanup = fixture;
+        var own = fixture.ArticlesOfOwnState();
+        Assert.HasCount(130, own);
+        var ids = own.Select(static article => article.PublisherId).Order(StringComparer.Ordinal).ToArray();
+        var textOf = own.ToDictionary(static article => article.PublisherId, static article => article.Text, StringComparer.Ordinal);
+        var laterDate = Shift(fixture.ApplicabilityDate, 400);
+        var later = await fixture.AddStateAsync(laterDate, "later");
+        await fixture.RewriteArticleTextsAsync(later.ExpressionIri, ids.Select((id, position) => (id, position)).ToDictionary(
+            static entry => entry.id,
+            entry => entry.position < 60 ? textOf[entry.id] + " modifié" : textOf[entry.id] + " " + string.Concat(Enumerable.Repeat("texte modifié ", 230)),
+            StringComparer.Ordinal));
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var identifier = $"/lu-legilux/{fixture.WorkKey}";
+        var from = Shift(fixture.ApplicabilityDate, 10);
+        var to = Shift(laterDate, 10);
+
+        var first = await DiffAsync(mount, identifier, from, to);
+        StringAssert.Contains(first.Result!.Value.GetProperty("text_rule").GetString(), "at most 50 articles and 98,304 bytes");
+        var pages = first.Result.Value.GetProperty("comparisons").EnumerateArray().Single().GetProperty("text_page").GetProperty("pages").GetInt32();
+        Assert.IsGreaterThan(2, pages, "70 articles of about 3,300 bytes each pass one page's bytes");
+        var served = new List<string>();
+        var perPage = new List<int>();
+        for (var number = 1; number <= pages; number++)
+        {
+            var envelope = number == 1 ? first : await DiffAsync(mount, identifier, from, to, page: number);
+            var comparison = envelope.Result!.Value.GetProperty("comparisons").EnumerateArray().Single();
+            var textPage = comparison.GetProperty("text_page");
+            Assert.AreEqual(number, textPage.GetProperty("page").GetInt32());
+            Assert.AreEqual(pages, textPage.GetProperty("pages").GetInt32());
+            var rows = comparison.GetProperty("articles").EnumerateArray().ToArray();
+            Assert.HasCount(130, rows, "every row is on every page; only the texts are paged");
+            Assert.AreEqual(130, comparison.GetProperty("counts").GetProperty("changed").GetInt32());
+            var withText = rows.Where(static row => row.GetProperty("to").EnumerateArray().Single().TryGetProperty("text", out _)).ToArray();
+            Assert.IsTrue(withText.All(static row => row.GetProperty("from").EnumerateArray().Single().TryGetProperty("text", out _)), "both sides of a row on the page");
+            Assert.IsLessThanOrEqualTo(50, withText.Length, $"page {number}: at most 50 articles");
+            var bytes = withText.Sum(static row => new[] { "from", "to" }.Sum(side =>
+                (long)Encoding.UTF8.GetByteCount(row.GetProperty(side).EnumerateArray().Single().GetProperty("text").GetString()!)));
+            Assert.IsLessThanOrEqualTo(98_304L, bytes, $"page {number}: at most 98,304 bytes of texts");
+            var onPage = withText.Select(static row => row.GetProperty("publisher_id").GetString()!).ToArray();
+            Assert.AreEqual(onPage[0], textPage.GetProperty("first").GetString());
+            Assert.AreEqual(onPage[^1], textPage.GetProperty("last").GetString());
+            served.AddRange(onPage);
+            perPage.Add(onPage.Length);
+        }
+
+        CollectionAssert.AreEqual(ids, served.ToArray(), "every changed article's wording on exactly one page, in the rows' order");
+        Assert.AreEqual(50, perPage[0], "the first page is cut by its 50 articles");
+        Assert.IsLessThan(50, perPage[1], "the next by its bytes");
+
+        // A page past the last is refused as a reading's page is, naming the pages.
+        var past = await DiffAsync(mount, identifier, from, to, page: pages + 1);
+        Assert.AreEqual("anchor_not_in_version", past.Refusal?.Code);
+        Assert.AreEqual(pages + 1, past.Refusal!.HelpfulPayload.GetProperty("requested_page").GetInt32());
+        Assert.AreEqual(pages, past.Refusal.HelpfulPayload.GetProperty("pages").GetInt32());
+        Assert.AreEqual("fra", past.Refusal.HelpfulPayload.GetProperty("language").GetString());
+
+        // A comparison in which nothing moved has no page; a later page of it is past the last.
+        var same = await DiffAsync(mount, identifier, from, Shift(from, 1));
+        Assert.AreEqual(JsonValueKind.Null, same.Result!.Value.GetProperty("comparisons").EnumerateArray().Single().GetProperty("text_page").ValueKind);
+        Assert.AreEqual("anchor_not_in_version", (await DiffAsync(mount, identifier, from, Shift(from, 1), page: 2)).Refusal?.Code);
     }
 
     [TestMethod]
@@ -644,6 +767,8 @@ public sealed class V3CorpusDiffMountTests
     [DataRow("{\"operation_id\":\"diff\",\"parameters\":{\"identifier\":\"/lu-legilux/w\",\"date_from\":\"2024-01-01\",\"date_to\":\"2025-1-1\"}}")]
     [DataRow("{\"operation_id\":\"diff\",\"parameters\":{\"identifier\":\"/lu-legilux/w\",\"date_from\":\"2024-01-01\",\"date_to\":\"2025-01-01\",\"language\":\"\"}}")]
     [DataRow("{\"operation_id\":\"diff\",\"parameters\":{\"identifier\":\"/lu-legilux/w\",\"date_from\":\"2024-01-01\",\"date_to\":\"2025-01-01\",\"anchor\":\"art_1\"}}")]
+    [DataRow("{\"operation_id\":\"diff\",\"parameters\":{\"identifier\":\"/lu-legilux/w\",\"date_from\":\"2024-01-01\",\"date_to\":\"2025-01-01\",\"page\":0}}")]
+    [DataRow("{\"operation_id\":\"diff\",\"parameters\":{\"identifier\":\"/lu-legilux/w\",\"date_from\":\"2024-01-01\",\"date_to\":\"2025-01-01\",\"page\":\"2\"}}")]
     public async Task UnusableDiffRequestsAreBelowEnvelopeSchemaRejections(string body)
     {
         var fixture = await MountedFixture.CreateAsync();
@@ -674,12 +799,18 @@ public sealed class V3CorpusDiffMountTests
         DateOnly.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture)
             .AddDays(days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-    private static async Task<V3Envelope> DiffAsync(V3CorpusMount mount, string identifier, string dateFrom, string dateTo, string? language = null)
+    private static async Task<V3Envelope> DiffAsync(
+        V3CorpusMount mount, string identifier, string dateFrom, string dateTo, string? language = null, int? page = null)
     {
-        var parameters = new Dictionary<string, string> { ["identifier"] = identifier, ["date_from"] = dateFrom, ["date_to"] = dateTo };
+        var parameters = new Dictionary<string, object> { ["identifier"] = identifier, ["date_from"] = dateFrom, ["date_to"] = dateTo };
         if (language is not null)
         {
             parameters["language"] = language;
+        }
+
+        if (page is not null)
+        {
+            parameters["page"] = page.Value;
         }
 
         var context = await PostAsync(mount, DiffRawTarget, JsonSerializer.Serialize(new { operation_id = "diff", parameters }));

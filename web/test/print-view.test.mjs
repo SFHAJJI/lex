@@ -101,3 +101,56 @@ test("on paper the page is black on white whatever the colour scheme, at its ful
   assert.match(block, /code\s*\{[^}]*overflow-wrap:\s*anywhere;/);
   assert.match(block, /\[data-quote-evidence\],\s*\[data-citation-form\],\s*\.breadcrumbs\s*\{[^}]*break-inside:\s*avoid;/);
 });
+
+test("a touch target is at least 44 by 44 CSS pixels, links in lists, summaries, controls and the info control alike (R62)", () => {
+  const rule = (selector) => {
+    const at = css.indexOf(selector);
+    assert.ok(at >= 0, selector);
+    return css.slice(at, css.indexOf("}", at));
+  };
+  for (const selector of ["li > a,\nsummary,\n.verify-cluster a {", "input[type='date'] {", ".check-official {", ".info-control {"]) {
+    assert.match(rule(selector), /min-block-size: 44px;/, selector);
+  }
+  for (const selector of ["li > a,\nsummary,\n.verify-cluster a {", "input[type='date'] {", ".info-control {"]) {
+    assert.match(rule(selector), /min-inline-size: 44px;/, selector);
+  }
+  assert.doesNotMatch(css, /min-(?:block|inline)-size: 24px;/, "no target keeps the 24 pixel floor");
+  // Every control stands in the controls' rule, the select and the checkbox too (the review of #1004, F5: a select in a form was
+  // about 40 pixels tall), and nothing after it lowers a select's or a checkbox's block size.
+  const head = css.indexOf("button,\n.filter-chip,");
+  const controls = css.slice(head, css.indexOf("{", head)).split(",").map((selector) => selector.trim());
+  for (const control of ["button", ".filter-chip", "select", "input[type='checkbox']", "input[type='text']", "input[type='search']", "input[type='date']"]) {
+    assert.ok(controls.includes(control), control);
+  }
+  assert.match(css.slice(head, css.indexOf("}", head)), /min-block-size: 44px;/);
+  assert.doesNotMatch(css, /(?:select|checkbox[^{]*)\{[^}]*(?:min-block-size|block-size|height):\s*(?:[0-3]?\d|4[0-3])px/, "no rule lowers a select or a checkbox");
+});
+
+test("at 320 CSS pixels the coverage page's sentences wrap and its blocks never widen the page (the journeys' coverage step)", () => {
+  const rule = (selector) => {
+    const at = css.indexOf(`${selector} {`);
+    assert.ok(at >= 0, selector);
+    return css.slice(at, css.indexOf("}", at));
+  };
+  // One column no wider than the block, and the platform's sentences, which name its tokens in plain text, wrap anywhere.
+  assert.match(rule(".coverage-block"), /grid-template-columns: minmax\(0, 1fr\);/);
+  const wrapped = css.slice(css.indexOf(".coverage-scope,\n.coverage-note,\n.coverage-held {"), css.indexOf("}", css.indexOf(".coverage-scope,\n.coverage-note,\n.coverage-held {")));
+  assert.match(wrapped, /overflow-wrap: anywhere;/);
+  // A table keeps its own scroll region rather than wrapping its cells letter by letter.
+  assert.match(css.slice(css.indexOf(".coverage-scroll,\n.table-scroll {")), /^[^}]*overflow-x: auto;/);
+});
+
+test("on a phone the first screen gives way around the 44 pixel targets, never the targets themselves (R62, R47)", () => {
+  // Every rule for a phone's width (max-width: 30rem), read whole.
+  const phone = [...css.matchAll(/@media \(max-width: 30rem\) \{([\s\S]*?)\n\}/g)].map((match) => match[1]).join("\n");
+  assert.match(phone, /\.site-tagline \{\s*display: none;\s*\}/, "the tagline steps out on a phone (the home page's heading says the same)");
+  assert.match(phone, /\.site-nav ul \{\s*gap: 0 0\.5rem;\s*\}/);
+  assert.match(phone, /\.not-advice \{\s*line-height: 1\.4;\s*\}/);
+  // No phone rule touches a target's size: the floors of the links in lists, the controls and the info control stand.
+  for (const block of phone.split("}")) {
+    const [selectors, body = ""] = block.split("{");
+    if (/\b(?:a|button|input|select|summary)\b|filter-chip|info-control|check-official/.test(selectors ?? "")) {
+      assert.doesNotMatch(body, /(?:min-)?(?:block-size|height)\s*:/, `a phone rule sizes a target: ${selectors.trim()}`);
+    }
+  }
+});
