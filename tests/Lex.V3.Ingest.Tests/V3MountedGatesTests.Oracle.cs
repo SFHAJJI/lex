@@ -222,6 +222,41 @@ public sealed partial class V3MountedGatesTests
         public IReadOnlyList<string> HeldLanguages(string work) =>
             RowsOf(work).Where(static row => row.Held).Select(static row => row.Language).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
 
+        /// <summary>
+        /// The classes of the interval rules a work's catalogue holds, by the oracle's own reading of its rows: a code, a hole, an
+        /// overlap, a same-date group, an invalid interval, an unclear end day, a state without text after a held one or before
+        /// the first held one, a translation, a state naming no expression. What the gate's sample is stratified by.
+        /// </summary>
+        public IReadOnlyList<string> Classes(string work)
+        {
+            var rows = RowsOf(work);
+            var chain = Chain(work, French);
+            var classes = new List<string>();
+            if (rows.Any(static row => row.Kind == "code")) classes.Add("code");
+            var starts = chain.Select(static row => row.From).Distinct().Order().ToArray();
+            for (var at = 0; at + 1 < starts.Length; at++)
+            {
+                var before = chain.Where(row => !row.Invalid && row.From <= starts[at]).ToArray();
+                if (before.Length > 0 && before.All(static row => row.To is not null) && before.Max(static row => row.To!.Value) < starts[at + 1])
+                {
+                    classes.Add("hole");
+                    break;
+                }
+            }
+
+            var valid = chain.Where(static row => !row.Invalid).ToArray();
+            if (valid.Any(earlier => valid.Any(later => later.From > earlier.From && earlier.To is { } end && end > later.From))) classes.Add("overlap");
+            if (chain.GroupBy(static row => row.From).Any(static group => group.Count() > 1)) classes.Add("same_date");
+            if (chain.Any(static row => row.Invalid)) classes.Add("invalid");
+            if (chain.Any(static row => row.InclusiveSuspected)) classes.Add("unclear_end");
+            var firstHeld = rows.Where(static row => row.Held).Select(static row => row.From).DefaultIfEmpty(DateOnly.MaxValue).Min();
+            if (rows.Any(row => !row.Held && row.From > firstHeld)) classes.Add("textless_after_held");
+            if (rows.Any(row => !row.Held && row.From < firstHeld)) classes.Add("textless_before_held");
+            if (rows.Any(static row => !IsFrench(row.Language))) classes.Add("translation");
+            if (rows.Any(static row => row.Expression.Length == 0)) classes.Add("no_expression");
+            return classes;
+        }
+
         /// <summary>The days a chain's rules change on: each start, and each end, with none outside the chain.</summary>
         public IReadOnlyList<DateOnly> Boundaries(string work, string? language)
         {

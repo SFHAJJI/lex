@@ -55,6 +55,34 @@ public sealed class V3MountedGatesDiagnosticsProbe
         }
 
         var works = new SortedSet<string>(StringComparer.Ordinal);
+
+        // The release's gate as it ran at 7152de65: the timelines over every state row of index 9, textless ones included, by
+        // the index 8 rule; each case it failed, classed by what the reader answered.
+        var allRows = LexIndexAllRowTimelines(connection);
+        var releaseTimelines = allRows.Where(value => timelines.Any(held => held.WorkKey == value.WorkKey)).ToArray();
+        foreach (var (name, arm) in new[] { ("release as_of in fra", V3MachineGatesTests.AsOfArm(mount, "fra")), ("release in_force_on in fra", V3MachineGatesTests.InForceOnArm(mount, "fra")) })
+        {
+            var cases = releaseTimelines.Where(static value => value.Language == "fra").SelectMany(V3MountedGatesTests.Cases).ToArray();
+            var wrong = 0;
+            foreach (var one in cases)
+            {
+                var actual = arm(one.WorkKey, one.AsOf);
+                if (actual == one.ExpectedStateKey)
+                {
+                    continue;
+                }
+
+                wrong++;
+                text.AppendLine($"{name} | {one.CaseId} | {one.AsOf:yyyy-MM-dd} | expected {Short(one.ExpectedStateKey)} | actual {Short(actual)} | {Detail(mount, one.WorkKey, one.AsOf, "fra")}");
+            }
+
+            text.AppendLine($"== {name}: {wrong} of {cases.Length} differ");
+        }
+
+        // The release's refusal set's profiles pair: two states alone on their dates whose profiles differ, over every row.
+        var diff = await EnvelopeAsync(mount, "/api/v3/diff", "diff", new { identifier = "/lu-legilux/code-civil", date_from = "2018-09-16", date_to = "2018-11-01", language = "fra" });
+        text.AppendLine($"== release refusal set, profiles-differ (code-civil 2018-09-16 to 2018-11-01): {(diff.Refusal is { } refused ? refused.Code + " " + refused.HelpfulPayload.GetRawText()[..Math.Min(300, refused.HelpfulPayload.GetRawText().Length)] : "answer")}");
+
         foreach (var language in timelines.Select(static value => value.Language).Distinct().Order(StringComparer.Ordinal))
         {
             var ofLanguage = timelines.Where(value => value.Language == language).ToArray();
@@ -158,6 +186,19 @@ public sealed class V3MountedGatesDiagnosticsProbe
         await File.WriteAllTextAsync(output!, text.ToString());
         Assert.Fail($"V3_GATES_DIAGNOSE wrote {output} and checked nothing.");
     }
+
+    /// <summary>The timelines as the release's gate read them: every state row, textless ones included, by work and language.</summary>
+    private static V3MountedGatesTests.Timeline[] LexIndexAllRowTimelines(SqliteConnection connection) =>
+        LuxembourgIndexBuilderTests.ReadStates(connection)
+            .GroupBy(static row => (row.WorkKey, row.Language))
+            .OrderBy(static group => group.Key.WorkKey, StringComparer.Ordinal)
+            .ThenBy(static group => group.Key.Language, StringComparer.Ordinal)
+            .Select(static group => new V3MountedGatesTests.Timeline(group.Key.WorkKey, group.Key.Language, group
+                .GroupBy(static row => DateOnly.ParseExact(row.ApplicabilityDate, "yyyy-MM-dd", CultureInfo.InvariantCulture))
+                .OrderBy(static date => date.Key)
+                .Select(static date => (date.Key, (IReadOnlyList<string>)date.Select(static row => row.StateSha256).Order(StringComparer.Ordinal).ToArray()))
+                .ToArray()))
+            .ToArray();
 
     private static string Short(string? key) => key is null ? "null" : string.Join('+', key.Split('+').Select(static part => part.Length == 64 ? part[..12] : part));
 

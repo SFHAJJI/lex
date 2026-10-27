@@ -129,4 +129,32 @@ public sealed class V3MountedGatesOracleTests
         Assert.AreEqual("ambiguous_version", derived.Requests["twin-states"].Gold, "the 2021 pair of two wordings");
         StringAssert.Contains(System.Text.Json.JsonSerializer.Serialize(derived.Requests["twin-states"].Parameters), "loi-2021-05-05-n1");
     }
+
+    [TestMethod]
+    public async Task TheTemporalSampleIsStratifiedByTheClassesTheOracleReadsInTheCatalogue()
+    {
+        // The data design's §3.5: a seeded sample may miss every hole of a mount; each class the oracle reads adds works.
+        var harness = RepairFixture();
+        await using var fixture = await IntervalMount.CreateAsync(harness);
+        using var oracle = V3MountedGatesTests.IntervalOracle.Open(fixture.Directory, harness.MemberOutcomes)!;
+        foreach (var (work, kind) in new[]
+                 {
+                     ("code-civil", "code"), ("loi-1798-11-03-n1", "hole"), ("rgd-2007-06-07-n2", "overlap"), ("rgd-2007-06-07-n2", "invalid"),
+                     ("loi-1996-11-07-n1", "unclear_end"), ("loi-2018-09-14-a883", "same_date"), ("loi-2017-07-20-a674", "translation"),
+                     ("loi-2003-03-03-n1", "no_expression"), ("loi-2002-02-02-n1", "textless_before_held"), ("loi-1798-11-03-n1", "textless_after_held"),
+                     ("loi-2004-04-04-n1", "hole"), ("loi-2004-04-04-n1", "overlap"),
+                 })
+        {
+            CollectionAssert.Contains(oracle.Classes(work).ToArray(), kind, work);
+        }
+
+        CollectionAssert.DoesNotContain(oracle.Classes("loi-2010-03-03-n1").ToArray(), "hole", "a single act holds none");
+        var population = V3MountedGatesTests.Timelines(fixture.Directory);
+        var stratified = V3MountedGatesTests.Stratified([], population, oracle);
+        var chosen = stratified.Select(static value => value.WorkKey).ToHashSet(StringComparer.Ordinal);
+        foreach (var kind in new[] { "code", "hole", "overlap", "invalid", "unclear_end", "same_date", "translation", "no_expression", "textless_before_held", "textless_after_held" })
+        {
+            Assert.IsTrue(chosen.Any(work => oracle.Classes(work).Contains(kind)), $"the stratified sample holds a work with {kind}");
+        }
+    }
 }

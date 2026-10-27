@@ -118,10 +118,49 @@ public sealed partial class V3MountedGatesTests
             .ToArray();
     }
 
+    /// <summary>The works each stratum of the temporal gate adds beside the seeded sample, at most (the data design's §3.5).</summary>
+    private const int StratumWorks = 6;
+
+    /// <summary>
+    /// The temporal gate's sample over index 9 (the data design's §3.5): the seeded sample, and in each class of the interval
+    /// rules the oracle reads in the population's catalogue (<see cref="IntervalOracle.Classes"/>), up to
+    /// <see cref="StratumWorks"/> works more in the seeded order, so the classes a random sample may miss are asked of the
+    /// reader on every mount that holds them.
+    /// </summary>
+    internal static IReadOnlyList<Timeline> Stratified(IReadOnlyList<Timeline> sample, IReadOnlyList<Timeline> population, IntervalOracle oracle)
+    {
+        var chosen = sample.Select(static value => value.WorkKey).ToHashSet(StringComparer.Ordinal);
+        var counted = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var work in SeededOrder(population.Select(static value => value.WorkKey).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(), Seed))
+        {
+            var classes = oracle.Classes(work);
+            if (chosen.Contains(work))
+            {
+                foreach (var one in classes) counted[one] = counted.GetValueOrDefault(one) + 1;
+                continue;
+            }
+
+            if (classes.Any(one => counted.GetValueOrDefault(one) < StratumWorks))
+            {
+                chosen.Add(work);
+                foreach (var one in classes) counted[one] = counted.GetValueOrDefault(one) + 1;
+            }
+        }
+
+        return population.Where(value => chosen.Contains(value.WorkKey)).ToArray();
+    }
+
     /// <summary>A seeded sample of the works, all of each chosen work's languages kept together.</summary>
     internal static IReadOnlyList<Timeline> Sample(IReadOnlyList<Timeline> timelines, int works, ulong seed)
     {
-        var keys = timelines.Select(static value => value.WorkKey).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var keys = SeededOrder(timelines.Select(static value => value.WorkKey).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(), seed);
+        var chosen = keys.Take(works).ToHashSet(StringComparer.Ordinal);
+        return timelines.Where(value => chosen.Contains(value.WorkKey)).ToArray();
+    }
+
+    /// <summary>The keys in the seeded sample's order (a Fisher-Yates shuffle by <see cref="SplitMix64"/>).</summary>
+    private static string[] SeededOrder(string[] keys, ulong seed)
+    {
         var random = new SplitMix64(seed);
         for (var at = keys.Length - 1; at > 0; at--)
         {
@@ -129,8 +168,7 @@ public sealed partial class V3MountedGatesTests
             (keys[at], keys[other]) = (keys[other], keys[at]);
         }
 
-        var chosen = keys.Take(works).ToHashSet(StringComparer.Ordinal);
-        return timelines.Where(value => chosen.Contains(value.WorkKey)).ToArray();
+        return keys;
     }
 
     /// <summary>The temporal cases a timeline gives, each with what the timeline says it must select.</summary>
@@ -268,10 +306,12 @@ public sealed partial class V3MountedGatesTests
     /// one per operation with no language, each held to its own operation's answer; on an index of schema 8 or 6 by the works'
     /// timelines, as those readers select.
     /// </summary>
-    internal static EvaluationCardSet[] RunTemporalGate(V3CorpusMount mount, IReadOnlyList<Timeline> timelines, string mountDirectory)
+    internal static EvaluationCardSet[] RunTemporalGate(V3CorpusMount mount, IReadOnlyList<Timeline> timelines, string mountDirectory, IReadOnlyList<Timeline>? population = null)
     {
         using var oracle = IntervalOracle.Open(mountDirectory);
-        return oracle is null ? RunTemporalGate(mount, timelines) : RunIntervalGate(mount, timelines, oracle);
+        return oracle is null
+            ? RunTemporalGate(mount, timelines)
+            : RunIntervalGate(mount, population is null ? timelines : Stratified(timelines, population, oracle), oracle);
     }
 
     internal static EvaluationCardSet[] RunIntervalGate(V3CorpusMount mount, IReadOnlyList<Timeline> timelines, IntervalOracle oracle)
@@ -458,8 +498,9 @@ public sealed partial class V3MountedGatesTests
 
         using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None);
         Assert.IsNotNull(mount, $"{directory} does not mount.");
-        var timelines = Sample(Timelines(directory), WorkSample, Seed);
-        var temporal = RunTemporalGate(mount, timelines, directory);
+        var population = Timelines(directory);
+        var timelines = Sample(population, WorkSample, Seed);
+        var temporal = RunTemporalGate(mount, timelines, directory, population);
         var europeTemporal = RunEuropeTemporalGate(mount, directory);
         var (refusal, derived) = RunRefusalGate(mount, directory, timelines);
         // An EU index that holds a usable word in a wording EU search answers must give the EU requests (review of #846).
