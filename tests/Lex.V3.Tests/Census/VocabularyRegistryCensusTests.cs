@@ -232,9 +232,14 @@ public sealed class VocabularyRegistryCensusTests
                     + "FileName, const ResourceId",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRelationVocabulary: Authorities=2, "
                     + "Predicates=18",
-                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsAdmissionPolicies: "
-                    + "RegisteredSha256s=1, const Policy1Name, const Policy1Text, "
-                    + "static property Policy1Sha256",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsAdmissionPolicies: Admissible=6, "
+                    + "Entries=16, Rulings=3, RegisteredSha256s=16, const Policy1Name, "
+                    + "const Policy1Text, const PolicyAName, const PolicyAText, "
+                    + "const SingleChannelAdmission, const WindowEveryPage, const WindowLivePages, "
+                    + "static property Policy1Sha256, static property PolicyASha256",
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannels: const "
+                    + "ResolutionV2ProfileName, const ResolutionV2ProfileText, "
+                    + "static property ResolutionV2ProfileSha256",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgScopeResolver: AccTypes=1, "
                     + "AdmittedNonShelfTypes=23, MetadataSupportClasses=10, NeverFormats=3, "
                     + "NeverTypes=2, OrdinaryCandidateTypes=17, PointFormats=3, "

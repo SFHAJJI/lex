@@ -28,6 +28,13 @@ namespace Lex.V3.Ingest.Tests;
 /// them; nothing goes over the network.
 /// </para>
 /// <para>
+/// RELEASE 2. With <c>held</c> naming <c>run15-held-release2.jsonl</c> (what <see cref="LuxembourgInFileRightsReadingV2Run15Probe"/>
+/// writes: each held body's disposition under reading /2 and resolution /2) and <c>admission_policy</c> <c>A</c>, a body is
+/// acquired when policy A admits its disposition, and each corpus member whose disposition the file changes is re-bound as R1
+/// re-binds it (resolution /2, binding /2, the policy's outcome; derive-c's evidence references stand in for the /2 evidence
+/// index), so the index builds with the consolidations' text. Without them it runs Release 1, as before.
+/// </para>
+/// <para>
 /// WHAT IT RUNS, from real data, through the production code:
 /// </para>
 /// <list type="bullet">
@@ -64,7 +71,6 @@ public sealed class LuxembourgIndexNineBuildRun15Probe
     private const string EnableVariable = "LEX_LU_INDEX9_BUILD_PROBE";
     private const string RootVariable = "LEX_LU_INDEX9_BUILD_PROBE_ROOT";
     private const int ChunkBodies = 32;
-    private const string AcquiredRights = "agreed_same_run_cc_by";
 
     [TestMethod]
     public async Task IndexNinesBuildOverRun15IsWrittenAndVerified()
@@ -152,8 +158,20 @@ public sealed class LuxembourgIndexNineBuildRun15Probe
         var policy = template.PolicyEvidence;
         var held = new List<(LuxembourgHeldPopulationBuilder.Member Member, DurableBlobWriteReceipt Receipt)>();
         var rightsByRoot = new Dictionary<string, string>(StringComparer.Ordinal);
+        var rightsByObjectRef = new Dictionary<string, string>(StringComparer.Ordinal);
         var mismatchedObjectRefs = 0;
-        foreach (var line in File.ReadLines(Path.Combine(root, "run15-held.jsonl")))
+        // Release 1 reads the acquisition's rights (run15-held.jsonl, policy /1); Release 2 reads the dispositions
+        // LuxembourgInFileRightsReadingV2Run15Probe wrote (run15-held-release2.jsonl) under policy A.
+        var heldFile = (string?)settings["held"] ?? "run15-held.jsonl";
+        var admissionPolicy = (string?)settings["admission_policy"] switch
+        {
+            null or "1" => LuxembourgRightsAdmissionPolicies.Policy1Sha256,
+            "A" => LuxembourgRightsAdmissionPolicies.PolicyASha256,
+            var other => throw new AssertFailedException($"admission_policy {other} is not a registered policy's name"),
+        };
+        summary["held"] = heldFile;
+        summary["admission_policy"] = admissionPolicy;
+        foreach (var line in File.ReadLines(Path.Combine(root, heldFile)))
         {
             var row = JsonNode.Parse(line)!;
             var reference = new DurableBlobRef(
@@ -171,6 +189,7 @@ public sealed class LuxembourgIndexNineBuildRun15Probe
                     new CustodyPolicyEvidence(policy.Schema, reference, policy.VerificationProfile, policy.PolicyKey,
                         policy.Protection, policy.ObservedAt, policy.ProtectedUntil))));
             rightsByRoot[(string)row["root_iri"]!] = (string)row["rights_disposition"]!;
+            rightsByObjectRef[(string)row["object_ref_sha256"]!] = (string)row["rights_disposition"]!;
             if (!heldObjectRefByUri.TryGetValue((string)row["root_iri"]!, out var objectRef) ||
                 !string.Equals(objectRef, (string)row["object_ref_sha256"]!, StringComparison.Ordinal))
             {
@@ -198,9 +217,8 @@ public sealed class LuxembourgIndexNineBuildRun15Probe
             var three = await new LuxembourgAknLegalContentProfile3Producer(store).RunAsync(part, CancellationToken.None);
             foreach (var outcome in three.Outcomes)
             {
-                var acquired = string.Equals(
-                    rightsByRoot[outcome.SourceInventoryOutcome.Input.CorpusRecord.ObjectRef.PublisherUri], AcquiredRights,
-                    StringComparison.Ordinal);
+                var acquired = LuxembourgRightsAdmissionPolicies.Admits(
+                    admissionPolicy, Disposition(rightsByRoot[outcome.SourceInventoryOutcome.Input.CorpusRecord.ObjectRef.PublisherUri]));
                 content.Add(new(
                     ObjectRefOf(outcome.SourceInventoryOutcome),
                     outcome.SemanticIdentitySha256,
@@ -221,6 +239,7 @@ public sealed class LuxembourgIndexNineBuildRun15Probe
                     outcome.SemanticIdentitySha256,
                     LexCorpus6Builder.AknDisposition(outcome.Disposition))).ToArray(),
                 StringComparer.Ordinal);
+        var rebound = 0;
         var members = corpus.Set.Members
             .Where(static member => member.Publisher == PublisherId.LuLegilux)
             .Select(member => member.Stage3Outcomes.Count == 0 && !contentByObject.ContainsKey(member.ObjectRefSha256)
@@ -233,12 +252,42 @@ public sealed class LuxembourgIndexNineBuildRun15Probe
                         .Order(Comparer<LexCorpus6Stage3Outcome>.Create(LexCorpus6Member.CompareStage3Outcomes))
                         .ToArray(),
                 })
+            .Select(member =>
+            {
+                // A held member whose disposition the held file changes is re-bound as R1 re-binds it (resolution /2, binding
+                // /2), its outcome the policy's; derive-c's evidence references stand in for the /2 evidence index.
+                if (member.LuxembourgRights is not { } rights ||
+                    !rightsByObjectRef.TryGetValue(member.ObjectRefSha256, out var wire) ||
+                    wire == ContractWire.NameOf(rights.Disposition))
+                {
+                    return member;
+                }
+
+                var disposition = Disposition(wire);
+                var admitted = LuxembourgRightsAdmissionPolicies.Admits(admissionPolicy, disposition);
+                var rule = LuxembourgRightsChannels.ResolutionV2ProfileSha256;
+                rebound++;
+                return (member with
+                {
+                    Outcome = admitted ? LexCorpus6OutcomeKind.Acquired : LexCorpus6OutcomeKind.RightsWithheld,
+                    LuxembourgRights = rights with
+                    {
+                        Disposition = disposition,
+                        BindingSha256 = LexCorpus6LuxembourgRights.ComputeBindingSha256(
+                            member.RunIdentity, rights.BoundRunIdentity, rights.SelectedWemi.IdentitySha256, rule),
+                        ResolutionRule = rule,
+                    },
+                    Gaps = admitted ? [] : [LuxembourgRightsChannelResolution.ReasonCodeOf(disposition)],
+                }).Validate();
+            })
             .ToArray();
         contentByObject.Clear();
         summary["inputs"] = new JsonObject
         {
             ["records"] = records.Length,
             ["members"] = members.Length,
+            ["members_rebound"] = rebound,
+            ["members_acquired"] = members.Count(static member => member.Outcome == LexCorpus6OutcomeKind.Acquired),
             ["typed_assertion_rows"] = assertions.Count,
             ["held_bodies"] = population.Inputs.Count,
             ["inventory_outcomes"] = Counted(inventory.Outcomes.Select(static outcome => ContractWire.NameOf(outcome.Disposition))),
@@ -264,6 +313,9 @@ public sealed class LuxembourgIndexNineBuildRun15Probe
                 ["articles_with_a_date"] = rows.Articles.Count(static article => article.ApplicabilityDate is not null),
                 ["states"] = rows.States.Length,
                 ["held_states"] = rows.States.Count(static state => state.TextStatus == LuxembourgIndexBuilder.TextHeld),
+                ["held_states_by_kind"] = Counted(rows.States.Where(static state => state.TextStatus == LuxembourgIndexBuilder.TextHeld)
+                    .Select(static state => KindOf(state.ExpressionIri))),
+                ["articles_by_kind"] = Counted(rows.Articles.Select(static article => KindOf(article.ExpressionIri))),
                 ["intervals"] = rows.Intervals.Length,
                 ["work_titles"] = rows.WorkTitles.Length,
                 ["work_titles_by_kind"] = Counted(rows.WorkTitles.Select(static title => KindOf(title.ExpressionIri))),
@@ -331,6 +383,10 @@ public sealed class LuxembourgIndexNineBuildRun15Probe
                         }
                         Phase("reader");
 
+                        // The first file goes before the second is written: one index on disk at a time (this PC's free
+                        // disk), compared by digest and manifest bytes, as the build's double build compares them.
+                        SqliteConnection.ClearAllPools();
+                        LuxembourgIndexBuilder.DeleteDatabase(first);
                         var again = LuxembourgIndexBuilder.WriteFile(
                             second, corpus.ArtifactRef, rows.Members, rows.Articles, rows.States, rows.Intervals, rows.WorkTitles,
                             rows.WorkFacts, bodies, null, builtAtText, derivedAtText, out _, out var againDetail);
@@ -424,6 +480,9 @@ public sealed class LuxembourgIndexNineBuildRun15Probe
             "code" => "code",
             _ => "other",
         };
+
+    private static LuxembourgRightsChannelDisposition Disposition(string wire) =>
+        Enum.GetValues<LuxembourgRightsChannelDisposition>().Single(value => ContractWire.NameOf(value) == wire);
 
     private static JsonObject Counted(IEnumerable<string> values) =>
         new(values.GroupBy(static value => value, StringComparer.Ordinal)

@@ -1,0 +1,310 @@
+using System.Security.Cryptography;
+using System.Text;
+using Lex.V3.Contracts;
+using Lex.V3.Contracts.Source.Core;
+using Lex.V3.Contracts.Source.Luxembourg;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
+
+/// <summary>
+/// Resolution /2 (LU-DATA-DESIGN v2 §1.1, "Resolution", rules 1 to 15) and the admission policy registry (§1.2): one rule per
+/// test, over readings /2 stated directly. The /1 tests (<see cref="LuxembourgRightsChannelsTests"/>) stay as /1's pins.
+/// </summary>
+[TestClass]
+public sealed class LuxembourgRightsResolutionV2Tests
+{
+    /// <summary>Resolution /2's and policy A's texts, hashed outside this code base (Python, over the canonical texts).</summary>
+    internal const string PinnedResolutionV2Sha256 = "ab8a42cb641d1ce75a0e00b5be0c955eb1f2206c5b564777149493c6c9658422";
+    internal const string PinnedPolicyASha256 = "b9687998dcde76930137a913f54b753d3f496a13da1c7d827d3f1573dcf3dc41";
+    private const string Policy1Sha256 = "a477f4f2e6e0468bc9069da742f6f34f248ec831e01277a40552cb1e5bad2abb";
+
+    private const string Xml = "http://data.legilux.public.lu/eli/etat/leg/loi/2021/01/22/a45/consolide/20211217/fr/xml";
+    private const string Pdf = "http://data.legilux.public.lu/eli/etat/leg/loi/2021/01/22/a45/consolide/20211217/fr/pdf";
+    private const string ActXml = "http://data.legilux.public.lu/eli/etat/leg/loi/2021/01/22/a45/jo/fr/xml";
+    private const string CcBy = "http://creativecommons.org/licenses/by/4.0/";
+    private const string Scl = "http://data.legilux.public.lu/resource/authority/license/licenceSCL";
+    private const string Unruled = "https://example.invalid/licence/future";
+
+    [TestMethod]
+    public void TheResolutionAndThePoliciesAreTheirPinnedTexts()
+    {
+        var resolution = LuxembourgRightsChannels.CopyResolutionV2ProfileBytes();
+        StringAssert.StartsWith(Encoding.UTF8.GetString(resolution), "lex-lu-rights-resolution/2\n");
+        Assert.AreEqual(Convert.ToHexStringLower(SHA256.HashData(resolution)), LuxembourgRightsChannels.ResolutionV2ProfileSha256);
+        Assert.AreEqual(PinnedResolutionV2Sha256, LuxembourgRightsChannels.ResolutionV2ProfileSha256);
+
+        var policyA = LuxembourgRightsAdmissionPolicies.CopyPolicyABytes();
+        StringAssert.StartsWith(Encoding.UTF8.GetString(policyA), "lex-lu-rights-admission-policy/A\nadmits=agreed_cc_by_rederived,agreed_same_run_cc_by\n");
+        Assert.AreEqual(Convert.ToHexStringLower(SHA256.HashData(policyA)), LuxembourgRightsAdmissionPolicies.PolicyASha256);
+        Assert.AreEqual(PinnedPolicyASha256, LuxembourgRightsAdmissionPolicies.PolicyASha256);
+        Assert.AreEqual(Policy1Sha256, LuxembourgRightsAdmissionPolicies.Policy1Sha256, "policy /1 unchanged");
+        CollectionAssert.IsSubsetOf(new[] { Policy1Sha256, PinnedPolicyASha256 },
+            LuxembourgRightsAdmissionPolicies.RegisteredSha256s.ToArray());
+    }
+
+    [TestMethod]
+    public void PolicyAAdmitsTheTwoAgreementsAndPolicyOneOnlyTheSameRunOne()
+    {
+        CollectionAssert.AreEqual(new[] { LuxembourgRightsChannelDisposition.AgreedSameRunCcBy },
+            LuxembourgRightsAdmissionPolicies.AdmittingDispositions(Policy1Sha256).ToArray());
+        CollectionAssert.AreEqual(new[] { LuxembourgRightsChannelDisposition.AgreedSameRunCcBy },
+            LuxembourgRightsAdmissionPolicies.AdmittingDispositions(null).ToArray(), "a corpus naming no policy reads as /1");
+        CollectionAssert.AreEqual(
+            new[] { LuxembourgRightsChannelDisposition.AgreedSameRunCcBy, LuxembourgRightsChannelDisposition.AgreedCcByRederived },
+            LuxembourgRightsAdmissionPolicies.AdmittingDispositions(PinnedPolicyASha256).ToArray());
+        foreach (var disposition in Enum.GetValues<LuxembourgRightsChannelDisposition>())
+        {
+            var admittedByA = disposition is LuxembourgRightsChannelDisposition.AgreedSameRunCcBy
+                or LuxembourgRightsChannelDisposition.AgreedCcByRederived;
+            Assert.AreEqual(admittedByA, LuxembourgRightsAdmissionPolicies.Admits(PinnedPolicyASha256, disposition), disposition.ToString());
+        }
+
+        Assert.ThrowsExactly<ArgumentException>(() => LuxembourgRightsAdmissionPolicies.Admits(new string('a', 64),
+            LuxembourgRightsChannelDisposition.AgreedSameRunCcBy), "an unregistered policy names nothing");
+    }
+
+    [TestMethod]
+    public void APolicyNamingADispositionThatCanNeverAdmitCannotBeBuilt()
+    {
+        foreach (var never in new[]
+                 {
+                     LuxembourgRightsChannelDisposition.Conflict, LuxembourgRightsChannelDisposition.Multiple,
+                     LuxembourgRightsChannelDisposition.NonAdmittingLicenceScl, LuxembourgRightsChannelDisposition.MissingValue,
+                     LuxembourgRightsChannelDisposition.Stale, LuxembourgRightsChannelDisposition.TypedQuarantineInFileIdentityUnknown,
+                     LuxembourgRightsChannelDisposition.TypedQuarantineInFileReadingRejected,
+                     LuxembourgRightsChannelDisposition.ChannelEnumerationUnproven,
+                 })
+        {
+            var text = $"lex-lu-rights-admission-policy/X\nadmits={ContractWire.NameOf(never)}\nsingle-channel-admission=none\n"
+                + "single-channel-evidence-window=none\nruling=none\n";
+            Assert.ThrowsExactly<ArgumentException>(() => LuxembourgRightsAdmissionPolicies.Compose(text, never), never.ToString());
+            Assert.IsFalse(LuxembourgRightsAdmissionPolicies.IsAdmissible(never));
+        }
+
+        // A single-channel disposition needs the owner's ruling and its evidence window in the entry's text.
+        var silent = LuxembourgRightsChannelDisposition.SparqlCcByInFileSilent;
+        Assert.ThrowsExactly<ArgumentException>(() => LuxembourgRightsAdmissionPolicies.Compose(
+            "lex-lu-rights-admission-policy/X\nadmits=sparql_cc_by_in_file_silent\nsingle-channel-admission=none\n"
+            + "single-channel-evidence-window=none\nruling=none\n", silent));
+        Assert.ThrowsExactly<ArgumentException>(() => LuxembourgRightsAdmissionPolicies.Compose(
+            "lex-lu-rights-admission-policy/X\nadmits=agreed_same_run_cc_by\nsingle-channel-admission=none\n"
+            + "single-channel-evidence-window=none\nruling=none\n", LuxembourgRightsChannelDisposition.AgreedCcByRederived),
+            "the text names exactly its admitting set");
+    }
+
+    /// <summary>
+    /// The owner's rulings L1, L1b and L2 (LU-DATA-DESIGN v2 §5) are registered entries over policy A, each with option (a)
+    /// or (b): none is on in policy A, a single-channel disposition admits only with its licence page, and under (b) only a
+    /// page observed live. L3 (PDFs) has no entry, and no entry admits a conflict.
+    /// </summary>
+    [TestMethod]
+    public void TheOwnersRulingsAreRegisteredSwitchesOverPolicyA()
+    {
+        Assert.HasCount(16, LuxembourgRightsAdmissionPolicies.RegisteredSha256s, "/1, A, and seven combinations of three rulings, (a) and (b)");
+        Assert.AreEqual(PinnedPolicyASha256, LuxembourgRightsAdmissionPolicies.PolicyFor(false, false, false, false));
+        Assert.AreEqual(PinnedPolicyASha256, LuxembourgRightsAdmissionPolicies.PolicyFor(false, false, false, true), "no ruling, no window");
+        var l2a = LuxembourgRightsAdmissionPolicies.PolicyFor(false, false, true, false);
+        var l2b = LuxembourgRightsAdmissionPolicies.PolicyFor(false, false, true, true);
+        Assert.IsTrue(LuxembourgRightsAdmissionPolicies.IsRegistered(l2a));
+        Assert.IsTrue(LuxembourgRightsAdmissionPolicies.IsRegistered(l2b));
+        var text = Encoding.UTF8.GetString(LuxembourgRightsAdmissionPolicies.CopyPolicyBytes(l2a));
+        StringAssert.StartsWith(text, "lex-lu-rights-admission-policy/A+L2(a)\nadmits=agreed_cc_by_rederived,agreed_same_run_cc_by,sparql_cc_by_in_file_names_other_identity\n");
+        StringAssert.Contains(text, "the-owner's-words-not-yet-given");
+        Assert.AreEqual(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text))), l2a);
+        Assert.IsTrue(LuxembourgRightsAdmissionPolicies.LivePagesOnly(l2b));
+        Assert.IsFalse(LuxembourgRightsAdmissionPolicies.LivePagesOnly(l2a));
+
+        var other = LuxembourgRightsChannelDisposition.SparqlCcByInFileNamesOtherIdentity;
+        Assert.IsFalse(LuxembourgRightsAdmissionPolicies.Admits(l2a, other, null), "no single-channel admission without its licence page");
+        Assert.IsTrue(LuxembourgRightsAdmissionPolicies.Admits(l2a, other, false), "(a): a replayed page counts");
+        Assert.IsFalse(LuxembourgRightsAdmissionPolicies.Admits(l2b, other, false), "(b): only a live page");
+        Assert.IsTrue(LuxembourgRightsAdmissionPolicies.Admits(l2b, other, true));
+        Assert.IsFalse(LuxembourgRightsAdmissionPolicies.Admits(l2a, LuxembourgRightsChannelDisposition.SparqlCcByInFileSilent, true), "L1 is its own switch");
+        Assert.IsFalse(LuxembourgRightsAdmissionPolicies.Admits(PinnedPolicyASha256, other, true), "policy A admits no single channel");
+        Assert.IsTrue(LuxembourgRightsAdmissionPolicies.Admits(l2b, LuxembourgRightsChannelDisposition.AgreedCcByRederived, null));
+        foreach (var policy in LuxembourgRightsAdmissionPolicies.RegisteredSha256s)
+        {
+            Assert.IsFalse(LuxembourgRightsAdmissionPolicies.Admits(policy, LuxembourgRightsChannelDisposition.SparqlCcByInFileNotApplicable, true), "L3 has no entry");
+            Assert.IsFalse(LuxembourgRightsAdmissionPolicies.Admits(policy, LuxembourgRightsChannelDisposition.Conflict, true), "L4: a conflict never admits");
+        }
+
+        var all = LuxembourgRightsAdmissionPolicies.PolicyFor(true, true, true, false);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                LuxembourgRightsChannelDisposition.AgreedSameRunCcBy, LuxembourgRightsChannelDisposition.AgreedCcByRederived,
+                LuxembourgRightsChannelDisposition.SparqlCcByInFileNamesOtherIdentity, LuxembourgRightsChannelDisposition.SparqlCcByInFileSilent,
+                LuxembourgRightsChannelDisposition.SparqlCcByInFileOwnBlockEmpty,
+            },
+            LuxembourgRightsAdmissionPolicies.AdmittingDispositions(all).ToArray());
+        StringAssert.StartsWith(Encoding.UTF8.GetString(LuxembourgRightsAdmissionPolicies.CopyPolicyBytes(all)), "lex-lu-rights-admission-policy/A+L1+L1b+L2(a)\n");
+    }
+
+    [TestMethod]
+    public void ASingleChannelResolutionBindsOnlyItsOwnLicencePage()
+    {
+        var silent = Resolve(Reading(LuxembourgInFileRightsReadingV2Status.Silent, [], []));
+        var observed = new DateTimeOffset(2026, 10, 11, 13, 0, 0, TimeSpan.Zero);
+        var page = new LuxembourgSparqlLicencePage(Xml, PageRef, [CcBy], observed, observedLive: true);
+        var bound = silent.WithLicencePage(page);
+        Assert.AreEqual(page, bound.LicencePage);
+        Assert.AreEqual("lu_rights_publisher_catalogue_only_file_silent", LuxembourgRightsChannelResolution.DisclosureCodeOf(bound.Disposition));
+        Assert.IsTrue(LuxembourgRightsAdmissionPolicies.Admits(LuxembourgRightsAdmissionPolicies.PolicyFor(true, false, false, true), bound));
+        Assert.IsFalse(LuxembourgRightsAdmissionPolicies.Admits(PinnedPolicyASha256, bound));
+        Assert.IsFalse(LuxembourgRightsAdmissionPolicies.Admits(LuxembourgRightsAdmissionPolicies.PolicyFor(true, false, false, false), silent),
+            "unbound, no page: never admitted");
+
+        Assert.ThrowsExactly<ArgumentException>(() => silent.WithLicencePage(new LuxembourgSparqlLicencePage(Pdf, PageRef, [CcBy], observed, true)),
+            "a page of another manifestation");
+        Assert.ThrowsExactly<ArgumentException>(() => silent.WithLicencePage(new LuxembourgSparqlLicencePage(Xml, PageRef, [Scl], observed, true)),
+            "other licences than the SPARQL channel's");
+        Assert.ThrowsExactly<ArgumentException>(() => bound.WithLicencePage(page), "once");
+        var agreed = Resolve(Reading(LuxembourgInFileRightsReadingV2Status.Bound, [CcBy], [CcBy], (Xml, [CcBy])));
+        Assert.ThrowsExactly<ArgumentException>(() => agreed.WithLicencePage(page), "a two-channel agreement cites no page");
+        Assert.IsNull(LuxembourgRightsChannelResolution.DisclosureCodeOf(agreed.Disposition));
+        Assert.ThrowsExactly<ArgumentException>(() => new LuxembourgSparqlLicencePage(Xml, PageRef, [CcBy], observed.ToOffset(TimeSpan.FromHours(2)), true));
+    }
+
+    // ---- Resolution /2, rule by rule. ----
+
+    [TestMethod]
+    public void TwinBlocksBothCcByAgreeRederived()
+    {
+        var result = Resolve(Reading(LuxembourgInFileRightsReadingV2Status.Bound, [CcBy], [CcBy], (Xml, [CcBy]), (Pdf, [CcBy])),
+            catalogue: [(Xml, CcBy), (Pdf, CcBy)]);
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.AgreedCcByRederived, result.Disposition);
+        Assert.AreEqual("rights_agreed_dual_channel_cc_by_4_0_rederived", result.ReasonCode);
+        Assert.IsFalse(result.ChannelsAgreeOnAdmittingLicence, "resolution /1's agreement is a different disposition");
+        Assert.AreEqual(LuxembourgRightsChannels.ResolutionV2ProfileSha256, result.ResolutionRuleSha256);
+        Assert.AreEqual(InFileIndex, result.InFileObservations.EnumerationRef);
+        Assert.AreEqual(Body, result.InFileObservation!.EvidenceRef);
+        CollectionAssert.AreEqual(new[] { CcBy }, result.InFileObservation.LicenceIris.ToArray());
+        Assert.AreEqual(Run, result.InFileObservations.RunIdentity);
+    }
+
+    [TestMethod]
+    public void AnOwnBlockOfCcByBesideASclSiblingIsAConflict() => Assert.AreEqual(
+        LuxembourgRightsChannelDisposition.Conflict,
+        Resolve(Reading(LuxembourgInFileRightsReadingV2Status.Bound, [CcBy], [CcBy, Scl], (Xml, [CcBy]), (Pdf, [Scl]))).Disposition);
+
+    [TestMethod]
+    public void ABlockNamingAnIdentityTheCatalogueMarksSclOrDoubleLicensedIsAConflict()
+    {
+        var twin = Reading(LuxembourgInFileRightsReadingV2Status.Bound, [CcBy], [CcBy], (Xml, [CcBy]), (Pdf, [CcBy]));
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.Conflict, Resolve(twin, catalogue: [(Pdf, Scl)]).Disposition);
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.Conflict, Resolve(twin, catalogue: [(Pdf, CcBy), (Pdf, Scl)]).Disposition);
+        var unbound = Reading(LuxembourgInFileRightsReadingV2Status.Unbound, [], [CcBy], (ActXml, [CcBy]));
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.Conflict, Resolve(unbound, catalogue: [(ActXml, Scl)]).Disposition);
+    }
+
+    [TestMethod]
+    public void AnUnboundFileNamingOnlyUnknownIdentitiesIsQuarantinedAndOneNamingAKnownCcByIdentityIsSingleChannel()
+    {
+        var unbound = Reading(LuxembourgInFileRightsReadingV2Status.Unbound, [], [CcBy], (ActXml, [CcBy]));
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.TypedQuarantineInFileIdentityUnknown, Resolve(unbound).Disposition);
+        var known = Resolve(unbound, catalogue: [(ActXml, CcBy)]);
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.SparqlCcByInFileNamesOtherIdentity, known.Disposition);
+        Assert.IsNull(known.InFileObservation, "a block naming another identity never supplies the held file's licence");
+        Assert.IsFalse(LuxembourgRightsAdmissionPolicies.Admits(PinnedPolicyASha256, known.Disposition));
+    }
+
+    [TestMethod]
+    public void TheSingleChannelReadingsEachHaveTheirOwnDisposition()
+    {
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.SparqlCcByInFileSilent,
+            Resolve(Reading(LuxembourgInFileRightsReadingV2Status.Silent, [], [])).Disposition);
+        var empty = Resolve(Reading(LuxembourgInFileRightsReadingV2Status.OwnBlockEmpty, [], [CcBy], (Xml, []), (Pdf, [CcBy])));
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.SparqlCcByInFileOwnBlockEmpty, empty.Disposition);
+        Assert.AreEqual(0, empty.InFileObservation!.LicenceIris.Count, "the own block was read and states nothing");
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.SparqlCcByInFileNotApplicable,
+            Resolve(Reading(LuxembourgInFileRightsReadingV2Status.NotApplicable, [], [])).Disposition);
+    }
+
+    [TestMethod]
+    public void TheValueRulesKeepTheirOrder()
+    {
+        var bound = Reading(LuxembourgInFileRightsReadingV2Status.Bound, [CcBy], [CcBy], (Xml, [CcBy]));
+        var silent = Reading(LuxembourgInFileRightsReadingV2Status.Silent, [], []);
+        var rejected = Reading(LuxembourgInFileRightsReadingV2Status.AmbiguousBinding, [], []);
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.TypedQuarantineInFileReadingRejected,
+            Resolve(rejected, sparql: [CcBy, Scl]).Disposition, "an in-file rejection outranks SPARQL multiple, as in /1");
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.Multiple, Resolve(silent, sparql: [CcBy, Scl]).Disposition,
+            "SPARQL multiple outranks a silent file");
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.MissingValue, Resolve(bound, sparql: []).Disposition);
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.TypedQuarantineUnrepresentableLicenceShape,
+            Resolve(bound, unrepresentable: 1).Disposition, "an unrepresentable shape dominates");
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.Conflict, Resolve(bound, sparql: [Scl]).Disposition,
+            "a CC BY own block against a licenceSCL catalogue is a conflict");
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.NonAdmittingLicenceScl,
+            Resolve(Reading(LuxembourgInFileRightsReadingV2Status.Bound, [Scl], [Scl], (Xml, [Scl])), sparql: [Scl]).Disposition);
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.TypedQuarantineUnruledLicence,
+            Resolve(Reading(LuxembourgInFileRightsReadingV2Status.Bound, [Unruled], [Unruled], (Xml, [Unruled])), sparql: [Unruled]).Disposition);
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.ChannelEnumerationUnproven, Resolve(bound, sparqlRow: false).Disposition);
+    }
+
+    [TestMethod]
+    public void IndependenceAndTheBoundRunIdentityAreStillRequired()
+    {
+        var bound = Reading(LuxembourgInFileRightsReadingV2Status.Bound, [CcBy], [CcBy], (Xml, [CcBy]));
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.Stale, Resolve(bound, inFileRun: StaleRun).Disposition,
+            "an in-file channel carrying another run identity than the rights' bound one is stale");
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.EvidenceNotIndependent, Resolve(bound, inFileIndex: SparqlEnumeration).Disposition);
+        var sharedBody = new LuxembourgInFileRightsReadingV2(Xml, SparqlRow, LuxembourgInFileRightsReadingV2Status.Bound, [CcBy], [CcBy],
+            [new LuxembourgInFileNamedIdentity(Xml, [CcBy])], []);
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.EvidenceNotIndependent, Resolve(sharedBody).Disposition);
+    }
+
+    [TestMethod]
+    public void AReadingIsConsistentWithItsStatus()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() => Reading(LuxembourgInFileRightsReadingV2Status.Bound, [], [CcBy]));
+        Assert.ThrowsExactly<ArgumentException>(() => Reading(LuxembourgInFileRightsReadingV2Status.Silent, [], [CcBy]));
+        Assert.ThrowsExactly<ArgumentException>(() => Reading(LuxembourgInFileRightsReadingV2Status.Bound, [CcBy], []),
+            "an own-block licence the file does not declare");
+        Assert.ThrowsExactly<ArgumentException>(() => Reading(LuxembourgInFileRightsReadingV2Status.MalformedXml, [], [CcBy]));
+        Assert.ThrowsExactly<ArgumentException>(() => Reading(LuxembourgInFileRightsReadingV2Status.Bound, [" " + CcBy], [" " + CcBy]));
+    }
+
+    // ---- Plumbing. ----
+
+    private static LuxembourgInFileRightsReadingV2 Reading(
+        LuxembourgInFileRightsReadingV2Status status, string[] own, string[] declared, params (string Identity, string[] Licences)[] named) =>
+        new(Xml, Body, status, own, declared, named.Select(static block => new LuxembourgInFileNamedIdentity(block.Identity, block.Licences)).ToArray(), [Xml]);
+
+    private static LuxembourgRightsChannelResolution Resolve(
+        LuxembourgInFileRightsReadingV2 reading,
+        string[]? sparql = null,
+        (string Manifestation, string Licence)[]? catalogue = null,
+        int unrepresentable = 0,
+        bool sparqlRow = true,
+        SourceArtifactRef? inFileRun = null,
+        SourceArtifactRef? inFileIndex = null)
+    {
+        var licences = sparql ?? [CcBy];
+        var rows = sparqlRow
+            ? new[] { new LuxembourgRightsChannelObservation(Xml, Run, SparqlRow, licences.Order(StringComparer.Ordinal).ToArray(), unrepresentable) }
+            : [];
+        var known = (catalogue ?? []).Select(static row => (row.Manifestation, (string?)row.Licence))
+            .Concat(licences.Select(static licence => (Xml, (string?)licence)));
+        return LuxembourgRightsChannels.ResolveV2(
+            Xml, Run, new LuxembourgSparqlRightsChannelObservations(Run, SparqlEnumeration, rows),
+            inFileRun ?? Run, inFileIndex ?? InFileIndex, reading, LuxembourgRightsCatalogue.From(known));
+    }
+
+    private static SourceArtifactRef Run { get; } = Artifact("07b972ed-2a90-4f0a-af09-19ba7c86bc26", '1');
+
+    private static SourceArtifactRef StaleRun { get; } = Artifact("bd96f7f4-24a8-44d1-b9cc-4ca1716918d0", '2');
+
+    private static SourceArtifactRef SparqlRow { get; } = Artifact("4a204e37-4b19-4f73-b3e2-101f4a12a861", '3');
+
+    private static SourceArtifactRef Body { get; } = Artifact("b458bce1-a4df-40a9-981c-037961aacb4f", '4');
+
+    private static SourceArtifactRef SparqlEnumeration { get; } = Artifact("0bf0868f-4bf6-4759-8897-4106168d34f4", '6');
+
+    private static SourceArtifactRef InFileIndex { get; } = Artifact("6ae809e6-b8aa-4038-a71a-70b228f71004", '7');
+
+    private static SourceArtifactRef PageRef { get; } = Artifact("e095c0de-3aa2-457e-ad93-ec4b8f66f39f", '8');
+
+    private static SourceArtifactRef Artifact(string id, char digestCharacter) => new("urn:uuid:" + id, new string(digestCharacter, 64));
+}

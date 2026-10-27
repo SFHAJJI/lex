@@ -407,6 +407,11 @@ export function ReadingView({ view, paging = {}, onNext = null, readableFor = nu
           <Say template={COPY.rightsIn} values={{ rights: view.rightsDisposition, date: view.date, language: view.language }} />
         )}
       </p>
+      {(view.disclosures ?? []).map((disclosure) => (
+        <p key={`${disclosure.code} ${disclosure.observedOn}`} data-rights-disclosure={disclosure.code}>
+          <Say template={COPY.disclosure[disclosure.code]} values={{ date: disclosure.observedOn }} />
+        </p>
+      ))}
       <AsPublished asPublished={view.asPublished} />
       {view.states.map((state) => (
         <StateReading key={state.stateSha256} state={state} workKey={view.workKey} paging={paging[state.stateSha256] ?? null} onNext={onNext} readable={readableFor?.(state) ?? null} />

@@ -112,8 +112,60 @@ function readEuropeAuthenticity(answer, where) {
 
 const DIGEST = /^[0-9a-f]{64}$/;
 
-/** The one rights disposition under which the platform serves text (`agreed_same_run_cc_by`). */
+/** The rights disposition under which every corpus serves text: the two channels of one run agreeing CC BY 4.0. */
 export const ADMITTING_RIGHTS_DISPOSITION = 'agreed_same_run_cc_by';
+
+/**
+ * The rights dispositions under which the platform serves Luxembourg text: the two channels agreeing CC BY 4.0, in the same
+ * run (`agreed_same_run_cc_by`) or as in-file reading /2 reads the file's own block in a re-derivation from custody
+ * (`agreed_cc_by_rederived`, served by a corpus whose admission policy is A). The API holds each corpus to its own policy;
+ * this page refuses anything that is not one of these two agreements.
+ */
+export const ADMITTING_RIGHTS_DISPOSITIONS = Object.freeze([ADMITTING_RIGHTS_DISPOSITION, 'agreed_cc_by_rederived']);
+const ADMITTING_SAID = ADMITTING_RIGHTS_DISPOSITIONS.join(' or ');
+
+/**
+ * The single-channel dispositions a corpus serves only under one of the owner's rulings (L1, L1b, L2): the file does not
+ * state its own licence, and the text rests on the publisher's catalogue declaration alone. A source of one is read only
+ * with its `rights_disclosure` (the licence page it rests on and when it was observed), which the page shows beside the text.
+ */
+export const DISCLOSED_RIGHTS_DISPOSITIONS = Object.freeze([
+  'sparql_cc_by_in_file_names_other_identity',
+  'sparql_cc_by_in_file_own_block_empty',
+  'sparql_cc_by_in_file_silent',
+]);
+
+/** The disclosure codes, one per single-channel disposition, as the API sends them. */
+const DISCLOSURE_CODES = Object.freeze({
+  sparql_cc_by_in_file_names_other_identity: 'lu_rights_publisher_catalogue_only_file_names_other_identity',
+  sparql_cc_by_in_file_own_block_empty: 'lu_rights_publisher_catalogue_only_own_block_empty',
+  sparql_cc_by_in_file_silent: 'lu_rights_publisher_catalogue_only_file_silent',
+});
+
+function readDisclosure(source, disposition, at) {
+  if (!Object.hasOwn(source, 'rights_disclosure')) {
+    if (DISCLOSED_RIGHTS_DISPOSITIONS.includes(disposition)) {
+      throw new Error(`${at} was served under ${disposition} without its rights_disclosure`);
+    }
+    return null;
+  }
+  if (!DISCLOSED_RIGHTS_DISPOSITIONS.includes(disposition)) {
+    throw new Error(`${at} carries a rights_disclosure under ${disposition}, which needs none`);
+  }
+  const disclosure = requireOwn(source, 'rights_disclosure', at);
+  const code = requireText(requireOwn(disclosure, 'code', `${at} rights_disclosure`), `${at} rights_disclosure code`);
+  if (code !== DISCLOSURE_CODES[disposition]) {
+    throw new Error(`${at}'s disclosure ${code} is not ${disposition}'s`);
+  }
+  const live = requireOwn(disclosure, 'licence_page_observed_live', `${at} rights_disclosure`);
+  if (typeof live !== 'boolean') throw new Error(`${at}'s disclosure does not say whether its licence page was observed live`);
+  return Object.freeze({
+    code,
+    licencePageSha256: requireDigest(requireOwn(disclosure, 'licence_page_sha256', `${at} rights_disclosure`), `${at} licence_page_sha256`),
+    observedOn: requireDate(requireOwn(disclosure, 'licence_page_observed_on', `${at} rights_disclosure`), `${at} licence_page_observed_on`),
+    observedLive: live,
+  });
+}
 
 const encoder = new TextEncoder();
 
@@ -346,15 +398,17 @@ function readState(state, index, context) {
   const sources = requireList(requireOwn(state, 'sources', where), `${where} sources`).map((source, sourceIndex) => {
     const at = `${where} source ${sourceIndex + 1}`;
     const disposition = requireText(requireOwn(source, 'rights_disposition', at), `${at} rights_disposition`);
-    if (disposition !== ADMITTING_RIGHTS_DISPOSITION) {
-      throw new Error(`${at} was acquired under ${disposition}; text is served only under ${ADMITTING_RIGHTS_DISPOSITION}`);
+    if (!ADMITTING_RIGHTS_DISPOSITIONS.includes(disposition) && !DISCLOSED_RIGHTS_DISPOSITIONS.includes(disposition)) {
+      throw new Error(`${at} was acquired under ${disposition}; text is served only under ${ADMITTING_SAID}`);
     }
+    const disclosure = readDisclosure(source, disposition, at);
     const body = requireOwn(source, 'body_sha256', at);
     return Object.freeze({
       outcome: requireText(requireOwn(source, 'outcome', at), `${at} outcome`),
       bodySha256: body === null ? null : requireDigest(body, `${at} body_sha256`),
       bodyByteLength: requireOwn(source, 'body_byte_length', at),
       rightsDisposition: disposition,
+      disclosure,
     });
   });
   const bodySha256s = requireList(requireOwn(state, 'body_sha256s', where), `${where} body_sha256s`)
@@ -492,6 +546,22 @@ export function readCitationFacts(facts, states) {
   });
 }
 
+/** The bundle's distinct disclosures; a single-channel bundle disposition needs at least one source of it to carry one. */
+function readBundleDisclosures(rightsDisposition, states) {
+  const seen = new Map();
+  for (const state of states) {
+    for (const source of state.sources) {
+      if (source.disclosure !== null) seen.set(`${source.disclosure.code} ${source.disclosure.observedOn}`, source.disclosure);
+    }
+  }
+  if (DISCLOSED_RIGHTS_DISPOSITIONS.includes(rightsDisposition) &&
+      ![...seen.values()].some((disclosure) => disclosure.code === DISCLOSURE_CODES[rightsDisposition])) {
+    throw new Error(`a bundle served under ${rightsDisposition} names no source disclosing it`);
+  }
+  return Object.freeze([...seen.values()].sort((left, right) =>
+    left.code.localeCompare(right.code) || left.observedOn.localeCompare(right.observedOn)));
+}
+
 /**
  * Reads one V3 Luxembourg `evidence_bundle` answer into the view a live reading screen renders.
  *
@@ -505,8 +575,8 @@ export function readEvidenceBundle(answer) {
     throw new Error(`this evidence bundle is ${JSON.stringify(publisher)}'s; this reader reads the Luxembourg (lu-legilux) bundle only`);
   }
   const rightsDisposition = requireText(requireOwn(answer, 'rights_disposition', where), 'rights_disposition');
-  if (rightsDisposition !== ADMITTING_RIGHTS_DISPOSITION) {
-    throw new Error(`a bundle serves text only under ${ADMITTING_RIGHTS_DISPOSITION}, not ${rightsDisposition}`);
+  if (!ADMITTING_RIGHTS_DISPOSITIONS.includes(rightsDisposition) && !DISCLOSED_RIGHTS_DISPOSITIONS.includes(rightsDisposition)) {
+    throw new Error(`a bundle serves text only under ${ADMITTING_SAID}, not ${rightsDisposition}`);
   }
   const workKey = requireText(requireOwn(answer, 'work_key', where), 'work_key');
   const date = requireDate(requireOwn(answer, 'requested_date', where), 'requested_date');
@@ -556,6 +626,8 @@ export function readEvidenceBundle(answer) {
     availableLanguages,
     rightsDisposition,
     rightsRule: requireText(requireOwn(answer, 'rights_rule', where), 'rights_rule'),
+    // Every single-channel disclosure the bundle's text rests on, once each (the L5 single-channel sentence).
+    disclosures: readBundleDisclosures(rightsDisposition, states),
     states: Object.freeze(states),
     notHeld,
     // An act held only as first published says so (the plan's item 0.6): `as-published.mjs` reads it, or null.

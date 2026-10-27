@@ -483,6 +483,11 @@ export const LIVE_CHROME_FR = Object.freeze({
     idle: 'Saisissez un identifiant d’acte et une date pour lire son texte à cette date.',
     rights: 'Texte communiqué sous {rights}. Lu au {date}.',
     rightsIn: 'Texte communiqué sous {rights}. Lu au {date} en {language}.',
+    disclosure: Object.freeze({
+      lu_rights_publisher_catalogue_only_file_silent: 'Ce fichier n’indique pas lui-même sa licence. Il est communiqué sur la seule foi du catalogue de l’éditeur, qui déclare la licence CC BY 4.0 pour ce fichier, tel qu’observé le {date}.',
+      lu_rights_publisher_catalogue_only_own_block_empty: 'Les métadonnées propres de ce fichier le désignent sans indiquer de licence. Il est communiqué sur la seule foi du catalogue de l’éditeur, qui déclare la licence CC BY 4.0 pour ce fichier, tel qu’observé le {date}.',
+      lu_rights_publisher_catalogue_only_file_names_other_identity: 'La seule mention de licence de ce fichier désigne une autre publication du même acte. Il est communiqué sur la seule foi du catalogue de l’éditeur, qui déclare la licence CC BY 4.0 pour ce fichier, tel qu’observé le {date}.',
+    }),
     stateHeading: '{work}, {language}, la version applicable à partir du {from}',
     stateHeadingNext: '{work}, {language}, la version applicable à partir du {from} (la version suivante détenue s’applique à partir du {next})',
     stateHeadingEntryIntoForce: '{work}, {language}, l’acte tel que publié, daté de son entrée en vigueur le {from} (éditeur)',

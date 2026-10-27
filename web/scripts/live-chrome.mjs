@@ -241,6 +241,13 @@ const EN = Object.freeze({
     idle: "Type a work identifier and a date to read its text on that date.",
     rights: "Text served under {rights}. Read on {date}.",
     rightsIn: "Text served under {rights}. Read on {date} in {language}.",
+    // The L5 single-channel disclosure (LU-DATA-DESIGN v2 §1.2, §5): a text served on the publisher's catalogue alone, under
+    // one of the owner's rulings, says so beside the text with the date its licence page was observed. Drafts the owner revises.
+    disclosure: Object.freeze({
+      lu_rights_publisher_catalogue_only_file_silent: "This file does not state its own licence. It is served on the publisher's catalogue alone, which declares CC BY 4.0 for this file, as observed on {date}.",
+      lu_rights_publisher_catalogue_only_own_block_empty: "This file's own metadata names it but states no licence. It is served on the publisher's catalogue alone, which declares CC BY 4.0 for this file, as observed on {date}.",
+      lu_rights_publisher_catalogue_only_file_names_other_identity: "This file's only licence statement names another publication of the same act. It is served on the publisher's catalogue alone, which declares CC BY 4.0 for this file, as observed on {date}.",
+    }),
     stateHeading: "{work}, {language}, the state applying from {from}",
     stateHeadingNext: "{work}, {language}, the state applying from {from} (the next state held applies from {next})",
     // A state dated by its entry into force (index 9's date_role, S7a; R21): never said as applying from that date.

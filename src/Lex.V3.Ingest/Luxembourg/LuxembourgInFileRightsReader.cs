@@ -122,4 +122,167 @@ internal static class LuxembourgInFileRightsReader
         LuxembourgInFileRightsReading Failure(LuxembourgInFileRightsReadStatus status) =>
             new(manifestationIri, bodyRef, status, []);
     }
+
+    /// <summary>The first line of reading /2's canonical text: its name.</summary>
+    internal const string ReadingV2ProfileName = "lex-lu-in-file-rights-reading/2";
+
+    /// <summary>
+    /// Reading /2's rules as canonical text (LU-DATA-DESIGN v2 §1.1, "Rules /2"): what <see cref="ReadV2Async"/> does, one
+    /// rule per line. Reading /1 (<see cref="ReadAsync"/>) stays byte-identical: run 15's replay runs it.
+    /// </summary>
+    private const string ReadingV2ProfileText =
+        ReadingV2ProfileName + "\n" +
+        "representation=xml-or-xml-akomantoso;any-other-format-is-not_applicable(the-channel-cannot-read-it;not-a-defect-of-the-file)\n" +
+        "parse=the-whole-document;dtd-prohibited;no-resolver;malformed-is-malformed_xml\n" +
+        "root=akomaNtoso-in-the-akn-3.0-or-csd13-namespace;its-element-children-after-any-leading-scl:postit-are-exactly-one-akn-document-element;comments-tolerated;else-root_rejected\n" +
+        "identification=the-document-element's-own-meta/identification;more-than-one-meta-or-identification-is-root_rejected;none-means-no-own-block\n" +
+        "declarations=every-scl:jolux[@scl:name='license']-anywhere-in-the-document;one-with-element-content-or-whose-value-is-not-one-exact-absolute-iri-is-invalid_licence_iri;values-never-trimmed-or-repaired\n" +
+        "named-identities=every-scl:JOLUXManifestation-anywhere,each-scl:jolux[@scl:name='uriThis']-value-verbatim-with-that-block's-licence-values\n" +
+        "binding=the-scl:JOLUXManifestation-of-the-own-identification-whose-uriThis-equals-the-fetched-manifestation-exactly;two-such-blocks,or-such-a-block-naming-a-second-identity,is-ambiguous_binding;sibling-blocks-(the-pdf-twin)-tolerated\n" +
+        "frbr=the-own-identification's-FRBRManifestation/FRBRthis-values-recorded,never-required\n" +
+        "status=bound-when-the-own-block-states-a-licence;own_block_empty-when-it-states-none;else-unbound-when-the-document-declares-a-licence;else-silent\n" +
+        "licence-like-text-outside-scl:jolux-never-counts\n";
+
+    /// <summary>The SHA-256 of reading /2's canonical text, lowercase hex.</summary>
+    internal static string ReadingV2ProfileSha256 { get; } =
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(ReadingV2ProfileText)));
+
+    /// <summary>Reading /2's canonical text, as UTF-8 bytes (a copy).</summary>
+    internal static byte[] CopyReadingV2ProfileBytes() => System.Text.Encoding.UTF8.GetBytes(ReadingV2ProfileText);
+
+    /// <summary>
+    /// In-file rights reading /2 (<see cref="ReadingV2ProfileText"/>) of the retained body <paramref name="bodyRef"/>, read by
+    /// its digest and checked: the licence the document's own block states for <paramref name="manifestationIri"/>, every
+    /// licence the file declares, every identity its blocks name, and its FRBR identity, recorded. It binds by the
+    /// publisher's own block for the fetched manifestation, never by FRBR and never by a neighbour's block: a PDF twin's block
+    /// is a named identity, never the held body's licence.
+    /// </summary>
+    internal static async Task<LuxembourgInFileRightsReadingV2> ReadV2Async(
+        ICustodyStore store,
+        SourceArtifactRef bodyRef,
+        string manifestationIri,
+        LuxembourgUserFormatToken format,
+        CancellationToken cancellationToken)
+    {
+        if (format is not (LuxembourgUserFormatToken.Xml or LuxembourgUserFormatToken.XmlAkomaNtoso))
+        {
+            // The body is still read by its digest: a reading names only bytes custody holds.
+            _ = await CustodyRestore.ReadByDigestCheckedAsync(store, bodyRef.Sha256, cancellationToken).ConfigureAwait(false);
+            return Empty(LuxembourgInFileRightsReadingV2Status.NotApplicable);
+        }
+
+        var bytes = await CustodyRestore.ReadByDigestCheckedAsync(store, bodyRef.Sha256, cancellationToken).ConfigureAwait(false);
+        return ReadV2(bytes, bodyRef, manifestationIri);
+
+        LuxembourgInFileRightsReadingV2 Empty(LuxembourgInFileRightsReadingV2Status status) =>
+            new(manifestationIri, bodyRef, status, [], [], [], []);
+    }
+
+    /// <summary>Reading /2 over bytes already read by their digest (<see cref="ReadV2Async"/>).</summary>
+    internal static LuxembourgInFileRightsReadingV2 ReadV2(ReadOnlyMemory<byte> bytes, SourceArtifactRef bodyRef, string manifestationIri)
+    {
+        XDocument document;
+        try
+        {
+            using var stream = new MemoryStream(bytes.ToArray(), writable: false);
+            using var reader = XmlReader.Create(stream, new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver = null,
+                MaxCharactersInDocument = CustodyBounds.MaxObjectBytes,
+            });
+            document = XDocument.Load(reader, LoadOptions.None);
+        }
+        catch (XmlException)
+        {
+            return Empty(LuxembourgInFileRightsReadingV2Status.MalformedXml);
+        }
+
+        var root = document.Root;
+        if (root is null || root.Name.LocalName != "akomaNtoso" ||
+            root.Name.NamespaceName is not
+                ("http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" or
+                 "http://docs.oasis-open.org/legaldocml/ns/akn/3.0"))
+        {
+            return Empty(LuxembourgInFileRightsReadingV2Status.RootRejected);
+        }
+
+        XNamespace akn = root.Name.Namespace;
+        XNamespace scl = "http://www.scl.lu";
+        var children = root.Elements().SkipWhile(element => element.Name == scl + "postit").ToArray();
+        if (children.Length != 1 || children[0].Name.Namespace != akn)
+        {
+            return Empty(LuxembourgInFileRightsReadingV2Status.RootRejected);
+        }
+
+        var metas = children[0].Elements(akn + "meta").ToArray();
+        var identifications = metas.SelectMany(meta => meta.Elements(akn + "identification")).ToArray();
+        if (metas.Length > 1 || identifications.Length > 1)
+        {
+            return Empty(LuxembourgInFileRightsReadingV2Status.RootRejected);
+        }
+
+        // Every licence declaration in the document: markup inside one, or a value that is not one exact IRI, refuses.
+        var declarations = root.Descendants(scl + "jolux").Where(IsLicence).ToArray();
+        if (declarations.Any(static element => element.HasElements) ||
+            declarations.Any(static element => !IsExactAbsoluteIri(element.Value)))
+        {
+            return Empty(LuxembourgInFileRightsReadingV2Status.InvalidLicenceIri);
+        }
+
+        var declared = Sorted(declarations.Select(static element => element.Value));
+        var named = new List<LuxembourgInFileNamedIdentity>();
+        foreach (var block in root.Descendants(scl + "JOLUXManifestation"))
+        {
+            var licences = Sorted(block.Elements(scl + "jolux").Where(IsLicence).Select(static element => element.Value));
+            foreach (var identity in UriThis(block))
+            {
+                named.Add(new LuxembourgInFileNamedIdentity(identity, licences));
+            }
+        }
+
+        var identification = identifications.SingleOrDefault();
+        var frbr = identification is null
+            ? []
+            : Sorted(identification.Elements(akn + "FRBRManifestation").Elements(akn + "FRBRthis")
+                .Select(static element => (string?)element.Attribute("value"))
+                .Where(static value => !string.IsNullOrEmpty(value))
+                .Select(static value => value!));
+        var own = identification is null
+            ? []
+            : identification.Elements(scl + "JOLUXManifestation")
+                .Where(block => UriThis(block).Contains(manifestationIri, StringComparer.Ordinal))
+                .ToArray();
+        if (own.Length > 1 || own.Length == 1 && UriThis(own[0]).Count() != 1)
+        {
+            return Empty(LuxembourgInFileRightsReadingV2Status.AmbiguousBinding);
+        }
+
+        if (own.Length == 1)
+        {
+            var ownLicences = Sorted(own[0].Elements(scl + "jolux").Where(IsLicence).Select(static element => element.Value));
+            return new(manifestationIri, bodyRef,
+                ownLicences.Length == 0 ? LuxembourgInFileRightsReadingV2Status.OwnBlockEmpty : LuxembourgInFileRightsReadingV2Status.Bound,
+                ownLicences, declared, named, frbr);
+        }
+
+        return new(manifestationIri, bodyRef,
+            declared.Length == 0 ? LuxembourgInFileRightsReadingV2Status.Silent : LuxembourgInFileRightsReadingV2Status.Unbound,
+            [], declared, named, frbr);
+
+        bool IsLicence(XElement element) => (string?)element.Attribute(scl + "name") == "license";
+
+        IEnumerable<string> UriThis(XElement block) => block.Elements(scl + "jolux")
+            .Where(element => (string?)element.Attribute(scl + "name") == "uriThis" && element.Value.Length != 0)
+            .Select(static element => element.Value);
+
+        LuxembourgInFileRightsReadingV2 Empty(LuxembourgInFileRightsReadingV2Status status) =>
+            new(manifestationIri, bodyRef, status, [], [], [], []);
+    }
+
+    // Distinct only: the reading's record sorts its own lists in the contract's order.
+    private static string[] Sorted(IEnumerable<string> values) => values.Distinct(StringComparer.Ordinal).ToArray();
+
+    // The rights contract's exact IRI validation, as reading /1 reuses it; nothing is trimmed or repaired.
+    private static bool IsExactAbsoluteIri(string value) => LuxembourgInFileRightsReadingV2.IsExactLicenceIri(value);
 }

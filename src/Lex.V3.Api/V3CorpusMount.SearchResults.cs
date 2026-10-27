@@ -93,9 +93,9 @@ internal sealed partial class V3CorpusMount
                 var rows = sources.GetValueOrDefault(state.StateSha256) ?? [];
                 byState[state.StateSha256] = new SearchableState(
                     state,
-                    rows.Length > 0 && rows.All(static row =>
+                    rows.Length > 0 && rows.All(row =>
                         string.Equals(row.Outcome, AcquiredOutcomeToken, StringComparison.Ordinal) &&
-                        string.Equals(row.RightsDisposition, EvidenceBundleAdmittingRightsDisposition, StringComparison.Ordinal)),
+                        AdmitsRights(row.RightsDisposition)),
                     rows.Sum(static row => row.ArticlesWithSearchableText));
             }
 
