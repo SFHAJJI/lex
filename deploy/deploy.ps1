@@ -20,6 +20,12 @@ With -Apply, in order:
    stops the deployment, having changed nothing: a -Public deployment admits everyone (the template empties the rules as it
    deploys, before the candidate is probed), so it is for the open site only, and the opening is -Open's (the review of
    #989: on the private copy the rules were removed, and a failed probe deactivated only the candidate). A plan run says so;
+   then the app's revisions are read, also before anything in Azure changes. The candidate is named
+   `<app>--<release>-<digest>`: the release's version, and the first 8 hex digits of a SHA-256 over what makes the
+   revision (the image, -SearchEngines, -Public, the -AllowedCidr ranges and deploy/main.bicep), so the same release
+   deployed again with another setting is a revision of its own (the incident of 2026-10-27, STATUS-WEB.md). A name the
+   app already holds, or -LiveRevision's, stops the deployment there, having changed nothing; a read that fails stops it
+   too, unless it is a first deployment (no -LiveRevision). The plan prints the name;
 3. the release image is copied into the registry out of the release by its manifest digest (`oras cp`); the app is
    deployed by that digest, never by a tag;
 4. `deploy/main.bicep` is deployed: the image by digest as a new revision with the `candidate` label and no traffic
@@ -45,7 +51,10 @@ With -Apply, in order:
    fixture mounts only, and a release rehearsed with `image-rehearsal.mjs --no-browser` walks none. A browser walk of
    the private candidate from a machine where a browser is allowed (-BrowserProbe there) is the step left before the
    opening (STATUS-WEB.md);
-7. if the probe fails, the candidate revision is deactivated (the removal step) and the script exits non-zero.
+7. if the probe fails, the candidate revision is deactivated (the removal step) and the script exits non-zero. Every
+   deactivation the deployment makes (a failed deployment, a candidate that fails or is never ready, a failed probe) is
+   of a revision this deployment created, one that was not among the revisions read in step 2; if they could not be read,
+   nothing is deactivated, and the script says so.
 Promotion (moving traffic to the candidate) is printed for the owner and never run.
 
 -Remove deactivates one revision of the app and exits: the removal step on its own.
@@ -101,6 +110,35 @@ $checkout = Split-Path -Parent $PSScriptRoot
 $AllowedCidr = Get-AllowedCidrs $AllowedCidr
 
 function Step([string] $what) { Write-Host "== $what" }
+
+function Get-TextDigest([string] $Text) {
+    [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData([System.Text.Encoding]::UTF8.GetBytes($Text))).ToLowerInvariant()
+}
+
+# The candidate revision's suffix: the release's version, and the first 8 hex digits of a SHA-256 over the settings that make
+# the revision, so each deployment of a release with other settings names a revision of its own, and the same settings the
+# same one (refused below, before anything changes, if Azure holds it). A revision is named <app>--<suffix>: the suffix is
+# lower-case letters, digits and '-', begins with a letter, ends with a letter or a digit, has no '--' and is at most 64
+# characters (the Container Apps documentation, "Revisions"; az refuses '--' too), and the revision's own address, which the
+# probe asks, is <revision>.<environment domain>, so the whole name is one DNS label of at most 63 characters. A release's
+# version too long for the room left keeps its end (the time and the commit) and the digest; a name that cannot be formed
+# stops the deployment before anything runs.
+function Get-RevisionSuffix([string] $Version, [string] $App, [System.Collections.IDictionary] $Settings) {
+    $text = ($Settings.Keys | ForEach-Object {
+            $value = $Settings[$_]
+            $shown = if ($value -is [array]) { $value -join ',' } elseif ($value -is [bool]) { "$value".ToLowerInvariant() } else { "$value" }
+            "$_=$shown"
+        }) -join "`n"
+    $settingsDigest = (Get-TextDigest $text).Substring(0, 8)
+    $release = (($Version.ToLowerInvariant() -replace '[^a-z0-9-]', '-') -replace '-{2,}', '-').Trim('-')
+    $room = 63 - "$App--".Length - "-$settingsDigest".Length
+    if ($room -gt 0 -and $release.Length -gt $room) { $release = $release.Substring($release.Length - $room) -replace '^[^a-z]+', '' }
+    $suffix = "$release-$settingsDigest"
+    if ($room -le 0 -or $suffix -cnotmatch '^[a-z][a-z0-9-]*[a-z0-9]$' -or $suffix.Contains('--') -or $suffix.Length -gt 64 -or "$App--$suffix".Length -gt 63) {
+        throw "No revision of $App can be named for this release ($Version): a revision's name is <app>--<suffix>, at most 63 characters, and its suffix is lower-case letters, digits and '-', a letter first. Nothing is deployed."
+    }
+    return $suffix
+}
 
 # Without -BrowserProbe the probes run with the browser trap loaded first, so nothing they run can find or start a browser;
 # the opening's check of the legal pages runs under it too. The trap's file URL by the constructor, never a cast: on Linux a
@@ -198,10 +236,19 @@ $manifest = Get-Content (Join-Path $releasePath 'release-manifest.json') -Raw | 
 $digest = $manifest.image.manifest_digest
 if ($digest -notmatch '^sha256:[0-9a-f]{64}$') { throw "The release manifest names no image digest." }
 $image = "$Registry/$Repository@$digest"
-$suffix = ($manifest.version.ToLowerInvariant() -replace '[^a-z0-9-]', '-')
-if ($suffix.Length -gt 40) { $suffix = $suffix.Substring($suffix.Length - 40).TrimStart('-') }
+# Each deployment's revision is its own (the incident of 2026-10-27: the live release, deployed again to change only
+# LEX_V3_SEARCH_ENGINES, was given the live revision's own suffix; Azure refused it, "revision with suffix ... already
+# exists", and the failure step then deactivated the revision of that name, the live one: the site was down three minutes).
+# The digest is of what makes the revision: the image, the settings the template is handed for it, and the template itself.
+$revisionSettings = [ordered]@{
+    image = $image; searchEngines = $SearchEngines; openToPublic = [bool]$Public; allowedSourceCidrs = @($AllowedCidr)
+    template = Get-TextDigest ((Get-Content -Raw -LiteralPath (Join-Path $checkout 'deploy/main.bicep')) -replace "`r`n", "`n")
+}
+$suffix = Get-RevisionSuffix $manifest.version $AppName $revisionSettings
+$candidate = "$AppName--$suffix"
 $archive = Join-Path $releasePath 'lex-v3-image.oci.tar'
 Write-Host "  release $($manifest.version): image $digest, corpus $($manifest.corpus.sha256)"
+Write-Host "  revision ${candidate}: the release's suffix and the digest $($suffix.Substring($suffix.Length - 8)) of this deployment's settings (the image, searchEngines $SearchEngines, openToPublic $([bool]$Public), allowedSourceCidrs [$($AllowedCidr -join ',')], deploy/main.bicep)"
 
 # 2. The owner's subscription; and with -Public, that the site is already open. A -Public deployment admits everyone: the
 # template's openToPublic empties the address rules as it deploys, before the candidate is probed, and a failed probe
@@ -228,6 +275,48 @@ if ($Public) {
     else {
         Write-Host "  > az containerapp show -g $ResourceGroup -n $AppName --query properties.configuration.ingress.ipSecurityRestrictions -o json: any address rule stops a -Public deployment here, before anything in Azure changes (the site is private: open it with deploy.ps1 -Open first)"
     }
+}
+# The app's revisions, read before anything in Azure changes, every inactive one too: the deployment never names one that
+# exists, and a failure deactivates only a revision this deployment made (the incident of 2026-10-27). A read that fails stops
+# a redeployment here; a first deployment, whose app holds none yet, goes on, and a failure of it then deactivates nothing.
+Step "read the revisions of ${AppName}: the candidate $candidate must be one it does not hold"
+$priorRevisions = $null
+if ($Apply) {
+    $listed = az containerapp revision list -g $ResourceGroup -n $AppName --all --query "[].name" -o tsv
+    if ($LASTEXITCODE -eq 0) {
+        $priorRevisions = @($listed | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
+        Write-Host "  $AppName holds $($priorRevisions.Count) revision(s), active and inactive"
+    }
+    elseif (-not [string]::IsNullOrEmpty($LiveRevision)) {
+        throw "The revisions of $AppName could not be read; nothing was deployed: without them a failure could not tell a revision this deployment made from one that serves (the incident of 2026-10-27)."
+    }
+    else {
+        Write-Host "  a first deployment: the revisions of $AppName could not be read (it holds none yet), so should this deployment fail, no revision can be told to be its own, and none is deactivated"
+    }
+}
+else {
+    Write-Host "  > az containerapp revision list -g $ResourceGroup -n $AppName --all --query [].name -o tsv: a revision already named $candidate stops the deployment here, before anything in Azure changes"
+}
+$held = @(@($priorRevisions) + @($LiveRevision) | Where-Object { $_ })
+if ($held -contains $candidate) {
+    $which = if ($candidate -eq $LiveRevision) { 'it is -LiveRevision, the revision serving now' } else { 'an earlier deployment of this release with these same settings' }
+    throw "The revision $candidate already exists in $AppName ($which): a deployment makes a revision of its own and never names one that exists. Nothing was deployed and nothing changed. Another setting or a new release names a new revision; one that exists is activated and probed by hand, not deployed again."
+}
+# Only a revision this deployment made is ever deactivated by it: one whose name was not among the app's revisions read above.
+# When they could not be read, none can be told to be its own, and nothing is deactivated: it is said so, and left to -Remove.
+$candidateIsOurs = $null -ne $priorRevisions -and $priorRevisions -notcontains $candidate -and $candidate -ne $LiveRevision
+function Disable-Candidate([string] $Why, [switch] $IfActive) {
+    if (-not $candidateIsOurs) {
+        Step "${Why}: the candidate $candidate is not deactivated"
+        Write-Host "  whether $candidate is this deployment's own is not known (the revisions of $AppName could not be read before it), so nothing is deactivated: check it with az containerapp revision list -g $ResourceGroup -n $AppName --all, and remove it with deploy.ps1 -Remove -Revision $candidate if it is"
+        return
+    }
+    if ($IfActive) {
+        $active = az containerapp revision show -g $ResourceGroup -n $AppName --revision $candidate --query properties.active -o tsv 2>$null
+        if ($LASTEXITCODE -ne 0 -or $active -ne 'true') { return }
+    }
+    Step "${Why}: deactivate the candidate $candidate"
+    az containerapp revision deactivate -g $ResourceGroup -n $AppName --revision $candidate
 }
 
 # 3. The image into the registry: read out of the release by its manifest digest, tagged with the release version as a
@@ -320,14 +409,13 @@ try {
     catch {
         # A candidate that never becomes ready (its readiness route answers 503 while it holds no law) fails the deployment
         # itself, at Azure's progress deadline, before the probe can run: it is deactivated here as a failed probe's is, so
-        # no revision without the law stays active and billed (review of #963).
-        $failedCandidate = "$AppName--$suffix"
-        $active = az containerapp revision show -g $ResourceGroup -n $AppName --revision $failedCandidate --query properties.active -o tsv 2>$null
-        if ($LASTEXITCODE -eq 0 -and $active -eq 'true') {
-            Step "the deployment failed: deactivate the candidate $failedCandidate"
-            az containerapp revision deactivate -g $ResourceGroup -n $AppName --revision $failedCandidate
-        }
-        throw "The candidate revision did not deploy ($($_.Exception.Message)); a candidate that never becomes ready holds no law (GET /health/ready answers 503). It was deactivated if it was active, and no traffic moved to it."
+        # no revision without the law stays active and billed (review of #963). Only if this deployment made it, and it is
+        # active: a deployment Azure refused made none, and the revision of that name is another's (the incident of
+        # 2026-10-27, when it was the live one).
+        $failure = $_.Exception.Message
+        Disable-Candidate 'the deployment failed' -IfActive
+        $outcome = if ($candidateIsOurs) { 'It was deactivated if it was active, and no traffic moved to it.' } else { "Nothing was deactivated: whether $candidate is this deployment's own is not known (above); no traffic moved to it." }
+        throw "The candidate revision did not deploy ($failure); a candidate that never becomes ready holds no law (GET /health/ready answers 503). $outcome"
     }
 }
 finally {
@@ -366,7 +454,6 @@ if (-not $Apply) {
     Write-Host "== planned only: run again with -Apply to deploy (the owner's decision)"
     exit 0
 }
-$candidate = "$AppName--$suffix"
 # The probe asks the candidate revision at its own address, never through the candidate label: the label follows the
 # latest *ready* revision, so while the new revision pulled its image and verified its indexes (about four minutes for the
 # population) the label still named the live one, and on 2026-10-18 the probe held the live revision to this release.
@@ -378,8 +465,7 @@ while ($true) {
     $state = az containerapp revision show -g $ResourceGroup -n $AppName --revision $candidate --query "{running:properties.runningState,health:properties.healthState,provisioning:properties.provisioningState,active:properties.active,fqdn:properties.fqdn}" -o json | ConvertFrom-Json
     $failed = "$($state.provisioning)" -eq 'Failed' -or "$($state.running)" -eq 'Failed'
     if ($failed -or ($null -ne $state -and $state.active -eq $false)) {
-        Step "the candidate cannot become ready: deactivate the candidate $candidate"
-        az containerapp revision deactivate -g $ResourceGroup -n $AppName --revision $candidate
+        Disable-Candidate 'the candidate cannot become ready'
         $why = if ($failed) { "it failed (provisioning $($state.provisioning), running $($state.running))" } else { 'it is not active: activate it first if it should be probed' }
         throw "The candidate $candidate cannot become ready: $why. No traffic moved."
     }
@@ -388,9 +474,8 @@ while ($true) {
         break
     }
     if ((Get-Date) -gt $readyBy) {
-        Step "the candidate did not become ready: deactivate the candidate $candidate"
-        az containerapp revision deactivate -g $ResourceGroup -n $AppName --revision $candidate
-        throw "The candidate $candidate was not ready within 20 minutes ($($state.running), $($state.health)); it was deactivated and no traffic moved."
+        Disable-Candidate 'the candidate did not become ready'
+        throw "The candidate $candidate was not ready within 20 minutes ($($state.running), $($state.health)); $(if ($candidateIsOurs) { 'it was deactivated' } else { 'it was not deactivated (above)' }) and no traffic moved."
     }
     Write-Host "  waiting: $candidate is $($state.provisioning), $($state.running), $($state.health)"
     Start-Sleep -Seconds 15
@@ -403,10 +488,11 @@ if (-not $BrowserProbe) { Write-Host "  no browser probe (no -BrowserProbe): onl
 # traffic, and no promotion command is printed.
 $dataAgeRefused = $LASTEXITCODE -eq 3
 if ($LASTEXITCODE -ne 0 -and -not $dataAgeRefused) {
-    # 7. The removal step: the candidate never carried traffic (or only the allowed addresses'), and is deactivated.
-    Step "the probe failed: deactivate the candidate $candidate"
-    az containerapp revision deactivate -g $ResourceGroup -n $AppName --revision $candidate
-    throw "The candidate failed its probe and was deactivated; no traffic moved."
+    # 7. The removal step: the candidate never carried traffic (or only the allowed addresses'), and is deactivated, if this
+    # deployment made it.
+    Disable-Candidate 'the probe failed'
+    if ($candidateIsOurs) { throw "The candidate failed its probe and was deactivated; no traffic moved." }
+    throw "The candidate failed its probe and was not deactivated (above); no traffic moved."
 }
 
 Step "the candidate $candidate answers as the release holds"
