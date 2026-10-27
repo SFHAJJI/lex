@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-27 at 07:00 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-27 at 04:55 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -17,8 +17,9 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 - Merged on 27 October: Get help, How to read Lex and Developers; a limit of 60 questions a minute per visitor on
   the programming interface, kept only in memory; security headers; the published signing key; an outside check of the
   site every five minutes; and two operating documents, docs/OPERATING.md and docs/INCIDENT-RUNBOOK.md.
-- In review on 27 October: the last screen gaps: example searches on the home page, breadcrumbs, a clean printout of a
-  text, and a maintenance page for deployments.
+- In review on 27 October, repaired after its review: the last screen gaps: breadcrumbs, a clean printout of a text, a
+  maintenance page for deployments, and example searches on the home page, shown only once the list of acts that name no
+  private person exists (not yet). A deployment now refuses to start unless it names the version serving all visitors.
 
 ## The plan
 
