@@ -28,7 +28,7 @@ import { REFUSALS_FR } from './live-chrome-fr.mjs';
 /** The live screens, in the launch contract's order, each with its refusal table. */
 export const SCREENS = Object.freeze([
   Object.freeze({ id: 'coverage', name: 'Trust and Coverage', module: coverage, table: coverage.LIVE_COVERAGE_REFUSAL_SENTENCES }),
-  Object.freeze({ id: 'search', name: 'Search', module: search, table: search.LIVE_SEARCH_REFUSAL_SENTENCES, referenceTable: search.LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES, europeReferenceTable: search.LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES, heldActTable: search.LIVE_SEARCH_HELD_ACT_REFUSAL_SENTENCES }),
+  Object.freeze({ id: 'search', name: 'Search', module: search, table: search.LIVE_SEARCH_REFUSAL_SENTENCES, europeTable: search.LIVE_SEARCH_EUROPE_REFUSAL_SENTENCES, referenceTable: search.LIVE_SEARCH_REFERENCE_REFUSAL_SENTENCES, europeReferenceTable: search.LIVE_SEARCH_EUROPE_REFERENCE_REFUSAL_SENTENCES, heldActTable: search.LIVE_SEARCH_HELD_ACT_REFUSAL_SENTENCES }),
   Object.freeze({ id: 'dossier', name: 'Work dossier', module: dossier, table: dossier.LIVE_DOSSIER_REFUSAL_SENTENCES }),
   Object.freeze({ id: 'reading', name: 'Reading and Export composer', module: reading, table: reading.LIVE_READING_REFUSAL_SENTENCES, europeTable: reading.LIVE_READING_EUROPE_REFUSAL_SENTENCES }),
   Object.freeze({ id: 'history', name: 'Provision history', module: history, table: history.LIVE_HISTORY_REFUSAL_SENTENCES }),

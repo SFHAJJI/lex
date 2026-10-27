@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lex.V3.Contracts;
 using Lex.V3.Contracts.Facts;
+using Lex.V3.Contracts.Index;
 using Lex.V3.Contracts.Platform;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest;
@@ -4048,14 +4049,14 @@ internal sealed partial class V3CorpusMount : IDisposable
     public const int SearchMaxTerms = 32;
 
     internal const string SearchMatching =
-        "byte-exact substring of the article's searchable text, which is its text and reference tokens as the index holds them " +
-        "(modification markers and note references are not searched); case and diacritics are significant; " +
-        "nothing is folded, stemmed or expanded";
+        "substring of the article's searchable text, which is its text and reference tokens as the index holds them " +
+        "(modification markers and note references are not searched); " + TextFolding.Rule + "; nothing is stemmed or expanded";
 
     internal const string SearchLanes =
-        "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, " +
-        "so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, " +
-        "each article once; with a mode it is that lane's whole set. A lane not asked for is null in the population, not zero";
+        "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in " +
+        "any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer " +
+        "is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane's whole " +
+        "set. A lane not asked for is null in the population, not zero";
 
     internal const string SearchPageIs = "the first hits in the stated order, not the best hits";
 
@@ -4080,8 +4081,8 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// (lane R1): one work is a card ahead of every hit, several candidates are listed and none is
     /// picked. With a work named the resolver is not run and the answer says so
     /// (<c>not_run_identifier_given</c>). Then the strict lane,
-    /// the query as typed as a substring of an article's text, and the relaxed lane, every
-    /// whitespace-separated term as a substring in any order. The lanes are sets and the relaxed set
+    /// the query as a substring of an article's text once both are folded (<c>TextFolding</c>: capitals and
+    /// accents ignored), and the relaxed lane, every whitespace-separated term so in any order. The lanes are sets and the relaxed set
     /// contains the strict set. With no <c>mode</c> the answer is the strict hits and then only the
     /// relaxed hits strict did not serve, so an article matching both is served once, as strict, and
     /// every strict hit precedes every relaxed hit: relaxed never outranks strict. With a <c>mode</c>
@@ -4089,7 +4090,7 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// it is null in the population.
     /// <para>
     /// The index holds no FTS table and no ranker. What is served is an order and not a rank, no score
-    /// is served, and every answer says so, says that matching is byte-exact, and says that a page is
+    /// is served, and every answer says so, says how matching folds capitals and accents (<c>TextFolding</c>), and says that a page is
     /// the first hits in the stated order and not the best ones. A requested <c>mode</c> other than the
     /// two lanes is refused <c>retrieval_mode_unavailable</c> naming the modes held, never ignored. The
     /// query is bounded (<see cref="SearchMaxQueryCharacters"/> characters, <see cref="SearchMaxTerms"/>
@@ -4282,7 +4283,7 @@ internal sealed partial class V3CorpusMount : IDisposable
 
         // The lanes are sets and the relaxed set contains the strict set, so a lane is scanned only when
         // it is asked for. With no mode the relaxed lane adds only what strict did not serve; when the
-        // query is one word exactly as typed that is nothing, and the second scan is not paid.
+        // query is one word, its only term, that is nothing, and the second scan is not paid.
         var wantStrict = mode is null || string.Equals(mode, "strict", StringComparison.Ordinal);
         var wantRelaxed = mode is null || string.Equals(mode, "relaxed", StringComparison.Ordinal);
         var relaxedIsStrict = terms.Length == 1 && string.Equals(terms[0], query, StringComparison.Ordinal);
@@ -4482,18 +4483,31 @@ internal sealed partial class V3CorpusMount : IDisposable
     }
 
     internal const string EuropeSearchScope =
+        "one EU act named by the identifier (its CELEX, a work or expression IRI of the act or of one of its consolidated versions, or one of " +
+        "their provisions), in the language asked: with no date, every wording of it this index holds the text of, the original wording and " +
+        "each consolidated version the publisher dated; with a date, the one wording that date selects (selection_rule), as as_of selects it; " +
+        "a search across EU acts is not served";
+
+    /// <summary><see cref="EuropeSearchScope"/> on an EU index that holds no census of the act: its one original wording.</summary>
+    internal const string EuropeSearchOriginalScope =
         "one EU work named by the identifier (its CELEX, work or expression IRI, or one of its provisions), in the one held wording of its " +
-        "expression in the language asked; a search across EU works is not served";
+        "expression in the language asked; this index holds no census of the act, so no consolidated version is searched and a date is not " +
+        "answered; a search across EU works is not served";
 
     internal const string EuropeSearchRanking =
-        "none; strict lane before relaxed lane, then the publisher's article id and article identity. " +
+        "none; strict lane before relaxed lane, then the wording's date, its expression, the publisher's article id and article identity. " +
         "This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits";
 
     internal const string EuropeSearchMatching =
-        "byte-exact substring of the article's searchable text as the EU index holds it; case and diacritics are significant; " +
-        "nothing is folded, stemmed or expanded";
+        "substring of the article's searchable text as the EU index holds it; " + TextFolding.Rule + "; nothing is stemmed or expanded";
 
     internal const string EuropeSearchHitUnit =
+        "a hit is one article of one wording of the act, dated by that wording's role (wording_date and kind: an original wording by the " +
+        "act's Formex date, a consolidated version by the publisher's consolidation date, holding until next_date); with no date, an article's " +
+        "text is one hit, under the latest wording that holds it (fold)";
+
+    /// <summary><see cref="EuropeSearchHitUnit"/> on an EU index that holds no census of the act.</summary>
+    internal const string EuropeSearchOriginalHitUnit =
         "a hit is one article of the one wording this index holds of the expression; no other wording of the act is held";
 
     internal const string EuropeWordingDateSemantics =
@@ -4504,15 +4518,25 @@ internal sealed partial class V3CorpusMount : IDisposable
 
     internal static readonly string[][] EuropeSearchNotHeld =
     [
-        ["later_wordings", "no consolidated version is held, so a later wording of the act is not searched and a date is not answered here"],
+        ["unplaced_versions", "a version the publisher gives no usable date is not searched; timeline lists it, and searched counts it"],
         ["corrigenda_applied", "corrigenda are recorded by the index and not applied to the wording searched"],
-        ["other_languages", "an expression in a language this index holds no wording in is not searched; French expressions are not acquired (Decision 89)"],
-        ["article_text", "no snippet or article text is served; each hit names its provision, which resolve answers"],
+        ["other_languages", "an expression in a language this index holds no wording in is not searched"],
+        ["titles", "no title or Official Journal reference of an EU act is held by the EU index, so an EU act is searched only when named by its identifier, and a search that names no work searches Luxembourg law alone"],
+    ];
+
+    /// <summary><see cref="EuropeSearchNotHeld"/> on an EU index that holds no census of the act.</summary>
+    internal static readonly string[][] EuropeSearchOriginalNotHeld =
+    [
+        ["later_wordings", "this index holds no census of the act, so no consolidated version is searched and a date is not answered here"],
+        ["corrigenda_applied", "corrigenda are recorded by the index and not applied to the wording searched"],
+        ["other_languages", "an expression in a language this index holds no wording in is not searched"],
+        ["titles", "no title or Official Journal reference of an EU act is held by the EU index, so an EU act is searched only when named by its identifier, and a search that names no work searches Luxembourg law alone"],
     ];
 
     /// <summary>
-    /// Where a named work is an EU work, <c>search</c> answers from the EU index (<see cref="SearchEurope"/>)
-    /// or refuses with EU context; otherwise the Luxembourg path runs unchanged (null).
+    /// Where a named work is an EU act, <c>search</c> answers from the EU index: over the act's time view when the EU census holds
+    /// it (<see cref="SearchEuropeTime"/>), else in its one original wording (<see cref="SearchEurope"/>); or refuses with EU
+    /// context; otherwise the Luxembourg path runs unchanged (null).
     /// </summary>
     private V3PlatformOperationOutcome? RouteEuropeSearch(
         V3PlatformOperationRequest request,
@@ -4526,6 +4550,16 @@ internal sealed partial class V3CorpusMount : IDisposable
         int limit,
         DateTimeOffset observedAt)
     {
+        if (LocateEuropeSeedForSearch(request, identifier, observedAt, out var seed) is { } refusedSeed)
+        {
+            return refusedSeed;
+        }
+
+        if (seed is not null)
+        {
+            return SearchEuropeTime(request, identifier, seed, language, query, terms, requestedDate, mode, after, limit, observedAt);
+        }
+
         if (LocateEuropeWork(request, identifier, observedAt, out var europe) is { } refused)
         {
             return refused;
@@ -4593,15 +4627,13 @@ internal sealed partial class V3CorpusMount : IDisposable
     }
 
     /// <summary>
-    /// EU <c>search</c> in one work (lane R2): the two lexical lanes of the Luxembourg search over the one
-    /// held wording of the work's expression in the language asked, with its refusals. A language the work
-    /// holds no expression in is <c>language_not_available</c>; two expressions in it are
-    /// <c>ambiguous_identifier</c>, never one of them; a date is refused <c>retrieval_mode_unavailable</c>:
-    /// the search reads the original wording only, and the wording that answers a date is <c>as_of</c>'s
-    /// question, which the EU time view answers (V3CorpusMount.EuropeTime.cs); searching that wording at a
-    /// date is not built yet; a mode other than the two lanes is refused as the Luxembourg search refuses it. Each hit names its
-    /// article, the Formex act date of the wording (<c>wording_date</c>, with its meaning in the answer,
-    /// never an applicability date), and the provision coordinate <c>resolve</c> answers; no text is served.
+    /// EU <c>search</c> in one work on an EU index that holds no census of it (lane R2): the lanes over the one held wording of
+    /// the work's expression in the language asked, through <see cref="SearchEuropeWordings"/>. A language the work holds no
+    /// expression in is <c>language_not_available</c>; two expressions in it are <c>ambiguous_identifier</c>, never one of them;
+    /// a date is refused <c>retrieval_mode_unavailable</c>, since no other wording of the act is held to select; a mode other
+    /// than the two lanes is refused as the Luxembourg search refuses it. Each hit names its article, the Formex act date of the
+    /// wording (<c>wording_date</c>, never an applicability date), the provision coordinate <c>resolve</c> answers, its
+    /// permalink and its extract.
     /// </summary>
     private V3PlatformOperationOutcome SearchEurope(
         V3PlatformOperationRequest request,
@@ -4647,132 +4679,33 @@ internal sealed partial class V3CorpusMount : IDisposable
                 new V3PlatformOperationRefusal(request, "ambiguous_identifier", ambiguous.RootElement));
         }
 
-        if (requestedDate is not null || (mode is not null && !SearchModes.Contains(mode, StringComparer.Ordinal)))
+        if (requestedDate is not null)
         {
-            using var unavailableMode = JsonSerializer.SerializeToDocument(requestedDate is not null
-                ? new { requested_mode = "r6_as_of", available_modes = new[] { "r2_provision_discovery" } }
-                : new { requested_mode = mode!, available_modes = SearchModes });
+            using var unavailableMode = JsonSerializer.SerializeToDocument(
+                new { requested_mode = "r6_as_of", available_modes = new[] { "r2_provision_discovery" } });
             return V3PlatformOperationOutcome.Refused(
                 Context("refusal", observedAt, PublisherId.EuEurLex),
                 new V3PlatformOperationRefusal(request, "retrieval_mode_unavailable", unavailableMode.RootElement));
         }
 
-        var expression = expressions[0];
-        var wording = EuropeWordingOf(expression);
-        var wantStrict = mode is null || string.Equals(mode, "strict", StringComparison.Ordinal);
-        var wantRelaxed = mode is null || string.Equals(mode, "relaxed", StringComparison.Ordinal);
-        var relaxedIsStrict = terms.Length == 1 && string.Equals(terms[0], query, StringComparison.Ordinal);
-        var strictFound = wantStrict ? _europeReader.SearchExpressionArticles(language, [query], expression) : null;
-        var relaxedFound = wantRelaxed && (mode is not null || !relaxedIsStrict)
-            ? _europeReader.SearchExpressionArticles(language, terms, expression)
-            : null;
-        var measured = wantStrict ? strictFound is not null : relaxedFound is not null;
-        IReadOnlyList<EuropeIndexSearchHit> strict = wantStrict ? strictFound ?? [] : [];
-        var strictKeys = strict.Select(static hit => hit.ArticleIdentitySha256).ToHashSet(StringComparer.Ordinal);
-        IReadOnlyList<EuropeIndexSearchHit> relaxed = !wantRelaxed
-            ? []
-            : mode is null
-                ? (relaxedFound ?? []).Where(hit => !strictKeys.Contains(hit.ArticleIdentitySha256)).ToArray()
-                : relaxedFound ?? [];
-        var all = strict.Select(static hit => (Lane: "strict", Hit: hit))
-            .Concat(relaxed.Select(static hit => (Lane: "relaxed", Hit: hit)))
-            .ToArray();
-        static string Cursor((string Lane, EuropeIndexSearchHit Hit) entry) => $"{entry.Lane}.{entry.Hit.ArticleIdentitySha256}";
-        var start = 0;
-        if (after is not null)
+        if (mode is not null && !SearchModes.Contains(mode, StringComparer.Ordinal))
         {
-            var index = Array.FindIndex(all, entry => string.Equals(Cursor(entry), after, StringComparison.Ordinal));
-            if (index < 0)
-            {
-                throw new V3TransportFailureException(
-                    V3TransportFailureKind.RequestSchemaInvalid,
-                    "The operation request's 'after' names no hit of this query; a cursor is the continue_after of the same query, scope and index.");
-            }
-
-            start = index + 1;
+            return RefuseEuropeSearchMode(request, mode, observedAt);
         }
 
-        var page = all.Skip(start).Take(limit).ToArray();
-        var truncated = start + page.Length < all.Length;
-        var searchSeed = EuropeSeedsOf(resolved[0].PublisherWorkId) is [var heldSeed] ? heldSeed : null;
-        using var result = JsonSerializer.SerializeToDocument(new
-        {
-            requested_query = query,
-            requested_language = language,
-            requested_date = (string?)null,
-            requested_identifier = identifier,
-            requested_mode = mode,
-            requested_after = after,
-            publisher = "eu-eurlex",
-            scope = EuropeSearchScope,
-            ranking = EuropeSearchRanking,
-            matching = EuropeSearchMatching,
-            hit_unit = EuropeSearchHitUnit,
-            lanes = SearchLanes,
-            date_semantics = EuropeWordingDateSemantics,
-            consolidations_held = searchSeed is not null && EuropeConsolidationsHeld(EuropeTimelineOf(searchSeed)),
-            text_served = false,
-            searchable_text_held_for_language = measured,
-            searchable_languages = _europeReader.SearchableLanguages(),
-            modes_held = SearchModes,
-            modes_not_held = new[] { "bm25", "semantic" },
-            reference = ReferenceNotRead("not_run_identifier_given"),
-            lanes_run = true,
-            work_resolution = new
-            {
-                retrieval_lane = "r1_work_discovery",
-                outcome = "not_run_identifier_given",
-                work = (object?)null,
-                candidates = (object?)null,
-            },
-            terms,
-            population = new
-            {
-                scope = new { identifier, language, date = (string?)null, mode },
-                strict_hits = wantStrict ? (int?)strict.Count : null,
-                relaxed_hits = wantRelaxed ? (int?)relaxed.Count : null,
-                distinct_publisher_articles = all.Select(static entry => entry.Hit.PublisherIdentifier).Distinct(StringComparer.Ordinal).Count(),
-                works_with_hits = all.Select(static entry => entry.Hit.PublisherWorkId).Distinct(StringComparer.Ordinal).Count(),
-            },
-            ambiguous_works = Array.Empty<object>(),
-            limit,
-            truncated,
-            continue_after = truncated ? Cursor(page[^1]) : null,
-            page_is = SearchPageIs,
-            // The one held wording the hits are in, pinned (the EU permalink grammar), or null when it holds no single
-            // wording date to pin; each hit's permalink is it with the provision as a last segment.
-            pinned_wording = wording is not { } held ? null : new
-            {
-                wording_date = held.WordingDate,
-                wording_sha256 = held.Sha256,
-                permalink = held.Permalink,
-                digest_rule = EuropeWordingDigestRule,
-            },
-            hits = page.Select(entry => new
-            {
-                lane = entry.Lane,
-                match_reasons = new[] { entry.Lane == "strict" ? "exact_phrase" : "all_terms" },
-                publisher_work_id = entry.Hit.PublisherWorkId,
-                celex = entry.Hit.PublisherWorkCelex,
-                publisher_expression_id = entry.Hit.PublisherExpressionId,
-                language = entry.Hit.Language,
-                wording_date = entry.Hit.WordingDate,
-                article_identity_sha256 = entry.Hit.ArticleIdentitySha256,
-                publisher_id = entry.Hit.PublisherIdentifier,
-                heading = entry.Hit.Heading,
-                // The provision coordinate EU resolve answers; the text is not served here.
-                resolve = new { identifier = entry.Hit.ProvisionCoordinate },
-                // The hash-pinned provision permalink verify checks (null when the wording has no single date).
-                permalink = wording is { } pinned ? EuropeProvisionPermalink(pinned.Permalink, entry.Hit.PublisherIdentifier) : null,
-            }).ToArray(),
-            not_held = EuropeNotHeldRows(EuropeSearchNotHeld, searchSeed,
-                "consolidated versions of this act are held and answered by timeline, as_of and evidence_bundle; this search reads the original wording only, and a date is not answered here"),
-            corpus_sha256 = _corpus.ArtifactRef.Sha256,
-            index_sha256 = _europeReader.IndexRef.Sha256,
-        });
-        return V3PlatformOperationOutcome.Success(
-            Context("success", observedAt, PublisherId.EuEurLex),
-            new V3PlatformOperationResult(request, "quote", result.RootElement));
+        var expression = expressions[0];
+        var workId = resolved.First(candidate => string.Equals(candidate.PublisherExpressionId, expression, StringComparison.Ordinal)).PublisherWorkId;
+        var held = _europeReader.ResolveWorkExpressions(workId)
+            .FirstOrDefault(candidate => string.Equals(candidate.PublisherExpressionId, expression, StringComparison.Ordinal));
+        var wording = EuropeWordingOf(expression);
+        var celex = wording?.Celex ?? held?.PublisherWorkCelex;
+        var searched = new EuropeSearchWording(expression, language, wording?.WordingDate, "original_wording", workId, celex,
+            NextDate: null, NextTextHeld: null, EuropeArticleRowsOf(expression), wording?.Sha256, wording?.Permalink);
+        var authenticity = EuropeAuthenticityOf(celex is null
+            ? Array.Empty<string>()
+            : EuropeActDatesOf(workId, celex, held?.WordingDates ?? Array.Empty<string>()));
+        return SearchEuropeWordings(request, identifier, language, query, terms, requestedDate: null, mode, after, limit, observedAt,
+            [searched], census: null, authenticity);
     }
 
     internal const string CoverageScope =

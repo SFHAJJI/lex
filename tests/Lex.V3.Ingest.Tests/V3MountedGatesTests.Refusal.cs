@@ -253,10 +253,14 @@ public sealed partial class V3MountedGatesTests
             requests["eu-language-not-held"] = new("search", new { query = word, language = absent, identifier = celex }, "language_not_available");
         }
 
-        requests["eu-dated-search"] = new("search", new { query = word, language, identifier = celex, date = "2020-01-01" }, "retrieval_mode_unavailable");
+        // A dated EU search reads the wording the date selects, as as_of does, where the EU index holds the act's census: a date
+        // before every EU act is as_of's no_version_for_date; without a census no wording can be selected, and a date is refused.
+        var quotedCelex = celex.Replace("'", "''", StringComparison.Ordinal);
+        requests["eu-dated-search"] = HasStatesTable(connection) && Scalar(connection, $"SELECT seed_celex FROM states WHERE seed_celex = '{quotedCelex}' LIMIT 1") is not null
+            ? new("search", new { query = word, language, identifier = celex, date = "1900-01-01" }, "no_version_for_date")
+            : new("search", new { query = word, language, identifier = celex, date = "2020-01-01" }, "retrieval_mode_unavailable");
         requests["eu-in-force-on"] = new("in_force_on", new { identifier = celex, date = "2020-01-01", language }, "retrieval_mode_unavailable");
 
-        var quotedCelex = celex.Replace("'", "''", StringComparison.Ordinal);
         var quotedLanguage = language.Replace("'", "''", StringComparison.Ordinal);
         var wordings = Rows(connection, $"SELECT DISTINCT publisher_work_id, publisher_expression_id, wording_date FROM articles WHERE publisher_work_celex = '{quotedCelex}' AND language = '{quotedLanguage}'");
         if (wordings.Count != 1)

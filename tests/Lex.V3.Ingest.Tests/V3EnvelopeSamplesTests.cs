@@ -117,6 +117,8 @@ public sealed class V3EnvelopeSamplesTests
         // with the original's Formex package dated 2013-06-26, a fixture's date (the day CRD IV and the CRR bear), so its bundle
         // says the dated authenticity sentence. The page that holds its last article, so the census carries one short page.
         JsonObject datedBefore;
+        JsonObject europeSearchAll;
+        JsonObject europeSearchOn;
         var (datedRoot, datedDirectory) = await V3CorpusEuropeTimeViewTests.OriginalDatedMountAsync("20130626",
             new EuFirstMountAcquisitionTests.ConsolidatedWorkSpec(
                 V3CorpusEuropeTimeViewBranchTests.WorkB, V3CorpusEuropeTimeViewTests.ConsolidationDate, V3CorpusEuropeTimeViewBranchTests.Designated,
@@ -133,6 +135,20 @@ public sealed class V3EnvelopeSamplesTests
                 probe["result"]!["value"]!["index_sha256"]!.GetValue<string>(),
                 datedMount, "evidence_bundle", scenario, parameters);
             WithFixed(datedBefore["envelope"]!, "body_receipt_sha256", FixedReceiptDigest);
+
+            // EU search over the act's time view (the audit of 2026-10-27, gap 5), on the same mount: with no date, both wordings
+            // read and each unchanged article served once, under the consolidation, the original named beside it; with a date,
+            // the one wording that date selects, pinned.
+            europeSearchAll = await CaptureAsync(
+                probe["context"]!["snapshot"]!["snapshot_sha256"]!.GetValue<string>(),
+                probe["result"]!["value"]!["index_sha256"]!.GetValue<string>(),
+                datedMount, "search", "an EU act's original wording and its consolidated version, no date, the strict lane alone: each article's text once, under the latest wording that holds it, each hit dated by its wording's role",
+                new { query = "joint controllers", language = "eng", identifier = V3CorpusEuropeTimeViewTests.GdprSeed, mode = "strict" });
+            europeSearchOn = await CaptureAsync(
+                probe["context"]!["snapshot"]!["snapshot_sha256"]!.GetValue<string>(),
+                probe["result"]!["value"]!["index_sha256"]!.GetValue<string>(),
+                datedMount, "search", "the same EU act at a date before its consolidation, the strict lane alone: the one wording the date selects, pinned",
+                new { query = "Joint Controllers", language = "eng", identifier = V3CorpusEuropeTimeViewTests.GdprSeed, mode = "strict", date = "2020-01-01" });
         }
         finally
         {
@@ -157,6 +173,9 @@ public sealed class V3EnvelopeSamplesTests
             // As the site asks every search (the plan's items 4.3 and 4.5): the strict lane alone, with hits and without.
             await CaptureAsync(fixture, mount, "search", "the phrase as the site asks it, the strict lane alone: an answer with its passages by act, each with its extract", new { query = "assemblée générale", language = "fra", mode = "strict" }),
             await CaptureAsync(fixture, mount, "search", "a word no held article carries, the strict lane alone: the answer the no-hit card is drawn from", new { query = "zéphyr", language = "fra", mode = "strict" }),
+            // Capitals and accents never decide a match (the plan's item 4.4): the phrase in capitals and without its accents finds
+            // the passages the phrase finds, each extract marking the text's own spelling.
+            await CaptureAsync(fixture, mount, "search", "the phrase in capitals and without its accents, the strict lane alone: the passages the phrase finds, each marked as the text spells it", new { query = "ASSEMBLEE GENERALE", language = "fra", mode = "strict" }),
             await CaptureAsync(europe.CorpusSha256, europe.IndexSha256, europeMount, "search", "one EU work by its CELEX, a phrase its held wording carries: an answer whose hits carry the pinned wording's provision permalink", new { query = "joint controllers", language = "eng", identifier = "32016R0679" }),
             await CaptureAsync(europe.CorpusSha256, europe.IndexSha256, europeMount, "search", "one EU work in a language it is not held in: a refusal with a payload", new { query = "joint controllers", language = "fra", identifier = "32016R0679" }),
             await CaptureAsync(europe.CorpusSha256, europe.IndexSha256, europeMount, "search", "the EU work as the site asks it, the strict lane alone: an answer whose hits are the phrase's", new { query = "joint controllers", language = "eng", identifier = "32016R0679", mode = "strict" }),
@@ -186,6 +205,8 @@ public sealed class V3EnvelopeSamplesTests
             laterNotHeld,
             laterNotHeldPastLast,
             datedBefore,
+            europeSearchAll,
+            europeSearchOn,
             // A citation's evidence form is verified by both its hashes (R65): the version's, in its permalink, and the text's.
             await CaptureAsync(fixture, mount, "verify", "an article's permalink: digest_matches, with the article's text digest", new { identifier = fixture.Permalink + "/art_15" }),
             laterNotHeldVerified,

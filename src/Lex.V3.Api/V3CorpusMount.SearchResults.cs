@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Lex.V3.Contracts.Index;
 using Lex.V3.Ingest.Luxembourg;
 
 namespace Lex.V3.Api;
@@ -24,9 +25,11 @@ internal sealed partial class V3CorpusMount
         "extract is a run of the article's searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the " +
         "first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U+00A0, " +
         "U+202F, U+2007, which hold a date's day to its month or a number to its unit; a word that alone passes a bound is cut at the " +
-        "bound); parts are that run in order, and a part is matched when it is a whole match: the query as typed for a strict hit, a term " +
-        "or overlapping terms for a relaxed hit; a match the run cuts is not marked; byte_start and byte_end are the run's UTF-8 byte offsets " +
-        "in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run";
+        "bound); parts are that run in order, and a part is matched when it is a whole match: the query for a strict hit, a term or " +
+        "overlapping terms for a relaxed hit, each found as the lane finds it, with capitals and accents ignored, and marked on the text's " +
+        "own characters (a letter with the combining marks after it, a ligature whole); a match the run cuts is not marked; byte_start and " +
+        "byte_end are the run's UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided " +
+        "inside the run";
 
     internal const string SearchActsRule =
         "acts names each act of this page once, in the order its hits first appear: its work key, its dossier, the publisher's title of it " +
@@ -234,8 +237,8 @@ internal sealed partial class V3CorpusMount
     internal sealed record SearchExtract(int Start, int End, int ByteStart, int ByteEnd, IReadOnlyList<SearchExtractPart> Parts);
 
     /// <summary>
-    /// The extract of <paramref name="text"/> for a hit matched by <paramref name="needles"/> (the query as typed for a strict
-    /// hit, the terms for a relaxed one), by <see cref="SearchExtractRule"/>; null when no needle occurs in the text, which a
+    /// The extract of <paramref name="text"/> for a hit matched by <paramref name="needles"/> (the query for a strict hit, the
+    /// terms for a relaxed one, each found folded as the lanes find it), by <see cref="SearchExtractRule"/>; null when no needle occurs in the text, which a
     /// hit's text never is.
     /// </summary>
     internal static SearchExtract? ExtractOf(string text, IReadOnlyList<string> needles)
@@ -243,16 +246,15 @@ internal sealed partial class V3CorpusMount
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(needles);
 
-        // Every occurrence of every needle, each needle's found left to right without overlapping itself; then overlapping
-        // occurrences of different needles merged into one run (touching ones stay apart).
+        // Every occurrence of every needle, found as the lanes match (TextFolding: the needle and the text folded alike, so
+        // capitals and accents do not decide), each needle's left to right without overlapping itself, and said as the span of
+        // the text's own characters it comes from; then overlapping occurrences of different needles merged into one run
+        // (touching ones stay apart).
+        var folded = TextFolding.Folded(text);
         var occurrences = new List<(int Start, int End)>();
-        foreach (var needle in needles.Where(static needle => needle.Length > 0).Distinct(StringComparer.Ordinal))
+        foreach (var needle in needles.Select(TextFolding.Fold).Where(TextFolding.CanMatch).Distinct(StringComparer.Ordinal))
         {
-            for (var at = text.IndexOf(needle, StringComparison.Ordinal); at >= 0;
-                 at = text.IndexOf(needle, at + needle.Length, StringComparison.Ordinal))
-            {
-                occurrences.Add((at, at + needle.Length));
-            }
+            occurrences.AddRange(folded.Occurrences(needle));
         }
 
         if (occurrences.Count == 0)

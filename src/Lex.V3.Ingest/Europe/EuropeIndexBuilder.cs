@@ -1498,7 +1498,9 @@ public sealed partial class EuropeIndexReader : IDisposable
     /// <summary>
     /// The articles of one held expression, in one language, whose searchable text contains every one of
     /// <paramref name="needles"/> as a byte-exact substring, in the publisher's article id and article
-    /// identity order. Nothing is ranked, folded or dated here. The result is null when the capability
+    /// identity order. Nothing is ranked, folded or dated here: this is the index's own exact lookup, which the offline
+    /// mount's checks read; the API's EU search reads <see cref="ResolveExpressionArticleRows"/> and
+    /// <see cref="ResolveArticleTexts"/> and folds what it matches (<c>V3CorpusMount.EuropeSearch.cs</c>). The result is null when the capability
     /// manifest measured no searchable text in that language, which is the index saying it cannot answer,
     /// as distinct from an empty list, which is no hit.
     /// </summary>

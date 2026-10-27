@@ -19,6 +19,7 @@ import { FailureFrame, LiveSearch, RefusalCard, SearchAnswerView, SearchResultsV
 import {
   LIVE_SEARCH_IDLE,
   builtOnOf,
+  LIVE_SEARCH_EUROPE_REFUSAL_SENTENCES,
   LIVE_SEARCH_REFUSAL_SENTENCES,
   SEARCH_QUERY_MAX,
   SEARCH_TERMS_MAX,
@@ -142,8 +143,10 @@ test("a served search answer is the results by act, read by the search reader", 
   }
   assert.equal((markup.match(/data-lane="strict"/g) ?? []).length, value.hits.length);
   assert.equal((markup.match(/data-lane="relaxed"/g) ?? []).length, 0);
-  assert.equal((markup.match(/<mark>assemblée générale<\/mark>/g) ?? []).length, value.hits.flatMap((hit) => hit.extract.parts.filter((part) => part.matched)).length);
-  assert.doesNotMatch(markup, /class="badge"/, "a strict passage carries no lane badge: every passage is the exact phrase");
+  // Every match marked as the text spells it, capitals and accents aside (the plan's item 4.4): "Assemblée générale" too.
+  assert.equal((markup.match(/<mark>[Aa]ssemblée générale<\/mark>/g) ?? []).length, value.hits.flatMap((hit) => hit.extract.parts.filter((part) => part.matched)).length);
+  assert.ok(markup.includes("<mark>Assemblée générale</mark>"), "a match in capitals is marked as the text spells it");
+  assert.doesNotMatch(markup, /class="badge"/, "a strict passage carries no lane badge: every passage is the phrase's");
 
   // The act once, its passages under its one version, dated in the publisher's words, said as held only as published (R21).
   const [act] = value.acts;
@@ -156,7 +159,7 @@ test("a served search answer is the results by act, read by the search reader", 
   assert.doesNotMatch(shown, /version of/, "a version is dated as the publisher dates it, never by its date alone");
 
   // What was found and what was searched, every count the answer's, dated by the index's build (R11).
-  assert.ok(shown.includes(`“assemblée générale” in French: ${value.hits.length} passages with the exact phrase, in 1 act.`));
+  assert.ok(shown.includes(`“assemblée générale” in French: ${value.hits.length} passages with the phrase, in 1 act.`));
   const { searched } = value;
   assert.ok(shown.includes(`Searched: ${searched.works} act of Luxembourg law in French, in ${searched.states} version with ${searched.articles_with_searchable_text} articles of searchable text, as of the index built on ${builtOnOf(searched.index_built_at)}.`), shown);
   assert.ok(shown.includes("The first hits in the stated order, not the best hits."), "the page says there is no ranker, where the hits are");
@@ -202,12 +205,12 @@ test("an answer in both lanes, as an API caller may ask it, still says each lane
   assert.equal(outcome.state, "success");
   const markup = view(outcome);
   const shown = text(markup);
-  assert.ok(shown.includes("4 with the exact phrase, 1 with every word, in 1 work."));
+  assert.ok(shown.includes("4 with the phrase, 1 with every word, in 1 work."));
   assert.equal((markup.match(/data-lane="relaxed"/g) ?? []).length, 1);
   assert.match(markup, /<span class="badge">every word<\/span>/, "a relaxed passage says its lane");
 });
 
-test("a search with no hit is the plain no-hit card: what ran, that only exact matching ran, the population, and the publishers' search pages", () => {
+test("a search with no hit is the plain no-hit card: what ran, that only the phrase was matched, capitals and accents aside, the population, and the publishers' search pages", () => {
   const value = envelopeOf(NO_HIT).result.value;
   const outcome = searchOutcome({ state: "success", envelope: envelopeOf(NO_HIT) });
   assert.equal(outcome.state, "success");
@@ -220,9 +223,9 @@ test("a search with no hit is the plain no-hit card: what ran, that only exact m
   assert.ok(shown.includes("This index holds no work titles, so the phrase was matched against article text only."), "the titles line is the work resolution's own");
   assert.equal(shown.split("This index holds no work titles").length, 2, "and said once, in the card");
   assert.doesNotMatch(markup, /data-title-matching/, "no title was matched, so how titles are matched is not said");
-  assert.ok(shown.includes("Text: no article searched contains the phrase exactly as typed."));
+  assert.ok(shown.includes("Text: no article searched contains the phrase, even with capitals and accents ignored."));
   assert.doesNotMatch(markup, /data-search-run="every-word"/, "the relaxed lane was not run, so it is not said to have found nothing");
-  assert.ok(shown.includes("Only exact matching ran on the text: capitals, accents and every other character of the phrase count, and nothing is folded, stemmed or expanded. A looser search of the text stays off until its own check has passed."));
+  assert.ok(shown.includes("Only the phrase was matched in the text, with capitals and accents ignored and \u0153 and \u00e6 read as oe and ae: every other character of it counts, apostrophes, hyphens and spaces included, and nothing is stemmed or expanded. A looser search of the text stays off until its own check has passed."));
   assert.ok(shown.includes(`Searched: ${value.searched.works} act of Luxembourg law in French`));
   assert.equal((markup.match(/data-searched=/g) ?? []).length, 1, "the population is said once, inside the card");
   assert.ok(markup.indexOf("data-searched=") > markup.indexOf("data-no-hit-card"));
@@ -231,20 +234,21 @@ test("a search with no hit is the plain no-hit card: what ran, that only exact m
   }
   assert.ok(shown.includes("Legilux search, for Luxembourg law") && shown.includes("EUR-Lex advanced search, for EU law"));
   assert.ok(shown.includes("It is not evidence that the instrument or the law does not exist."), "the absence note (journey J2)");
-  assert.ok(shown.includes("0 passages with the exact phrase, in 0 acts."));
+  assert.ok(shown.includes("0 passages with the phrase, in 0 acts."));
 });
 
-test("an EU work's no-hit card says the reference and the titles were not run, and counts no Luxembourg population", () => {
+test("an EU work's no-hit card says the reference and the titles were not run, and counts the act's wordings, no Luxembourg population", () => {
   const outcome = searchOutcome({ state: "success", envelope: envelopeOf(EU_NO_HIT) });
   assert.equal(outcome.state, "success", outcome.sentence);
   const markup = view(outcome);
   const shown = text(markup);
   assert.ok(shown.includes("Exact references: not read, since a work was named."));
   assert.ok(shown.includes("Titles: not searched, since a work was named."));
-  assert.ok(shown.includes("Text: no article searched contains the phrase exactly as typed."));
-  assert.ok(shown.includes("Only exact matching ran on the text:"));
-  assert.doesNotMatch(markup, /data-searched=/, "an EU search counts no Luxembourg population");
-  assert.doesNotMatch(shown, /Searched:/);
+  assert.ok(shown.includes("Text: no article searched contains the phrase, even with capitals and accents ignored."));
+  assert.ok(shown.includes("Only the phrase was matched in the text, with capitals and accents ignored"));
+  assert.doesNotMatch(shown, /of Luxembourg law/, "an EU search counts no Luxembourg population");
+  assert.ok(shown.includes("Searched: 1 wording of 32016R0679 in English, with "), "it counts the act's wordings searched");
+  assert.ok(shown.includes("Searched with no date: each wording of this EU act, original or consolidated, whose text this site holds and may search"));
   assert.ok(markup.includes(OFFICIAL_SEARCH_PAGES[1].uri));
 });
 
@@ -300,7 +304,7 @@ test("the act a title names is on top, linked; several acts' titles are counted,
   assert.ok(unmatched({ outcome: "no_title_match" }).includes("Titles: no title of an act this site holds matches the phrase. Titles are matched with capitals and accents ignored."));
 });
 
-test("an EU work's search is the EU results: the pinned wording once, each hit's heading, CELEX and wording date, its permalink, and what is not covered", async () => {
+test("an EU work's search is the EU results: Decision 95's statements, each wording once, headed by its date in its role, each passage's heading, permalink and extract, and what is not covered", async () => {
   const envelope = envelopeOf(EU_ANSWER);
   const value = envelope.result.value;
   const { calls, fetchImpl } = answering(200, "application/json; charset=utf-8", envelope);
@@ -311,39 +315,72 @@ test("an EU work's search is the EU results: the pinned wording once, each hit's
 
   const markup = view(outcome);
   const shown = text(markup);
-  assert.ok(markup.includes(`data-pinned-wording="${value.pinned_wording.wording_sha256}"`));
-  assert.ok(markup.includes(`<code>${value.pinned_wording.permalink}</code>`), "the wording's permalink is printed once, above the hits");
-  assert.ok(shown.includes(`Every hit is in the original wording of 32016R0679 this server holds in eng, dated ${value.pinned_wording.wording_date} and pinned by its digest`));
-  assert.ok(shown.includes(`The wording date (wording_date in search, wording_dates in dossier) is the date the publisher's Formex package gives the act`),
-    "the answer's own sentence says what the date is, as a sentence");
-  assert.ok(markup.includes(`<a href="/en${value.pinned_wording.permalink}"><code>`), "the wording's permalink links to its reading");
+  // EU text stands below the acknowledgement and the authenticity statement (Decision 95), as on the reading screen.
+  assert.ok(markup.includes(`<p data-acknowledgement="">${value.acknowledgement}</p>`), "the platform's own English, on an English page");
+  assert.ok(markup.indexOf("data-authenticity=") < markup.indexOf("<q "), "the statements stand above the text quoted");
+  // The one wording, headed as the reading heads it (R21), with the dates it answers and its permalink, once.
+  const [wording] = value.wordings;
+  assert.equal((markup.match(/data-wording-kind="/g) ?? []).length, 1);
+  assert.ok(shown.includes(`32016R0679, eng, the original wording of ${wording.wording_date} (the act's date in the publisher's Formex package)`), shown);
+  assert.ok(shown.includes("This is the latest wording held: it answers every later date"), "no later wording is held");
+  assert.ok(markup.includes(`<a href="/en${wording.permalink}"><code>`), "the wording's permalink links to its reading");
   for (const hit of value.hits) {
-    assert.ok(markup.includes(`<a href="/en${hit.permalink}">`), `${hit.publisher_id} links to its reading at the provision, by its permalink`);
+    assert.ok(markup.includes(`<a href="/en${hit.permalink}"><strong lang="en">${hit.heading}</strong></a>`), `${hit.publisher_id} links to its reading at the provision, by its permalink, its heading marked in its language`);
     assert.ok(!markup.includes(`<code>${hit.permalink}</code>`), "and the row prints no digest");
-    assert.ok(shown.includes(`${hit.heading} of ${hit.celex}, wording of ${hit.wording_date}`));
-    assert.ok(markup.includes(`<strong lang="en">${hit.heading}</strong>`), "the publisher's heading is marked in its language");
+    const quoted = hit.extract.parts.map((part) => (part.matched ? `<mark>${part.text}</mark>` : part.text)).join("");
+    assert.ok(markup.includes(`<q lang="en">${quoted}</q>`), `${hit.publisher_id}'s extract is quoted as the answer cuts it`);
   }
-  assert.doesNotMatch(shown, /version of/, "an EU wording is never called a version");
+  assert.doesNotMatch(shown, /version of|applicable from/, "an EU wording is never called a version, nor dated as applicable");
   assert.equal((markup.match(/data-lane="strict"/g) ?? []).length, 2);
   assert.equal((markup.match(/data-lane="relaxed"/g) ?? []).length, 0, "the page asks the strict lane alone");
-  assert.ok(shown.includes("“joint controllers” in English: 2 passages with the exact phrase, in 1 act."));
+  assert.ok(shown.includes("“joint controllers” in English: 2 passages with the phrase, in 1 wording of 32016R0679."));
+  assert.ok(shown.includes(`Searched: 1 wording of 32016R0679 in English, with ${value.searched.articles_with_searchable_text} articles of searchable text.`), shown);
+  assert.ok(shown.includes("Searched with no date: each wording of this EU act, original or consolidated, whose text this site holds and may search; where several of them hold the same text of an article, that text is shown once, under the latest of them."));
   assert.ok(shown.includes("What this search does not cover"));
   for (const row of value.not_held) assert.ok(shown.includes(`${row.item}: ${row.reason}`), row.item);
   assert.doesNotMatch(markup, /Next page/, "a whole page offers no next page");
 
-  // The review of #853's reproduction, through the screen: a hit of a second work is not shown as a one-work result.
-  const twoWorks = structuredClone(envelope);
-  const second = twoWorks.result.value.hits[1];
-  second.publisher_work_id = `${second.publisher_work_id.slice(0, -1)}${second.publisher_work_id.endsWith("0") ? "1" : "0"}`;
-  const mixed = searchOutcome({ state: "success", envelope: twoWorks });
+  // A hit whose wording the answer does not list is not shown under another wording.
+  const elsewhere = structuredClone(envelope);
+  const second = elsewhere.result.value.hits[1];
+  second.publisher_expression_id += "-other";
+  second.resolve.identifier = `${second.publisher_expression_id}#lex-provision=${second.publisher_id}`;
+  const mixed = searchOutcome({ state: "success", envelope: elsewhere });
   assert.equal(mixed.state, "invalid_envelope");
-  assert.match(mixed.sentence, /the hits are in 2 works/);
+  assert.match(mixed.sentence, /a wording the answer does not list/);
 
   const unpinned = structuredClone(envelope);
   unpinned.result.value.pinned_wording = null;
+  unpinned.result.value.wordings[0].permalink = null;
+  unpinned.result.value.wordings[0].wording_sha256 = null;
   const refused = searchOutcome({ state: "success", envelope: unpinned });
   assert.equal(refused.state, "invalid_envelope", "hits that pin no wording are not shown unpinned");
   assert.match(refused.sentence, /pins no wording/);
+});
+
+test("an EU act's search over its original wording and its consolidated version: each wording headed by its role, a text shown once, said; a date's one wording", () => {
+  const all = searchOutcome({ state: "success", envelope: envelopeOf("an EU act's original wording and its consolidated version") });
+  assert.equal(all.state, "success", all.sentence);
+  const markup = view(all);
+  const shown = text(markup);
+  const [original, consolidated] = all.view.wordings;
+  // Only the consolidation has passages on this page: the original's text is the same, so each passage is shown once, under
+  // the latest wording, and the original is named under it.
+  assert.equal((markup.match(/data-wording-kind="consolidated_version"/g) ?? []).length, 1);
+  assert.equal((markup.match(/data-wording-kind="original_wording"/g) ?? []).length, 0);
+  assert.ok(shown.includes(`32016R0679, eng, the consolidated wording of ${consolidated.wordingDate} (the publisher's consolidation date)`), shown);
+  assert.equal((markup.match(/data-same-wording="1"/g) ?? []).length, all.view.hits.length);
+  assert.ok(shown.includes("The same text is in 1 other wording this site searched."));
+  assert.ok(shown.includes("in 1 wording of 32016R0679."), "the passages are counted by the wordings they are in");
+  assert.ok(shown.includes("Searched: 2 wordings of 32016R0679 in English"));
+  assert.doesNotMatch(shown, /version of|applicable from|in \d+ acts?\b/);
+
+  const dated = searchOutcome({ state: "success", envelope: envelopeOf("the same EU act at a date before its consolidation") });
+  assert.equal(dated.state, "success", dated.sentence);
+  const datedShown = text(view(dated));
+  assert.ok(datedShown.includes("Searched at 2020-01-01: the one wording of this EU act that date selects, the latest dated on or before it."), datedShown);
+  assert.ok(datedShown.includes(`the original wording of ${original.wordingDate}`));
+  assert.ok(datedShown.includes(`This wording answers the dates from ${original.wordingDate} to the day before ${consolidated.wordingDate}, the date of the next wording.`));
 });
 
 test("a truncated page offers the next page with its own cursor, and a whole-result page does not", async () => {
@@ -398,7 +435,9 @@ test("the refusals a search from this page can meet are refusal cards, an EU wor
     assert.equal(outcome.state, "refusal", code);
     assert.equal(outcome.code, code);
     assert.equal(outcome.card, true, `${code}: the card's rules accept the payload the platform sent`);
-    assert.equal(outcome.sentence, code === "no_corpus_mounted" ? "This build has no Luxembourg index mounted." : LIVE_SEARCH_REFUSAL_SENTENCES[code]);
+    // A refusal within an EU act is said with the EU's sentences (an EU date is a wording's), the others with Luxembourg's.
+    const table = envelope.context.publisher === "eu-eurlex" ? LIVE_SEARCH_EUROPE_REFUSAL_SENTENCES : LIVE_SEARCH_REFUSAL_SENTENCES;
+    assert.equal(outcome.sentence, code === "no_corpus_mounted" ? "This build has no Luxembourg index mounted." : table[code]);
     const card = renderToStaticMarkup(h(RefusalCard, { code, sentence: outcome.sentence, payload: outcome.payload }));
     assert.equal(view(outcome), `<section data-answer-state="refusal">${asShown(outcome, card)}</section>`);
   }

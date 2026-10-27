@@ -128,7 +128,7 @@ export const SEARCH_PHRASE = "assemblée générale";
  * phrase alone, the population searched (its one act, version and 49 articles), the version under the act, as published,
  * dated as the publisher dates it, and a passage of art_15.
  */
-export const SEARCH_FOUND_SAID = `“${SEARCH_PHRASE}” in French: 4 passages with the exact phrase, in 1 act.`;
+export const SEARCH_FOUND_SAID = `“${SEARCH_PHRASE}” in French: 4 passages with the phrase, in 1 act.`;
 export const SEARCH_SEARCHED_SAID = "Searched: 1 act of Luxembourg law in French, in 1 version with 49 articles of searchable text, as of the index built on";
 export const SEARCH_VERSION_SAID = "The act as published, applicable from 2024-02-01 (publisher)";
 
@@ -1927,7 +1927,7 @@ export function specificationJourneyExpectations() {
     ["J1, a date before the history", { step: EARLY_READING_STEP, state: "refusal", refusalCode: "no_version_for_date", texts: [NO_EARLIER_STATE, "2024-02-01"] }],
     // The plain no-hit card (the plan's item 4.5): what was searched, that only exact matching ran, the population searched and
     // the publishers' own search pages, above the absence note.
-    ["J2, a question no article carries", { step: NO_HIT_SEARCH_STEP, state: "success", nothingToCite: true, texts: ["0 passages with the exact phrase, in 0 acts.", "What was searched", "Text: no article searched contains the phrase exactly as typed.", "Only exact matching ran on the text:", SEARCH_SEARCHED_SAID, "Legilux search, for Luxembourg law", "EUR-Lex advanced search, for EU law", absence] }],
+    ["J2, a question no article carries", { step: NO_HIT_SEARCH_STEP, state: "success", nothingToCite: true, texts: ["0 passages with the phrase, in 0 acts.", "What was searched", "Text: no article searched contains the phrase, even with capitals and accents ignored.", "Only the phrase was matched in the text, with capitals and accents ignored:", SEARCH_SEARCHED_SAID, "Legilux search, for Luxembourg law", "EUR-Lex advanced search, for EU law", absence] }],
     ["J5, a law not held", { step: UNKNOWN_LAW_STEP, state: "refusal", refusalCode: "out_of_corpus_scope", texts: [LIVE_DOSSIER_REFUSAL_SENTENCES.out_of_corpus_scope, UNKNOWN_LAW_WHO_TO_ASK, UNKNOWN_LAW_OFFICIAL_PLACE, absence] }],
   ];
 }

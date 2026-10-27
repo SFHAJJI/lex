@@ -129,6 +129,34 @@ public sealed class LuxembourgIndexQueryPlanTests
         }
     }
 
+    private static readonly (string Sql, (string, object)[] Parameters) SearchTextsQuery =
+        (LuxembourgIndexQueries.SearchTexts, [("$language", "fra")]);
+
+    /// <summary>
+    /// The search's folded copy of a language is read once from every state (the plan's item 4.4): the states are read whole,
+    /// and that is the one scan; each state's identities then lead to each article by primary key, never a scan of the articles,
+    /// whatever the statistics say, as <see cref="StateTextSourcesProblems"/> holds for the population's read.
+    /// </summary>
+    private static IEnumerable<string> SearchTextsProblems(string label, string[] plan)
+    {
+        var shown = $"{label}, SearchTexts: {string.Join(" | ", plan)}";
+        if (plan.Any(static line => Regex.IsMatch(line, @"^SCAN a\b")))
+        {
+            yield return "table a is scanned. " + shown;
+        }
+
+        var order = new[]
+        {
+            Array.FindIndex(plan, static line => Regex.IsMatch(line, @"^SCAN s\b")),
+            Array.FindIndex(plan, static line => Regex.IsMatch(line, @"^SCAN j\b")),
+            Array.FindIndex(plan, static line => line.StartsWith("SEARCH a USING INDEX sqlite_autoindex_articles_1 (article_identity_sha256=?)", StringComparison.Ordinal)),
+        };
+        if (order.Any(static index => index < 0) || !order.SequenceEqual(order.Order()))
+        {
+            yield return "the order is not the states, their identities, the article by primary key. " + shown;
+        }
+    }
+
     private static readonly (string Sql, (string, object)[] Parameters) EventCountQuery =
         (LuxembourgIndexQueries.EventCount, [("$events", "[\"validity_revised\",\"interval_closed\"]")]);
 
@@ -235,7 +263,7 @@ public sealed class LuxembourgIndexQueryPlanTests
     private static IEnumerable<string> SubjectFactsUnderProblems(string label, string[] plan)
     {
         var shown = $"{label}, SubjectFactsUnder: {string.Join(" | ", plan)}";
-        if (plan.Any(static line => Regex.IsMatch(line, @"^SCAN f")))
+        if (plan.Any(static line => Regex.IsMatch(line, @"^SCAN fb")))
         {
             yield return "the fact table is scanned. " + shown;
         }
@@ -510,6 +538,7 @@ public sealed class LuxembourgIndexQueryPlanTests
             .Concat(MemberOutcomeProblems("the index as built", Plan(connection, MemberOutcomeQuery.Sql, MemberOutcomeQuery.Parameters)))
             .Concat(StateDocumentProblems("the index as built", Plan(connection, StateDocumentQuery.Sql, StateDocumentQuery.Parameters)))
             .Concat(StateTextSourcesProblems("the index as built", Plan(connection, StateTextSourcesQuery.Sql, StateTextSourcesQuery.Parameters)))
+            .Concat(SearchTextsProblems("the index as built", Plan(connection, SearchTextsQuery.Sql, SearchTextsQuery.Parameters)))
             .Concat(CitationProblems("the index as built", Plan(connection, CitationQuery.Sql, CitationQuery.Parameters)))
             .Concat(HeldWorksProblems("the index as built", Plan(connection, HeldWorksQuery.Sql, HeldWorksQuery.Parameters)))
             .Concat(CitationsToProblems("the index as built", Plan(connection, CitationsToQuery.Sql, CitationsToQuery.Parameters)))
@@ -581,6 +610,7 @@ public sealed class LuxembourgIndexQueryPlanTests
             problems.AddRange(MemberOutcomeProblems(label, Plan(connection, MemberOutcomeQuery.Sql, MemberOutcomeQuery.Parameters)));
             problems.AddRange(StateDocumentProblems(label, Plan(connection, StateDocumentQuery.Sql, StateDocumentQuery.Parameters)));
             problems.AddRange(StateTextSourcesProblems(label, Plan(connection, StateTextSourcesQuery.Sql, StateTextSourcesQuery.Parameters)));
+            problems.AddRange(SearchTextsProblems(label, Plan(connection, SearchTextsQuery.Sql, SearchTextsQuery.Parameters)));
             problems.AddRange(CitationProblems(label, Plan(connection, CitationQuery.Sql, CitationQuery.Parameters)));
             problems.AddRange(HeldWorksProblems(label, Plan(connection, HeldWorksQuery.Sql, HeldWorksQuery.Parameters)));
             problems.AddRange(CitationsToProblems(label, Plan(connection, CitationsToQuery.Sql, CitationsToQuery.Parameters)));
@@ -724,11 +754,21 @@ public sealed class LuxembourgIndexQueryPlanTests
             Occurrences(reader, "outcomes.CommandText = LuxembourgIndexQueries.MemberOutcomes;"),
             "The reader does not run LuxembourgIndexQueries.MemberOutcomes exactly once, so the plan asked of it is not the plan it gets.");
 
-        // The one per-state join left inline is search's, which scans a whole language on its own connection by design.
+        // No per-state join is left inline: search's, which reads a whole language once on its own connection, is
+        // LuxembourgIndexQueries.SearchTexts, run by the reader's search file (the plan's item 4.4).
         Assert.AreEqual(
-            1,
+            0,
             Occurrences(reader, "json_each(s.article_identities_json)"),
             "A per-state query is written inline in the reader, so no plan is asked of it: put it in LuxembourgIndexQueries and in Queries.");
+        var search = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "Lex.V3.Ingest", "Luxembourg", "LuxembourgIndexReader.Search.cs"));
+        Assert.AreEqual(
+            0,
+            Occurrences(search, "json_each(s.article_identities_json)"),
+            "A per-state query is written inline in the reader's search, so no plan is asked of it: put it in LuxembourgIndexQueries.");
+        Assert.AreEqual(
+            1,
+            Occurrences(search, "command.CommandText = LuxembourgIndexQueries.SearchTexts;"),
+            "The reader does not run LuxembourgIndexQueries.SearchTexts exactly once, so the plan asked of it is not the plan it gets.");
     }
 
     private static int Occurrences(string text, string value) => text.Split(value).Length - 1;

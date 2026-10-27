@@ -118,6 +118,7 @@ public sealed class VocabularyRegistryCensusTests
                     + "const PublisherDateFact, const PublisherRelation, const RelationFact, "
                     + "const VocabularyDrift",
                 "Lex.V3.Contracts.Facts.FactsVocabularies: KindsByType=8, AllKinds=8",
+                "Lex.V3.Contracts.Index.TextFolding: Units=65536, const Rule",
                 "Lex.V3.Contracts.Index.TitleFolding: Folds=2140",
                 "Lex.V3.Contracts.Index.V3IndexCapabilityManifestArtifact: Domain=35, "
                     + "const SchemaId",

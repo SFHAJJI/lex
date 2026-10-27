@@ -175,7 +175,7 @@ internal sealed partial class V3CorpusMount
     /// <summary>
     /// Reads, once, what the phase reads on its first reference of a kind, so that no request pays it and none waits behind it:
     /// the EU census's identifiers (every seed act's CELEXes, works and expressions) and the catalogue's Mémorial issues and
-    /// historical identifiers. The server calls it once the mount is open; an act's own EU timeline is still read on its first
+    /// historical identifiers; and the search's population and its folded copy of the Luxembourg text. The server calls it once the mount is open; an act's own EU timeline is still read on its first
     /// use, as every time-view answer reads it.
     /// </summary>
     internal void Warm()
@@ -191,6 +191,9 @@ internal sealed partial class V3CorpusMount
 
             // What every search counts and the rights decision it applies per state (V3CorpusMount.SearchResults.cs).
             _ = SearchPopulationOf();
+
+            // The search's folded copy of the searchable text, which every full-text search matches in (the plan's item 4.4).
+            _reader.WarmSearch();
         }
     }
 
