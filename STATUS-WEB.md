@@ -4,6 +4,26 @@ Updated 2026-10-27. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Review and repair (#1004): treaties never out of the population, How to read Lex as narrow as index 8 (sole driver, 2026-10-27)
+
+The independent review of #1004 (`writer/truth-and-coverage` at b02c978a) said REPAIR. The one repair round:
+- **F1 (high).** Over derive-c, a held treaty (`12016E`, `CELEX:12016P`, `12012E`) and an article of one (`12016E101`) answered
+  `out_of_corpus_scope`: the index holds a treaty by its "/TXT" part. A sector-1 CELEX is now never read as an act outside the
+  population (`identifier_unknown`, as before this branch), and any act held by its "/TXT" part counts as held. The scope test
+  holds five treaty forms over dossier, resolve and timeline.
+- **F2 (medium).** How to read Lex said Lex names a textless version and why where it holds another version; index 8, which
+  the live release mounts, names none. The sentence is dropped, and the last says "Lex never shows another version's text
+  as that version's" (on index 8 an act held as published answers later dates, labelled as published): only what holds on
+  every index, with or without R77's records.
+- **F3.** The R80 reason names the population only ("The EU population Lex's rule selects is the N acts of its seed list
+  (Decision 84), and X is not one of them."): 12 of derive-c's 82 seed acts hold no wording.
+- **F4.** CODE_RECUEIL is no longer declared "not collected" (run 15 collected its catalogue records with the codes); RCSF and
+  RBCL are admitted and awaiting a run, with no order claimed (O7, the owner's, is open); `admitted_first_awaiting_a_run` is
+  retired, and the rule names no role.
+- **F5.** The select and the checkbox stand in the controls' 44 px rule.
+- **Also said in the PR**: every `out_of_corpus_scope` law page is a 404 in both servers, the out-of-scope list's classes
+  included, and both still render the refusal card.
+
 ## Truth and coverage: the six overclaims narrowed, R80, R79, R78/R82/R12 on Coverage, R62 and R65 (sole driver, 2026-10-27)
 
 The audit of 2026-10-27 (`C:\lex-v3\AUDIT-2026-10-27.md`, "Overclaims") found six public sentences that claimed more than the
@@ -19,8 +39,8 @@ code does. Branch `writer/truth-and-coverage`, from v3/integration a0958bb9 (#10
   - Privacy notice: the no-logging test runs on the server's own code before deployment; the hosting is set up from a template
     with no log store; its settings once deployed are not tested this way. Driver decision (reversible): narrowed rather than
     pinned in `main.bicep` with a probe check, which needs the managed environment in the template and Azure to test.
-  - How to read Lex: a textless version is named, and why, when Lex holds another version of the act (true whether or not
-    `writer/catalogue-and-compare`, R77, lands).
+  - How to read Lex: no longer promises that a textless version is named, or why (the review's F2, above); it keeps the
+    reasons a version can lack text and that Lex never shows another version's text as that version's.
   - Home page: history and comparison are said of a Luxembourg act of which more than one version is held.
 - **R80**: an EU act the mounted EU population does not hold, named by its CELEX (as typed, after "CELEX:", in an EUR-Lex or
   Publications Office address; sectors 0 to 4; a consolidated version or corrigendum read as its act), answers

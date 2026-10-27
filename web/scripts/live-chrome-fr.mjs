@@ -373,6 +373,9 @@
 // ("lorsqu’ils existent": not every act exists in every official language), the class names and dispositions ("catégorie",
 // "à titre rectificatif", "texte de la loi", "décision de Lex", "une fois autorisée", no role named) and `classesHeld`; the copy
 // button's four forms ("Citation copiée"); and the French of `OUTSIDE_EU_POPULATION_SENTENCE` in `REFUSALS_FR.sentences`.
+// In the repair of #1004, the same delegation's supplement "the review of #1004, F2" took the reviewer's pair for
+// `guide.sections.textless.text`: its middle sentence dropped, and "Lex ne présente jamais le texte d’une autre version comme celui
+// de cette version" (a version as published answers later dates on index 8, under its label).
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
 
@@ -1441,7 +1444,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       }),
       textless: Object.freeze({
         heading: 'Versions dont Lex ne détient pas les textes',
-        text: 'Lex peut savoir, par le catalogue de l’éditeur, qu’une version existe sans en détenir le texte : son fichier peut être un PDF, que Lex ne lit pas ; sa licence peut ne pas permettre à Lex de le montrer ; ou Lex peut ne pas l’avoir collecté. Lex ne montre jamais le texte d’une autre version à sa place.',
+        text: 'Lex peut savoir, par le catalogue de l’éditeur, qu’une version existe sans en détenir le texte : son fichier peut être un PDF, que Lex ne lit pas ; sa licence peut ne pas permettre à Lex de le montrer ; ou Lex peut ne pas l’avoir collecté. Lex ne présente jamais le texte d’une autre version comme celui de cette version.',
         article: 'Un article détenu sans texte est nommé à part, sous la mention « {withoutText} », et n’est jamais cité, interrogé ni exporté comme texte.',
         annexes: 'Une annexe d’un acte de l’UE que l’éditeur ne fournit que sous forme d’images n’est jamais communiquée sous forme de texte, interrogée, citée ni exportée ; Lex en donne la source officielle.',
       }),

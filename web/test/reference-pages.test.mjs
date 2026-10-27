@@ -624,7 +624,7 @@ test("the home page and How to read Lex claim no more than each publisher's page
   // How to read Lex: no promise that a textless version is named, or why, since index 8 (the live release) names none and R77's
   // records may or may not exist (the review of #1004, F2); only what holds on every index: no other version's text in its place.
   const textless = EN.guide.sections.textless.text;
-  assert.ok(textless.endsWith("or Lex may not have collected it. Lex never shows another version's text in its place."), textless);
+  assert.ok(textless.endsWith("or Lex may not have collected it. Lex never shows another version's text as that version's."), textless);
   assert.doesNotMatch(textless, /names the version|says why/);
   assert.doesNotMatch(LIVE_CHROME.fr.guide.sections.textless.text, /nomme la version|dit pourquoi/);
   for (const language of ["en", "fr"]) {
