@@ -96,7 +96,12 @@ public sealed class V3CorpusLegacySchema8MountTests
     /// registry identity alone (`lex-v3-operation-registry/2` and its digest), and the two coverage answers by their operations
     /// note and rows too (an operation served from no data refuses inside the envelope, its row naming the reason and the mode);
     /// no other member moved. Recorded again at 320c0f20 (the same branch over v3/integration 473a9fae, #995: `rate_limited`'s
-    /// payload schema typed as the limit sends it): all 38 rows by the registry digest alone. The answers are those production sends: recorded on Linux, as the release image
+    /// payload schema typed as the limit sends it): all 38 rows by the registry digest alone. Recorded again at ee44bf68 (R77 and
+    /// R57, writer/catalogue-and-compare): the two schema-8 searches by the exact-reference rule's text alone (it names the
+    /// record of an act only the catalogue holds), the schema-8 diff by its new text_rule alone (R57: what changed carries its
+    /// served text), and the five schema-6 answers about loi-2017-03-14-a439, which that index's catalogue names and whose
+    /// states it does not hold, from identifier_unknown to text_not_available with the act's record (R77); no other row and no
+    /// other member moved. The answers are those production sends: recorded on Linux, as the release image
     /// runs (globalization-invariant, UTC; the language library changes no byte), and every system is held to them. Resolve
     /// of a rooted path was the one answer Windows sent otherwise, until a rooted path was read as an identifier on every
     /// system (<c>LooksLikeIdentifier</c>).
@@ -107,7 +112,7 @@ public sealed class V3CorpusLegacySchema8MountTests
         using var recorded = JsonDocument.Parse(Fixture("base-answers.json"));
         var root = recorded.RootElement;
         Assert.AreEqual("3b7913ec", root.GetProperty("written_at_commit").GetString());
-        Assert.AreEqual("320c0f20", root.GetProperty("recorded_at_commit").GetString());
+        Assert.AreEqual("ee44bf68", root.GetProperty("recorded_at_commit").GetString());
         Assert.AreEqual(IndexFileSha256, root.GetProperty("index_sha256").GetString());
         Assert.AreEqual(StateSha256, root.GetProperty("state_sha256").GetString());
 
