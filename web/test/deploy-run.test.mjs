@@ -180,7 +180,7 @@ test("a -Public deployment's probe reads the token --opening, just before --prom
   assert.equal(run.result, "RESULT:returned", run.out);
   assert.equal(run.probes.length, 1, run.calls.join("\n"));
   const [probe] = run.probes;
-  assert.deepEqual(probeTail(probe), ["--signer", "signer", "--opening", "--promotion-check"], JSON.stringify(probe));
+  assert.deepEqual(probeTail(probe), ["--signer", "signer", "--opening", "--promotion-check", "--search-engines", "kept-out"], JSON.stringify(probe));
   assert.ok(probe.every((token) => token.length > 1), `no argument handed over one character at a time: ${JSON.stringify(probe)}`);
   assert.equal(probe[0], "--import", "without -BrowserProbe the probe runs under the browser trap");
   assert.match(probe[1], /^file:\/\/\/\S+browser-trap\.mjs$/);
@@ -211,7 +211,7 @@ test("the browser probes, asked for, are handed over whole beside --opening, and
   const run = deploy(["-SignerIdentity", "signer", "-Public", "-BrowserProbe", "-Apply"], { RULES: "[]" });
   assert.equal(run.result, "RESULT:returned", run.out);
   const [probe] = run.probes;
-  assert.deepEqual(probeTail(probe), ["--signer", "signer", "--browser", "--opening", "--promotion-check"], JSON.stringify(probe));
+  assert.deepEqual(probeTail(probe), ["--signer", "signer", "--browser", "--opening", "--promotion-check", "--search-engines", "kept-out"], JSON.stringify(probe));
   assert.ok(!probe.includes("--import"), "the browser probes run without the trap");
 });
 
@@ -219,7 +219,7 @@ test("the private copy's probe reads no --opening, and its rules are read before
   const run = deploy(["-SignerIdentity", "signer", "-AllowedCidr", "203.0.113.7/32", "-Apply"], { RULES: PRIVATE_RULES });
   assert.equal(run.result, "RESULT:returned", run.out);
   const [probe] = run.probes;
-  assert.deepEqual(probeTail(probe), ["--signer", "signer", "--promotion-check"], JSON.stringify(probe));
+  assert.deepEqual(probeTail(probe), ["--signer", "signer", "--promotion-check", "--search-engines", "kept-out"], JSON.stringify(probe));
   assert.ok(!probe.some((token) => token.includes("opening") || token === "o"), JSON.stringify(probe));
   assert.deepEqual(run.deployments.map((deployment) => deployment.openToPublic), ["False"], run.calls.join("\n"));
   // The rules are read before anything in Azure changes (on the open site a deployment without -Public would restrict it
@@ -284,6 +284,8 @@ test("the incident of 2026-10-27: the live release redeployed with -SearchEngine
   assert.equal(run.planned, deployment.revisionSuffix, "the step says the suffix it deploys");
   const [probe] = run.probes;
   assert.equal(probe[probe.indexOf("--origin") + 1], `https://${run.candidate}.example.azurecontainerapps.io`, "the new revision is probed at its own address");
+  // The probe holds robots.txt and the sitemap to this deployment's switch, not to the kept-out default (the probe of 02:30 UTC).
+  assert.deepEqual(probe.slice(probe.indexOf("--search-engines"), probe.indexOf("--search-engines") + 2), ["--search-engines", "indexed"], JSON.stringify(probe));
   assert.ok(promotes(run, run.candidate), run.out);
   // The revisions are read before anything in Azure changes: before the image is copied and the template deployed.
   const read = indexOf(run.calls, /^az containerapp revision list -g rg -n ca-lex-v3 --all /);

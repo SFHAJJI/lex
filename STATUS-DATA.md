@@ -1,6 +1,70 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-26.
+Updated 2026-10-27.
+
+## The PDF layout reads no host font: a Windows and a Linux derive write the same PDF artefacts (sole driver, 2026-10-27)
+
+- **The defect** (known since b0a342e3, below under R1): PdfPig 0.1.11 lays out a TrueType font the PDF does not embed
+  from an installed font of the same name. `PdfDocumentFactory` gives each document's `TrueTypeFontHandler` the
+  process-wide `SystemFontFinder.Instance` (the Windows font folder, `/usr/share/fonts`, `~/.fonts`). With a host font a
+  glyph's box is that font's outline; without one it is the descriptor's `/FontBBox` at the glyph's origin; when the font
+  dictionary has no `/Encoding`, even the glyph's text comes from the host font's cmap. This PC has Arial; the Linux
+  release image and D1 have no such font. PdfPig has no option for it, in 0.1.11 or in 0.1.16 (its latest): the finder is
+  a private field of the document's handler. An upgrade would not help, so none is made and no lock file moves.
+- **The fix** (`HostFontFreePdf`, new): the one door through which the product opens a PDF. It opens the document as PdfPig
+  does, then, before any page loads a font, sets that field of this document's handler to a finder that finds nothing. A
+  non-embedded TrueType font is then read on every host as on a host without it: advances from the PDF's `/Widths`, each
+  box the `/FontBBox` at its origin, the Standard 14 metrics PdfPig bundles where a dictionary names one without metrics.
+  Type 1, CID and Type 3 fonts never read the host. Each reflection step is checked against the pinned PdfPig; one that
+  does not hold throws `PdfHostFontIsolationException`, which every caller lets through (a PDF is never called
+  unreadable, nor read with host fonts, because the door did not close). All four PdfPig opens go through it: the layout
+  producer and the three EU annex classes (page labels, letter counts and images: no output of theirs moves, but a host
+  font could make a page throw and read as unreadable on one machine only).
+- **Which source of metrics, and why this one.** The PDF's own `/FontBBox` is the only geometry the PDF states for a glyph
+  it does not embed, and it encloses every glyph of the font; a host font or the bundled Helvetica would be a substitute
+  for a program the publisher never shipped. The text layer (`LXPDTL1`) reads only each glyph's text, its order and its
+  rendering mode, never a box; the act scope reads only the item's address; the corpus reads only identities and
+  dispositions. Glyph text did not differ by host in run 15: D1's 20 text layers have 19 distinct bodies, all 19 also
+  written by the Windows build of 2026-10-12; only their header binding (the layout outcome's identity) differed. **No
+  served text or answer can change**: no Luxembourg PDF's text is served (`not_available_pdf`), and the index reader counts
+  stage-3 outcomes by disposition and never reads their identities.
+- **Tests.**
+  - `HostFontFreePdfTests` (new, 5): a synthetic PDF, every byte written in the test, with a non-embedded TrueType
+    "Arial,Bold" lays out to boxes from its `/FontBBox` and `/Widths` and to one layout artifact, `9c7f0938…`, on Windows 11
+    and in WSL Ubuntu 24.04 (`DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1`, `TZ=UTC`), in WSL also with Windows' Arial and
+    Arial Bold in a test-only `~/.fonts`. A finder standing for a host that has the font (a TrueType program the committed
+    EU PDF/A fixture embeds, no file of the machine) reads other boxes; the document asks only the finder the door gives
+    it; an embedded font asks no finder; the door names the PdfPig the project references; and no file in `src` opens a
+    PDF or names a font finder outside the door.
+  - Before the fix (the door made a plain `PdfDocument.Open`): on Windows the synthetic "L" read from 20.77 to 25.81,
+    Arial Bold's outline, instead of 13.72 to 40, and 2 of the 5 failed; in WSL 5 of 5 passed (no Arial: why Linux never
+    saw it), and with Arial in `~/.fonts` the same 2 failed with Windows' boxes to the bit.
+  - `LuxembourgPdfLayoutHostFontProbe` (new, opt-in `LEX_V3_PDF_LAYOUT_PROBE=1`, read-only, never a CI test): run 15's 22
+    publisher PDFs of D1 (21 PDFs; one serves two members), read from custody by digest, laid out by the producer's own
+    `ReadLayout`, must be the artifacts custody holds. After the fix, Windows and WSL (with and without Arial) give D1's
+    22 artifacts byte for byte, source `cdbb6a99…` its `16423639…`. The base build gives on Windows the 22 artifacts the
+    Windows build wrote on 2026-10-12 (`29d6431a…` for `cdbb6a99…`) and in WSL D1's 22; in WSL with Windows' Arial and
+    Arial Bold, 20 of the Windows 22, `29d6431a…` among them (the other two use fonts not copied, Arial Italic and
+    Arial Narrow among them). The host's fonts were the only difference.
+- **What moves.** No rule profile: layout rule /2 `b3a32ec7…`, text layer `1ef57d74…` and act scope stay. On a host
+  without the PDF's non-embedded fonts (D1, the release image, CI) no byte moves. On a host with them (this PC) the layout
+  artifacts of the members that use such a font become the ones D1 wrote, and so their layout, text-layer and act-scope
+  outcome identities, the three population identities in the corpus header, each such member's `stage3_outcomes` entry
+  in the corpus and in the Luxembourg index's `members.stage3_outcomes_json`, and those files' digests. Release 2's path
+  (R1, D1, Linux) does not move: a re-derivation of it, here or on Azure, names D1's 22 layout and 20 text-layer
+  artifacts (all held, so none is written again) and builds D1's corpus; before the fix one on this PC named the
+  2026-10-12 artifacts and built another corpus. derive-c, which release 1 serves, ran on this PC on 2026-10-13
+  and names the host-font readings. Of its 184 layout artifacts (164 PDFs, each mapped to its artifact by the base build
+  reproducing it here), the fixed build changes exactly 22, D1's 22 sources, each to D1's artifact; the other 162 use no
+  non-embedded TrueType font and are the same on every host. A re-derivation of R0 after the fix therefore names D1's 22
+  layout and 20 text-layer artifacts (held, none written again) and builds a corpus and a Luxembourg index whose digests
+  differ from derive-c's, with the same dispositions and text. Release 1 is not re-derived.
+- **Driver decision (reversible).** The layout rule stays /2: its text names PdfPig 0.1.11 and no host input, and every
+  host now writes what the release image always wrote, so D1 and the release 2 path stand without a rerun. The 184
+  artifacts the Windows builds wrote under the same rule digest are host-font readings no build now writes; they stay in
+  custody (create-only), named only by derive-c. Reversing it (a rule /3) would move every layout artifact, the text
+  layer, the act scope, the corpus and both indexes, and need a new D1 on Azure. The earlier decision to derive and
+  release on Linux only is withdrawn: a derive on Windows now gives the same PDF outcomes.
 
 ## D1's second refusal: a code's title dated by each of its articles; the index build now runs over run 15 on this PC first (sole driver, 2026-10-26)
 
@@ -1406,9 +1470,9 @@ Updated 2026-10-26.
     glyphs with other bounding boxes (up to 7.6 points; the first glyphs, "Arial,Bold", 2.7 points wide on Windows and 14.1
     on Linux). PdfPig 0.1.11 reads a font the PDF does not embed from the host's installed fonts, so those glyphs' metrics
     are the machine's. Derives A and B (both Linux) agree; a Windows derive of the same custody names other PDF outcomes
-    and builds another corpus. **Known defect, not fixed here**: the PDF layout depends on the host's fonts. **Driver
-    decision (reversible)**: D1's artefacts stand, and the population is derived and released on Linux only (as D1 and the
-    release image are) until the layout reads no host font.
+    and builds another corpus. **Known defect, fixed on 2026-10-27** (the section "The PDF layout reads no host font"
+    above): every host now writes D1's 22 artefacts. **Driver decision (reversible)**: D1's artefacts stand; the
+    decision to derive and release on Linux only, made until the layout read no host font, is withdrawn with the fix.
 - **Not yet.** Release 2's R1 (S4r: reading /2, the re-resolution, the licence-page index, `measure-lu-rights`); state digest
   /2 and `log.derived_at` (S6); the coverage row and its web copies (S7c); S4b; the dry run.
 

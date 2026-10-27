@@ -733,14 +733,16 @@ const EN = Object.freeze({
     title: "Privacy notice",
     eyebrow: "About this site",
     heading: "Privacy notice",
-    intro: "What happens to your data when you read Lex: it asks you for none, sets no cookie and keeps nothing about you.",
+    intro: "What happens to your data when you read Lex: it asks you for none, sets no cookie and records nothing about you.",
     sections: Object.freeze({
       reading: Object.freeze({
         heading: "When you read the site",
         request: "Each page you open and each search you send is a request from your browser to this site's server. The request carries your device's IP address, the address of the page and the technical details every browser sends. A search's words travel in the body of the request, never in the request's address; a link that keeps a search holds it in the part after the “#”, which your browser never sends.",
         host: "Microsoft, which hosts the site, carries each request to the server and its answer back to you, and handles the connection data this needs under its own terms.",
-        kept: "The server uses the request only to answer it, and keeps nothing of it once it has answered: it writes no access log and no record of what is read or searched, and the hosting is set up with no log store and no monitoring service that would keep requests. This is tested: the server is run with requests carrying marked values (a search phrase, an address, a browser's name), and none of them may appear in anything it writes.",
-        nothingHeld: "Lex has no accounts and no sign-up, so it never knows who you are. Since it keeps nothing about a visit, it holds nothing about you that it could show, correct or erase.",
+        kept: "The server uses the request to answer it and to count it (see below), and writes nothing of it anywhere: it keeps no access log and no record of what is read or searched, and the hosting is set up with no log store and no monitoring service that would keep requests. This is tested: the server is run with requests carrying marked values (a search phrase, an IP address, a browser's name), and none of them may appear in anything it writes.",
+        // The per-client limit (R109; V3ClientLimiter): what the server holds of an IP address, where, and for how long.
+        limit: "So that no single IP address can overload the server, the server counts the requests that come from each IP address. For this it holds, in its working memory only, a fingerprint of the IP address beside a count of its recent requests. The fingerprint is computed with a secret key that is drawn at random, never written down and replaced every day; the IP address itself is not kept. Neither the fingerprint nor the count is ever written down, and both are forgotten at the latest about two minutes after the last request from that IP address, or when the server restarts. An IP address that sends too many requests at once or in a minute is asked to wait a moment.",
+        nothingHeld: "Lex has no accounts and no sign-up, so it never knows who you are. Since it records nothing about a visit, and forgets the count above within minutes, it holds nothing about you that it could later show, correct or erase.",
       }),
       nothingElse: Object.freeze({
         heading: "No cookies, no trackers, no other sites",
@@ -1028,7 +1030,7 @@ const EN = Object.freeze({
       heading: "Two ways in, one answer",
       rest: "REST: {request}, with a JSON body that names the operation and its parameters, {body}. The path takes no query, and any other method gets only a failure below the envelope.",
       mcp: "MCP: JSON-RPC messages sent by POST to {endpoint}, over the Streamable HTTP transport, protocol version {version}. The server answers {methods}; every operation it serves is a tool of the same name, whose input schema is the {parameters} member of the operation's request schema.",
-      same: "Both give the same envelope for the same request: a tool call is turned into the REST request document and answered by the same code, and its result carries the envelope as its structured content. A refusal is an answer, not an error: REST sends it as a successful HTTP answer, and MCP as a tool result with {isError}.",
+      same: "Both give the same envelope for the same request: a tool call is turned into the REST request document and answered by the same code, and its result carries the envelope as its structured content. A refusal is an answer, not an error: REST sends it as a successful HTTP answer, and MCP as a tool result with {isError}; only the refusal of a request past its client's limit has another status over REST, given below.",
       restExample: "For example, the coverage report, asked with curl:",
       mcpExample: "The same over MCP, as a tools/call message:",
       client: "A client that speaks Streamable HTTP is given the address {endpoint}; one that reads its servers from a JSON file, for example:",
@@ -1163,14 +1165,18 @@ const EN = Object.freeze({
       heading: "Quoting and citing",
       quote: "Every quoted article carries {text}, the digest of its text; {body}, the digest of the publisher's file it was read from; {source}, its official source; and {permalink}, which pins the publisher, the act, the date and digest of the version or EU wording, the language and the article: {shape}.",
       verify: "{verify} checks a permalink's digest against the one the index holds, from what this server holds: it never asks the publisher.",
+      // The published key set (R116; `V3KeySet`).
+      keys: "Each release of Lex is signed. The keys that sign releases, each with its identity, role, validity and status, are published at {keySet}: check a release's signatures against that set, never only against the key the release carries.",
       forms: "On the reading page, an article is cited in three forms, “{conventional}”, “{withPermalink}” and “{evidence}”, and an export carries all three. In a document, cite the official text by its official reference.",
     }),
     limits: Object.freeze({
       heading: "Limits",
-      anonymous: "There is no key and no account, and the server keeps no record of a request: see the {privacyPage}.",
+      anonymous: "There is no key and no account, and the server keeps no record of a request; for the per-client limit below, it counts requests in its working memory alone: see the {privacyPage}.",
       size: "A request body is at most {bytes} bytes; a larger one is answered with {code}.",
       paging: "Lists are paged: {limit} sets a page's size, within the bounds each request schema states, and {after} continues from where the last page stopped.",
-      rate: "This server sets no per-client rate limit at present, and the service is small, so heavy use slows every reader: send one request at a time and poll gently. The registry holds the refusal {code}, carrying {retryAfter}: a client that receives it waits that long before asking again.",
+      // The per-client limit (R109, R46): its figures are the server's (`CLIENT_LIMIT`, held to `V3ClientLimiter`).
+      rate: "Each client, known by its IP address, may send {perMinute} API requests a minute, REST and MCP together, with at most {atOnce} being answered at once. Past either limit, a request to an operation (over MCP, a tool call) is refused with {code}, which carries {retryAfter}, the seconds to wait before asking again, as the {retryAfterHeader} header does; over REST its status is {status}. The service is small: send one request at a time and poll gently.",
+      pages: "The pages the server renders itself have a budget of their own, {renders} a minute for each client; past it, a page is sent as built, and the browser then asks the API for its answer. No page is refused.",
       availability: "Nothing is promised about availability: see the {termsPage}.",
     }),
     events: Object.freeze({

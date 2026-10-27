@@ -109,6 +109,282 @@ pages exist).
   - The JavaScript live server (`serve-live.mjs`, the journeys' and development's) has no maintenance mode; only the API,
     which production runs, has one.
 
+## Review and repair (#995): the runbook's blocks stop at a failed step, renders hold a place, the ingress checked by hand (sole driver, 2026-10-27)
+
+The one repair round of #995 (`writer/platform-ops` at ef99b6cc), after its one review: REPAIR, five findings. Each was
+reproduced first.
+- **F1 (medium), the runbook's blocks.** As written, the promotion lines (`traffic set`, then `revision deactivate $live`)
+  ran on after a failed traffic move: PowerShell does not stop when a native command fails, the pattern of 2026-10-27.
+  Reproduced with the reviewer's `promote-block.ps1` and its made-up `az`: the deactivation ran. The rollback read
+  "Healthy" once instead of waiting.
+  - **Repair** (`docs/INCIDENT-RUNBOOK.md`, section 3): every block that changes something is one `& { ... }` with an
+    `if ($LASTEXITCODE -ne 0) { ...; return }` after each command, so pasted whole it stops at the first failure and says
+    so. Moving traffic (a rollback, a forward move, a promotion) is three blocks: activate; wait until the target is active,
+    running and healthy (ten minutes at most, every 15 seconds), move all traffic, and read it back through `ingress traffic
+    show`; deactivate the revision left only when the read traffic is 100 per cent on the target and none on it. The
+    deployment block stops when the revision serving now cannot be read.
+  - **Test** (`web/test/runbook-blocks.test.mjs`, 9): the marked blocks are pasted into pwsh under a made-up `az` that holds
+    the app's traffic, with the test's clock: a failed traffic move switches nothing off (the reviewer's repro); the normal
+    promotion's order (three reads while the target warms, two waits, the move, the read-back, one deactivation); a target
+    never healthy moves no traffic; a move that does not take is caught by the read-back; an unreadable revision or traffic
+    stops its block; a failed activation stops; the deployment block passes `-LiveRevision`; the first half of the
+    two-address check. A mutation that drops the read-back guard fails four of them. The reviewer's repro, re-run against
+    the new blocks with its made-up `az`: "Moving the traffic ... failed: stop here" and "nothing deactivated", where the
+    old lines ran the deactivation.
+- **F2 (low-medium), server-rendered pages bypassed the concurrency cap.** `AdmitRender` took a token and no place, so a
+  client could run any number of renders at once.
+  - **Repair:** a render holds one of the client's four in-flight places while the mount is asked and the page rendered
+    (`V3ClientLimiter.AdmitRender` returns an admission; `V3WebRoot.TryServeAsync` holds it, then gives it back). With four
+    requests being answered, the page is served as built; a render in flight leaves three places for API requests.
+  - **Tests:** `V3ClientLimiterTests.ARenderHoldsOneOfTheClientsFourPlaces…` and
+    `V3HostAnswerTests.APageIsServedAsBuiltWhileTheClientHasFourRequestsBeingAnswered`; the census pins the two new doors.
+  - **Text:** unchanged. The Developers page's "at most four being answered at once" and "past it [the budget], a page is
+    sent as built; no page is refused" stay true, and so does the privacy notice; OPERATING.md says renders hold a place.
+- **F3, the platform assumption.** No test of this pull request can see Container Apps' ingress, so whether it forwards
+  each reader's own address is an assumption, now said plainly in OPERATING.md ("What the tests do not prove"), and checked
+  by hand before each promotion: the runbook's two-address check spends one address's minute at the candidate's own
+  address (a 429 must come; none means the limit counts no one), then asks once from a second address within the minute
+  (a 200 must come; a 429 means one bucket for the whole site). The coordinator runs it against the candidate.
+- **F4, the integration.** v3/integration at 81782325 merged in (#992 deploy-live-safe, #993 the probe's search engines,
+  #994 the PDF door): OWNER-BRIEF.md and this file joined by hand, both kept. The runbook and OPERATING.md no longer say the
+  deploy fix is unmerged; they give the revision name `ca-lex-v3--<the release's suffix>-<8 hex digits of its settings>`,
+  and the kit's rules since #992 and #993 (a revision that exists is activated and probed by hand, a redeployment names
+  `-LiveRevision`, `--search-engines` goes to the probe), with the by-hand probe's command.
+- **F5:** `V3ClientLimitTests` now proves the mount is not asked: the mount is disposed before the refusals, which still
+  come over REST and MCP, while another client's admitted request, which asks the disposed mount, is not answered.
+  `V3MachineGatesTests`' summary of `ProducedCodes` is back on its method.
+- **Counts** (this PC, at the repaired head; no browser, no publisher traffic, nothing sent to Azure):
+  `dotnet build Lex.V3.slnx -c Release` 0 warnings; Lex.V3.Tests 3,348 (3,342 passed, 6 skipped); `V3ClientLimitTests` and
+  `PublicRequestRecordingTests` 14 passed; `npm run build` and `npm test` (Git Bash) 1,398 (1,395 passed, 3 skipped, the
+  browser tests CI runs); `eng/verify-v3-tree.ps1` 1,713 tracked paths.
+
+## The per-client limit, the key set, the headers on every answer, the outside monitor and the runbook (sole driver, 2026-10-27)
+
+The specification of record's platform and "running it" lines (R109, R46, R116, the shell line and the plan's item 10.7,
+R107, R108, R8, R114), on `writer/platform-ops`, from v3/integration at db0a7b53. The site is open since 2026-10-27 01:10
+UTC.
+- **The per-client limit** (R109, R46; `src/Lex.V3.Api/V3ClientLimiter.cs`; driver decisions, reversible):
+  - **Budgets.** The API (`/api/v3/*` served routes and `/mcp`): 60 requests a minute, a bucket of 60 refilled at one a
+    second (R109's number; "re-sized by the load test"), and at most 4 of a client's requests answered at once (R109's
+    concurrency cap, on every operation: on one vCPU each is a costly one, and a page asks one at a time). The pages the
+    server renders from its own answer: 300 a minute (R46: well above), past which the page is served as built and asks
+    for itself, so no page is ever refused. Every other file of the site, readiness, the key set and unknown routes are
+    not counted.
+  - **The refusal.** Past the API budget a well-formed request is answered with the typed refusal `rate_limited`
+    (`{"retry_after":1,"retryable":true}`), in the mounted corpus's refusal context, before the mount is asked: REST
+    with status 429 and `Retry-After`; MCP's tool call with the same envelope in a JSON-RPC result, status 200 (the
+    dispatcher's rule) and `Retry-After`. A malformed request keeps its own transport problem. The web client reads a 429
+    envelope only when it is that refusal, which the failure panel shows with its retry (`v3-client.mjs`).
+  - **The client.** The connection's address; when the peer is inside the host's network (loopback, private, shared
+    100.64/10, link-local: Container Apps' ingress), the last address of `X-Forwarded-For`, the one the ingress appended;
+    with none, no client and no count (the platform's probes, the journeys, a release's image run: so no release probe or
+    journey meets the limit). An IPv6 address counts by its /64. On the live host the TCP peer is the ingress, so keying on
+    the connection alone would have made one bucket for every reader.
+  - **What is held.** 16 bytes of HMAC-SHA-256 of the address under a 32-byte key drawn at random per process and replaced
+    each UTC day (every entry dropped with it), beside the counts; the address itself is not kept; nothing is written. A
+    sweep each minute forgets every entry whose buckets have filled again, so none outlives its client's last request by
+    more than about two minutes. At most 100,000 entries; past that a new client is answered without one.
+  - **The census of S4-A11** (`PublicRequestRecordingTests`): the address and the forwarded header are read in one place,
+    `V3ApiHandler.ClientOf`, handed whole to the limit, and counted by a test of their own; the rules see through that one
+    expression and nothing else. The behavioural test now runs every scenario directly and through the ingress, and past
+    the limit to the 429, and finds no marked value anywhere.
+  - **The refusal census:** `rate_limited` moves from `not_produced` to `produced`, by every served operation (24); five
+    codes stay unproduced. The refusal gate's set gains one case, a client past its minute (19 cases; the evaluation card
+    re-rendered).
+  - **The probes:** the deploy probe asks a candidate through the ingress from one address and can ask about a hundred
+    times in seconds (the accented-title check), so its API requests (`askOperation`, `verify`, a step's own request) go
+    through `within-limit.mjs`: a 429 is waited out as its Retry-After says, then that origin is paced at two seconds a
+    request; a local server is never waited for.
+- **The privacy notice** (EN and FR): `privacy.intro` ("records nothing"), `reading.kept`, the new `reading.limit` (what
+  is held, where, how long) and `reading.nothingHeld` ("later"); the French reviewed by an independent reviewer in the
+  addendum of 2026-10-27 of `C:\lex-v3\lanes\fr-review\review.md` (4 forms, 2 changed, with two English changes taken);
+  `LEGAL_TEXTS_UPDATED` is 2026-10-27. Points for the lawyer's read (O4): the fingerprint is pseudonymised personal data;
+  the notice states no legal basis for it (the usual candidate art. 6(1)(f)); its first retention period is stated; an
+  IPv6 /64 shares one count.
+- **The key set** (R116): `src/Lex.V3.Api/well-known/lex-keys.json` (schema `lex-v3-keys/1`), embedded in the server
+  and served at `/.well-known/lex-keys.json`, GET and HEAD; the release key, identity `lex-v3-release`, role `release`,
+  status `active`, valid from 2026-10-13 to 2027-10-13, key id the SHA-256 of its SubjectPublicKeyInfo
+  (`c4e97ce0…`), its PEM committed beside it (`lex-v3-release.pem`, the key release 1 is signed with). No second signer's
+  key exists yet (O16).
+- **Headers on every answer** (`V3HostHeaders`): before, on https://law.soufien.lu, the pages carried HSTS,
+  `Referrer-Policy`, `nosniff` and their CSP with `frame-ancestors 'none'`, but readiness and the API's answers carried
+  only `nosniff` and `no-store` (read on 2026-10-27). Now every answer carries HSTS, `Referrer-Policy: no-referrer`,
+  `nosniff` and, when it is no page, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`; a transport
+  problem sets them again after its reset. A page keeps its own reviewed policy.
+- **The outside monitor** (R107): `.github/workflows/v3-monitor.yml`, every five minutes on GitHub's runners, runs
+  `web/scripts/site-monitor.mjs`: readiness 204, the French home page with its CSP and HSTS, one dated reading page
+  (the GDPR in French at 2024-01-01, answer state `success`), `coverage` answered and not stale, and the certificate
+  trusted and at least 21 days from its end; a failed check is asked again a minute later, and two failures fail the run
+  and open or add to one issue (the run's own token, no secret), closed once the site answers. Run once from this PC
+  against the live site: all five ok (certificate to 2027-04-18). It acts only once its file is on the default branch
+  (`main`), the owner's choice.
+- **The documents:** `docs/INCIDENT-RUNBOOK.md` (R108: classes, the first five minutes, rollback, forward, reactivating a
+  live revision, redeploying, blocking a client, the known failure modes with the incident of 2026-10-27, the breach
+  procedure, the cost ceiling's command) and `docs/OPERATING.md` (R8: who decides, the review rule, standing
+  authorisations, the platform, the domain and certificate, how a refresh and a release are made, the deploy kit's rules,
+  freshness and the 30 days, monitoring, money, what is not done). The tree's allowlist admits `docs/*.md` by name and the
+  monitor's workflow.
+- **The cost ceiling** (R114): the command is in the runbook, for the owner: an action group whose receiver is the Owner
+  role, then `az consumption budget create-with-rg` over `rg-lex-v3`, 150 EUR a month (the plan's N1), alerts at 50, 80
+  and 100 per cent to the Owner role, no e-mail address (the classic `create` takes no notifications); the JSON form of
+  its notifications was parsed by the CLI's own argument code offline, and nothing was sent to Azure.
+- **Tests:** `V3ClientLimiterTests` (10), `V3HostAnswerTests` (7), `V3ClientLimitTests` (1), the recording census's new
+  count test and its ingress and limit paths, the refusal census and gate set, the Lex.V3.Tests census pins (two guarded
+  types, two registries); web `within-limit.test.mjs` (3), `site-monitor.test.mjs` (6), `v3-client.test.mjs`'s 429 case,
+  `legal-pages.test.mjs`'s pinned privacy forms and their evidence.
+- **Combined with `writer/help-and-developers`** (the merge of 3d8e6f7b; one web pull request): the two 2026-10-27 sections
+  of this file and the owner's brief joined by hand, everything else merged clean. The Developers page now says the limit
+  as the server enforces it (R46: `developers.limits.rate` and the new `.pages`, their figures from `CLIENT_LIMIT` in
+  `developers.mjs`, which `reference-pages.test.mjs` holds to `V3ClientLimiter`'s constants and the 429 of
+  `HandleRateLimitedAsync`), its `anonymous` line says what the limit counts in memory, and its citing part names the key
+  set (`developers.citing.keys`; its address as printed text, since the API serves it and the pages' own server does not);
+  the French of those four forms, and of `developers.access.same`, which the review found contradicted by the 429 and which
+  now says it, reviewed in the addendum of 2026-10-27 on the Developers page's limits and the key set (3 changed, the English
+  with them: a release of Lex is a "mise en production"; "reconnu à", "refusée avec"; past the limit only an operation is
+  refused, over MCP a tool call).
+  The operating page stays a repository document (`docs/OPERATING.md`): R8 asks for a numbered page, not a public one, and
+  a link from the site to the repository would print its owner's account name, which the decision of 2026-10-19 keeps off
+  the pages (a driver decision, reversible).
+- **Counts** (this PC, Windows, no browser, no publisher traffic, nothing sent to Azure; at the combined head):
+  `dotnet build Lex.V3.slnx -c Release` 0 warnings; Lex.V3.Tests 3,346 (3,340 passed, 6 skipped); the Ingest classes this
+  touches with the censuses and the samples (Census, envelope and answer samples, MCP, `PublicRequestRecordingTests`, the
+  refusal census, `V3ClientLimitTests`, `V3MachineGatesTests`) 57 passed; the refusal census and the evaluation card
+  rendered with their variables and verified without; `npm run build` and `npm test` 1,380 (1,377 passed, 3 skipped: the
+  browser tests, run in CI), from Git Bash (from PowerShell the image run's awk test cannot find awk on that PATH);
+  `eng/verify-v3-tree.ps1` 1,709 tracked paths; the monitor run once against https://law.soufien.lu, five checks ok.
+- **Not done here:** a reviewed sentence for
+  `rate_limited` on each screen (the panel says the code today); latency, error-rate and restart alerts; the load test
+  that re-sizes the limit.
+
+## Get help, How to read Lex and Developers: the launch set's three missing screens (sole driver, 2026-10-27)
+
+The owner's order of 2026-10-27 (finish V3 to the ideal specification within 72 hours, at high quality): the screens the
+specification of record's launch set names (§3, Screens; R42, R46, R48, R50, R55) and the site did not serve, built as one
+web pull request (`writer/help-and-developers`). Each page is in French and English, under its language (R61), complete
+from the server and readable with no script (R67), never indexed, its footer's freshness strip saying it carries no answer,
+as the legal pages are (`scripts/reference-pages.mjs`, `app/ReferencePages.jsx`).
+- **Get help** (`/{fr,en}/help.html`, R42, R50). What Lex is, R50's sentence word for word, and that for what a text means
+  for a reader they should ask a lawyer or another adviser of their choice; what Lex does not do (apply the law, compute a
+  deadline, predict, consolidate, hold case law, choose between versions or fill a gap, keep a record of readers); how to
+  read an answer when Lex cannot give the one asked for (the plain sentence first, then what would answer and the official
+  link; an answer about what Lex holds, never about the law; a service failure in R60's words); where the official texts
+  are (the authenticity line, legilux.public.lu and eur-lex.europa.eu as links); that Lex names no adviser yet, since R42's
+  list must first be checked by a person (N2); and, by the owner's decision of 2026-10-19, that Lex has no contact channel
+  (no e-mail address, form, telephone or postal address, and no person), so it receives and keeps no message, the privacy
+  notice naming where to complain about personal data.
+- **How to read Lex** (`/{fr,en}/how-to-read.html`, R48, R21, R24, R58, R64, R65, R87). The two kinds of date (from when a
+  text is applicable, in the publisher's words, a Luxembourg version's "applicable from … (publisher)" and an EU act's
+  wordings; and when it was published and collected), never merged; each date with its role; as published and
+  consolidated, with the authenticity line and the as-published label; versions without text and image-only annexes; gaps;
+  two versions for one date; how current Lex is; permalinks, readable addresses and the three citation forms; the keyboard
+  (no shortcuts of its own; the skip link). Then a glossary of the site's own words: each term is an entry of the chrome
+  table named by its path (`GLOSSARY`), said as the page that prints it says it, a template's term its words before its
+  first value, sorted in each language's order.
+- **Developers** (`/{fr,en}/developers.html`, R46, R55; the plan's item 8.4). Generated from the contracts, never by hand
+  (`scripts/developers.mjs`): the census's `contract` block, which `V3EnvelopeSamplesTests` reads from the reviewed
+  registry (the operations, the refusal codes with the fields each payload must carry, the verdicts, the registry's
+  digest); the census's coverage answer (which operations this server serves, and the data that would serve the three it
+  does not); the request schemas (each operation's parameters) and the envelope schema (its members). REST and MCP and
+  that both give one envelope; examples (curl, a tools/call message, an MCP client's configuration); every operation with
+  its REST path, its MCP tool, its parameters, its answer's objects and its two schemas, linked and with their digests;
+  the envelope, its context and the verdicts; the refusal codes, the two presentation results and the failures below the
+  envelope; quoting and citing; the limits as they are (no key, no account, nothing recorded; the request body's ceiling;
+  paging; the per-client limit as `writer/platform-ops` enforces it, since the two branches were combined; no availability promised); the events log (polling by
+  cursor, at least once, no webhooks, the platform's own delivery statement); and the schemas. The facts only the API's
+  code holds (the MCP protocol version and methods, the request ceiling, the transport failures) are named once in
+  `developers.mjs` and held to the C# by `reference-pages.test.mjs`.
+- **The schemas, published.** Every file of `schemas/v3-platform/*.schema.json` is published beside the pages, byte for
+  byte, at `/schemas/v3-platform/{name}.json` (one extension per file, as both servers' path rules require), and the
+  Developers page links each with its SHA-256, which the API checks against the registry's when it loads it.
+- **Links.** Every page's footer has a "Help and reference" menu of the three, the current one marked; the home page links
+  Changes, Trust and Coverage, Developers and Get help (§3, Shell and home); Get help links How to read Lex and the
+  Developers page. The site's table (`site-paths.json`) names the six pages as files, which both servers serve
+  (`V3WebRootTests`, `legal-pages.test.mjs`, `reference-pages.test.mjs`).
+- **Tests** (`test/reference-pages.test.mjs`, 9 cases): the pages built in both languages with the site around them, no
+  script, no form, never indexed, language links to the same page, the French saying none of the English's words; every
+  internal link they hold served by the live server (pages and schemas, a schema's bytes); every footer's menu and the
+  home page's links; the Developers page in sync with the registry (the C#'s `RequiredOperationIds`,
+  `RequiredRefusalCodes`, `MandatoryRefusalPayloadFields` and `V3RestRouteBinding.Served` parsed and compared with the
+  census, the chrome table and the rendered page; an operation, or a refusal code, the page has no words for fails the
+  render); the API facts held to the C#; the glossary's terms the table's entries; R21's guard over every form and every
+  rendered page in both languages; Get help's no-contact statement and no contact; every count the page says the
+  contracts'; and the forms the French review pinned, beside the C# they describe. Changed tests: `live-chrome`, `live-home`, `legal-pages`, `freshness`, `no-literal-counts` (the new pages and
+  sections), `V3WebRootTests` (16 file rows). Mutation: the `verify` description taken out of the English table failed 5 of
+  the first 8 cases (the page refuses to render an operation it has no words for).
+- **French** (Decision 41): one independent reviewer (Claude, AI reviewer, not the author) under the owner's delegation,
+  in the addendum of 2026-10-27 of `C:\lex-v3\lanes\fr-review\review.md` ("the three reference pages, Get help, How to read
+  Lex and its glossary, and Developers"): 242 forms reviewed, 59 changed (the English too in 31), 183 approved. Its blocking
+  points, both languages: a Luxembourg version's end day ("until the day before the end date Legilux gives it", the end the
+  publisher states being the first day not covered, `[from, to)`), and "never chooses between two versions", which holds only
+  when their texts differ, since the platform serves one of several held with one text (`SameWording`). Its recommended
+  points made twelve other forms say only what the code does (an article held without text is named apart; a permalink says
+  first when it shows another text; the freshness strip is a region a screen reader names; the staleness banner stands only
+  on a page with an answer; any other REST method gets a failure below the envelope; a refusal's code and payload follow its
+  sentence). The finals are applied byte for byte (checked against the reviewer's own file), with its point 6's English for
+  `developers.operations.notServed`; its point 8's tests are the ninth case of `reference-pages.test.mjs`; the 242 forms and
+  the new vocabulary rows (conseiller, ce déploiement, Streamable HTTP, "sert de réponse pour", "intervalle sans version")
+  are named in the header comment of `live-chrome-fr.mjs`; the addendum is appended with the driver's note.
+- **Driver decisions** (reversible): the pages stand under each language as every page does (R61), so R55's "/developers"
+  is `/{lang}/developers.html`, with no unprefixed redirect; the three are never indexed, as the legal pages are, until a
+  release's switch is extended to them; the header menu is unchanged (the home page holds the audience entry points, R47,
+  and every footer the three), which keeps the keyboard journeys' path to each form as it is; Get help names no adviser
+  until R42's list is checked by a person; the Developers page says the rate limit as the server enforces it (since the combination with
+  `writer/platform-ops`, above).
+- **The L lines, against what the site serves** (the specification of record's §3 and the plan's "On opening day"): what each L line that names a screen, a page or an address asks, and
+  whether the site serves it after this pull request. Each "missing" was looked for in `web/app`, `web/scripts`,
+  `src/Lex.V3.Api` and `deploy/`, and is not there.
+  - Served, each with its page: Search as the home page (one box, today's date, what Lex is and is not, the dated coverage
+    line, the links §3 names), the Work dossier, Reading with its date, Provision history, Compare, Changes, Trust and
+    Coverage, the Export composer, Developers, Get help, How to read Lex, the five legal pages, the 404 page and the
+    failure panels, the German and Luxembourgish page, the freshness strip and staleness banner, robots.txt and the
+    sitemap (with the switch), the evaluation card's JSON, `/api/v3` and `/mcp`, and now the published schemas.
+  - Missing on the home page: example searches (R47; no answer names a title or a text a search would land on, so none is
+    shown, `LiveHome.jsx`). Closed by the screens' gaps slice (`writer/screens-gaps`, the section at the top): derived from the mount through the API's answers.
+  - Missing in the shell: breadcrumbs (publisher, act, article, version; R48); a print view of Reading (R62's fifth item,
+    33 §7 rule 9; the stylesheet has no print rules); the maintenance page during a deployment (R60; built, not wired into
+    the deploy kit). Closed by the screens' gaps slice (`writer/screens-gaps`, the section at the top): all three.
+  - Missing in How to read Lex's reach: a link from each banner's info control (R48); the guide is linked from every
+    footer, and no banner has an info control yet. Closed by the screens' gaps slice (`writer/screens-gaps`, the section at the top).
+  - Missing in Get help: R42's versioned handoff list by theme (advisers, "where to complain"), and the help block on the
+    dossier and reading pages of acts in high-stakes themes (R50). Both need the list a person writes and checks (N2).
+  - Missing on Developers (the plan's item 8.4): replay guarantees G1 to G5 as supported, live examples from the
+    release's own data, and a stated change policy beyond the schemas' versioned identities and the registry digest; the
+    try-it console moves with O1.
+  - Missing in the API the page describes (each one the Developers page says as it is): a typed refusal inside a normal answer for the three unserved operations
+    (`concepts`, `knowable_on`, `transposition` answer the transport failure `operation_not_served`; the plan's item 8.6);
+    a published schema for each refusal code's payload (the plan's item 6.10; `refusal.schema.json` holds an open
+    payload, and the mandatory fields are the registry's, now listed on the page); "out of scope" with its reason and who
+    to ask, and the list of what Lex never holds (6.10, J5); MCP `ping` and server instructions (8.5); the per-client rate
+    limiter (R109), which `writer/platform-ops` builds: when the two branches are combined, `developers.limits.rate` (which
+    says no per-client limit is applied) must say the limit as that branch enforces it, in both languages, reviewed (done
+    in the combination, above).
+  - Missing addresses: `/.well-known/lex-keys.json`, the published key set (R116; served since the combination); `/.well-known/security.txt` with a
+    disclosure policy (R74), which the owner's decision of 2026-10-19 (no contact of any kind) leaves to the owner; a page
+    "Operating Lex after launch" with the hosting statement and the monthly ceiling (R8, R113, R114; `docs/OPERATING.md`
+    since the combination, a repository document); R55's unprefixed
+    `/developers` (the page stands under each language, R61).
+  - Missing in the journeys: J6 through Get help and J7 through the Developers page (R53); the CI journeys walk neither
+    page yet. Closed by the screens' gaps slice (`writer/screens-gaps`, the section at the top).
+  - Not audited by this slice, and each the subject of its own L line: the dossier's relation tabs (R29), the inline diff
+    (R57), Changes' export, density notice and watch scope (R54), Coverage's text yield per class, attribution rate and
+    retention rule (R86, R29, R89), Reading's notices and in-act links (R17, R68, R71, R72).
+- **Measured** (Windows, no browser, no publisher traffic, no Azure):
+  - `npm test` (Git Bash), on 7808a5fa: 1,368 (1,365 passed, 0 failed, 3 skipped); before the French finals, 1,367 (1,364
+    passed, 0 failed, 3 skipped). `node --test test/reference-pages.test.mjs`: 9 of 9.
+  - `npm run build`: 30 state pages (the preview build, which this slice does not change), before the French finals.
+  - `dotnet build Lex.V3.slnx -c Release`: 0 warnings, 0 errors; `Lex.V3.Tests` (Release): 3,329 (3,323 passed, 0 failed, 6
+    skipped), on the tree of 95935ef7, whose C# (`V3WebRootTests`, the site-paths table) has not changed since.
+  - `eng/verify-v3-tree.ps1`: 1,694 tracked paths.
+  - Not run here: the Ingest suite and the journeys, which CI runs (no browser on this machine).
+- **Follow-ups the review named** (driver points of the addendum): show a reading's `same_text_states` (the other versions
+  held with the same text) under the text, so the guide's same-text sentence can say more; R28's collapsed details on the
+  refusal card, open by default only on Developers (the card shows its code and payload inline today; the review gives the
+  forms to use once it is built).
+- **For the owner** (not asked, recorded): the site's host name carries a first name, which the Developers page prints in
+  its examples and every page in its head links (the decision of 2026-10-19 names no person in the pages' words); Get help
+  narrows "how each article changed" to Luxembourg acts, where `home.intro` still says it generally; the lawyer's read (O4)
+  of "un avocat ou un autre conseiller de votre choix" and of R50's "conseil juridique".
+
 ## The live revision deactivated by a redeployment, 01:10 to 01:13 UTC, and the fix (sole driver, 2026-10-27)
 
 - **What happened.** The site (the container app `ca-lex-v3`), open to everyone, served release
@@ -152,133 +428,6 @@ pages exist).
   - The template is in the digest, so a template change on the same release can still deploy.
   - The same release with the same settings and template is refused before any change; a revision that exists is
     activated by hand.
-
-## Get help, How to read Lex and Developers: the launch set's three missing screens (sole driver, 2026-10-27)
-
-The owner's order of 2026-10-27 (finish V3 to the ideal specification within 72 hours, at high quality): the screens the
-specification of record's launch set names (§3, Screens; R42, R46, R48, R50, R55) and the site did not serve, built as one
-web pull request (`writer/help-and-developers`). Each page is in French and English, under its language (R61), complete
-from the server and readable with no script (R67), never indexed, its footer's freshness strip saying it carries no answer,
-as the legal pages are (`scripts/reference-pages.mjs`, `app/ReferencePages.jsx`).
-- **Get help** (`/{fr,en}/help.html`, R42, R50). What Lex is, R50's sentence word for word, and that for what a text means
-  for a reader they should ask a lawyer or another adviser of their choice; what Lex does not do (apply the law, compute a
-  deadline, predict, consolidate, hold case law, choose between versions or fill a gap, keep a record of readers); how to
-  read an answer when Lex cannot give the one asked for (the plain sentence first, then what would answer and the official
-  link; an answer about what Lex holds, never about the law; a service failure in R60's words); where the official texts
-  are (the authenticity line, legilux.public.lu and eur-lex.europa.eu as links); that Lex names no adviser yet, since R42's
-  list must first be checked by a person (N2); and, by the owner's decision of 2026-10-19, that Lex has no contact channel
-  (no e-mail address, form, telephone or postal address, and no person), so it receives and keeps no message, the privacy
-  notice naming where to complain about personal data.
-- **How to read Lex** (`/{fr,en}/how-to-read.html`, R48, R21, R24, R58, R64, R65, R87). The two kinds of date (from when a
-  text is applicable, in the publisher's words, a Luxembourg version's "applicable from … (publisher)" and an EU act's
-  wordings; and when it was published and collected), never merged; each date with its role; as published and
-  consolidated, with the authenticity line and the as-published label; versions without text and image-only annexes; gaps;
-  two versions for one date; how current Lex is; permalinks, readable addresses and the three citation forms; the keyboard
-  (no shortcuts of its own; the skip link). Then a glossary of the site's own words: each term is an entry of the chrome
-  table named by its path (`GLOSSARY`), said as the page that prints it says it, a template's term its words before its
-  first value, sorted in each language's order.
-- **Developers** (`/{fr,en}/developers.html`, R46, R55; the plan's item 8.4). Generated from the contracts, never by hand
-  (`scripts/developers.mjs`): the census's `contract` block, which `V3EnvelopeSamplesTests` reads from the reviewed
-  registry (the operations, the refusal codes with the fields each payload must carry, the verdicts, the registry's
-  digest); the census's coverage answer (which operations this server serves, and the data that would serve the three it
-  does not); the request schemas (each operation's parameters) and the envelope schema (its members). REST and MCP and
-  that both give one envelope; examples (curl, a tools/call message, an MCP client's configuration); every operation with
-  its REST path, its MCP tool, its parameters, its answer's objects and its two schemas, linked and with their digests;
-  the envelope, its context and the verdicts; the refusal codes, the two presentation results and the failures below the
-  envelope; quoting and citing; the limits as they are (no key, no account, nothing recorded; the request body's ceiling;
-  paging; no per-client rate limit applied yet, R109 not built; no availability promised); the events log (polling by
-  cursor, at least once, no webhooks, the platform's own delivery statement); and the schemas. The facts only the API's
-  code holds (the MCP protocol version and methods, the request ceiling, the transport failures) are named once in
-  `developers.mjs` and held to the C# by `reference-pages.test.mjs`.
-- **The schemas, published.** Every file of `schemas/v3-platform/*.schema.json` is published beside the pages, byte for
-  byte, at `/schemas/v3-platform/{name}.json` (one extension per file, as both servers' path rules require), and the
-  Developers page links each with its SHA-256, which the API checks against the registry's when it loads it.
-- **Links.** Every page's footer has a "Help and reference" menu of the three, the current one marked; the home page links
-  Changes, Trust and Coverage, Developers and Get help (§3, Shell and home); Get help links How to read Lex and the
-  Developers page. The site's table (`site-paths.json`) names the six pages as files, which both servers serve
-  (`V3WebRootTests`, `legal-pages.test.mjs`, `reference-pages.test.mjs`).
-- **Tests** (`test/reference-pages.test.mjs`, 9 cases): the pages built in both languages with the site around them, no
-  script, no form, never indexed, language links to the same page, the French saying none of the English's words; every
-  internal link they hold served by the live server (pages and schemas, a schema's bytes); every footer's menu and the
-  home page's links; the Developers page in sync with the registry (the C#'s `RequiredOperationIds`,
-  `RequiredRefusalCodes`, `MandatoryRefusalPayloadFields` and `V3RestRouteBinding.Served` parsed and compared with the
-  census, the chrome table and the rendered page; an operation, or a refusal code, the page has no words for fails the
-  render); the API facts held to the C#; the glossary's terms the table's entries; R21's guard over every form and every
-  rendered page in both languages; Get help's no-contact statement and no contact; every count the page says the
-  contracts'; and the forms the French review pinned, beside the C# they describe. Changed tests: `live-chrome`, `live-home`, `legal-pages`, `freshness`, `no-literal-counts` (the new pages and
-  sections), `V3WebRootTests` (16 file rows). Mutation: the `verify` description taken out of the English table failed 5 of
-  the first 8 cases (the page refuses to render an operation it has no words for).
-- **French** (Decision 41): one independent reviewer (Claude, AI reviewer, not the author) under the owner's delegation,
-  in the addendum of 2026-10-27 of `C:\lex-v3\lanes\fr-review\review.md` ("the three reference pages, Get help, How to read
-  Lex and its glossary, and Developers"): 242 forms reviewed, 59 changed (the English too in 31), 183 approved. Its blocking
-  points, both languages: a Luxembourg version's end day ("until the day before the end date Legilux gives it", the end the
-  publisher states being the first day not covered, `[from, to)`), and "never chooses between two versions", which holds only
-  when their texts differ, since the platform serves one of several held with one text (`SameWording`). Its recommended
-  points made twelve other forms say only what the code does (an article held without text is named apart; a permalink says
-  first when it shows another text; the freshness strip is a region a screen reader names; the staleness banner stands only
-  on a page with an answer; any other REST method gets a failure below the envelope; a refusal's code and payload follow its
-  sentence). The finals are applied byte for byte (checked against the reviewer's own file), with its point 6's English for
-  `developers.operations.notServed`; its point 8's tests are the ninth case of `reference-pages.test.mjs`; the 242 forms and
-  the new vocabulary rows (conseiller, ce déploiement, Streamable HTTP, "sert de réponse pour", "intervalle sans version")
-  are named in the header comment of `live-chrome-fr.mjs`; the addendum is appended with the driver's note.
-- **Driver decisions** (reversible): the pages stand under each language as every page does (R61), so R55's "/developers"
-  is `/{lang}/developers.html`, with no unprefixed redirect; the three are never indexed, as the legal pages are, until a
-  release's switch is extended to them; the header menu is unchanged (the home page holds the audience entry points, R47,
-  and every footer the three), which keeps the keyboard journeys' path to each form as it is; Get help names no adviser
-  until R42's list is checked by a person; the Developers page says the rate limit as it is (none), since R109's limiter is
-  not built.
-- **The L lines, against what the site serves** (the specification of record's §3 and the plan's "On opening day"): what each L line that names a screen, a page or an address asks, and
-  whether the site serves it after this pull request. Each "missing" was looked for in `web/app`, `web/scripts`,
-  `src/Lex.V3.Api` and `deploy/`, and is not there.
-  - Served, each with its page: Search as the home page (one box, today's date, what Lex is and is not, the dated coverage
-    line, the links §3 names), the Work dossier, Reading with its date, Provision history, Compare, Changes, Trust and
-    Coverage, the Export composer, Developers, Get help, How to read Lex, the five legal pages, the 404 page and the
-    failure panels, the German and Luxembourgish page, the freshness strip and staleness banner, robots.txt and the
-    sitemap (with the switch), the evaluation card's JSON, `/api/v3` and `/mcp`, and now the published schemas.
-  - Missing on the home page: example searches (R47; no answer names a title or a text a search would land on, so none is
-    shown, `LiveHome.jsx`). Closed by the screens' gaps slice (`writer/screens-gaps`, the section at the top): derived from the mount through the API's answers.
-  - Missing in the shell: breadcrumbs (publisher, act, article, version; R48); a print view of Reading (R62's fifth item,
-    33 §7 rule 9; the stylesheet has no print rules); the maintenance page during a deployment (R60; built, not wired into
-    the deploy kit). Closed by the screens' gaps slice (`writer/screens-gaps`, the section at the top): all three.
-  - Missing in How to read Lex's reach: a link from each banner's info control (R48); the guide is linked from every
-    footer, and no banner has an info control yet. Closed by the screens' gaps slice (`writer/screens-gaps`, the section at the top).
-  - Missing in Get help: R42's versioned handoff list by theme (advisers, "where to complain"), and the help block on the
-    dossier and reading pages of acts in high-stakes themes (R50). Both need the list a person writes and checks (N2).
-  - Missing on Developers (the plan's item 8.4): replay guarantees G1 to G5 as supported, live examples from the
-    release's own data, and a stated change policy beyond the schemas' versioned identities and the registry digest; the
-    try-it console moves with O1.
-  - Missing in the API the page describes (each one the Developers page says as it is): a typed refusal inside a normal answer for the three unserved operations
-    (`concepts`, `knowable_on`, `transposition` answer the transport failure `operation_not_served`; the plan's item 8.6);
-    a published schema for each refusal code's payload (the plan's item 6.10; `refusal.schema.json` holds an open
-    payload, and the mandatory fields are the registry's, now listed on the page); "out of scope" with its reason and who
-    to ask, and the list of what Lex never holds (6.10, J5); MCP `ping` and server instructions (8.5); the per-client rate
-    limiter (R109), which `writer/platform-ops` builds: when the two branches are combined, `developers.limits.rate` (which
-    says no per-client limit is applied) must say the limit as that branch enforces it, in both languages, reviewed.
-  - Missing addresses: `/.well-known/lex-keys.json`, the published key set (R116); `/.well-known/security.txt` with a
-    disclosure policy (R74), which the owner's decision of 2026-10-19 (no contact of any kind) leaves to the owner; a page
-    "Operating Lex after launch" with the hosting statement and the monthly ceiling (R8, R113, R114); R55's unprefixed
-    `/developers` (the page stands under each language, R61).
-  - Missing in the journeys: J6 through Get help and J7 through the Developers page (R53); the CI journeys walk neither
-    page yet. Closed by the screens' gaps slice (`writer/screens-gaps`, the section at the top).
-  - Not audited by this slice, and each the subject of its own L line: the dossier's relation tabs (R29), the inline diff
-    (R57), Changes' export, density notice and watch scope (R54), Coverage's text yield per class, attribution rate and
-    retention rule (R86, R29, R89), Reading's notices and in-act links (R17, R68, R71, R72).
-- **Measured** (Windows, no browser, no publisher traffic, no Azure):
-  - `npm test` (Git Bash), on 7808a5fa: 1,368 (1,365 passed, 0 failed, 3 skipped); before the French finals, 1,367 (1,364
-    passed, 0 failed, 3 skipped). `node --test test/reference-pages.test.mjs`: 9 of 9.
-  - `npm run build`: 30 state pages (the preview build, which this slice does not change), before the French finals.
-  - `dotnet build Lex.V3.slnx -c Release`: 0 warnings, 0 errors; `Lex.V3.Tests` (Release): 3,329 (3,323 passed, 0 failed, 6
-    skipped), on the tree of 95935ef7, whose C# (`V3WebRootTests`, the site-paths table) has not changed since.
-  - `eng/verify-v3-tree.ps1`: 1,694 tracked paths.
-  - Not run here: the Ingest suite and the journeys, which CI runs (no browser on this machine).
-- **Follow-ups the review named** (driver points of the addendum): show a reading's `same_text_states` (the other versions
-  held with the same text) under the text, so the guide's same-text sentence can say more; R28's collapsed details on the
-  refusal card, open by default only on Developers (the card shows its code and payload inline today; the review gives the
-  forms to use once it is built).
-- **For the owner** (not asked, recorded): the site's host name carries a first name, which the Developers page prints in
-  its examples and every page in its head links (the decision of 2026-10-19 names no person in the pages' words); Get help
-  narrows "how each article changed" to Luxembourg acts, where `home.intro` still says it generally; the lawyer's read (O4)
-  of "un avocat ou un autre conseiller de votre choix" and of R50's "conseil juridique".
 
 ## Release 1 on the private copy, and the opening that waits on the owner's command (sole driver, 2026-10-26)
 
@@ -6782,7 +6931,7 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   `annexes_not_served`. Every one is served as `text_not_available`, whatever its disposition, and linked to its
   expression's official source. No annex text is served even where the publisher's PDF has a text layer; that
   waits until annexes are indexed as units of their own, with their own rights rule and citations.
-- The six refusal codes no operation produces at launch (the refusal census's `not_produced` list),
+- The six refusal codes no operation produced at launch (five since 2026-10-27; the refusal census's `not_produced` list),
   each unreachable by construction, decided under that delegation (2026-10-02). The launch contract's
   refusal line holds them in the closed registry with their payloads; the refusal case set measures the
   fourteen produced codes.
@@ -6797,11 +6946,11 @@ Each is the driver's call under ruling 7 and can be reversed by a later pull req
   - `out_of_corpus_scope`: an identifier neither index holds answers `identifier_unknown`, naming this
     service's own `search` as the way forward (`official_search_actions`); a list of publishers known to
     be out of scope (a CSSF circular, a court decision) would produce it, and none is kept at launch.
-  - `rate_limited`: the one-server host applies no per-client limit at launch, since it keeps no IP
-    address or user agent (the launch contract's privacy line). Cost under abuse is bounded by one
-    replica per revision (`minReplicas` and `maxReplicas` 1 in `deploy/main.bicep`); the kit runs in
-    multiple-revision mode, so each active revision runs its own replica. A per-client limit that needs
-    no identifying record is follow-on work.
+  - `rate_limited`: **reversed on 2026-10-27** (R109 reverses it by name): the per-client limit ships, in memory, keyed by
+    a keyed hash of the address, and every served operation produces `rate_limited` past it (the section "The per-client
+    limit, the key set, the headers on every answer, the outside monitor and the runbook", above). The decision it
+    replaces: no per-client limit at launch, since the host kept no IP address or user agent, with cost under abuse
+    bounded by one replica per revision. Five codes stay unproduced.
   - `upstream_unreachable`: serving never contacts a publisher: the API holds no HTTP client, and the
     only publisher client (`RoutedHttpAcquisitionSession`) is built by acquisition, which the API never
     references; a mount is served from its own files, so no upstream can be unreachable at request time.

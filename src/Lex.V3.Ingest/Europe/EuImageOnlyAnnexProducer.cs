@@ -6,7 +6,6 @@ using Lex.V3.Contracts.Derivation;
 using Lex.V3.Contracts.Source.Core;
 using Lex.V3.Contracts.Source.Europe;
 using Lex.V3.Contracts.Source.Http;
-using UglyToad.PdfPig;
 
 namespace Lex.V3.Ingest.Europe;
 
@@ -185,7 +184,7 @@ public sealed class EuImageOnlyAnnexProducer
                     "the retained bytes do not carry a complete supported PDF structure");
             }
 
-            using var document = PdfDocument.Open(pdfBytes.ToArray());
+            using var document = HostFontFreePdf.Open(pdfBytes.ToArray());
             if (pages.Any(page => page > document.NumberOfPages))
             {
                 return EuImageOnlyAnnexProductionResult.Refused(
@@ -216,7 +215,7 @@ public sealed class EuImageOnlyAnnexProducer
         {
             throw;
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not PdfHostFontIsolationException)
         {
             return EuImageOnlyAnnexProductionResult.Refused(
                 EuImageOnlyAnnexProductionRefusal.PdfUnreadable,

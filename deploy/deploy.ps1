@@ -577,7 +577,7 @@ if (-not $Apply -and $Maintenance) {
 }
 if (-not $Apply) {
     Write-Host "  > wait until $AppName--$suffix is provisioned, active, running and healthy"
-    Write-Host "  > node $(($nodeTrap + @('web/scripts/deploy-probe.mjs')) -join ' ') --origin https://<$AppName--$suffix's own address> --release $releasePath --public-key $keyPath $($signerProbe -join ' ') $($browserArgs -join ' ') $($openingArgs -join ' ') --promotion-check"
+    Write-Host "  > node $(($nodeTrap + @('web/scripts/deploy-probe.mjs')) -join ' ') --origin https://<$AppName--$suffix's own address> --release $releasePath --public-key $keyPath $($signerProbe -join ' ') $($browserArgs -join ' ') $($openingArgs -join ' ') --promotion-check --search-engines $SearchEngines"
     Write-Host "  (exit 3: the candidate answers as its release holds and promotion refuses its data's age; no promotion command would be printed)"
     if (-not $BrowserProbe) { Write-Host "  (no browser probe: only the HTTP probes would run, under the browser trap, and no page of the candidate would be walked in a browser; -BrowserProbe walks them, where a browser may run)" }
     Write-Host "== planned only: run again with -Apply to deploy (the owner's decision)"
@@ -628,7 +628,9 @@ if ($Maintenance) {
     exit 0
 }
 if (-not $BrowserProbe) { Write-Host "  no browser probe (no -BrowserProbe): only the HTTP probes run, under the browser trap, and no page of the candidate is walked in a browser" }
-& node @nodeTrap (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --origin $origin --release $releasePath --public-key $keyPath @signerProbe @browserArgs @openingArgs --promotion-check
+& node @nodeTrap (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --origin $origin --release $releasePath --public-key $keyPath @signerProbe @browserArgs @openingArgs --promotion-check --search-engines $SearchEngines
+# The probe holds robots.txt and the sitemap to this deployment's -SearchEngines (the probe of 2026-10-27 held an indexed
+# candidate to the kept-out robots.txt, and rightly deactivated it).
 # Exit 3: the candidate answers as its release holds, and promotion refuses its data's age (R87; O11's maximum, which every
 # answer states): a publisher channel's newest completed collection is past it, or not stated. The candidate stays, with no
 # traffic, and no promotion command is printed.
