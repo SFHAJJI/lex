@@ -148,7 +148,8 @@ public sealed class V3MountedGatesOracleTests
     [TestMethod]
     public async Task TheTemporalSampleIsStratifiedByTheClassesTheOracleReadsInTheCatalogue()
     {
-        // The data design's §3.5: a seeded sample may miss every hole of a mount; each class the oracle reads adds works.
+        // The data design's §3.5: a seeded sample may miss every hole of a mount; each class the oracle reads adds works, every
+        // code, overlap, unclear end day and invalid interval among them.
         var harness = RepairFixture();
         await using var fixture = await IntervalMount.CreateAsync(harness);
         using var oracle = V3MountedGatesTests.IntervalOracle.Open(fixture.Directory, harness.MemberOutcomes)!;
@@ -158,18 +159,81 @@ public sealed class V3MountedGatesOracleTests
                      ("loi-1996-11-07-n1", "unclear_end"), ("loi-2018-09-14-a883", "same_date"), ("loi-2017-07-20-a674", "translation"),
                      ("loi-2003-03-03-n1", "no_expression"), ("loi-2002-02-02-n1", "textless_before_held"), ("loi-1798-11-03-n1", "textless_after_held"),
                      ("loi-2004-04-04-n1", "hole"), ("loi-2004-04-04-n1", "overlap"),
+                     ("loi-2001-01-01-n1", "multi_state"), ("loi-2008-08-08-n1", "multi_state"), ("loi-2010-03-03-n1", "single_act"),
+                     ("loi-1798-11-03-n1", "withheld_after_act"), ("loi-2001-01-01-n1", "withheld_after_act"),
                  })
         {
             CollectionAssert.Contains(oracle.Classes(work).ToArray(), kind, work);
         }
 
         CollectionAssert.DoesNotContain(oracle.Classes("loi-2010-03-03-n1").ToArray(), "hole", "a single act holds none");
+        CollectionAssert.DoesNotContain(oracle.Classes("loi-2002-02-02-n1").ToArray(), "withheld_after_act", "its act holds no text, and its later consolidation is held");
+        CollectionAssert.DoesNotContain(oracle.Classes("loi-2005-01-01-n1").ToArray(), "multi_state", "an act and one consolidation are two states");
         var population = V3MountedGatesTests.Timelines(fixture.Directory);
         var stratified = V3MountedGatesTests.Stratified([], population, oracle);
         var chosen = stratified.Select(static value => value.WorkKey).ToHashSet(StringComparer.Ordinal);
-        foreach (var kind in new[] { "code", "hole", "overlap", "invalid", "unclear_end", "same_date", "translation", "no_expression", "textless_before_held", "textless_after_held" })
+        var works = population.Select(static value => value.WorkKey).Distinct(StringComparer.Ordinal).ToArray();
+        foreach (var (kind, quota) in V3MountedGatesTests.StratumWorks)
         {
-            Assert.IsTrue(chosen.Any(work => oracle.Classes(work).Contains(kind)), $"the stratified sample holds a work with {kind}");
+            var holding = works.Where(work => oracle.Classes(work).Contains(kind)).ToArray();
+            Assert.IsNotEmpty(holding, $"the fixture holds a work with {kind}");
+            Assert.IsTrue(holding.Count(chosen.Contains) >= Math.Min(quota, holding.Length), $"the stratified sample holds {kind}'s quota of {quota}, or every work of it");
+        }
+
+        Assert.IsFalse(chosen.Contains("loi-2005-01-01-n1"), "a work of no class is not added");
+    }
+
+    [TestMethod]
+    public async Task TheOracleDatesEachStateByTheCatalogueSoAnIndexThatMisdatesOneFailsTheGate()
+    {
+        // The data design's §3.5: the oracle reads the catalogue's own dates, never the row's. A row whose date is moved leaves the
+        // oracle's answers as they were; a catalogue that dates a state otherwise than the index under test does fails the gate.
+        var harness = RepairFixture();
+        await using var fixture = await IntervalMount.CreateAsync(harness);
+        const string Work = "loi-2008-08-08-n1";
+        var resource = W("loi/2008/08/08/n1/consolide/20120101");
+        using var oracle = V3MountedGatesTests.IntervalOracle.Open(fixture.Directory, harness.MemberOutcomes)!;
+        var days = oracle.Boundaries(Work, "fra").SelectMany(static day => new[] { day.AddDays(-1), day, day.AddDays(1) }).Append(Day("2011-06-01")).Distinct().Order().ToArray();
+        var truth = days.Select(day => oracle.AsOf(Work, "fra", day)).ToArray();
+
+        var copy = Path.Combine(Path.GetTempPath(), "lex-gates-oracle-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(copy);
+        try
+        {
+            var index = Path.Combine(copy, Lex.V3.Api.V3CorpusMount.IndexFileName);
+            void Mutate(string sql)
+            {
+                File.Copy(Path.Combine(fixture.Directory, Lex.V3.Api.V3CorpusMount.IndexFileName), index, overwrite: true);
+                using var connection = Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder.Open(index, Microsoft.Data.Sqlite.SqliteOpenMode.ReadWrite);
+                using var command = connection.CreateCommand();
+                command.CommandText = sql;
+                command.Parameters.AddWithValue("$resource", resource);
+                Assert.AreEqual(1, command.ExecuteNonQuery(), sql);
+            }
+
+            // The row's own date moved: the oracle does not read it.
+            Mutate("UPDATE states SET applicability_date = '2011-06-01' WHERE publisher_legal_resource_iri = $resource");
+            using (var rowMoved = V3MountedGatesTests.IntervalOracle.Open(copy, harness.MemberOutcomes)!)
+            {
+                Assert.AreEqual(Day("2012-01-01"), rowMoved.RowsOf(Work).Single(row => row.LegalResource == resource).From);
+                CollectionAssert.AreEqual(truth, days.Select(day => rowMoved.AsOf(Work, "fra", day)).ToArray());
+            }
+
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            // The catalogue's date moved: the index under test (the mount's) now misdates the state against it, and the gate fails.
+            Mutate("UPDATE work_facts SET object_value = '2011-06-01' WHERE subject_iri = $resource AND predicate = 'dateApplicability'");
+            using var catalogueMoved = V3MountedGatesTests.IntervalOracle.Open(copy, harness.MemberOutcomes)!;
+            Assert.AreEqual(Day("2011-06-01"), catalogueMoved.RowsOf(Work).Single(row => row.LegalResource == resource).From);
+            var timelines = V3MountedGatesTests.Timelines(fixture.Directory).Where(static timeline => timeline.WorkKey == Work).ToArray();
+            var sets = V3MountedGatesTests.RunIntervalGate(fixture.Mount, timelines, catalogueMoved);
+            Assert.AreEqual(GateVerdict.Fail, sets.Single(static set => set.Arm == "as_of in fra").Gates.Single().Verdict, "the misdated state is caught");
+            var held = V3MountedGatesTests.RunIntervalGate(fixture.Mount, timelines, oracle);
+            Assert.IsTrue(held.All(static set => set.Gates.All(static gate => gate.Verdict == GateVerdict.Pass)), "the catalogue's own dates are answered");
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            Directory.Delete(copy, recursive: true);
         }
     }
 }

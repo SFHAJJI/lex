@@ -127,20 +127,32 @@ public sealed class V3MountedGatesDiagnosticsProbe
             text.AppendLine($"== {name}: {wrong} of {cases.Length} differ");
         }
 
-        // The interval oracle's cases against the reader (what the gate asks now).
+        // The interval oracle's cases against the reader (what the gate asks now), over the stratified sample, with each stratum's
+        // works in the population and in the sample.
         using (var oracle = V3MountedGatesTests.IntervalOracle.Open(directory!))
         {
             if (oracle is not null)
             {
-                var arms = new List<(string Name, string? Language, TemporalArm Arm, Func<string, string?, DateOnly, string> Expected, string[] Works)>();
-                foreach (var language in timelines.Select(static value => value.Language).Distinct().Order(StringComparer.Ordinal))
+                var population = V3MountedGatesTests.Timelines(directory!);
+                var stratified = V3MountedGatesTests.Stratified(timelines, population, oracle);
+                var sampled = stratified.Select(static value => value.WorkKey).ToHashSet(StringComparer.Ordinal);
+                var classed = population.Select(static value => value.WorkKey).Distinct(StringComparer.Ordinal).Select(work => (Work: work, Classes: oracle.Classes(work))).ToArray();
+                foreach (var kind in V3MountedGatesTests.StratumWorks.Keys)
                 {
-                    var held = timelines.Where(value => value.Language == language).Select(static value => value.WorkKey).Distinct().Order(StringComparer.Ordinal).ToArray();
+                    var holding = classed.Where(value => value.Classes.Contains(kind)).Select(static value => value.Work).ToArray();
+                    text.AppendLine($"== stratum {kind}: {holding.Length} works in the population, {holding.Count(sampled.Contains)} in the sample");
+                }
+
+                text.AppendLine($"== the stratified sample: {sampled.Count} works of {classed.Length}");
+                var arms = new List<(string Name, string? Language, TemporalArm Arm, Func<string, string?, DateOnly, string> Expected, string[] Works)>();
+                foreach (var language in stratified.Select(static value => value.Language).Distinct().Order(StringComparer.Ordinal))
+                {
+                    var held = stratified.Where(value => value.Language == language).Select(static value => value.WorkKey).Distinct().Order(StringComparer.Ordinal).ToArray();
                     arms.Add(($"interval as_of in {language}", language, V3MountedGatesTests.IntervalAsOfArm(mount, language), oracle.AsOf, held));
                     arms.Add(($"interval in_force_on in {language}", language, V3MountedGatesTests.IntervalInForceOnArm(mount, language), oracle.InForceOn, held));
                 }
 
-                var all = timelines.Select(static value => value.WorkKey).Distinct().Order(StringComparer.Ordinal).ToArray();
+                var all = stratified.Select(static value => value.WorkKey).Distinct().Order(StringComparer.Ordinal).ToArray();
                 arms.Add(("interval as_of with no language", null, V3MountedGatesTests.IntervalAsOfArm(mount, null), oracle.AsOf, all));
                 arms.Add(("interval in_force_on with no language", null, V3MountedGatesTests.IntervalInForceOnArm(mount, null), oracle.InForceOn, all));
                 foreach (var (name, language, arm, expected, held) in arms)

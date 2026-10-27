@@ -10,11 +10,13 @@ public sealed partial class V3MountedGatesTests
 {
     /// <summary>
     /// The temporal oracle over <c>lex-v3-luxembourg-index/9</c> (the data design of 2026-10-14, §3.5), written apart from the
-    /// reader and from the index's own chain: it reads each catalogue state's start and kind from its row, the publisher's
-    /// end from the catalogue's facts (<c>work_facts</c>: one exact <c>dateEndApplicability</c>, of a consolidation or a code
-    /// state, as index 9's state rule profile reads it), whether the index holds the state's text from the articles the state
-    /// binds, and, for a state whose text is not held, whether its rights withheld it from the corpus file's member of its
-    /// expression. It never reads <c>applicable_to</c>, <c>applicable_to_source</c>, <c>boundary</c>, <c>text_status</c> or the
+    /// reader and from the index's own chain: it reads each catalogue state's kind from its row, its start and the publisher's
+    /// end from the catalogue's facts (<c>work_facts</c>: a consolidation's or code state's one exact <c>dateApplicability</c>,
+    /// an act's own file date else its one exact <c>dateEntryInForce</c>, and one exact <c>dateEndApplicability</c> of a
+    /// consolidation or a code state, as index 9's state rule profile reads them), whether the index holds the state's text
+    /// from the articles the state binds, and, for a state whose text is not held, whether its rights withheld it from the
+    /// corpus file's member of its expression. It never reads <c>applicability_date</c>, <c>date_role</c>,
+    /// <c>applicable_to</c>, <c>applicable_to_source</c>, <c>boundary</c>, <c>text_status</c>, <c>translation_of</c> or the
     /// <c>intervals</c> table. It applies the specification's interval rules itself (§3.2's table; R21 for how a date is said):
     /// a state covers D when <c>from ≤ D &lt; to</c>, <c>to</c> the publisher's end, else the next dated state's start of the
     /// work's French chain (French rows and rows naming no expression), else none; a translation takes the interval of the
@@ -42,7 +44,6 @@ public sealed partial class V3MountedGatesTests
             string Language,
             string Expression,
             string LegalResource,
-            string? TranslationOf,
             DateOnly? PublisherEnd,
             bool Held,
             string Profiles,
@@ -114,20 +115,20 @@ public sealed partial class V3MountedGatesTests
             using (var command = _connection.CreateCommand())
             {
                 command.CommandText =
-                    "SELECT state_sha256, applicability_date, state_kind, language, expression_iri, publisher_legal_resource_iri, translation_of, " +
+                    "SELECT state_sha256, state_kind, language, expression_iri, publisher_legal_resource_iri, in_file_date, " +
                     "rule_profiles_json, article_identities_json FROM states WHERE work_key = $work";
                 command.Parameters.AddWithValue("$work", work);
                 using var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
-                    var kind = reader.GetString(2);
-                    var resource = reader.GetString(5);
-                    var articles = reader.GetString(8);
+                    var kind = reader.GetString(1);
+                    var resource = reader.GetString(4);
+                    var articles = reader.GetString(7);
                     rows.Add(new Row(
-                        reader.GetString(0), Day(reader.GetString(1)), kind, reader.GetString(3), reader.GetString(4), resource,
-                        reader.IsDBNull(6) ? null : reader.GetString(6),
-                        kind == "as_published" ? null : PublisherEndOf(resource),
-                        HoldsText(articles), reader.GetString(7), articles));
+                        reader.GetString(0), StartOf(resource, kind, reader.IsDBNull(5) ? null : reader.GetString(5)), kind,
+                        reader.GetString(2), reader.GetString(3), resource,
+                        kind == "as_published" ? null : CatalogueDate(resource, "dateEndApplicability"),
+                        HoldsText(articles), reader.GetString(6), articles));
                 }
             }
 
@@ -136,12 +137,24 @@ public sealed partial class V3MountedGatesTests
             return completed;
         }
 
-        /// <summary>The catalogue's one exact <c>dateEndApplicability</c> of a legal resource, or none (none stated, or several).</summary>
-        private DateOnly? PublisherEndOf(string resource)
+        /// <summary>
+        /// A state's start by the catalogue (the data design's §3.5, never the row's own date): a consolidation's or a code
+        /// state's one exact <c>dateApplicability</c>; an act's own file date where its file states one exact date, else its
+        /// one exact <c>dateEntryInForce</c>. A state the catalogue dates no way is a row the index should not hold, and the
+        /// oracle refuses to guess its date.
+        /// </summary>
+        private DateOnly StartOf(string resource, string kind, string? inFileDate) =>
+            (kind != "as_published" ? CatalogueDate(resource, "dateApplicability")
+                : ExactDay(inFileDate) ?? CatalogueDate(resource, "dateEntryInForce"))
+            ?? throw new InvalidDataException($"The catalogue states no one exact start of {resource}, which the index holds as a state.");
+
+        /// <summary>The catalogue's one exact date of a legal resource for a predicate, or none (none stated, several, or not a date).</summary>
+        private DateOnly? CatalogueDate(string resource, string predicate)
         {
             using var command = _connection.CreateCommand();
-            command.CommandText = "SELECT DISTINCT object_value FROM work_facts WHERE subject_iri = $subject AND predicate = 'dateEndApplicability'";
+            command.CommandText = "SELECT DISTINCT object_value FROM work_facts WHERE subject_iri = $subject AND predicate = $predicate";
             command.Parameters.AddWithValue("$subject", resource);
+            command.Parameters.AddWithValue("$predicate", predicate);
             using var reader = command.ExecuteReader();
             var values = new List<string>();
             while (reader.Read())
@@ -149,10 +162,11 @@ public sealed partial class V3MountedGatesTests
                 values.Add(reader.GetString(0));
             }
 
-            return values.Count == 1 && DateOnly.TryParseExact(values[0], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var end)
-                ? end
-                : null;
+            return values.Count == 1 ? ExactDay(values[0]) : null;
         }
+
+        private static DateOnly? ExactDay(string? value) =>
+            value is not null && DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day) ? day : null;
 
         /// <summary>Whether the index holds a state's text: it binds articles, and the index holds the first of them.</summary>
         private bool HoldsText(string articlesJson)
@@ -172,8 +186,9 @@ public sealed partial class V3MountedGatesTests
         /// <summary>
         /// The interval of each row by the oracle's rules: over the French chain in date order, the publisher's end when stated,
         /// else the next later start (derived); an end on or before the start covers nothing; an end the day before the next
-        /// start is a suspected inclusive end. A translation takes the interval of the French state of its legal resource whose
-        /// expression it translates, when that state is a row; else its own end, with none derived.
+        /// start is a suspected inclusive end. A translation takes the interval, start and end, of the French state of its legal
+        /// resource when the catalogue gives that resource one French state as a row (the oracle reads no <c>translation_of</c>);
+        /// else its own start and end, with none derived.
         /// </summary>
         private static Row[] Complete(IReadOnlyList<Row> rows)
         {
@@ -199,13 +214,11 @@ public sealed partial class V3MountedGatesTests
                     return french;
                 }
 
-                var translated = row.TranslationOf is null
-                    ? null
-                    : chain.FirstOrDefault(candidate => candidate.Language == French && candidate.LegalResource == row.LegalResource && candidate.Expression == row.TranslationOf);
-                if (translated is not null)
+                var translated = chain.Where(candidate => candidate.Language == French && candidate.LegalResource == row.LegalResource).ToArray();
+                if (translated is [var one])
                 {
-                    var source = completed[translated.Digest];
-                    return row with { To = source.To, Invalid = source.Invalid, InclusiveSuspected = source.InclusiveSuspected };
+                    var source = completed[one.Digest];
+                    return row with { From = source.From, To = source.To, Invalid = source.Invalid, InclusiveSuspected = source.InclusiveSuspected };
                 }
 
                 return row with { To = row.PublisherEnd, Invalid = row.PublisherEnd is { } end && end <= row.From };
@@ -223,9 +236,10 @@ public sealed partial class V3MountedGatesTests
             RowsOf(work).Where(static row => row.Held).Select(static row => row.Language).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
 
         /// <summary>
-        /// The classes of the interval rules a work's catalogue holds, by the oracle's own reading of its rows: a code, a hole, an
-        /// overlap, a same-date group, an invalid interval, an unclear end day, a state without text after a held one or before
-        /// the first held one, a translation, a state naming no expression. What the gate's sample is stratified by.
+        /// The classes of the interval rules a work's catalogue holds, by the oracle's own reading of its rows: a code, a
+        /// consolidated work of three states or more, a single act, an act with a later consolidation withheld by its rights, a
+        /// hole, an overlap, a same-date group, an invalid interval, an unclear end day, a state without text after a held one or
+        /// before the first held one, a translation, a state naming no expression. What the gate's sample is stratified by.
         /// </summary>
         public IReadOnlyList<string> Classes(string work)
         {
@@ -233,6 +247,14 @@ public sealed partial class V3MountedGatesTests
             var chain = Chain(work, French);
             var classes = new List<string>();
             if (rows.Any(static row => row.Kind == "code")) classes.Add("code");
+            if (chain.Count >= 3 && chain.Any(static row => row.Kind == "consolidation")) classes.Add("multi_state");
+            if (rows is [{ Kind: "as_published" }]) classes.Add("single_act");
+            if (chain.Any(act => act.Kind == "as_published" && act.Held &&
+                                 chain.Any(later => later.Kind == "consolidation" && later.From > act.From && !later.Held && TextlessCode(later) == "text_withheld")))
+            {
+                classes.Add("withheld_after_act");
+            }
+
             var starts = chain.Select(static row => row.From).Distinct().Order().ToArray();
             for (var at = 0; at + 1 < starts.Length; at++)
             {

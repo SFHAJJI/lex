@@ -118,13 +118,32 @@ public sealed partial class V3MountedGatesTests
             .ToArray();
     }
 
-    /// <summary>The works each stratum of the temporal gate adds beside the seeded sample, at most (the data design's §3.5).</summary>
-    private const int StratumWorks = 6;
+    /// <summary>
+    /// The works each stratum of the temporal gate holds, at least, the seeded sample's included (the data design's §3.5): every
+    /// code, every overlap, every unclear end day and every invalid interval; 10 consolidated works of three states or more;
+    /// six of each other class. A class the population holds fewer works of is held whole.
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<string, int> StratumWorks = new Dictionary<string, int>(StringComparer.Ordinal)
+    {
+        ["code"] = int.MaxValue,
+        ["multi_state"] = 10,
+        ["single_act"] = 6,
+        ["withheld_after_act"] = 6,
+        ["hole"] = 6,
+        ["overlap"] = int.MaxValue,
+        ["same_date"] = 6,
+        ["invalid"] = int.MaxValue,
+        ["unclear_end"] = int.MaxValue,
+        ["textless_after_held"] = 6,
+        ["textless_before_held"] = 6,
+        ["translation"] = 6,
+        ["no_expression"] = 6,
+    };
 
     /// <summary>
     /// The temporal gate's sample over index 9 (the data design's §3.5): the seeded sample, and in each class of the interval
-    /// rules the oracle reads in the population's catalogue (<see cref="IntervalOracle.Classes"/>), up to
-    /// <see cref="StratumWorks"/> works more in the seeded order, so the classes a random sample may miss are asked of the
+    /// rules the oracle reads in the population's catalogue (<see cref="IntervalOracle.Classes"/>), works more in the seeded
+    /// order until the class holds its <see cref="StratumWorks"/>, so the classes a random sample may miss are asked of the
     /// reader on every mount that holds them.
     /// </summary>
     internal static IReadOnlyList<Timeline> Stratified(IReadOnlyList<Timeline> sample, IReadOnlyList<Timeline> population, IntervalOracle oracle)
@@ -140,7 +159,7 @@ public sealed partial class V3MountedGatesTests
                 continue;
             }
 
-            if (classes.Any(one => counted.GetValueOrDefault(one) < StratumWorks))
+            if (classes.Any(one => counted.GetValueOrDefault(one) < StratumWorks[one]))
             {
                 chosen.Add(work);
                 foreach (var one in classes) counted[one] = counted.GetValueOrDefault(one) + 1;
