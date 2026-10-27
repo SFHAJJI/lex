@@ -367,7 +367,8 @@ public static partial class EuropeIndexBuilder
                     string.Equals(value.SemanticIdentitySha256, outcome.SemanticIdentitySha256,
                         StringComparison.Ordinal)))
                 .Take(2).ToArray();
-            if (matching.Length == 0 && outcome.Source.Kind != EuFormexPackageOutcomeKind.Acquired)
+            var readsArticles = EuFormexMainBodyLegalContentProducer.CarriesArticles(outcome.Disposition);
+            if (matching.Length == 0 && outcome.Source.Kind != EuFormexPackageOutcomeKind.Acquired && !readsArticles)
             {
                 continue;
             }
@@ -389,13 +390,18 @@ public static partial class EuropeIndexBuilder
             var member = matching[0];
             var objectRef = member.ObjectRefSha256;
 
-            if (outcome.Source.Kind != EuFormexPackageOutcomeKind.Acquired)
+            // A main body whose annexes are unclassified is read from an admitted package whose annex chain did not close,
+            // and from nothing else; every other outcome that is not an acquisition carries no legal content.
+            var annexChainOpen = outcome.Disposition == EuFormexMainBodyLegalContentDisposition.AdmittedAnnexesUnclassified;
+            if (annexChainOpen && (outcome.Source.Kind != EuFormexPackageOutcomeKind.NotAcquired || outcome.Source.RetainedInventory is null))
+                throw new InvalidDataException("A Formex main body with unclassified annexes names no admitted package whose annex chain did not close.");
+            if (outcome.Source.Kind != EuFormexPackageOutcomeKind.Acquired && !annexChainOpen)
             {
-                if (outcome.Disposition == EuFormexMainBodyLegalContentDisposition.Admitted)
+                if (readsArticles)
                     throw new InvalidDataException("A non-acquired Formex outcome claims admitted legal content.");
                 continue;
             }
-            if (outcome.Disposition != EuFormexMainBodyLegalContentDisposition.Admitted) continue;
+            if (!readsArticles) continue;
             if (member.Outcome != LexCorpus6OutcomeKind.Acquired ||
                 member.EuropeContentClass?.ContentClass is not (EuContentClass.OriginalLegalText or EuContentClass.Consolidation))
             {
@@ -415,7 +421,7 @@ public static partial class EuropeIndexBuilder
                 return false;
             }
 
-            var inventory = outcome.Source.AcquiredInventory
+            var inventory = outcome.Source.AcquiredInventory ?? outcome.Source.RetainedInventory
                 ?? throw new InvalidDataException("An admitted Formex outcome has no retained inventory.");
             foreach (var article in outcome.Articles)
             {

@@ -25,6 +25,12 @@ public enum EuFormexMainBodyLegalContentDisposition
     [JsonStringEnumMemberName("package_not_acquired")] PackageNotAcquired = 10,
     [JsonStringEnumMemberName("route_refused")] RouteRefused = 11,
     [JsonStringEnumMemberName("package_rejected")] PackageRejected = 12,
+
+    /// <summary>
+    /// The main body of an admitted package whose annex chain did not close: its articles are read as an acquired package's
+    /// are, and its annexes stay unclassified for the package outcome's stated reason (never merged into the main body).
+    /// </summary>
+    [JsonStringEnumMemberName("admitted_annexes_unclassified")] AdmittedAnnexesUnclassified = 13,
 }
 
 public enum EuFormexMainBodyTokenKind
@@ -165,10 +171,21 @@ public sealed class EuFormexMainBodyLegalContentPopulation
 /// <summary>Reopens acquired Formex packages and derives ordered main-body ARTICLE content.</summary>
 public sealed class EuFormexMainBodyLegalContentProducer
 {
+    /// <summary>
+    /// Profile /5 reads two main-body roots /4 did not, both measured over EU run 16's retained packages (2026-10-27):
+    /// <c>CONS.OTH</c>, the consolidated Treaties (TEU and TFEU, 48 retained packages that /4 typed
+    /// <c>main_body_missing</c>), whose operative text is the one <c>ENACTING.TERMS</c> reached through
+    /// <c>CONS.DOC.GEN</c> parts only (the Protocols, Annexes and Declarations sit under <c>CONTENTS</c> and stay out, as
+    /// annexes do); and <c>GENERAL</c>, the Charter of Fundamental Rights (4 packages), read only when the package holds no
+    /// act root and exactly one <c>GENERAL</c> unit carries an <c>ENACTING.TERMS</c> (a cover or contents page carries none).
+    /// </summary>
     public const string Profile =
-        "lex-v3-eu-formex-main-body-profile/4;root=ACT,CONS.ACT;units=ARTICLE;" +
+        "lex-v3-eu-formex-main-body-profile/5;root=ACT,CONS.ACT,CONS.OTH,GENERAL-without-act;units=ARTICLE;" +
         "tokens=text,reference,footnote-with-body;oj-reference-target=publisher-attributes;" +
-        "exclude=recitals,final,annex;consolidated=one-cons-doc,one-bib-instance,one-enacting-terms;language=matches-expression-with-en-eng-fr-fra-authority-aliases";
+        "exclude=recitals,final,annex,protocols,declarations;consolidated=one-cons-doc,one-bib-instance,one-enacting-terms;" +
+        "consolidated-other=one-cons-oth-doc,one-bib-instance,one-enacting-terms-through-cons-doc-gen;" +
+        "general=only-without-act-root,one-unit-with-enacting-terms,one-enacting-terms;" +
+        "language=matches-expression-with-en-eng-fr-fra-authority-aliases";
     public static string ProfileSha256 { get; } = Convert.ToHexStringLower(
         SHA256.HashData(Encoding.UTF8.GetBytes(Profile)));
 
@@ -189,13 +206,16 @@ public sealed class EuFormexMainBodyLegalContentProducer
         foreach (var source in formex.Outcomes)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (source.Kind != EuFormexPackageOutcomeKind.Acquired)
+            // An admitted package whose annex chain did not close is read for its main body; every other outcome that is
+            // not an acquisition keeps its own typed disposition.
+            var annexChainOpen = source.Kind == EuFormexPackageOutcomeKind.NotAcquired && source.RetainedInventory is not null;
+            if (source.Kind != EuFormexPackageOutcomeKind.Acquired && !annexChainOpen)
             {
                 outcomes.Add(new(source, Map(source.Kind), [], source.Detail));
                 continue;
             }
 
-            var inventory = source.AcquiredInventory!;
+            var inventory = source.AcquiredInventory ?? source.RetainedInventory!;
             ReadOnlyMemory<byte> bytes;
             try
             {
@@ -215,10 +235,24 @@ public sealed class EuFormexMainBodyLegalContentProducer
             }
 
             var parsed = Parse(source, bytes, cancellationToken);
+            if (annexChainOpen && parsed.Disposition == EuFormexMainBodyLegalContentDisposition.Admitted)
+            {
+                outcomes.Add(new(source, EuFormexMainBodyLegalContentDisposition.AdmittedAnnexesUnclassified, parsed.Articles,
+                    $"the package's {inventory.Members.Count} annex member(s) are not classified: {ContractWireName(source.NotAcquiredReason)}"));
+                continue;
+            }
+
             outcomes.Add(new(source, parsed.Disposition, parsed.Articles, parsed.Detail));
         }
         return new EuFormexMainBodyLegalContentPopulation(formex, outcomes);
     }
+
+    /// <summary>Whether a disposition carries the articles of a main body: an acquired package's, or one whose annexes are unclassified.</summary>
+    public static bool CarriesArticles(EuFormexMainBodyLegalContentDisposition disposition) =>
+        disposition is EuFormexMainBodyLegalContentDisposition.Admitted or EuFormexMainBodyLegalContentDisposition.AdmittedAnnexesUnclassified;
+
+    private static string ContractWireName(EuFormexPackageNotAcquiredReason reason) =>
+        Lex.V3.Contracts.ContractWire.NameOf(reason);
 
     private static EuFormexMainBodyLegalContentDisposition Map(EuFormexPackageOutcomeKind kind) => kind switch
     {
@@ -253,11 +287,11 @@ public sealed class EuFormexMainBodyLegalContentProducer
                 return Refused(EuFormexMainBodyLegalContentDisposition.PackageUnreadable,
                     "the Formex package exceeds the entry bound");
 
+            // Pass one reads every XML entry (an invalid one refuses the package, as it always did) and notes its root; pass
+            // two reads the one main-body unit again. No more than one entry's tree is held at a time.
             var names = new HashSet<string>(StringComparer.Ordinal);
-            var articles = new List<EuFormexMainBodyArticle>();
-            var identities = new HashSet<string>(StringComparer.Ordinal);
+            var units = new List<(ZipArchiveEntry Entry, string Root, int EnactingTerms)>();
             long totalXmlBytes = 0;
-            var actCount = 0;
             foreach (var entry in archive.Entries)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -271,117 +305,132 @@ public sealed class EuFormexMainBodyLegalContentProducer
                         "the Formex XML payload exceeds the admitted bound");
                 totalXmlBytes += entry.Length;
 
-                XDocument document;
-                try
-                {
-                    using var entryStream = entry.Open();
-                    using var reader = XmlReader.Create(entryStream, new XmlReaderSettings
-                    {
-                        DtdProcessing = DtdProcessing.Prohibit,
-                        XmlResolver = null,
-                        MaxCharactersInDocument = MaxXmlEntryBytes,
-                        IgnoreComments = true,
-                    });
-                    document = XDocument.Load(reader, LoadOptions.PreserveWhitespace);
-                }
-                catch (Exception exception) when (exception is InvalidDataException or XmlException)
-                {
+                var loaded = Load(entry);
+                if (loaded is null)
                     return Refused(EuFormexMainBodyLegalContentDisposition.XmlRejected,
                         $"Formex XML entry {entry.FullName} is invalid");
-                }
-
-                var rootName = document.Root?.Name.LocalName;
-                if (rootName is not ("ACT" or "CONS.ACT")) continue;
-                actCount++;
-                var sourceEntrySha256 = HashEntry(entry, cancellationToken);
-                var articleRoot = document.Root!;
-                string? language;
-                string? publisherDate;
-                if (rootName == "CONS.ACT")
-                {
-                    // Consolidated Formex wraps the operative text in CONS.DOC. Its
-                    // bibliography has other dates/languages in amendment history;
-                    // only the document's own BIB.INSTANCE supplies these coordinates.
-                    var documents = document.Root!.Elements()
-                        .Where(static value => value.Name.LocalName == "CONS.DOC").ToArray();
-                    if (documents.Length != 1)
-                        return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
-                            "a CONS.ACT must contain exactly one CONS.DOC");
-                    var bibliographies = documents[0].Elements()
-                        .Where(static value => value.Name.LocalName == "BIB.INSTANCE").ToArray();
-                    var operative = documents[0].Elements()
-                        .Where(static value => value.Name.LocalName == "ENACTING.TERMS").ToArray();
-                    if (bibliographies.Length != 1 || operative.Length != 1)
-                        return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
-                            "a CONS.DOC must contain one BIB.INSTANCE and one ENACTING.TERMS");
-                    var languages = bibliographies[0].Elements()
-                        .Where(static value => value.Name.LocalName == "LG.DOC").ToArray();
-                    var dates = bibliographies[0].Elements()
-                        .Where(static value => value.Name.LocalName == "DATE").ToArray();
-                    language = languages.Length == 1 ? languages[0].Value.Trim() : null;
-                    // Keep the existing article bibliographic date meaning. CONSLEG.DATE
-                    // is a separate publisher state coordinate, never an applicability date.
-                    publisherDate = dates.Length == 1 ? dates[0].Attribute("ISO")?.Value : null;
-                    if (!DateOnly.TryParseExact(publisherDate, new[] { "yyyyMMdd", "yyyy-MM-dd" },
-                            CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
-                        return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
-                            "a CONS.DOC bibliographic date must be one exact civil date");
-                    articleRoot = operative[0];
-                }
-                else
-                {
-                    language = RequiredSingleValue(document.Root!, "LG.DOC");
-                    publisherDate = document.Root!.Descendants()
-                        .FirstOrDefault(static value => value.Name.LocalName == "BIB.INSTANCE")?
-                        .Elements().FirstOrDefault(static value => value.Name.LocalName == "DATE")?
-                        .Attribute("ISO")?.Value;
-                }
-                if (string.IsNullOrWhiteSpace(language) || string.IsNullOrWhiteSpace(publisherDate))
-                    return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
-                        $"Formex main-body entry {entry.FullName} lacks one language or publisher date");
-
-                if (NormalizeLanguage(language) != NormalizeLanguage(source.Expression.OfficialLanguage))
-                    return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
-                        $"Formex main-body entry {entry.FullName} language does not match its proven expression language");
-
-                foreach (var element in articleRoot.Descendants()
-                    .Where(value => value.Name.LocalName == "ARTICLE" &&
-                        (rootName != "CONS.ACT" || !value.Ancestors().TakeWhile(parent => parent != articleRoot)
-                            .Any(static parent => parent.Name.LocalName is "ANNEX" or "NOTE" or "FT"))))
-                {
-                    var identifier = element.Attribute("IDENTIFIER")?.Value;
-                    var heading = element.Elements().SingleOrDefault(static value =>
-                        value.Name.LocalName == "TI.ART")?.Value;
-                    if (string.IsNullOrWhiteSpace(identifier) || string.IsNullOrWhiteSpace(heading))
-                        return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
-                            $"Formex main-body entry {entry.FullName} contains an article without one identifier and heading");
-                    var tokens = TokensOf(element);
-                    if (tokens.Count == 0)
-                        return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
-                            $"Formex article {identifier} contains no legal text");
-                    var article = new EuFormexMainBodyArticle(
-                        source.ExpressionIdentity.PublisherExpressionId,
-                        entry.FullName,
-                        identifier,
-                        heading,
-                        language,
-                        publisherDate,
-                        SearchableTextOf(element),
-                        tokens,
-                        sourceEntrySha256);
-                    if (!identities.Add(article.IdentitySha256))
-                        return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
-                            $"Formex package contains duplicate article identity {identifier}");
-                    articles.Add(article);
-                }
+                var root = loaded.Root?.Name.LocalName;
+                if (root is "ACT" or "CONS.ACT" or "CONS.OTH" or "GENERAL")
+                    units.Add((entry, root, loaded.Root!.Descendants().Count(static value => value.Name.LocalName == "ENACTING.TERMS")));
             }
 
-            if (actCount == 0)
+            // An act root is the main body. A GENERAL unit is one only in a package that holds no act root, and only when it
+            // carries an ENACTING.TERMS: the Charter's package holds its contents page as a second GENERAL unit, which
+            // carries none.
+            var main = units.Where(static unit => unit.Root is not "GENERAL").ToArray();
+            if (main.Length == 0)
+                main = units.Where(static unit => unit.Root == "GENERAL" && unit.EnactingTerms > 0).ToArray();
+            if (main.Length == 0)
                 return Refused(EuFormexMainBodyLegalContentDisposition.MainBodyMissing,
-                    "the retained Formex package contains no ACT or CONS.ACT unit");
-            if (actCount != 1)
+                    "the retained Formex package contains no ACT, CONS.ACT or CONS.OTH unit, nor a GENERAL unit with an ENACTING.TERMS");
+            if (main.Length != 1)
                 return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
-                    "the retained Formex package contains more than one ACT/CONS.ACT main-body unit");
+                    "the retained Formex package contains more than one ACT/CONS.ACT/CONS.OTH main-body unit");
+
+            var (mainEntry, rootName, _) = main[0];
+            var document = Load(mainEntry)
+                ?? throw new InvalidDataException($"Formex XML entry {mainEntry.FullName} did not read the same twice");
+            var sourceEntrySha256 = HashEntry(mainEntry, cancellationToken);
+            var articleRoot = document.Root!;
+            string? language;
+            string? publisherDate;
+            if (rootName is "CONS.ACT" or "CONS.OTH")
+            {
+                // Consolidated Formex wraps the operative text in CONS.DOC (an act) or CONS.OTH.DOC (another document: the
+                // consolidated Treaties). Its bibliography has other dates/languages in amendment history; only the
+                // document's own BIB.INSTANCE supplies these coordinates.
+                var documentName = rootName == "CONS.ACT" ? "CONS.DOC" : "CONS.OTH.DOC";
+                var documents = document.Root!.Elements()
+                    .Where(value => value.Name.LocalName == documentName).ToArray();
+                if (documents.Length != 1)
+                    return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
+                        $"a {rootName} must contain exactly one {documentName}");
+                var bibliographies = documents[0].Elements()
+                    .Where(static value => value.Name.LocalName == "BIB.INSTANCE").ToArray();
+                // A consolidated act's operative text is its document's own ENACTING.TERMS. A consolidated Treaty's is the
+                // one ENACTING.TERMS reached through CONS.DOC.GEN parts only: the Protocols, Annexes and Declarations
+                // annexed to it sit under CONTENTS, each with ENACTING.TERMS of its own, and are not the Treaty's articles.
+                var operative = rootName == "CONS.ACT"
+                    ? documents[0].Elements().Where(static value => value.Name.LocalName == "ENACTING.TERMS").ToArray()
+                    : documents[0].Descendants().Where(value => value.Name.LocalName == "ENACTING.TERMS" &&
+                        value.Ancestors().TakeWhile(parent => parent != documents[0])
+                            .All(static parent => parent.Name.LocalName == "CONS.DOC.GEN")).ToArray();
+                if (bibliographies.Length != 1 || operative.Length != 1)
+                    return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
+                        $"a {documentName} must contain one BIB.INSTANCE and one ENACTING.TERMS");
+                var languages = bibliographies[0].Elements()
+                    .Where(static value => value.Name.LocalName == "LG.DOC").ToArray();
+                var dates = bibliographies[0].Elements()
+                    .Where(static value => value.Name.LocalName == "DATE").ToArray();
+                language = languages.Length == 1 ? languages[0].Value.Trim() : null;
+                // Keep the existing article bibliographic date meaning. CONSLEG.DATE
+                // is a separate publisher state coordinate, never an applicability date.
+                publisherDate = dates.Length == 1 ? dates[0].Attribute("ISO")?.Value : null;
+                if (!DateOnly.TryParseExact(publisherDate, new[] { "yyyyMMdd", "yyyy-MM-dd" },
+                        CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+                    return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
+                        $"a {documentName} bibliographic date must be one exact civil date");
+                articleRoot = operative[0];
+            }
+            else
+            {
+                language = RequiredSingleValue(document.Root!, "LG.DOC");
+                publisherDate = document.Root!.Descendants()
+                    .FirstOrDefault(static value => value.Name.LocalName == "BIB.INSTANCE")?
+                    .Elements().FirstOrDefault(static value => value.Name.LocalName == "DATE")?
+                    .Attribute("ISO")?.Value;
+                if (rootName == "GENERAL")
+                {
+                    // A GENERAL unit's operative text is its one ENACTING.TERMS; its title and preamble are not articles.
+                    var operative = document.Root!.Descendants()
+                        .Where(static value => value.Name.LocalName == "ENACTING.TERMS").ToArray();
+                    if (operative.Length != 1)
+                        return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
+                            "a GENERAL main-body unit must contain exactly one ENACTING.TERMS");
+                    articleRoot = operative[0];
+                }
+            }
+            if (string.IsNullOrWhiteSpace(language) || string.IsNullOrWhiteSpace(publisherDate))
+                return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
+                    $"Formex main-body entry {mainEntry.FullName} lacks one language or publisher date");
+
+            if (NormalizeLanguage(language) != NormalizeLanguage(source.Expression.OfficialLanguage))
+                return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
+                    $"Formex main-body entry {mainEntry.FullName} language does not match its proven expression language");
+
+            var articles = new List<EuFormexMainBodyArticle>();
+            var identities = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var element in articleRoot.Descendants()
+                .Where(value => value.Name.LocalName == "ARTICLE" &&
+                    (rootName == "ACT" || !value.Ancestors().TakeWhile(parent => parent != articleRoot)
+                        .Any(static parent => parent.Name.LocalName is "ANNEX" or "NOTE" or "FT"))))
+            {
+                var identifier = element.Attribute("IDENTIFIER")?.Value;
+                var heading = element.Elements().SingleOrDefault(static value =>
+                    value.Name.LocalName == "TI.ART")?.Value;
+                if (string.IsNullOrWhiteSpace(identifier) || string.IsNullOrWhiteSpace(heading))
+                    return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
+                        $"Formex main-body entry {mainEntry.FullName} contains an article without one identifier and heading");
+                var tokens = TokensOf(element);
+                if (tokens.Count == 0)
+                    return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
+                        $"Formex article {identifier} contains no legal text");
+                var article = new EuFormexMainBodyArticle(
+                    source.ExpressionIdentity.PublisherExpressionId,
+                    mainEntry.FullName,
+                    identifier,
+                    heading,
+                    language,
+                    publisherDate,
+                    SearchableTextOf(element),
+                    tokens,
+                    sourceEntrySha256);
+                if (!identities.Add(article.IdentitySha256))
+                    return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
+                        $"Formex package contains duplicate article identity {identifier}");
+                articles.Add(article);
+            }
+
             if (articles.Count == 0)
                 return Refused(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape,
                     "the retained Formex main body contains no ARTICLE unit");
@@ -391,6 +440,27 @@ public sealed class EuFormexMainBodyLegalContentProducer
         catch (InvalidDataException exception)
         {
             return Refused(EuFormexMainBodyLegalContentDisposition.PackageUnreadable, exception.Message);
+        }
+    }
+
+    /// <summary>One XML entry read under the producer's bounds, or null when it is not well-formed XML within them.</summary>
+    private static XDocument? Load(ZipArchiveEntry entry)
+    {
+        try
+        {
+            using var entryStream = entry.Open();
+            using var reader = XmlReader.Create(entryStream, new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver = null,
+                MaxCharactersInDocument = MaxXmlEntryBytes,
+                IgnoreComments = true,
+            });
+            return XDocument.Load(reader, LoadOptions.PreserveWhitespace);
+        }
+        catch (Exception exception) when (exception is InvalidDataException or XmlException)
+        {
+            return null;
         }
     }
 

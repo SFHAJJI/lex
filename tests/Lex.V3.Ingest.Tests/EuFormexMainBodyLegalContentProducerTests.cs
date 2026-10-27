@@ -85,6 +85,192 @@ public sealed class EuFormexMainBodyLegalContentProducerTests
         Assert.IsFalse(result.Articles.Any(a => a.SearchableText.Contains("EXCLUDED_SENTINEL", StringComparison.Ordinal)));
     }
 
+    /// <summary>
+    /// Profile /5's consolidated Treaty (<c>CONS.OTH</c>), in the two shapes EU run 16's 48 retained Treaty packages take: the
+    /// TFEU's, whose own text is a <c>CONS.DOC.GEN</c> part of the document beside its Protocols (here "in-part"), and the
+    /// TEU's, whose own text sits in the document's top <c>CONS.DOC.GEN</c> (here "at-top"). Both read the Treaty's own
+    /// articles, with the bibliographic language and date of the document's own <c>BIB.INSTANCE</c>, and leave out the
+    /// articles of the Protocols, whose <c>ENACTING.TERMS</c> sit under <c>CONTENTS</c>.
+    /// </summary>
+    [TestMethod]
+    [DataRow("in-part")]
+    [DataRow("at-top")]
+    public async Task AConsolidatedTreatyReadsTheTreatysOwnArticlesAndNotItsProtocols(string shape)
+    {
+        var bytes = RewriteConsolidated(await ReadConsolidatedPackage("eng"), root => AsConsolidatedTreaty(root, shape));
+        var outcome = await Produce(bytes);
+        Assert.HasCount(99, outcome.Articles);
+        AssertDigests(bytes, outcome.Articles);
+        CollectionAssert.AreEqual(Enumerable.Range(1, 99).Select(n => n.ToString("D3")).ToArray(),
+            outcome.Articles.Select(a => a.PublisherIdentifier).ToArray());
+        Assert.IsTrue(outcome.Articles.All(a => a.Language == "EN" && a.PublisherDate == "20160504"));
+        Assert.IsFalse(outcome.Articles.Any(a => a.SearchableText.Contains("PROTOCOL_SENTINEL", StringComparison.Ordinal)),
+            "a Protocol's articles are not the Treaty's.");
+    }
+
+    [TestMethod]
+    [DataRow("two-own-texts")]
+    [DataRow("no-own-text")]
+    [DataRow("two-documents")]
+    public async Task AConsolidatedTreatyWithoutExactlyOneOwnTextRefuses(string change)
+    {
+        var bytes = RewriteConsolidated(await ReadConsolidatedPackage("eng"), root =>
+        {
+            AsConsolidatedTreaty(root, "in-part");
+            var document = root.Element("CONS.OTH.DOC")!;
+            var top = document.Element("CONS.DOC.GEN")!;
+            var part = top.Elements("CONS.DOC.GEN").First();
+            switch (change)
+            {
+                case "two-own-texts": top.Add(new XElement(part)); break;
+                case "no-own-text": part.Element("ENACTING.TERMS")!.Remove(); break;
+                case "two-documents": root.Add(new XElement(document)); break;
+                default: throw new ArgumentOutOfRangeException(nameof(change));
+            }
+        });
+        var result = await Produce(bytes, requireAdmitted: false);
+        Assert.AreEqual(EuFormexMainBodyLegalContentDisposition.UnsupportedContentShape, result.Disposition, result.Detail);
+        Assert.HasCount(0, result.Articles);
+    }
+
+    /// <summary>
+    /// Profile /5's <c>GENERAL</c> main body, the Charter's shape: a package with no act root, a contents page carrying no
+    /// <c>ENACTING.TERMS</c> and one unit carrying one. The articles of that one <c>ENACTING.TERMS</c> are read; a
+    /// <c>GENERAL</c> unit beside an act root (a Commission statement, say) never is.
+    /// </summary>
+    [TestMethod]
+    public async Task AGeneralUnitIsTheMainBodyOnlyWithoutAnActRoot()
+    {
+        var original = await File.ReadAllBytesAsync(Path.Combine(
+            AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "gdpr-fmx4-200-body.bin"));
+        var main = MainEntryOf(original);
+        var asGeneral = RewriteEntry(original, main, bytes => Rewrite(bytes, root =>
+        {
+            root.Name = "GENERAL";
+            root.Add(new XElement("ARTICLE", new XAttribute("IDENTIFIER", "999"),
+                new XElement("TI.ART", "Outside the operative text"), new XElement("P", "GENERAL_SENTINEL")));
+        }));
+        var withContentsPage = AddEntry(asGeneral, "CHARTER.CONTENTS.xml",
+            "<GENERAL><BIB.INSTANCE><DATE ISO=\"20160607\"/><LG.DOC>EN</LG.DOC></BIB.INSTANCE><CONTENTS><P>Contents</P></CONTENTS></GENERAL>");
+        var general = await Produce(withContentsPage);
+        Assert.HasCount(99, general.Articles);
+        Assert.IsTrue(general.Articles.All(a => a.PackageEntry == main));
+        Assert.IsFalse(general.Articles.Any(a => a.SearchableText.Contains("GENERAL_SENTINEL", StringComparison.Ordinal)),
+            "only the GENERAL unit's ENACTING.TERMS is read.");
+
+        var statementBesideAct = AddEntry(original, "STATEMENT.xml",
+            "<GENERAL><BIB.INSTANCE><DATE ISO=\"20160427\"/><LG.DOC>EN</LG.DOC></BIB.INSTANCE><ENACTING.TERMS><ARTICLE IDENTIFIER=\"001\">"
+            + "<TI.ART>Article 1</TI.ART><P>STATEMENT_SENTINEL</P></ARTICLE></ENACTING.TERMS></GENERAL>");
+        var act = await Produce(statementBesideAct);
+        Assert.HasCount(99, act.Articles);
+        Assert.IsTrue(act.Articles.All(a => a.PackageEntry == main));
+        Assert.IsFalse(act.Articles.Any(a => a.SearchableText.Contains("STATEMENT_SENTINEL", StringComparison.Ordinal)));
+    }
+
+    /// <summary>
+    /// An admitted package whose annex chain did not close (here its held XHTML carries no annex convention) keeps its
+    /// inventory on the not-acquired outcome, and its main body is read: <c>admitted_annexes_unclassified</c>, with the
+    /// act's articles and none of the annex's. A not-acquired outcome without a retained inventory keeps its typed
+    /// disposition, and only an annex-chain reason may carry one.
+    /// </summary>
+    [TestMethod]
+    public async Task AnAdmittedPackageWhoseAnnexChainDidNotCloseKeepsItsMainBody()
+    {
+        var bytes = await ReadMixedPackage();
+        var fixture = await EuFormexAnnexInventoryProducerTests.FixtureAsync(bytes);
+        var inventory = await new EuFormexAnnexInventoryProducer(fixture.Store).RunAsync(
+            fixture.Binding, fixture.Profile.Bytes, fixture.Profile.Reference, CancellationToken.None);
+        Assert.IsNotNull(inventory.Inventory, inventory.Detail);
+        Assert.HasCount(1, inventory.Inventory.Members);
+        var expression = LanguageScopedExpression.FromRetainedSource(
+            new LanguageScopedExpressionIdentity(fixture.Binding.Expression.ParentKeyRef!.PublisherUri,
+                fixture.Binding.Expression.PublisherUri), "EN", null, fixture.Binding.Expression,
+            LanguageScopedExpressionLineage.FromContributions(
+                [new(LanguageScopedExpressionContribution.IdentityAndLanguage, fixture.Receipt)]));
+        var retained = EuFormexPackageOutcome.NotAcquired(expression, EuFormexPackageNotAcquiredReason.AnnexXhtmlNotInventoried,
+            "the held work body carries no publisher annex inventory", inventory.Inventory);
+        var run = await EuAxiomWiringHarness.RunAsync(static root => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(root));
+        var population = await new EuFormexMainBodyLegalContentProducer(fixture.Store).RunAsync(
+            EuFormexAnnexClassificationReconciliationTests.Reconciliation(run, [retained]), CancellationToken.None);
+        var outcome = population.Outcomes.Single();
+        Assert.AreEqual(EuFormexMainBodyLegalContentDisposition.AdmittedAnnexesUnclassified, outcome.Disposition, outcome.Detail);
+        Assert.HasCount(2, outcome.Articles);
+        AssertDigests(bytes, outcome.Articles);
+        Assert.IsTrue(outcome.Articles.All(static article => article.PackageEntry == "L_202601965EN.000101.fmx.xml"));
+        StringAssert.Contains(outcome.Detail, "1 annex member(s) are not classified: annex_xhtml_not_inventoried");
+        Assert.IsTrue(EuFormexMainBodyLegalContentProducer.CarriesArticles(outcome.Disposition));
+        Assert.AreEqual(LexCorpus6Stage3Disposition.FormexMainBodyAdmittedAnnexesUnclassified,
+            LexCorpus6Builder.FormexMainBodyDisposition(outcome.Disposition));
+
+        var withoutInventory = EuFormexPackageOutcome.NotAcquired(expression, EuFormexPackageNotAcquiredReason.AnnexXhtmlNotInventoried,
+            "the held work body carries no publisher annex inventory");
+        var typed = await new EuFormexMainBodyLegalContentProducer(fixture.Store).RunAsync(
+            EuFormexAnnexClassificationReconciliationTests.Reconciliation(run, [withoutInventory]), CancellationToken.None);
+        Assert.AreEqual(EuFormexMainBodyLegalContentDisposition.PackageNotAcquired, typed.Outcomes.Single().Disposition);
+        Assert.HasCount(0, typed.Outcomes.Single().Articles);
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => EuFormexPackageOutcome.NotAcquired(expression,
+            EuFormexPackageNotAcquiredReason.BodyNotHeld, "no body", inventory.Inventory));
+    }
+
+    private static void AsConsolidatedTreaty(XElement root, string shape)
+    {
+        root.Name = "CONS.OTH";
+        var document = root.Element("CONS.DOC")!;
+        document.Name = "CONS.OTH.DOC";
+        var own = document.Elements().Where(static element => element.Name.LocalName is not ("BIB.INSTANCE" or "FAM.COMP")).ToArray();
+        foreach (var element in own) element.Remove();
+        var protocols = new XElement("CONS.DOC.GEN",
+            new XElement("TITLE", new XElement("TI", new XElement("P", "PROTOCOLS"))),
+            new XElement("CONTENTS", new XElement("GR.SEQ", new XElement("ENACTING.TERMS",
+                new XElement("ARTICLE", new XAttribute("IDENTIFIER", "001"),
+                    new XElement("TI.ART", "Article 1"), new XElement("P", "PROTOCOL_SENTINEL"))))));
+        document.Add(shape == "in-part"
+            ? new XElement("CONS.DOC.GEN", new XElement("CONTENTS", new XElement("P", "Contents")),
+                new XElement("CONS.DOC.GEN", own), protocols)
+            : new XElement("CONS.DOC.GEN", own, protocols));
+    }
+
+    private static string MainEntryOf(byte[] package)
+    {
+        using var input = new MemoryStream(package);
+        using var archive = new ZipArchive(input, ZipArchiveMode.Read);
+        return archive.Entries.Single(e => e.FullName.EndsWith(".xml", StringComparison.Ordinal)
+            && !e.FullName.EndsWith(".doc.xml", StringComparison.Ordinal)).FullName;
+    }
+
+    private static byte[] Rewrite(byte[] bytes, Action<XElement> rewrite)
+    {
+        var document = XDocument.Parse(Encoding.UTF8.GetString(bytes), LoadOptions.PreserveWhitespace);
+        rewrite(document.Root!);
+        return Encoding.UTF8.GetBytes(document.ToString(SaveOptions.DisableFormatting));
+    }
+
+    private static byte[] AddEntry(byte[] package, string name, string xml)
+    {
+        using var input = new MemoryStream(package);
+        using var original = new ZipArchive(input, ZipArchiveMode.Read);
+        using var output = new MemoryStream();
+        using (var changed = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in original.Entries)
+            {
+                using var source = entry.Open();
+                var next = changed.CreateEntry(entry.FullName);
+                next.LastWriteTime = entry.LastWriteTime;
+                using var destination = next.Open();
+                source.CopyTo(destination);
+            }
+
+            var added = changed.CreateEntry(name);
+            added.LastWriteTime = original.Entries[0].LastWriteTime;
+            using var write = added.Open();
+            write.Write(Encoding.UTF8.GetBytes(xml));
+        }
+
+        return PortableZip.Normalise(output.ToArray());
+    }
+
     private static Task<byte[]> ReadConsolidatedPackage(string language) => File.ReadAllBytesAsync(Path.Combine(
         AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", $"gdpr-consolidated-{language}-fmx4-body.bin"));
 

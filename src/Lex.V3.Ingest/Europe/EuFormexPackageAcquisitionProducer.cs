@@ -374,6 +374,10 @@ public sealed partial class EuFormexPackageAcquisitionProducer
 
         // ---- The package names annexes: the annex chain, or a typed reason with the ZIP retained. ----
         var retained = $"the ZIP is retained under {zipReceipt.Reference.ContentSha256}";
+        // The package itself was fetched and admitted: an annex chain that does not close leaves its annexes unclassified, and
+        // the outcome carries the admitted inventory, so the main body the package holds is still read (profile /5).
+        EuFormexPackageAcquisitionResult AnnexChainOpen(EuFormexPackageNotAcquiredReason reason, string detail) =>
+            new(EuFormexPackageOutcome.NotAcquired(expression, reason, detail, inventory.Inventory), requests);
         var xhtmlReceipt = heldRecord.Body.Receipt!;
         var xhtmlProfile = context.Profile(
             XhtmlInventoryProfileHeader, "transport_sha256=" + xhtmlReceipt.Reference.ContentSha256, "xhtml_namespace=" + XhtmlNamespace);
@@ -381,31 +385,31 @@ public sealed partial class EuFormexPackageAcquisitionProducer
             .ConfigureAwait(false);
         if (!xhtml.Produced)
         {
-            return new(EuFormexPackageOutcome.NotAcquired(expression, EuFormexPackageNotAcquiredReason.AnnexXhtmlNotInventoried,
+            return AnnexChainOpen(EuFormexPackageNotAcquiredReason.AnnexXhtmlNotInventoried,
                 $"the package names {inventory.Inventory.Members.Count} annex member(s) and the held work body carries no publisher "
-                + $"annex inventory: {xhtml.Refusal}: {xhtml.Detail}; {retained}"), requests);
+                + $"annex inventory: {xhtml.Refusal}: {xhtml.Detail}; {retained}");
         }
 
         var pdfMediaType = PdfMediaTypeListed(enumeration);
         if (pdfMediaType is null)
         {
-            return new(EuFormexPackageOutcome.NotAcquired(expression, EuFormexPackageNotAcquiredReason.AnnexPdfNotServed,
+            return AnnexChainOpen(EuFormexPackageNotAcquiredReason.AnnexPdfNotServed,
                 $"the package names {inventory.Inventory.Members.Count} annex member(s) and the enumeration lists no pdf or pdfa2a "
-                + $"manifestation for the expression; {retained}"), requests);
+                + $"manifestation for the expression; {retained}");
         }
 
         var pdfAddress = EuDocumentFetchAddress.TryCreate("cellar", workRef!.CanonicalKey, pdfMediaType.Value, language, out var pdfAddressRefusal);
         if (pdfAddress is null)
         {
-            return new(EuFormexPackageOutcome.NotAcquired(expression, EuFormexPackageNotAcquiredReason.AnnexPdfNotServed,
-                $"the work {workRef.PublisherUri} is not a document-fetch address: {pdfAddressRefusal}; {retained}"), requests);
+            return AnnexChainOpen(EuFormexPackageNotAcquiredReason.AnnexPdfNotServed,
+                $"the work {workRef.PublisherUri} is not a document-fetch address: {pdfAddressRefusal}; {retained}");
         }
 
         var pdfAttempt = await FetchAsync(pdfAddress, documentFetchRendererSource, wireBudget, context, cancellationToken).ConfigureAwait(false);
         if (pdfAttempt.Evidence is null)
         {
-            return new(EuFormexPackageOutcome.NotAcquired(expression, EuFormexPackageNotAcquiredReason.AnnexPdfNotServed,
-                $"the PDF route was not executed: {pdfAttempt.Refusal}: {pdfAttempt.Detail}; {retained}"), requests);
+            return AnnexChainOpen(EuFormexPackageNotAcquiredReason.AnnexPdfNotServed,
+                $"the PDF route was not executed: {pdfAttempt.Refusal}: {pdfAttempt.Detail}; {retained}");
         }
 
         var pdfRoute = pdfAttempt.Evidence;
@@ -416,16 +420,16 @@ public sealed partial class EuFormexPackageAcquisitionProducer
             || pdfAttempt.HopWriteReceiptsByObservationId is null
             || !pdfAttempt.HopWriteReceiptsByObservationId.TryGetValue(pdfTerminal.ObservationId, out var pdfReceipt))
         {
-            return new(EuFormexPackageOutcome.NotAcquired(expression, EuFormexPackageNotAcquiredReason.AnnexPdfNotServed,
+            return AnnexChainOpen(EuFormexPackageNotAcquiredReason.AnnexPdfNotServed,
                 $"the office answered {pdfFetch.ObservedStatus?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "no status"} "
-                + $"({pdfRoute.Outcome.GetType().Name}) for {pdfAddress.ResourceUri}; {retained}"), requests);
+                + $"({pdfRoute.Outcome.GetType().Name}) for {pdfAddress.ResourceUri}; {retained}");
         }
 
         var pdfManifestationRef = TryAdmitPdfManifestation(boundary!, expressionRef!, expression, pdfTerminal.RequestUri, out var pdfManifestationDetail);
         if (pdfManifestationRef is null)
         {
-            return new(EuFormexPackageOutcome.NotAcquired(expression, EuFormexPackageNotAcquiredReason.AnnexEvidenceNotBound,
-                $"the PDF the office served is not a manifestation of this expression: {pdfManifestationDetail}; {retained}"), requests);
+            return AnnexChainOpen(EuFormexPackageNotAcquiredReason.AnnexEvidenceNotBound,
+                $"the PDF the office served is not a manifestation of this expression: {pdfManifestationDetail}; {retained}");
         }
 
         var reconciliationProfile = context.Profile(
@@ -440,16 +444,16 @@ public sealed partial class EuFormexPackageAcquisitionProducer
             .ConfigureAwait(false);
         if (bound.Binding is null)
         {
-            return new(EuFormexPackageOutcome.NotAcquired(expression, EuFormexPackageNotAcquiredReason.AnnexEvidenceNotBound,
-                $"{bound.Refusal}: {bound.Detail}; {retained}"), requests);
+            return AnnexChainOpen(EuFormexPackageNotAcquiredReason.AnnexEvidenceNotBound,
+                $"{bound.Refusal}: {bound.Detail}; {retained}");
         }
 
         var officialRequest = await TryRestoreRequestAsync(pdfRoute.Hops[0], cancellationToken).ConfigureAwait(false);
         var terminalRequest = await TryRestoreRequestAsync(pdfTerminal, cancellationToken).ConfigureAwait(false);
         if (officialRequest.Request is null || terminalRequest.Request is null)
         {
-            return new(EuFormexPackageOutcome.NotAcquired(expression, EuFormexPackageNotAcquiredReason.AnnexBodyNotClassified,
-                $"the PDF requests the session sent are not retained: {officialRequest.Detail ?? terminalRequest.Detail}; {retained}"), requests);
+            return AnnexChainOpen(EuFormexPackageNotAcquiredReason.AnnexBodyNotClassified,
+                $"the PDF requests the session sent are not retained: {officialRequest.Detail ?? terminalRequest.Detail}; {retained}");
         }
 
         var classificationProfile = context.Profile(
@@ -463,8 +467,8 @@ public sealed partial class EuFormexPackageAcquisitionProducer
             .ConfigureAwait(false);
         if (classified.Classification is null)
         {
-            return new(EuFormexPackageOutcome.NotAcquired(expression, EuFormexPackageNotAcquiredReason.AnnexBodyNotClassified,
-                $"{classified.Refusal}: {classified.Detail}; {retained}"), requests);
+            return AnnexChainOpen(EuFormexPackageNotAcquiredReason.AnnexBodyNotClassified,
+                $"{classified.Refusal}: {classified.Detail}; {retained}");
         }
 
         return new(EuFormexPackageOutcome.Acquired(expression, inventory.Inventory), requests, classified.Classification);
