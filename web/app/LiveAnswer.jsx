@@ -25,6 +25,7 @@ import { Fragment } from 'react';
 
 import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillParts, liveChrome } from '../scripts/live-chrome.mjs';
 import { OFFICIAL_SITES, isFailure } from '../scripts/live-failure.mjs';
+import { EUROPE_TREATY_PART_DISPOSITIONS } from '../scripts/europe-annexes.mjs';
 import { isSiteAddress, permalinkHref } from '../scripts/permalinks.mjs';
 import { GuideLink } from './GuideLink.jsx';
 
@@ -73,7 +74,7 @@ export function EuropeAnnexes({ rows, language }) {
   return rows.map((row) => (
     <p key={row.disposition} data-annexes-not-served={row.count} data-annex-disposition={row.disposition}>
       <Say
-        template={countedEntry(common.europeAnnexes, row.count)}
+        template={countedEntry(EUROPE_TREATY_PART_DISPOSITIONS.includes(row.disposition) ? common.europeTreatyParts : common.europeAnnexes, row.count)}
         values={{
           count: row.count,
           language: common.languageNames[language] ?? language,

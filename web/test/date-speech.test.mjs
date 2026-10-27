@@ -90,6 +90,8 @@ const EUROPE_ENTRIES = new Set([
   "refusalCard.europeNotes.ambiguous_version",
   "reading.europeSameDateWorks.one", "reading.europeSameDateWorks.other", "reading.europeUnplaced.one", "reading.europeUnplaced.other",
   "common.europeAnnexes.one", "common.europeAnnexes.other",
+  // The Treaties' items left out, by the wording they are published with (the review of #996, F2).
+  "common.europeTreatyParts.one", "common.europeTreatyParts.other",
   "reading.europePinReplaced", "reading.europePinNotHeld", "reading.europeWholeAct", "reading.europeNewerWording",
   "reading.europeLaterWordingNotHeld",
   // A page past an EU wording's last (the review of #978, F2).

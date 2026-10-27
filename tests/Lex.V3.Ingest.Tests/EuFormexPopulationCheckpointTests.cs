@@ -32,6 +32,7 @@ public sealed partial class EuFormexPackagePopulationProducerTests
     [DataRow(2, false)]
     [DataRow(3, false)]
     [DataRow(4, false)]
+    [DataRow(5, false)]
     [DataRow(2, true)]
     public async Task PopulationReplayRepeatsAllTypedOutcomesWithoutNewArtifactsOrRequests(int shape, bool weaker)
     {
@@ -59,6 +60,17 @@ public sealed partial class EuFormexPackagePopulationProducerTests
             "Restored enumeration floors must describe the copied store, not the original receipts.");
         if (shape == 3) Assert.AreEqual(1, first.NotEnumeratedExpressionCount);
         if (shape == 2) Assert.HasCount(1, first.AnnexClassifications);
+        if (shape == 5)
+        {
+            // The annex chain that did not close keeps its admitted inventory through the replay (review of #996): the same
+            // inventory, so the main body read from it is the same.
+            var captured = capture.Result.Reconciliation!.Outcomes.Single(static value => value.RetainedInventory is not null);
+            var replayed = first.Reconciliation.Outcomes.Single(static value => value.RetainedInventory is not null);
+            Assert.AreEqual(EuFormexPackageNotAcquiredReason.AnnexXhtmlNotInventoried, replayed.NotAcquiredReason);
+            Assert.AreEqual(captured.RetainedInventory!.IdentitySha256, replayed.RetainedInventory!.IdentitySha256);
+            Assert.AreEqual(captured.RetainedInventory.SourceReceipt.Reference, replayed.RetainedInventory.SourceReceipt.Reference);
+            Assert.HasCount(0, first.AnnexClassifications);
+        }
     }
 
     [TestMethod]
@@ -209,10 +221,11 @@ public sealed partial class EuFormexPackagePopulationProducerTests
         var (run, english, other) = await RunWithTwoExpressionsAsync(
             shape == 2 ? await FixtureAsync("new-xhtml-200-body.bin") : null, store,
             shape == 3 ? "http://publications.europa.eu/resource/authority/language/DEU" : FrenchAuthority);
-        var zip = shape == 2 ? await FixtureAsync("new-fmx4-200-body.bin") : null;
+        // Shape 5: the annex package beside a held body with no annex convention, so its annex chain does not close.
+        var zip = shape is 2 or 5 ? await FixtureAsync("new-fmx4-200-body.bin") : null;
         var handler = new FormexEnumerationHandler(new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
-            [english.Identity.PublisherExpressionId] = shape == 0 ? ["xhtml"] : shape == 2 ? ["fmx4", "pdfa2a"] : ["fmx4"],
+            [english.Identity.PublisherExpressionId] = shape == 0 ? ["xhtml"] : shape is 2 or 5 ? ["fmx4", "pdfa2a"] : ["fmx4"],
             [other.Identity.PublisherExpressionId] = ["xhtml"],
         }, [english, other], request => zip is not null && request.RequestUri!.AbsolutePath.EndsWith("/zip", StringComparison.Ordinal)
             ? EuAcquisitionTestFixture.BinaryResponse(request, HttpStatusCode.OK, zip, "application/zip") : null);

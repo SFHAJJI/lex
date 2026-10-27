@@ -64,7 +64,8 @@ public sealed class EuFormexPackageOutcome
         EuDocumentFetchAttemptRefusal? acquisitionRefusal,
         string? detail,
         EuFormexPackageNotAcquiredReason notAcquiredReason = EuFormexPackageNotAcquiredReason.None,
-        EuFormexAnnexInventoryRefusal packageRefusal = EuFormexAnnexInventoryRefusal.None)
+        EuFormexAnnexInventoryRefusal packageRefusal = EuFormexAnnexInventoryRefusal.None,
+        EuFormexAnnexInventory? retainedInventory = null)
     {
         Expression = expression;
         Kind = kind;
@@ -75,6 +76,7 @@ public sealed class EuFormexPackageOutcome
         Detail = detail;
         NotAcquiredReason = notAcquiredReason;
         PackageRefusal = packageRefusal;
+        RetainedInventory = retainedInventory;
     }
 
     public LanguageScopedExpression Expression { get; }
@@ -98,6 +100,21 @@ public sealed class EuFormexPackageOutcome
 
     /// <summary>The inventory producer's refusal of a <see cref="EuFormexPackageOutcomeKind.PackageRejected"/> outcome; <c>None</c> otherwise.</summary>
     public EuFormexAnnexInventoryRefusal PackageRefusal { get; }
+
+    /// <summary>
+    /// The admitted inventory of a package that was fetched and admitted but whose annex chain did not close
+    /// (<see cref="IsAnnexChainReason"/>): the package and its main body are retained and read, its annexes stay unclassified
+    /// for the stated reason. Null for every other outcome. It is not part of the outcome's replay digest: the reopened
+    /// acquisition reproduces the same typed outcome, and this is the inventory that replay admitted again.
+    /// </summary>
+    public EuFormexAnnexInventory? RetainedInventory { get; }
+
+    /// <summary>Whether a not-acquired reason follows an admitted package: the annex chain did not close.</summary>
+    public static bool IsAnnexChainReason(EuFormexPackageNotAcquiredReason reason) => reason is
+        EuFormexPackageNotAcquiredReason.AnnexXhtmlNotInventoried or
+        EuFormexPackageNotAcquiredReason.AnnexPdfNotServed or
+        EuFormexPackageNotAcquiredReason.AnnexEvidenceNotBound or
+        EuFormexPackageNotAcquiredReason.AnnexBodyNotClassified;
 
     public static EuFormexPackageOutcome NotEnumeratedLanguageOutOfScope(LanguageScopedExpression expression)
     {
@@ -190,6 +207,40 @@ public sealed class EuFormexPackageOutcome
         return new EuFormexPackageOutcome(
             expression, EuFormexPackageOutcomeKind.NotAcquired, null,
             null, null, null, detail, notAcquiredReason: reason);
+    }
+
+    /// <summary>
+    /// An admitted package whose annex chain did not close: not acquired for <paramref name="reason"/> (one
+    /// <see cref="IsAnnexChainReason"/> admits), with the admitted inventory retained so its main body is still read.
+    /// </summary>
+    public static EuFormexPackageOutcome NotAcquired(
+        LanguageScopedExpression expression,
+        EuFormexPackageNotAcquiredReason reason,
+        string detail,
+        EuFormexAnnexInventory retainedInventory)
+    {
+        ArgumentNullException.ThrowIfNull(expression);
+        ArgumentNullException.ThrowIfNull(retainedInventory);
+        if (!IsAnnexChainReason(reason))
+        {
+            throw new ArgumentOutOfRangeException(nameof(reason), reason,
+                "Only an annex chain that did not close follows an admitted package.");
+        }
+
+        if (!string.Equals(
+                retainedInventory.TransportBinding.Expression.PublisherUri,
+                expression.Identity.PublisherExpressionId,
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The retained Formex inventory does not carry this run expression's publisher identity.",
+                nameof(retainedInventory));
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(detail);
+        return new EuFormexPackageOutcome(
+            expression, EuFormexPackageOutcomeKind.NotAcquired, null,
+            null, null, null, detail, notAcquiredReason: reason, retainedInventory: retainedInventory);
     }
 
     public static EuFormexPackageOutcome RouteRefused(

@@ -92,6 +92,10 @@ test("an EU reading names its wording by its own date, never with a Luxembourg d
     assert.equal(crumbs[1].href, `/en/eu-eurlex/${view.celex}`);
     assert.match(crumbs[2].text, /wording of \d{4}-\d{2}-\d{2}$/);
   }
+  // A CELEX with a solidus (a Treaty's, the Charter's) is one segment of its act's address, written %2F (review of #996, F1).
+  const slashed = readingCrumbs({ ...view, celex: "12016E/TXT" }, { locale: "en" });
+  assert.equal(slashed[1].part, "act");
+  assert.equal(slashed[1].href, "/en/eu-eurlex/12016E%2FTXT");
   for (const wording of view.wordings) {
     for (const words of [versionWords(view, wording, EN), versionWords(view, wording, FR)]) {
       assert.doesNotMatch(words, /\b(?:appl(?:y|ies|ying|icability)|versions?|states?)\b|s[’']appliqu|applicab/i, words);

@@ -225,7 +225,7 @@ internal sealed partial class V3WebRoot
     {
         ArgumentNullException.ThrowIfNull(address);
         var match = SiteMatch(address);
-        return match is null ? address : match.Groups["work"].Success ? $"/lu-legilux/{match.Groups["work"].Value}" : match.Groups["celex"].Value;
+        return match is null ? address : match.Groups["work"].Success ? $"/lu-legilux/{match.Groups["work"].Value}" : V3CorpusMount.EuropeCelexOfSegment(match.Groups["celex"].Value)!;
     }
 
     /// <summary>
