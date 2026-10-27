@@ -499,6 +499,11 @@ public sealed class V3WebRootTests
                 (_, _) => "{\"result\":null,\"refusal\":{\"code\":\"identifier_unknown\"}}"u8.ToArray()));
             Assert.AreEqual(StatusCodes.Status404NotFound, unknown.Response.StatusCode, "a work the API does not know is a page that is not there");
             Assert.AreEqual("<!doctype html><p>dossier identifier_unknown /en/lu-legilux/no-such-work</p>", Body(unknown));
+            // An act the API does not hold (an EU act outside the EU population, R80) is a page that is not there either.
+            var outside = Request("GET", "/en/lu-legilux/no-such-work");
+            Assert.IsTrue(await root.TryServeAsync(outside, "/en/lu-legilux/no-such-work", CancellationToken.None,
+                (_, _) => "{\"result\":null,\"refusal\":{\"code\":\"out_of_corpus_scope\"}}"u8.ToArray()));
+            Assert.AreEqual(StatusCodes.Status404NotFound, outside.Response.StatusCode, "an act the API does not hold is a page that is not there");
 
             foreach (var (what, answer) in new (string, Func<V3SitePage, CancellationToken, byte[]?>?)[]
             {

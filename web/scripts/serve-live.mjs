@@ -149,7 +149,8 @@ async function renderSitePage(page, pathname, apiOrigin, renderer, deadlineMs) {
   } catch {
     return null;
   }
-  return { status: code === "identifier_unknown" ? 404 : 200, html };
+  // A work the API does not know, or an act it does not hold (an EU act outside the EU population, R80), is a page that is not there.
+  return { status: code === "identifier_unknown" || code === "out_of_corpus_scope" ? 404 : 200, html };
 }
 
 /**

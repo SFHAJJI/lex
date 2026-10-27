@@ -4,6 +4,49 @@ Updated 2026-10-27. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Truth and coverage: the six overclaims narrowed, R80, R79, R78/R82/R12 on Coverage, R62 and R65 (sole driver, 2026-10-27)
+
+The audit of 2026-10-27 (`C:\lex-v3\AUDIT-2026-10-27.md`, "Overclaims") found six public sentences that claimed more than the
+code does. Branch `writer/truth-and-coverage`, from v3/integration a0958bb9 (#1001 merged in at the start).
+- **The six overclaims**, each narrowed to what is true, in English and French:
+  - EU dossier and search: the other-languages row no longer says French is not acquired; it says Lex acquires the English and
+    French expressions of EU acts only (Decision 89) and EUR-Lex publishes an act's other language versions where they
+    exist (`V3CorpusMount`).
+  - Developers G3: the code can keep earlier builds by a retention rule; Lex does not keep them yet, the release holds only the
+    build its server mounts, so a version is re-verifiable only while a kept build holds its text (R89; no funding claim).
+  - Evaluation card: above its verdict, a line names the gates it holds (from the card) and what it does not hold: the data
+    gates, answer quality, speed, two systems, and the refusal codes no operation sends (from the refusal census).
+  - Privacy notice: the no-logging test runs on the server's own code before deployment; the hosting is set up from a template
+    with no log store; its settings once deployed are not tested this way. Driver decision (reversible): narrowed rather than
+    pinned in `main.bicep` with a probe check, which needs the managed environment in the template and Azure to test.
+  - How to read Lex: a textless version is named, and why, when Lex holds another version of the act (true whether or not
+    `writer/catalogue-and-compare`, R77, lands).
+  - Home page: history and comparison are said of a Luxembourg act of which more than one version is held.
+- **R80**: an EU act the mounted EU population does not hold, named by its CELEX (as typed, after "CELEX:", in an EUR-Lex or
+  Publications Office address; sectors 0 to 4; a consolidated version or corrigendum read as its act), answers
+  `out_of_corpus_scope` (class `eu_act_outside_population`): the rule with the number of seed acts the index holds, the act's
+  EUR-Lex page, the Publications Office as who to ask, no list or digest (`V3CorpusMount.Scope.cs`). Only the request's
+  `identifier` is read; a sector-5 document stays `identifier_unknown`; a case stays the list's `eu_case_law`. Every screen
+  says it in its own sentence (`OUTSIDE_EU_POPULATION_SENTENCE`), never "a kind Lex never holds". A law page whose answer is that refusal
+  is a 404, as an unknown work's is, in both servers (`V3WebRoot.AnswersUnknownWork`, `serve-live.mjs`).
+- **R79 (E3)**: the Luxembourg dossier on index 9 carries `force`, the work's and its act as published's own `inForceStatus`,
+  `dateEntryInForce` and `dateNoLongerInForce`, verbatim (`V3CorpusMount.Force.cs`); the page says the status token, "Entry into
+  force" and "End of force" with the publisher's record, and that this is not a reading for anyone's situation (R21 held).
+- **R78, R82, R12**: coverage on index 9 carries `declared_scope`: every recognized Luxembourg class not held (the publisher's
+  codes but CODE, LOI and RGD, with the Mémorial B and communal regulations), each with a closed disposition; the EU languages
+  held of the 24 official ones; when Lex's own observations begin per publisher (the mounted log's first build, or the EU
+  collection's end from the build report, or not stated). Shown in both renderers; R26's EU sentence names no language.
+- **R62**: touch targets of 44 px (links in lists, summaries, controls, the info control). **R65**: a copy button under each
+  citation form, rendered only after the script finds `navigator.clipboard.writeText`; the server renders none.
+- **Not done**: the home page's robots marker per state in the deploy probe (#993's F2): `data/release-checks-ops` owns the
+  probe, and the driver's instruction kept this slice out of `deploy-probe.mjs`. ARGD has no name on Coverage (token only).
+- **Legacy answers**: the EU schema-5 answers recorded again on Linux (WSL Ubuntu 24.04.4, .NET 10.0.400, invariant
+  globalization, UTC) at 81fc8ac1: 15 rows, 3 moved by the other-languages sentence alone. Schema 8 and 6 did not move (the new
+  members are index 9's).
+- **French** (Decision 41): one independent reviewer (Claude, AI reviewer, not the author), the addendum of 2026-10-27 "truth
+  and coverage" and its supplement in `C:\lex-v3\lanes\fr-review\review.md`: 58 forms, 19 changed in French, applied byte for
+  byte; the English changed for truth in three (EUR-Lex publishes the other languages only where they exist).
+
 ## Review and repair (#998): G2 exact, the change policy's digest, MCP failures, the out-of-scope forms (sole driver, 2026-10-27)
 
 The review of #998 (`writer/api-gaps` at 0bb59e65, the other model family, Decision 95) said REPAIR, with its scripts in the

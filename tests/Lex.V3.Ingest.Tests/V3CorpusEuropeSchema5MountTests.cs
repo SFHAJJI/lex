@@ -22,7 +22,7 @@ namespace Lex.V3.Ingest.Tests;
 /// answers were recorded again at v3/integration e504d188 (#989 gives every answer its freshness and commits context), by
 /// that code with this class alone added, on Linux, the files unchanged; and again at 9b28c5c3 (the API's gaps, the plan's
 /// items 6.10 and 8.6), on Linux, each row moving by its registry identity alone and coverage by its operations note and rows; and
-/// again at 1cd0ef62 (truth and coverage), on Linux, three rows moving by the other-languages sentence alone.
+/// again at 81fc8ac1 (truth and coverage), on Linux, three rows moving by the other-languages sentence alone.
 /// </summary>
 [TestClass]
 public sealed class V3CorpusEuropeSchema5MountTests
@@ -35,10 +35,10 @@ public sealed class V3CorpusEuropeSchema5MountTests
 
     // The commit the answers were last recorded at, on Linux: e504d188, the code without force dates, then 9b28c5c3 (the API's
     // gaps, 2026-10-27), where every row moved by its registry identity alone (lex-v3-operation-registry/2 and its digest) and
-    // coverage by its operations note and rows too, then 320c0f20 (over #995: the registry digest alone), then 1cd0ef62 (truth and
+    // coverage by its operations note and rows too, then 320c0f20 (over #995: the registry digest alone), then 81fc8ac1 (truth and
     // coverage, 2026-10-27: the three EU dossier and search rows by their other-languages sentence alone, which no longer says
     // French is not acquired).
-    private const string RecordedAtCommit = "1cd0ef62";
+    private const string RecordedAtCommit = "81fc8ac1";
 
     private static byte[] Fixture(string name) =>
         File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuSchema5Mount", name));
@@ -91,7 +91,7 @@ public sealed class V3CorpusEuropeSchema5MountTests
 
     /// <summary>
     /// Every recorded request, asked again of the same committed files, answers the same bytes. The answers were recorded at
-    /// the base (24118293 on Windows, again at e504d188, 9b28c5c3, 320c0f20 and 1cd0ef62 on Linux); nothing in an EU answer reads the system (paths, culture or
+    /// the base (24118293 on Windows, again at e504d188, 9b28c5c3, 320c0f20 and 81fc8ac1 on Linux); nothing in an EU answer reads the system (paths, culture or
     /// clock: the handler answers at one fixed observation time), and every system is held to them.
     /// </summary>
     [TestMethod]

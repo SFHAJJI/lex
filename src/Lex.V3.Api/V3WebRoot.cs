@@ -689,7 +689,10 @@ internal sealed partial class V3WebRoot
 
     private static readonly Regex CalendarDate = new("^[0-9]{4}-[0-9]{2}-[0-9]{2}\\z", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
 
-    /// <summary>Whether an envelope is the refusal of a work the API does not know: its page is a 404, as an absent page is.</summary>
+    /// <summary>
+    /// Whether an envelope is the refusal of a work the API does not know or does not hold (<c>identifier_unknown</c>, or
+    /// <c>out_of_corpus_scope</c>: an EU act outside the EU population, R80): its page is a 404, as an absent page is.
+    /// </summary>
     private static bool AnswersUnknownWork(byte[] envelope)
     {
         try
@@ -698,7 +701,7 @@ internal sealed partial class V3WebRoot
             return document.RootElement.TryGetProperty("refusal", out var refusal) &&
                 refusal.ValueKind == JsonValueKind.Object &&
                 refusal.TryGetProperty("code", out var code) &&
-                string.Equals(code.GetString(), "identifier_unknown", StringComparison.Ordinal);
+                code.GetString() is "identifier_unknown" or "out_of_corpus_scope";
         }
         catch (JsonException)
         {
