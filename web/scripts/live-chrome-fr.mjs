@@ -259,6 +259,17 @@
 // contradict by one; the lag is "le décalage entre publication et collecte", never "délai"; a commit is a "révision du
 // code", never "commit" or "version"; a channel's texts are "provenant de" their publisher; the region is "Mise à jour des
 // données"; the English changed with the count and the banner, and says "(not recorded)").
+// The three reference pages (Get help, How to read Lex and its glossary, Developers; the specification of record's launch
+// set, R42, R46, R48, R50, R55): every form of the sections `reference`, `help`, `guide` and `developers` (242 forms) was
+// reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the same delegation in the addendum of
+// 2026-10-27 "the three reference pages, Get help, How to read Lex and its glossary, and Developers" (59 changed in review,
+// the English too in 31: a Luxembourg version runs "jusqu’à la veille de la date de fin que Legilux lui donne", never "jusqu’à
+// la fin", since the end the publisher states is the first day not covered; Lex never chooses between two versions "et que
+// leurs textes diffèrent", since it serves one of several held with one text; an article held without text is named apart,
+// never listed with the others; a permalink says first when the text it shows is not the one it pins; the freshness strip is
+// a region a screen reader names, and the staleness banner stands only on a page with an answer; an adviser is a
+// "conseiller"; the MCP transport keeps its name, "Streamable HTTP"; this release is "ce déploiement"), with the English of
+// `developers.operations.notServed` the review's point 6 suggested. Its vocabulary rows are added below.
 // No French entry ships unreviewed.
 //
 // Vocabulary: a work is an "acte" (a publisher's Cellar work, one record of an EU act, is an "œuvre de l’éditeur"), a
@@ -266,6 +277,10 @@
 // Luxembourg article from state to state) is a "libellé", never a "rédaction" or a "formulation", and an EU date is never
 // "applicable"; held is "détenu", never "disponible"; a build is a "déploiement"; legal advice is "consultation
 // juridique"; the publisher's record is "les données de l’éditeur" (never "registre", which is the operations registry).
+// On the reference pages (the addendum of 2026-10-27): an adviser is a "conseiller", never "conseil", which stays the advice;
+// this release (the server that runs) is "ce déploiement"; the MCP transport is "le transport Streamable HTTP", its name kept,
+// never "HTTP en flux"; a text "sert de réponse pour" a date, never "répond à"; a gap in the catalogue is an "intervalle sans
+// version", "vide" being kept for "vide juridique"; the site "connaît une défaillance", never "est en défaut".
 // An EU act's force dates (the plan's item 2.1; R79's E1, R21): the seventeen forms of `common.europeForceDates` (the
 // heading, the six roles, `notPinnedNoCode`, `openEnd`, `qualifier`, the four role names, `notHeld`, `conflict` and
 // `notWording`) were reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the same delegation

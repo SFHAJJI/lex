@@ -382,7 +382,7 @@ test("the forms the French review pinned say what the platform does, and the Fre
   // The counted refusal sentence reads right for 0 and 1 in French and for 1 in English.
   for (const [language, count] of [["fr", 0], ["fr", 1], ["en", 1], ["en", 20]]) {
     const said = fillCounted(LIVE_CHROME[language].developers.refusals.text, count, { refuse: "refuse", schema: "lex-v3-refusal/1" }, language);
-    assert.doesNotMatch(said, /l’un des \d+ code|one of \d+ code/, `${language} ${count}`);
+    assert.doesNotMatch(said, /l’un des \d+ code\b|one of \d+ code\b/, `${language} ${count}`);
     assert.ok(said.includes(String(count)), `${language} ${count}`);
   }
   // The glossary's French definition of a plural term agrees with it.
@@ -391,7 +391,7 @@ test("the forms the French review pinned say what the platform does, and the Fre
   // Words the review refused in these pages' French: Lex's texts are never "sur Lex", the MCP transport is never "HTTP en
   // flux", this release is never "version du site", a text "sert de réponse pour" a date, the site "connaît une
   // défaillance", and a catalogue gap is an "intervalle sans version" ("vide" is kept for "vide juridique").
-  const refused = [/sur Lex/, /HTTP en flux/, /version du site/, /répond à la date/, /est en défaut/, /(?:un|le|ce|’un) vide(?! juridique)/, /^Vides$/, /conseil de votre choix/, /aucun conseil/];
+  const refused = [/\bsur Lex\b/, /HTTP en flux/, /version du site/, /répond à la date/, /est en défaut/, /(?:\bun|\ble|\bce|’un) vide(?! juridique)/, /^Vides$/, /conseil de votre choix/, /aucun conseil\b/];
   for (const [path, text] of entriesOf(FR).filter(([one]) => SECTIONS.test(one))) {
     for (const pattern of refused) assert.doesNotMatch(text, pattern, `fr ${path}`);
   }
