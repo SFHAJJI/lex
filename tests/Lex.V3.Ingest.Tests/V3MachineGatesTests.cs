@@ -475,7 +475,6 @@ public sealed class V3MachineGatesTests
         return directory?.FullName ?? throw new InvalidOperationException("The repository root holds Lex.V3.slnx.");
     }
 
-    /// <summary>The codes the refusal census records as produced by the served operations.</summary>
     /// <summary>The refusal set's case of a client past its minute of API requests (R109).</summary>
     private const string PastItsMinute = "a-client-past-its-minute";
 
@@ -517,6 +516,7 @@ public sealed class V3MachineGatesTests
         return V3EnvelopeJson.ParseAndVerify(ResponseBytes(limited), V3OperationRegistry.Reviewed);
     }
 
+    /// <summary>The codes the refusal census records as produced by the served operations.</summary>
     private static string[] ProducedCodes()
     {
         using var census = JsonDocument.Parse(File.ReadAllText(Path.Combine(

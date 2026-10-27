@@ -38,11 +38,18 @@ run today. It names no person: "the owner" and "the driver" are roles.
   the server to it.
 - **The per-client limit** (R109, R46; `src/Lex.V3.Api/V3ClientLimiter.cs`): 60 API requests (REST or MCP) a minute per
   client, at most 4 at once, then the typed refusal `rate_limited` with status 429 and `Retry-After`; pages the server
-  renders, 300 a minute, then served as built; the site's other files are not counted. The client is the connection's
+  renders, 300 a minute, each render holding one of the 4 places while it runs, and past either served as built; the
+  site's other files are not counted. The client is the connection's
   address, or behind the platform's ingress the address it forwards, hashed at once with a key drawn at random for the
   process and replaced every day; only the hash and the counts are held, in memory, and each entry is forgotten about two
   minutes after the client's last request. A request from inside the host with no forwarded address (the platform's
   probes, the journeys, a release's own image run) is not counted. The privacy notice says so.
+  - **What the tests do not prove.** The server's tests drive the handler with a made-up connection and header; none of
+    them can see Container Apps' ingress, so none proves that the ingress forwards each reader's own address in
+    `X-Forwarded-For`. That is the platform's documented behaviour and an assumption here. It is checked on each
+    candidate before promotion, from two addresses (INCIDENT-RUNBOOK.md, section 3, "Before promoting"): if the
+    ingress forwarded nothing, the limit would count no one; if it forwarded one address for everyone, the whole site
+    would share one bucket.
 - **Security headers** on every answer (`src/Lex.V3.Api/V3HostHeaders.cs`): HSTS for a year with subdomains,
   `Referrer-Policy: no-referrer`, `nosniff`, and a Content-Security-Policy: the page's own reviewed policy with
   `frame-ancestors 'none'`, or `default-src 'none'; frame-ancestors 'none'` for every answer that is no page.
@@ -105,7 +112,15 @@ A data refresh and a release are four steps, each with its own evidence:
   ready; a data age past the maximum stops promotion (exit 3);
 - a bound domain is read back and kept, and a failed read stops the deployment;
 - since the opening every deployment says `-Public`, which stops if any address rule exists;
-- promotion, rollback and the deactivation of the previous revision are printed for the owner, never run.
+- since #992, each deployment makes a revision of its own, `ca-lex-v3--<the release's suffix>-<8 hex digits of a SHA-256
+  over its settings>` (the image, `-SearchEngines`, `-Public`, the address ranges and `deploy/main.bicep`); a revision that
+  already exists is refused before anything changes, and is activated and probed by hand instead (INCIDENT-RUNBOOK.md,
+  section 3); a redeployment must name the revision serving now with `-LiveRevision`, one of the app's; and the kit
+  deactivates only a revision it made;
+- since #993, the probe is handed `-SearchEngines` as `--search-engines` and holds robots.txt and the sitemap to it;
+- promotion, rollback and the deactivation of the previous revision are printed for the owner, never run; the runbook's
+  blocks for them stop at a failed step, wait until the target is running and healthy, and deactivate only once the
+  traffic reads 100 per cent on the target (`web/test/runbook-blocks.test.mjs`).
 
 ## 5. Freshness and the 30-day limit
 
@@ -152,5 +167,4 @@ Not yet watched from outside: latency budgets, error rates and restarts (R107); 
 - DNS, the key set and a fallback page outside the subscription (R117, O14), and a maintenance revision that can be
   switched on at night (the plan's item 10.14).
 - A second signer with its own key (R116, O16).
-- The deploy kit's fix for redeploying the live release (`writer/deploy-live-safe`).
 - Latency, error-rate and restart alerts (R107), and the load test that re-sizes the limit (R109).

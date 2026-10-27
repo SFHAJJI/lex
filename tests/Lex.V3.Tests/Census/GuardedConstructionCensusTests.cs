@@ -73,7 +73,9 @@ public sealed class GuardedConstructionCensusTests
                     + "constructor private static Lex.V3.Api.V3ClientLimiter::.cctor",
                 "Lex.V3.Api.V3ClientLimiter+Admission: constructor internal instance "
                     + "Lex.V3.Api.V3ClientLimiter+Admission::.ctor, "
-                    + "method internal instance Lex.V3.Api.V3ClientLimiter::AdmitApi",
+                    + "method internal instance Lex.V3.Api.V3ClientLimiter::AdmitApi, "
+                    + "method internal instance Lex.V3.Api.V3ClientLimiter::AdmitRender, "
+                    + "method private instance Lex.V3.Api.V3ApiHandler::AdmitRender",
                 "Lex.V3.Api.V3CorpusMount: constructor private instance "
                     + "Lex.V3.Api.V3CorpusMount::.ctor, "
                     + "constructor private static Lex.V3.Api.V3CorpusMount::.cctor, "

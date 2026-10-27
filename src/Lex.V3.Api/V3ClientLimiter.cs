@@ -17,7 +17,8 @@ namespace Lex.V3.Api;
 /// "concurrency cap on costly operations": on one vCPU every operation is a costly one, and a page asks one at a time). Over
 /// either, the answer is the typed refusal <c>rate_limited</c> with <c>Retry-After</c>.</description></item>
 /// <item><description>The pages the server renders from its own answer (R67): <see cref="RendersPerMinute"/> a minute, well above
-/// the API's (R46). Over it, the page is served as built and asks for itself, as when the renderer is busy; no page is refused.
+/// the API's (R46), each render holding one of the client's <see cref="ApiInFlight"/> places while it runs. Over the budget, or
+/// with every place taken, the page is served as built and asks for itself, as when the renderer is busy; no page is refused.
 /// Every other file of the site is not counted at all.</description></item>
 /// </list>
 /// </para>
@@ -232,14 +233,16 @@ internal sealed class V3ClientLimiter
     }
 
     /// <summary>
-    /// Whether the server may render one page for <paramref name="client"/> from its own answer, taking a token if so; a
-    /// request with no client may always. A page that may not is served as built.
+    /// Admits one page render for <paramref name="client"/> from the server's own answer, or not: refused while the client has
+    /// <see cref="ApiInFlight"/> requests being answered (a render is one of them: it asks the mount and runs the renderer, so
+    /// it holds one of the client's in-flight places until it is disposed; the review of #995, F2), or with no render token
+    /// left. A request with no client is always admitted. A page whose render is refused is served as built.
     /// </summary>
-    internal bool AdmitRender(Client? client)
+    internal Admission AdmitRender(Client? client)
     {
         if (client is not { } known)
         {
-            return true;
+            return new Admission(null, null, 0);
         }
 
         lock (_gate)
@@ -248,16 +251,17 @@ internal sealed class V3ClientLimiter
             RotateIfDue(now);
             if (EntryFor(known, now) is not { } entry)
             {
-                return true;
+                return new Admission(null, null, 0);
             }
 
-            if (entry.RenderTokens < 1)
+            if (entry.InFlight >= ApiInFlight || entry.RenderTokens < 1)
             {
-                return false;
+                return new Admission(null, null, 1);
             }
 
             entry.RenderTokens -= 1;
-            return true;
+            entry.InFlight += 1;
+            return new Admission(this, known, 0);
         }
     }
 

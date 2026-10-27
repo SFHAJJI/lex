@@ -23,14 +23,14 @@ public sealed class V3ClientLimitTests
         public override DateTimeOffset GetUtcNow() => ObservedAt;
     }
 
-    private static async Task<DefaultHttpContext> PostAsync(V3ApiHandler handler, string rawTarget, string body)
+    private static async Task<DefaultHttpContext> PostAsync(V3ApiHandler handler, string rawTarget, string body, string from = "203.0.113.77")
     {
         var bytes = Encoding.UTF8.GetBytes(body);
         var context = new DefaultHttpContext { TraceIdentifier = "client-limit" };
         context.Request.Method = HttpMethods.Post;
         context.Request.Body = new MemoryStream(bytes);
         context.Request.ContentLength = bytes.Length;
-        context.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.77");
+        context.Connection.RemoteIpAddress = IPAddress.Parse(from);
         context.Features.Get<IHttpRequestFeature>()!.RawTarget = rawTarget;
         context.Response.Body = new MemoryStream();
         await handler.HandleAsync(context, CancellationToken.None);
@@ -38,7 +38,7 @@ public sealed class V3ClientLimitTests
     }
 
     [TestMethod]
-    public async Task OverAMountTheRefusalIsTheMountsOwnEnvelopeOverRestAndMcpAlike()
+    public async Task OverAMountTheRefusalIsTheMountsOwnEnvelopeOverRestAndMcpAlikeAndTheMountIsNotAsked()
     {
         var fixture = await MountedFixture.CreateAsync();
         await using var cleanup = fixture;
@@ -56,6 +56,9 @@ public sealed class V3ClientLimitTests
             Assert.AreEqual(StatusCodes.Status200OK, answered.Response.StatusCode, $"request {index + 1}");
         }
 
+        // The mount is not asked (the review of #995, F5): from here it is disposed, so a request that asked it could not be
+        // answered (the control, another client, below), and the refused client's answers still come.
+        mount.Dispose();
         var refused = await PostAsync(handler, "/api/v3/dossier", body);
         Assert.AreEqual(StatusCodes.Status429TooManyRequests, refused.Response.StatusCode);
         Assert.AreEqual("1", refused.Response.Headers.RetryAfter.ToString());
@@ -81,5 +84,10 @@ public sealed class V3ClientLimitTests
         using var tool = JsonDocument.Parse(ResponseBytes(mcp));
         Assert.IsTrue(JsonElement.DeepEquals(refusal.RootElement, tool.RootElement.GetProperty("result").GetProperty("structuredContent")),
             "REST and MCP answer one envelope (the launch contract)");
+
+        // The control: another client, admitted, asks the disposed mount and is not answered with the law.
+        var asking = await PostAsync(handler, "/api/v3/dossier", body, from: "203.0.113.78");
+        Assert.AreNotEqual(StatusCodes.Status200OK, asking.Response.StatusCode, "a request that asks the disposed mount cannot be answered, so the refusals above asked it nothing");
+        Assert.AreNotEqual(StatusCodes.Status429TooManyRequests, asking.Response.StatusCode, "and the control was admitted");
     }
 }

@@ -127,6 +127,22 @@ internal sealed class V3ApiHandler
         _limiter.ClientOf(context.Connection.RemoteIpAddress, context.Request.Headers[V3ClientLimiter.ForwardedForHeader].ToString());
 
     /// <summary>
+    /// One page render's place for the request's client (<see cref="V3ClientLimiter.AdmitRender"/>), held until it is disposed,
+    /// or null when the client's render budget or in-flight places are spent, and the page is then served as built.
+    /// </summary>
+    private V3ClientLimiter.Admission? AdmitRender(HttpContext context)
+    {
+        var admission = _limiter.AdmitRender(ClientOf(context));
+        if (admission.Admitted)
+        {
+            return admission;
+        }
+
+        admission.Dispose();
+        return null;
+    }
+
+    /// <summary>
     /// The outcome of an operation request over its client's limit (R109): the typed refusal <c>rate_limited</c>, with the wait
     /// and <c>retryable</c>, in the mounted corpus's refusal context, or with no corpus mounted the unmounted one; the same
     /// over REST and MCP. Nothing is asked of the mount.
@@ -238,7 +254,7 @@ internal sealed class V3ApiHandler
         // below, the synthetic routes, or with no preview the unknown route. A readable address asks for today in Luxembourg
         // (R13), by this server's clock. A page rendered from the API's own answer is counted against its client's render
         // budget (R46, V3ClientLimiter), and over it is served as built; no other file is counted.
-        if (_webRoot is not null && await _webRoot.TryServeAsync(context, rawTarget, cancellationToken, AnswerFor(context), LuxembourgToday, () => _limiter.AdmitRender(ClientOf(context))).ConfigureAwait(false))
+        if (_webRoot is not null && await _webRoot.TryServeAsync(context, rawTarget, cancellationToken, AnswerFor(context), LuxembourgToday, () => AdmitRender(context)).ConfigureAwait(false))
         {
             return;
         }

@@ -200,14 +200,67 @@ public sealed class V3ClientLimiterTests
         Assert.IsGreaterThanOrEqualTo(5 * V3ClientLimiter.ApiPerMinute, V3ClientLimiter.RendersPerMinute, "R46: the site's own pages sit well above the API's limit");
         for (var index = 0; index < V3ClientLimiter.RendersPerMinute; index++)
         {
-            Assert.IsTrue(limiter.AdmitRender(client), $"render {index + 1}");
+            using var render = limiter.AdmitRender(client);
+            Assert.IsTrue(render.Admitted, $"render {index + 1}");
         }
 
-        Assert.IsFalse(limiter.AdmitRender(client));
-        Assert.IsTrue(limiter.AdmitApi(client).Admitted, "the two budgets are apart");
-        Assert.IsTrue(limiter.AdmitRender(null));
+        Assert.IsFalse(limiter.AdmitRender(client).Admitted);
+        using (var api = limiter.AdmitApi(client))
+        {
+            Assert.IsTrue(api.Admitted, "the two budgets are apart");
+        }
+
+        Assert.IsTrue(limiter.AdmitRender(null).Admitted);
         time.Advance(TimeSpan.FromSeconds(1));
-        Assert.IsTrue(limiter.AdmitRender(client), "five come back each second");
+        using var again = limiter.AdmitRender(client);
+        Assert.IsTrue(again.Admitted, "five come back each second");
+    }
+
+    [TestMethod]
+    public void ARenderHoldsOneOfTheClientsFourPlacesSoFourRequestsAnsweredAtOnceLeaveNoneForAPageAndTheReverse()
+    {
+        // The review of #995, F2: a server-rendered page asks the mount and runs the renderer, so it is one of the client's
+        // requests answered at once, and the in-flight cap holds renders too.
+        var (limiter, _) = Limiter();
+        var client = Public(limiter, "203.0.113.77");
+        var apis = Enumerable.Range(0, V3ClientLimiter.ApiInFlight).Select(_ => limiter.AdmitApi(client)).ToList();
+        Assert.IsTrue(apis.All(static admission => admission.Admitted));
+        using (var page = limiter.AdmitRender(client))
+        {
+            Assert.IsFalse(page.Admitted, "four API requests being answered: the page is served as built, not rendered");
+        }
+
+        apis[0].Dispose();
+        var render = limiter.AdmitRender(client);
+        Assert.IsTrue(render.Admitted, "a place free: the page is rendered");
+        using (var fifth = limiter.AdmitApi(client))
+        {
+            Assert.IsFalse(fifth.Admitted, "the render holds the fourth place while it runs");
+            Assert.AreEqual(1, fifth.RetryAfterSeconds);
+        }
+
+        render.Dispose();
+        using (var after = limiter.AdmitApi(client))
+        {
+            Assert.IsTrue(after.Admitted, "the render's place is freed once it is done");
+        }
+
+        foreach (var admission in apis)
+        {
+            admission.Dispose();
+        }
+
+        var renders = Enumerable.Range(0, V3ClientLimiter.ApiInFlight).Select(_ => limiter.AdmitRender(client)).ToList();
+        Assert.IsTrue(renders.All(static admission => admission.Admitted), "four renders at once");
+        using (var fifthRender = limiter.AdmitRender(client))
+        {
+            Assert.IsFalse(fifthRender.Admitted, "and a fifth at once is served as built");
+        }
+
+        foreach (var admission in renders)
+        {
+            admission.Dispose();
+        }
     }
 
     [TestMethod]

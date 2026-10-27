@@ -4,6 +4,55 @@ Updated 2026-10-27. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Review and repair (#995): the runbook's blocks stop at a failed step, renders hold a place, the ingress checked by hand (sole driver, 2026-10-27)
+
+The one repair round of #995 (`writer/platform-ops` at ef99b6cc), after its one review: REPAIR, five findings. Each was
+reproduced first.
+- **F1 (medium), the runbook's blocks.** As written, the promotion lines (`traffic set`, then `revision deactivate $live`)
+  ran on after a failed traffic move: PowerShell does not stop when a native command fails, the pattern of 2026-10-27.
+  Reproduced with the reviewer's `promote-block.ps1` and its made-up `az`: the deactivation ran. The rollback read
+  "Healthy" once instead of waiting.
+  - **Repair** (`docs/INCIDENT-RUNBOOK.md`, section 3): every block that changes something is one `& { ... }` with an
+    `if ($LASTEXITCODE -ne 0) { ...; return }` after each command, so pasted whole it stops at the first failure and says
+    so. Moving traffic (a rollback, a forward move, a promotion) is three blocks: activate; wait until the target is active,
+    running and healthy (ten minutes at most, every 15 seconds), move all traffic, and read it back through `ingress traffic
+    show`; deactivate the revision left only when the read traffic is 100 per cent on the target and none on it. The
+    deployment block stops when the revision serving now cannot be read.
+  - **Test** (`web/test/runbook-blocks.test.mjs`, 9): the marked blocks are pasted into pwsh under a made-up `az` that holds
+    the app's traffic, with the test's clock: a failed traffic move switches nothing off (the reviewer's repro); the normal
+    promotion's order (three reads while the target warms, two waits, the move, the read-back, one deactivation); a target
+    never healthy moves no traffic; a move that does not take is caught by the read-back; an unreadable revision or traffic
+    stops its block; a failed activation stops; the deployment block passes `-LiveRevision`; the first half of the
+    two-address check. A mutation that drops the read-back guard fails four of them. The reviewer's repro, re-run against
+    the new blocks with its made-up `az`: "Moving the traffic ... failed: stop here" and "nothing deactivated", where the
+    old lines ran the deactivation.
+- **F2 (low-medium), server-rendered pages bypassed the concurrency cap.** `AdmitRender` took a token and no place, so a
+  client could run any number of renders at once.
+  - **Repair:** a render holds one of the client's four in-flight places while the mount is asked and the page rendered
+    (`V3ClientLimiter.AdmitRender` returns an admission; `V3WebRoot.TryServeAsync` holds it, then gives it back). With four
+    requests being answered, the page is served as built; a render in flight leaves three places for API requests.
+  - **Tests:** `V3ClientLimiterTests.ARenderHoldsOneOfTheClientsFourPlaces…` and
+    `V3HostAnswerTests.APageIsServedAsBuiltWhileTheClientHasFourRequestsBeingAnswered`; the census pins the two new doors.
+  - **Text:** unchanged. The Developers page's "at most four being answered at once" and "past it [the budget], a page is
+    sent as built; no page is refused" stay true, and so does the privacy notice; OPERATING.md says renders hold a place.
+- **F3, the platform assumption.** No test of this pull request can see Container Apps' ingress, so whether it forwards
+  each reader's own address is an assumption, now said plainly in OPERATING.md ("What the tests do not prove"), and checked
+  by hand before each promotion: the runbook's two-address check spends one address's minute at the candidate's own
+  address (a 429 must come; none means the limit counts no one), then asks once from a second address within the minute
+  (a 200 must come; a 429 means one bucket for the whole site). The coordinator runs it against the candidate.
+- **F4, the integration.** v3/integration at 81782325 merged in (#992 deploy-live-safe, #993 the probe's search engines,
+  #994 the PDF door): OWNER-BRIEF.md and this file joined by hand, both kept. The runbook and OPERATING.md no longer say the
+  deploy fix is unmerged; they give the revision name `ca-lex-v3--<the release's suffix>-<8 hex digits of its settings>`,
+  and the kit's rules since #992 and #993 (a revision that exists is activated and probed by hand, a redeployment names
+  `-LiveRevision`, `--search-engines` goes to the probe), with the by-hand probe's command.
+- **F5:** `V3ClientLimitTests` now proves the mount is not asked: the mount is disposed before the refusals, which still
+  come over REST and MCP, while another client's admitted request, which asks the disposed mount, is not answered.
+  `V3MachineGatesTests`' summary of `ProducedCodes` is back on its method.
+- **Counts** (this PC, at the repaired head; no browser, no publisher traffic, nothing sent to Azure):
+  `dotnet build Lex.V3.slnx -c Release` 0 warnings; Lex.V3.Tests 3,348 (3,342 passed, 6 skipped); `V3ClientLimitTests` and
+  `PublicRequestRecordingTests` 14 passed; `npm run build` and `npm test` (Git Bash) 1,398 (1,395 passed, 3 skipped, the
+  browser tests CI runs); `eng/verify-v3-tree.ps1` 1,713 tracked paths.
+
 ## The per-client limit, the key set, the headers on every answer, the outside monitor and the runbook (sole driver, 2026-10-27)
 
 The specification of record's platform and "running it" lines (R109, R46, R116, the shell line and the plan's item 10.7,

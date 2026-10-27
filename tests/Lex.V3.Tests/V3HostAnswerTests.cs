@@ -301,4 +301,46 @@ public sealed class V3HostAnswerTests
             Directory.Delete(directory, recursive: true);
         }
     }
+
+    [TestMethod]
+    public async Task APageIsServedAsBuiltWhileTheClientHasFourRequestsBeingAnswered()
+    {
+        // The review of #995, F2: a render is one of the client's requests answered at once.
+        var directory = Path.Combine(Path.GetTempPath(), $"lex-v3-host-render-cap-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(Path.Combine(directory, "en"));
+        Directory.CreateDirectory(Path.Combine(directory, "ssr"));
+        File.WriteAllText(Path.Combine(directory, "en", "index.html"),
+            "<!doctype html><html><head><meta http-equiv=\"Content-Security-Policy\" content=\"default-src &#x27;self&#x27;\"></head><body>home</body></html>");
+        File.WriteAllText(Path.Combine(directory, "en", "dossier.html"), "<!doctype html><p>the dossier page as built</p>");
+        File.WriteAllText(Path.Combine(directory, "ssr", "en.js"), "globalThis.lexSsr = { render(kind) { return '<!doctype html><p>rendered ' + kind + '</p>'; } };");
+        try
+        {
+            var limiter = new V3ClientLimiter(new V3ClientLimiterTests.ManualTime(Now), static () => new byte[32]);
+            var handler = Handler(V3WebRoot.Open(directory)!, limiter);
+            const string dossier = "/en/lu-legilux/loi-1991-08-10-n3";
+            var client = limiter.ClientOf(IPAddress.Parse("203.0.113.77"), null);
+            var held = Enumerable.Range(0, V3ClientLimiter.ApiInFlight).Select(_ => limiter.AdmitApi(client)).ToList();
+            Assert.IsTrue(held.All(static admission => admission.Admitted));
+            var asBuilt = await AskAsync(handler, "GET", dossier);
+            Assert.AreEqual(StatusCodes.Status200OK, asBuilt.Response.StatusCode, "no page is refused");
+            Assert.AreEqual("<!doctype html><p>the dossier page as built</p>", Encoding.UTF8.GetString(Bytes(asBuilt)), "four answered at once: as built");
+            Assert.AreEqual("<!doctype html><p>rendered dossier</p>", Encoding.UTF8.GetString(Bytes(await AskAsync(handler, "GET", dossier, from: "203.0.113.78"))),
+                "another client's page is rendered");
+            held[0].Dispose();
+            Assert.AreEqual("<!doctype html><p>rendered dossier</p>", Encoding.UTF8.GetString(Bytes(await AskAsync(handler, "GET", dossier))), "a place free: rendered");
+            using (var fourth = limiter.AdmitApi(client))
+            {
+                Assert.IsTrue(fourth.Admitted, "the render gave its place back once the page was rendered");
+            }
+
+            foreach (var admission in held)
+            {
+                admission.Dispose();
+            }
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
 }
