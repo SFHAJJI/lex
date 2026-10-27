@@ -361,6 +361,18 @@
 // 2026-10-18 for this same check (never "particuliers" nor "personnes physiques", which a countersigning minister is too); the
 // claim is tied to the check ("D’après la vérification de Lex" / "According to Lex's check"), since a class is withheld whole
 // and an office holder named with an honorific is counted; and the link is the act's ("en suivant le lien officiel").
+// R77's records of the acts only the catalogue holds and R57's wording on Compare (writer/catalogue-and-compare): the 32
+// forms (`compare.intro`, the four hidden change markers, `jumpHeading`, `jumpItem`, `previousChange`, `nextChange`, the
+// three `wordingNotServed`, `wordingWhole`, every `refusalCard.catalogue` form, and `CATALOGUE_RECORD_SENTENCE` in
+// `REFUSALS_FR`) were reviewed by an independent reviewer (Claude, AI reviewer, not the author) under the same delegation in
+// the addendum of 2026-10-27 "R77's catalogue records and R57's compare wording" (12 changed in French, 8 with the
+// English; 5 blocking): a compared side is named by its date's label, "à la date de départ" / "à la date d’arrivée", never
+// "antérieure" / "postérieure", since the page does not order its dates; a run struck or underlined is "texte", never
+// "mots"; a comparison shown whole keeps the beginning and end its texts share ("d’un seul tenant"); a reason names the
+// "fichiers XML et PDF" it reads, never every file; after "l’éditeur" the text is "le texte français de l’acte", never "son
+// texte français"; isPartOf "rattache" an act to its "Mémorial A n° …" (an ordinary space, as the citation's); an entry
+// into force is a labelled line, since a record may carry two dates; and this site's record of an act is its "notice", the
+// publisher's record staying "les données de l’éditeur".
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
 
@@ -671,7 +683,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Comparer',
     eyebrow: 'Comparer',
     heading: 'Deux versions, article par article',
-    intro: 'Les versions d’un acte luxembourgeois applicables à deux dates, comparées selon les identifiants d’article et le libellé de l’éditeur, sans rien affirmer sur l’effet juridique ; le libellé modifié est affiché, les mots supprimés barrés et les mots insérés soulignés. L’identifiant et les dates sont envoyés à ce serveur dans la requête et figurent dans l’adresse de cette page, afin qu’une comparaison puisse être partagée et lue sans JavaScript ; cette page ne conserve rien.',
+    intro: 'Les versions d’un acte luxembourgeois applicables à deux dates, comparées selon les identifiants d’article et le libellé de l’éditeur, sans rien affirmer sur l’effet juridique ; le libellé modifié est affiché, le texte supprimé barré et le texte inséré souligné. L’identifiant et les dates sont envoyés à ce serveur dans la requête et figurent dans l’adresse de cette page, afin qu’une comparaison puisse être partagée et lue sans JavaScript ; cette page ne conserve rien.',
     idle: 'Saisissez un identifiant d’acte et deux dates pour comparer les versions applicables à ces dates.',
     summary: '{work} : {from} comparé au {to}.',
     summaryIn: '{work} : {from} comparé au {to}, en {language}.',
@@ -711,11 +723,11 @@ export const LIVE_CHROME_FR = Object.freeze({
     previousChange: 'Modification précédente',
     nextChange: 'Modification suivante',
     wordingNotServed: Object.freeze({
-      from: 'Le libellé de cet article n’est pas affiché : ce site ne communique pas le texte de la version antérieure.',
-      to: 'Le libellé de cet article n’est pas affiché : ce site ne communique pas le texte de la version postérieure.',
+      from: 'Le libellé de cet article n’est pas affiché : ce site ne communique pas le texte de la version à la date de départ.',
+      to: 'Le libellé de cet article n’est pas affiché : ce site ne communique pas le texte de la version à la date d’arrivée.',
       both: 'Le libellé de cet article n’est pas affiché : ce site ne communique le texte d’aucune des deux versions.',
     }),
-    wordingWhole: 'Cet article a trop changé pour être comparé ici mot à mot : son texte antérieur est affiché comme supprimé et son texte postérieur comme inséré, chacun en entier.',
+    wordingWhole: 'Cet article a trop changé pour être comparé ici mot à mot : hormis le début et la fin éventuellement communs à ses deux textes, son texte à la date de départ est affiché comme supprimé et son texte à la date d’arrivée comme inséré, chacun d’un seul tenant.',
   }),
   radar: Object.freeze({
     title: 'Radar',
@@ -900,19 +912,19 @@ export const LIVE_CHROME_FR = Object.freeze({
       held: 'Cet acte figure dans le catalogue de l’éditeur, et ce site n’en détient aucun texte : {why}.',
       heldRead: 'Cet acte figure dans le catalogue de l’éditeur, tel que ce site l’a lu au plus tard le {read}, et ce site n’en détient aucun texte : {why}.',
       reasons: Object.freeze({
-        catalogue_licence_scl: 'l’éditeur place tous les fichiers de son texte français sous la licence licenceSCL, sous laquelle ce site ne reproduit aucun texte',
-        catalogue_licence_scl_in_part: 'l’éditeur place certains fichiers de son texte français sous la licence licenceSCL et les autres sous une autre licence, et ce site n’en détient aucun',
-        catalogue_cc_by_not_acquired: 'l’éditeur place les fichiers de son texte français sous la licence CC BY 4.0, et ce site ne les a pas acquis',
-        catalogue_no_or_other_licence: 'le catalogue de l’éditeur n’indique aucune licence pour les fichiers de son texte français, ou en indique une autre, et ce site n’en détient aucun',
-        catalogue_no_xml_or_pdf_manifestation: 'le catalogue de l’éditeur ne nomme aucun fichier XML ou PDF de son texte français',
-        catalogue_translations_only: 'le catalogue de l’éditeur ne nomme son texte que dans d’autres langues que le français',
+        catalogue_licence_scl: 'l’éditeur place tous les fichiers XML et PDF du texte français de l’acte sous la licence licenceSCL, sous laquelle ce site ne reproduit aucun texte',
+        catalogue_licence_scl_in_part: 'l’éditeur ne place qu’une partie des fichiers XML et PDF du texte français de l’acte sous la licence licenceSCL, et ce site n’en détient aucun',
+        catalogue_cc_by_not_acquired: 'l’éditeur place les fichiers XML et PDF du texte français de l’acte sous la licence CC BY 4.0, et ce site ne les a pas acquis',
+        catalogue_no_or_other_licence: 'le catalogue de l’éditeur n’indique aucune licence pour les fichiers XML et PDF du texte français de l’acte, ou en indique une autre, et ce site n’en détient aucun',
+        catalogue_no_xml_or_pdf_manifestation: 'le catalogue de l’éditeur ne nomme aucun fichier XML ou PDF du texte français de l’acte',
+        catalogue_translations_only: 'le catalogue de l’éditeur ne nomme le texte de l’acte que dans d’autres langues que le français',
         catalogue_no_expression: 'le catalogue de l’éditeur n’en nomme aucun texte',
       }),
       type: 'Son type dans les données de l’éditeur : {type} (typeDocument).',
       documentDate: 'Les données de l’éditeur indiquent le {dates} comme date de l’acte (dateDocument).',
       publicationDate: 'Les données de l’éditeur indiquent le {dates} comme date de publication (publicationDate).',
-      memorial: 'Les données de l’éditeur le situent au Mémorial A n° {number} de {year} (isPartOf).',
-      entryIntoForce: 'Les données de l’éditeur indiquent le {dates} comme date d’entrée en vigueur (dateEntryInForce).',
+      memorial: 'Les données de l’éditeur le rattachent au Mémorial A n° {number} de {year} (isPartOf).',
+      entryIntoForce: 'Son entrée en vigueur dans les données de l’éditeur : {dates} (dateEntryInForce).',
       status: 'Son statut dans les données de l’éditeur : {status} (inForceStatus).',
       historicalId: 'Son identifiant historique dans les données de l’éditeur : {id} (historicalLegalId).',
       versions: 'Le catalogue de l’éditeur en recense {count} versions, et ce site ne détient le texte d’aucune.',

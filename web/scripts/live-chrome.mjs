@@ -391,7 +391,7 @@ const EN = Object.freeze({
     eyebrow: "Compare",
     heading: "Two states, article by article",
     // R57 (the audit of 2026-10-27, gap 2): the wording that changed is shown, and a comparison has an address of its own.
-    intro: "The states of one Luxembourg work applicable on two dates, compared by the publisher's article ids and wording, with nothing said about legal effect; the wording that changed is shown, the words deleted struck through and the words inserted underlined. The identifier and the dates go to this server in the request and in this page's address, so that a comparison can be shared and read without JavaScript; this page keeps nothing.",
+    intro: "The states of one Luxembourg work applicable on two dates, compared by the publisher's article ids and wording, with nothing said about legal effect; the wording that changed is shown, the text deleted struck through and the text inserted underlined. The identifier and the dates go to this server in the request and in this page's address, so that a comparison can be shared and read without JavaScript; this page keeps nothing.",
     idle: "Type a work identifier and two dates to compare the states applicable on them.",
     summary: "{work}: {from} against {to}.",
     summaryIn: "{work}: {from} against {to} in {language}.",
@@ -441,11 +441,11 @@ const EN = Object.freeze({
     nextChange: "Next change",
     // A side whose text this site does not serve (its rights did not admit it): the digests stand, and no wording is shown.
     wordingNotServed: Object.freeze({
-      from: "The wording of this article is not shown: this site does not serve the text of the earlier version.",
-      to: "The wording of this article is not shown: this site does not serve the text of the later version.",
+      from: "The wording of this article is not shown: this site does not serve the text of the version at the from date.",
+      to: "The wording of this article is not shown: this site does not serve the text of the version at the to date.",
       both: "The wording of this article is not shown: this site serves the text of neither version.",
     }),
-    wordingWhole: "This article changed too much to be compared word by word here: its earlier text is shown deleted and its later text inserted, each whole.",
+    wordingWhole: "This article changed too much to be compared word by word here: apart from any beginning or end its two texts share, its text at the from date is shown deleted and its text at the to date inserted, each in one piece.",
   }),
   radar: Object.freeze({
     title: "Radar",

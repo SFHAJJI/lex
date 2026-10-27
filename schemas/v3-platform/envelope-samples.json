@@ -3310,7 +3310,7 @@
     },
     {
       "operation": "search",
-      "scenario": "a reference naming the same act by its type, date and title words: a refusal with its record and what was recognised",
+      "scenario": "a reference naming the same act by the address this site gives it: a refusal with its record and what was recognised",
       "http_status": 200,
       "content_type": "application/json;charset=utf-8",
       "envelope": {
@@ -3386,7 +3386,7 @@
             ],
             "reason": "catalogue_licence_scl",
             "reason_rule": "each reason says what the publisher\u0027s catalogue states of a version of which this site holds no file, as Coverage counts it, and never why the acquisition did not fetch it: catalogue_licence_scl, every XML and PDF file of its French text is licensed licenceSCL, which this site does not reproduce; catalogue_licence_scl_in_part, some are licensed licenceSCL and some otherwise; catalogue_cc_by_not_acquired, every one is licensed CC BY 4.0 and none was acquired; catalogue_no_or_other_licence, they carry no licence or another one; catalogue_no_xml_or_pdf_manifestation, its French text has no XML or PDF file; catalogue_translations_only, the catalogue names its text in other languages than French only; catalogue_no_expression, the catalogue names no text of it; reason is the act as published\u0027s, else its first version\u0027s",
-            "recognised_act": "loi du 10 ao\u00FBt 1991 portant approbation de la Convention de La Haye",
+            "recognised_act": "/lu-legilux/loi-1991-08-10-n5",
             "recognised_article": null,
             "recognised_catalogue_works": [
               "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n5"
@@ -3395,8 +3395,8 @@
             "recognised_date_source": null,
             "recognised_held_act": null,
             "recognised_held_version": null,
-            "recognised_kind": "citation",
-            "recognised_title": "Loi du 10 ao\u00FBt 1991 portant approbation de la Convention de La Haye",
+            "recognised_kind": "permalink",
+            "recognised_title": null,
             "record_address": "/lu-legilux/loi-1991-08-10-n5",
             "record_evidence_sha256s": [
               "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"

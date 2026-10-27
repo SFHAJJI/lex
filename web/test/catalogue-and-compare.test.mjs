@@ -36,7 +36,7 @@ const envelopeOf = (operation, scenarioStart) => {
 };
 const RECORD_DOSSIER = envelopeOf("dossier", "an act the publisher's catalogue holds and the index holds no version of (R77)");
 const RECORD_READING = envelopeOf("evidence_bundle", "the same act read at its address in French");
-const RECORD_SEARCH = envelopeOf("search", "a reference naming the same act");
+const RECORD_SEARCH = envelopeOf("search", "a reference naming the same act by the address this site gives it");
 
 /** The two-state comparison of the answer census, its per-run digests given a digest's shape, as the compare test does. */
 function twoStates() {
@@ -82,6 +82,12 @@ test("a text's word tokens give it back, and the parts of a comparison give back
   const whole = wordDiff("un deux trois quatre", "cinq six sept huit", { maxEdits: 2 });
   assert.equal(whole.complete, false);
   assert.deepEqual(sidesOf(whole.parts), { before: "un deux trois quatre", after: "cinq six sept huit" });
+  // The beginning and end the two texts share stay as they are even then (the French review of this PR, form 13).
+  const shared = wordDiff("Le ministre peut accorder une aide aux entreprises.", "Le Gouvernement accorde une subvention aux communes.", { maxEdits: 1 });
+  assert.equal(shared.complete, false);
+  assert.equal(shared.parts[0].text, "Le ");
+  assert.equal(shared.parts.at(-1).text, ".");
+  assert.deepEqual(shared.parts.map((part) => part.kind), ["same", "del", "ins", "same"], "each side in one piece");
   assert.ok(MAX_EDITS >= 1000);
 });
 
@@ -175,12 +181,12 @@ test("an act held only in the publisher's catalogue is said in one sentence on e
   assert.ok(markup.includes('<h2 data-catalogue-record="">loi-1991-08-10-n5</h2>'), "the act, by the address this site gives it");
   assert.ok(markup.includes('<p lang="fr">Loi du 10 août 1991 portant approbation de la Convention de La Haye</p>'), "its title, in its language");
   for (const said of [
-    "This act is in the publisher's catalogue, as this site read it no later than 2026-10-01T08:00:00Z, and this site holds none of its text: the publisher licenses every file of its French text under licenceSCL, which this site does not reproduce.",
+    "This act is in the publisher's catalogue, as this site read it no later than 2026-10-01T08:00:00Z, and this site holds none of its text: the publisher licenses every XML and PDF file of its French text under licenceSCL, which this site does not reproduce.",
     "Its type in the publisher's record: LOI (typeDocument).",
     "The publisher's record gives 1991-08-10 as the act's date (dateDocument).",
     "The publisher's record gives 1991-08-23 as its publication date (publicationDate).",
     "The publisher's record places it in Mémorial A no. 58 of 1991 (isPartOf).",
-    "The publisher's record gives 1991-08-27 as its entry-into-force date (dateEntryInForce).",
+    "Its entry into force in the publisher's record: 1991-08-27 (dateEntryInForce).",
     "The publisher's record gives 2010-01-01 as the act's end-of-force date (dateNoLongerInForce).",
     "Its status in the publisher's record: no-longer-in-force (inForceStatus).",
     "Its historical identifier in the publisher's record: 1991A10580 (historicalLegalId).",
@@ -196,6 +202,16 @@ test("an act held only in the publisher's catalogue is said in one sentence on e
     "catalogue.entryIntoForce", "catalogue.endOfForce", "catalogue.status", "catalogue.historicalId"]);
   assert.ok(french[0].text.startsWith("Cet acte figure dans le catalogue de l’éditeur"), french[0].text);
   assert.ok(french.every((line) => !/\{[a-zA-Z]+\}/.test(line.text)), "every placeholder filled");
+  // The review's refused forms: no file but the XML and PDF ones is said of, the act's French text is never "son texte", a
+  // compared side is named by its date's label (the page does not order the dates), and "n°" takes an ordinary space.
+  const tables = JSON.stringify([LIVE_CHROME.fr.compare, LIVE_CHROME.fr.refusalCard.catalogue]);
+  for (const refused of ["son texte français", "de son texte", "tous les fichiers de", "les mots supprimés", "version antérieure", "version postérieure", "en entier", "n° "]) {
+    assert.ok(!tables.includes(refused), refused);
+  }
+  const english = JSON.stringify([LIVE_CHROME.en.compare, LIVE_CHROME.en.refusalCard.catalogue]);
+  for (const refused of ["every file of its French text", "as its entry-into-force date", "of the earlier version", "of the later version", "each whole"]) {
+    assert.ok(!english.includes(refused), refused);
+  }
 
   // A reason the card does not word is refused, so a new one is worded before it is shown.
   assert.throws(() => validateRefusal({ code: "text_not_available", sentence: CATALOGUE_RECORD_SENTENCE, payload: RECORD_DOSSIER.refusal.helpful_payload }) &&
