@@ -58,7 +58,9 @@ const [SHOWS_CONTACT] = legalPageTextFailures("/fr/legal-notice.html", CONTACT_P
 // a failure, and the probe exits 1; without it, a note beside a pass. `REVISIONS` names the app's revisions, comma-separated
 // (the live one by default), and `REVISIONS_READ_FAILS` makes their listing fail; a deployment whose revision exists fails as
 // Azure's did on 2026-10-27, creating nothing, and `DEPLOYMENT_FAILS` fails one after its revision is created (a candidate
-// that never becomes ready); `CANDIDATE_FAILS` makes a revision's state read say it failed to provision.
+// that never becomes ready); `CANDIDATE_FAILS` makes a revision's state read say it failed to provision;
+// `MAINTENANCE_PROBE_FAILS` makes the maintenance revision's probe (`--maintenance`) fail, and `DATA_AGE_REFUSED` a
+// candidate's probe exit 3 (it answers as its release holds, and promotion refuses its data's age).
 const STUBS = `
   $global:calls = [System.Collections.Generic.List[string]]::new()
   $global:revisions = [System.Collections.Generic.List[string]]::new()
@@ -69,7 +71,7 @@ const STUBS = `
     if ($line -like 'deployment group create*') {
       $file = ($args | Where-Object { "$_".StartsWith('@') } | Select-Object -First 1).Substring(1)
       $parameters = (Get-Content -Raw $file | ConvertFrom-Json).parameters
-      $global:calls.Add("az deployment group create openToPublic=$($parameters.openToPublic.value) revisionSuffix=$($parameters.revisionSuffix.value) liveRevision=$($parameters.liveRevision.value) searchEngines=$($parameters.searchEngines.value)")
+      $global:calls.Add("az deployment group create openToPublic=$($parameters.openToPublic.value) revisionSuffix=$($parameters.revisionSuffix.value) liveRevision=$($parameters.liveRevision.value) searchEngines=$($parameters.searchEngines.value) maintenance=$($parameters.maintenance.value)")
       $revision = "$($parameters.appName.value)--$($parameters.revisionSuffix.value)"
       if ($global:revisions -contains $revision) {
         Write-Host "ERROR: made up: revision with suffix $($parameters.revisionSuffix.value) already exists"
@@ -109,6 +111,12 @@ const STUBS = `
     $argv = @($args | Where-Object { $null -ne $_ })
     $global:calls.Add('node ' + (ConvertTo-Json -Compress -InputObject $argv))
     $global:LASTEXITCODE = 0
+    if ($env:MAINTENANCE_PROBE_FAILS -and ($argv -ccontains '--maintenance')) {
+      Write-Host "- GET /fr/ answered 200, not 503"
+      $global:LASTEXITCODE = 1
+      return
+    }
+    if ($env:DATA_AGE_REFUSED -and ($argv -ccontains '--promotion-check')) { $global:LASTEXITCODE = 3; return }
     if ($env:LEGAL_PAGE_FAILURE -and ($argv -ccontains '--origin')) {
       if ($argv -ccontains '--opening') {
         Write-Host "- the legal pages are not ready to publish, so the site may not open: $env:LEGAL_PAGE_FAILURE"
@@ -132,7 +140,10 @@ function deploy(parameters, env = {}, { live = LIVE, release = releaseDirectory 
   // A wait that never ends (the script's own is 20 minutes) fails here instead.
   const run = spawnSync("pwsh", ["-NoProfile", "-NonInteractive", "-Command", script], {
     encoding: "utf8", timeout: 120_000,
-    env: { ...process.env, RULES: "", RULES_READ_FAILS: "", LEGAL_PAGE_FAILURE: "", REVISIONS: LIVE, REVISIONS_READ_FAILS: "", DEPLOYMENT_FAILS: "", CANDIDATE_FAILS: "", ...env },
+    env: {
+      ...process.env, RULES: "", RULES_READ_FAILS: "", LEGAL_PAGE_FAILURE: "", REVISIONS: LIVE, REVISIONS_READ_FAILS: "", DEPLOYMENT_FAILS: "", CANDIDATE_FAILS: "",
+      MAINTENANCE_PROBE_FAILS: "", DATA_AGE_REFUSED: "", ...env,
+    },
   });
   assert.equal(run.error, undefined, `pwsh could not run: ${run.error}`);
   const lines = run.stdout.split(/\r?\n/);
@@ -144,7 +155,7 @@ function deploy(parameters, env = {}, { live = LIVE, release = releaseDirectory 
     .map((call) => Object.fromEntries(call.slice("az deployment group create ".length).split(" ").map((pair) => pair.split("="))));
   const deactivated = calls.filter((call) => call.startsWith("az containerapp revision deactivate "))
     .map((call) => call.slice(call.indexOf("--revision ") + "--revision ".length));
-  const planned = /^== deploy the candidate revision (\S+)$/m.exec(run.stdout)?.[1];
+  const planned = /^== deploy the (?:candidate|maintenance) revision (\S+)$/m.exec(run.stdout)?.[1];
   return { out: run.stdout, result, calls, probes, deployments, deactivated, planned, candidate: deployments[0] && `ca-lex-v3--${deployments[0].revisionSuffix}` };
 }
 
@@ -395,4 +406,99 @@ test("a new release over the live revision deploys as it did: one new candidate,
   const order = [/^oras cp /, /^az deployment group what-if /, /^az deployment group create /, /ipSecurityRestrictions/, /^az containerapp revision show .*runningState/, /^node .*--origin/]
     .map((pattern) => indexOf(run.calls, pattern));
   assert.ok(order.every((at, index) => at >= 0 && (index === 0 || at > order[index - 1])), `${order}: ${run.calls.join("\n")}`);
+});
+
+// The release's maintenance revision (-Maintenance; R60, R108, R115; the plan's item 10.14): built beside the live revision
+// from the same release, held to its maintenance pages, and kept inactive; switching it on and off is printed, never run.
+const MAINTAINED = ["-SignerIdentity", "signer", "-AllowedCidr", "203.0.113.7/32"];
+const switchCommands = (name, live = LIVE) => [
+  `> az containerapp revision activate -g rg -n ca-lex-v3 --revision ${name}`,
+  `> az containerapp ingress traffic set -g rg -n ca-lex-v3 --revision-weight ${name}=100`,
+  `> az containerapp ingress traffic set -g rg -n ca-lex-v3 --revision-weight ${live}=100`,
+  `> az containerapp revision deactivate -g rg -n ca-lex-v3 --revision ${name}`,
+];
+const movesTraffic = (run) => run.calls.some((call) => /^az containerapp (ingress traffic set|revision activate) /.test(call));
+
+test("a -Maintenance plan run names the maintenance revision, never the candidate's, and its steps, and asks Azure nothing", () => {
+  const run = deploy(["-AllowedCidr", "203.0.113.7/32", "-Maintenance"]);
+  assert.equal(run.result, "RESULT:returned", run.out);
+  assert.deepEqual(run.calls.filter((call) => !call.startsWith("node ")), [], "a plan run runs no Azure or registry command");
+  const name = `ca-lex-v3--${run.planned}`;
+  assert.match(run.out, /^== deploy the maintenance revision v3-20261019t060000z-0123456789ab-[0-9a-f]{8}\r?$/m);
+  assert.ok(run.out.includes(`  revision ${name}: the release's suffix and the digest ${run.planned.slice(-8)} of this deployment's settings (the image, searchEngines kept-out, openToPublic False, allowedSourceCidrs [203.0.113.7/32], deploy/main.bicep, maintenance)`), run.out);
+  assert.notEqual(run.planned, deploy(["-AllowedCidr", "203.0.113.7/32"]).planned, "the same release and settings without -Maintenance name the candidate, another revision");
+  assert.match(run.out, / maintenance=True>/, "the template is told maintenance");
+  const probeLine = run.out.split(/\r?\n/).find((line) => line.includes(" --maintenance --origin ")) ?? "";
+  assert.match(probeLine, new RegExp(`^  > node --import file:///\\S+browser-trap\\.mjs web/scripts/deploy-probe\\.mjs --maintenance --origin https://<${name}'s own address> --release `), run.out);
+  assert.doesNotMatch(probeLine, /--promotion-check|--opening|--browser/, "the maintenance probe alone");
+  for (const command of switchCommands(name)) assert.ok(run.out.includes(command), `${command}: ${run.out}`);
+  assert.match(run.out, /^== planned only: run again with -Apply to build the maintenance revision/m);
+});
+
+test("-Maintenance deploys the maintenance revision beside the live one with no traffic, probes it at its own address, keeps it inactive, and moves no traffic", () => {
+  const run = deploy([...MAINTAINED, "-Maintenance", "-Apply"], { RULES: PRIVATE_RULES });
+  assert.equal(run.result, "RESULT:returned", run.out);
+  assert.equal(run.deployments.length, 1, run.calls.join("\n"));
+  const [deployment] = run.deployments;
+  assert.deepEqual([deployment.maintenance, deployment.liveRevision, deployment.openToPublic], ["True", LIVE, "False"], "the live revision keeps all the traffic");
+  const name = run.candidate;
+  assert.notEqual(name, LIVE);
+  assert.equal(run.planned, deployment.revisionSuffix, "the step says the suffix it deploys");
+  // Probed once, at its own address, under the trap, against the release's maintenance pages alone.
+  assert.equal(run.probes.length, 1, run.calls.join("\n"));
+  const [probe] = run.probes;
+  assert.equal(probe[0], "--import", "under the browser trap");
+  assert.match(probe[1], /^file:\/\/\/\S+browser-trap\.mjs$/);
+  const tail = probe.slice(probe.indexOf("--maintenance"));
+  assert.deepEqual(tail.slice(0, 4), ["--maintenance", "--origin", `https://${name}.example.azurecontainerapps.io`, "--release"], JSON.stringify(probe));
+  assert.deepEqual(tail.slice(-2), ["--signer", "signer"], JSON.stringify(probe));
+  assert.ok(!probe.some((token) => ["--promotion-check", "--opening", "--browser"].includes(token)), JSON.stringify(probe));
+  // Then deactivated, kept for the day it is switched on; nothing else is deactivated, and no traffic moves.
+  assert.deepEqual(run.deactivated, [name], run.calls.join("\n"));
+  const order = [/^az deployment group create /, /ipSecurityRestrictions/, /^az containerapp revision show .*runningState/, /^node .*--maintenance/, /^az containerapp revision deactivate /]
+    .map((pattern) => indexOf(run.calls, pattern));
+  assert.ok(order.every((at, index) => at >= 0 && (index === 0 || at > order[index - 1])), `${order}: ${run.calls.join("\n")}`);
+  assert.ok(!movesTraffic(run), run.calls.join("\n"));
+  for (const command of switchCommands(name)) assert.ok(run.out.includes(command), `${command}: ${run.out}`);
+  assert.ok(!run.out.includes("Promotion is the owner's decision"), "nothing a candidate's run says");
+});
+
+test("a maintenance revision that fails its probe is deactivated, the run stops, and no switch is offered", () => {
+  const run = deploy([...MAINTAINED, "-Maintenance", "-Apply"], { RULES: PRIVATE_RULES, MAINTENANCE_PROBE_FAILS: "1" });
+  assert.equal(run.result, "RESULT:threw The maintenance revision failed its probe and was deactivated; no traffic moved.", run.out);
+  assert.ok(run.out.includes("- GET /fr/ answered 200, not 503"), run.out);
+  assert.deepEqual(run.deactivated, [run.candidate], run.calls.join("\n"));
+  assert.doesNotMatch(run.out, /--revision-weight/);
+  assert.ok(!movesTraffic(run), run.calls.join("\n"));
+});
+
+test("-Maintenance with no -LiveRevision or with the browser probes is refused before anything is read, and one whose revisions cannot be read before anything changes", () => {
+  const unnamed = /^RESULT:threw -Maintenance builds the release's maintenance revision beside the revision serving now, which keeps all the traffic: name that revision with -LiveRevision\. A maintenance revision is never a first deployment\. Nothing was deployed and nothing changed\.$/;
+  for (const [what, parameters, live, said] of [
+    ["no -LiveRevision", [...MAINTAINED, "-Maintenance", "-Apply"], "", unnamed],
+    ["no -LiveRevision, in a plan run", ["-AllowedCidr", "203.0.113.7/32", "-Maintenance"], "", unnamed],
+    ["the browser probes", [...MAINTAINED, "-Maintenance", "-BrowserProbe", "-Apply"], LIVE, /^RESULT:threw -Maintenance is probed over HTTP only, under the browser trap: leave out -BrowserProbe\.$/],
+  ]) {
+    const run = deploy(parameters, { RULES: PRIVATE_RULES }, { live });
+    assert.match(run.result, said, `${what}: ${run.out}`);
+    assert.deepEqual(run.calls, [], `${what}: not even the release is read back`);
+  }
+  const unread = deploy([...MAINTAINED, "-Maintenance", "-Apply"], { RULES: PRIVATE_RULES, REVISIONS_READ_FAILS: "1" });
+  assert.match(unread.result, /^RESULT:threw The revisions of ca-lex-v3 could not be read; nothing was deployed/, unread.out);
+  assert.deepEqual(writes(unread), [], unread.calls.join("\n"));
+});
+
+test("a deployment's closing lines say how to pre-build its release's maintenance revision, from its own parameters, beside the candidate once it serves", () => {
+  const run = deploy(["-SignerIdentity", "signer", "-AllowedCidr", "203.0.113.7/32", "-Apply"], { RULES: PRIVATE_RULES });
+  assert.equal(run.result, "RESULT:returned", run.out);
+  const line = run.out.split(/\r?\n/).find((one) => one.includes(" -Maintenance -Apply")) ?? "";
+  assert.match(line, /^  > pwsh -File deploy\/deploy\.ps1 -Subscription s -ResourceGroup rg -AppName ca-lex-v3 -EnvironmentId env -Registry crlex\.azurecr\.io -Repository lex-v3 -IdentityResourceId id -SigningPublicKey '[^']+' -SignerIdentity 'signer' -Release '[^']+' -AllowedCidr 203\.0\.113\.7\/32 -SearchEngines kept-out -LiveRevision \S+ -Maintenance -Apply$/, run.out);
+  assert.equal(/-LiveRevision (\S+) -Maintenance/.exec(line)?.[1], run.candidate);
+  const open = deploy(["-SignerIdentity", "signer", "-Public", "-SearchEngines", "indexed", "-Apply"], { RULES: "[]" });
+  assert.match(open.out, / -Release '[^']+' -Public -SearchEngines indexed -LiveRevision \S+ -Maintenance -Apply\r?$/m, open.out);
+  // Not where promotion refuses the release's data: that release is not to serve.
+  const refused = deploy(["-SignerIdentity", "signer", "-AllowedCidr", "203.0.113.7/32", "-Apply"], { RULES: PRIVATE_RULES, DATA_AGE_REFUSED: "1" });
+  assert.equal(refused.result, "RESULT:returned", refused.out);
+  assert.match(refused.out, /Promotion refuses this release's data/);
+  assert.doesNotMatch(refused.out, /-Maintenance -Apply/);
 });

@@ -1,7 +1,8 @@
 <#
 .SYNOPSIS
 The owner's go-live for Lex V3, as one command: a verified release deployed as a zero-traffic candidate revision of the
-one-server container, probed, and removed again if the probe fails.
+one-server container, probed, and removed again if the probe fails; or, with -Maintenance, the release's maintenance
+revision, built the same way, probed and kept inactive until it is switched on.
 
 .DESCRIPTION
 Going live is the owner's decision (production credentials, deployment and promotion; STATUS, owner decisions). This
@@ -57,6 +58,21 @@ With -Apply, in order:
    nothing is deactivated, and the script says so.
 Promotion (moving traffic to the candidate) is printed for the owner and never run.
 
+-Maintenance builds the release's maintenance revision (the specification of record's R60: "a maintenance page shows during
+deployments"; R108 pre-authorises the page, R115 makes it the fallback of the first public exposure, the plan's item 10.14
+asks for it pre-built). It takes steps 1 to 5 as a deployment does, from the same verified release and image, and deploys
+the template with maintenance=true: the revision runs with LEX_V3_MAINTENANCE=on, mounts nothing and serves only the
+maintenance page, and arrives as the `maintenance` label with no traffic while -LiveRevision keeps 100 per cent. It is
+never a first deployment: without -LiveRevision it is refused before anything changes. Its name's digest covers maintenance
+too, so it is never the release's candidate. Step 6 waits until it is ready and probes it at its own address
+(`web/scripts/deploy-probe.mjs --maintenance`, under the browser trap; never -BrowserProbe): readiness 204; each page, the
+root included, 503 with Retry-After, a page's headers and the release image's own maintenance page, byte for byte; the API
+answering the problem service_in_maintenance; no cookie. Then it is deactivated and kept (an inactive revision bills
+nothing), or, if the probe fails, deactivated and the script exits non-zero, each through the same guard as a candidate.
+Switching it on (activate it, then move all traffic to it) and off (move the traffic back, then deactivate it) are traffic
+moves, the owner's as a promotion is: printed, never run. Every deployment's closing lines say how to pre-build its
+release's maintenance revision.
+
 -Remove deactivates one revision of the app and exits: the removal step on its own.
 
 -Open is the owner's opening, on the opening day and never otherwise: it first asks the site's ten legal pages
@@ -76,6 +92,12 @@ pwsh -File deploy/deploy.ps1 -Subscription <id> -ResourceGroup rg-lex-v3 -Enviro
   -Registry crlex.azurecr.io -IdentityResourceId <user-assigned identity id> -SigningPublicKey release-signing.pem `
   -SignerIdentity <the release signer's identity> -Release C:\releases\v3-... -LiveRevision ca-lex-v3--v3-previous `
   -AllowedCidr 203.0.113.7/32,198.51.100.0/24 -Apply
+
+.EXAMPLE
+pwsh -File deploy/deploy.ps1 -Subscription <id> -ResourceGroup rg-lex-v3 -EnvironmentId <managed environment id> `
+  -Registry crlex.azurecr.io -IdentityResourceId <user-assigned identity id> -SigningPublicKey release-signing.pem `
+  -SignerIdentity <the release signer's identity> -Release C:\releases\v3-... -LiveRevision <the revision serving now> `
+  -AllowedCidr 203.0.113.7/32,198.51.100.0/24 -Maintenance -Apply
 #>
 [CmdletBinding(DefaultParameterSetName = 'Deploy')]
 param(
@@ -97,6 +119,7 @@ param(
     [Parameter(ParameterSetName = 'Deploy')] [switch] $BrowserProbe,
     [Parameter(ParameterSetName = 'Deploy')] [switch] $SkipBrowserProbe,
     [Parameter(ParameterSetName = 'Deploy')] [ValidateSet('kept-out', 'indexed', IgnoreCase = $false)] [string] $SearchEngines = 'kept-out',
+    [Parameter(ParameterSetName = 'Deploy')] [switch] $Maintenance,
 
     [Parameter(Mandatory, ParameterSetName = 'Remove')] [switch] $Remove,
     [Parameter(Mandatory, ParameterSetName = 'Remove')] [string] $Revision,
@@ -224,6 +247,15 @@ $browserArgs = @(if ($BrowserProbe) { '--browser' })
 # Once the site is open (-Public), the candidate's legal pages are held to the opening's rule: none may show an e-mail
 # address, a mail or telephone link, a placeholder or a postcode.
 $openingArgs = @(if ($Public) { '--opening' })
+# The release's maintenance revision (-Maintenance; R60, R108, R115; the plan's item 10.14) is built beside the revision that
+# serves now, which keeps all the traffic: it is never a first deployment (the template's first-deployment rule would send
+# all traffic to it), and it is probed over HTTP only, under the browser trap. Both are refused before anything is read.
+if ($Maintenance -and [string]::IsNullOrEmpty($LiveRevision)) {
+    throw "-Maintenance builds the release's maintenance revision beside the revision serving now, which keeps all the traffic: name that revision with -LiveRevision. A maintenance revision is never a first deployment. Nothing was deployed and nothing changed."
+}
+if ($Maintenance -and $BrowserProbe) { throw "-Maintenance is probed over HTTP only, under the browser trap: leave out -BrowserProbe." }
+# What the revision this run makes is called in what it says: the candidate, or the maintenance revision.
+$role = if ($Maintenance) { 'maintenance revision' } else { 'candidate' }
 
 # 1. The release, read back under the signing identity's key, before anything touches Azure.
 Step "verify the release under the signing identity's public key"
@@ -244,11 +276,14 @@ $revisionSettings = [ordered]@{
     image = $image; searchEngines = $SearchEngines; openToPublic = [bool]$Public; allowedSourceCidrs = @($AllowedCidr)
     template = Get-TextDigest ((Get-Content -Raw -LiteralPath (Join-Path $checkout 'deploy/main.bicep')) -replace "`r`n", "`n")
 }
+# The maintenance revision's settings say so, so its name is never the release's candidate's; a candidate's are as before.
+if ($Maintenance) { $revisionSettings['maintenance'] = $true }
 $suffix = Get-RevisionSuffix $manifest.version $AppName $revisionSettings
 $candidate = "$AppName--$suffix"
 $archive = Join-Path $releasePath 'lex-v3-image.oci.tar'
 Write-Host "  release $($manifest.version): image $digest, corpus $($manifest.corpus.sha256)"
-Write-Host "  revision ${candidate}: the release's suffix and the digest $($suffix.Substring($suffix.Length - 8)) of this deployment's settings (the image, searchEngines $SearchEngines, openToPublic $([bool]$Public), allowedSourceCidrs [$($AllowedCidr -join ',')], deploy/main.bicep)"
+Write-Host "  revision ${candidate}: the release's suffix and the digest $($suffix.Substring($suffix.Length - 8)) of this deployment's settings (the image, searchEngines $SearchEngines, openToPublic $([bool]$Public), allowedSourceCidrs [$($AllowedCidr -join ',')], deploy/main.bicep$(if ($Maintenance) { ', maintenance' }))"
+if ($Maintenance) { Write-Host "  the release's maintenance revision: LEX_V3_MAINTENANCE=on, no mount, only the maintenance page, no traffic beside $LiveRevision" }
 
 # 2. The owner's subscription; and with -Public, that the site is already open. A -Public deployment admits everyone: the
 # template's openToPublic empties the address rules as it deploys, before the candidate is probed, and a failed probe
@@ -279,7 +314,7 @@ if ($Public) {
 # The app's revisions, read before anything in Azure changes, every inactive one too: the deployment never names one that
 # exists, and a failure deactivates only a revision this deployment made (the incident of 2026-10-27). A read that fails stops
 # a redeployment here; a first deployment, whose app holds none yet, goes on, and a failure of it then deactivates nothing.
-Step "read the revisions of ${AppName}: the candidate $candidate must be one it does not hold"
+Step "read the revisions of ${AppName}: the $role $candidate must be one it does not hold"
 $priorRevisions = $null
 if ($Apply) {
     $listed = az containerapp revision list -g $ResourceGroup -n $AppName --all --query "[].name" -o tsv
@@ -315,7 +350,7 @@ if ($held -contains $candidate) {
 $candidateIsOurs = $null -ne $priorRevisions -and $priorRevisions -notcontains $candidate -and $candidate -ne $LiveRevision
 function Disable-Candidate([string] $Why, [switch] $IfActive) {
     if (-not $candidateIsOurs) {
-        Step "${Why}: the candidate $candidate is not deactivated"
+        Step "${Why}: the $role $candidate is not deactivated"
         Write-Host "  whether $candidate is this deployment's own is not known (the revisions of $AppName could not be read before it), so nothing is deactivated: check it with az containerapp revision list -g $ResourceGroup -n $AppName --all, and remove it with deploy.ps1 -Remove -Revision $candidate if it is"
         return
     }
@@ -323,7 +358,7 @@ function Disable-Candidate([string] $Why, [switch] $IfActive) {
         $active = az containerapp revision show -g $ResourceGroup -n $AppName --revision $candidate --query properties.active -o tsv 2>$null
         if ($LASTEXITCODE -ne 0 -or $active -ne 'true') { return }
     }
-    Step "${Why}: deactivate the candidate $candidate"
+    Step "${Why}: deactivate the $role $candidate"
     az containerapp revision deactivate -g $ResourceGroup -n $AppName --revision $candidate
 }
 
@@ -356,7 +391,7 @@ finally {
 
 # 4. The candidate revision, with no traffic while a live revision serves, admitting only the named ranges until the
 # opening. The parameters go in a file, since the ranges are an array; it holds no secret.
-Step "deploy the candidate revision $suffix"
+Step "deploy the $(if ($Maintenance) { 'maintenance' } else { 'candidate' }) revision $suffix"
 # A domain already bound to the app (deploy/bind-domain.ps1) is read back and passed on, so a redeployment keeps it: the
 # template would otherwise set the app's custom domains to none. A plan run asks Azure nothing, and says so.
 $customDomains = @()
@@ -383,7 +418,7 @@ $values = [ordered]@{
     environmentId = $EnvironmentId; appName = $AppName; image = $image; registryServer = $Registry
     identityResourceId = $IdentityResourceId; revisionSuffix = $suffix; liveRevision = $LiveRevision
     allowedSourceCidrs = @($AllowedCidr); openToPublic = [bool]$Public; searchEngines = $SearchEngines
-    customDomains = @($customDomains)
+    customDomains = @($customDomains); maintenance = [bool]$Maintenance
 }
 $document = [ordered]@{
     '$schema' = 'https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#'
@@ -423,6 +458,7 @@ try {
         $failure = $_.Exception.Message
         Disable-Candidate 'the deployment failed' -IfActive
         $outcome = if ($candidateIsOurs) { 'It was deactivated if it was active, and no traffic moved to it.' } else { "Nothing was deactivated: whether $candidate is this deployment's own is not known (above); no traffic moved to it." }
+        if ($Maintenance) { throw "The maintenance revision did not deploy ($failure); one that never becomes ready holds no maintenance page in each interface language (GET /health/ready answers 503). $outcome" }
         throw "The candidate revision did not deploy ($failure); a candidate that never becomes ready holds no law (GET /health/ready answers 503). $outcome"
     }
 }
@@ -452,8 +488,29 @@ if ($Apply) {
     if ($Public) { Write-Host "  ingress admits everyone (-Public)" } else { Write-Host "  ingress admits only $($AllowedCidr -join ', ')" }
 }
 
-# 6. The zero-traffic probe against the candidate's own URL.
-Step "probe the candidate"
+# Switching the maintenance page on and off moves traffic, the owner's as a promotion is (R108 pre-authorises the page once
+# O17 is adopted; the plan's item 10.14): printed, never run.
+function Write-MaintenanceSwitch {
+    Write-Host "  Switching the maintenance page on or off moves traffic, the owner's as a promotion is (R108 pre-authorises it once O17 is adopted); it is not run here."
+    Write-Host "  To switch it on: activate $candidate, wait until it is ready (it mounts nothing: seconds once it has started), then move all traffic to it:"
+    Write-Host "  > az containerapp revision activate -g $ResourceGroup -n $AppName --revision $candidate"
+    Write-Host "  > az containerapp ingress traffic set -g $ResourceGroup -n $AppName --revision-weight $candidate=100"
+    Write-Host "  To switch it off: move all traffic back to $LiveRevision (or to the revision that is to serve then), then deactivate ${candidate}:"
+    Write-Host "  > az containerapp ingress traffic set -g $ResourceGroup -n $AppName --revision-weight $LiveRevision=100"
+    Write-Host "  > az containerapp revision deactivate -g $ResourceGroup -n $AppName --revision $candidate"
+}
+
+# 6. The zero-traffic probe against the candidate's own URL (the maintenance revision's: against its own).
+if ($Maintenance) { Step "probe the maintenance revision" } else { Step "probe the candidate" }
+if (-not $Apply -and $Maintenance) {
+    Write-Host "  > wait until $candidate is provisioned, active, running and healthy (it mounts nothing, so it is ready once it has started)"
+    Write-Host "  > node $(($nodeTrap + @('web/scripts/deploy-probe.mjs')) -join ' ') --maintenance --origin https://<$candidate's own address> --release $releasePath --public-key $keyPath $($signerProbe -join ' ')"
+    Write-Host "  (only the maintenance page and its readiness are probed, over HTTP, under the browser trap)"
+    Write-Host "  > deactivate $candidate once it passes: it is kept, inactive, for the day it is switched on (an inactive revision bills nothing); one that fails is deactivated too"
+    Write-MaintenanceSwitch
+    Write-Host "== planned only: run again with -Apply to build the maintenance revision (the owner's decision)"
+    exit 0
+}
 if (-not $Apply) {
     Write-Host "  > wait until $AppName--$suffix is provisioned, active, running and healthy"
     Write-Host "  > node $(($nodeTrap + @('web/scripts/deploy-probe.mjs')) -join ' ') --origin https://<$AppName--$suffix's own address> --release $releasePath --public-key $keyPath $($signerProbe -join ' ') $($browserArgs -join ' ') $($openingArgs -join ' ') --promotion-check"
@@ -475,7 +532,7 @@ while ($true) {
     if ($failed -or ($null -ne $state -and $state.active -eq $false)) {
         Disable-Candidate 'the candidate cannot become ready'
         $why = if ($failed) { "it failed (provisioning $($state.provisioning), running $($state.running))" } else { 'it is not active: activate it first if it should be probed' }
-        throw "The candidate $candidate cannot become ready: $why. No traffic moved."
+        throw "The $role $candidate cannot become ready: $why. No traffic moved."
     }
     if ($state.health -eq 'Healthy' -and "$($state.running)".StartsWith('Running') -and -not [string]::IsNullOrEmpty($state.fqdn)) {
         Write-Host "  $candidate is $($state.running) and $($state.health), at its own address $($state.fqdn)"
@@ -483,12 +540,29 @@ while ($true) {
     }
     if ((Get-Date) -gt $readyBy) {
         Disable-Candidate 'the candidate did not become ready'
-        throw "The candidate $candidate was not ready within 20 minutes ($($state.running), $($state.health)); $(if ($candidateIsOurs) { 'it was deactivated' } else { 'it was not deactivated (above)' }) and no traffic moved."
+        throw "The $role $candidate was not ready within 20 minutes ($($state.running), $($state.health)); $(if ($candidateIsOurs) { 'it was deactivated' } else { 'it was not deactivated (above)' }) and no traffic moved."
     }
     Write-Host "  waiting: $candidate is $($state.provisioning), $($state.running), $($state.health)"
     Start-Sleep -Seconds 15
 }
 $origin = "https://$($state.fqdn)"
+if ($Maintenance) {
+    # The maintenance revision at its own address: its readiness, its pages (the release image's own maintenance page, 503,
+    # Retry-After and a page's headers), the API's 503 problem and no cookie, over HTTP only, under the browser trap.
+    & node @nodeTrap (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --maintenance --origin $origin --release $releasePath --public-key $keyPath @signerProbe
+    if ($LASTEXITCODE -ne 0) {
+        Disable-Candidate 'the maintenance probe failed'
+        if ($candidateIsOurs) { throw "The maintenance revision failed its probe and was deactivated; no traffic moved." }
+        throw "The maintenance revision failed its probe and was not deactivated (above); no traffic moved."
+    }
+    # Pre-built and kept inactive until it is switched on: an inactive revision bills nothing. Through the same guard as a
+    # failed candidate's, so only a revision this run made is ever deactivated.
+    Disable-Candidate 'the maintenance revision answers as its release holds, and is kept inactive until it is switched on'
+    if ($LASTEXITCODE -ne 0) { throw "The maintenance revision $candidate passed its probe and could not be deactivated: deactivate it with deploy.ps1 -Remove -Revision $candidate, since an active revision is billed. No traffic moved." }
+    Step "the maintenance revision $candidate is built, probed and inactive, beside $LiveRevision, which keeps all the traffic"
+    Write-MaintenanceSwitch
+    exit 0
+}
 if (-not $BrowserProbe) { Write-Host "  no browser probe (no -BrowserProbe): only the HTTP probes run, under the browser trap, and no page of the candidate is walked in a browser" }
 & node @nodeTrap (Join-Path $checkout 'web/scripts/deploy-probe.mjs') --origin $origin --release $releasePath --public-key $keyPath @signerProbe @browserArgs @openingArgs --promotion-check
 # Exit 3: the candidate answers as its release holds, and promotion refuses its data's age (R87; O11's maximum, which every
@@ -532,4 +606,11 @@ if (-not [string]::IsNullOrEmpty($LiveRevision) -and -not $dataAgeRefused) {
     Write-Host "  > az containerapp ingress traffic set -g $ResourceGroup -n $AppName --revision-weight $LiveRevision=100"
     Write-Host "  and forward again to the candidate:"
     Write-Host "  > az containerapp ingress traffic set -g $ResourceGroup -n $AppName --revision-weight $candidate=100"
+}
+if (-not $dataAgeRefused) {
+    # R60: a deployment that must take the site down shows the maintenance page. Each release's is pre-built beside the
+    # revision that serves (-Maintenance), from this command's own parameters, and kept inactive until it is switched on.
+    $ranges = if ($Public) { '-Public' } else { "-AllowedCidr $($AllowedCidr -join ',')" }
+    Write-Host "  To pre-build this release's maintenance revision (R60: the page shown while a deployment must take the site down), beside the revision that serves then ($candidate once it serves):"
+    Write-Host "  > pwsh -File deploy/deploy.ps1 -Subscription $Subscription -ResourceGroup $ResourceGroup -AppName $AppName -EnvironmentId $EnvironmentId -Registry $Registry -Repository $Repository -IdentityResourceId $IdentityResourceId -SigningPublicKey '$($keyPath -replace "'", "''")' -SignerIdentity '$($SignerIdentity -replace "'", "''")' -Release '$($releasePath -replace "'", "''")' $ranges -SearchEngines $SearchEngines -LiveRevision $candidate -Maintenance -Apply"
 }
