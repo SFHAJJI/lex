@@ -95,6 +95,9 @@ public sealed class V3CorpusCatalogueRecordMountTests
         CollectionAssert.AreEqual(new[] { Pdf }, Strings(payload.GetProperty("official_pdf")), asked);
         CollectionAssert.AreEqual(new[] { Act }, Strings(payload.GetProperty("versions")), asked);
         CollectionAssert.AreEqual(new[] { "as_published" }, Strings(payload.GetProperty("version_kinds")), asked);
+        // The publisher's own word for its type and status, which a page says.
+        CollectionAssert.AreEqual(new[] { "LOI" }, Strings(payload.GetProperty("document_type_codes")), asked);
+        CollectionAssert.AreEqual(new[] { "no-longer-in-force" }, Strings(payload.GetProperty("in_force_status_codes")), asked);
         Assert.AreEqual(payload.GetProperty("reason").GetString(), Strings(payload.GetProperty("version_reasons")).Single(), asked);
         Assert.IsGreaterThan(0, payload.GetProperty("record_evidence_sha256s").GetArrayLength(), asked);
         Assert.IsFalse(payload.GetProperty("asserts_absence_of_law").GetBoolean(), asked);

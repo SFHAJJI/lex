@@ -373,6 +373,10 @@
 // texte français"; isPartOf "rattache" an act to its "Mémorial A n° …" (an ordinary space, as the citation's); an entry
 // into force is a labelled line, since a record may carry two dates; and this site's record of an act is its "notice", the
 // publisher's record staying "les données de l’éditeur".
+// Its supplement of the same day reviewed the intro again once R109's hold kept the form's controls unnamed (a comparison's
+// address is "inscrit" in the page's only when the act is named by its address on this site: "lorsque l’acte est désigné par
+// son adresse sur ce site, ils sont aussi inscrits"), and approved the French of `wordingNotServed` with its English "This
+// article's wording".
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
 
@@ -683,7 +687,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Comparer',
     eyebrow: 'Comparer',
     heading: 'Deux versions, article par article',
-    intro: 'Les versions d’un acte luxembourgeois applicables à deux dates, comparées selon les identifiants d’article et le libellé de l’éditeur, sans rien affirmer sur l’effet juridique ; le libellé modifié est affiché, le texte supprimé barré et le texte inséré souligné. L’identifiant et les dates sont envoyés à ce serveur dans la requête ; une comparaison d’un acte désigné par son adresse sur ce site figure aussi dans l’adresse de cette page, afin qu’elle puisse être partagée et lue sans JavaScript ; cette page ne conserve rien.',
+    intro: 'Les versions d’un acte luxembourgeois applicables à deux dates, comparées selon les identifiants d’article et le libellé de l’éditeur, sans rien affirmer sur l’effet juridique ; le libellé modifié est affiché, le texte supprimé barré et le texte inséré souligné. L’identifiant et les dates sont envoyés à ce serveur dans la requête ; lorsque l’acte est désigné par son adresse sur ce site, ils sont aussi inscrits dans l’adresse de cette page, afin que la comparaison puisse être partagée et lue sans JavaScript ; cette page ne conserve rien.',
     idle: 'Saisissez un identifiant d’acte et deux dates pour comparer les versions applicables à ces dates.',
     summary: '{work} : {from} comparé au {to}.',
     summaryIn: '{work} : {from} comparé au {to}, en {language}.',

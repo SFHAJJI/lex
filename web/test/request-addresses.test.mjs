@@ -190,6 +190,14 @@ test("what the pages write into their own address holds no word but after #: a d
     assert.equal(compareOfQuery(`?work=${encodeURIComponent(identifier)}&from=2024-01-01&to=2026-10-18`), null, `${identifier}: no comparison the server renders`);
   }
   assert.equal(compareQueryOf({ identifier: "/lu-legilux/loi-1991-08-10-n3", dateFrom: WORDS, dateTo: "2026-10-18" }), null, "a word is no date");
+  // Every form of this site's address of an act the API reads as one is written as the bare one (the French review's
+  // supplement: a reader pastes the address from the browser's bar).
+  for (const identifier of ["/fr/lu-legilux/loi-1991-08-10-n3", "/en/lu-legilux/loi-1991-08-10-n3", "https://law.soufien.lu/fr/lu-legilux/loi-1991-08-10-n3", "https://law.soufien.lu/lu-legilux/loi-1991-08-10-n3"]) {
+    assert.equal(compareQueryOf({ identifier, dateFrom: "2024-01-01", dateTo: "2026-10-18" }), "?work=%2Flu-legilux%2Floi-1991-08-10-n3&from=2024-01-01&to=2026-10-18", identifier);
+  }
+  for (const identifier of ["http://law.soufien.lu/lu-legilux/loi-1991-08-10-n3", "https://law.soufien.lu/de/lu-legilux/loi-1991-08-10-n3", "/fr/eu-eurlex/32016R0679", "https://example.org/lu-legilux/loi-1991-08-10-n3"]) {
+    assert.equal(compareQueryOf({ identifier, dateFrom: "2024-01-01", dateTo: "2026-10-18" }), null, identifier);
+  }
   // The search goes after "#", where no server receives it.
   const fragment = searchFragment({ query: WORDS, language: "fra", date: "2026-10-18" });
   assert.ok(fragment.startsWith("#") && !fragment.includes("?"), fragment);

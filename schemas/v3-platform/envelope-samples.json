@@ -3135,6 +3135,9 @@
             "document_type": [
               "http://data.legilux.public.lu/resource/authority/resource-type/LOI"
             ],
+            "document_type_codes": [
+              "LOI"
+            ],
             "entry_into_force": [
               "1991-08-27"
             ],
@@ -3143,6 +3146,9 @@
             ],
             "in_force_status": [
               "http://data.legilux.public.lu/resource/authority/application-status/no-longer-in-force"
+            ],
+            "in_force_status_codes": [
+              "no-longer-in-force"
             ],
             "memorial_issue": [
               "http://data.legilux.public.lu/eli/etat/leg/memorial/1991/a58"
@@ -3166,7 +3172,7 @@
             ],
             "record_kind": "catalogue_only",
             "retained_transport_evidence": "none",
-            "rule": "R77: the publisher\u0027s catalogue holds this act and this index holds no version of it, so it is answered text_not_available with its record, read from the catalogue\u0027s facts in the index as they stand: official_identity is the act as published (the work followed by /jo) where the catalogue names it, else its first version; official_source is the publisher\u0027s PDF file of that act\u0027s French text where the catalogue names one, else the same identity; document_type, date_document, publication_date, entry_into_force, no_longer_in_force, in_force_status, memorial_issue and historical_legal_id are the act\u0027s own typeDocument, dateDocument, publicationDate, dateEntryInForce, dateNoLongerInForce, inForceStatus, isPartOf and historicalLegalId facts, verbatim, each a list that is empty when the catalogue states none; in_force_status is the act\u0027s, never a consolidation\u0027s; each date is the publisher\u0027s and has the role its fact names, and none is an applicability date; title is the act\u0027s French title as the catalogue states it, or null; versions lists the act\u0027s versions in the catalogue (as published, consolidated, a code\u0027s), with each one\u0027s kind and the reason no text of it is held here (reason_rule); record_address is the address this site gives the act, where this record is its page; nothing here is the act\u0027s text, and an absence of text here is not an absence of law",
+            "rule": "R77: the publisher\u0027s catalogue holds this act and this index holds no version of it, so it is answered text_not_available with its record, read from the catalogue\u0027s facts in the index as they stand: official_identity is the act as published (the work followed by /jo) where the catalogue names it, else its first version; official_source is the publisher\u0027s PDF file of that act\u0027s French text where the catalogue names one, else the same identity; document_type, date_document, publication_date, entry_into_force, no_longer_in_force, in_force_status, memorial_issue and historical_legal_id are the act\u0027s own typeDocument, dateDocument, publicationDate, dateEntryInForce, dateNoLongerInForce, inForceStatus, isPartOf and historicalLegalId facts, verbatim, each a list that is empty when the catalogue states none, and document_type_codes and in_force_status_codes the last segment of each of the first two IRIs, the publisher\u0027s own word; in_force_status is the act\u0027s, never a consolidation\u0027s; each date is the publisher\u0027s and has the role its fact names, and none is an applicability date; title is the act\u0027s French title as the catalogue states it, or null; versions lists the act\u0027s versions in the catalogue (as published, consolidated, a code\u0027s), with each one\u0027s kind and the reason no text of it is held here (reason_rule); record_address is the address this site gives the act, where this record is its page; nothing here is the act\u0027s text, and an absence of text here is not an absence of law",
             "title": "Loi du 10 ao\u00FBt 1991 portant approbation de la Convention de La Haye",
             "title_language": "fra",
             "version_kinds": [
@@ -3248,6 +3254,9 @@
             "document_type": [
               "http://data.legilux.public.lu/resource/authority/resource-type/LOI"
             ],
+            "document_type_codes": [
+              "LOI"
+            ],
             "entry_into_force": [
               "1991-08-27"
             ],
@@ -3256,6 +3265,9 @@
             ],
             "in_force_status": [
               "http://data.legilux.public.lu/resource/authority/application-status/no-longer-in-force"
+            ],
+            "in_force_status_codes": [
+              "no-longer-in-force"
             ],
             "memorial_issue": [
               "http://data.legilux.public.lu/eli/etat/leg/memorial/1991/a58"
@@ -3279,7 +3291,7 @@
             ],
             "record_kind": "catalogue_only",
             "retained_transport_evidence": "none",
-            "rule": "R77: the publisher\u0027s catalogue holds this act and this index holds no version of it, so it is answered text_not_available with its record, read from the catalogue\u0027s facts in the index as they stand: official_identity is the act as published (the work followed by /jo) where the catalogue names it, else its first version; official_source is the publisher\u0027s PDF file of that act\u0027s French text where the catalogue names one, else the same identity; document_type, date_document, publication_date, entry_into_force, no_longer_in_force, in_force_status, memorial_issue and historical_legal_id are the act\u0027s own typeDocument, dateDocument, publicationDate, dateEntryInForce, dateNoLongerInForce, inForceStatus, isPartOf and historicalLegalId facts, verbatim, each a list that is empty when the catalogue states none; in_force_status is the act\u0027s, never a consolidation\u0027s; each date is the publisher\u0027s and has the role its fact names, and none is an applicability date; title is the act\u0027s French title as the catalogue states it, or null; versions lists the act\u0027s versions in the catalogue (as published, consolidated, a code\u0027s), with each one\u0027s kind and the reason no text of it is held here (reason_rule); record_address is the address this site gives the act, where this record is its page; nothing here is the act\u0027s text, and an absence of text here is not an absence of law",
+            "rule": "R77: the publisher\u0027s catalogue holds this act and this index holds no version of it, so it is answered text_not_available with its record, read from the catalogue\u0027s facts in the index as they stand: official_identity is the act as published (the work followed by /jo) where the catalogue names it, else its first version; official_source is the publisher\u0027s PDF file of that act\u0027s French text where the catalogue names one, else the same identity; document_type, date_document, publication_date, entry_into_force, no_longer_in_force, in_force_status, memorial_issue and historical_legal_id are the act\u0027s own typeDocument, dateDocument, publicationDate, dateEntryInForce, dateNoLongerInForce, inForceStatus, isPartOf and historicalLegalId facts, verbatim, each a list that is empty when the catalogue states none, and document_type_codes and in_force_status_codes the last segment of each of the first two IRIs, the publisher\u0027s own word; in_force_status is the act\u0027s, never a consolidation\u0027s; each date is the publisher\u0027s and has the role its fact names, and none is an applicability date; title is the act\u0027s French title as the catalogue states it, or null; versions lists the act\u0027s versions in the catalogue (as published, consolidated, a code\u0027s), with each one\u0027s kind and the reason no text of it is held here (reason_rule); record_address is the address this site gives the act, where this record is its page; nothing here is the act\u0027s text, and an absence of text here is not an absence of law",
             "title": "Loi du 10 ao\u00FBt 1991 portant approbation de la Convention de La Haye",
             "title_language": "fra",
             "version_kinds": [
@@ -3361,6 +3373,9 @@
             "document_type": [
               "http://data.legilux.public.lu/resource/authority/resource-type/LOI"
             ],
+            "document_type_codes": [
+              "LOI"
+            ],
             "entry_into_force": [
               "1991-08-27"
             ],
@@ -3369,6 +3384,9 @@
             ],
             "in_force_status": [
               "http://data.legilux.public.lu/resource/authority/application-status/no-longer-in-force"
+            ],
+            "in_force_status_codes": [
+              "no-longer-in-force"
             ],
             "memorial_issue": [
               "http://data.legilux.public.lu/eli/etat/leg/memorial/1991/a58"
@@ -3403,7 +3421,7 @@
             ],
             "record_kind": "catalogue_only",
             "retained_transport_evidence": "none",
-            "rule": "R77: the publisher\u0027s catalogue holds this act and this index holds no version of it, so it is answered text_not_available with its record, read from the catalogue\u0027s facts in the index as they stand: official_identity is the act as published (the work followed by /jo) where the catalogue names it, else its first version; official_source is the publisher\u0027s PDF file of that act\u0027s French text where the catalogue names one, else the same identity; document_type, date_document, publication_date, entry_into_force, no_longer_in_force, in_force_status, memorial_issue and historical_legal_id are the act\u0027s own typeDocument, dateDocument, publicationDate, dateEntryInForce, dateNoLongerInForce, inForceStatus, isPartOf and historicalLegalId facts, verbatim, each a list that is empty when the catalogue states none; in_force_status is the act\u0027s, never a consolidation\u0027s; each date is the publisher\u0027s and has the role its fact names, and none is an applicability date; title is the act\u0027s French title as the catalogue states it, or null; versions lists the act\u0027s versions in the catalogue (as published, consolidated, a code\u0027s), with each one\u0027s kind and the reason no text of it is held here (reason_rule); record_address is the address this site gives the act, where this record is its page; nothing here is the act\u0027s text, and an absence of text here is not an absence of law",
+            "rule": "R77: the publisher\u0027s catalogue holds this act and this index holds no version of it, so it is answered text_not_available with its record, read from the catalogue\u0027s facts in the index as they stand: official_identity is the act as published (the work followed by /jo) where the catalogue names it, else its first version; official_source is the publisher\u0027s PDF file of that act\u0027s French text where the catalogue names one, else the same identity; document_type, date_document, publication_date, entry_into_force, no_longer_in_force, in_force_status, memorial_issue and historical_legal_id are the act\u0027s own typeDocument, dateDocument, publicationDate, dateEntryInForce, dateNoLongerInForce, inForceStatus, isPartOf and historicalLegalId facts, verbatim, each a list that is empty when the catalogue states none, and document_type_codes and in_force_status_codes the last segment of each of the first two IRIs, the publisher\u0027s own word; in_force_status is the act\u0027s, never a consolidation\u0027s; each date is the publisher\u0027s and has the role its fact names, and none is an applicability date; title is the act\u0027s French title as the catalogue states it, or null; versions lists the act\u0027s versions in the catalogue (as published, consolidated, a code\u0027s), with each one\u0027s kind and the reason no text of it is held here (reason_rule); record_address is the address this site gives the act, where this record is its page; nothing here is the act\u0027s text, and an absence of text here is not an absence of law",
             "title": "Loi du 10 ao\u00FBt 1991 portant approbation de la Convention de La Haye",
             "title_language": "fra",
             "version_kinds": [

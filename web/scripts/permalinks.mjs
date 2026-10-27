@@ -398,14 +398,27 @@ export function compareOfQuery(search) {
 }
 
 /**
- * The query a comparison writes into the compare page's own address once it is asked (`?work=…&from=…&to=…[&language=…]`), so
- * it can be shared and read without JavaScript, or null when its work is no address of this site (`COMPARE_WORK`): words a
- * reader typed never reach an address (R109), and the address is then left as it is.
+ * This site's address of a Luxembourg act in each form the API reads as one (`V3CorpusMount.TryParseStableWorkCoordinate`):
+ * `/lu-legilux/{key}`, under an interface language (`/fr/lu-legilux/{key}`), and either under this origin
+ * (`https://law.soufien.lu/…`), as a reader pastes it from the browser's bar; written as `/lu-legilux/{key}`, or null.
+ */
+export function compareWorkOf(identifier) {
+  if (typeof identifier !== 'string') return null;
+  const origin = 'https://law.soufien.lu';
+  const path = (identifier.startsWith(`${origin}/`) ? identifier.slice(origin.length) : identifier).replace(/^\/(?:en|fr)(?=\/lu-legilux\/)/, '');
+  return COMPARE_WORK.test(path) ? path : null;
+}
+
+/**
+ * The query a comparison writes into the compare page's own address once it is asked (`?work=/lu-legilux/{key}&from=…&to=…
+ * [&language=…]`), so it can be shared and read without JavaScript, or null when its work is no address of this site of an
+ * act (`compareWorkOf`): words a reader typed never reach an address (R109), and the address is then left as it is.
  */
 export function compareQueryOf({ identifier, dateFrom, dateTo, language = '' }) {
-  if (typeof identifier !== 'string' || !COMPARE_WORK.test(identifier) || !isCalendarDate(dateFrom) || !isCalendarDate(dateTo)) return null;
+  const work = compareWorkOf(identifier);
+  if (work === null || !isCalendarDate(dateFrom) || !isCalendarDate(dateTo)) return null;
   if (language !== '' && !COMPARE_QUERY_LANGUAGES.includes(language)) return null;
-  const query = new URLSearchParams({ work: identifier, from: dateFrom, to: dateTo, ...(language === '' ? {} : { language }) });
+  const query = new URLSearchParams({ work, from: dateFrom, to: dateTo, ...(language === '' ? {} : { language }) });
   return `?${query.toString()}`;
 }
 

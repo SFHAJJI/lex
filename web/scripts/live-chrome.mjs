@@ -391,7 +391,7 @@ const EN = Object.freeze({
     eyebrow: "Compare",
     heading: "Two states, article by article",
     // R57 (the audit of 2026-10-27, gap 2): the wording that changed is shown, and a comparison has an address of its own.
-    intro: "The states of one Luxembourg work applicable on two dates, compared by the publisher's article ids and wording, with nothing said about legal effect; the wording that changed is shown, the text deleted struck through and the text inserted underlined. The identifier and the dates go to this server in the request; a comparison of an act named by its address on this site is also written into this page's address, so that it can be shared and read without JavaScript; this page keeps nothing.",
+    intro: "The states of one Luxembourg work applicable on two dates, compared by the publisher's article ids and wording, with nothing said about legal effect; the wording that changed is shown, the text deleted struck through and the text inserted underlined. The identifier and the dates go to this server in the request; when the act is named by its address on this site, they are also written into this page's address, so that the comparison can be shared and read without JavaScript; this page keeps nothing.",
     idle: "Type a work identifier and two dates to compare the states applicable on them.",
     summary: "{work}: {from} against {to}.",
     summaryIn: "{work}: {from} against {to} in {language}.",
