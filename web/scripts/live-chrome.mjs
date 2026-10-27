@@ -645,6 +645,11 @@ const EN = Object.freeze({
       other: "{count} articles",
     }),
     links: "Elsewhere on this site",
+    // The example searches (R47; `home-examples.mjs`): each a usual citation of an article this site holds, derived from the
+    // mount at build and kept only when searching it opens that article's text; the citations themselves are data, said in
+    // their text's language.
+    examplesHeading: "Example searches",
+    examplesIntro: "Each searches for an article this site holds, cited as it is usually written, and leads to its text.",
   }),
   // A service failure on a screen, panel by panel (the specification of record's R60; `live-failure.mjs`): its line, word
   // for word the specification's, above what the screen says of the failure; the retry, which asks the same request again;

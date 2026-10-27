@@ -968,6 +968,8 @@ export const LIVE_CHROME_FR = Object.freeze({
       other: '{count} articles',
     }),
     links: 'Ailleurs sur ce site',
+    examplesHeading: 'Exemples de recherche',
+    examplesIntro: 'Chacun recherche un article que ce site détient, cité comme on l’écrit d’habitude, et mène à son texte.',
   }),
   failure: Object.freeze({
     line: 'Lex n’a pas pu mener à bien cette demande. Ce n’est pas une réponse sur le droit.',
