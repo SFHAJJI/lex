@@ -39,6 +39,13 @@ key set, the host headers, the monitor and the runbook) merged in, both sides ke
   derivations on one day give one record, byte for byte (tested with two API clocks).
 - **The open question (driver decision, reversible):** only an act the release's indexing record admits (R92) is featured;
   with no record, none. The journeys give a fixture mount a record of its one act (the test suite's own, naming no one).
+- **CI's journeys on #997 (run 40452673971): the J7 walk failed, every schema link 404.** The walk asked the API's origin
+  for the schemas; in the journeys whose pages the live server serves, the API holds no web root, while the page's own
+  origin served every schema (the API-served runs passed). J7 now follows a link on the page's origin. The build, the
+  release image and both servers held the schemas all along; the image probe and the deploy probe now also hold every
+  schema a Developers page links to the image's own bytes (`schemaLinkFailures`), and `developers-schemas.test.mjs` holds
+  the built directory to every linked schema, byte for byte the repository's, through the live server, with the CI fault
+  reproduced.
 - **#995 merged in**: `deploy-probe.mjs` reads both `--maintenance` and `--search-engines`; the probe's example searches go
   through `fetchWithinLimit` (the per-client limit); `V3TransportResponse` keeps both `service_in_maintenance` and the host
   headers; STATUS-WEB keeps both sides; OWNER-BRIEF keeps v3/integration's lines.

@@ -2284,11 +2284,14 @@ const decodedText = (text) => text.replaceAll("&quot;", '"').replaceAll("&#x27;"
 
 /**
  * What the Developers page (`html`, its bytes) says that the API at `origin` does not, as failures: its operations and which
- * of them are served, against the coverage answer's; each schema it links, which must be served as JSON; and its two
- * examples, the REST request its curl prints and the MCP tools/call message it prints, sent to this server as printed,
- * which must answer one envelope. `post` stands for `postJson`, so a test can say what the server answers.
+ * of them are served, against the coverage answer's; each schema it links, which the site serving the page (`pageOrigin`:
+ * the live server, or the API itself when it serves the pages) must serve as JSON, a link being followed on the page's own
+ * origin; and its two examples, the REST request its curl prints and the MCP tools/call message it prints, sent to the API
+ * as printed, which must answer one envelope. `post` stands for `postJson`, so a test can say what the server answers.
+ * (The first CI run of the walk, #997, asked the API's origin for the schemas: with the pages served by the live server, the
+ * API holds no web root, and every schema answered 404 there while the page's origin served it.)
  */
-export async function developersPageFailures(origin, html, { post = postJson, fetchImpl = fetch } = {}) {
+export async function developersPageFailures(origin, html, { post = postJson, fetchImpl = fetch, pageOrigin = origin } = {}) {
   const failures = [];
   const listed = [...html.matchAll(/data-operation="([a-z_]+)" data-served="(true|false)"/g)].map(([, id, served]) => ({ id, served: served === "true" }));
   const operations = (await post(`${origin}/api/v3/coverage`, { operation_id: "coverage", parameters: {} })).json?.result?.value?.operations;
@@ -2306,7 +2309,7 @@ export async function developersPageFailures(origin, html, { post = postJson, fe
   const schemas = [...new Set([...html.matchAll(/<a href="(\/schemas\/v3-platform\/[a-z0-9-]+\.json)" data-schema="/g)].map(([, path]) => path))];
   if (schemas.length === 0) failures.push("the page links no schema");
   for (const path of schemas) {
-    const answer = await fetchImpl(`${origin}${path}`);
+    const answer = await fetchImpl(`${pageOrigin}${path}`);
     let json = true;
     try {
       JSON.parse(await answer.text());
@@ -2343,7 +2346,7 @@ export async function runWalk(apiOutput, mount, walk, options, browser, liveRoot
     const response = await fetch(`${pageOrigin}${walk.to}`);
     const destination = { status: response.status, bytes: await response.text() };
     const failures = walkFailures(observed, walk, destination);
-    if (walk.journey === "J7") failures.push(...await developersPageFailures(api.origin, destination.bytes));
+    if (walk.journey === "J7") failures.push(...await developersPageFailures(api.origin, destination.bytes, { pageOrigin }));
     return { observed: { ...observed, verifications: [], paint: null }, failures };
   } finally {
     if (live !== null) await new Promise((resolve) => live.close(resolve));

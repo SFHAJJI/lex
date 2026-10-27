@@ -28,6 +28,8 @@
 //   holds none of them. `--opening` with no `--release` is the opening's own check (`deploy.ps1 -Open`): the site's served
 //   legal pages, each 200, without a cookie and showing none of those, or the site is not opened (`openingFailures`);
 // - no cookie: neither the home page nor a legal page sets one (the cookies page says no page does);
+// - the Developers pages' schema links (R46, R55): each schema they link, the image's own file, served as JSON byte for
+//   byte (`schemaLinkFailures`);
 // - the home page's example searches (R47): each one a home page lists, asked of the revision as the search page asks it,
 //   opens the article the page says it opens (`homeExampleFailures`);
 // - the browser probes (`--browser`): the journey's real-mount steps through a browser against the revision, each
@@ -172,6 +174,37 @@ export function homePageFailures(served, built, { renderer = null, coverage = nu
   return failures;
 }
 
+/** The published schemas a Developers page links, in its bytes' order, each once: `/schemas/v3-platform/{name}.json`. */
+export function linkedSchemas(html) {
+  return [...new Set([...String(html).matchAll(/<a href="(\/schemas\/v3-platform\/[a-z0-9-]+\.json)" data-schema="/g)].map(([, path]) => path))];
+}
+
+/**
+ * The schemas the release image's Developers pages link (`en/developers.html`, `fr/developers.html`; R46, R55;
+ * `developers.mjs`), as failures: each must be a file of the image (`web`, its live page files), and the revision at `origin`
+ * must serve it 200 as JSON with those bytes. An image whose Developers page links a schema it does not hold, or a revision
+ * that does not serve one, fails; an image with no Developers page links none. `fetchImpl` stands for `fetch`.
+ */
+export async function schemaLinkFailures(origin, web, { fetchImpl = fetch } = {}) {
+  const files = new Map(web);
+  const paths = new Set(["fr", "en"].flatMap((language) => (files.has(`${language}/developers.html`) ? linkedSchemas(files.get(`${language}/developers.html`).toString("utf8")) : [])));
+  const failures = [];
+  for (const path of paths) {
+    const held = files.get(path.slice(1));
+    if (held === undefined) {
+      failures.push(`the release image's Developers page links ${path}, which the image does not hold`);
+      continue;
+    }
+    const answer = await fetchImpl(`${origin}${path}`, { redirect: "manual" });
+    const bytes = Buffer.from(await answer.arrayBuffer());
+    const type = answer.headers.get("content-type") ?? "";
+    if (answer.status !== 200 || !type.startsWith("application/json") || !bytes.equals(held)) {
+      failures.push(`GET ${path} answered ${answer.status} ${type}${answer.status === 200 ? ", not the image's own schema, byte for byte" : ""}: the Developers page's link to it does not work`);
+    }
+  }
+  return failures;
+}
+
 /** An address nothing claims, asked of a revision for its 404 page (R60): a page request, under no law's address. */
 export const NOT_FOUND_PROBE = "/fr/no-such-page";
 
@@ -295,6 +328,9 @@ export async function servedPageFailures(origin, { web, card, corpusSha256, note
   if (page.status === 200) {
     failures.push(...homePageFailures(body, served.get("/fr/"), { renderer: new Map(web).get("ssr/fr.js") ?? null, coverage: envelope }));
   }
+  // The schemas the Developers pages link (R46, R55): each the image's own file, served by this revision as JSON, byte for
+  // byte (the first CI run of the J7 walk, #997, found a link that answered 404 where the page was served without them).
+  failures.push(...await schemaLinkFailures(origin, web));
   // The home page's example searches (R47; `home-examples-run.mjs`): each one a home page lists, asked of this revision as
   // the search page asks it, must open the article the page says it opens; with the record the build carried
   // (`homeExamples`, the release rehearsal's), the page must list exactly its examples. Each home page the image holds.
