@@ -420,27 +420,38 @@ public sealed class V3PlatformHostTests
     }
 
     [TestMethod]
-    public async Task ARegisteredOperationWithNoRouteIsToldApartFromAPathNothingNames()
+    public async Task EveryRegisteredOperationHasARouteAndAnOperationServedFromNoDataRefusesInsideAnEnvelope()
     {
-        // Every registered id that no route serves answers operation_not_served; the exact segment only,
-        // so a query, a trailing segment or a served id keep their own answers.
+        // The specification of record, §3: "All 27 registered operations are served, or refuse with the typed reason their
+        // capability manifest states." Every registered id is routed, so none is a transport failure of its own; the three served
+        // from no data are routed apart from the served ones, and with no corpus mounted refuse as every operation does, inside
+        // an envelope. A trailing segment, a case variant or the bare prefix names nothing.
+        CollectionAssert.AreEqual(
+            V3OperationRegistry.Reviewed.Operations.Select(static operation => operation.OperationId).ToArray(),
+            V3RestRouteBinding.Routed.Select(static binding => binding.OperationId).Order(StringComparer.Ordinal).ToArray());
+        CollectionAssert.AreEqual(
+            V3UnservedOperations.Rows.Select(static row => row.Operation).ToArray(),
+            V3RestRouteBinding.Refusing.Select(static binding => binding.OperationId).ToArray());
+        Assert.IsEmpty(V3RestRouteBinding.Served.Intersect(V3RestRouteBinding.Refusing).ToArray());
+        Assert.IsFalse(Enum.GetNames<V3TransportFailureKind>().Contains("OperationNotServed"), "no registered operation is a transport failure");
+
         var application = new V3ApiHandler(
             SyntheticApiState.Unavailable,
             static () => DateTimeOffset.Parse("2026-09-18T00:00:00Z"));
-        var unserved = V3OperationRegistry.Reviewed.Operations
-            .Select(static operation => operation.OperationId)
-            .Except(V3RestRouteBinding.Served.Select(static binding => binding.OperationId), StringComparer.Ordinal)
-            .ToArray();
-        Assert.IsNotEmpty(unserved, "the registry still names operations no route serves; when it does not, this test retires with the kind.");
-        foreach (var operationId in unserved)
+        foreach (var binding in V3RestRouteBinding.Refusing)
         {
-            var route = RouteContext(Encoding.UTF8.GetBytes("{}"));
-            route.Features.Get<IHttpRequestFeature>()!.RawTarget = "/api/v3/" + operationId;
+            var route = RouteContext(Encoding.UTF8.GetBytes($"{{\"operation_id\":\"{binding.OperationId}\",\"parameters\":{{}}}}"));
+            route.Features.Get<IHttpRequestFeature>()!.RawTarget = binding.RawTarget;
             await application.HandleAsync(route, CancellationToken.None);
-            AssertTransportProblem(route, "operation_not_served", StatusCodes.Status404NotFound);
+            Assert.AreEqual(StatusCodes.Status200OK, route.Response.StatusCode, binding.OperationId);
+            using var envelope = JsonDocument.Parse(((MemoryStream)route.Response.Body).ToArray());
+            Assert.AreEqual(binding.OperationId, envelope.RootElement.GetProperty("operation_id").GetString());
+            Assert.AreEqual("refuse", envelope.RootElement.GetProperty("verdict").GetString());
+            Assert.AreEqual("no_corpus_mounted", envelope.RootElement.GetProperty("refusal").GetProperty("code").GetString());
         }
 
-        foreach (var rawTarget in new[] { "/api/v3/" + unserved[0] + "?x=1", "/api/v3/" + unserved[0] + "/more", "/api/v3/" + unserved[0].ToUpperInvariant(), "/api/v3/" })
+        var unserved = V3RestRouteBinding.Refusing[0].OperationId;
+        foreach (var rawTarget in new[] { "/api/v3/" + unserved + "/more", "/api/v3/" + unserved.ToUpperInvariant(), "/api/v3/", "/api/v3/no_such_operation" })
         {
             var route = RouteContext(Encoding.UTF8.GetBytes("{}"));
             route.Features.Get<IHttpRequestFeature>()!.RawTarget = rawTarget;
@@ -473,6 +484,57 @@ public sealed class V3PlatformHostTests
         Assert.IsFalse(problem.RootElement.TryGetProperty("result", out _));
         Assert.IsFalse(problem.RootElement.TryGetProperty("refusal", out _));
         Assert.IsFalse(problem.RootElement.TryGetProperty("verdict", out _));
+    }
+
+    /// <summary>
+    /// The review of #998, F5: the published payload schemas themselves, not a stand-in validator, keep a refusal whose payload
+    /// breaks its code's schema from leaving the server, over REST (500 <c>internal_response_invalid</c>, no envelope) and over
+    /// MCP (the host's failure, which the dispatcher answers JSON-RPC's Internal error); the payload as producers send it
+    /// passes through the same host.
+    /// </summary>
+    [TestMethod]
+    public async Task TheRealPayloadSchemasRefuseAPayloadThatBreaksItsCodesSchemaOverRestAndMcp()
+    {
+        var host = new V3PlatformHost();
+        var request = Encoding.UTF8.GetBytes("{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\"Circulaire CSSF 20/747\"}}");
+        const string who = "{\"name\":\"Commission de surveillance du secteur financier (CSSF)\",\"link\":\"https://www.cssf.lu/\",\"role\":\"information\"}";
+        const string asProduced = "{\"requested_identifier\":\"Circulaire CSSF 20/747\",\"official_source\":\"https://www.cssf.lu/\",\"reason\":\"r.\",\"who_to_ask\":" + who + "}";
+        (string Code, string Payload, string Why)[] broken =
+        [
+            ("out_of_corpus_scope", "{\"requested_identifier\":\"x\",\"official_source\":\"https://www.cssf.lu/\",\"reason\":\"r.\",\"who_to_ask\":\"the CSSF\"}", "who to ask named in words, not as an institution and its link"),
+            ("out_of_corpus_scope", "{\"requested_identifier\":\"x\",\"official_source\":\"http://www.cssf.lu/\",\"reason\":\"r.\",\"who_to_ask\":" + who + "}", "an official place that is no https link"),
+            ("out_of_corpus_scope", "{\"requested_identifier\":\"x\",\"official_source\":\"https://www.cssf.lu/\",\"who_to_ask\":" + who + "}", "no reason"),
+            ("rate_limited", "{\"retry_after\":0,\"retryable\":true}", "no wait"),
+            ("rate_limited", "{\"retry_after\":5,\"retryable\":false}", "not retryable"),
+            ("retrieval_mode_unavailable", "{\"requested_mode\":\"r5_concepts\"}", "no modes named"),
+        ];
+
+        foreach (var (code, payload, why) in broken.Select(static row => (row.Code, row.Payload, row.Why)).Prepend(("out_of_corpus_scope", asProduced, "as produced")))
+        {
+            using var helpful = JsonDocument.Parse(payload);
+            var element = helpful.RootElement.Clone();
+            Func<V3PlatformOperationRequest, V3PlatformOperationOutcome> execute = bound =>
+                V3PlatformOperationOutcome.Refused(RefusalContext(), new V3PlatformOperationRefusal(bound, code, element));
+            var rest = RouteContext(request);
+            await V3ResolveRestRoute.HandleOutcomeAsync(rest, host, "req_payload_" + code, execute, CancellationToken.None);
+            if (why == "as produced")
+            {
+                Assert.AreEqual(StatusCodes.Status200OK, rest.Response.StatusCode, why);
+                var envelope = V3EnvelopeJson.ParseAndVerify(((MemoryStream)rest.Response.Body).ToArray(), V3OperationRegistry.Reviewed);
+                Assert.AreEqual(code, envelope.Refusal!.Code, why);
+                _ = await host.CreateMcpOutcomeAsync(request, "req_payload_mcp", execute, CancellationToken.None);
+                continue;
+            }
+
+            AssertTransportProblem(rest, "internal_response_invalid", StatusCodes.Status500InternalServerError);
+            using var problem = JsonDocument.Parse(((MemoryStream)rest.Response.Body).ToArray());
+            Assert.IsFalse(problem.RootElement.TryGetProperty("refusal", out _), $"{code}, {why}: no envelope leaves");
+            var failure = await Assert.ThrowsExactlyAsync<V3TransportFailureException>(
+                () => host.CreateMcpOutcomeAsync(request, "req_payload_mcp", execute, CancellationToken.None), $"{code}, {why}");
+            Assert.AreEqual(V3TransportFailureKind.InternalResponseInvalid, failure.Kind, $"{code}, {why}");
+            Assert.IsInstanceOfType(failure.InnerException, typeof(JsonException), $"{code}, {why}: the schema refused it");
+            Assert.IsTrue(V3TransportResponse.IsServerFailure(failure.Kind), $"{code}, {why}: the server's failure, not the caller's");
+        }
     }
 
     [TestMethod]

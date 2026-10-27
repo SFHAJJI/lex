@@ -33,6 +33,7 @@ const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/enve
 const envelopeOf = (operation, scenarioStart) => census.envelopes.find((entry) => entry.operation === operation && entry.scenario.startsWith(scenarioStart)).envelope;
 const READING = envelopeOf("evidence_bundle", "the work on its state's date");
 const COVERAGE = census.envelopes.find((entry) => entry.operation === "coverage" && entry.envelope.result !== null).envelope;
+const BROWSE = census.envelopes.find((entry) => entry.operation === "browse" && entry.envelope.result !== null).envelope;
 const STATE = READING.result.value.states[0];
 // The reading the page at the state's permalink is rendered from (R64: asked by the permalink itself), and the refusal a
 // permalink whose digest is not the one held at its date gets, with the current link.
@@ -304,6 +305,15 @@ test("the build writes a server renderer per language, which renders the page in
       assert.ok(html.includes(`<link rel="canonical" href="https://law.soufien.lu/${language}/lu-legilux/loi-1991-08-10-n3/fra"/>`), `${language}: the canonical in the page's own language`);
       assert.equal((html.match(/<blockquote/g) ?? []).length, STATE.articles.length, `${language}: the reading, quoted`);
       assert.throws(() => context.lexSsr.render("history", "{}", "/en/x"), /no server-rendered history page/);
+
+      // The Developers page, from the answer to browse for the first act held: its live examples, the release's own data
+      // (the plan's item 8.4), with the contracts the build handed the renderer; the page as built carries none.
+      const developers = context.lexSsr.render("developers", JSON.stringify(BROWSE), `/${language}/developers.html`);
+      assert.match(developers, new RegExp(`^<!doctype html>\n<html lang="${language}" data-product-line="lex-v3" data-preview-state="live-developers"`), `${language}: the Developers page`);
+      assert.ok(developers.includes('data-live-examples="live"') && developers.includes(`<code>${BROWSE.result.value.works[0].identifier}</code>`), `${language}: its live examples, the first act held`);
+      assert.ok(developers.includes(`data-registry-sha256="${census.contract.registry_sha256}"`), `${language}: from the contracts`);
+      const built = await readFile(join(destination, language, "developers.html"), "utf8");
+      assert.ok(built.includes('data-live-examples="built"') && !built.includes('data-live-examples="live"'), `${language}: as built, none`);
 
       // The home page, from the coverage answer, in this language: the one box with its placeholder, today in Luxembourg
       // when the API answered, the coverage line from the answer's counts, and R50's sentence under the box and in the footer.

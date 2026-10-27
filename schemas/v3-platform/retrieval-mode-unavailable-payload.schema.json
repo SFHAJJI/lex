@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-retrieval_mode_unavailable-payload/1",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "requested_mode": {
+      "type": "string"
+    },
+    "available_modes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "requested_mode",
+    "available_modes"
+  ]
+}

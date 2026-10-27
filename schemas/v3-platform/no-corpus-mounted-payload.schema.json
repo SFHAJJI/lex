@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lex-v3-no_corpus_mounted-payload/1",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "required_corpus": {
+      "type": "string",
+      "enum": [
+        "lu",
+        "eu"
+      ]
+    }
+  },
+  "required": [
+    "required_corpus"
+  ]
+}

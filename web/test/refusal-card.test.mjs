@@ -519,7 +519,7 @@ test('the payload contract covers the registry, with no code left undeclared', (
       // line can describe what a refusal ought to carry; the registry is what it does carry.
       assert.match(
         requirement.basis,
-        /^(3[0-9]-[a-z0-9-]+|lex-v3-operation-registry\/1:)/,
+        /^(3[0-9]-[a-z0-9-]+|lex-v3-operation-registry\/2:)/,
         `${code} requires keys without citing a numbered architect document or the registry`,
       );
       assert.ok(!requirement.unspecified, `${code} is both specified and unspecified`);

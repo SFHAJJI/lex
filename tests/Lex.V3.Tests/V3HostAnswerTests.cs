@@ -89,7 +89,8 @@ public sealed class V3HostAnswerTests
             ("POST", "/api/v3/coverage", Coverage, StatusCodes.Status200OK),
             ("POST", "/api/v3/coverage", "{", StatusCodes.Status400BadRequest),
             ("GET", "/api/v3/coverage", "", StatusCodes.Status405MethodNotAllowed),
-            ("POST", "/api/v3/transposition", "{}", StatusCodes.Status404NotFound),
+            // An operation served from no data answers its typed refusal inside an envelope (the plan's item 8.6).
+            ("POST", "/api/v3/transposition", "{\"operation_id\":\"transposition\",\"parameters\":{}}", StatusCodes.Status200OK),
             ("POST", "/api/v3/no-such-operation", "{}", StatusCodes.Status404NotFound),
             ("POST", "/mcp", McpCoverage, StatusCodes.Status200OK),
             ("GET", "/mcp", "", StatusCodes.Status405MethodNotAllowed),

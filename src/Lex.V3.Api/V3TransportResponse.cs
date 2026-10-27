@@ -16,7 +16,6 @@ internal enum V3TransportFailureKind
     UnknownRoute,
     InternalResponseInvalid,
     InternalFailure,
-    OperationNotServed,
 
     /// <summary>
     /// A maintenance revision's answer to every request that is not a page's or its readiness (the specification of record's
@@ -104,6 +103,13 @@ internal static class V3TransportResponse
             cancellationToken);
     }
 
+    /// <summary>
+    /// Whether a failure below the envelope is the server's own, which REST answers with a 5xx status, rather than the
+    /// request's: MCP answers it JSON-RPC's Internal error, never Invalid params (<see cref="V3McpJsonRpc"/>).
+    /// </summary>
+    internal static bool IsServerFailure(V3TransportFailureKind kind) =>
+        Describe(kind).Status >= StatusCodes.Status500InternalServerError;
+
     private static (string Code, string Title, int Status) Describe(V3TransportFailureKind kind) => kind switch
     {
         V3TransportFailureKind.MalformedJson =>
@@ -126,8 +132,6 @@ internal static class V3TransportResponse
             ("method_not_allowed", "Method not allowed", StatusCodes.Status405MethodNotAllowed),
         V3TransportFailureKind.UnknownRoute =>
             ("unknown_route", "Unknown route", StatusCodes.Status404NotFound),
-        V3TransportFailureKind.OperationNotServed =>
-            ("operation_not_served", "Operation registered and not served", StatusCodes.Status404NotFound),
         V3TransportFailureKind.InternalResponseInvalid =>
             ("internal_response_invalid", "Internal response invalid", StatusCodes.Status500InternalServerError),
         V3TransportFailureKind.InternalFailure =>

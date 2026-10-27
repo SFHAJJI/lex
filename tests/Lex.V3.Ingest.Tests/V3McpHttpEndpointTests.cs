@@ -33,9 +33,15 @@ public sealed class V3McpHttpEndpointTests
         Assert.AreEqual(StatusCodes.Status200OK, list.Response.StatusCode);
         using var listed = JsonDocument.Parse(ResponseBytes(list));
         CollectionAssert.AreEqual(
-            V3RestRouteBinding.Served.Select(static binding => binding.OperationId).ToArray(),
+            V3RestRouteBinding.Routed.Select(static binding => binding.OperationId).ToArray(),
             listed.RootElement.GetProperty("result").GetProperty("tools").EnumerateArray().Select(static tool => tool.GetProperty("name").GetString()).ToArray(),
-            "the endpoint lists one tool per served REST operation.");
+            "the endpoint lists one tool per REST route: the 24 served and the 3 served from no data, which refuse.");
+        // The MCP specification's instructions (2025-06-18) and ping (the plan's item 8.5).
+        StringAssert.Contains(initialized.RootElement.GetProperty("result").GetProperty("instructions").GetString(), "A refusal is an answer, not an error");
+        var ping = await PostAsync(null, JsonSerializer.Serialize(new { jsonrpc = "2.0", id = 3, method = "ping" }));
+        Assert.AreEqual(StatusCodes.Status200OK, ping.Response.StatusCode);
+        Assert.AreEqual(V3McpJsonRpc.ProtocolVersion, ping.Response.Headers["MCP-Protocol-Version"].ToString());
+        Assert.AreEqual("{\"jsonrpc\":\"2.0\",\"id\":3,\"result\":{}}", System.Text.Encoding.UTF8.GetString(ResponseBytes(ping)));
     }
 
     [TestMethod]
@@ -81,11 +87,15 @@ public sealed class V3McpHttpEndpointTests
             ("events", new { limit = 5 }),
             ("answer_drift", new { identifier = work }),
             ("as_observed", new { identifier = work, date = fixture.ApplicabilityDate, snapshot = fixture.IndexSha256 }),
+            // The three served from no data refuse every call with their typed reason, inside the envelope (the plan's item 8.6).
+            ("concepts", new { identifier = work }),
+            ("knowable_on", new { identifier = work, date = fixture.ApplicabilityDate }),
+            ("transposition", new { identifier = work }),
         };
         CollectionAssert.AreEquivalent(
-            V3RestRouteBinding.Served.Select(static binding => binding.OperationId).ToArray(),
+            V3RestRouteBinding.Routed.Select(static binding => binding.OperationId).ToArray(),
             calls.Select(static call => call.Operation).ToArray(),
-            "every served operation is called once here.");
+            "every routed operation is called once here.");
 
         foreach (var (operation, arguments) in calls)
         {
@@ -98,11 +108,18 @@ public sealed class V3McpHttpEndpointTests
             using var rpc = JsonDocument.Parse(ResponseBytes(mcp));
             Assert.IsFalse(rpc.RootElement.TryGetProperty("error", out var rpcError), operation + ": " + (rpcError.ValueKind == JsonValueKind.Undefined ? "" : rpcError.ToString()));
             var structured = rpc.RootElement.GetProperty("result").GetProperty("structuredContent");
-            // ask answers the contained assistant's card under the point verdict (Decision 91); every other call is an answer.
-            Assert.AreEqual(operation == "ask" ? V3Verdicts.Point : V3Verdicts.Answer, structured.GetProperty("verdict").GetString(), operation + ": the fixture answers this call; a refusal on both paths would still compare equal.");
+            // ask answers the contained assistant's card under the point verdict (Decision 91); the three served from no data refuse
+            // retrieval_mode_unavailable; every other call is an answer.
+            var refusing = V3RestRouteBinding.Refusing.Any(binding => binding.OperationId == operation);
+            Assert.AreEqual(operation == "ask" ? V3Verdicts.Point : refusing ? V3Verdicts.Refuse : V3Verdicts.Answer, structured.GetProperty("verdict").GetString(), operation + ": the fixture answers this call; a refusal on both paths would still compare equal.");
+            Assert.IsFalse(rpc.RootElement.GetProperty("result").GetProperty("isError").GetBoolean(), operation + ": a refusal is an answer, never a tool error");
+            if (refusing)
+            {
+                Assert.AreEqual("retrieval_mode_unavailable", structured.GetProperty("refusal").GetProperty("code").GetString(), operation);
+            }
 
             var rest = await PostAsync(mount, JsonSerializer.Serialize(new { operation_id = operation, parameters = arguments }), traceIdentifier,
-                V3RestRouteBinding.Served.Single(binding => binding.OperationId == operation).RawTarget);
+                V3RestRouteBinding.Routed.Single(binding => binding.OperationId == operation).RawTarget);
             Assert.AreEqual(StatusCodes.Status200OK, rest.Response.StatusCode, operation);
             using var envelope = JsonDocument.Parse(ResponseBytes(rest));
             Assert.AreEqual(

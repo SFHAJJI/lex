@@ -25,7 +25,12 @@ import { pathToFileURL } from "node:url";
 
 import * as app from "../.react-build/app.mjs";
 import { buildLive } from "../scripts/build-live.mjs";
-import { CLIENT_LIMIT, KEY_SET_PATH, developersModel, MAXIMUM_REQUEST_BYTES, MCP_METHODS, MCP_PROTOCOL_VERSION, TRANSPORT_PROBLEMS, TRANSPORT_PROBLEM_SCHEMA, publishedSchemaPath } from "../scripts/developers.mjs";
+import {
+  CLIENT_LIMIT, KEY_SET_PATH, LIVE_EXAMPLE_REQUEST, MAXIMUM_REQUEST_BYTES, MCP_INSTRUCTIONS, MCP_METHODS, MCP_PROTOCOL_VERSION, REPLAY_GUARANTEES,
+  REPLAY_TESTS, TRANSPORT_PROBLEMS, TRANSPORT_PROBLEM_SCHEMA, developersModel, liveAnswerText, publishedSchemaPath,
+} from "../scripts/developers.mjs";
+import { OUT_OF_SCOPE_HOSTS } from "../scripts/routes.mjs";
+import { sitePageFor } from "../scripts/permalinks.mjs";
 import { readDevelopersContracts, readPlatformSchemas } from "../scripts/developers-contracts.mjs";
 import { SHOWN_NOWHERE, shownOnPage } from "../scripts/legal-pages.mjs";
 import { LIVE_CHROME, entriesOf, fillCounted, liveChrome } from "../scripts/live-chrome.mjs";
@@ -128,7 +133,7 @@ test("the three reference pages are built under each interface language, with th
         assert.equal((html.match(/aria-current="page"/g) ?? []).length, 1, `${label}: no menu entry is current but itself`);
         assert.ok(html.includes(`<p>${escaped(copy.freshness.noAnswer)}</p>`), `${label}: its strip carries no answer`);
         // Each part under its heading, in the table's order.
-        const parts = page.key === "developers" ? ["access", "operations", "envelope", "refusals", "citing", "limits", "events", "schemas"] : Object.keys(entry.sections);
+        const parts = page.key === "developers" ? [...app.DEVELOPERS_PARTS] : Object.keys(entry.sections);
         assert.deepEqual([...mainOf(html).matchAll(/data-reference-section="([a-z]+)"/gi)].map((match) => match[1]), page.key === "guide" ? [...parts, "glossary"] : parts, `${label}: its parts`);
         // No page of the site gives a contact: no e-mail address, no mail or telephone link, no postcode, in any bytes.
         assert.deepEqual(shownOnPage(html), [], `${label}: shows none of what the owner's decision keeps off the site`);
@@ -240,7 +245,7 @@ test("the Developers page is the registry's: every operation, refusal code, verd
     const section = main.slice(main.indexOf(`data-operation="${operation.id}"`), main.indexOf("</section>", main.indexOf(`data-operation="${operation.id}"`)));
     assert.ok(section.includes(`<code>POST /api/v3/${operation.id}</code>`), `${operation.id}: its REST path`);
     assert.ok(section.includes(escaped(liveChrome("en").developers.operations.descriptions[operation.id])), `${operation.id}: its description`);
-    assert.equal(section.includes(`<dd><code>${operation.id}</code></dd>`), operation.served, `${operation.id}: an MCP tool exactly when served`);
+    assert.ok(section.includes(`<dd><code>${operation.id}</code></dd>`), `${operation.id}: an MCP tool, served or not (every registered operation is routed)`);
     const request = JSON.parse(readFileSyncOf(`schemas/v3-platform/${operation.id.replaceAll("_", "-")}-request.schema.json`)).properties.parameters;
     assert.deepEqual([...section.matchAll(/data-parameter="([a-z_]+)" data-required="(true|false)"/g)].map((match) => [match[1], match[2] === "true"]),
       Object.keys(request.properties ?? {}).map((name) => [name, (request.required ?? []).includes(name)]), `${operation.id}: its parameters, as its request schema states them`);
@@ -248,13 +253,43 @@ test("the Developers page is the registry's: every operation, refusal code, verd
       assert.equal(schema.sha256, createHash("sha256").update(readFileSyncOf(`schemas/v3-platform/${schema.file}`, null)).digest("hex"), `${schema.id}: its digest`);
       assert.ok(section.includes(`<a href="${schema.path}" data-schema="${schema.id}">`) && section.includes(`<code>${schema.sha256}</code>`), `${operation.id}: links ${schema.id} with its digest`);
     }
-    if (!operation.served) assert.ok(section.includes(escaped(coverage.not_served_data.find((row) => row.operation === operation.id).data_needed)), `${operation.id}: the data that would serve it`);
+    if (!operation.served) {
+      const row = coverage.not_served_data.find((one) => one.operation === operation.id);
+      assert.ok(section.includes(escaped(row.data_needed)), `${operation.id}: the data that would serve it`);
+      // The typed refusal every request for it answers inside the envelope (the plan's item 8.6), and the mode it names.
+      assert.equal(row.reason, "retrieval_mode_unavailable", `${operation.id}: its typed reason`);
+      assert.ok(section.includes(`data-refusal-code="${row.reason}"`) && section.includes(`<code>${row.reason}</code>`) && section.includes(`<code>${row.requested_mode}</code>`), `${operation.id}: its refusal and its mode`);
+    }
   }
   assert.deepEqual([...main.matchAll(/data-refusal="([a-z_]+)"/g)].map((match) => match[1]), REGISTERED_REFUSALS, "every refusal code, in the registry's order");
   for (const refusal of contract.refusals) {
     const row = main.slice(main.indexOf(`data-refusal="${refusal.code}"`), main.indexOf("</div>", main.indexOf(`data-refusal="${refusal.code}"`)));
     for (const field of refusal.mandatory_payload_fields) assert.ok(row.includes(`<code>${field}</code>`), `${refusal.code}: names ${field}`);
+    // Its payload's schema (the plan's item 6.10), published, linked with its digest, which the registry names.
+    const file = `${refusal.code.replaceAll("_", "-")}-payload.schema.json`;
+    assert.equal(refusal.payload_schema, `lex-v3-${refusal.code}-payload/1`, `${refusal.code}: its payload schema's identity`);
+    assert.equal(refusal.payload_schema_sha256, createHash("sha256").update(readFileSyncOf(`schemas/v3-platform/${file}`, null)).digest("hex"), `${refusal.code}: its payload schema's digest`);
+    assert.deepEqual(JSON.parse(readFileSyncOf(`schemas/v3-platform/${file}`)).required, refusal.mandatory_payload_fields, `${refusal.code}: the schema requires the registry's fields`);
+    assert.ok(row.includes(`<a href="${publishedSchemaPath(file)}" data-schema="${refusal.payload_schema}">`) && row.includes(`<code>${refusal.payload_schema_sha256}</code>`), `${refusal.code}: links its payload schema with its digest`);
   }
+  assert.deepEqual(MANDATORY_FIELDS.get("out_of_corpus_scope"), ["requested_identifier", "official_source", "reason", "who_to_ask"], "out_of_corpus_scope carries its four elements (36-ideal-evaluation.md §4)");
+
+  // What Lex never holds: the census's out-of-scope list, each class with its official place and who to ask, an institution.
+  const list = contract.out_of_scope;
+  assert.equal(list.schema, "lex-v3-out-of-scope/1");
+  assert.ok(list.classes.length >= 4, `the list's classes are read (${list.classes.length})`);
+  assert.deepEqual([...main.matchAll(/data-out-of-scope-class="([a-z_]+)"/g)].map((match) => match[1]), list.classes.map((entry) => entry.class), "every class of the list, in its order");
+  assert.ok(main.includes(`<code>${list.sha256}</code>`), "the list's digest");
+  for (const entry of list.classes) {
+    const item = main.slice(main.indexOf(`data-out-of-scope-class="${entry.class}"`), main.indexOf("</li>", main.indexOf(`data-out-of-scope-class="${entry.class}"`)));
+    assert.ok(item.includes(escaped(entry.instrument)) && item.includes(escaped(entry.reason)), `${entry.class}: the instrument and the reason`);
+    assert.ok(item.includes(`<a href="${entry.official_source}" rel="external">`) && item.includes(`<a href="${entry.who_to_ask.link}" rel="external">${escaped(entry.who_to_ask.name)}</a>`), `${entry.class}: its official place and who to ask, linked`);
+    for (const example of entry.examples) assert.ok(item.includes(`<code>${escaped(example)}</code>`), `${entry.class}: ${example}`);
+    assert.equal(entry.who_to_ask.role, "information", `${entry.class}: who to ask is the institution that publishes it`);
+    assert.match(entry.who_to_ask.name, /\([A-Z]{3,4}\)$/, `${entry.class}: an institution, by its official name`);
+  }
+  // The card's link policy for an out-of-scope refusal names exactly the list's hosts.
+  assert.deepEqual([...new Set(list.classes.flatMap((entry) => [new URL(entry.official_source).host, new URL(entry.who_to_ask.link).host]))].sort(), [...OUT_OF_SCOPE_HOSTS].sort(), "OUT_OF_SCOPE_HOSTS is the list's hosts");
   assert.deepEqual([...main.matchAll(/data-verdict="([a-z_]+)"/g)].map((match) => match[1]), contract.verdicts, "every verdict");
   assert.deepEqual([...main.matchAll(/data-member="([a-z0-9_]+)"/g)].map((match) => match[1]), DEVELOPERS.envelope.members, "every envelope member");
   assert.ok(main.includes(`data-registry-sha256="${contract.registry_sha256}"`) && main.includes(`<code>${contract.registry_sha256}</code>`), "the registry's digest");
@@ -284,6 +319,19 @@ test("the facts the Developers page takes from the API's code are that code's", 
   const dispatch = /return method switch\s*\{([\s\S]*?)_ => Error/.exec(mcp);
   assert.ok(dispatch, "the MCP dispatch is where this test expects it");
   assert.deepEqual([...dispatch[1].matchAll(/"([a-z/]+)" =>/g)].map((match) => match[1]), MCP_METHODS, "the MCP methods answered");
+  assert.ok(MCP_METHODS.includes("ping"), "ping (the plan's item 8.5)");
+  // The server's instructions, word for word (the plan's item 8.5), as the page quotes them.
+  const instructions = /internal const string Instructions =([\s\S]*?);\n/.exec(mcp);
+  assert.ok(instructions, "the MCP instructions are where this test expects them");
+  assert.equal([...instructions[1].matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((match) => match[1]).join(""), MCP_INSTRUCTIONS, "the MCP instructions");
+  assert.ok(render("developers").includes(escaped(MCP_INSTRUCTIONS)), "and the page quotes them");
+  // The replay guarantees are held by the tests the page names, each a test method of the class it names.
+  const replay = await repository(REPLAY_TESTS);
+  assert.deepEqual(REPLAY_GUARANTEES.map((guarantee) => guarantee.id), ["G1", "G2", "G3", "G4", "G5"]);
+  for (const guarantee of REPLAY_GUARANTEES) {
+    assert.match(replay, new RegExp(`\\[TestMethod\\]\\s*public async Task ${guarantee.test}\\(`), `${guarantee.id}: ${guarantee.test} is a test of ${REPLAY_TESTS}`);
+    assert.ok(render("developers").includes(`data-guarantee="${guarantee.id}"`) && render("developers").includes(`<code>${guarantee.test}</code>`), `${guarantee.id}: on the page, with its test`);
+  }
   const host = await repository("src/Lex.V3.Api/V3PlatformHost.cs");
   const ceiling = /internal const int MaximumRequestBytes = ([0-9 *]+);/.exec(host)?.[1];
   assert.ok(ceiling !== undefined, "the request ceiling is where this test expects it");
@@ -312,6 +360,31 @@ test("the facts the Developers page takes from the API's code are that code's", 
   for (const language of ["en", "fr"]) {
     assert.doesNotMatch(LIVE_CHROME[language].developers.limits.rate, /no per-client|aucune limite de débit/, `${language}: the page no longer says there is no limit`);
   }
+});
+
+test("the Developers page's live examples are the served release's own answer: rendered from browse for the first act it holds, and as built, none", () => {
+  // Both servers render the page from their answer to browse for the first act held (the plan's item 8.4: "live examples from
+  // the release's own data"), as the site's table says (`sitePageFor`, `V3WebRoot.SitePageFor`).
+  for (const language of ["en", "fr"]) {
+    assert.deepEqual(JSON.parse(JSON.stringify(sitePageFor(`/${language}/developers.html`))), { language, kind: "developers", operation: LIVE_EXAMPLE_REQUEST.operation_id, parameters: LIVE_EXAMPLE_REQUEST.parameters });
+  }
+  const browse = census.envelopes.find((entry) => entry.operation === "browse" && entry.envelope.result !== null).envelope;
+  const work = browse.result.value.works[0];
+  const live = mainOf(app.renderLiveReferencePage("developers", { developers: DEVELOPERS, live: browse }));
+  assert.ok(live.includes('data-live-examples="live"'), "rendered from an answer");
+  assert.ok(live.includes(escaped(liveAnswerText(browse))), "the answer, whole");
+  assert.ok(live.includes(escaped(JSON.stringify(LIVE_EXAMPLE_REQUEST))), "the request it answers");
+  assert.ok(live.includes(`<code>${work.identifier}</code>`) && live.includes(`<code>${work.latest_applicability_date}</code>`), "the first act held and its latest version's date");
+  assert.ok(live.includes(escaped(`"identifier":"${work.identifier}"`)) && live.includes(escaped(`"name": "as_of"`)), "the next requests ask about it");
+  const built = mainOf(render("developers"));
+  assert.ok(built.includes('data-live-examples="built"') && !built.includes('data-live-examples="live"'), "as built, none");
+  // A refusal is shown as the answer it is.
+  const refused = structuredClone(census.envelopes.find((entry) => entry.operation === "coverage" && entry.envelope.refusal !== null).envelope);
+  refused.operation_id = "browse";
+  const refusedPage = mainOf(app.renderLiveReferencePage("developers", { developers: DEVELOPERS, live: refused }));
+  assert.ok(refusedPage.includes(escaped(liveAnswerText(refused))) && refusedPage.includes(escaped(LIVE_CHROME.en.developers.examples.refused)), "a refusal, as an answer");
+  assert.throws(() => app.renderLiveReferencePage("developers", { developers: DEVELOPERS, live: census.envelopes[0].envelope }), /drawn from a browse answer/, "and from browse only");
+  assert.throws(() => app.renderLiveReferencePage("help", { live: browse }), /only the Developers page/, "no other reference page is rendered from an answer");
 });
 
 test("the glossary's terms are the site's own words, in each language, as the pages that print them say them", () => {
@@ -439,4 +512,73 @@ test("the Developers page says the per-client limit and the key set in the revie
   }
   assert.deepEqual(Object.keys(LIVE_CHROME.en.developers.limits), ["heading", "anonymous", "size", "paging", "rate", "pages", "availability"]);
   assert.deepEqual(Object.keys(LIVE_CHROME.fr.developers.limits), Object.keys(LIVE_CHROME.en.developers.limits));
+});
+
+test("the forms the French review of the API's gaps pinned say what the platform does (the addendum of 2026-10-27, the API's gaps)", async () => {
+  const [EN, FR] = [LIVE_CHROME.en, LIVE_CHROME.fr];
+  // G1 and G3: an earlier version verifies only while a kept build holds its text (`VerifyScope`); a referenced build is one
+  // its caller lists (`V3GenerationRetention.Referenced`), never one a permalink names by itself.
+  const mount = await repository("src/Lex.V3.Api/V3CorpusMount.cs");
+  assert.ok(mount.includes("unless a retained generation holds that state"), "VerifyScope, where the review read it");
+  for (const key of ["G1", "G3"]) {
+    assert.match(EN.developers.replay.guarantees[key].text, /while a kept build holds its text/, `en ${key}`);
+    assert.match(FR.developers.replay.guarantees[key].text, /tant qu’une construction conservée en détient le texte/, `fr ${key}`);
+  }
+  const retention = await repository("src/Lex.V3.Ingest/V3GenerationRetention.cs");
+  assert.ok(retention.includes('public const string Referenced = "referenced";') && retention.includes("Nothing records which permalinks or bundles were published"));
+  assert.ok(EN.developers.replay.guarantees.G3.text.includes("every build listed as referenced by a published permalink"));
+  assert.equal(EN.developers.replay.guarantees.G3.name, "Nothing is deleted from the log");
+  // G1: a replaced file is recorded whether or not its text changed (the replay test's two file_replaced events).
+  assert.ok(EN.developers.replay.guarantees.G1.text.includes("the version stays the same when the text is unchanged"));
+  // G5: the bundle carries the row facts since S7a, so the version's own digest is recomputed from the answer.
+  assert.ok(mount.includes("caller recomputes the digest from this answer"), "ProvenanceDerivationNine, where the review read it");
+  assert.ok(EN.developers.replay.guarantees.G5.text.includes("and the version's own digest") && !/does not carry yet/.test(EN.developers.replay.guarantees.G5.text));
+  // Entry 3: a request to an operation served from no data is refused out of scope first, and with no mount no_corpus_mounted,
+  // so the sentence says "a request", never "every request" (`V3CorpusScopeMountTests`).
+  assert.ok(EN.developers.operations.notServed.startsWith("Not served from data: a request to it"));
+  assert.ok(FR.developers.operations.notServed.startsWith("Opération non servie faute de données : une requête qui la vise"));
+  // The words the review refused in these forms.
+  const refused = [/servies? sans données/, /refusée?s? par \{/, /qui en prend/, /sans eux/, /sa fiche en REST/, /ignore les membres/, /lié à côté/, /population de l’UE/, /comme celle de \{example\}/];
+  for (const [path, text] of [...entriesOf(FR.developers).map(([one, value]) => [`developers.${one}`, value]), ["coverageAnswer.facts.notRouted", FR.coverageAnswer.facts.notRouted], ["coverageAnswer.captions.notServedData", FR.coverageAnswer.captions.notServedData]]) {
+    for (const pattern of refused) assert.doesNotMatch(text, pattern, `fr ${path}`);
+  }
+});
+
+test("G2 names what moves with the moment of the answer, as its replay test holds it, and the change policy points to the out-of-scope list's own digest (the review of #998, F1 and F2)", async () => {
+  const [EN, FR] = [LIVE_CHROME.en, LIVE_CHROME.fr];
+  // F1: the members G2 names are the ones `V3ReplayGuaranteesTests` finds moving a month later, and no other.
+  const replay = await repository(REPLAY_TESTS);
+  for (const member of [
+    "context.freshness.channels[0].age_days", "context.freshness.channels[0].stale", "context.freshness.observed_at", "context.freshness.stale",
+    "request_ref", "result.value.reference.recognised.date.date", "result.value.reference.opens.state_date",
+    "result.value.reference.opens.address", "result.value.reference.opens.address_kind",
+  ]) {
+    assert.ok(replay.includes(`"${member}"`), `${REPLAY_TESTS} holds ${member}`);
+  }
+  for (const key of ["servingCommit", "observedAt", "requestRef", "ageDays", "channelStale", "stale", "recognisedDate", "rateLimited"]) {
+    assert.ok(EN.developers.replay.guarantees.G2.text.includes(`{${key}}`), `en G2 names {${key}}`);
+    assert.ok(FR.developers.replay.guarantees.G2.text.includes(`{${key}}`), `fr G2 names {${key}}`);
+  }
+  assert.doesNotMatch(EN.developers.replay.guarantees.G2.text, /the two members/);
+  // An undated reference is read at the search's date when the search names one, and at today only when it names none
+  // either (`ExactReferenceRule`; the French review of #998's repair, F12); the French says "révision du code", never
+  // "commit", and never "date donnée" beside "données" (G26).
+  assert.match(EN.developers.replay.guarantees.G2.text, /today in Luxembourg \(\{recognisedDate\}\) if the search names none either/);
+  assert.match(FR.developers.replay.guarantees.G2.text, /si la recherche n\u2019en indique pas non plus/);
+  for (const text of [FR.developers.replay.guarantees.G2.text, FR.developers.changes.digest]) {
+    assert.doesNotMatch(text, /\bcommit\b|date donnée|conserve l\u2019empreinte/);
+  }
+  // F2: the registry's digest moves with an operation's definition, not with a fix to how it behaves; the out-of-scope list
+  // is not in the registry, and every out_of_corpus_scope refusal names its own identity and digest.
+  assert.ok(EN.developers.changes.digest.startsWith("Any change to an operation's definition,"));
+  assert.match(EN.developers.changes.digest, /that leaves its definition as it is keeps the digest/);
+  for (const [language, table] of [["en", EN], ["fr", FR]]) {
+    for (const key of ["code", "scopeList", "scopeListDigest"]) assert.ok(table.developers.changes.digest.includes(`{${key}}`), `${language} digest names {${key}}`);
+  }
+  const scope = await repository("src/Lex.V3.Api/V3CorpusMount.Scope.cs");
+  assert.ok(scope.includes("scope_list = V3OutOfScope.Schema") && scope.includes("scope_list_sha256 = V3OutOfScope.Sha256"), "the refusal names the list and its digest");
+  const page = mainOf(render("developers"));
+  for (const member of ["context.freshness.channels[].age_days", "result.value.reference.recognised.date", "context.commits.serving_runtime_source_commit", "scope_list_sha256"]) {
+    assert.ok(page.includes(`<code>${member}</code>`), `the page shows ${member}`);
+  }
 });
