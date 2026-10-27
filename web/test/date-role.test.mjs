@@ -241,8 +241,8 @@ test("the search page says a version dated by its entry into force as that, and 
 });
 
 test("the CSV export says what its date is in a date_role column after the segments, and nothing on an older index (R21; the review of #987)", () => {
-  // The column is appended, so every column before it keeps its place.
-  assert.deepEqual(CSV_COLUMNS.slice(-2), ["segments", "date_role"]);
+  // The column is appended, so every column before it keeps its place; the rights disclosure comes after it.
+  assert.deepEqual(CSV_COLUMNS.slice(-3), ["segments", "date_role", "rights_disclosure"]);
   const csvOf = (envelope) => {
     const outcome = readingOutcome({ state: "success", envelope });
     assert.equal(outcome.state, "success", outcome.sentence);
@@ -250,7 +250,12 @@ test("the CSV export says what its date is in a date_role column after the segme
     const pins = new Set([...state.articles, ...state.articlesWithoutText].map((article) => pinKey(state.stateSha256, article.publisherId)));
     const rows = exportCsv(exportState(outcome, pins).model).split("\r\n").filter((line) => line.length > 0);
     assert.equal(rows[0], CSV_COLUMNS.join(","));
-    return rows.slice(1).map((row) => row.slice(row.lastIndexOf(",") + 1));
+    // The date's role is the cell before the last, the rights disclosure, which is empty here (no ruling serves these texts).
+    return rows.slice(1).map((row) => {
+      assert.ok(row.endsWith(","), "no rights disclosure on a text no ruling serves");
+      const cells = row.slice(0, -1);
+      return cells.slice(cells.lastIndexOf(",") + 1);
+    });
   };
   // A state dated by its entry into force: its applies_from cell is that date, and the role says what it is.
   const dated = csvOf(byEntryIntoForce(bundle()));
