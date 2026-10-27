@@ -121,13 +121,13 @@ public sealed class V3WebRootMaintenanceTests
     public void TheSwitchIsTheReleasesOneVariableOnOnlyWhenItSaysOnExactly()
     {
         // The variable's name is held to the template's (web/test/deploy-kit.test.mjs).
-        foreach (var (value, on) in new (string? Value, bool On)[]
+        foreach (var (value, isOn) in new (string? Value, bool IsOn)[]
                  {
                      ("on", true), (null, false), (string.Empty, false), ("On", false), ("ON", false), (" on", false), ("on ", false),
                      ("on\n", false), ("1", false), ("true", false), ("yes", false), ("off", false), ("maintenance", false),
                  })
         {
-            Assert.AreEqual(on, V3WebRoot.MaintenanceState(value), value ?? "(none)");
+            Assert.AreEqual(isOn, V3WebRoot.MaintenanceState(value), value ?? "(none)");
         }
     }
 
