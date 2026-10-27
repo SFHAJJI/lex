@@ -1,20 +1,20 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-27 at 02:15 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-27 at 05:45 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 ## Where V3 stands
 
-- Merged on 26 October, in three pull requests, each reviewed and green: the web (today's date, the search kept in
-  its link, the legal pages naming no one, the EU authenticity line, how current the law is on every page); the data
-  (which version answers a date, each date said for what it is, the gaps between versions, an EU act's own dates).
+- Merged on 26 October, reviewed and green: the web (today's date, legal pages naming no one, the EU authenticity line,
+  how current the law is) and the data (which version answers a date, dates by role, gaps, an EU act's own dates).
 - Released on 26 October: a signed release of that code, rebuilt identically, every quality gate passed, no cookie,
   nothing kept about readers. It serves law.soufien.lu, open to everyone since 27 October 01:08 UTC, when you removed
   the address rules from your phone. The legal pages were checked first and again after.
 - Down 3 minutes on 27 October (01:10 to 01:13 UTC): a redeployment switched off the live version by mistake. The
   deployment script is fixed so it never switches off a version it did not make.
-- Today Luxembourg has 1,730 acts as first published, no codes; EU text covers 511 of 1,170 versions.
+- Text: Luxembourg 1,730 acts as first published; EU 274 of 377 versions, 333 after the next rebuild (fixed 27 October:
+  Treaties, Charter, 43 acts). No consolidated Luxembourg law yet: 451 await our rights fix, 1,286 your L1 and L2.
 - The codes (121,000 articles) were rebuilt on Azure on 26 October; two builds agreed byte for byte. Their gates pass
   for the EU and for search; the Luxembourg date check, which still assumes one version per act, is being rewritten to
   the publisher's own dates, and any reader fault it finds fixed, before a second release carries the codes.
