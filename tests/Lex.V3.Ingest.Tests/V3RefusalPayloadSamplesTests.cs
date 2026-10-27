@@ -49,8 +49,17 @@ public sealed class V3RefusalPayloadSamplesTests
         await ObserveReferenceListsAsync(census);
         await ObserveEuropeReferencesAsync(census);
         await ObserveOutsideNamedVersionAsync(census);
+        await ObserveScopeAsync(census);
         Assert.IsEmpty(census.Problems, "Scenarios that did not yield the refusal they name:\n" + string.Join("\n", census.Problems));
         var observed = census.Observed;
+
+        // Each payload is held, independently of the copy the API embeds, to its code's published schema (the plan's item 6.10;
+        // 36-ideal-evaluation.md §4: "Payload completeness: JSON-schema per refusal type; 100 percent").
+        var schemaFailures = observed
+            .Where(static observation => !PublishedPayloadSchema(observation.Code).Evaluate(observation.Payload).IsValid)
+            .Select(static observation => $"{observation.Operation} / {observation.Scenario}: {observation.Code}")
+            .ToArray();
+        Assert.IsEmpty(schemaFailures, "Payloads their code's published schema refuses:\n" + string.Join("\n", schemaFailures));
 
         var registryCodes = V3OperationRegistry.Reviewed.RefusalCodes.Order(StringComparer.Ordinal).ToArray();
         Assert.AreEqual(20, registryCodes.Length);
@@ -424,6 +433,33 @@ public sealed class V3RefusalPayloadSamplesTests
     }
 
     /// <summary>Drives one served operation through the real handler and records the refusal, which must be the one named.</summary>
+    /// <summary>
+    /// The two refusals given before the mount is read: the three operations served from no data, each refusing
+    /// <c>retrieval_mode_unavailable</c> (the plan's item 8.6), and the instruments the out-of-scope list names, refused
+    /// <c>out_of_corpus_scope</c> with their official place and who to ask (the plan's item 6.10; J5's circular).
+    /// </summary>
+    private static async Task ObserveScopeAsync(Census observed)
+    {
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var work = $"/lu-legilux/{fixture.WorkKey}";
+        await DriveAsync(observed, mount, "concepts", "an operation served from no data, asked of a held work", new { identifier = work }, "retrieval_mode_unavailable");
+        await DriveAsync(observed, mount, "knowable_on", "an operation served from no data, asked of a held work on its date", new { identifier = work, date = fixture.ApplicabilityDate }, "retrieval_mode_unavailable");
+        await DriveAsync(observed, mount, "transposition", "an operation served from no data, asked of a held work", new { identifier = work }, "retrieval_mode_unavailable");
+        await DriveAsync(observed, mount, "dossier", "a CSSF circular asked for by its name (J5)", new { identifier = "Circulaire CSSF 20/747" }, "out_of_corpus_scope");
+        await DriveAsync(observed, mount, "resolve", "a decision of the Court of Justice by its ECLI", new { identifier = "ECLI:EU:C:2014:317" }, "out_of_corpus_scope");
+        await DriveAsync(observed, mount, "as_of", "a CNPD decision on a date", new { identifier = "Délibération CNPD n° 12/2023", date = fixture.ApplicabilityDate }, "out_of_corpus_scope");
+        await DriveAsync(observed, mount, "timeline", "a RESA publication", new { identifier = "RESA_2020_123.456" }, "out_of_corpus_scope");
+    }
+
+    /// <summary>A refusal code's payload schema as published (<c>schemas/v3-platform/{code}-payload.schema.json</c>), read from the file.</summary>
+    private static Json.Schema.JsonSchema PublishedPayloadSchema(string code) =>
+        Json.Schema.JsonSchema.FromText(
+            File.ReadAllText(Path.Combine(RepositoryRoot(), "schemas", "v3-platform", $"{code.Replace('_', '-')}-payload.schema.json")),
+            new Json.Schema.BuildOptions { Dialect = Json.Schema.Dialect.Draft202012, SchemaRegistry = new Json.Schema.SchemaRegistry() });
+
     private static async Task DriveAsync(
         Census census, V3CorpusMount mount, string operation, string scenario, object parameters, string expectedCode)
     {
