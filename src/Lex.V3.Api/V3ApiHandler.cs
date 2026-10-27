@@ -332,33 +332,41 @@ internal sealed class V3ApiHandler
     {
         ArgumentNullException.ThrowIfNull(corpusMount);
         ArgumentNullException.ThrowIfNull(utcNow);
-        return operationId switch
+        Func<V3PlatformOperationRequest, DateTimeOffset, V3PlatformOperationOutcome> operation = operationId switch
         {
-            "resolve" => request => corpusMount.Resolve(request, utcNow()),
-            "as_of" => request => corpusMount.AsOf(request, utcNow()),
-            "timeline" => request => corpusMount.Timeline(request, utcNow()),
-            "article_history" => request => corpusMount.ArticleHistory(request, utcNow()),
-            "diff" => request => corpusMount.Diff(request, utcNow()),
-            "changes_in_period" => request => corpusMount.ChangesInPeriod(request, utcNow()),
-            "in_force_on" => request => corpusMount.InForceOn(request, utcNow()),
-            "search" => request => corpusMount.Search(request, utcNow()),
-            "coverage" => request => corpusMount.Coverage(request, utcNow()),
-            "provenance" => request => corpusMount.Provenance(request, utcNow()),
-            "dossier" => request => corpusMount.Dossier(request, utcNow()),
-            "citation" => request => corpusMount.Citation(request, utcNow()),
-            "cited_by" => request => corpusMount.CitedBy(request, utcNow()),
-            "verify" => request => corpusMount.Verify(request, utcNow()),
-            "relations" => request => corpusMount.Relations(request, utcNow()),
-            "evidence_bundle" => request => corpusMount.EvidenceBundle(request, utcNow()),
-            "classification" => request => corpusMount.Classification(request, utcNow()),
-            "manifestation" => request => corpusMount.Manifestation(request, utcNow()),
-            "status_on" => request => corpusMount.StatusOn(request, utcNow()),
-            "browse" => request => corpusMount.Browse(request, utcNow()),
-            "ask" => request => corpusMount.Ask(request, utcNow()),
-            "events" => request => corpusMount.Events(request, utcNow()),
-            "answer_drift" => request => corpusMount.AnswerDrift(request, utcNow()),
-            "as_observed" => request => corpusMount.AsObserved(request, utcNow()),
+            "resolve" => corpusMount.Resolve,
+            "as_of" => corpusMount.AsOf,
+            "timeline" => corpusMount.Timeline,
+            "article_history" => corpusMount.ArticleHistory,
+            "diff" => corpusMount.Diff,
+            "changes_in_period" => corpusMount.ChangesInPeriod,
+            "in_force_on" => corpusMount.InForceOn,
+            "search" => corpusMount.Search,
+            "coverage" => corpusMount.Coverage,
+            "provenance" => corpusMount.Provenance,
+            "dossier" => corpusMount.Dossier,
+            "citation" => corpusMount.Citation,
+            "cited_by" => corpusMount.CitedBy,
+            "verify" => corpusMount.Verify,
+            "relations" => corpusMount.Relations,
+            "evidence_bundle" => corpusMount.EvidenceBundle,
+            "classification" => corpusMount.Classification,
+            "manifestation" => corpusMount.Manifestation,
+            "status_on" => corpusMount.StatusOn,
+            "browse" => corpusMount.Browse,
+            "ask" => corpusMount.Ask,
+            "events" => corpusMount.Events,
+            "answer_drift" => corpusMount.AnswerDrift,
+            "as_observed" => corpusMount.AsObserved,
             _ => throw new ArgumentOutOfRangeException(nameof(operationId), operationId, "Not a served operation."),
+        };
+
+        // Every answer passes the names record (R92, V3CorpusMount.Names.cs) on its way out, on both transports and for the
+        // server's own pages: an answer about a work it withholds is text_withheld.
+        return request =>
+        {
+            var now = utcNow();
+            return corpusMount.WithNamesWithheld(request, operation(request, now), now);
         };
     }
 

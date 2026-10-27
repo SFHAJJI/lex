@@ -46,16 +46,21 @@ internal sealed partial class V3CorpusMount : IDisposable
     // (V3CorpusMount.Freshness.cs).
     private readonly MountFreshness _freshness;
 
+    // The works R92's measurement withholds, from the names record beside the mount (V3CorpusMount.Names.cs); none without one.
+    private readonly NamesWithheld _names;
+
     private V3CorpusMount(
         LuxembourgIndexReader? reader,
         EuropeIndexReader? europeReader,
         LexCorpus6MountView corpus,
         BuildReportFacts report,
         V3RetentionDecision? generations = null,
-        IReadOnlyList<GenerationReader>? generationReaders = null)
+        IReadOnlyList<GenerationReader>? generationReaders = null,
+        NamesWithheld? names = null)
     {
         if (reader is null && europeReader is null)
             throw new ArgumentException("A V3 corpus mount requires at least one publisher index.");
+        _names = names ?? new NamesWithheld([], null);
         _reader = reader;
         _europeReader = europeReader;
         _corpus = corpus ?? throw new ArgumentNullException(nameof(corpus));
@@ -160,7 +165,11 @@ internal sealed partial class V3CorpusMount : IDisposable
             // The build report beside the mount, held to the artifacts just verified: what it says of each channel's newest
             // completed acquisition and of the commit that built the index (R87, R23); a report naming others refuses the mount.
             var report = await ReadBuildReportAsync(directory, corpus.ArtifactRef, reader, europeReader, cancellationToken).ConfigureAwait(false);
-            return new V3CorpusMount(reader, europeReader, corpus, report, generations, generationReaders);
+
+            // The names record beside the mount (R92), held to the corpus and indexes just verified: a record of another build, or
+            // one that breaks a rule, refuses the mount, like every other check here (V3CorpusMount.Names.cs).
+            var names = await ReadNamesRecordAsync(directory, corpus.ArtifactRef.Sha256, reader, europeReader, cancellationToken).ConfigureAwait(false);
+            return new V3CorpusMount(reader, europeReader, corpus, report, generations, generationReaders, names);
         }
         catch
         {
@@ -288,7 +297,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                 return Unknown(request, identifier, observedAt);
             }
 
-            var workResolution = _reader?.ResolveWorkTitle(identifier);
+            var workResolution = _reader is null ? null : TitleLadder(identifier);
             if (workResolution is null)
             {
                 using var unavailable = JsonSerializer.SerializeToDocument(new
@@ -3038,6 +3047,8 @@ internal sealed partial class V3CorpusMount : IDisposable
                     ? state
                     : throw new InvalidDataException("An article of the index belongs to no state."),
                 Edge: edge))
+            // R92: an article of a work the names record withholds is not quoted here (its label is its text).
+            .Where(entry => !CitingWithheld(entry.State))
             .OrderBy(static entry => entry.State.ApplicabilityDate, StringComparer.Ordinal)
             .ThenBy(static entry => entry.State.WorkKey, StringComparer.Ordinal)
             .ThenBy(static entry => entry.State.Language, StringComparer.Ordinal)
@@ -4140,7 +4151,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         // Both paths above have established that a Luxembourg index is mounted; this says so to the
         // compiler, which the unconditional call it replaces used to.
         ArgumentNullException.ThrowIfNull(_reader);
-        var titles = identifier is null ? _reader.ResolveWorkTitle(query) : null;
+        var titles = identifier is null ? TitleLadder(query) : null;
         var titleOutcome = titles is null ? "not_run_identifier_given"
             : !titles.Available ? "no_titles_held"
             : titles.Candidates.Count == 0 ? "no_title_match"
@@ -4183,8 +4194,9 @@ internal sealed partial class V3CorpusMount : IDisposable
         // Rights before any hit is served (SearchRightsRule): a state whose text its rights did not admit is not matched, so
         // no answer says which of its articles hold a word. The rule is evidence_bundle's, applied per state.
         // The decision is evidence_bundle's, read once for every state with the population the answer counts (SearchAdmits).
-        strict = strict.Where(hit => SearchAdmits(hit.StateSha256)).ToArray();
-        relaxed = relaxed.Where(hit => SearchAdmits(hit.StateSha256)).ToArray();
+        // R92 likewise: a state of a work the names record withholds is never matched (V3CorpusMount.Names.cs).
+        strict = strict.Where(hit => SearchAdmits(hit.StateSha256) && SearchMatchesUnderR92(hit.StateSha256)).ToArray();
+        relaxed = relaxed.Where(hit => SearchAdmits(hit.StateSha256) && SearchMatchesUnderR92(hit.StateSha256)).ToArray();
 
         var ambiguousWorks = new List<object>();
         if (requestedDate is not null)

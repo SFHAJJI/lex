@@ -288,7 +288,7 @@ internal sealed partial class V3CorpusMount
             {
                 // A title: the title ladder's exact and prefix tiers only, among the acts the index holds a version of; a title
                 // that only shares words with an act's, or that names no held act, is no reference.
-                var resolution = _reader.ResolveWorkTitle(reference.Act.Title!);
+                var resolution = TitleLadder(reference.Act.Title!);
                 var matched = resolution.Candidates
                     .Where(static candidate => candidate.MatchReason is "exact_normalized_title" or "prefix")
                     .ToArray();
@@ -327,7 +327,7 @@ internal sealed partial class V3CorpusMount
         (act.WorkKey is null ? [] : TitlesOfWork(act.WorkKey).Select(static title => title.Title)).Concat(CatalogueTitles(act.WorkIri));
 
     /// <summary>The titles (and short titles) the publisher's catalogue states of a work's versions and expressions, French first.</summary>
-    private IReadOnlyList<string> CatalogueTitles(string workIri) =>
+    private IReadOnlyList<string> CatalogueTitles(string workIri) => TitlesWithheld(null, workIri) ? [] :
         _reader!.ResolveFactsUnder(workIri + "/")
             .Where(static fact => fact.Predicate is "title" or "titleShort" && string.Equals(fact.ObjectKind, "literal", StringComparison.Ordinal))
             .OrderBy(static fact => fact.SubjectIri.EndsWith("/fr", StringComparison.Ordinal) ? 0 : 1)
@@ -661,6 +661,12 @@ internal sealed partial class V3CorpusMount
     /// <summary>A held work's titles, French first, then the rest in language order: what a recognition and a candidate name it by.</summary>
     private IReadOnlyList<LuxembourgIndexWorkTitle> TitlesOfWork(string workKey)
     {
+        // R92: a withheld work's titles are never served nor matched (V3CorpusMount.Names.cs).
+        if (TitlesWithheld(workKey, null))
+        {
+            return [];
+        }
+
         var expressions = _reader!.ResolveWorkStates(workKey).Select(static state => state.ExpressionIri)
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         return _reader.ResolveWorkTitles(expressions)
