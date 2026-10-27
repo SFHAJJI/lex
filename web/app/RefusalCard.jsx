@@ -135,10 +135,11 @@ function Payload({ parts, copy }) {
               {/* A declared null is the card's own sentence; any other value is the platform's, in English
                   where it is words, so a page in another language marks it English; a catalogue record's title is the
                   act's own words, in their language (R77). */}
-              <dd lang={row.lang ?? (row.declaredNull ? undefined : ENGLISH_LANG)}>
+              <dd lang={row.declaredNull || row.lang !== undefined ? undefined : ENGLISH_LANG}>
                 {row.declaredNull
                   ? copy.nullSentences[row.key]
-                  : row.href === undefined ? row.value : <a href={row.href} rel="external">{row.value}</a>}
+                  : row.lang !== undefined ? <span lang={row.lang}>{row.value}</span>
+                    : row.href === undefined ? row.value : <a href={row.href} rel="external">{row.value}</a>}
               </dd>
             </div>
           ))}

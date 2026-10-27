@@ -363,11 +363,18 @@ function formDecoded(raw) {
 }
 
 /**
- * The comparison a compare page's query names (`?work=…&from=yyyy-mm-dd&to=yyyy-mm-dd[&language=fra]`, as its form sends it
- * with no script; R57), as the request the page would send (`diff`'s `identifier`, `date_from`, `date_to` and `language`), or
- * null: each of `work`, `from` and `to` once and `language` at most once, each value form-decoded; the work not blank, at most
- * 1,024 characters and no control character, sent as written; two calendar dates; a language the form offers, or none
- * (empty). Any other name is ignored. As `V3WebRoot.CompareOfQuery` (a test holds the two to one table).
+ * A comparison's work as its address may name it: this site's address of a Luxembourg act (`/lu-legilux/{work key}`), a work
+ * key's characters and nothing else, never words (R109: no word a reader types reaches an address a server could record).
+ */
+const COMPARE_WORK = /^\/lu-legilux\/[a-z0-9][a-z0-9_-]{0,511}$/;
+
+/**
+ * The comparison a compare page's query names (`?work=/lu-legilux/{work}&from=yyyy-mm-dd&to=yyyy-mm-dd[&language=fra]`, as the
+ * compare screen writes it into its own address once it has asked it; R57), as the request the page would send (`diff`'s
+ * `identifier`, `date_from`, `date_to` and `language`), or null: each of `work`, `from` and `to` once and `language` at most
+ * once, each value form-decoded; the work this site's address of a Luxembourg act (`COMPARE_WORK`), never words; two calendar
+ * dates; a language the form offers, or none (empty). Any other name is ignored. As `V3WebRoot.CompareOfQuery` (a test holds
+ * the two to one table).
  */
 export function compareOfQuery(search) {
   if (typeof search !== 'string' || search.length < 2 || search[0] !== '?') return null;
@@ -383,17 +390,23 @@ export function compareOfQuery(search) {
   const work = values.get('work');
   const from = values.get('from');
   const to = values.get('to');
-  if (typeof work !== 'string' || work.trim().length === 0 || work.length > 1024 || /[\x00-\x1f\x7f]/.test(work)) return null;
+  if (typeof work !== 'string' || !COMPARE_WORK.test(work)) return null;
   if (!isCalendarDate(from) || !isCalendarDate(to)) return null;
   const language = values.get('language') ?? '';
   if (language !== '' && !COMPARE_QUERY_LANGUAGES.includes(language)) return null;
   return Object.freeze({ identifier: work, date_from: from, date_to: to, ...(language === '' ? {} : { language }) });
 }
 
-/** A comparison's address under an interface language (`/en/compare.html?work=…`), as the compare form writes it. */
-export function compareAddress(locale, { identifier, dateFrom, dateTo, language = '' }) {
+/**
+ * The query a comparison writes into the compare page's own address once it is asked (`?work=…&from=…&to=…[&language=…]`), so
+ * it can be shared and read without JavaScript, or null when its work is no address of this site (`COMPARE_WORK`): words a
+ * reader typed never reach an address (R109), and the address is then left as it is.
+ */
+export function compareQueryOf({ identifier, dateFrom, dateTo, language = '' }) {
+  if (typeof identifier !== 'string' || !COMPARE_WORK.test(identifier) || !isCalendarDate(dateFrom) || !isCalendarDate(dateTo)) return null;
+  if (language !== '' && !COMPARE_QUERY_LANGUAGES.includes(language)) return null;
   const query = new URLSearchParams({ work: identifier, from: dateFrom, to: dateTo, ...(language === '' ? {} : { language }) });
-  return `/${locale}/compare.html?${query.toString()}`;
+  return `?${query.toString()}`;
 }
 
 /**

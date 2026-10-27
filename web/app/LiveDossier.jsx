@@ -295,7 +295,7 @@ export function DossierAnswerView({ outcome, onRetry }) {
         {catalogueRecord(outcome.code, outcome.payload) ? (
           <>
             <h2 data-catalogue-record="">{outcome.payload.work_key}</h2>
-            {typeof outcome.payload.title === 'string' ? <p lang={quotationLanguageTag(outcome.payload.title_language)}>{outcome.payload.title}</p> : null}
+            {typeof outcome.payload.title === 'string' ? <p data-catalogue-title=""><span lang={quotationLanguageTag(outcome.payload.title_language)}>{outcome.payload.title}</span></p> : null}
           </>
         ) : null}
         <FailureFrame outcome={outcome} onRetry={onRetry}>

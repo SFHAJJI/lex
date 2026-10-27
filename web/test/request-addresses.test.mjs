@@ -29,7 +29,7 @@ import { createHistorySession } from "../scripts/live-history.mjs";
 import { createCompareSession } from "../scripts/live-compare.mjs";
 import { createRadarSession } from "../scripts/live-radar.mjs";
 import { startLiveCoverage } from "../scripts/live-coverage.mjs";
-import { readingPageAddress, withDateQuery } from "../scripts/permalinks.mjs";
+import { compareOfQuery, compareQueryOf, readingPageAddress, withDateQuery } from "../scripts/permalinks.mjs";
 import { searchFragment } from "../scripts/search-address.mjs";
 
 const WEB = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -100,6 +100,9 @@ const PINNED = Object.freeze({
   "app/page-address.mjs: the page's address: export function replacePageAddress(window, { search = window.location.search, hash = window.location.hash } = {}) {": "its definition: the path is the page's own",
   "app/LiveSearch.jsx: the page's address: if (fragment !== null) replacePageAddress(window, { hash: fragment });": "the search, after #",
   "app/LiveReading.jsx: the page's address: replacePageAddress(window, { search: withDateQuery(window.location.search, pin.request.date) });": "the date read at, in the query",
+  // R57: a comparison asked of an act named by this site's address is written into the compare page's own query, so it can be
+  // shared and read without JavaScript: a law's address and two dates (`compareQueryOf`), never a word.
+  "app/LiveCompare.jsx: the page's address: if (session.current.ask(request) && search !== null) replacePageAddress(window, { search });": "a law's address and two dates, in the query",
 });
 
 test("every place the pages' code could send a request or change an address is pinned, with why it carries no word", () => {
@@ -179,6 +182,14 @@ test("what the pages write into their own address holds no word but after #: a d
   assert.equal(readingPageAddress("/fr/lu-legilux/x/fra", 1, "2024-01-01"), "/fr/lu-legilux/x/fra?date=2024-01-01");
   assert.equal(readingPageAddress("/fr/lu-legilux/x/fra", 1, null), "/fr/lu-legilux/x/fra");
   assert.equal(readingPageAddress("/fr/lu-legilux/x/fra", 2, WORDS), "/fr/lu-legilux/x/fra?page=2", "a word is no date");
+  // A comparison writes a law's address and two dates into the query, and nothing for words a reader typed (R57, R109).
+  assert.equal(compareQueryOf({ identifier: "/lu-legilux/loi-1991-08-10-n3", dateFrom: "2024-01-01", dateTo: "2026-10-18", language: "fra" }),
+    "?work=%2Flu-legilux%2Floi-1991-08-10-n3&from=2024-01-01&to=2026-10-18&language=fra");
+  for (const identifier of [WORDS, "loi du 10 août 1991", "/lu-legilux/loi 1991", "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3", "/eu-eurlex/32016R0679"]) {
+    assert.equal(compareQueryOf({ identifier, dateFrom: "2024-01-01", dateTo: "2026-10-18" }), null, identifier);
+    assert.equal(compareOfQuery(`?work=${encodeURIComponent(identifier)}&from=2024-01-01&to=2026-10-18`), null, `${identifier}: no comparison the server renders`);
+  }
+  assert.equal(compareQueryOf({ identifier: "/lu-legilux/loi-1991-08-10-n3", dateFrom: WORDS, dateTo: "2026-10-18" }), null, "a word is no date");
   // The search goes after "#", where no server receives it.
   const fragment = searchFragment({ query: WORDS, language: "fra", date: "2026-10-18" });
   assert.ok(fragment.startsWith("#") && !fragment.includes("?"), fragment);

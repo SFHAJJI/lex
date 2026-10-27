@@ -1,10 +1,11 @@
 // The compare screen, asked of the live API: two states of one work, article by article.
 //
-// The server renders the form and the idle state, or, at a comparison's address (`/en/compare.html?work=…&from=…&to=…`,
-// the specification of record's R57 and R67; the audit of 2026-10-27, gap 2), the comparison itself from its own answer,
-// readable without JavaScript; the browser then asks only when the reader submits, and writes the comparison's address in
-// place of the page's. The form's controls carry names so that, with no script, the browser asks that address itself: a
-// work identifier and two dates, an address of law as a permalink is, never a phrase (a driver decision, STATUS-WEB.md).
+// The server renders the form and the idle state, or, at a comparison's address (`/en/compare.html?work=/lu-legilux/…&from=…
+// &to=…`, the specification of record's R57 and R67; the audit of 2026-10-27, gap 2), the comparison itself from its own
+// answer, readable without JavaScript; the browser then asks only when the reader submits. The form's controls carry no
+// name (R109), so a submit the browser performs itself sends nothing; once a comparison is asked, the screen writes its
+// address into the page's when its work is this site's address of an act (`compareQueryOf`: a law's address and two dates,
+// never a word; a driver decision, STATUS-WEB.md), so it can be shared.
 //
 // A changed article shows its wording inline (R57): one column, in reading order, the words deleted struck through and the
 // words inserted underlined, each also said in words hidden from sight, so a screen reader reads it linearly and nothing is
@@ -35,7 +36,8 @@ import { AsPublished, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, 
 import { todayAt } from '../scripts/initial-answer.mjs';
 import { TodayHint, useLuxembourgToday } from './Today.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
-import { compareAddress, compareOfQuery } from '../scripts/permalinks.mjs';
+import { compareOfQuery, compareQueryOf } from '../scripts/permalinks.mjs';
+import { replacePageAddress } from './page-address.mjs';
 import { answerHandedWith } from '../scripts/v3-client.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
@@ -364,40 +366,36 @@ export function LiveCompare({ contract, fetchImpl, initial = null }) {
 
   return (
     <div>
-      {/* Without a script, the form asks this page at the comparison's address, which the server renders (R57, R67); with
-          one, the screen asks the API and writes the comparison's address in place of the page's, so it can be shared. */}
+      {/* The form's controls carry no name (R109): a submit the browser performs itself sends nothing. Once a comparison is
+          asked, the screen writes its address into the page's when its work is this site's address of an act (a law's
+          address and two dates, never a word), which the server renders (R57, R67), so it can be shared and read without
+          JavaScript. */}
       <form
         role="search"
-        method="get"
         onSubmit={(event) => {
           event.preventDefault();
           const request = { identifier, dateFrom, dateTo, language };
-          if (session.current.ask(request)) {
-            try {
-              window.history.replaceState(null, '', compareAddress(CHROME_LOCALE, request));
-            } catch {
-              // An address that cannot be written leaves the page's as it was.
-            }
-          }
+          const search = compareQueryOf(request);
+          if (session.current.ask(request) && search !== null) replacePageAddress(window, { search });
         }}
       >
         <label>
           {FORM.workIdentifier}{' '}
-          <input type="text" name="work" value={identifier} autoComplete="off" spellCheck={false} onChange={(event) => setIdentifier(event.target.value)} />
+          <input type="text" value={identifier} autoComplete="off" spellCheck={false} onChange={(event) => setIdentifier(event.target.value)} />
         </label>{' '}
         <label>
           {FORM.from}{' '}
-          <input type="text" name="from" inputMode="numeric" placeholder={FORM.datePlaceholder} value={dateFrom} autoComplete="off" aria-describedby={today === null ? undefined : COMPARE_TODAY_HINT} onChange={(event) => setDateFrom(event.target.value)} />
+          <input type="text" inputMode="numeric" placeholder={FORM.datePlaceholder} value={dateFrom} autoComplete="off" aria-describedby={today === null ? undefined : COMPARE_TODAY_HINT} onChange={(event) => setDateFrom(event.target.value)} />
         </label>{' '}
         <label>
           {FORM.to}{' '}
-          <input type="text" name="to" inputMode="numeric" placeholder={FORM.datePlaceholder} value={dateTo} autoComplete="off" aria-describedby={today === null ? undefined : COMPARE_TODAY_HINT} onChange={(event) => setDateTo(event.target.value)} />
+          <input type="text" inputMode="numeric" placeholder={FORM.datePlaceholder} value={dateTo} autoComplete="off" aria-describedby={today === null ? undefined : COMPARE_TODAY_HINT} onChange={(event) => setDateTo(event.target.value)} />
         </label>{' '}
         {/* Today in Luxembourg, beside the two dates (R13; the plan's item 3.4). */}
         <TodayHint id={COMPARE_TODAY_HINT} today={today} />
         <label>
           {FORM.language}{' '}
-          <select name="language" value={language} onChange={(event) => setLanguage(event.target.value)}>
+          <select value={language} onChange={(event) => setLanguage(event.target.value)}>
             <option value="">{FORM.anyLanguage}</option>
             {COMPARE_LANGUAGES.map((offered) => (
               <option key={offered.code} value={offered.code}>

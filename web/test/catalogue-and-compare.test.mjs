@@ -23,7 +23,7 @@ import { CATALOGUE_RECORD_SENTENCE } from "../scripts/live-refusals.mjs";
 import { CATALOGUE_RECORD_KEYS, REQUIRED_PAYLOAD, catalogueRecord, reasonView, validateRefusal } from "../scripts/refusal-card.mjs";
 import { LIVE_CHROME, liveChrome } from "../scripts/live-chrome.mjs";
 import { MAX_EDITS, sidesOf, wordDiff, wordTokens } from "../scripts/word-diff.mjs";
-import { compareAddress, compareOfQuery, sitePageFor } from "../scripts/permalinks.mjs";
+import { compareOfQuery, compareQueryOf, sitePageFor } from "../scripts/permalinks.mjs";
 import { INITIAL_ANSWER_ID } from "../scripts/initial-answer.mjs";
 
 const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
@@ -140,10 +140,10 @@ test("a comparison's address is rendered by the server from diff, complete, and 
   const search = "?work=%2Flu-legilux%2Floi-1991-08-10-n3&from=2024-02-01&to=2025-04-01&language=fra";
   assert.deepEqual({ ...compareOfQuery(search) }, { identifier: "/lu-legilux/loi-1991-08-10-n3", date_from: "2024-02-01", date_to: "2025-04-01", language: "fra" });
   assert.equal(sitePageFor("/en/compare.html", { search }).operation, "diff");
-  assert.equal(compareAddress("fr", { identifier: "/lu-legilux/loi-1991-08-10-n3", dateFrom: "2024-02-01", dateTo: "2025-04-01", language: "fra" }),
-    "/fr/compare.html?work=%2Flu-legilux%2Floi-1991-08-10-n3&from=2024-02-01&to=2025-04-01&language=fra", "the address the form writes, which reads back");
-  assert.deepEqual({ ...compareOfQuery(compareAddress("en", { identifier: "Loi du 10 août 1991", dateFrom: "2024-02-01", dateTo: "2025-04-01" }).slice("/en/compare.html".length)) },
-    { identifier: "Loi du 10 août 1991", date_from: "2024-02-01", date_to: "2025-04-01" });
+  assert.equal(compareQueryOf({ identifier: "/lu-legilux/loi-1991-08-10-n3", dateFrom: "2024-02-01", dateTo: "2025-04-01", language: "fra" }), search,
+    "the address the screen writes, which reads back");
+  assert.equal(compareQueryOf({ identifier: "Loi du 10 août 1991", dateFrom: "2024-02-01", dateTo: "2025-04-01" }), null, "words are never written (R109)");
+  assert.equal(compareOfQuery("?work=Loi+du+10+ao%C3%BBt+1991&from=2024-02-01&to=2025-04-01"), null, "nor read");
 
   const initial = { envelope: twoStates(), path: `/en/compare.html${search}` };
   const html = renderLiveComparePage({ initial });
@@ -179,7 +179,7 @@ test("an act held only in the publisher's catalogue is said in one sentence on e
   const outcome = dossierOutcome({ state: "refusal", envelope: RECORD_DOSSIER });
   const markup = renderToStaticMarkup(h(DossierAnswerView, { outcome }));
   assert.ok(markup.includes('<h2 data-catalogue-record="">loi-1991-08-10-n5</h2>'), "the act, by the address this site gives it");
-  assert.ok(markup.includes('<p lang="fr">Loi du 10 août 1991 portant approbation de la Convention de La Haye</p>'), "its title, in its language");
+  assert.ok(markup.includes('<p data-catalogue-title=""><span lang="fr">Loi du 10 août 1991 portant approbation de la Convention de La Haye</span></p>'), "its title, in its language");
   for (const said of [
     "This act is in the publisher's catalogue, as this site read it no later than 2026-10-01T08:00:00Z, and this site holds none of its text: the publisher licenses every XML and PDF file of its French text under licenceSCL, which this site does not reproduce.",
     "Its type in the publisher's record: LOI (typeDocument).",
@@ -194,7 +194,7 @@ test("an act held only in the publisher's catalogue is said in one sentence on e
     assert.ok(markup.replaceAll("&#x27;", "'").includes(said), said);
   }
   assert.ok(markup.includes('<a href="/en/lu-legilux/loi-1991-08-10-n5"><code>/lu-legilux/loi-1991-08-10-n5</code></a>'), "its record's page on this site");
-  assert.ok(markup.includes('<dd lang="fr">Loi du 10 août 1991'), "the title's row marked in its language");
+  assert.ok(markup.includes('<dd><span lang="fr">Loi du 10 août 1991'), "the title's row marked in its language");
 
   // The same card in French, from the reviewed table: one line per fact, each in the page's language.
   const french = reasonView("text_not_available", RECORD_DOSSIER.refusal.helpful_payload, LIVE_CHROME.fr.refusalCard);

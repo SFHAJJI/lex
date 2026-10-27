@@ -55,17 +55,13 @@ function withDigests(node, counter = { n: 0 }) {
 
 const view = (outcome) => renderToStaticMarkup(h(CompareAnswerView, { outcome }));
 
-test("the server renders the form in its idle state, which asks a comparison's address with no script, and asks nothing", () => {
+test("the server renders the form in its idle state with no named control, and asks nothing", () => {
   const { calls, fetchImpl } = answering(200, "application/json", envelopeOf(ANSWER));
   const markup = renderToStaticMarkup(h(LiveCompare, { contract, fetchImpl }));
   assert.match(markup, /data-answer-state="idle"/);
   assert.ok(markup.includes(LIVE_COMPARE_IDLE));
   assert.equal(calls.length, 0);
-  // R57: with no script, the form asks this page at the comparison's address (a work and two dates, never a phrase), which
-  // the server renders from diff (`sitePageFor`); its controls are named as `compareOfQuery` reads them.
-  const form = markup.slice(markup.indexOf("<form"), markup.indexOf("</form>"));
-  assert.match(form, /^<form role="search" method="get">/);
-  assert.deepEqual([...form.matchAll(/\sname="([a-z]+)"/g)].map((match) => match[1]), ["work", "from", "to", "language"]);
+  assert.doesNotMatch(markup.slice(markup.indexOf("<form"), markup.indexOf("</form>")), /\sname=/);
   assert.ok(renderLiveComparePage().includes('<script src="/en/client-live-compare.js" defer=""></script>'));
 });
 

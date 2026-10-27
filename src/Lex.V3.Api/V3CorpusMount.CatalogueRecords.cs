@@ -42,7 +42,8 @@ internal sealed partial class V3CorpusMount
         "file of that act's French text where the catalogue names one, else the same identity; document_type, date_document, " +
         "publication_date, entry_into_force, no_longer_in_force, in_force_status, memorial_issue and historical_legal_id are the " +
         "act's own typeDocument, dateDocument, publicationDate, dateEntryInForce, dateNoLongerInForce, inForceStatus, isPartOf and " +
-        "historicalLegalId facts, verbatim, each a list that is empty when the catalogue states none; in_force_status is the act's, " +
+        "historicalLegalId facts, verbatim, each a list that is empty when the catalogue states none, and document_type_codes and " +
+        "in_force_status_codes the last segment of each of the first two IRIs, the publisher's own word; in_force_status is the act's, " +
         "never a consolidation's; each date is the publisher's and has the role its fact names, and none is an applicability " +
         "date; title is the act's French title as the catalogue states it, or null; versions lists the act's versions in the " +
         "catalogue (as published, consolidated, a code's), with each one's kind and the reason no text of it is held here " +
@@ -98,6 +99,17 @@ internal sealed partial class V3CorpusMount
         }
 
         return V3TextYield.CatalogueVersionsOf(_reader.ResolveSubjectsUnder(work + "/"), work).Count > 0 ? work : null;
+    }
+
+    /// <summary>
+    /// The publisher's own word for a value of its authority vocabularies: the IRI's last path segment
+    /// (<c>…/resource-type/LOI</c> is <c>LOI</c>, <c>…/application-status/in-force</c> is <c>in-force</c>), or the value as it is
+    /// when it has no segment.
+    /// </summary>
+    private static string AuthorityCode(string iri)
+    {
+        var at = iri.LastIndexOf('/');
+        return at < 0 || at == iri.Length - 1 ? iri : iri[(at + 1)..];
     }
 
     /// <summary>The work key the index would mint for a work IRI (<see cref="LuxembourgIndexBuilder.WorkKeyOf"/>), or null.</summary>
@@ -187,11 +199,14 @@ internal sealed partial class V3CorpusMount
             ["title"] = title,
             ["title_language"] = title is null ? null : FrenchLanguage,
             ["document_type"] = List(Values(primary, "typeDocument")),
+            // The publisher's own word for each, the last segment of its authority IRI (LOI, RGD; in-force), as a page says it.
+            ["document_type_codes"] = List(Values(primary, "typeDocument").Select(AuthorityCode)),
             ["date_document"] = List(Values(primary, "dateDocument")),
             ["publication_date"] = List(Values(primary, "publicationDate")),
             ["entry_into_force"] = List(Values(primary, "dateEntryInForce")),
             ["no_longer_in_force"] = List(Values(primary, "dateNoLongerInForce")),
             ["in_force_status"] = List(hasAct ? Values(primary, "inForceStatus") : []),
+            ["in_force_status_codes"] = List(hasAct ? Values(primary, "inForceStatus").Select(AuthorityCode) : []),
             ["memorial_issue"] = List(Values(primary, "isPartOf")),
             ["historical_legal_id"] = List(Values(primary, "historicalLegalId")),
             ["official_pdf"] = List(pdf),

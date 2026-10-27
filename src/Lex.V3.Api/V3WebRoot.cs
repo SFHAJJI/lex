@@ -702,12 +702,13 @@ internal sealed partial class V3WebRoot
     private static readonly string[] CompareLanguages = ["deu", "eng", "fra"];
 
     /// <summary>
-    /// The comparison a compare page's query names (<c>?work=…&amp;from=yyyy-mm-dd&amp;to=yyyy-mm-dd[&amp;language=fra]</c>, as its form
-    /// sends it with no script; R57), as the request the page would send (<c>diff</c>'s <c>identifier</c>, <c>date_from</c>,
-    /// <c>date_to</c> and <c>language</c>), or null: each of <c>work</c>, <c>from</c> and <c>to</c> once and <c>language</c> at most
-    /// once, a value form-decoded (<c>+</c> a space, <c>%HH</c> UTF-8 bytes; a malformed escape or bytes that are not UTF-8 name
-    /// nothing); the work not blank, at most 1,024 characters and no control character, sent as written; two calendar dates; a
-    /// language the form offers, or none (empty). Any other name is ignored. As <c>compareOfQuery</c> in
+    /// The comparison a compare page's query names (<c>?work=/lu-legilux/{work}&amp;from=yyyy-mm-dd&amp;to=yyyy-mm-dd[&amp;language=fra]</c>,
+    /// as the compare screen writes it into its own address once it has asked it; R57), as the request the page would send
+    /// (<c>diff</c>'s <c>identifier</c>, <c>date_from</c>, <c>date_to</c> and <c>language</c>), or null: each of <c>work</c>,
+    /// <c>from</c> and <c>to</c> once and <c>language</c> at most once, a value form-decoded (<c>+</c> a space, <c>%HH</c> UTF-8
+    /// bytes; a malformed escape or bytes that are not UTF-8 name nothing); the work this site's address of a Luxembourg act
+    /// (<c>/lu-legilux/{work key}</c>), never words (R109: no word a reader types reaches an address a server could record); two
+    /// calendar dates; a language the form offers, or none (empty). Any other name is ignored. As <c>compareOfQuery</c> in
     /// <c>web/scripts/permalinks.mjs</c> (a test holds the two to one table).
     /// </summary>
     internal static Dictionary<string, object>? CompareOfQuery(string? query)
@@ -736,8 +737,7 @@ internal sealed partial class V3WebRoot
         }
 
         if (!values.TryGetValue("work", out var work) || !values.TryGetValue("from", out var from) || !values.TryGetValue("to", out var to) ||
-            string.IsNullOrWhiteSpace(work) || work.Length > 1024 || work.Any(static character => character < ' ' || character == '\u007f') ||
-            !IsCalendarDate(from) || !IsCalendarDate(to))
+            !CompareWork.IsMatch(work) || !IsCalendarDate(from) || !IsCalendarDate(to))
         {
             return null;
         }
@@ -755,6 +755,9 @@ internal sealed partial class V3WebRoot
 
         return parameters;
     }
+
+    /// <summary>A comparison's work: this site's address of a Luxembourg act, a work key's characters and nothing else.</summary>
+    private static readonly Regex CompareWork = new("^/lu-legilux/[a-z0-9][a-z0-9_-]{0,511}\\z", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
 
     private static bool IsCalendarDate(string value) =>
         CalendarDate.IsMatch(value) &&

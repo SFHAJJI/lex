@@ -683,7 +683,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     title: 'Comparer',
     eyebrow: 'Comparer',
     heading: 'Deux versions, article par article',
-    intro: 'Les versions d’un acte luxembourgeois applicables à deux dates, comparées selon les identifiants d’article et le libellé de l’éditeur, sans rien affirmer sur l’effet juridique ; le libellé modifié est affiché, le texte supprimé barré et le texte inséré souligné. L’identifiant et les dates sont envoyés à ce serveur dans la requête et figurent dans l’adresse de cette page, afin qu’une comparaison puisse être partagée et lue sans JavaScript ; cette page ne conserve rien.',
+    intro: 'Les versions d’un acte luxembourgeois applicables à deux dates, comparées selon les identifiants d’article et le libellé de l’éditeur, sans rien affirmer sur l’effet juridique ; le libellé modifié est affiché, le texte supprimé barré et le texte inséré souligné. L’identifiant et les dates sont envoyés à ce serveur dans la requête ; une comparaison d’un acte désigné par son adresse sur ce site figure aussi dans l’adresse de cette page, afin qu’elle puisse être partagée et lue sans JavaScript ; cette page ne conserve rien.',
     idle: 'Saisissez un identifiant d’acte et deux dates pour comparer les versions applicables à ces dates.',
     summary: '{work} : {from} comparé au {to}.',
     summaryIn: '{work} : {from} comparé au {to}, en {language}.',

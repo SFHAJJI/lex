@@ -304,7 +304,7 @@ export const INTERVAL_KEYS = Object.freeze({
  */
 export const CATALOGUE_RECORD_KEYS = Object.freeze([
   'record_kind', 'reason', 'reason_rule', 'work_iri', 'work_key', 'record_address', 'act_iri', 'title', 'title_language',
-  'document_type', 'date_document', 'publication_date', 'entry_into_force', 'no_longer_in_force', 'in_force_status',
+  'document_type', 'document_type_codes', 'in_force_status_codes', 'date_document', 'publication_date', 'entry_into_force', 'no_longer_in_force', 'in_force_status',
   'memorial_issue', 'historical_legal_id', 'official_pdf', 'versions', 'version_kinds', 'version_reasons',
   'record_evidence_sha256s', 'catalogue_read_no_later_than', 'rule',
 ]);
@@ -314,7 +314,7 @@ export const CATALOGUE_RECORD_KIND = 'catalogue_only';
 
 /** Whether a refusal is R77's record of an act the catalogue holds and this site holds no version of. */
 export function catalogueRecord(code, payload) {
-  return code === 'text_not_available' && payload?.record_kind === CATALOGUE_RECORD_KIND;
+  return code === 'text_not_available' && payload?.record_kind === CATALOGUE_RECORD_KIND && typeof payload?.reason === 'string';
 }
 
 export const REQUIRED_PAYLOAD = Object.freeze({
@@ -1033,7 +1033,7 @@ const TEXTLESS_NAMED = "This version, {version}, is in the publisher's catalogue
  * R77: an act the publisher's catalogue holds and this site holds no version of, said from its record (`catalogueRecord`):
  * that it is there and why no text of it is held (its reason, as Coverage counts it), then each fact the record states, by
  * its role (R21: the act's date, its publication, its entry into force and its end of force, each the publisher's, never
- * merged), its status in the publisher's own word, its Mémorial issue and its historical identifier. A reason outside this
+ * merged), its status in the publisher's own word (the record's codes), its Mémorial issue and its historical identifier. A reason outside this
  * set is refused, so a new one is worded before it is shown.
  */
 const CATALOGUE_RECORD_COPY = Object.freeze({
@@ -1059,11 +1059,6 @@ const CATALOGUE_RECORD_COPY = Object.freeze({
   record: 'Its record on this site: {address}',
 });
 
-/** The last segment of a publisher's vocabulary IRI (`…/resource-type/LOI` is `LOI`): the publisher's own word for it. */
-function vocabularyToken(iri) {
-  return typeof iri === 'string' && iri.includes('/') ? iri.slice(iri.lastIndexOf('/') + 1) : String(iri);
-}
-
 /** A Mémorial A issue's year and number from its ELI (`…/eli/etat/leg/memorial/1981/a15`), or null for any other IRI. */
 function memorialIssue(iri) {
   const match = /\/eli\/etat\/leg\/memorial\/([0-9]{4})\/a([0-9]+)$/.exec(typeof iri === 'string' ? iri : '');
@@ -1084,13 +1079,13 @@ function catalogueRecordView(payload, copy) {
     text: fillCard(typeof read === 'string' && read.length > 0 ? said.heldRead : said.held, { read, why: said.reasons[reason] }),
   }];
   const add = (key, template, values) => lines.push({ key: `catalogue.${key}`, text: fillCard(template, values) });
-  if (list('document_type').length > 0) add('type', said.type, { type: list('document_type').map(vocabularyToken).join(', ') });
+  if (list('document_type_codes').length > 0) add('type', said.type, { type: list('document_type_codes').join(', ') });
   if (list('date_document').length > 0) add('documentDate', said.documentDate, { dates: list('date_document').join(', ') });
   if (list('publication_date').length > 0) add('publicationDate', said.publicationDate, { dates: list('publication_date').join(', ') });
   for (const issue of list('memorial_issue').map(memorialIssue).filter((one) => one !== null)) add('memorial', said.memorial, issue);
   if (list('entry_into_force').length > 0) add('entryIntoForce', said.entryIntoForce, { dates: list('entry_into_force').join(', ') });
   if (list('no_longer_in_force').length > 0) add('endOfForce', copy.baseActEndOfForce, { dates: list('no_longer_in_force').join(', ') });
-  if (list('in_force_status').length > 0) add('status', said.status, { status: list('in_force_status').map(vocabularyToken).join(', ') });
+  if (list('in_force_status_codes').length > 0) add('status', said.status, { status: list('in_force_status_codes').join(', ') });
   if (list('historical_legal_id').length > 0) add('historicalId', said.historicalId, { id: list('historical_legal_id').join(', ') });
   if (list('versions').length > 1) add('versions', said.versions, { count: list('versions').length });
   return Object.freeze(lines.map(Object.freeze));
@@ -1486,7 +1481,7 @@ function renderPayload(code, payload) {
         .map(
           ({ key, value, href, lang }) =>
             `<div class="strip-row"><dt>${escapeHtml(key)}</dt>` +
-            `<dd${lang === undefined ? '' : ` lang="${escapeHtml(lang)}"`}>${href === undefined ? escapeHtml(value) : `<a href="${escapeHtml(href)}" rel="external">${escapeHtml(value)}</a>`}</dd></div>`,
+            `<dd>${lang !== undefined ? `<span lang="${escapeHtml(lang)}">${escapeHtml(value)}</span>` : href === undefined ? escapeHtml(value) : `<a href="${escapeHtml(href)}" rel="external">${escapeHtml(value)}</a>`}</dd></div>`,
         )
         .join('') +
       '</dl>'
