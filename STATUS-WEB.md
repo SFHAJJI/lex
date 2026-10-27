@@ -15,20 +15,25 @@ back).
   this site gives it (`/lu-legilux/{key}`, as the index would mint it), its type, its dates by role (dateDocument,
   publicationDate, dateEntryInForce, dateNoLongerInForce, each the publisher's, R21), its status in the publisher's word
   (the act's `inForceStatus`, never a consolidation's), its Mémorial issue, historicalLegalId, official PDF, title, its
-  versions, and why no text of each is held, by the reason Coverage counts it under; the publisher's own word for its type
-  and status (`document_type_codes`, `in_force_status_codes`, the last segment of each authority IRI), which a page says (`V3TextYield.CatalogueNotHeldReason`:
-  (`catalogue_licence_scl`, `catalogue_cc_by_not_acquired`, …; what the catalogue states, never why the acquisition did not
-  fetch it). Every per-work operation (the dossier, reading and the rest), `resolve` and search's exact reference (a
-  reference, or this site's address of the act) answer it; it needs no new derive and reads index /9 and /8 alike.
+  versions, and why no text of each is shown, by the reason Coverage counts it under (one rule, `V3TextYield.HeldFile` and
+  `CatalogueNotHeldReason`): for a version whose file the corpus holds, that file's bucket (`file_withheld` with its rights
+  disposition, `file_pdf_only`, `file_no_article_served` with its dispositions, `file_articles_no_state`), and for one of which
+  no file is held, what the catalogue states (`catalogue_licence_scl`, `catalogue_cc_by_not_acquired`, …), never why the
+  acquisition did not fetch it; and the publisher's own word for its type and status (`document_type_codes`,
+  `in_force_status_codes`, the last segment of each authority IRI), which a page says. Every per-work operation (the dossier,
+  reading and the rest), `resolve` and search's exact reference (a reference, or this site's address of the act) answer it;
+  it needs no new derive and reads index /9 and /8 alike.
   - **R92 first:** an act the names record withholds answers `text_withheld` (`names_private_individuals`) with no title and
     no record, as every answer about it does (a test measures a catalogue act whose title grants naturalisation).
   - **Screens:** every screen says one sentence (`CATALOGUE_RECORD_SENTENCE`), and the card says why no text is held and each
     fact by its role, in English and French (`refusal-card.mjs`, `catalogueRecord`); the dossier shows the act and its title
     in its language, and links the record's page.
-  - **Measured, read-only:** derive-r1, 22,049 acts gain a record (16,330 `catalogue_licence_scl`, 5,362
-    `catalogue_cc_by_not_acquired`, 355 `catalogue_licence_scl_in_part`, 2 `catalogue_no_expression`; by the act as
-    published's reason); R92's record withholds 974 of the catalogue's acts (STATUS-DATA). derive-c, 22,891 (16,330, 6,204,
-    355, 2). Of derive-r1's, 22,040 state their dates, status and issue, 19,679 a historical identifier, 6,467 an end of force.
+  - **Measured, read-only** (after the repair, by the act as published's reason, else the first version's): derive-r1, 22,049
+    acts gain a record: 16,330 `catalogue_licence_scl`, 5,673 `file_withheld` (each `typed_quarantine_in_file_reading_rejected`),
+    34 `file_no_article_served`, 10 `catalogue_cc_by_not_acquired`, 2 `catalogue_no_expression`; R92's record withholds 974 of
+    the catalogue's acts (STATUS-DATA). derive-c, 22,891: 16,330, 5,675 `file_withheld`, 665 `file_no_article_served`, 209
+    `file_articles_no_state`, 10, 2. Of derive-r1's, 22,040 state their dates, status and issue, 19,679 a historical
+    identifier, 6,467 an end of force.
 - **R57.** `diff` carries the served text of each changed, added or removed article, where that side's rights admit it, and
   null otherwise (`text_rule`; the digests still decide the status). The compare page shows each change inline, word by
   word (`word-diff.mjs`): the text deleted struck through, the text inserted underlined, each also said in hidden words,
@@ -47,7 +52,9 @@ back).
 - **Pins moved.** The envelope, answer and refusal-payload samples re-rendered (`V3_RENDER_*`) and verified without: three
   new envelopes (the record by the dossier, reading and search), the payload census samples the record, the two-state
   diff carries its texts. The legacy base answers recorded again on Linux at ee44bf68 (9 of 53 rows, each by R77 or R57
-  alone) and at a9179b39 (the five schema-6 records by their two code members alone); Windows replays the same bytes.
+  alone), at a9179b39 (the five schema-6 records by their two code members alone) and at caaff24d (the repair: all 38
+  legacy rows and the 15 EU schema-5 rows by the registry digest, since diff's request schema gained `page`; the schema-8
+  diff by its `text_page`; the five schema-6 records by F1's reason); Windows replays the same bytes.
 - **French** (Decision 41): the 32 new or changed forms were reviewed by an independent reviewer (Claude, AI reviewer, not the
   author) in the addendum of 2026-10-27 "R77's catalogue records and R57's compare wording" (`C:\lex-v3\lanes\fr-review\review.md`):
   20 approved, 12 changed in French and 8 of them in English too, 5 blocking and each a truth finding (a compared side is named
@@ -57,7 +64,10 @@ back).
   the blocking finals, the recommended ones of 17 to 19 and the optional one of the intro. Not taken (reversible): ordering
   the two dates, setting the status token apart, a spoken end marker. Its supplement (the intro after R109, and the English
   "This article's wording", since "wording of" is the EU's) changed the intro in French with its recommended English, and its
-  blocking point was taken by the preferred fix (every form of an act's site address written as the bare one).
+  blocking point was taken by the preferred fix (every form of an act's site address written as the bare one). Its
+  supplement 2 (the repair) reviewed 13 forms: 8 approved, 5 changed in French, 2 blocking in English ("The wording of the
+  changes" spoke the EU's "wording of": "The wording that changed"); every final applied byte for byte, the optional English
+  of A4 and A7 taken, and on its advice `refusalCard.textless` and `textlessNamed` say "shows" too.
 - **For the data lane** (the review's point 3): 12,040 of the 16,330 expressions whose XML and PDF files are licenceSCL also
   carry an HTML or DOCX file under CC BY 4.0 in the catalogue. Whether Lex could admit those files is a question for R83 and
   the data lane; nothing here claims it.
@@ -66,6 +76,27 @@ back).
   (`V3Corpus*`), the text yield, the three sample censuses, the machine gates, the EU predicate census, PublicRequestRecording,
   the index builder and #1002's release checks: 632, 627 pass, 5 skip (33 min). `npm run build`; `npm test`: 1,471, 1,468
   pass, 3 skip (the real-browser tests). `eng/verify-v3-tree.ps1`: 1,788 tracked paths verified.
+- **Review and repair (#1003, one round; the review by the other model family).**
+  - **F1 (truth):** the record said "not acquired" of acts whose file the corpus holds (derive-r1: 5,707 of them). The mount now
+    reads the corpus's held Luxembourg files by work once, and the record gives such a version its file's bucket with its
+    disposition, by the rule Coverage counts it with (`V3TextYield.HeldFile`, shared), and the held file's body receipt as
+    `retained_transport_evidence`; `catalogue_*` reasons stay for versions of which no file is held. `what_would_answer`:
+    `expanded_official_scope` for `catalogue_cc_by_not_acquired` alone, `new_official_observation` otherwise. A test holds the
+    record and Coverage equal over every case (`V3TextYieldTests`), one the schema-6 fixture's act (acquired, its four
+    articles held and no state: `file_articles_no_state`, as Coverage counts it with text). The card and the census sentence
+    say "shows none of its text", not "holds".
+  - **F2 (performance):** an address with no work's shape (`/lu-legilux/rgd`, a year, a day) is `identifier_unknown` before any
+    read of the catalogue (`IsWorkShape`, R92's `LuxembourgWorkIriOf`), by the record and by the exact reference's catalogue
+    names; a counter proves no range is read.
+  - **F3 (truth):** a work with no act as published (a code) has empty act-level lists; `CatalogueRecordRule` says so.
+  - **F4:** `diff`'s texts are cut into pages as a reading's (50 articles, 98,304 bytes of both sides' texts): `page` asks one
+    (the request schema gained it, so the registry digest is `627879b6…`, was `befb867f…`; the envelope test's pin moved with it), `text_page` names it, and a page past the last is `anchor_not_in_version` (with no page cut,
+    its nearest anchor is `page=1`). Compare names the page by its first and last article, links the pages around it
+    (`page=N` in the comparison's address, which both servers render; a button where the comparison has no address), and says
+    of a change on another page that its wording is there.
+  - **Driver decisions (reversible):** `file_articles_no_state` is the record's name for Coverage's `files_with_text` where the
+    index holds a file's articles and no state (derive-c: 209, derive-r1: none); Coverage still counts those articles as
+    served, which is Coverage's wording and outside this round. The textless forms say "shows" too (the French review's point).
 - **Not done:** R57's side-by-side view and its swap control; R56's gap rows on the reading's version list.
 
 ## Review and repair (#998): G2 exact, the change policy's digest, MCP failures, the out-of-scope forms (sole driver, 2026-10-27)

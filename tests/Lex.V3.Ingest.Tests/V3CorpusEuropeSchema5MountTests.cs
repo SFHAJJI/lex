@@ -36,8 +36,9 @@ public sealed class V3CorpusEuropeSchema5MountTests
     // gaps, 2026-10-27), where every row moved by its registry identity alone (lex-v3-operation-registry/2 and its digest) and
     // coverage by its operations note and rows too, then 320c0f20 (over #995: the registry digest alone), then ee44bf68 (R77 and
     // R57, writer/catalogue-and-compare: the exact-reference rule now names the record of an act only the catalogue holds, so
-    // the one search answer with a reference moved by that rule's text alone).
-    private const string RecordedAtCommit = "ee44bf68";
+    // the one search answer with a reference moved by that rule's text alone), then caaff24d (the review of #1003: diff's
+    // request schema gained `page`, so every row moved by the registry digest alone).
+    private const string RecordedAtCommit = "caaff24d";
 
     private static byte[] Fixture(string name) =>
         File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuSchema5Mount", name));
@@ -90,7 +91,7 @@ public sealed class V3CorpusEuropeSchema5MountTests
 
     /// <summary>
     /// Every recorded request, asked again of the same committed files, answers the same bytes. The answers were recorded at
-    /// the base (24118293 on Windows, again at e504d188, 9b28c5c3, 320c0f20 and ee44bf68 on Linux); nothing in an EU answer reads the system (paths, culture or
+    /// the base (24118293 on Windows, again at e504d188, 9b28c5c3, 320c0f20, ee44bf68 and caaff24d on Linux); nothing in an EU answer reads the system (paths, culture or
     /// clock: the handler answers at one fixed observation time), and every system is held to them.
     /// </summary>
     [TestMethod]
