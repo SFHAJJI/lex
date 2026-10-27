@@ -6703,7 +6703,7 @@
         "ambiguous_works": [],
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
-        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query as typed for a strict hit, a term or overlapping terms for a relaxed hit; a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
+        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query for a strict hit, a term or overlapping terms for a relaxed hit, each found as the lane finds it, with capitals and accents ignored, and marked on the text\u0027s own characters (a letter with the combining marks after it, a ligature whole); a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
         "fold": {
           "relaxed_hits_before_fold": 1,
           "rule": "on lex-v3-luxembourg-index/9 a search with no date serves one hit per work, publisher article id and wording (the wording digest of the article\u0027s text and reference tokens): the hit of the latest state that holds that wording, each other state that holds it named under the hit\u0027s same_wording_states, so an article that did not change is one hit and not one per version; strict_hits and relaxed_hits count the hits served, and fold counts the hits before they were folded; with a date, one state per work is searched and nothing is folded",
@@ -6717,12 +6717,20 @@
             "date_role": "applicability_in_file",
             "entry_into_force": null,
             "extract": {
-              "byte_end": 362,
-              "byte_start": 46,
+              "byte_end": 242,
+              "byte_start": 0,
               "parts": [
                 {
                   "matched": false,
-                  "text": "se tient dans la premi\u00E8re quinzaine du mois de juillet.(2)L\u2019ordre du jour de l\u2019"
+                  "text": "Art. 15.(1)L\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "Assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " annuelle se tient dans la premi\u00E8re quinzaine du mois de juillet.(2)L\u2019ordre du jour de l\u2019"
                 },
                 {
                   "matched": true,
@@ -6730,7 +6738,7 @@
                 },
                 {
                   "matched": false,
-                  "text": " annuelle comprend notamment la pr\u00E9sentation du rapport d\u2019activit\u00E9s du B\u00E2tonnier et du Conseil de l\u2019Ordre, la pr\u00E9sentation des comptes relatifs \u00E0 l\u2019ann\u00E9e \u00E9coul\u00E9e, l\u2019approbation de ces comptes, la"
+                  "text": " annuelle comprend notamment la pr\u00E9sentation du rapport d\u2019activit\u00E9s du B\u00E2tonnier et du"
                 }
               ],
               "text_byte_length": 1400,
@@ -6953,10 +6961,10 @@
           }
         ],
         "index_sha256": "\u003Cvaries-per-run\u003E",
-        "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
         "lanes_run": true,
         "limit": 200,
-        "matching": "byte-exact substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); case and diacritics are significant; nothing is folded, stemmed or expanded",
+        "matching": "substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; every other character, punctuation, apostrophes and every kind of space included, is kept as it is, so capitals and accents never decide a match and every other character does; nothing is stemmed or expanded",
         "modes_held": [
           "strict",
           "relaxed"
@@ -7047,7 +7055,7 @@
         "ambiguous_works": [],
         "continue_after": "strict.803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4.05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
-        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query as typed for a strict hit, a term or overlapping terms for a relaxed hit; a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
+        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query for a strict hit, a term or overlapping terms for a relaxed hit, each found as the lane finds it, with capitals and accents ignored, and marked on the text\u0027s own characters (a letter with the combining marks after it, a ligature whole); a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
         "fold": {
           "relaxed_hits_before_fold": 1,
           "rule": "on lex-v3-luxembourg-index/9 a search with no date serves one hit per work, publisher article id and wording (the wording digest of the article\u0027s text and reference tokens): the hit of the latest state that holds that wording, each other state that holds it named under the hit\u0027s same_wording_states, so an article that did not change is one hit and not one per version; strict_hits and relaxed_hits count the hits served, and fold counts the hits before they were folded; with a date, one state per work is searched and nothing is folded",
@@ -7061,12 +7069,20 @@
             "date_role": "applicability_in_file",
             "entry_into_force": null,
             "extract": {
-              "byte_end": 362,
-              "byte_start": 46,
+              "byte_end": 242,
+              "byte_start": 0,
               "parts": [
                 {
                   "matched": false,
-                  "text": "se tient dans la premi\u00E8re quinzaine du mois de juillet.(2)L\u2019ordre du jour de l\u2019"
+                  "text": "Art. 15.(1)L\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "Assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " annuelle se tient dans la premi\u00E8re quinzaine du mois de juillet.(2)L\u2019ordre du jour de l\u2019"
                 },
                 {
                   "matched": true,
@@ -7074,7 +7090,7 @@
                 },
                 {
                   "matched": false,
-                  "text": " annuelle comprend notamment la pr\u00E9sentation du rapport d\u2019activit\u00E9s du B\u00E2tonnier et du Conseil de l\u2019Ordre, la pr\u00E9sentation des comptes relatifs \u00E0 l\u2019ann\u00E9e \u00E9coul\u00E9e, l\u2019approbation de ces comptes, la"
+                  "text": " annuelle comprend notamment la pr\u00E9sentation du rapport d\u2019activit\u00E9s du B\u00E2tonnier et du"
                 }
               ],
               "text_byte_length": 1400,
@@ -7097,10 +7113,10 @@
           }
         ],
         "index_sha256": "\u003Cvaries-per-run\u003E",
-        "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
         "lanes_run": true,
         "limit": 1,
-        "matching": "byte-exact substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); case and diacritics are significant; nothing is folded, stemmed or expanded",
+        "matching": "substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; every other character, punctuation, apostrophes and every kind of space included, is kept as it is, so capitals and accents never decide a match and every other character does; nothing is stemmed or expanded",
         "modes_held": [
           "strict",
           "relaxed"
@@ -7191,7 +7207,7 @@
         "ambiguous_works": [],
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
-        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query as typed for a strict hit, a term or overlapping terms for a relaxed hit; a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
+        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query for a strict hit, a term or overlapping terms for a relaxed hit, each found as the lane finds it, with capitals and accents ignored, and marked on the text\u0027s own characters (a letter with the combining marks after it, a ligature whole); a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
         "fold": {
           "relaxed_hits_before_fold": 1,
           "rule": "on lex-v3-luxembourg-index/9 a search with no date serves one hit per work, publisher article id and wording (the wording digest of the article\u0027s text and reference tokens): the hit of the latest state that holds that wording, each other state that holds it named under the hit\u0027s same_wording_states, so an article that did not change is one hit and not one per version; strict_hits and relaxed_hits count the hits served, and fold counts the hits before they were folded; with a date, one state per work is searched and nothing is folded",
@@ -7401,10 +7417,10 @@
           }
         ],
         "index_sha256": "\u003Cvaries-per-run\u003E",
-        "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
         "lanes_run": true,
         "limit": 200,
-        "matching": "byte-exact substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); case and diacritics are significant; nothing is folded, stemmed or expanded",
+        "matching": "substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; every other character, punctuation, apostrophes and every kind of space included, is kept as it is, so capitals and accents never decide a match and every other character does; nothing is stemmed or expanded",
         "modes_held": [
           "strict",
           "relaxed"
@@ -7495,7 +7511,7 @@
         "ambiguous_works": [],
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
-        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query as typed for a strict hit, a term or overlapping terms for a relaxed hit; a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
+        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query for a strict hit, a term or overlapping terms for a relaxed hit, each found as the lane finds it, with capitals and accents ignored, and marked on the text\u0027s own characters (a letter with the combining marks after it, a ligature whole); a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
         "fold": {
           "relaxed_hits_before_fold": 5,
           "rule": "on lex-v3-luxembourg-index/9 a search with no date serves one hit per work, publisher article id and wording (the wording digest of the article\u0027s text and reference tokens): the hit of the latest state that holds that wording, each other state that holds it named under the hit\u0027s same_wording_states, so an article that did not change is one hit and not one per version; strict_hits and relaxed_hits count the hits served, and fold counts the hits before they were folded; with a date, one state per work is searched and nothing is folded",
@@ -7509,12 +7525,20 @@
             "date_role": "applicability_in_file",
             "entry_into_force": null,
             "extract": {
-              "byte_end": 242,
+              "byte_end": 239,
               "byte_start": 0,
               "parts": [
                 {
                   "matched": false,
-                  "text": "Art. 15.(1)L\u2019Assembl\u00E9e "
+                  "text": "Art. 15.(1)L\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "Assembl\u00E9e"
+                },
+                {
+                  "matched": false,
+                  "text": " "
                 },
                 {
                   "matched": true,
@@ -7538,7 +7562,7 @@
                 },
                 {
                   "matched": false,
-                  "text": " annuelle comprend notamment la pr\u00E9sentation du rapport d\u2019activit\u00E9s du B\u00E2tonnier et du"
+                  "text": " annuelle comprend notamment la pr\u00E9sentation du rapport d\u2019activit\u00E9s du B\u00E2tonnier et"
                 }
               ],
               "text_byte_length": 1400,
@@ -7817,10 +7841,10 @@
           }
         ],
         "index_sha256": "\u003Cvaries-per-run\u003E",
-        "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
         "lanes_run": true,
         "limit": 200,
-        "matching": "byte-exact substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); case and diacritics are significant; nothing is folded, stemmed or expanded",
+        "matching": "substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; every other character, punctuation, apostrophes and every kind of space included, is kept as it is, so capitals and accents never decide a match and every other character does; nothing is stemmed or expanded",
         "modes_held": [
           "strict",
           "relaxed"
@@ -7900,7 +7924,7 @@
         "ambiguous_works": [],
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
-        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query as typed for a strict hit, a term or overlapping terms for a relaxed hit; a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
+        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query for a strict hit, a term or overlapping terms for a relaxed hit, each found as the lane finds it, with capitals and accents ignored, and marked on the text\u0027s own characters (a letter with the combining marks after it, a ligature whole); a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
         "fold": {
           "relaxed_hits_before_fold": 0,
           "rule": "on lex-v3-luxembourg-index/9 a search with no date serves one hit per work, publisher article id and wording (the wording digest of the article\u0027s text and reference tokens): the hit of the latest state that holds that wording, each other state that holds it named under the hit\u0027s same_wording_states, so an article that did not change is one hit and not one per version; strict_hits and relaxed_hits count the hits served, and fold counts the hits before they were folded; with a date, one state per work is searched and nothing is folded",
@@ -7909,10 +7933,10 @@
         "hit_unit": "a hit is one article of one held state, not a provision: a provision whose wording never changed is a hit in every state that holds it",
         "hits": [],
         "index_sha256": "\u003Cvaries-per-run\u003E",
-        "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
         "lanes_run": true,
         "limit": 200,
-        "matching": "byte-exact substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); case and diacritics are significant; nothing is folded, stemmed or expanded",
+        "matching": "substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; every other character, punctuation, apostrophes and every kind of space included, is kept as it is, so capitals and accents never decide a match and every other character does; nothing is stemmed or expanded",
         "modes_held": [
           "strict",
           "relaxed"
@@ -8002,7 +8026,7 @@
         "ambiguous_works": [],
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
-        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query as typed for a strict hit, a term or overlapping terms for a relaxed hit; a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
+        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query for a strict hit, a term or overlapping terms for a relaxed hit, each found as the lane finds it, with capitals and accents ignored, and marked on the text\u0027s own characters (a letter with the combining marks after it, a ligature whole); a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
         "fold": {
           "relaxed_hits_before_fold": null,
           "rule": "on lex-v3-luxembourg-index/9 a search with no date serves one hit per work, publisher article id and wording (the wording digest of the article\u0027s text and reference tokens): the hit of the latest state that holds that wording, each other state that holds it named under the hit\u0027s same_wording_states, so an article that did not change is one hit and not one per version; strict_hits and relaxed_hits count the hits served, and fold counts the hits before they were folded; with a date, one state per work is searched and nothing is folded",
@@ -8016,12 +8040,20 @@
             "date_role": "applicability_in_file",
             "entry_into_force": null,
             "extract": {
-              "byte_end": 362,
-              "byte_start": 46,
+              "byte_end": 242,
+              "byte_start": 0,
               "parts": [
                 {
                   "matched": false,
-                  "text": "se tient dans la premi\u00E8re quinzaine du mois de juillet.(2)L\u2019ordre du jour de l\u2019"
+                  "text": "Art. 15.(1)L\u2019"
+                },
+                {
+                  "matched": true,
+                  "text": "Assembl\u00E9e g\u00E9n\u00E9rale"
+                },
+                {
+                  "matched": false,
+                  "text": " annuelle se tient dans la premi\u00E8re quinzaine du mois de juillet.(2)L\u2019ordre du jour de l\u2019"
                 },
                 {
                   "matched": true,
@@ -8029,7 +8061,7 @@
                 },
                 {
                   "matched": false,
-                  "text": " annuelle comprend notamment la pr\u00E9sentation du rapport d\u2019activit\u00E9s du B\u00E2tonnier et du Conseil de l\u2019Ordre, la pr\u00E9sentation des comptes relatifs \u00E0 l\u2019ann\u00E9e \u00E9coul\u00E9e, l\u2019approbation de ces comptes, la"
+                  "text": " annuelle comprend notamment la pr\u00E9sentation du rapport d\u2019activit\u00E9s du B\u00E2tonnier et du"
                 }
               ],
               "text_byte_length": 1400,
@@ -8204,10 +8236,10 @@
           }
         ],
         "index_sha256": "\u003Cvaries-per-run\u003E",
-        "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
         "lanes_run": true,
         "limit": 200,
-        "matching": "byte-exact substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); case and diacritics are significant; nothing is folded, stemmed or expanded",
+        "matching": "substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; every other character, punctuation, apostrophes and every kind of space included, is kept as it is, so capitals and accents never decide a match and every other character does; nothing is stemmed or expanded",
         "modes_held": [
           "strict",
           "relaxed"
@@ -8287,7 +8319,7 @@
         "ambiguous_works": [],
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
-        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query as typed for a strict hit, a term or overlapping terms for a relaxed hit; a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
+        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query for a strict hit, a term or overlapping terms for a relaxed hit, each found as the lane finds it, with capitals and accents ignored, and marked on the text\u0027s own characters (a letter with the combining marks after it, a ligature whole); a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
         "fold": {
           "relaxed_hits_before_fold": null,
           "rule": "on lex-v3-luxembourg-index/9 a search with no date serves one hit per work, publisher article id and wording (the wording digest of the article\u0027s text and reference tokens): the hit of the latest state that holds that wording, each other state that holds it named under the hit\u0027s same_wording_states, so an article that did not change is one hit and not one per version; strict_hits and relaxed_hits count the hits served, and fold counts the hits before they were folded; with a date, one state per work is searched and nothing is folded",
@@ -8296,10 +8328,10 @@
         "hit_unit": "a hit is one article of one held state, not a provision: a provision whose wording never changed is a hit in every state that holds it",
         "hits": [],
         "index_sha256": "\u003Cvaries-per-run\u003E",
-        "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
         "lanes_run": true,
         "limit": 200,
-        "matching": "byte-exact substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); case and diacritics are significant; nothing is folded, stemmed or expanded",
+        "matching": "substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; every other character, punctuation, apostrophes and every kind of space included, is kept as it is, so capitals and accents never decide a match and every other character does; nothing is stemmed or expanded",
         "modes_held": [
           "strict",
           "relaxed"
@@ -8373,22 +8405,65 @@
       "object_type": "quote",
       "scenario": "one EU work by its CELEX, a phrase its held English wording carries: strict hits, then a relaxed hit, each with the pinned wording\u0027s provision permalink",
       "answer": {
+        "acknowledgement": "\u00A9 European Union, https://eur-lex.europa.eu",
         "ambiguous_works": [],
+        "authenticity": "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) No 216/2013, Article 1(2)); this text is a reproduction read from the Publications Office\u0027s Formex package, not the authentic edition.",
+        "authenticity_act_dates": [
+          "2016-04-27"
+        ],
+        "authenticity_basis": "electronic_edition",
+        "authenticity_rule": "the sentence is chosen by the act\u0027s own date, since this index holds no Official Journal publication date: authenticity_act_dates lists, once each and in order, the dates this index holds of the act the text belongs to (for a consolidated version, the act it consolidates): the date the publisher\u0027s Formex package gives the act\u0027s original wording, when that text is held, and the publisher\u0027s work_date_document of the act\u0027s own work, when the EU census of the act is held; a consolidated text outside a held census lists none, its own date being a consolidation\u0027s; the basis is electronic_edition when a date is listed and the earliest is on or after 2013-07-01, since an act is published on or after the date it bears, so in an Official Journal whose electronic edition alone is authentic (Regulation (EU) No 216/2013, which applies from 1 July 2013), and edition_by_publication_date otherwise, whose sentence states which edition is authentic on either side of 1 July 2013 and not on which side the act was published, so it also holds for an act dated before that day and published on or after it (one adopted in June 2013 may have been published in July); Lex\u0027s reproduction is never the authentic edition",
         "consolidations_held": false,
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
-        "date_semantics": "the wording date (wording_date in search, wording_dates in dossier) is the date the publisher\u0027s Formex package gives the act, the date of the original wording this index holds; it is not a publication, entry-into-force, application or consolidation date, and an EU date is never merged with a Luxembourg applicability date",
-        "hit_unit": "a hit is one article of the one wording this index holds of the expression; no other wording of the act is held",
+        "date_semantics": "an EU wording date is the date of a wording of the act: for the original wording, the date the publisher\u0027s Formex package gives the act; for a consolidated version, the publisher\u0027s consolidation date (cdm:act_consolidated_date) of that version; it is not an entry-into-force, application or publication date, and an EU date is never merged with a Luxembourg applicability date",
+        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query for a strict hit, a term or overlapping terms for a relaxed hit, each found as the lane finds it, with capitals and accents ignored, and marked on the text\u0027s own characters (a letter with the combining marks after it, a ligature whole); a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
+        "fold": {
+          "relaxed_hits_before_fold": 1,
+          "rule": "with no date, one hit per publisher article id and text: the hit of the latest wording that holds that text (by wording date), each other wording that holds it named under the hit\u0027s same_wording, so an article a consolidation did not change is one hit and not one per wording; strict_hits and relaxed_hits count the hits served, and fold counts the hits before they were folded; with a date, one wording is searched and nothing is folded",
+          "strict_hits_before_fold": 2
+        },
+        "hit_unit": "a hit is one article of one wording of the act, dated by that wording\u0027s role (wording_date and kind: an original wording by the act\u0027s Formex date, a consolidated version by the publisher\u0027s consolidation date, holding until next_date); with no date, an article\u0027s text is one hit, under the latest wording that holds it (fold)",
         "hits": [
           {
             "article_identity_sha256": "7ab119a143803f39c2c7bccb41c19504294baa152fdfda20607356624da54a2c",
             "celex": "32016R0679",
+            "extract": {
+              "byte_end": 212,
+              "byte_start": 0,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "Article 26 "
+                },
+                {
+                  "matched": true,
+                  "text": "Joint controllers"
+                },
+                {
+                  "matched": false,
+                  "text": " 1. Where two or more controllers jointly determine the purposes and means of processing, they shall be "
+                },
+                {
+                  "matched": true,
+                  "text": "joint controllers"
+                },
+                {
+                  "matched": false,
+                  "text": ". They shall in a transparent manner determine their respective"
+                }
+              ],
+              "text_byte_length": 1148,
+              "text_sha256": "6bf53bd73f3c0e86c9220c813f468743e0085688631aec60df1957a0aada248a"
+            },
             "heading": "Article 26",
+            "kind": "original_wording",
             "lane": "strict",
             "language": "eng",
             "match_reasons": [
               "exact_phrase"
             ],
+            "next_date": null,
             "permalink": "/eu-eurlex/32016R0679/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f/eng/026",
             "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
             "publisher_id": "026",
@@ -8396,17 +8471,40 @@
             "resolve": {
               "identifier": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001#lex-provision=026"
             },
+            "same_wording": [],
             "wording_date": "2016-04-27"
           },
           {
             "article_identity_sha256": "2750f70907f6d3e12f587dddf8e05ad775e5a7649f72ab8410afe5e4bb02ee08",
             "celex": "32016R0679",
+            "extract": {
+              "byte_end": 1661,
+              "byte_start": 1365,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "with: (a) where applicable, the respective responsibilities of the controller, "
+                },
+                {
+                  "matched": true,
+                  "text": "joint controllers"
+                },
+                {
+                  "matched": false,
+                  "text": " and processors involved in the processing, in particular for processing within a group of undertakings; (b) the purposes and means of the intended processing; (c) the measures and safeguards provided"
+                }
+              ],
+              "text_byte_length": 2561,
+              "text_sha256": "4dfacf13950781ad853e5f67d9aea17cd344c7637a6dd50d1841957b161eafa4"
+            },
             "heading": "Article 36",
+            "kind": "original_wording",
             "lane": "strict",
             "language": "eng",
             "match_reasons": [
               "exact_phrase"
             ],
+            "next_date": null,
             "permalink": "/eu-eurlex/32016R0679/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f/eng/036",
             "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
             "publisher_id": "036",
@@ -8414,17 +8512,40 @@
             "resolve": {
               "identifier": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001#lex-provision=036"
             },
+            "same_wording": [],
             "wording_date": "2016-04-27"
           },
           {
             "article_identity_sha256": "276c0867194f7e772fdc1eeb837b539f789c0ad66ffc2e9ae963d7d19a107c26",
             "celex": "32016R0679",
+            "extract": {
+              "byte_end": 551,
+              "byte_start": 270,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "concerned of the group of undertakings, or group of enterprises engaged in a "
+                },
+                {
+                  "matched": true,
+                  "text": "joint"
+                },
+                {
+                  "matched": false,
+                  "text": " economic activity, including their employees; (b) expressly confer enforceable rights on data subjects with regard to the processing of their personal data; and (c) fulfil the requirements laid down"
+                }
+              ],
+              "text_byte_length": 4883,
+              "text_sha256": "5999b67cfe4a65b71a1f91af9fe735362e3017038c64eab833a4e70a590d30fd"
+            },
             "heading": "Article 47",
+            "kind": "original_wording",
             "lane": "relaxed",
             "language": "eng",
             "match_reasons": [
               "all_terms"
             ],
+            "next_date": null,
             "permalink": "/eu-eurlex/32016R0679/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f/eng/047",
             "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
             "publisher_id": "047",
@@ -8432,14 +8553,15 @@
             "resolve": {
               "identifier": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001#lex-provision=047"
             },
+            "same_wording": [],
             "wording_date": "2016-04-27"
           }
         ],
         "index_sha256": "\u003Cvaries-per-run\u003E",
-        "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
         "lanes_run": true,
         "limit": 200,
-        "matching": "byte-exact substring of the article\u0027s searchable text as the EU index holds it; case and diacritics are significant; nothing is folded, stemmed or expanded",
+        "matching": "substring of the article\u0027s searchable text as the EU index holds it; the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; every other character, punctuation, apostrophes and every kind of space included, is kept as it is, so capitals and accents never decide a match and every other character does; nothing is stemmed or expanded",
         "modes_held": [
           "strict",
           "relaxed"
@@ -8450,8 +8572,8 @@
         ],
         "not_held": [
           {
-            "item": "later_wordings",
-            "reason": "no consolidated version is held, so a later wording of the act is not searched and a date is not answered here"
+            "item": "unplaced_versions",
+            "reason": "a version the publisher gives no usable date is not searched; timeline lists it, and searched counts it"
           },
           {
             "item": "corrigenda_applied",
@@ -8462,13 +8584,16 @@
             "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
           },
           {
-            "item": "article_text",
-            "reason": "no snippet or article text is served; each hit names its provision, which resolve answers"
+            "item": "titles",
+            "reason": "no title or Official Journal reference of an EU act is held by the EU index, so an EU act is searched only when named by its identifier, and a search that names no work searches Luxembourg law alone"
           }
         ],
+        "original_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
         "page_is": "the first hits in the stated order, not the best hits",
         "pinned_wording": {
-          "digest_rule": "the SHA-256, under the domain lex-v3-eu-wording/1, of the work\u0027s CELEX, the publisher\u0027s work and expression IRIs, the language, the wording date and every article identity of the expression in the publisher\u0027s article order, each field written as a 4-byte big-endian length and its UTF-8 bytes; each article identity is itself the SHA-256 of that article\u0027s text and tokens, so the digest pins the whole held wording, computed here from the EU index, which stores no wording digest",
+          "digest_rule": "the SHA-256, under the domain lex-v3-eu-wording/1, of the seed act\u0027s CELEX (the act a consolidated version consolidates; for the original wording, its work\u0027s own CELEX, which is the same), the publisher\u0027s work and expression IRIs of the wording, the language, the wording date (the original\u0027s Formex date or the publisher\u0027s consolidation date) and every article identity of the expression in the publisher\u0027s article order, each field written as a 4-byte big-endian length and its UTF-8 bytes; each article identity is itself the SHA-256 of that article\u0027s text and tokens, so the digest pins the whole held wording, computed here from the EU index, which stores no wording digest",
+          "kind": "original_wording",
+          "next_date": null,
           "permalink": "/eu-eurlex/32016R0679/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f/eng",
           "wording_date": "2016-04-27",
           "wording_sha256": "ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f"
@@ -8486,7 +8611,7 @@
           "works_with_hits": 1
         },
         "publisher": "eu-eurlex",
-        "ranking": "none; strict lane before relaxed lane, then the publisher\u0027s article id and article identity. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "ranking": "none; strict lane before relaxed lane, then the wording\u0027s date, its expression, the publisher\u0027s article id and article identity. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
         "reference": {
           "kind": null,
           "opens": null,
@@ -8502,17 +8627,50 @@
         "requested_language": "eng",
         "requested_mode": null,
         "requested_query": "joint controllers",
-        "scope": "one EU work named by the identifier (its CELEX, work or expression IRI, or one of its provisions), in the one held wording of its expression in the language asked; a search across EU works is not served",
+        "rights_rule": "a wording is searched only when its text is one evidence_bundle would quote: every corpus member its articles come from was acquired, which an EU build reaches only after retaining the Decision 95 rights receipt; a wording whose text is not admitted is not matched and is counted in searched.wordings_withheld_by_rights, and every text served carries the acknowledgement and the authenticity statement Decision 95 requires",
+        "scope": "one EU act named by the identifier (its CELEX, a work or expression IRI of the act or of one of its consolidated versions, or one of their provisions), in the language asked: with no date, every wording of it whose text this index holds and the rights rule admits (rights_rule), the original wording and each consolidated version the publisher dated; with a date, the one wording that date selects (selection_rule), as as_of selects it; a search across EU acts is not served",
         "searchable_languages": [
           "eng"
         ],
         "searchable_text_held_for_language": true,
+        "searched": {
+          "articles_with_searchable_text": 99,
+          "date": null,
+          "language": "eng",
+          "not_searched": {
+            "dates_with_different_texts": 0,
+            "versions_without_usable_date": 0,
+            "wordings_without_text": 0
+          },
+          "publisher": "eu-eurlex",
+          "rule": "searched counts what the lanes matched against, from this index: the wordings of the act in the language asked whose text the rights rule admits (with a date, the one wording the date selects) and their articles with searchable text; wordings_withheld_by_rights counts the wordings of that scope whose text the rights rule keeps out, wordings_without_text the dated wordings whose text this index does not hold, and versions_without_usable_date the versions the publisher gives no usable date, none of which is searched; nothing here counts what the publisher holds",
+          "seed_celex": "32016R0679",
+          "wordings": 1,
+          "wordings_withheld_by_rights": 0
+        },
+        "seed_celex": "32016R0679",
+        "selection_rule": "per language, the wording a date answers is the latest dated wording at or before it, and it holds until the next dated wording (next_date), or with no next date until a version the publisher has not yet consolidated, which is not held; when several discovered works share that date, the answer is served only if every text the corpus holds for that date in that language is the same (the publisher\u0027s work whose CELEX names that version represents them when its text is held), and two different held texts are refused ambiguous_version; a version with no usable publisher date is disclosed, and refused as ambiguous only when the corpus holds a text of it that differs from the answer",
         "terms": [
           "joint",
           "controllers"
         ],
-        "text_served": false,
+        "text_served": true,
         "truncated": false,
+        "wordings": [
+          {
+            "celex": "32016R0679",
+            "hits": 3,
+            "kind": "original_wording",
+            "language": "eng",
+            "next_date": null,
+            "next_text_held": null,
+            "permalink": "/eu-eurlex/32016R0679/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f/eng",
+            "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
+            "publisher_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+            "wording_date": "2016-04-27",
+            "wording_sha256": "ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f"
+          }
+        ],
         "work_resolution": {
           "candidates": null,
           "outcome": "not_run_identifier_given",
@@ -8526,22 +8684,65 @@
       "object_type": "quote",
       "scenario": "the same EU phrase, one hit per page: the first hit and the cursor to the next page",
       "answer": {
+        "acknowledgement": "\u00A9 European Union, https://eur-lex.europa.eu",
         "ambiguous_works": [],
+        "authenticity": "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) No 216/2013, Article 1(2)); this text is a reproduction read from the Publications Office\u0027s Formex package, not the authentic edition.",
+        "authenticity_act_dates": [
+          "2016-04-27"
+        ],
+        "authenticity_basis": "electronic_edition",
+        "authenticity_rule": "the sentence is chosen by the act\u0027s own date, since this index holds no Official Journal publication date: authenticity_act_dates lists, once each and in order, the dates this index holds of the act the text belongs to (for a consolidated version, the act it consolidates): the date the publisher\u0027s Formex package gives the act\u0027s original wording, when that text is held, and the publisher\u0027s work_date_document of the act\u0027s own work, when the EU census of the act is held; a consolidated text outside a held census lists none, its own date being a consolidation\u0027s; the basis is electronic_edition when a date is listed and the earliest is on or after 2013-07-01, since an act is published on or after the date it bears, so in an Official Journal whose electronic edition alone is authentic (Regulation (EU) No 216/2013, which applies from 1 July 2013), and edition_by_publication_date otherwise, whose sentence states which edition is authentic on either side of 1 July 2013 and not on which side the act was published, so it also holds for an act dated before that day and published on or after it (one adopted in June 2013 may have been published in July); Lex\u0027s reproduction is never the authentic edition",
         "consolidations_held": false,
         "continue_after": "strict.7ab119a143803f39c2c7bccb41c19504294baa152fdfda20607356624da54a2c",
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
-        "date_semantics": "the wording date (wording_date in search, wording_dates in dossier) is the date the publisher\u0027s Formex package gives the act, the date of the original wording this index holds; it is not a publication, entry-into-force, application or consolidation date, and an EU date is never merged with a Luxembourg applicability date",
-        "hit_unit": "a hit is one article of the one wording this index holds of the expression; no other wording of the act is held",
+        "date_semantics": "an EU wording date is the date of a wording of the act: for the original wording, the date the publisher\u0027s Formex package gives the act; for a consolidated version, the publisher\u0027s consolidation date (cdm:act_consolidated_date) of that version; it is not an entry-into-force, application or publication date, and an EU date is never merged with a Luxembourg applicability date",
+        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query for a strict hit, a term or overlapping terms for a relaxed hit, each found as the lane finds it, with capitals and accents ignored, and marked on the text\u0027s own characters (a letter with the combining marks after it, a ligature whole); a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
+        "fold": {
+          "relaxed_hits_before_fold": 1,
+          "rule": "with no date, one hit per publisher article id and text: the hit of the latest wording that holds that text (by wording date), each other wording that holds it named under the hit\u0027s same_wording, so an article a consolidation did not change is one hit and not one per wording; strict_hits and relaxed_hits count the hits served, and fold counts the hits before they were folded; with a date, one wording is searched and nothing is folded",
+          "strict_hits_before_fold": 2
+        },
+        "hit_unit": "a hit is one article of one wording of the act, dated by that wording\u0027s role (wording_date and kind: an original wording by the act\u0027s Formex date, a consolidated version by the publisher\u0027s consolidation date, holding until next_date); with no date, an article\u0027s text is one hit, under the latest wording that holds it (fold)",
         "hits": [
           {
             "article_identity_sha256": "7ab119a143803f39c2c7bccb41c19504294baa152fdfda20607356624da54a2c",
             "celex": "32016R0679",
+            "extract": {
+              "byte_end": 212,
+              "byte_start": 0,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "Article 26 "
+                },
+                {
+                  "matched": true,
+                  "text": "Joint controllers"
+                },
+                {
+                  "matched": false,
+                  "text": " 1. Where two or more controllers jointly determine the purposes and means of processing, they shall be "
+                },
+                {
+                  "matched": true,
+                  "text": "joint controllers"
+                },
+                {
+                  "matched": false,
+                  "text": ". They shall in a transparent manner determine their respective"
+                }
+              ],
+              "text_byte_length": 1148,
+              "text_sha256": "6bf53bd73f3c0e86c9220c813f468743e0085688631aec60df1957a0aada248a"
+            },
             "heading": "Article 26",
+            "kind": "original_wording",
             "lane": "strict",
             "language": "eng",
             "match_reasons": [
               "exact_phrase"
             ],
+            "next_date": null,
             "permalink": "/eu-eurlex/32016R0679/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f/eng/026",
             "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
             "publisher_id": "026",
@@ -8549,14 +8750,15 @@
             "resolve": {
               "identifier": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001#lex-provision=026"
             },
+            "same_wording": [],
             "wording_date": "2016-04-27"
           }
         ],
         "index_sha256": "\u003Cvaries-per-run\u003E",
-        "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
         "lanes_run": true,
         "limit": 1,
-        "matching": "byte-exact substring of the article\u0027s searchable text as the EU index holds it; case and diacritics are significant; nothing is folded, stemmed or expanded",
+        "matching": "substring of the article\u0027s searchable text as the EU index holds it; the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; every other character, punctuation, apostrophes and every kind of space included, is kept as it is, so capitals and accents never decide a match and every other character does; nothing is stemmed or expanded",
         "modes_held": [
           "strict",
           "relaxed"
@@ -8567,8 +8769,8 @@
         ],
         "not_held": [
           {
-            "item": "later_wordings",
-            "reason": "no consolidated version is held, so a later wording of the act is not searched and a date is not answered here"
+            "item": "unplaced_versions",
+            "reason": "a version the publisher gives no usable date is not searched; timeline lists it, and searched counts it"
           },
           {
             "item": "corrigenda_applied",
@@ -8579,13 +8781,16 @@
             "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
           },
           {
-            "item": "article_text",
-            "reason": "no snippet or article text is served; each hit names its provision, which resolve answers"
+            "item": "titles",
+            "reason": "no title or Official Journal reference of an EU act is held by the EU index, so an EU act is searched only when named by its identifier, and a search that names no work searches Luxembourg law alone"
           }
         ],
+        "original_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
         "page_is": "the first hits in the stated order, not the best hits",
         "pinned_wording": {
-          "digest_rule": "the SHA-256, under the domain lex-v3-eu-wording/1, of the work\u0027s CELEX, the publisher\u0027s work and expression IRIs, the language, the wording date and every article identity of the expression in the publisher\u0027s article order, each field written as a 4-byte big-endian length and its UTF-8 bytes; each article identity is itself the SHA-256 of that article\u0027s text and tokens, so the digest pins the whole held wording, computed here from the EU index, which stores no wording digest",
+          "digest_rule": "the SHA-256, under the domain lex-v3-eu-wording/1, of the seed act\u0027s CELEX (the act a consolidated version consolidates; for the original wording, its work\u0027s own CELEX, which is the same), the publisher\u0027s work and expression IRIs of the wording, the language, the wording date (the original\u0027s Formex date or the publisher\u0027s consolidation date) and every article identity of the expression in the publisher\u0027s article order, each field written as a 4-byte big-endian length and its UTF-8 bytes; each article identity is itself the SHA-256 of that article\u0027s text and tokens, so the digest pins the whole held wording, computed here from the EU index, which stores no wording digest",
+          "kind": "original_wording",
+          "next_date": null,
           "permalink": "/eu-eurlex/32016R0679/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f/eng",
           "wording_date": "2016-04-27",
           "wording_sha256": "ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f"
@@ -8603,7 +8808,7 @@
           "works_with_hits": 1
         },
         "publisher": "eu-eurlex",
-        "ranking": "none; strict lane before relaxed lane, then the publisher\u0027s article id and article identity. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "ranking": "none; strict lane before relaxed lane, then the wording\u0027s date, its expression, the publisher\u0027s article id and article identity. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
         "reference": {
           "kind": null,
           "opens": null,
@@ -8619,17 +8824,50 @@
         "requested_language": "eng",
         "requested_mode": null,
         "requested_query": "joint controllers",
-        "scope": "one EU work named by the identifier (its CELEX, work or expression IRI, or one of its provisions), in the one held wording of its expression in the language asked; a search across EU works is not served",
+        "rights_rule": "a wording is searched only when its text is one evidence_bundle would quote: every corpus member its articles come from was acquired, which an EU build reaches only after retaining the Decision 95 rights receipt; a wording whose text is not admitted is not matched and is counted in searched.wordings_withheld_by_rights, and every text served carries the acknowledgement and the authenticity statement Decision 95 requires",
+        "scope": "one EU act named by the identifier (its CELEX, a work or expression IRI of the act or of one of its consolidated versions, or one of their provisions), in the language asked: with no date, every wording of it whose text this index holds and the rights rule admits (rights_rule), the original wording and each consolidated version the publisher dated; with a date, the one wording that date selects (selection_rule), as as_of selects it; a search across EU acts is not served",
         "searchable_languages": [
           "eng"
         ],
         "searchable_text_held_for_language": true,
+        "searched": {
+          "articles_with_searchable_text": 99,
+          "date": null,
+          "language": "eng",
+          "not_searched": {
+            "dates_with_different_texts": 0,
+            "versions_without_usable_date": 0,
+            "wordings_without_text": 0
+          },
+          "publisher": "eu-eurlex",
+          "rule": "searched counts what the lanes matched against, from this index: the wordings of the act in the language asked whose text the rights rule admits (with a date, the one wording the date selects) and their articles with searchable text; wordings_withheld_by_rights counts the wordings of that scope whose text the rights rule keeps out, wordings_without_text the dated wordings whose text this index does not hold, and versions_without_usable_date the versions the publisher gives no usable date, none of which is searched; nothing here counts what the publisher holds",
+          "seed_celex": "32016R0679",
+          "wordings": 1,
+          "wordings_withheld_by_rights": 0
+        },
+        "seed_celex": "32016R0679",
+        "selection_rule": "per language, the wording a date answers is the latest dated wording at or before it, and it holds until the next dated wording (next_date), or with no next date until a version the publisher has not yet consolidated, which is not held; when several discovered works share that date, the answer is served only if every text the corpus holds for that date in that language is the same (the publisher\u0027s work whose CELEX names that version represents them when its text is held), and two different held texts are refused ambiguous_version; a version with no usable publisher date is disclosed, and refused as ambiguous only when the corpus holds a text of it that differs from the answer",
         "terms": [
           "joint",
           "controllers"
         ],
-        "text_served": false,
+        "text_served": true,
         "truncated": true,
+        "wordings": [
+          {
+            "celex": "32016R0679",
+            "hits": 3,
+            "kind": "original_wording",
+            "language": "eng",
+            "next_date": null,
+            "next_text_held": null,
+            "permalink": "/eu-eurlex/32016R0679/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f/eng",
+            "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
+            "publisher_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+            "wording_date": "2016-04-27",
+            "wording_sha256": "ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f"
+          }
+        ],
         "work_resolution": {
           "candidates": null,
           "outcome": "not_run_identifier_given",
@@ -8643,22 +8881,57 @@
       "object_type": "quote",
       "scenario": "the EU page after the first one-hit page, no limit: the rest of the result, whose population is still the whole result\u0027s",
       "answer": {
+        "acknowledgement": "\u00A9 European Union, https://eur-lex.europa.eu",
         "ambiguous_works": [],
+        "authenticity": "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) No 216/2013, Article 1(2)); this text is a reproduction read from the Publications Office\u0027s Formex package, not the authentic edition.",
+        "authenticity_act_dates": [
+          "2016-04-27"
+        ],
+        "authenticity_basis": "electronic_edition",
+        "authenticity_rule": "the sentence is chosen by the act\u0027s own date, since this index holds no Official Journal publication date: authenticity_act_dates lists, once each and in order, the dates this index holds of the act the text belongs to (for a consolidated version, the act it consolidates): the date the publisher\u0027s Formex package gives the act\u0027s original wording, when that text is held, and the publisher\u0027s work_date_document of the act\u0027s own work, when the EU census of the act is held; a consolidated text outside a held census lists none, its own date being a consolidation\u0027s; the basis is electronic_edition when a date is listed and the earliest is on or after 2013-07-01, since an act is published on or after the date it bears, so in an Official Journal whose electronic edition alone is authentic (Regulation (EU) No 216/2013, which applies from 1 July 2013), and edition_by_publication_date otherwise, whose sentence states which edition is authentic on either side of 1 July 2013 and not on which side the act was published, so it also holds for an act dated before that day and published on or after it (one adopted in June 2013 may have been published in July); Lex\u0027s reproduction is never the authentic edition",
         "consolidations_held": false,
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
-        "date_semantics": "the wording date (wording_date in search, wording_dates in dossier) is the date the publisher\u0027s Formex package gives the act, the date of the original wording this index holds; it is not a publication, entry-into-force, application or consolidation date, and an EU date is never merged with a Luxembourg applicability date",
-        "hit_unit": "a hit is one article of the one wording this index holds of the expression; no other wording of the act is held",
+        "date_semantics": "an EU wording date is the date of a wording of the act: for the original wording, the date the publisher\u0027s Formex package gives the act; for a consolidated version, the publisher\u0027s consolidation date (cdm:act_consolidated_date) of that version; it is not an entry-into-force, application or publication date, and an EU date is never merged with a Luxembourg applicability date",
+        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query for a strict hit, a term or overlapping terms for a relaxed hit, each found as the lane finds it, with capitals and accents ignored, and marked on the text\u0027s own characters (a letter with the combining marks after it, a ligature whole); a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
+        "fold": {
+          "relaxed_hits_before_fold": 1,
+          "rule": "with no date, one hit per publisher article id and text: the hit of the latest wording that holds that text (by wording date), each other wording that holds it named under the hit\u0027s same_wording, so an article a consolidation did not change is one hit and not one per wording; strict_hits and relaxed_hits count the hits served, and fold counts the hits before they were folded; with a date, one wording is searched and nothing is folded",
+          "strict_hits_before_fold": 2
+        },
+        "hit_unit": "a hit is one article of one wording of the act, dated by that wording\u0027s role (wording_date and kind: an original wording by the act\u0027s Formex date, a consolidated version by the publisher\u0027s consolidation date, holding until next_date); with no date, an article\u0027s text is one hit, under the latest wording that holds it (fold)",
         "hits": [
           {
             "article_identity_sha256": "2750f70907f6d3e12f587dddf8e05ad775e5a7649f72ab8410afe5e4bb02ee08",
             "celex": "32016R0679",
+            "extract": {
+              "byte_end": 1661,
+              "byte_start": 1365,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "with: (a) where applicable, the respective responsibilities of the controller, "
+                },
+                {
+                  "matched": true,
+                  "text": "joint controllers"
+                },
+                {
+                  "matched": false,
+                  "text": " and processors involved in the processing, in particular for processing within a group of undertakings; (b) the purposes and means of the intended processing; (c) the measures and safeguards provided"
+                }
+              ],
+              "text_byte_length": 2561,
+              "text_sha256": "4dfacf13950781ad853e5f67d9aea17cd344c7637a6dd50d1841957b161eafa4"
+            },
             "heading": "Article 36",
+            "kind": "original_wording",
             "lane": "strict",
             "language": "eng",
             "match_reasons": [
               "exact_phrase"
             ],
+            "next_date": null,
             "permalink": "/eu-eurlex/32016R0679/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f/eng/036",
             "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
             "publisher_id": "036",
@@ -8666,17 +8939,40 @@
             "resolve": {
               "identifier": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001#lex-provision=036"
             },
+            "same_wording": [],
             "wording_date": "2016-04-27"
           },
           {
             "article_identity_sha256": "276c0867194f7e772fdc1eeb837b539f789c0ad66ffc2e9ae963d7d19a107c26",
             "celex": "32016R0679",
+            "extract": {
+              "byte_end": 551,
+              "byte_start": 270,
+              "parts": [
+                {
+                  "matched": false,
+                  "text": "concerned of the group of undertakings, or group of enterprises engaged in a "
+                },
+                {
+                  "matched": true,
+                  "text": "joint"
+                },
+                {
+                  "matched": false,
+                  "text": " economic activity, including their employees; (b) expressly confer enforceable rights on data subjects with regard to the processing of their personal data; and (c) fulfil the requirements laid down"
+                }
+              ],
+              "text_byte_length": 4883,
+              "text_sha256": "5999b67cfe4a65b71a1f91af9fe735362e3017038c64eab833a4e70a590d30fd"
+            },
             "heading": "Article 47",
+            "kind": "original_wording",
             "lane": "relaxed",
             "language": "eng",
             "match_reasons": [
               "all_terms"
             ],
+            "next_date": null,
             "permalink": "/eu-eurlex/32016R0679/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f/eng/047",
             "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
             "publisher_id": "047",
@@ -8684,14 +8980,15 @@
             "resolve": {
               "identifier": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001#lex-provision=047"
             },
+            "same_wording": [],
             "wording_date": "2016-04-27"
           }
         ],
         "index_sha256": "\u003Cvaries-per-run\u003E",
-        "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
         "lanes_run": true,
         "limit": 200,
-        "matching": "byte-exact substring of the article\u0027s searchable text as the EU index holds it; case and diacritics are significant; nothing is folded, stemmed or expanded",
+        "matching": "substring of the article\u0027s searchable text as the EU index holds it; the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; every other character, punctuation, apostrophes and every kind of space included, is kept as it is, so capitals and accents never decide a match and every other character does; nothing is stemmed or expanded",
         "modes_held": [
           "strict",
           "relaxed"
@@ -8702,8 +8999,8 @@
         ],
         "not_held": [
           {
-            "item": "later_wordings",
-            "reason": "no consolidated version is held, so a later wording of the act is not searched and a date is not answered here"
+            "item": "unplaced_versions",
+            "reason": "a version the publisher gives no usable date is not searched; timeline lists it, and searched counts it"
           },
           {
             "item": "corrigenda_applied",
@@ -8714,13 +9011,16 @@
             "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
           },
           {
-            "item": "article_text",
-            "reason": "no snippet or article text is served; each hit names its provision, which resolve answers"
+            "item": "titles",
+            "reason": "no title or Official Journal reference of an EU act is held by the EU index, so an EU act is searched only when named by its identifier, and a search that names no work searches Luxembourg law alone"
           }
         ],
+        "original_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
         "page_is": "the first hits in the stated order, not the best hits",
         "pinned_wording": {
-          "digest_rule": "the SHA-256, under the domain lex-v3-eu-wording/1, of the work\u0027s CELEX, the publisher\u0027s work and expression IRIs, the language, the wording date and every article identity of the expression in the publisher\u0027s article order, each field written as a 4-byte big-endian length and its UTF-8 bytes; each article identity is itself the SHA-256 of that article\u0027s text and tokens, so the digest pins the whole held wording, computed here from the EU index, which stores no wording digest",
+          "digest_rule": "the SHA-256, under the domain lex-v3-eu-wording/1, of the seed act\u0027s CELEX (the act a consolidated version consolidates; for the original wording, its work\u0027s own CELEX, which is the same), the publisher\u0027s work and expression IRIs of the wording, the language, the wording date (the original\u0027s Formex date or the publisher\u0027s consolidation date) and every article identity of the expression in the publisher\u0027s article order, each field written as a 4-byte big-endian length and its UTF-8 bytes; each article identity is itself the SHA-256 of that article\u0027s text and tokens, so the digest pins the whole held wording, computed here from the EU index, which stores no wording digest",
+          "kind": "original_wording",
+          "next_date": null,
           "permalink": "/eu-eurlex/32016R0679/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f/eng",
           "wording_date": "2016-04-27",
           "wording_sha256": "ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f"
@@ -8738,7 +9038,7 @@
           "works_with_hits": 1
         },
         "publisher": "eu-eurlex",
-        "ranking": "none; strict lane before relaxed lane, then the publisher\u0027s article id and article identity. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "ranking": "none; strict lane before relaxed lane, then the wording\u0027s date, its expression, the publisher\u0027s article id and article identity. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
         "reference": {
           "kind": null,
           "opens": null,
@@ -8754,17 +9054,50 @@
         "requested_language": "eng",
         "requested_mode": null,
         "requested_query": "joint controllers",
-        "scope": "one EU work named by the identifier (its CELEX, work or expression IRI, or one of its provisions), in the one held wording of its expression in the language asked; a search across EU works is not served",
+        "rights_rule": "a wording is searched only when its text is one evidence_bundle would quote: every corpus member its articles come from was acquired, which an EU build reaches only after retaining the Decision 95 rights receipt; a wording whose text is not admitted is not matched and is counted in searched.wordings_withheld_by_rights, and every text served carries the acknowledgement and the authenticity statement Decision 95 requires",
+        "scope": "one EU act named by the identifier (its CELEX, a work or expression IRI of the act or of one of its consolidated versions, or one of their provisions), in the language asked: with no date, every wording of it whose text this index holds and the rights rule admits (rights_rule), the original wording and each consolidated version the publisher dated; with a date, the one wording that date selects (selection_rule), as as_of selects it; a search across EU acts is not served",
         "searchable_languages": [
           "eng"
         ],
         "searchable_text_held_for_language": true,
+        "searched": {
+          "articles_with_searchable_text": 99,
+          "date": null,
+          "language": "eng",
+          "not_searched": {
+            "dates_with_different_texts": 0,
+            "versions_without_usable_date": 0,
+            "wordings_without_text": 0
+          },
+          "publisher": "eu-eurlex",
+          "rule": "searched counts what the lanes matched against, from this index: the wordings of the act in the language asked whose text the rights rule admits (with a date, the one wording the date selects) and their articles with searchable text; wordings_withheld_by_rights counts the wordings of that scope whose text the rights rule keeps out, wordings_without_text the dated wordings whose text this index does not hold, and versions_without_usable_date the versions the publisher gives no usable date, none of which is searched; nothing here counts what the publisher holds",
+          "seed_celex": "32016R0679",
+          "wordings": 1,
+          "wordings_withheld_by_rights": 0
+        },
+        "seed_celex": "32016R0679",
+        "selection_rule": "per language, the wording a date answers is the latest dated wording at or before it, and it holds until the next dated wording (next_date), or with no next date until a version the publisher has not yet consolidated, which is not held; when several discovered works share that date, the answer is served only if every text the corpus holds for that date in that language is the same (the publisher\u0027s work whose CELEX names that version represents them when its text is held), and two different held texts are refused ambiguous_version; a version with no usable publisher date is disclosed, and refused as ambiguous only when the corpus holds a text of it that differs from the answer",
         "terms": [
           "joint",
           "controllers"
         ],
-        "text_served": false,
+        "text_served": true,
         "truncated": false,
+        "wordings": [
+          {
+            "celex": "32016R0679",
+            "hits": 3,
+            "kind": "original_wording",
+            "language": "eng",
+            "next_date": null,
+            "next_text_held": null,
+            "permalink": "/eu-eurlex/32016R0679/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f/eng",
+            "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
+            "publisher_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+            "wording_date": "2016-04-27",
+            "wording_sha256": "ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f"
+          }
+        ],
         "work_resolution": {
           "candidates": null,
           "outcome": "not_run_identifier_given",
@@ -8778,18 +9111,31 @@
       "object_type": "quote",
       "scenario": "a word the EU work\u0027s held wording does not carry: no hit is an answer, not a refusal",
       "answer": {
+        "acknowledgement": "\u00A9 European Union, https://eur-lex.europa.eu",
         "ambiguous_works": [],
+        "authenticity": "Only the Official Journal of the European Union published in electronic form is authentic and produces legal effects (Regulation (EU) No 216/2013, Article 1(2)); this text is a reproduction read from the Publications Office\u0027s Formex package, not the authentic edition.",
+        "authenticity_act_dates": [
+          "2016-04-27"
+        ],
+        "authenticity_basis": "electronic_edition",
+        "authenticity_rule": "the sentence is chosen by the act\u0027s own date, since this index holds no Official Journal publication date: authenticity_act_dates lists, once each and in order, the dates this index holds of the act the text belongs to (for a consolidated version, the act it consolidates): the date the publisher\u0027s Formex package gives the act\u0027s original wording, when that text is held, and the publisher\u0027s work_date_document of the act\u0027s own work, when the EU census of the act is held; a consolidated text outside a held census lists none, its own date being a consolidation\u0027s; the basis is electronic_edition when a date is listed and the earliest is on or after 2013-07-01, since an act is published on or after the date it bears, so in an Official Journal whose electronic edition alone is authentic (Regulation (EU) No 216/2013, which applies from 1 July 2013), and edition_by_publication_date otherwise, whose sentence states which edition is authentic on either side of 1 July 2013 and not on which side the act was published, so it also holds for an act dated before that day and published on or after it (one adopted in June 2013 may have been published in July); Lex\u0027s reproduction is never the authentic edition",
         "consolidations_held": false,
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
-        "date_semantics": "the wording date (wording_date in search, wording_dates in dossier) is the date the publisher\u0027s Formex package gives the act, the date of the original wording this index holds; it is not a publication, entry-into-force, application or consolidation date, and an EU date is never merged with a Luxembourg applicability date",
-        "hit_unit": "a hit is one article of the one wording this index holds of the expression; no other wording of the act is held",
+        "date_semantics": "an EU wording date is the date of a wording of the act: for the original wording, the date the publisher\u0027s Formex package gives the act; for a consolidated version, the publisher\u0027s consolidation date (cdm:act_consolidated_date) of that version; it is not an entry-into-force, application or publication date, and an EU date is never merged with a Luxembourg applicability date",
+        "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query for a strict hit, a term or overlapping terms for a relaxed hit, each found as the lane finds it, with capitals and accents ignored, and marked on the text\u0027s own characters (a letter with the combining marks after it, a ligature whole); a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
+        "fold": {
+          "relaxed_hits_before_fold": 0,
+          "rule": "with no date, one hit per publisher article id and text: the hit of the latest wording that holds that text (by wording date), each other wording that holds it named under the hit\u0027s same_wording, so an article a consolidation did not change is one hit and not one per wording; strict_hits and relaxed_hits count the hits served, and fold counts the hits before they were folded; with a date, one wording is searched and nothing is folded",
+          "strict_hits_before_fold": 0
+        },
+        "hit_unit": "a hit is one article of one wording of the act, dated by that wording\u0027s role (wording_date and kind: an original wording by the act\u0027s Formex date, a consolidated version by the publisher\u0027s consolidation date, holding until next_date); with no date, an article\u0027s text is one hit, under the latest wording that holds it (fold)",
         "hits": [],
         "index_sha256": "\u003Cvaries-per-run\u003E",
-        "lanes": "strict: the query as typed is a substring; relaxed: every distinct whitespace-separated term is a substring, in any order, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+        "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
         "lanes_run": true,
         "limit": 200,
-        "matching": "byte-exact substring of the article\u0027s searchable text as the EU index holds it; case and diacritics are significant; nothing is folded, stemmed or expanded",
+        "matching": "substring of the article\u0027s searchable text as the EU index holds it; the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; every other character, punctuation, apostrophes and every kind of space included, is kept as it is, so capitals and accents never decide a match and every other character does; nothing is stemmed or expanded",
         "modes_held": [
           "strict",
           "relaxed"
@@ -8800,8 +9146,8 @@
         ],
         "not_held": [
           {
-            "item": "later_wordings",
-            "reason": "no consolidated version is held, so a later wording of the act is not searched and a date is not answered here"
+            "item": "unplaced_versions",
+            "reason": "a version the publisher gives no usable date is not searched; timeline lists it, and searched counts it"
           },
           {
             "item": "corrigenda_applied",
@@ -8812,13 +9158,16 @@
             "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
           },
           {
-            "item": "article_text",
-            "reason": "no snippet or article text is served; each hit names its provision, which resolve answers"
+            "item": "titles",
+            "reason": "no title or Official Journal reference of an EU act is held by the EU index, so an EU act is searched only when named by its identifier, and a search that names no work searches Luxembourg law alone"
           }
         ],
+        "original_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
         "page_is": "the first hits in the stated order, not the best hits",
         "pinned_wording": {
-          "digest_rule": "the SHA-256, under the domain lex-v3-eu-wording/1, of the work\u0027s CELEX, the publisher\u0027s work and expression IRIs, the language, the wording date and every article identity of the expression in the publisher\u0027s article order, each field written as a 4-byte big-endian length and its UTF-8 bytes; each article identity is itself the SHA-256 of that article\u0027s text and tokens, so the digest pins the whole held wording, computed here from the EU index, which stores no wording digest",
+          "digest_rule": "the SHA-256, under the domain lex-v3-eu-wording/1, of the seed act\u0027s CELEX (the act a consolidated version consolidates; for the original wording, its work\u0027s own CELEX, which is the same), the publisher\u0027s work and expression IRIs of the wording, the language, the wording date (the original\u0027s Formex date or the publisher\u0027s consolidation date) and every article identity of the expression in the publisher\u0027s article order, each field written as a 4-byte big-endian length and its UTF-8 bytes; each article identity is itself the SHA-256 of that article\u0027s text and tokens, so the digest pins the whole held wording, computed here from the EU index, which stores no wording digest",
+          "kind": "original_wording",
+          "next_date": null,
           "permalink": "/eu-eurlex/32016R0679/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f/eng",
           "wording_date": "2016-04-27",
           "wording_sha256": "ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f"
@@ -8836,7 +9185,7 @@
           "works_with_hits": 0
         },
         "publisher": "eu-eurlex",
-        "ranking": "none; strict lane before relaxed lane, then the publisher\u0027s article id and article identity. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+        "ranking": "none; strict lane before relaxed lane, then the wording\u0027s date, its expression, the publisher\u0027s article id and article identity. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
         "reference": {
           "kind": null,
           "opens": null,
@@ -8852,16 +9201,49 @@
         "requested_language": "eng",
         "requested_mode": null,
         "requested_query": "zephyr",
-        "scope": "one EU work named by the identifier (its CELEX, work or expression IRI, or one of its provisions), in the one held wording of its expression in the language asked; a search across EU works is not served",
+        "rights_rule": "a wording is searched only when its text is one evidence_bundle would quote: every corpus member its articles come from was acquired, which an EU build reaches only after retaining the Decision 95 rights receipt; a wording whose text is not admitted is not matched and is counted in searched.wordings_withheld_by_rights, and every text served carries the acknowledgement and the authenticity statement Decision 95 requires",
+        "scope": "one EU act named by the identifier (its CELEX, a work or expression IRI of the act or of one of its consolidated versions, or one of their provisions), in the language asked: with no date, every wording of it whose text this index holds and the rights rule admits (rights_rule), the original wording and each consolidated version the publisher dated; with a date, the one wording that date selects (selection_rule), as as_of selects it; a search across EU acts is not served",
         "searchable_languages": [
           "eng"
         ],
         "searchable_text_held_for_language": true,
+        "searched": {
+          "articles_with_searchable_text": 99,
+          "date": null,
+          "language": "eng",
+          "not_searched": {
+            "dates_with_different_texts": 0,
+            "versions_without_usable_date": 0,
+            "wordings_without_text": 0
+          },
+          "publisher": "eu-eurlex",
+          "rule": "searched counts what the lanes matched against, from this index: the wordings of the act in the language asked whose text the rights rule admits (with a date, the one wording the date selects) and their articles with searchable text; wordings_withheld_by_rights counts the wordings of that scope whose text the rights rule keeps out, wordings_without_text the dated wordings whose text this index does not hold, and versions_without_usable_date the versions the publisher gives no usable date, none of which is searched; nothing here counts what the publisher holds",
+          "seed_celex": "32016R0679",
+          "wordings": 1,
+          "wordings_withheld_by_rights": 0
+        },
+        "seed_celex": "32016R0679",
+        "selection_rule": "per language, the wording a date answers is the latest dated wording at or before it, and it holds until the next dated wording (next_date), or with no next date until a version the publisher has not yet consolidated, which is not held; when several discovered works share that date, the answer is served only if every text the corpus holds for that date in that language is the same (the publisher\u0027s work whose CELEX names that version represents them when its text is held), and two different held texts are refused ambiguous_version; a version with no usable publisher date is disclosed, and refused as ambiguous only when the corpus holds a text of it that differs from the answer",
         "terms": [
           "zephyr"
         ],
-        "text_served": false,
+        "text_served": true,
         "truncated": false,
+        "wordings": [
+          {
+            "celex": "32016R0679",
+            "hits": 0,
+            "kind": "original_wording",
+            "language": "eng",
+            "next_date": null,
+            "next_text_held": null,
+            "permalink": "/eu-eurlex/32016R0679/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f/eng",
+            "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
+            "publisher_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+            "wording_date": "2016-04-27",
+            "wording_sha256": "ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f"
+          }
+        ],
         "work_resolution": {
           "candidates": null,
           "outcome": "not_run_identifier_given",
