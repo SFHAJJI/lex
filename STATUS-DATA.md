@@ -2,6 +2,32 @@
 
 Updated 2026-10-27.
 
+## Where the data stands at the end of 27 October, and what Release 3's derive would add (sole driver, 2026-10-27)
+
+- **Release 2's data is derived and waits.** The D1 at 98eef6c6 (rule set lu-release-2, policy A; derive A and B
+  byte-identical; luxembourg_rederivation 93872e80...; mount tar `derive/d1-20261027-98eef6c6/mount-r1.tar` in
+  stlexv3soufien) passes 29 of the 30 machine gates. The one that fails is Luxembourg temporal exactness (as_of, fra):
+  the gates' oracle, not the reader (data/r1-gates, waiting on the owner's "continue the gates"). Until then the live
+  site's data stays Release 1's (derive-c).
+- **R111's copy.** Release 1 is copied to `stlexv3soufien/releases/v3-20261026T180319Z-8958ec5fa63f/` and verified by
+  SHA-256, with blob versioning and 365-day soft delete on for the account (deploy/backup-release.ps1). The two releases
+  before the opening are being copied the same way.
+- **Release 3's derive, scoped read-only** (the driver's scope note, outside the repository):
+  - Luxembourg relation records are held but never projected: 15,078 `modifies` and 7,879 `repeals` edges from run
+    15's set G. Over derive-r1's served acts, R72's "amended after the last consolidation" fires for 54 acts. That is
+    an index /10 relations table, 10 to 12 hours.
+  - EU titles are in run 16's custody, and OJ references are in the held Formex packages (67 of 82 seeds classic). That
+    is EU index /7, 8 to 10 hours.
+  - EU per-consolidation amending-act and corrigendum lists (258 and 76 pairs), 6 to 8 hours.
+  - Annexes as text provisions (R84/R59): EU 3,934 consolidated annexes and 480 in act packages, Luxembourg 1,761
+    parts in admitted files. 22 to 26 hours.
+  - An XHTML/HTML reader for 5 EU works, about 1,030 articles, 8 to 10 hours.
+  - Correction to the audit: no corrigendum row is indexed today. Run 16's corrigendum sets are empty.
+  - Needs the owner:
+    - EU R72 and R68 need a Cellar query: publisher traffic, which could ride the EU refresh due 4 November.
+    - 12,040 licenceSCL Luxembourg acts list HTML/DOCX manifestations under CC BY 4.0. They are not in custody, so they
+      need an acquisition. They are also single-channel, while the same expression's XML/PDF say licenceSCL, so they
+      need a new ruling.
 ## The release path's checks against the release serving now: R106, R88, R86(2) listed and blocking, the card at promotion (R104), the exports' disclosure, R111's copy (sole driver, 2026-10-27)
 
 The audit's gaps 6, 9 and 16 (R111), for Release 2, the first release after the opening (`data/release-checks-ops`). No
