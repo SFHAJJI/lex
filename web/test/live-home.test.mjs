@@ -64,7 +64,7 @@ test("the home page says what Lex is and is not, and the sentence under the box 
   assert.ok(main.includes(`<h2>${escaped(EN.home.aboutHeading)}</h2><p>${escaped(EN.home.intro)}</p>`), "what Lex is and is not");
 });
 
-test("the home page links to Changes and to Trust and Coverage, and to no page the site does not serve", () => {
+test("the home page links to Changes, Trust and Coverage, Developers and Get help, the specification's list, and to no page the site does not serve", () => {
   for (const html of [rendered(COVERAGE), renderLiveHomePage()]) {
     const links = /<nav aria-label="([^"]*)" class="home-links" data-home-links="">([\s\S]*?)<\/nav>/.exec(html);
     assert.ok(links !== null, "the links");
@@ -72,9 +72,11 @@ test("the home page links to Changes and to Trust and Coverage, and to no page t
     assert.deepEqual([...links[2].matchAll(/<a href="([^"]+)">([^<]+)<\/a>/g)].map(([, href, text]) => [href, text]), [
       ["/en/radar.html", EN.site.radar],
       ["/en/coverage.html", EN.coverage.title],
+      ["/en/developers.html", EN.developers.title],
+      ["/en/help.html", EN.help.title],
     ]);
-    // Developers and Get help have no live page yet (R52: nothing unserved is shown).
-    assert.doesNotMatch(mainOf(html), /developer|get-help|help\.html/i);
+    // Each a page the site serves (`reference-pages.test.mjs` builds and serves them), and nothing else is linked (R52).
+    assert.equal([...mainOf(html).matchAll(/developers\.html|help\.html/g)].length, 2);
   }
 });
 
