@@ -101,7 +101,9 @@ public sealed class V3CorpusLegacySchema8MountTests
     /// record of an act only the catalogue holds), the schema-8 diff by its new text_rule alone (R57: what changed carries its
     /// served text), and the five schema-6 answers about loi-2017-03-14-a439, which that index's catalogue names and whose
     /// states it does not hold, from identifier_unknown to text_not_available with the act's record (R77); no other row and no
-    /// other member moved. The answers are those production sends: recorded on Linux, as the release image
+    /// other member moved. Recorded again at a9179b39: the same five schema-6 answers by the record's two new members alone
+    /// (document_type_codes, in_force_status_codes: the publisher's own word for its type and status). The answers are those
+    /// production sends: recorded on Linux, as the release image
     /// runs (globalization-invariant, UTC; the language library changes no byte), and every system is held to them. Resolve
     /// of a rooted path was the one answer Windows sent otherwise, until a rooted path was read as an identifier on every
     /// system (<c>LooksLikeIdentifier</c>).
@@ -112,7 +114,7 @@ public sealed class V3CorpusLegacySchema8MountTests
         using var recorded = JsonDocument.Parse(Fixture("base-answers.json"));
         var root = recorded.RootElement;
         Assert.AreEqual("3b7913ec", root.GetProperty("written_at_commit").GetString());
-        Assert.AreEqual("ee44bf68", root.GetProperty("recorded_at_commit").GetString());
+        Assert.AreEqual("a9179b39", root.GetProperty("recorded_at_commit").GetString());
         Assert.AreEqual(IndexFileSha256, root.GetProperty("index_sha256").GetString());
         Assert.AreEqual(StateSha256, root.GetProperty("state_sha256").GetString());
 
