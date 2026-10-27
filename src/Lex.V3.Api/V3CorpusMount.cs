@@ -4506,7 +4506,7 @@ internal sealed partial class V3CorpusMount : IDisposable
     [
         ["later_wordings", "no consolidated version is held, so a later wording of the act is not searched and a date is not answered here"],
         ["corrigenda_applied", "corrigenda are recorded by the index and not applied to the wording searched"],
-        ["other_languages", "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes the others"],
+        ["other_languages", "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act's other language versions where they exist"],
         ["article_text", "no snippet or article text is served; each hit names its provision, which resolve answers"],
     ];
 
@@ -6252,7 +6252,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         ["force_dates", "no entry-into-force, application or end-of-validity date is held; the wording date is none of them"],
         ["document_type", "the publisher's document type is not held for EU works"],
         ["corrigenda", "corrigendum lines are recorded by the index per corrected work root and are not joined to the work here, because the join between a corrected work root and the work's publisher identifier is not established"],
-        ["other_languages", "an expression in a language the index holds no wording in is not listed; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes the others"],
+        ["other_languages", "an expression in a language the index holds no wording in is not listed; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act's other language versions where they exist"],
         ["annexes", EuropeAnnexesNotHeldReason],
     ];
 

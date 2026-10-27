@@ -2450,7 +2450,7 @@
               },
               {
                 "item": "other_languages",
-                "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes the others"
+                "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
               },
               {
                 "item": "article_text",
@@ -2694,7 +2694,7 @@
               },
               {
                 "item": "other_languages",
-                "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes the others"
+                "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
               },
               {
                 "item": "article_text",
@@ -2841,7 +2841,7 @@
               },
               {
                 "item": "other_languages",
-                "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes the others"
+                "reason": "an expression in a language this index holds no wording in is not searched; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
               },
               {
                 "item": "article_text",
@@ -3498,7 +3498,7 @@
               },
               {
                 "item": "other_languages",
-                "reason": "an expression in a language the index holds no wording in is not listed; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes the others"
+                "reason": "an expression in a language the index holds no wording in is not listed; Lex acquires the English and French expressions of EU acts only (Decision 89), and EUR-Lex publishes an act\u0027s other language versions where they exist"
               },
               {
                 "item": "annexes",
