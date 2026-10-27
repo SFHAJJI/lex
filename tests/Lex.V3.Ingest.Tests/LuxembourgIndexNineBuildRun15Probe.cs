@@ -273,8 +273,11 @@ public sealed class LuxembourgIndexNineBuildRun15Probe
                     LuxembourgRights = rights with
                     {
                         Disposition = disposition,
+                        // Binding /2 names the re-derivation record, which a derive makes and this probe does not: a
+                        // stand-in digest, never verified here (the probe builds no corpus).
                         BindingSha256 = LexCorpus6LuxembourgRights.ComputeBindingSha256(
-                            member.RunIdentity, rights.BoundRunIdentity, rights.SelectedWemi.IdentitySha256, rule),
+                            member.RunIdentity, rights.BoundRunIdentity, rights.SelectedWemi.IdentitySha256, rule,
+                            LuxembourgInFileRightsReader.ReadingV2ProfileSha256, admissionPolicy, new string('0', 64)),
                         ResolutionRule = rule,
                     },
                     Gaps = admitted ? [] : [LuxembourgRightsChannelResolution.ReasonCodeOf(disposition)],

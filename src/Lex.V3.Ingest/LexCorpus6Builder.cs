@@ -387,14 +387,23 @@ public sealed record LexCorpus6LuxembourgRights(
                 "The Luxembourg rights name a resolution rule this build does not implement.", nameof(ResolutionRule));
         }
 
-        if (!string.Equals(
-                BindingSha256,
-                ComputeBindingSha256(memberRunIdentity, BoundRunIdentity, SelectedWemi.IdentitySha256, ResolutionRule),
-                StringComparison.Ordinal))
+        // Binding /1 is the member's own. Binding /2 also covers the corpus header's admission policy and re-derivation record,
+        // so the set checks it (LexCorpus6ManifestSet.ValidateLuxembourgAdmission) and the member checks only its form here.
+        if (ResolutionRule is null)
         {
-            throw new ArgumentException(
-                "The Luxembourg rights binding does not match its acquisition run, rights run, selected WEMI and resolution rule.",
-                nameof(BindingSha256));
+            if (!string.Equals(
+                    BindingSha256,
+                    ComputeBindingSha256(memberRunIdentity, BoundRunIdentity, SelectedWemi.IdentitySha256),
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "The Luxembourg rights binding does not match its acquisition run, rights run and selected WEMI.",
+                    nameof(BindingSha256));
+            }
+        }
+        else
+        {
+            LexCorpus6Member.RequireSha256(BindingSha256, nameof(BindingSha256));
         }
 
         if (!IsTerminal(Disposition))
@@ -423,18 +432,31 @@ public sealed record LexCorpus6LuxembourgRights(
     }
 
     /// <summary>
-    /// The member's rights binding: binding /1 over the acquisition run, the rights' run and the selected WEMI; binding /2
-    /// (<paramref name="resolutionRule"/> given, rights a re-derivation re-bound) over the same and the resolution rule.
+    /// The member's rights binding: binding /1 over the acquisition run, the rights' run and the selected WEMI. Binding /2
+    /// covers rights a re-derivation re-bound (<paramref name="resolutionRule"/> given). It hashes the same, plus the
+    /// resolution /2 rule, the in-file reading /2 rule, the admission policy and the re-derivation record the corpus names
+    /// (LU-DATA-DESIGN v2 §1.2), every one of them required.
     /// </summary>
     public static string ComputeBindingSha256(
         SourceArtifactRef memberRunIdentity,
         SourceArtifactRef rightsRunIdentity,
         string selectedWemiIdentitySha256,
-        string? resolutionRule = null)
+        string? resolutionRule = null,
+        string? readingRule = null,
+        string? admissionPolicy = null,
+        string? rederivationRecord = null)
     {
         ArgumentNullException.ThrowIfNull(memberRunIdentity);
         ArgumentNullException.ThrowIfNull(rightsRunIdentity);
         ArgumentException.ThrowIfNullOrWhiteSpace(selectedWemiIdentitySha256);
+        if (resolutionRule is null
+                ? readingRule is not null || admissionPolicy is not null || rederivationRecord is not null
+                : string.IsNullOrWhiteSpace(readingRule) || string.IsNullOrWhiteSpace(admissionPolicy) ||
+                  string.IsNullOrWhiteSpace(rederivationRecord))
+        {
+            throw new ArgumentException(
+                "Binding /2 names the resolution rule, the reading rule, the policy and the re-derivation record together; binding /1 none.");
+        }
 
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         string[] values = resolutionRule is null
@@ -456,6 +478,9 @@ public sealed record LexCorpus6LuxembourgRights(
                 rightsRunIdentity.Sha256,
                 selectedWemiIdentitySha256,
                 resolutionRule,
+                readingRule!,
+                admissionPolicy!,
+                rederivationRecord!,
             ];
         foreach (var value in values)
         {
@@ -954,6 +979,22 @@ public sealed record LexCorpus6ManifestSet(
                     nameof(Members));
             }
 
+            // Binding /2: the member's run, rights run and WEMI, the resolution and reading rules, and this corpus's policy
+            // and re-derivation record.
+            if (rights.ResolutionRule is not null && !string.Equals(
+                    rights.BindingSha256,
+                    LexCorpus6LuxembourgRights.ComputeBindingSha256(
+                        member.RunIdentity, rights.BoundRunIdentity, rights.SelectedWemi.IdentitySha256, rights.ResolutionRule,
+                        Luxembourg.LuxembourgInFileRightsReader.ReadingV2ProfileSha256, LuxembourgRightsAdmissionPolicy!,
+                        LuxembourgRederivation!),
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "The Luxembourg rights binding /2 does not match its runs, its WEMI, the rules, and the corpus's policy and "
+                    + "re-derivation record.",
+                    nameof(Members));
+            }
+
             // A single-channel disposition admits only with its disclosed licence page, within the policy's evidence window;
             // a disclosure is carried by an admitted body only.
             var expected = Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsAdmissionPolicies.Admits(
@@ -1284,11 +1325,13 @@ public static class LexCorpus6Builder
                 new LexCorpus6LuxembourgRights(
                     selectedWemi,
                     rights.BoundRunIdentity,
-                    LexCorpus6LuxembourgRights.ComputeBindingSha256(
-                        record.RunIdentity,
-                        rights.BoundRunIdentity,
-                        selectedWemi.IdentitySha256,
-                        rights.ResolutionRuleSha256),
+                    rights.ResolutionRuleSha256 is null
+                        ? LexCorpus6LuxembourgRights.ComputeBindingSha256(
+                            record.RunIdentity, rights.BoundRunIdentity, selectedWemi.IdentitySha256)
+                        : LexCorpus6LuxembourgRights.ComputeBindingSha256(
+                            record.RunIdentity, rights.BoundRunIdentity, selectedWemi.IdentitySha256, rights.ResolutionRuleSha256,
+                            Luxembourg.LuxembourgInFileRightsReader.ReadingV2ProfileSha256,
+                            profileEnvelope.LuxembourgRederivation!.AdmissionPolicySha256, profileEnvelope.LuxembourgRederivation.Sha256),
                     rights.Disposition,
                     SortArtifacts(rightsEvidence))
                 {

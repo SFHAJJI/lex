@@ -71,8 +71,20 @@ public sealed class LuxembourgRightsReleaseTwoTests
         Assert.AreEqual(LuxembourgRightsChannels.ResolutionV2ProfileSha256, outcome.Member.LuxembourgRights.ResolutionRule);
         Assert.AreEqual(
             LexCorpus6LuxembourgRights.ComputeBindingSha256(outcome.Member.RunIdentity, outcome.Member.LuxembourgRights.BoundRunIdentity,
-                outcome.Member.LuxembourgRights.SelectedWemi.IdentitySha256, LuxembourgRightsChannels.ResolutionV2ProfileSha256),
-            outcome.Member.LuxembourgRights.BindingSha256, "binding /2");
+                outcome.Member.LuxembourgRights.SelectedWemi.IdentitySha256, LuxembourgRightsChannels.ResolutionV2ProfileSha256,
+                LuxembourgInFileRightsReaderV2Tests.PinnedReadingV2ProfileSha256, LuxembourgRightsAdmissionPolicies.PolicyASha256,
+                outcome.Record.Sha256),
+            outcome.Member.LuxembourgRights.BindingSha256, "binding /2: the rules, the policy and the record");
+
+        // Binding /2 covers the corpus's record: a header naming another record no longer binds the member.
+        var otherRecord = outcome.CorpusText.Replace(
+            $"\"luxembourg_rederivation\":\"{outcome.Record.Sha256}\"", $"\"luxembourg_rederivation\":\"{new string('e', 64)}\"",
+            StringComparison.Ordinal);
+        Assert.AreNotEqual(outcome.CorpusText, otherRecord);
+        StringAssert.Contains(
+            Assert.ThrowsExactly<ArgumentException>(() => VerifiedLexCorpus6ManifestSet.ParseCanonicalAndVerify(Encoding.UTF8.GetBytes(otherRecord)))
+                .ToString(), "binding /2");
+        Assert.ThrowsExactly<ArgumentException>(() => LexCorpus6MountView.ParseCanonicalAndVerify(Encoding.UTF8.GetBytes(otherRecord)));
         CollectionAssert.AreEqual(Array.Empty<string>(), outcome.Member.Gaps.ToArray());
         Assert.AreEqual(LuxembourgRightsAdmissionPolicies.PolicyASha256, outcome.Policy);
         StringAssert.Contains(outcome.CorpusText, $"\"resolution_rule\":\"{LuxembourgRightsChannels.ResolutionV2ProfileSha256}\"");
@@ -287,7 +299,8 @@ public sealed class LuxembourgRightsReleaseTwoTests
         }
 
         // The corpus holds every admission to its own policy: under policy A, or under option (b) with a page not observed
-        // live, the disclosed member contradicts it and the corpus does not read.
+        // live, the disclosed member contradicts it and the corpus does not read. (The option windows themselves are
+        // LuxembourgRightsResolutionV2Tests'.)
         var optionB = LuxembourgRightsAdmissionPolicies.PolicyFor(l1: false, l1b: true, l2: false, livePagesOnly: true);
         foreach (var (what, altered) in new[]
                  {
@@ -301,8 +314,13 @@ public sealed class LuxembourgRightsReleaseTwoTests
             Assert.ThrowsExactly<ArgumentException>(() => LexCorpus6MountView.ParseCanonicalAndVerify(Encoding.UTF8.GetBytes(altered)), what);
         }
 
-        var asIs = outcome.CorpusText.Replace(policy, optionB, StringComparison.Ordinal);
-        Assert.IsNotNull(LexCorpus6MountView.ParseCanonicalAndVerify(Encoding.UTF8.GetBytes(asIs)), "option (b) admits a live page");
+        // Binding /2 covers the policy (the review of #999): another registered policy that would admit the same member, named
+        // in the header in place of the one it was derived under, no longer binds it either.
+        var swapped = outcome.CorpusText.Replace(policy, optionB, StringComparison.Ordinal);
+        StringAssert.Contains(
+            Assert.ThrowsExactly<ArgumentException>(() => LexCorpus6MountView.ParseCanonicalAndVerify(Encoding.UTF8.GetBytes(swapped))).ToString(),
+            "binding /2");
+        Assert.IsNotNull(LexCorpus6MountView.ParseCanonicalAndVerify(Encoding.UTF8.GetBytes(outcome.CorpusText)));
     }
 
     /// <summary>
@@ -336,6 +354,108 @@ public sealed class LuxembourgRightsReleaseTwoTests
             await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => LuxembourgRederivation.ApplyUnderOwnersRulingAsync(
                 store, verified, Release2() with { AdmissionPolicySha256 = other }, CancellationToken.None), other);
         }
+    }
+
+    /// <summary>
+    /// R1 refuses, naming the member, when resolution /2 is not terminal evidence: the acquisition's SPARQL channel holds no
+    /// row for the held file (<c>channel_enumeration_unproven</c>). Nothing is minted.
+    /// </summary>
+    [TestMethod]
+    public async Task ANonTerminalResolutionRefusesTheReDerivation()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var (_, verified) = await V3FirstMountBuildTests.AcquireAsync(store, V3FirstMountBuildTests.CheckoutRoot(), Body(Block(Xml, CcBy), Block(Pdf, CcBy)));
+        var altered = await WithAcquiredRightsAsync(store, verified, static rights => LuxembourgRightsChannels.Resolve(
+            rights.SelectedManifestationIri, rights.BoundRunIdentity,
+            new LuxembourgSparqlRightsChannelObservations(rights.SparqlObservations.RunIdentity, rights.SparqlObservations.EnumerationRef, []),
+            rights.InFileObservations));
+        var refused = await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(
+            () => LuxembourgRederivation.ApplyAsync(store, altered, Release2(), CancellationToken.None));
+        StringAssert.Contains(refused.Message, "resolves to a non-terminal disposition under resolution /2");
+        StringAssert.Contains(refused.Message, LuxembourgFirstMountAcquisitionTests.ConsolidationIri);
+        StringAssert.Contains(refused.Message, "-> channel_enumeration_unproven");
+    }
+
+    /// <summary>
+    /// R1 refuses a held body that resolves to <c>non_admitting_licence_scl</c> under resolution /2 (a silent file whose
+    /// SPARQL channel says licenceSCL): holding would have differed, so the acquisition's held set no longer stands.
+    /// </summary>
+    [TestMethod]
+    public async Task ANonAdmittingLicenceSclRefusesTheReDerivation()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var (_, verified) = await V3FirstMountBuildTests.AcquireAsync(store, V3FirstMountBuildTests.CheckoutRoot(), Body());
+        var altered = await WithAcquiredRightsAsync(store, verified, static rights => LuxembourgRightsChannels.Resolve(
+            rights.SelectedManifestationIri, rights.BoundRunIdentity,
+            new LuxembourgSparqlRightsChannelObservations(
+                rights.SparqlObservations.RunIdentity, rights.SparqlObservations.EnumerationRef,
+                rights.SparqlObservations.Observations.Select(row => new LuxembourgRightsChannelObservation(
+                    row.ManifestationIri, row.RunIdentity, row.EvidenceRef, [Scl])).ToArray()),
+            rights.InFileObservations));
+        var refused = await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(
+            () => LuxembourgRederivation.ApplyAsync(store, altered, Release2(), CancellationToken.None));
+        StringAssert.Contains(refused.Message, "resolves to non_admitting_licence_scl under resolution /2, so its holding would have differed");
+        StringAssert.Contains(refused.Message, LuxembourgFirstMountAcquisitionTests.ConsolidationIri);
+    }
+
+    /// <summary>
+    /// Under one of the owner's rulings, R1 refuses a single-channel admission for which no retained licence page holds the
+    /// manifestation's licence row: here the SPARQL channel's rights evidence index lists no page at all.
+    /// </summary>
+    [TestMethod]
+    public async Task ASingleChannelAdmissionWithoutItsLicencePageRefusesTheReDerivation()
+    {
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var (_, verified) = await V3FirstMountBuildTests.AcquireAsync(store, V3FirstMountBuildTests.CheckoutRoot(), Body());
+        var empty = Encoding.UTF8.GetBytes("{\"schema\":\"lex-v3-test-rights-evidence-index-without-pages\",\"deliveries\":[],\"observedObjectCount\":0,\"observationBatches\":[]}");
+        var held = await store.CreateAsync(empty, CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var noPages = new SourceArtifactRef("urn:uuid:7e57a6e5-0000-4000-8000-000000000001", held.Reference.ContentSha256);
+        var altered = await WithAcquiredRightsAsync(store, verified, rights => LuxembourgRightsChannels.Resolve(
+            rights.SelectedManifestationIri, rights.BoundRunIdentity,
+            new LuxembourgSparqlRightsChannelObservations(rights.SparqlObservations.RunIdentity, noPages, rights.SparqlObservations.Observations),
+            rights.InFileObservations));
+        var policy = LuxembourgRightsAdmissionPolicies.PolicyFor(l1: true, l1b: false, l2: false, livePagesOnly: false);
+        var refused = await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => LuxembourgRederivation.ApplyUnderOwnersRulingAsync(
+            store, altered, Release2() with { AdmissionPolicySha256 = policy }, CancellationToken.None));
+        StringAssert.Contains(refused.Message, "(sparql_cc_by_in_file_silent) finds no retained licence page holding exactly its SPARQL licence");
+        StringAssert.Contains(refused.Message, LuxembourgFirstMountAcquisitionTests.ConsolidationIri);
+
+        // Under policy A the same body reads no page and is withheld: the refusal is the ruling's alone.
+        var underA = await LuxembourgRederivation.ApplyAsync(store, altered, Release2(), CancellationToken.None);
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.SparqlCcByInFileSilent,
+            underA.Run!.HeldBodyDerivationPopulation!.Inputs.Single().RightsResolution!.Disposition);
+    }
+
+    /// <summary>
+    /// The acquisition with each held member's acquired rights resolution replaced by <paramref name="change"/>'s, the frozen
+    /// inventory /3 and content /1 run again over that population (R1 requires the acquisition's derivations to be of its own
+    /// population), and its catalog and checkpoints as they were.
+    /// </summary>
+    private static async Task<LuxembourgFirstMountAcquisitionResult> WithAcquiredRightsAsync(
+        ICustodyStore store,
+        LuxembourgFirstMountAcquisitionResult verified,
+        Func<LuxembourgRightsChannelResolution, LuxembourgRightsChannelResolution> change)
+    {
+        var run = verified.Run!;
+        var population = run.HeldBodyDerivationPopulation!;
+        var altered = run.WithHeldBodyDerivationPopulation(population.WithRederivedRights(
+            population.Inputs.ToDictionary(static input => input.ObjectOrdinal, input => change(input.RightsResolution!))));
+        var inventory = await new LuxembourgAknArticleInventoryProducer(store)
+            .RunAsync(altered.HeldBodyDerivationPopulation!, CancellationToken.None);
+        var content = await new LuxembourgAknLegalContentProfileProducer(store).RunAsync(inventory, CancellationToken.None);
+        var result = LuxembourgFirstMountAcquisitionResult.Success(
+            altered, verified.Profile!, verified.VocabularyEvidenceRef!, inventory, content);
+        if (verified.VocabularyCheckpointRef is { } vocabulary)
+        {
+            result = result.WithVocabularyCheckpoint(vocabulary);
+        }
+
+        if (verified.CheckpointRef is { } checkpoint)
+        {
+            result = result.WithCheckpoint(checkpoint, verified.Resumption);
+        }
+
+        return verified.PopulationScopeManifestRef is { } scope ? result.WithPopulationScopeManifest(scope) : result;
     }
 
     /// <summary>The population's door re-binds exactly its members: a map that drops a member or moves its manifestation refuses.</summary>

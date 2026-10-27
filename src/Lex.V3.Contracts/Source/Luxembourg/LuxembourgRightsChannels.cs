@@ -108,7 +108,7 @@ public enum LuxembourgRightsChannelDisposition
     [JsonStringEnumMemberName("sparql_cc_by_in_file_not_applicable")]
     SparqlCcByInFileNotApplicable = 17,
 
-    /// <summary>The file binds no block to the fetched manifestation, and every identity it names is unknown to the catalogue.</summary>
+    /// <summary>The file binds no block to the fetched manifestation, and it names no identity, or one the catalogue does not know.</summary>
     [JsonStringEnumMemberName("typed_quarantine_in_file_identity_unknown")]
     TypedQuarantineInFileIdentityUnknown = 18,
 }
@@ -355,12 +355,16 @@ public sealed record LuxembourgRightsChannelResolution
     /// The in-file reading /2 this resolution was made from (<see cref="LuxembourgRightsChannels.ResolveV2"/>); null for a
     /// resolution /1, whose in-file channel is the acquisition's reading /1.
     /// </summary>
+    /// <remarks>Absent from the wire when null, so a resolution /1 serializes exactly as before reading /2 existed: the
+    /// acquisition's gazette and query checkpoints hash body joins and gazette dispositions that carry one.</remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public LuxembourgInFileRightsReadingV2? InFileReadingV2 { get; private init; }
 
     /// <summary>
     /// The SHA-256 of the resolution rule this resolution was made under: null for resolution /1 (the acquisition's), and
     /// <see cref="LuxembourgRightsChannels.ResolutionV2ProfileSha256"/> for resolution /2.
     /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ResolutionRuleSha256 { get; private init; }
 
     internal LuxembourgRightsChannelResolution AsResolutionV2(LuxembourgInFileRightsReadingV2 reading) =>
@@ -370,6 +374,7 @@ public sealed record LuxembourgRightsChannelResolution
     /// The retained SPARQL page that holds the fetched manifestation's licence row, bound to a single-channel resolution /2
     /// (<see cref="WithLicencePage"/>): what its admission cites and discloses. Null otherwise.
     /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public LuxembourgSparqlLicencePage? LicencePage { get; private init; }
 
     /// <summary>
@@ -479,8 +484,8 @@ public static class LuxembourgRightsChannels
         "9=non_admitting_licence_scl:the-sparql-value-is-licencescl;otherwise-typed_quarantine_unruled_licence:the-sparql-value-is-not-cc-by-4.0\n" +
         "10=agreed_cc_by_rederived:the-own-block-states-exactly-the-sparql-value-cc-by-4.0\n" +
         "11=sparql_cc_by_in_file_own_block_empty:the-own-block-states-no-licence\n" +
-        "12=typed_quarantine_in_file_identity_unknown:no-own-block,and-every-identity-the-file-names-is-unknown-to-the-catalogue\n" +
-        "13=sparql_cc_by_in_file_names_other_identity:no-own-block,and-the-file's-declared-licences-are-exactly-cc-by-4.0\n" +
+        "12=typed_quarantine_in_file_identity_unknown:no-own-block,and-the-file-names-no-identity-or-an-identity-unknown-to-the-catalogue\n" +
+        "13=sparql_cc_by_in_file_names_other_identity:no-own-block,every-identity-the-file-names-is-cc-by-4.0-in-the-catalogue,and-the-file's-declared-licences-are-exactly-cc-by-4.0\n" +
         "14=sparql_cc_by_in_file_silent:the-file-states-no-licence\n" +
         "15=sparql_cc_by_in_file_not_applicable:the-in-file-channel-cannot-read-the-representation\n" +
         "single-channel=11,13,14,15:the-file-does-not-speak-for-the-fetched-manifestation;only-a-policy-naming-them-admits-them\n";
@@ -635,10 +640,14 @@ public static class LuxembourgRightsChannels
                 LuxembourgRightsChannelDisposition.AgreedCcByRederived,
             // 11. The own block states no licence, whatever its siblings say.
             LuxembourgInFileRightsReadingV2Status.OwnBlockEmpty => LuxembourgRightsChannelDisposition.SparqlCcByInFileOwnBlockEmpty,
-            // 12. No own block, and nothing the file names can be checked.
-            LuxembourgInFileRightsReadingV2Status.Unbound when reading.NamedIdentities.All(named => !catalogue.Knows(named.Identity)) =>
+            // 12. No own block, and something the file names cannot be checked: it names no identity, or one the catalogue
+            // does not know. A file naming one CC BY identity and one unknown one never reaches rule 13 (design §5: every
+            // identity the block names is itself CC BY in the same catalogue).
+            LuxembourgInFileRightsReadingV2Status.Unbound when reading.NamedIdentities.Count == 0 ||
+                reading.NamedIdentities.Any(named => !catalogue.Knows(named.Identity)) =>
                 LuxembourgRightsChannelDisposition.TypedQuarantineInFileIdentityUnknown,
-            // 13. No own block; the file's declared values are exactly [CC BY] (rule 8).
+            // 13. No own block; every identity the file names is known and, by rule 8, licensed exactly CC BY; the file's
+            // declared values are exactly [CC BY] (rule 8).
             LuxembourgInFileRightsReadingV2Status.Unbound => LuxembourgRightsChannelDisposition.SparqlCcByInFileNamesOtherIdentity,
             // 14. Nothing stated.
             LuxembourgInFileRightsReadingV2Status.Silent => LuxembourgRightsChannelDisposition.SparqlCcByInFileSilent,

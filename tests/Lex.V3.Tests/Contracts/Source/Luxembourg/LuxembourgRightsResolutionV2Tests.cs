@@ -15,7 +15,8 @@ namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
 public sealed class LuxembourgRightsResolutionV2Tests
 {
     /// <summary>Resolution /2's and policy A's texts, hashed outside this code base (Python, over the canonical texts).</summary>
-    internal const string PinnedResolutionV2Sha256 = "ab8a42cb641d1ce75a0e00b5be0c955eb1f2206c5b564777149493c6c9658422";
+    /// <remarks>Re-pinned in the review of #999: rule 12 quarantines a file naming any identity the catalogue does not know.</remarks>
+    internal const string PinnedResolutionV2Sha256 = "05ed311fa4e124c04e5bd644423f6797dbbdf2a2141075d11879cd4dc2f9e083";
     internal const string PinnedPolicyASha256 = "b9687998dcde76930137a913f54b753d3f496a13da1c7d827d3f1573dcf3dc41";
     private const string Policy1Sha256 = "a477f4f2e6e0468bc9069da742f6f34f248ec831e01277a40552cb1e5bad2abb";
 
@@ -207,6 +208,28 @@ public sealed class LuxembourgRightsResolutionV2Tests
         Assert.AreEqual(LuxembourgRightsChannelDisposition.SparqlCcByInFileNamesOtherIdentity, known.Disposition);
         Assert.IsNull(known.InFileObservation, "a block naming another identity never supplies the held file's licence");
         Assert.IsFalse(LuxembourgRightsAdmissionPolicies.Admits(PinnedPolicyASha256, known.Disposition));
+    }
+
+    /// <summary>
+    /// Rule 12 (the review of #999): a file naming one identity the catalogue licenses CC BY and one it does not know is a
+    /// quarantine, never <c>names_other_identity</c>, so L2 can never admit it; and so is an unbound file naming no identity.
+    /// </summary>
+    [TestMethod]
+    public void AnUnboundFileNamingAnyUnknownIdentityOrNoneIsQuarantined()
+    {
+        const string Unknown = "http://data.legilux.public.lu/eli/etat/leg/loi/1999/01/01/a1/jo/fr/xml";
+        var mixed = Resolve(Reading(LuxembourgInFileRightsReadingV2Status.Unbound, [], [CcBy], (ActXml, [CcBy]), (Unknown, [CcBy])),
+            catalogue: [(ActXml, CcBy)]);
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.TypedQuarantineInFileIdentityUnknown, mixed.Disposition);
+        Assert.IsFalse(LuxembourgRightsAdmissionPolicies.Admits(
+            LuxembourgRightsAdmissionPolicies.PolicyFor(false, false, true, false), mixed.Disposition, true), "L2 (a) does not admit it");
+        var nameless = Resolve(Reading(LuxembourgInFileRightsReadingV2Status.Unbound, [], [CcBy]));
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.TypedQuarantineInFileIdentityUnknown, nameless.Disposition,
+            "a licence in a block naming nothing names no identity to check");
+        var bothKnown = Resolve(Reading(LuxembourgInFileRightsReadingV2Status.Unbound, [], [CcBy], (ActXml, [CcBy]), (Unknown, [CcBy])),
+            catalogue: [(ActXml, CcBy), (Unknown, CcBy)]);
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.SparqlCcByInFileNamesOtherIdentity, bothKnown.Disposition,
+            "every identity it names is CC BY in the catalogue");
     }
 
     [TestMethod]
