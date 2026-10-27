@@ -315,3 +315,73 @@ test("an EU export never names an article the reader was not shown, and needs a 
   assert.throws(compose({ view: readEvidenceBundle(await bundle()) }), /composed from an EU reading/, "a Luxembourg reading is never composed as EU text");
   assert.equal(compose({})().items.length, 1);
 });
+
+// The owner's switches L1, L1b and L2 (STATUS-DATA.md, Release 2's rights): a single-channel admission is served with its
+// rights disclosure, which every export must carry before a switch may be turned on. The bundle is the one the API sends with
+// L1 switched on (`LuxembourgRightsReleaseTwoTests`: the source's rights_disclosure beside its single-channel disposition).
+function withSwitchOn(answer, { code = "lu_rights_publisher_catalogue_only_file_silent", disposition = "sparql_cc_by_in_file_silent", live = true } = {}) {
+  answer.rights_disposition = disposition;
+  for (const source of answer.states[0].sources) {
+    source.rights_disposition = disposition;
+    source.rights_disclosure = { code, licence_page_sha256: "a".repeat(64), licence_page_observed_on: "2026-10-11", licence_page_observed_live: live };
+  }
+  return answer;
+}
+
+test("with one of the owner's switches on, every export carries the text's rights disclosure: the JSON, each CSV row and the PDF", async () => {
+  const { DISCLOSED_RIGHTS_DISPOSITIONS } = await import("../scripts/reading-answer.mjs");
+  const { LIVE_CHROME, fillText } = await import("../scripts/live-chrome.mjs");
+  const { exportPdf } = await import("../scripts/export-pdf.mjs");
+  const view = readEvidenceBundle(withSwitchOn(await bundle()));
+  const [state] = view.states;
+  const pins = state.articles.slice(0, 2).map((article) => ({ stateSha256: state.stateSha256, publisherId: article.publisherId }));
+  const model = composeExport({ view, pinned: pins, observedAt: OBSERVED });
+  const sentence = fillText(LIVE_CHROME.en.reading.disclosure.lu_rights_publisher_catalogue_only_file_silent, { date: "2026-10-11" });
+  assert.match(sentence, /served on the publisher's catalogue alone, which declares CC BY 4\.0 for this file, as observed on 2026-10-11\.$/);
+  const said = { code: "lu_rights_publisher_catalogue_only_file_silent", licence_page_sha256: "a".repeat(64), licence_page_observed_on: "2026-10-11", licence_page_observed_live: true, sentence };
+
+  const json = JSON.parse(exportJson(model));
+  assert.equal(json.rights_disposition, "sparql_cc_by_in_file_silent");
+  assert.deepEqual(json.rights_disclosures, [said], "the export as a whole says each disclosure once");
+  for (const item of json.items) assert.deepEqual(item.rights_disclosure, said, "each item read from a disclosed source says it");
+
+  const csv = parseCsv(exportCsv(model));
+  assert.equal(csv[0].at(-1), "rights_disclosure");
+  for (const row of csv.slice(1)) {
+    const record = Object.fromEntries(CSV_COLUMNS.map((column, position) => [column, row[position]]));
+    assert.deepEqual(JSON.parse(record.rights_disclosure), said, "a row copied out alone still says it");
+    assert.equal(record.rights_disposition, "sparql_cc_by_in_file_silent");
+  }
+
+  const pdf = Buffer.from(exportPdf(model)).toString("latin1");
+  const words = (text) => text.replace(/\s+/g, " ");
+  const runs = words([...pdf.matchAll(/\(((?:\\[\s\S]|[^\\)])*)\) Tj/g)].map((match) => match[1]).join(" "));
+  for (const fragment of ["served on the publisher", "catalogue alone, which declares CC BY 4.0 for this file, as observed on 2026-10-11."]) {
+    assert.ok(runs.includes(fragment), `the PDF says: ${fragment}`);
+  }
+  assert.ok(runs.includes(`Licence page sha-256 ${"a".repeat(64)}.`), "each item names the licence page it rests on");
+
+  // Each of the three switches' dispositions says its own sentence.
+  for (const [disposition, code] of [
+    ["sparql_cc_by_in_file_own_block_empty", "lu_rights_publisher_catalogue_only_own_block_empty"],
+    ["sparql_cc_by_in_file_names_other_identity", "lu_rights_publisher_catalogue_only_file_names_other_identity"],
+  ]) {
+    assert.ok(DISCLOSED_RIGHTS_DISPOSITIONS.includes(disposition));
+    const other = readEvidenceBundle(withSwitchOn(await bundle(), { code, disposition, live: false }));
+    const exported = JSON.parse(exportJson(composeExport({ view: other, pinned: pins, observedAt: OBSERVED })));
+    assert.equal(exported.items[0].rights_disclosure.code, code);
+    assert.equal(exported.items[0].rights_disclosure.licence_page_observed_live, false);
+    assert.equal(exported.items[0].rights_disclosure.sentence, fillText(LIVE_CHROME.en.reading.disclosure[code], { date: "2026-10-11" }));
+  }
+});
+
+test("with every switch off, an export says no disclosure: its JSON has none, and its CSV's last column is empty", async () => {
+  const view = readEvidenceBundle(await bundle());
+  const [state] = view.states;
+  const model = composeExport({ view, pinned: [{ stateSha256: state.stateSha256, publisherId: state.articles[0].publisherId }], observedAt: OBSERVED });
+  const json = JSON.parse(exportJson(model));
+  assert.ok(!Object.hasOwn(json, "rights_disclosures"));
+  assert.ok(!Object.hasOwn(json.items[0], "rights_disclosure"));
+  const csv = parseCsv(exportCsv(model));
+  assert.equal(csv[1].at(-1), "");
+});
