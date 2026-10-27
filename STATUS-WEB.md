@@ -67,7 +67,7 @@ pages exist).
     served against the coverage answer, every schema it links served as JSON, and its REST example and MCP tools/call
     message, sent as printed, one envelope (`envelopeIdentityFailures`).
 - **French** (Decision 41): one independent reviewer (Claude, AI reviewer, not the author) under the owner's
-  delegation, in the addendum of 2026-10-27 of `C:lex-v3lanesr-revieweview.md` ("breadcrumbs, the banners' info
+  delegation, in the addendum of 2026-10-27 of `C:\lex-v3\lanes\fr-review\review.md` ("breadcrumbs, the banners' info
   controls and the home page's example searches"): 11 forms reviewed, 1 changed (`home.examplesIntro`: "Chaque exemple lance
   la recherche d’un article …, désigné par sa citation usuelle"), 10 approved, nothing blocking. Its optional pair for
   `breadcrumbs.stateEntryIntoForce` ("(publisher)" / "(éditeur)", as the heading says it) is taken, and its material point
