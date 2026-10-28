@@ -19,7 +19,7 @@ public sealed class LuxembourgIndexBuilderTests
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             LuxembourgIndexBuilder.BuildFixedInputDeterminismEvidence()));
-        Assert.AreEqual("7cfd99881fc878616e96b067342f955df11ae908147f69c04ff64fcfce439184", digest);
+        Assert.AreEqual("b2a99e3fe4c48cf4a638a8f7510e99430090e8848dcd23bdf755d78390f33e23", digest);
     }
 
     /// <summary>

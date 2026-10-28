@@ -1,6 +1,3 @@
-using System.Text.Json;
-using Lex.V3.Api;
-using Lex.V3.Contracts.Platform;
 using Lex.V3.Contracts.Source.Luxembourg;
 using Lex.V3.Ingest.Luxembourg;
 
@@ -10,7 +7,7 @@ namespace Lex.V3.Ingest.Tests;
 /// The derive's own path for index 10's relation records: the fixture acquisition, its run re-delivered with resolved publisher
 /// relations (an act that modifies the fixture's act, one it repeals) and the publication dates the catalogue states, re-derived
 /// under Release 1, built into the first mount twice, written, verified and mounted. Both derives give the same files byte for
-/// byte; the index holds the relations the run resolved, and the dossier serves them with R72's notice.
+/// byte; the index holds the relations the run resolved with the acting act's dates, and its reader serves them.
 /// </summary>
 [TestClass]
 [DoNotParallelize]
@@ -22,7 +19,7 @@ public sealed class LuxembourgPublisherRelationsDeriveTests
     private const string Repealed = "http://data.legilux.public.lu/eli/etat/leg/rgd/2020/01/01/n1/jo";
 
     [TestMethod]
-    public async Task TwoDerivesOfTheRelationsAreTheSameBytesAndTheDossierServesThemWithTheNotice()
+    public async Task TwoDerivesOfTheRelationsAreTheSameBytesAndTheReaderServesThem()
     {
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         var (europe, acquired) = await V3FirstMountBuildTests.AcquireAsync(
@@ -76,19 +73,17 @@ public sealed class LuxembourgPublisherRelationsDeriveTests
                     "the index holds the relations the run resolved, each with the acting act's publication date from the run's facts; cites is not one");
             }
 
-            using var mount = V3CorpusMount.Served(await V3CorpusMount.OpenAsync(directories[0], CancellationToken.None), directories[0]);
-            Assert.IsNotNull(mount);
-            var envelope = await V3CorpusIntervalMountTests.AskAsync(mount, "dossier", new { identifier = "/lu-legilux/loi-2026-01-01-a1" });
-            Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict, envelope.Refusal?.HelpfulPayload.GetRawText());
-            var value = envelope.Result!.Value;
-            var views = value.GetProperty("publisher_relations").GetProperty("edges").EnumerateArray()
-                .Select(static edge => edge.GetProperty("view").GetString() + " " + edge.GetProperty("other").GetProperty("iri").GetString())
-                .ToArray();
-            CollectionAssert.AreEqual(new[] { $"amended_by {Amending}", $"repeals {Repealed}" }, views);
-            var notice = value.GetProperty("amended_after_consolidation");
-            Assert.AreEqual("notice", notice.GetProperty("status").GetString(), notice.GetRawText());
-            Assert.AreEqual("2026-02-03", notice.GetProperty("latest_consolidation_publication_date").GetString());
-            Assert.AreEqual(Amending, notice.GetProperty("acts")[0].GetProperty("acting_iri").GetString());
+            // The reader serves what the derive wrote (the dossier's own tests mount a held act; under Release 1 the fixture's
+            // consolidation is not served, so the work answers with its catalogue record).
+            var manifest = await File.ReadAllBytesAsync(Path.Combine(directories[0], V3FirstMountBuildResult.LuxembourgCapabilityManifestFileName));
+            using var index = await LuxembourgIndexReader.OpenAndVerifyFileAsync(
+                Path.Combine(directories[0], V3FirstMountBuildResult.LuxembourgIndexFileName), manifest, CancellationToken.None);
+            Assert.IsTrue(index.RecordsPublisherRelations);
+            var relations = index.ResolvePublisherRelations([Work, Work + "/jo"]);
+            CollectionAssert.AreEqual(
+                new[] { $"modifies {Amending} -> {Work}/jo 2026-03-05", $"repeals {Work}/jo -> {Repealed} -" },
+                relations.Select(static relation => $"{relation.EdgeType} {relation.ActingIri} -> {relation.ActedOnIri} {relation.ActingPublicationDate ?? "-"}").ToArray());
+            Assert.AreEqual(acquired.Run!.RelationFamilyAcquisitions.Count, index.ResolveRelationFamilies().Count, "each family's state is held");
         }
         finally
         {

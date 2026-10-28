@@ -189,6 +189,17 @@ public sealed class V3CorpusPublisherRelationsMountTests
         Assert.AreEqual("notice", fires.GetProperty("status").GetString());
         Assert.AreEqual("2015-01-10", fires.GetProperty("latest_consolidation_publication_date").GetString());
         Assert.AreEqual("2015-01-01", fires.GetProperty("latest_consolidation").GetProperty("applicability_date").GetString());
+        // The latest consolidated version is a state whose text is not held: its permalink, as the notice names it, is refused by
+        // verify and resolve for its text (#1008), naming that state, never identifier_unknown.
+        var latest = fires.GetProperty("latest_consolidation");
+        Assert.AreEqual("not_acquired", latest.GetProperty("text_status").GetString());
+        foreach (var operation in new[] { "verify", "resolve" })
+        {
+            var refused = await V3CorpusIntervalMountTests.AskAsync(fixture.Mount, operation, new { identifier = latest.GetProperty("permalink").GetString() });
+            Assert.AreEqual(V3Verdicts.Refuse, refused.Verdict, operation);
+            Assert.AreEqual("text_not_available", refused.Refusal!.Code, operation);
+            StringAssert.Contains(refused.Refusal.HelpfulPayload.GetRawText(), latest.GetProperty("state_sha256").GetString(), operation);
+        }
         var act = fires.GetProperty("acts").EnumerateArray().Single();
         Assert.AreEqual(("2016-06-03", W("loi/2016/06/01/n1/jo")), (act.GetProperty("publication_date").GetString(), act.GetProperty("acting_iri").GetString()));
         Assert.AreEqual(
@@ -274,12 +285,15 @@ public sealed class V3CorpusPublisherRelationsMountTests
                 Assert.AreNotEqual(V3CorpusMount.ReferencesStructuredRelationsTen, (string?)row["reason"], operation);
             }
 
-            // Index 10's answer, less what it adds and with index 9's not-held words, is index 9's, but for the index digest.
+            // Index 10's answer, less what it adds and with index 9's not-held words, is index 9's, but for the mounts' digests
+            // (the shared fixture mints its corpus's identifiers anew for each mount, and the two indexes are two files).
             tenAnswer.Remove("publisher_relations");
             tenAnswer.Remove("amended_after_consolidation");
             tenAnswer["not_held"] = nineAnswer["not_held"]!.DeepClone();
-            tenAnswer["index_sha256"] = nineAnswer["index_sha256"]!.DeepClone();
-            Assert.AreEqual(nineAnswer.ToJsonString(), tenAnswer.ToJsonString(), operation);
+            var tenText = tenAnswer.ToJsonString()
+                .Replace((string)tenAnswer["corpus_sha256"]!, (string)nineAnswer["corpus_sha256"]!, StringComparison.Ordinal)
+                .Replace((string)tenAnswer["index_sha256"]!, (string)nineAnswer["index_sha256"]!, StringComparison.Ordinal);
+            Assert.AreEqual(nineAnswer.ToJsonString(), tenText, operation);
         }
     }
 }

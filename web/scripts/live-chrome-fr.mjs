@@ -418,6 +418,15 @@
 // typographic apostrophes, no-break spaces and soft hyphen" (1 form, changed in French only): "étant lues comme" written out
 // once more (G24), "une espace insécable comme une espace ordinaire", "un trait d’union conditionnel n’étant pas lu" (never
 // "comme rien", G13), and "chacun des autres caractères de l’expression" (G20).
+// The dossier's relation tabs and R72's notice (Release 3's item 2; R29, R72, R21): 37 forms, `dossier.relations*`,
+// `dossier.relationGroups.*`, `dossier.relation*` and `dossier.amendedAfter*`, reviewed by an independent reviewer (Claude, AI
+// reviewer, not the author) under the same delegation in the addendum of 2026-10-27 "the dossier's relation tabs and R72's
+// notice" (22 approved as drafted, 15 changed in French, the English of 3 changed: `relationsNotHeldFor` says the records are
+// not all held, `relationsNotSeenClasses` ends its list with a full stop, and the banner's heading is "Amended, with no
+// consolidated version published since" / "Modifié, sans version consolidée publiée depuis"): a relation is recorded "dans les
+// données" of an act, a record of the table of modifications is "un enregistrement", an act beside its date is "acte publié le",
+// "Déduit de la relation directe de l’éditeur" for R29's label, "après l’acte modificatif" (never "après lui"), "Ce bandeau nomme
+// l’acte" (G20), and a list joined by " ; " ends with a full stop before the next clause (G28, new: a list's end).
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
 
@@ -596,7 +605,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     entryIntoForceDate: 'aucune date indiquée (entrée en vigueur : {date})',
     entryIntoForceNote: 'La mention « aucune date indiquée » signifie que le fichier de l’acte n’indique aucune date d’applicabilité exacte ; la date entre parenthèses est celle de l’entrée en vigueur de l’acte dans les données de l’éditeur, et non une date d’applicabilité.',
     relationsHeading: 'Les relations dans les données de l’éditeur',
-    relationsIntro: 'L’éditeur enregistre quels actes en modifient, en abrogent ou en rectifient d’autres. Chaque donnée nomme les actes, et non ce qu’un acte change.',
+    relationsIntro: 'L’éditeur enregistre quels actes en modifient, en abrogent ou en rectifient d’autres. Chaque enregistrement nomme les actes, et non ce qu’un acte change.',
     relationsNotAcquired: 'Ce site ne détient pas les données de relations de l’éditeur pour cet acte : aucune relation n’est donc listée ici, et rien ici ne dit qu’il n’en existe aucune.',
     relationsNav: 'Relations listées',
     relationGroups: Object.freeze({
@@ -612,28 +621,28 @@ export const LIVE_CHROME_FR = Object.freeze({
       impact_made: 'Modifications apportées par cet acte, selon le tableau des modifications de l’éditeur',
     }),
     relationTab: '{group} ({count})',
-    relationDerived: 'Déduit de la relation directe de l’éditeur : l’éditeur enregistre chacune de ces relations sur l’autre acte, et non sur celui-ci.',
-    relationImpact: 'Lu dans le tableau des modifications de l’éditeur, un enregistrement qui nomme l’acte d’où vient une modification et l’acte auquel elle est apportée.',
-    relationPublished: '{act}, publié le {published} (éditeur)',
-    relationPublishedEntry: '{act}, publié le {published} ; entrée en vigueur : {entry} (éditeur)',
+    relationDerived: 'Déduit de la relation directe de l’éditeur : l’éditeur enregistre chacune de ces relations dans les données de l’autre acte, et non dans celles de cet acte.',
+    relationImpact: 'Lu dans le tableau des modifications de l’éditeur : chaque enregistrement y nomme, pour une modification, l’acte d’où elle vient et l’acte auquel elle est apportée.',
+    relationPublished: '{act}, acte publié le {published} (éditeur)',
+    relationPublishedEntry: '{act}, acte publié le {published} ; entrée en vigueur : {entry} (éditeur)',
     relationUndated: '{act} ; les données de l’éditeur n’indiquent pas sa date de publication',
     relationIntegrated: 'L’éditeur indique que cette modification a été intégrée dans la version consolidée applicable à partir du {date}.',
     relationIntegratedOther: 'L’éditeur indique que cette modification a été intégrée dans {version}.',
     relationTitleWithheld: 'son intitulé n’est pas affiché ici',
     relationSelf: 'cet acte lui-même',
     relationsNone: 'Les données de l’éditeur, telles que ce site les a lues, ne nomment aucun acte pour : {groups}.',
-    relationsNotHeldFor: 'Ce site ne détient pas les données de l’éditeur pour : {groups}.',
-    relationsNotSeen: 'Ce site a lu les données de relations que l’éditeur enregistre sur les codes, les lois et les règlements grand-ducaux ; une donnée enregistrée sur un acte d’un autre type n’a pas été lue : un acte d’un autre type qui modifie, abroge ou rectifie cet acte, ou que cet acte modifie temporairement, n’est donc pas listé.',
-    relationsNotSeenClasses: 'Ce site a lu les données de relations que l’éditeur enregistre sur ces seules catégories d’identifiants : {classes} ; une donnée enregistrée sur un acte d’une autre catégorie n’a pas été lue : un acte d’une autre catégorie qui modifie, abroge ou rectifie cet acte, ou que cet acte modifie temporairement, n’est donc pas listé.',
-    amendedAfterHeading: 'Modifié après la dernière version consolidée',
-    amendedAfterOne: 'Un acte publié le {date} ({act}) modifie cet acte, selon les données de relations de l’éditeur ; aucune version consolidée du catalogue de l’éditeur, tel que ce site l’a lu, n’a été publiée après lui.',
+    relationsNotHeldFor: 'Ce site ne détient pas toutes les données de l’éditeur pour : {groups}.',
+    relationsNotSeen: 'Ce site a lu les relations que l’éditeur enregistre dans les données des codes, des lois et des règlements grand-ducaux ; une relation enregistrée dans les données d’un acte d’un autre type n’a pas été lue : un acte d’un autre type qui modifie, abroge ou rectifie cet acte, ou que cet acte modifie temporairement, n’est donc pas listé.',
+    relationsNotSeenClasses: 'Ce site a lu les relations que l’éditeur enregistre dans les données des actes de ces seules catégories d’identifiants : {classes}. Une relation enregistrée dans les données d’un acte d’une autre catégorie n’a pas été lue : un acte d’une autre catégorie qui modifie, abroge ou rectifie cet acte, ou que cet acte modifie temporairement, n’est donc pas listé.',
+    amendedAfterHeading: 'Modifié, sans version consolidée publiée depuis',
+    amendedAfterOne: 'Un acte publié le {date} ({act}) modifie cet acte, selon les données de relations de l’éditeur ; aucune version consolidée du catalogue de l’éditeur, tel que ce site l’a lu, n’a été publiée après l’acte modificatif.',
     amendedAfterMany: 'Ces actes modifient cet acte, selon les données de relations de l’éditeur ; aucune version consolidée du catalogue de l’éditeur, tel que ce site l’a lu, n’a été publiée après eux :',
-    amendedAfterAct: '{act}, publié le {date} (éditeur)',
-    amendedAfterLatest: 'La dernière version consolidée qu’il recense a été publiée le {date}.',
+    amendedAfterAct: '{act}, acte publié le {date} (éditeur)',
+    amendedAfterLatest: 'La dernière version consolidée que recense ce catalogue a été publiée le {date}.',
     amendedAfterNoConsolidation: 'Ce catalogue ne recense aucune version consolidée de cet acte.',
-    amendedAfterNote: 'Ceci est déduit de la relation directe de l’éditeur : chaque acte nommé enregistre qu’il modifie cet acte. Il nomme l’acte, et non ce que l’acte change. Un acte modificatif qui n’est ni un code, ni une loi, ni un règlement grand-ducal n’est pas vu.',
-    amendedAfterNoteUnscoped: 'Ceci est déduit de la relation directe de l’éditeur : chaque acte nommé enregistre qu’il modifie cet acte. Il nomme l’acte, et non ce que l’acte change, et un acte modificatif dont ce site n’a pas lu les données n’est pas vu.',
-    amendedAfterNoteClasses: 'Ceci est déduit de la relation directe de l’éditeur : chaque acte nommé enregistre qu’il modifie cet acte. Il nomme l’acte, et non ce que l’acte change. Un acte modificatif hors de ces catégories d’identifiants n’est pas vu : {classes}.',
+    amendedAfterNote: 'Ceci est déduit de la relation directe de l’éditeur : les données de chaque acte nommé indiquent qu’il modifie cet acte. Ce bandeau nomme l’acte, et non ce que l’acte change. Un acte modificatif qui n’est ni un code, ni une loi, ni un règlement grand-ducal n’est pas vu.',
+    amendedAfterNoteUnscoped: 'Ceci est déduit de la relation directe de l’éditeur : les données de chaque acte nommé indiquent qu’il modifie cet acte. Ce bandeau nomme l’acte, et non ce que l’acte change, et un acte modificatif dont ce site n’a pas lu les données n’est pas vu.',
+    amendedAfterNoteClasses: 'Ceci est déduit de la relation directe de l’éditeur : les données de chaque acte nommé indiquent qu’il modifie cet acte. Ce bandeau nomme l’acte, et non ce que l’acte change. Un acte modificatif hors de ces catégories d’identifiants n’est pas vu : {classes}.',
   }),
   reading: Object.freeze({
     pinReplaced: 'Ce lien épingle {pinned}, qui n’est pas la version que ce site communique pour cette date ; la version qu’il communique est affichée ci-dessous.',

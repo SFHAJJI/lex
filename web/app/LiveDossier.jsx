@@ -323,7 +323,10 @@ function PublisherRelations({ relations }) {
  */
 function AmendedAfterBanner({ amendedAfter, relations }) {
   if (amendedAfter === null || amendedAfter.status !== 'notice') return null;
-  const classes = relations === null ? null : relationClasses(relations);
+  // The note says what the modifies family does not see, by that family's own classes; when it was not read in full, only that
+  // an amending act whose record was not read is not seen (the French review of the relation tabs, point 3).
+  const modifies = relations === null ? undefined : relations.families.find((family) => family.edgeType === 'modifies');
+  const classes = modifies === undefined || !modifies.acquired ? null : modifies.subjectClasses;
   const [first] = amendedAfter.acts;
   return (
     <aside className="relation-notice" role="note" aria-label={COPY.amendedAfterHeading} data-amended-after={amendedAfter.acts.length}>

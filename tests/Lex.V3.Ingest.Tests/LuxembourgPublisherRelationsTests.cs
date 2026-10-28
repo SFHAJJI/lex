@@ -160,7 +160,7 @@ public sealed class LuxembourgPublisherRelationsTests
         }
 
         // An unsealed change is refused by the stamp, as every table's is.
-        var unsealed = MutateDatabase(built.IndexBytes.Span, "DELETE FROM relation_families WHERE predicate='jolux:repeals'");
+        var unsealed = MutateDatabase(built.IndexBytes.Span, static connection => Execute(connection, "DELETE FROM relation_families WHERE predicate='jolux:repeals'"));
         var unsealedRef = IndexRefOf(unsealed);
         var stamped = Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexReader.OpenAndVerify(
             unsealedRef, unsealed, Harness.CorpusRef, RebindManifest(built.CapabilityManifest, unsealedRef.Sha256)));
@@ -187,7 +187,7 @@ public sealed class LuxembourgPublisherRelationsTests
         var stampedRef = IndexRefOf(stampedTen);
         Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexReader.OpenAndVerify(
             stampedRef, stampedTen, Harness.CorpusRef, RebindManifest(built.CapabilityManifest, stampedRef.Sha256)));
-        var tablesTen = MutateDatabase(built.IndexBytes.Span, "PRAGMA user_version=9");
+        var tablesTen = MutateDatabase(built.IndexBytes.Span, static connection => Execute(connection, "PRAGMA user_version=9"));
         var tablesRef = IndexRefOf(tablesTen);
         var refused = Assert.ThrowsExactly<InvalidDataException>(() => LuxembourgIndexReader.OpenAndVerify(
             tablesRef, tablesTen, Harness.CorpusRef, RebindManifest(built.CapabilityManifest, tablesRef.Sha256)));

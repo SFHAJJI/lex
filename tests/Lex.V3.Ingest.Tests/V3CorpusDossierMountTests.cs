@@ -325,7 +325,22 @@ public sealed class V3CorpusDossierMountTests
             "titles[].short_titles", "titles[].short_titles[].evidence_sha256", "titles[].short_titles[].title",
             "titles[].titles", "titles[].titles[].evidence_sha256", "titles[].titles[].title",
             "work_key",
-        }.Concat(fact.Select(static name => "as_published.authenticity.publication_dates[]." + name))
+            // Index 10's relation records (R29) and R72's notice: the fixture's run designated no relation family, so each family
+            // is named not acquired, no edge is listed and the notice is not_acquired (V3CorpusPublisherRelationsMountTests holds
+            // the rows).
+            "amended_after_consolidation", "amended_after_consolidation.acts", "amended_after_consolidation.amending_acts",
+            "amended_after_consolidation.amending_acts_without_publication_date", "amended_after_consolidation.consolidations",
+            "amended_after_consolidation.consolidations_without_publication_date", "amended_after_consolidation.derived",
+            "amended_after_consolidation.latest_consolidation", "amended_after_consolidation.latest_consolidation_publication_date",
+            "amended_after_consolidation.notice", "amended_after_consolidation.rule", "amended_after_consolidation.source_predicate",
+            "amended_after_consolidation.status",
+            "publisher_relations", "publisher_relations.edge_count", "publisher_relations.edge_counts", "publisher_relations.edges",
+            "publisher_relations.families", "publisher_relations.families[].edge_type", "publisher_relations.families[].family_keys",
+            "publisher_relations.families[].reason", "publisher_relations.families[].source_predicates",
+            "publisher_relations.families[].state", "publisher_relations.families[].subject_classes",
+            "publisher_relations.inverse_label", "publisher_relations.not_seen", "publisher_relations.rule",
+        }.Concat(V3CorpusMount.PublisherRelationViews.Select(static view => "publisher_relations.edge_counts." + view))
+            .Concat(fact.Select(static name => "as_published.authenticity.publication_dates[]." + name))
             .Concat(fact.Select(static name => "as_published.authenticity.served_manifestations[].legal_values[]." + name))
             .Concat(fact.Select(static name => "as_published.later_version_facts.end_of_force[]." + name))
             .Concat(fact.Select(static name => "force.no_longer_in_force[]." + name))

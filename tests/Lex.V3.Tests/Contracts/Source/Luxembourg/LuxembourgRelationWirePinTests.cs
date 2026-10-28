@@ -14,11 +14,13 @@ namespace Lex.V3.Tests.Contracts.Source.Luxembourg;
 /// null, makes the replay refuse before R1 runs. Index 10 reads these shapes and changes none of them; this pins their bytes.
 /// </summary>
 /// <remarks>
-/// The objects are run 15's own: its first set-G <c>modifies</c> row and its first <c>cites</c> row as custody holds them
-/// (checkpoint <c>1f9a11f3…</c>, family <c>legislative-loi-g</c>), with the run's one observation reference, the vocabulary
-/// observation every relation of the run carries (<c>b86525e5…</c>, the journal's <c>lu-vocabulary</c> entry). The values were
-/// computed with this branch's Contracts, which are byte-identical to integration head ee474a6d's (no file under
-/// <c>src/Lex.V3.Contracts</c> changes in this slice), so they are the bytes run 15's checkpoint digests were made from.
+/// The objects are run 15's own: its first set-G <c>modifies</c> row as custody holds it (checkpoint <c>1f9a11f3…</c>, family
+/// <c>legislative-loi-g</c>; the same pair read as a <c>cites</c> row and as the local inbound view of one), with the run's one
+/// observation reference, the vocabulary observation every relation of the run carries (<c>b86525e5…</c>, the journal's
+/// <c>lu-vocabulary</c> entry). The values were computed with this branch's Contracts, which are byte-identical to integration
+/// heads ee474a6d's and 7583e4d0's (no file under <c>src/Lex.V3.Contracts</c> changes in this slice), so they are the bytes R0's
+/// replay hashes. The stored checkpoint digest itself covers the whole query result, which only the query phase's full replay
+/// rebuilds, so no read-only check over custody can recompute it; this pin holds the shapes it is made from.
 /// </remarks>
 [TestClass]
 public sealed class LuxembourgRelationWirePinTests
@@ -27,13 +29,16 @@ public sealed class LuxembourgRelationWirePinTests
     private const string Amending = "http://data.legilux.public.lu/eli/etat/leg/loi/1842/12/27/n1/jo";
     private const string Amended = "http://data.legilux.public.lu/eli/etat/leg/loi/1819/05/21/n1/jo";
 
-    private const string ModifiesJson = "TBD";
-    private const string ModifiesSha256 = "TBD";
-    private const string CitesSha256 = "TBD";
-    private const string InboundSha256 = "TBD";
-    private const string ObservedSha256 = "TBD";
-    private const string ListSha256 = "TBD";
-    private const string FamilySha256 = "TBD";
+    private const string ModifiesJson =
+        """
+        {"subject_iri":"http://data.legilux.public.lu/eli/etat/leg/loi/1842/12/27/n1/jo","predicate_iri":"http://data.legilux.public.lu/resource/ontology/jolux#modifies","object_iri":"http://data.legilux.public.lu/eli/etat/leg/loi/1819/05/21/n1/jo","observation_ref":{"resource_id":"urn:uuid:afd60336-dcf4-479d-bc6c-c75bfd575bce","sha256":"b86525e5dc4a237ca540299fd1f122edc9d36abd74daae80f089bad03984cfed"},"semantic":"AssertedRelation","disposition":"Accepted","consolidates_shape":null,"authority":"publisher_asserted"}
+        """;
+    private const string ModifiesSha256 = "76523b9f8d5be7995cb3777f93a7d7dfc4c3e621e1248e094cf945d737b42012";
+    private const string CitesSha256 = "510a8cbf9317dca47a11024590e213b589e6274389da3078d008ef68a12ffdb8";
+    private const string InboundSha256 = "b0fc07c72ac3e5f290bfd9b92e7fce11c20530b57ef651b2cc40528ed6050f10";
+    private const string ObservedSha256 = "a4d46c0136038c9dd2ef1e779b8754b75746841dbf513c1376baec05c01ab564";
+    private const string ListSha256 = "d48edb8442d3e427cc4e2b8636a3cb81f2154298bd50b7d60211b5c2799e1e80";
+    private const string FamilySha256 = "6f7f57b4ab5a4a1b9d694527c3058b31ab14bde361db74a79d1a0aa58fee48f9";
 
     /// <summary>Run 15's observation reference, the journal's <c>lu-vocabulary</c> observation.</summary>
     private static readonly SourceArtifactRef Run15Observation = new(
