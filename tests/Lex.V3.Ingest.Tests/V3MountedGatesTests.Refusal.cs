@@ -215,9 +215,16 @@ public sealed partial class V3MountedGatesTests
                 }
             }
 
+            // An ambiguity the sample does not hold may be in the catalogue: the first day, in work order, on which the rules say
+            // two French states cover a work's date and are not one wording (a pair of one date, or one state nested in another).
+            if (!requests.ContainsKey("twin-states") && AmbiguousInCatalogue(connection, oracle) is { } ambiguous)
+            {
+                requests["twin-states"] = new("as_of", new { identifier = $"/lu-legilux/{ambiguous.Work}", date = ambiguous.Date, language = "fra" }, "ambiguous_version");
+            }
+
             ReasonOnIndexNine(notProduced, "text_withheld", "no state without text that as_of refuses on its own date is withheld by its rights, and every held state's sources were acquired under the one admitting rights disposition");
             ReasonOnIndexNine(notProduced, "text_not_available", "no state without text that as_of refuses on its own date lacks it for a reason other than its rights, and every held state whose text is admitted holds text");
-            ReasonOnIndexNine(notProduced, "ambiguous_version", "no date on which two states of a sampled work begin in one language is one the rules call ambiguous (states of one wording are served once)");
+            ReasonOnIndexNine(notProduced, "ambiguous_version", "no day a French state of a served work begins or ends on is one the rules call ambiguous (states of one wording are served once)");
             ReasonOnIndexNine(notProduced, "profiles_differ", "no two held states of one work, each served alone on its own date, differ in rule profile");
         }
 
@@ -231,6 +238,17 @@ public sealed partial class V3MountedGatesTests
             notProduced[code] = reason;
         }
     }
+
+    /// <summary>
+    /// The first day, in work key order then date order, of a French chain's starts and ends on which the interval oracle says
+    /// <c>as_of</c> in French is <c>ambiguous_version</c>, or none.
+    /// </summary>
+    private static (string Work, string Date)? AmbiguousInCatalogue(SqliteConnection connection, IntervalOracle oracle) =>
+        Rows(connection, "SELECT DISTINCT work_key FROM states ORDER BY work_key")
+            .SelectMany(row => oracle.Boundaries(row[0], "fra").Select(day => (Work: row[0], Day: day)))
+            .Where(value => oracle.AsOf(value.Work, "fra", value.Day) == Ambiguous)
+            .Select(static value => ((string Work, string Date)?)(value.Work, value.Day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))
+            .FirstOrDefault();
 
     /// <summary>
     /// The first state without text, in the catalogue's order, on whose own date the interval oracle says <c>as_of</c> refuses

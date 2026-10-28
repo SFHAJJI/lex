@@ -146,6 +146,25 @@ public sealed class V3MountedGatesOracleTests
     }
 
     [TestMethod]
+    public async Task AnAmbiguityTheSampleDoesNotHoldIsAskedWhereTheCatalogueHoldsOne()
+    {
+        // derive-r1's set named ambiguous_version as not produced because its 40 sampled works held none; index 9's catalogue
+        // holds same-date pairs of two wordings, so the set asks the first day the rules call ambiguous, in work order.
+        var harness = RepairFixture();
+        await using var fixture = await IntervalMount.CreateAsync(harness);
+        var single = V3MountedGatesTests.Timelines(fixture.Directory).Where(static timeline => timeline.WorkKey == "loi-2010-03-03-n1").ToArray();
+        var (set, derived) = V3MountedGatesTests.RunRefusalGate(fixture.Mount, fixture.Directory, single, harness.MemberOutcomes);
+        var report = string.Join("; ", derived.Requests.Select(static pair => $"{pair.Key}={pair.Value.Gold}"));
+        Assert.AreEqual(GateVerdict.Pass, set.Gates.Single().Verdict, report);
+        Assert.IsFalse(derived.NotProduced.ContainsKey("ambiguous_version"), report);
+        var parameters = System.Text.Json.JsonSerializer.SerializeToElement(derived.Requests["twin-states"].Parameters);
+        var work = parameters.GetProperty("identifier").GetString()!["/lu-legilux/".Length..];
+        Assert.AreNotEqual("loi-2010-03-03-n1", work);
+        using var oracle = V3MountedGatesTests.IntervalOracle.Open(fixture.Directory, harness.MemberOutcomes)!;
+        Assert.AreEqual("refusal:ambiguous_version", oracle.AsOf(work, "fra", Day(parameters.GetProperty("date").GetString()!)), work);
+    }
+
+    [TestMethod]
     public async Task TheTemporalSampleIsStratifiedByTheClassesTheOracleReadsInTheCatalogue()
     {
         // The data design's §3.5: a seeded sample may miss every hole of a mount; each class the oracle reads adds works, every

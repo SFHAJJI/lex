@@ -378,28 +378,35 @@ public sealed partial class V3MountedGatesTests
 
     /// <summary>
     /// One card set per arm, over its cases, with the date control over the cases its timeline says the shift changes; an arm
-    /// with no case is not measured, and its control says why (<paramref name="noCase"/>).
+    /// with no case is not measured, and its control says why (<paramref name="noCase"/>). The control's cases are read from
+    /// the oracle first, one arm after another; then each arm asks the mount on a thread of its own, as the server answers
+    /// concurrent requests over one mount. What is asked, and what each answer is held to, are the same as in one arm after
+    /// another; the sets come in the arms' order.
     /// </summary>
     private static EvaluationCardSet[] TemporalSets(
         IReadOnlyList<(string Name, TemporalArm Arm, IReadOnlyList<TemporalCase> Cases, Func<string, DateOnly, string> ExpectedAt)> arms,
         int shift,
         string noCase)
     {
-        var sets = new List<EvaluationCardSet>();
-        foreach (var (name, arm, cases, expectedAt) in arms)
+        var controlCases = arms
+            .Select(value => (IReadOnlyList<TemporalCase>)value.Cases.Where(one => value.ExpectedAt(one.WorkKey, one.AsOf.AddDays(shift)) != one.ExpectedStateKey).ToArray())
+            .ToArray();
+        var measured = new (TemporalReport Report, ControlResult Control)[arms.Count];
+        Parallel.For(0, arms.Count, at =>
         {
+            var (_, arm, cases, _) = arms[at];
             var report = TemporalEvaluation.Evaluate(cases, arm, floor: Math.Max(1, cases.Count));
-            var controlCases = cases.Where(value => expectedAt(value.WorkKey, value.AsOf.AddDays(shift)) != value.ExpectedStateKey).ToArray();
             var control = cases.Count == 0
                 ? new ControlResult(ShuffledControlNames.DateShuffle, ControlVerdict.NotApplicable, noCase, Seed)
                 : ShuffledControls.DateShuffle(
-                    controlCases, arm, (set, run) => TemporalEvaluation.Evaluate(set, run, floor: Math.Max(1, set.Count)), [shift], Seed);
-            sets.Add(EvaluationCard.Temporal(
-                name, cases, report, controlCases, control,
-                $"the control shifts every case forward by {shift} days, the median gap between held dates; a case the shift cannot change (its timeline selects the same after it) is outside the control by its design"));
-        }
+                    controlCases[at], arm, (set, run) => TemporalEvaluation.Evaluate(set, run, floor: Math.Max(1, set.Count)), [shift], Seed);
+            measured[at] = (report, control);
+        });
 
-        return [.. sets];
+        return arms.Select((value, at) => EvaluationCard.Temporal(
+                value.Name, value.Cases, measured[at].Report, controlCases[at], measured[at].Control,
+                $"the control shifts every case forward by {shift} days, the median gap between held dates; a case the shift cannot change (its timeline selects the same after it) is outside the control by its design"))
+            .ToArray();
     }
 
     private static DateOnly Day(string date) => DateOnly.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
