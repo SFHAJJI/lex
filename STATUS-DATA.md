@@ -1,6 +1,66 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-27.
+Updated 2026-10-28.
+
+## EU titles and Official Journal references: the EU index /7, its answers, pages and citation (sole driver, 2026-10-28)
+
+Release 3's item 1 (`data/eu-titles-oj`; the specification of record's search, the dossier, R65's evidence form, R21). No
+acquisition, no publisher traffic, no browser, no Azure.
+- **Where they were.** Run 16's family X delivered every expression's `cdm:expression_title` (some an `_short` too) and
+  nothing read it (`EuLanguageScopedExpressionDecode.cs:573`). Every admitted Formex package states its `TITLE` and an
+  Official Journal reference: an act's `DOCUMENT.REF`, dated by its document record's `PUBLICATION.REF`; a consolidation's
+  base-act `DOCUMENT.REF.CONS`, dated by its bibliography's `DATE`.
+- **The derive reads them, no acquisition added.**
+  - The query run projects the English and French titles from the checked family-X rows
+    (`EuQueryExecutionResult.ObservedExpressionTitles`). They stand outside the result digest and the Formex population's
+    input digest, so run 16's query checkpoint reopens with its stored bytes.
+  - The main-body producer reads each admitted main unit's title and reference beside its articles
+    (`EuFormexPublicationReader`, `EuFormexMainBodyLegalContentOutcome.Publication`), outside the outcome's identity: the
+    corpus and every article identity are unchanged.
+- **EU index /7** (`EuropeIndexTitles.cs`).
+  - `expression_titles`: per expression and language, the words, the raw form (the literal with its tag or datatype, or the
+    `TITLE` markup), the source (`cellar_expression_title`, `cellar_expression_title_short`, `formex_title`) and the batch or
+    package it was read from.
+  - `official_journal_references`: kind (`act_publication`, `consolidated_act_publication`), number form (`series_number`,
+    `act_number`), series, issue or act number, year, first page, publication date, the raw elements, the package entry and
+    digest.
+  - The reader reads every row again from its raw form at open and refuses one that disagrees. A literal's identity names
+    no per-acquisition batch. An index /6 or older is read with its own DDL and holds none.
+- **The answers over /7.**
+  - `dossier`, `as_of`, `evidence_bundle` and an EU `search` carry `titles` and `official_journal` for the expressions
+    they list. The not-held row `titles` goes where a title is held; a `titles` or `official_journal` row stays only where
+    one is not held.
+  - The authenticity rule no longer says no publication date is held; it still chooses by the act's own date.
+  - A search that names no work lists, under `europe_titles`, the EU acts whose titles hold the query (`TextFolding`),
+    each once, whole titles first; an act R92 withholds is not listed.
+  - Over an EU index /6 every answer is unchanged: derive-c and derive-r2 answer as today.
+- **The pages and the citation** (EN and reviewed FR: 24 forms, 21 approved, 3 changed in French; the reviewer's forms for
+  its points 2 and 6 taken byte for byte; addendum of 2026-10-27 appended to the review record).
+  - The EU dossier and reading say each wording's title, short title and reference, or that none is held.
+  - The search page lists the EU acts found by title, linked to their dossiers, says their text was not searched, and the
+    no-hit card names the Luxembourg and EU titles apart.
+  - The evidence form says "Published in: OJ L 119, 4.5.2016, p. 1" ("OJ L, 2024/1689, 12.7.2024"; for a consolidated
+    wording, the act it consolidates) and the publisher's title, where held.
+- **Measured read-only over run 16's custody** (Python, brotli, SHA-256 checked; the C# probe below to confirm):
+  - Family X: 15,855 expressions in 24 languages, every one titled. English and French: 1,327 expressions (640 and 687), all
+    titled; 55 short titles. Census works titled: 640 in English and 687 in French of 1,170; all 82 seeds in both; 558 and
+    605 of the 1,088 consolidated works.
+  - The 892 held Formex packages (1,120 package-expression pairs): every main unit read states a reference with its date:
+    act publications 146 (128 by issue, 18 by act number) and 4 Charter `GENERAL` units; consolidations 966 (932 by issue,
+    34 by act number). 4 pairs (the 2012 Treaties' packages) have no single main unit.
+  - Per seed: 69 by issue, 9 by act number, 4 with none: 12012E and 12012M, whose packages the build refuses
+    (`PackageDoesNotIdentifyFormex`), and the two acts held only as HTML (32003L0088, 32004R0139). The scope note's six also
+    counted the two Charters, whose main units (`GENERAL`) state a reference. 32003R0001, 12016E and 12016M are referenced
+    through their consolidations only.
+- **Driver decisions (reversible).**
+  - Titles are held for English and French expressions only (Decision 89).
+  - The Charter's `GENERAL` unit is read like an act's main unit: it states a `DOCUMENT.REF`.
+  - A document record dates the reference only when its series and number agree with it.
+  - The reference is said in EUR-Lex's form ("4.5.2016"), a citation's convention, not R62's written-out page date.
+  - The dossier names its original wording's reference; a consolidated wording's is said where it is read.
+  - The reviewer's point 3 (an act R92 withholds is still held, so "no EU act this site holds" is narrower than said where
+    one is withheld) is left as the reviewed `runTitles` leaves it.
+- **Not done here.** A derive: Release 3's derive builds index /7 over run 16's custody.
 
 ## Where the data stands at the end of 27 October, and what Release 3's derive would add (sole driver, 2026-10-27)
 
