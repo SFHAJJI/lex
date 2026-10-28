@@ -582,9 +582,11 @@ public sealed class EuQueryExecutionResult
         string? decodeOffendingIri,
         EuCellarObjectSnapshotRefusal? decodeSnapshotRefusal,
         EuWitnessTraversalRefusalDetail? witnessTraversalRefusal = null,
-        IReadOnlyList<EuObservedWorkFacts>? observedWorkFacts = null)
+        IReadOnlyList<EuObservedWorkFacts>? observedWorkFacts = null,
+        IReadOnlyList<EuObservedExpressionTitle>? observedExpressionTitles = null)
     {
         ObservedWorkFacts = observedWorkFacts ?? [];
+        ObservedExpressionTitles = observedExpressionTitles ?? [];
         WitnessTraversalRefusal = witnessTraversalRefusal;
         Topology = topology;
         FamilyOutcomes = familyOutcomes;
@@ -619,6 +621,14 @@ public sealed class EuQueryExecutionResult
 
     public IReadOnlyList<EuObservedWorkFacts> ObservedWorkFacts { get; }
 
+    /// <summary>
+    /// The titles family X delivered for the English and French expressions of the census works
+    /// (<see cref="EuQueryExecutionAdapter.ProjectExpressionTitles"/>), recomputed from the checked rows on every replay and
+    /// deliberately outside the run's result digest, so a checkpoint written before they were read reopens unchanged. Empty
+    /// on a refused run.
+    /// </summary>
+    public IReadOnlyList<EuObservedExpressionTitle> ObservedExpressionTitles { get; }
+
     public SourceArtifactRef? DocumentAcquisitionCheckpointRef { get; private init; }
 
     public SourceArtifactRef? AcquisitionCheckpointRef { get; private init; }
@@ -635,7 +645,7 @@ public sealed class EuQueryExecutionResult
             DateAxioms, LocatedAmendmentObservations, LocatedAmendmentProduction, CorrigendumTripwires,
             CorpusRecordSetRef, CorpusRecordSetReceipt, CorpusRecordSet, HeldBodyContentClasses,
             Completion, Refusal, DecodeRefusal, DecodeOffendingIri,
-            DecodeSnapshotRefusal, WitnessTraversalRefusal, ObservedWorkFacts) { DocumentAcquisitionCheckpointRef = document, AcquisitionCheckpointRef = acquisition };
+            DecodeSnapshotRefusal, WitnessTraversalRefusal, ObservedWorkFacts, ObservedExpressionTitles) { DocumentAcquisitionCheckpointRef = document, AcquisitionCheckpointRef = acquisition };
 
     public static EuQueryExecutionResult Delivered(
         SourceProfileTopology topology,
@@ -762,7 +772,8 @@ public sealed class EuQueryExecutionResult
         IReadOnlyList<EuCellarObjectSnapshot> decodedSnapshots,
         CorpusRecordSetWriteResult recordSetResult,
         EuCorrigendumTripwireCompletion corrigendumTripwires,
-        IReadOnlyList<EuObservedWorkFacts>? observedWorkFacts = null)
+        IReadOnlyList<EuObservedWorkFacts>? observedWorkFacts = null,
+        IReadOnlyList<EuObservedExpressionTitle>? observedExpressionTitles = null)
     {
         ArgumentNullException.ThrowIfNull(topology);
         ArgumentNullException.ThrowIfNull(watermarkWitnessPlan);
@@ -800,7 +811,8 @@ public sealed class EuQueryExecutionResult
             observedManifestationTypesByCelex, observedExpressionsByCelex, mintedRowsByOrdinal,
             dateAxioms, locatedAmendmentObservations, locatedAmendmentProduction, corrigendumTripwires,
             recordSetResult.SetRef!, recordSetResult.RetainedSetReceipt!, corpusRecordSet,
-            heldBodyContentClasses, completion, null, null, null, null, observedWorkFacts: observedWorkFacts);
+            heldBodyContentClasses, completion, null, null, null, null, observedWorkFacts: observedWorkFacts,
+            observedExpressionTitles: observedExpressionTitles);
     }
 
     private static IReadOnlyDictionary<SourceObjectRef, EuContentClassObservation> BindHeldBodyContentClasses(
@@ -2222,7 +2234,10 @@ public sealed partial class EuQueryExecutionAdapter
             observedWorkFacts: ProjectWorkFacts(closuresByCelex, pFamilies.Select(batch =>
                 (batch.Rows, batch.Profile, batch.Proof.InterpretationProfileRef)).ToArray(),
                 censusByFamilyKey.Values.ToDictionary(value => value.RequestedCelex,
-                    value => value.Proof.InterpretationProfileRef, StringComparer.Ordinal))).WithDocumentCheckpoint(documentCapture.Checkpoint!);
+                    value => value.Proof.InterpretationProfileRef, StringComparer.Ordinal)),
+            // Each family-X batch keeps its own coordinate, as family A's do: a title names the batch it was read from.
+            observedExpressionTitles: ProjectExpressionTitles(closuresByCelex, xFamilies.Select(batch =>
+                (batch.Rows, batch.Profile, batch.Proof.InterpretationProfileRef)).ToArray())).WithDocumentCheckpoint(documentCapture.Checkpoint!);
     }
 
     /// <summary>

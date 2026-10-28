@@ -27,6 +27,9 @@ public static class NamesMeasurement
 
     private const string EuropeSchema = "lex-v3-europe-index/6";
 
+    /// <summary>The EU index /7: schema 6 and the expressions' titles, which the measurement reads as it reads a Luxembourg title.</summary>
+    private const string EuropeTitlesSchema = "lex-v3-europe-index/7";
+
     /// <summary>The three files of one measurement, as bytes, and the works it withholds and lists.</summary>
     public sealed record Outcome(
         NamesMeasuredMount Measured,
@@ -88,11 +91,23 @@ public static class NamesMeasurement
 
             FreezesListedPersons |= texts.Any(PrivateIndividuals.FreezesListedPersons);
         }
+
+        /// <summary>One served title: read by the detector as an article's text is, its findings the work's; it counts as no article.</summary>
+        public void ReadTitle(string title)
+        {
+            if (title.Length == 0) return;
+            foreach (var code in PrivateIndividuals.DetectText(title).ToHashSet(StringComparer.Ordinal))
+            {
+                Findings.Add(code);
+            }
+
+            Titles.Add(title);
+        }
     }
 
     /// <summary>
-    /// Measures the mount in <paramref name="mountDirectory"/> (its Luxembourg index of schema 9, its EU index of schema 6, or
-    /// both), read-only and in place, or throws <see cref="InvalidDataException"/> when it holds neither or they bind different
+    /// Measures the mount in <paramref name="mountDirectory"/> (its Luxembourg index of schema 9, its EU index of schema 6 or 7,
+    /// or both), read-only and in place, or throws <see cref="InvalidDataException"/> when it holds neither or they bind different
     /// corpora. <paramref name="log"/> hears counts only.
     /// </summary>
     public static Outcome Measure(string mountDirectory, Action<string>? log = null, CancellationToken cancellationToken = default)
@@ -115,6 +130,7 @@ public static class NamesMeasurement
         var withheld = new List<NamesWithheldWork>();
         var indexed = new List<(string Address, IReadOnlyList<string> Languages)>();
         Tally? held = null, catalogue = null, europe = null;
+        var europeHoldsTitles = false;
         if (hasLuxembourg)
         {
             log("hashing the Luxembourg index");
@@ -137,10 +153,12 @@ public static class NamesMeasurement
             europeDigest = FileSha256(europePath, cancellationToken);
             using var connection = OpenReadOnly(europePath);
             var (schema, stampedCorpus) = Stamp(connection);
-            if (!string.Equals(schema, EuropeSchema, StringComparison.Ordinal))
+            if (!string.Equals(schema, EuropeSchema, StringComparison.Ordinal) && !string.Equals(schema, EuropeTitlesSchema, StringComparison.Ordinal))
             {
-                throw new InvalidDataException($"The EU index is {schema}; the measurement reads {EuropeSchema}.");
+                throw new InvalidDataException($"The EU index is {schema}; the measurement reads {EuropeSchema} or {EuropeTitlesSchema}.");
             }
+
+            europeHoldsTitles = string.Equals(schema, EuropeTitlesSchema, StringComparison.Ordinal);
 
             if (corpus is not null && !string.Equals(corpus, stampedCorpus, StringComparison.Ordinal))
             {
@@ -148,13 +166,13 @@ public static class NamesMeasurement
             }
 
             corpus = stampedCorpus;
-            europe = MeasureEurope(connection, withheld, indexed, log, cancellationToken);
+            europe = MeasureEurope(connection, europeHoldsTitles, withheld, indexed, log, cancellationToken);
         }
 
         var measured = new NamesMeasuredMount(corpus!, luxembourgDigest, europeDigest, builtAt);
         var indexingBytes = IndexingRecord.Write(builtAt, indexed);
         var namesBytes = NamesRecord.Write(measured, withheld);
-        var measurementBytes = WriteMeasurement(measured, held, catalogue, europe, indexingBytes, namesBytes);
+        var measurementBytes = WriteMeasurement(measured, held, catalogue, europe, europeHoldsTitles, indexingBytes, namesBytes);
         return new Outcome(measured, withheld.AsReadOnly(), indexed.AsReadOnly(), indexingBytes, namesBytes, measurementBytes);
     }
 
@@ -333,6 +351,7 @@ public static class NamesMeasurement
 
     private static Tally MeasureEurope(
         SqliteConnection connection,
+        bool holdsTitles,
         List<NamesWithheldWork> withheld,
         List<(string Address, IReadOnlyList<string> Languages)> indexed,
         Action<string> log,
@@ -387,6 +406,33 @@ public static class NamesMeasurement
         if (orphans > 0)
         {
             throw new InvalidDataException($"{orphans} EU articles belong to no state's work: the index is not one the measurement can read.");
+        }
+
+        // An EU index /7 serves its expressions' titles: each is read by the detector as served text is, so a title that names
+        // someone withholds its act; a title of a work no state names is the index's own fault.
+        if (holdsTitles)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT publisher_work_iri, title_text FROM expression_titles ORDER BY title_identity_sha256";
+            using var reader = command.ExecuteReader();
+            long titleOrphans = 0;
+            while (reader.Read())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (actOfVersion.TryGetValue(reader.GetString(0), out var act))
+                {
+                    act.ReadTitle(reader.GetString(1));
+                }
+                else
+                {
+                    titleOrphans++;
+                }
+            }
+
+            if (titleOrphans > 0)
+            {
+                throw new InvalidDataException($"{titleOrphans} EU titles belong to no state's work: the index is not one the measurement can read.");
+            }
         }
 
         var tally = new Tally();
@@ -509,7 +555,7 @@ public static class NamesMeasurement
         return bodies;
     }
 
-    private static byte[] WriteMeasurement(NamesMeasuredMount measured, Tally? held, Tally? catalogue, Tally? europe, byte[] indexing, byte[] names)
+    private static byte[] WriteMeasurement(NamesMeasuredMount measured, Tally? held, Tally? catalogue, Tally? europe, bool europeHoldsTitles, byte[] indexing, byte[] names)
     {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream, NamesRecord.WriterOptions))
@@ -525,7 +571,9 @@ public static class NamesMeasurement
             writer.WriteEndObject();
             WriteTally(writer, "luxembourg_held", held, "the Luxembourg works the index holds a version of: their titles (the index's and the catalogue's) and every served article");
             WriteTally(writer, "luxembourg_catalogue", catalogue, "the other acts the Luxembourg catalogue names by a title the API can serve (a reference names them): their titles only; no text of them is held");
-            WriteTally(writer, "europe", europe, "the EU acts the index holds, by their own CELEX: every served article (the EU index holds no title)");
+            WriteTally(writer, "europe", europe, europeHoldsTitles
+                ? "the EU acts the index holds, by their own CELEX: their titles (the index's) and every served article"
+                : "the EU acts the index holds, by their own CELEX: every served article (the EU index holds no title)");
             writer.WriteStartObject("files");
             writer.WriteString(IndexingRecord.FileName, Convert.ToHexStringLower(SHA256.HashData(indexing)));
             writer.WriteString(NamesRecord.FileName, Convert.ToHexStringLower(SHA256.HashData(names)));

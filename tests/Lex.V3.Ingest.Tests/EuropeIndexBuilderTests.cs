@@ -218,7 +218,7 @@ public sealed class EuropeIndexBuilderTests
                     ReadRows<EuropeIndexBuilder.CorrigendumLineRow>(connection, "ReadLines"),
                     ReadRows<EuropeIndexBuilder.CorrigendumGapRow>(connection, "ReadGaps"), articles,
                     ReadRows<EuropeIndexBuilder.ArticleSourceRow>(connection, "ReadArticleSources"));
-                EuropeIndexBuilder.Execute(connection, "DROP TABLE force_dates; DROP TABLE states; DROP TABLE article_digests; PRAGMA user_version=3;");
+                EuropeIndexBuilder.Execute(connection, "DROP TABLE expression_titles; DROP TABLE official_journal_references; DROP TABLE force_dates; DROP TABLE states; DROP TABLE article_digests; PRAGMA user_version=3;");
                 EuropeIndexBuilder.Execute(connection, "PRAGMA writable_schema=ON; UPDATE sqlite_schema SET sql=replace(sql,'publisher_work_celex TEXT COLLATE BINARY,','publisher_work_celex TEXT COLLATE BINARY NOT NULL,') WHERE name='articles'; PRAGMA writable_schema=OFF;");
                 using var command = connection.CreateCommand();
                 command.CommandText = "UPDATE stamp SET schema_identity='lex-v3-europe-index/3',logical_rows_sha256=$logical";
@@ -259,7 +259,7 @@ public sealed class EuropeIndexBuilderTests
                     ReadRows<EuropeIndexBuilder.CorrigendumGapRow>(connection, "ReadGaps"), articles,
                     ReadRows<EuropeIndexBuilder.ArticleSourceRow>(connection, "ReadArticleSources"),
                     ReadRows<EuropeIndexBuilder.ArticleDigestRow>(connection, "ReadArticleDigests"));
-                EuropeIndexBuilder.Execute(connection, "DROP TABLE force_dates; DROP TABLE states; PRAGMA user_version=4;");
+                EuropeIndexBuilder.Execute(connection, "DROP TABLE expression_titles; DROP TABLE official_journal_references; DROP TABLE force_dates; DROP TABLE states; PRAGMA user_version=4;");
                 EuropeIndexBuilder.Execute(connection, "PRAGMA writable_schema=ON; UPDATE sqlite_schema SET sql=replace(sql,'publisher_work_celex TEXT COLLATE BINARY,','publisher_work_celex TEXT COLLATE BINARY NOT NULL,') WHERE name='articles'; PRAGMA writable_schema=OFF;");
                 using var command = connection.CreateCommand();
                 command.CommandText = "UPDATE stamp SET schema_identity='lex-v3-europe-index/4',logical_rows_sha256=$logical";
@@ -298,7 +298,7 @@ public sealed class EuropeIndexBuilderTests
                     ReadRows<EuropeIndexBuilder.ArticleSourceRow>(connection, "ReadArticleSources"),
                     ReadRows<EuropeIndexBuilder.ArticleDigestRow>(connection, "ReadArticleDigests"),
                     ReadRows<EuropeIndexState>(connection, "ReadStates"));
-                EuropeIndexBuilder.Execute(connection, "DROP TABLE force_dates; PRAGMA user_version=5;");
+                EuropeIndexBuilder.Execute(connection, "DROP TABLE expression_titles; DROP TABLE official_journal_references; DROP TABLE force_dates; PRAGMA user_version=5;");
                 using var command = connection.CreateCommand();
                 command.CommandText = "UPDATE stamp SET schema_identity='lex-v3-europe-index/5',logical_rows_sha256=$logical";
                 command.Parameters.AddWithValue("$logical", logical);
@@ -312,6 +312,47 @@ public sealed class EuropeIndexBuilderTests
             Assert.IsTrue(reader.HasStates);
             Assert.IsFalse(reader.HasForceDates, "an index /5 holds no force date, and none is invented");
             Assert.ThrowsExactly<InvalidOperationException>(() => reader.ReadForceDates("https://example.invalid/work"));
+            Assert.AreEqual(1, reader.ArticleCount);
+        }
+        finally { EuropeIndexBuilder.DeleteDatabase(path); }
+    }
+
+    [TestMethod]
+    public void Schema6RemainsReadableWithoutInventingTitles()
+    {
+        var bytes = EuropeIndexBuilder.BuildFixedInputDeterminismEvidence();
+        var path = Path.Combine(Path.GetTempPath(), $"lex-v3-schema6-test-{Guid.NewGuid():N}.sqlite");
+        try
+        {
+            File.WriteAllBytes(path, bytes);
+            EuropeIndexBuilder.ArticleRow[] articles;
+            using (var connection = EuropeIndexBuilder.Open(path, SqliteOpenMode.ReadWrite))
+            {
+                articles = ReadRows<EuropeIndexBuilder.ArticleRow>(connection, "ReadArticles");
+                var logical = EuropeIndexBuilder.HashLogicalRows(
+                    ReadRows<EuropeIndexBuilder.MemberRow>(connection, "ReadMembers"),
+                    ReadRows<EuropeIndexBuilder.CorrigendumLineRow>(connection, "ReadLines"),
+                    ReadRows<EuropeIndexBuilder.CorrigendumGapRow>(connection, "ReadGaps"), articles,
+                    ReadRows<EuropeIndexBuilder.ArticleSourceRow>(connection, "ReadArticleSources"),
+                    ReadRows<EuropeIndexBuilder.ArticleDigestRow>(connection, "ReadArticleDigests"),
+                    ReadRows<EuropeIndexState>(connection, "ReadStates"),
+                    ReadRows<EuropeIndexForceDate>(connection, "ReadForceDateRows"));
+                EuropeIndexBuilder.Execute(connection, "DROP TABLE expression_titles; DROP TABLE official_journal_references; PRAGMA user_version=6;");
+                using var command = connection.CreateCommand();
+                command.CommandText = "UPDATE stamp SET schema_identity='lex-v3-europe-index/6',logical_rows_sha256=$logical";
+                command.Parameters.AddWithValue("$logical", logical);
+                command.ExecuteNonQuery();
+            }
+            bytes = File.ReadAllBytes(path);
+            var sha = Convert.ToHexStringLower(SHA256.HashData(bytes));
+            var corpusSha = new string('a', 64);
+            using var reader = EuropeIndexReader.OpenAndVerify(new(LexCorpus6Builder.ResourceIdOf(sha), sha), bytes,
+                new(LexCorpus6Builder.ResourceIdOf(corpusSha), corpusSha), EuropeIndexBuilder.MeasureCapabilities(sha, articles));
+            Assert.IsTrue(reader.HasForceDates);
+            Assert.IsFalse(reader.HasTitles, "an index /6 holds no title or Official Journal reference, and none is invented");
+            Assert.ThrowsExactly<InvalidOperationException>(() => reader.ReadTitles(["https://example.invalid/expression"]));
+            Assert.ThrowsExactly<InvalidOperationException>(() => reader.ReadOfficialJournalReferences(["https://example.invalid/expression"]));
+            Assert.ThrowsExactly<InvalidOperationException>(() => reader.SearchTitles("fixed"));
             Assert.AreEqual(1, reader.ArticleCount);
         }
         finally { EuropeIndexBuilder.DeleteDatabase(path); }
@@ -401,7 +442,9 @@ public sealed class EuropeIndexBuilderTests
                     ReadRows<EuropeIndexBuilder.ArticleSourceRow>(connection, "ReadArticleSources"),
                     ReadRows<EuropeIndexBuilder.ArticleDigestRow>(connection, "ReadArticleDigests"),
                     ReadRows<EuropeIndexState>(connection, "ReadStates"),
-                    ReadRows<EuropeIndexForceDate>(connection, "ReadForceDateRows"));
+                    ReadRows<EuropeIndexForceDate>(connection, "ReadForceDateRows"),
+                    ReadRows<EuropeIndexExpressionTitle>(connection, "ReadTitleRows"),
+                    ReadRows<EuropeIndexOfficialJournalReference>(connection, "ReadReferenceRows"));
                 using var command = connection.CreateCommand();
                 command.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical";
                 command.Parameters.AddWithValue("$logical", logical);
@@ -709,7 +752,8 @@ public sealed class EuropeIndexBuilderTests
         bool reopenRetainedBytes = true,
         bool acquireFrenchExpression = false,
         bool mismatchedFrenchPackage = false,
-        bool withForceDates = false)
+        bool withForceDates = false,
+        bool withTitles = false)
     {
         var bytes = await File.ReadAllBytesAsync(Path.Combine(
             AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "gdpr-fmx4-200-body.bin"));
@@ -728,7 +772,9 @@ public sealed class EuropeIndexBuilderTests
             expressionIri: expressionIri,
             additionalExpressionIri: acquireFrenchExpression ? frenchExpressionIri : null,
             additionalExpressionLanguageAuthority: acquireFrenchExpression
-                ? "http://publications.europa.eu/resource/authority/language/FRA" : null);
+                ? "http://publications.europa.eu/resource/authority/language/FRA" : null,
+            // With titles, family X delivers the GDPR's titles and short titles as run 16 holds them (EuTitlesFixture).
+            expressionTitles: withTitles ? EuTitlesFixture.Gdpr(expressionIri, acquireFrenchExpression ? frenchExpressionIri : null) : null);
         var acquiredExpressionIri = acquireFrenchExpression ? frenchExpressionIri : expressionIri;
         var expression = run.CorrigendumTripwires!.ProductionsByFamilyKey.Values
             .SelectMany(static production => production.Expressions!.Derivation!.Expressions)

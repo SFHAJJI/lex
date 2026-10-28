@@ -148,13 +148,15 @@ public sealed class EuFormexMainBodyLegalContentOutcome
         EuFormexMainBodyLegalContentDisposition disposition,
         IReadOnlyList<EuFormexMainBodyArticle> articles,
         string? detail,
-        IReadOnlyList<EuFormexMainBodyPartNotServed>? partsNotServed = null)
+        IReadOnlyList<EuFormexMainBodyPartNotServed>? partsNotServed = null,
+        EuFormexPublication? publication = null)
     {
         Source = source;
         Disposition = disposition;
         Articles = Array.AsReadOnly(articles.ToArray());
         Detail = detail;
         PartsNotServed = Array.AsReadOnly((partsNotServed ?? []).ToArray());
+        Publication = publication;
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         EuFormexMainBodyArticle.Append(hash, "lex-v3-eu-formex-main-body-outcome/1");
         EuFormexMainBodyArticle.Append(hash, EuFormexMainBodyLegalContentProducer.Profile);
@@ -175,6 +177,14 @@ public sealed class EuFormexMainBodyLegalContentOutcome
 
     /// <summary>The parts of the admitted package that are not served as text, each typed; empty for every other outcome.</summary>
     public IReadOnlyList<EuFormexMainBodyPartNotServed> PartsNotServed { get; }
+
+    /// <summary>
+    /// The title and Official Journal reference the admitted main unit states (EU index /7), or null when its markup gives neither
+    /// or no main body was read. Read beside the articles and outside <see cref="SemanticIdentitySha256"/>: the outcome's identity,
+    /// its articles' and the corpus built from them are what they were before it was read.
+    /// </summary>
+    public EuFormexPublication? Publication { get; }
+
     public EuFormexMainBodyLegalContentDisposition Disposition { get; }
     public IReadOnlyList<EuFormexMainBodyArticle> Articles { get; }
     public string? Detail { get; }
@@ -272,11 +282,11 @@ public sealed class EuFormexMainBodyLegalContentProducer
                         EuFormexMainBodyPartKind.AnnexUnclassified, member.Title))
                     .ToArray();
                 outcomes.Add(new(source, EuFormexMainBodyLegalContentDisposition.AdmittedAnnexesUnclassified, parsed.Articles,
-                    $"the package's {inventory.Members.Count} annex member(s) are not classified: {reason}", annexes));
+                    $"the package's {inventory.Members.Count} annex member(s) are not classified: {reason}", annexes, parsed.Publication));
                 continue;
             }
 
-            outcomes.Add(new(source, parsed.Disposition, parsed.Articles, parsed.Detail, parsed.Parts));
+            outcomes.Add(new(source, parsed.Disposition, parsed.Articles, parsed.Detail, parsed.Parts, parsed.Publication));
         }
         return new EuFormexMainBodyLegalContentPopulation(formex, outcomes);
     }
@@ -308,7 +318,8 @@ public sealed class EuFormexMainBodyLegalContentProducer
     };
 
     private static (EuFormexMainBodyLegalContentDisposition Disposition,
-        IReadOnlyList<EuFormexMainBodyArticle> Articles, string? Detail, IReadOnlyList<EuFormexMainBodyPartNotServed> Parts) Parse(
+        IReadOnlyList<EuFormexMainBodyArticle> Articles, string? Detail, IReadOnlyList<EuFormexMainBodyPartNotServed> Parts,
+        EuFormexPublication? Publication) Parse(
         EuFormexPackageOutcome source,
         ReadOnlyMemory<byte> packageBytes,
         CancellationToken cancellationToken)
@@ -325,6 +336,8 @@ public sealed class EuFormexMainBodyLegalContentProducer
             // two reads the one main-body unit again. No more than one entry's tree is held at a time.
             var names = new HashSet<string>(StringComparer.Ordinal);
             var units = new List<(ZipArchiveEntry Entry, string Root, int EnactingTerms)>();
+            // Each document record's PUBLICATION.REF, by its entry: the publication date an act's DOCUMENT.REF names (EU index /7).
+            var publicationReferences = new Dictionary<string, XElement>(StringComparer.Ordinal);
             long totalXmlBytes = 0;
             foreach (var entry in archive.Entries)
             {
@@ -346,6 +359,8 @@ public sealed class EuFormexMainBodyLegalContentProducer
                 var root = loaded.Root?.Name.LocalName;
                 if (root is "ACT" or "CONS.ACT" or "CONS.OTH" or "GENERAL")
                     units.Add((entry, root, loaded.Root!.Descendants().Count(static value => value.Name.LocalName == "ENACTING.TERMS")));
+                if (root == "DOC" && loaded.Root!.Elements().Where(static value => value.Name.LocalName == "PUBLICATION.REF").ToArray() is [var stated])
+                    publicationReferences[entry.FullName] = stated;
             }
 
             // An act root is the main body. A GENERAL unit is one only in a package that holds no act root, and only when it
@@ -471,8 +486,10 @@ public sealed class EuFormexMainBodyLegalContentProducer
             // A consolidated Treaty's Protocols, Annexes, Declarations and tables are left out of its articles, and are
             // typed and counted as parts not served (Art. 51 TEU makes the Protocols and Annexes integral to the Treaties).
             var parts = rootName == "CONS.OTH" ? TreatyPartsNotServed(source, mainEntry.FullName, document.Root!, articleRoot) : [];
+            // The main unit's title and Official Journal reference, read beside the articles from its bibliographic markup.
+            var publication = EuFormexPublicationReader.Read(document.Root!, mainEntry.FullName, publicationReferences);
             return (EuFormexMainBodyLegalContentDisposition.Admitted,
-                Array.AsReadOnly(articles.ToArray()), null, parts);
+                Array.AsReadOnly(articles.ToArray()), null, parts, publication);
         }
         catch (InvalidDataException exception)
         {
@@ -658,9 +675,10 @@ public sealed class EuFormexMainBodyLegalContentProducer
         name.Split('/').All(static part => part.Length != 0 && part != "." && part != "..");
 
     private static (EuFormexMainBodyLegalContentDisposition Disposition,
-        IReadOnlyList<EuFormexMainBodyArticle> Articles, string Detail, IReadOnlyList<EuFormexMainBodyPartNotServed> Parts) Refused(
+        IReadOnlyList<EuFormexMainBodyArticle> Articles, string Detail, IReadOnlyList<EuFormexMainBodyPartNotServed> Parts,
+        EuFormexPublication? Publication) Refused(
         EuFormexMainBodyLegalContentDisposition disposition,
-        string detail) => (disposition, Array.Empty<EuFormexMainBodyArticle>(), detail, Array.Empty<EuFormexMainBodyPartNotServed>());
+        string detail) => (disposition, Array.Empty<EuFormexMainBodyArticle>(), detail, Array.Empty<EuFormexMainBodyPartNotServed>(), null);
 
     /// <summary>
     /// The parts of a consolidated Treaty's document that are not its own text: each <c>CONS.DOC.GEN</c> part that neither is
