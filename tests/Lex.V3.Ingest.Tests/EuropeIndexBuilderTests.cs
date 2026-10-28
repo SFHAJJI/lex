@@ -753,10 +753,25 @@ public sealed class EuropeIndexBuilderTests
         bool acquireFrenchExpression = false,
         bool mismatchedFrenchPackage = false,
         bool withForceDates = false,
-        bool withTitles = false)
+        bool withTitles = false,
+        bool withLuxembourgText = false)
     {
         var bytes = await File.ReadAllBytesAsync(Path.Combine(
             AppContext.BaseDirectory, "Fixtures", "EuDocumentFetch", "gdpr-fmx4-200-body.bin"));
+        // With Luxembourg text, the envelope's Luxembourg half is the AKN act the Luxembourg mount fixture holds (in French), so a
+        // search that names no work answers over the one corpus both indexes bind (MountedFixture.CreateAsync).
+        Luxembourg.LuxembourgQueryExecutionResult? luxembourg = null;
+        Lex.V3.Contracts.Custody.ICustodyStore? luxembourgStore = null;
+        if (withLuxembourgText)
+        {
+            luxembourgStore = new RoutedHttpAcquisitionSessionTests.MultiObjectCustodyStore();
+            luxembourg = await LuxembourgGazetteAcquisitionTests.CompleteXmlForStage3BodyCompositionAsync(
+                await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "LuAknLegalContent", "loi-1991-08-10-n3--2024-02-01--fr.bin")),
+                luxembourgStore,
+                "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml",
+                "http://data.legilux.public.lu/filestore/eli/etat/leg/loi/1991/08/10/n3/jo/fr/xml/eli-etat-leg-loi-1991-08-10-n3-jo-fr-xml.xml");
+        }
+
         if (acquireFrenchExpression && !mismatchedFrenchPackage)
             bytes = EuAcquisitionTestFixture.SyntheticFrenchMainBodyPackage();
         const string expressionIri =
@@ -791,6 +806,8 @@ public sealed class EuropeIndexBuilderTests
 
         return await LexCorpus6BuilderTests.CompleteProfileEnvelopeAsync(
             europeOverride: run,
+            luxembourgOverride: luxembourg,
+            luxembourgStore: luxembourgStore,
             formexOverride: formex,
             formexStore: reopenRetainedBytes
                 ? fixture.Store

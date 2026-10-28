@@ -2332,9 +2332,15 @@ public sealed class V3CorpusResolveMountTests
         public string CorpusSha256 { get; }
         public string IndexSha256 { get; private set; }
 
-        public static async Task<EuropeMountedFixture> CreateAsync(bool acquireFrenchExpression = false, bool withForceDates = false, bool withTitles = false) =>
+        /// <summary>
+        /// The retained GDPR's mount; with <paramref name="withLuxembourgText"/>, its envelope's Luxembourg half is an AKN act held in
+        /// French, so <see cref="AddLuxembourgMountAsync"/> mounts a Luxembourg index a search that names no work answers over.
+        /// </summary>
+        public static async Task<EuropeMountedFixture> CreateAsync(bool acquireFrenchExpression = false, bool withForceDates = false, bool withTitles = false,
+            bool withLuxembourgText = false) =>
             await FromEnvelopeAsync(await EuropeIndexBuilderTests.RetainedGdprEnvelopeAsync(
-                acquireFrenchExpression: acquireFrenchExpression, withForceDates: withForceDates, withTitles: withTitles));
+                acquireFrenchExpression: acquireFrenchExpression, withForceDates: withForceDates, withTitles: withTitles,
+                withLuxembourgText: withLuxembourgText));
 
         /// <summary>
         /// The mount of one EU envelope: its corpus and EU index built and written where the API mounts them, named by its one

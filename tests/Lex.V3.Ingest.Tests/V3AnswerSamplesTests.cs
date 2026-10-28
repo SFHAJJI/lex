@@ -371,7 +371,7 @@ public sealed class V3AnswerSamplesTests
 
         // A search that names no work over a mount holding the EU index /7 and a Luxembourg index: the EU acts its query names by
         // title are listed beside the Luxembourg answer (Release 3's item 1).
-        var titled = await EuropeMountedFixture.CreateAsync(withTitles: true);
+        var titled = await EuropeMountedFixture.CreateAsync(withTitles: true, withLuxembourgText: true);
         await using var cleanupTitled = titled;
         await titled.AddLuxembourgMountAsync();
         using var titledMount = await V3CorpusMount.OpenAsync(titled.Directory, CancellationToken.None);

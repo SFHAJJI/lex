@@ -101,7 +101,7 @@ public sealed class V3CorpusEuropeTitlesMountTests
     [TestMethod]
     public async Task ASearchThatNamesNoWorkListsTheEuActsItsQueryNamesByTitle()
     {
-        var fixture = await V3CorpusResolveMountTests.EuropeMountedFixture.CreateAsync(withTitles: true);
+        var fixture = await V3CorpusResolveMountTests.EuropeMountedFixture.CreateAsync(withTitles: true, withLuxembourgText: true);
         await using var cleanup = fixture;
         await fixture.AddLuxembourgMountAsync();
         using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
@@ -141,7 +141,7 @@ public sealed class V3CorpusEuropeTitlesMountTests
     [TestMethod]
     public async Task AnActWithheldUnderR92IsNotListedByAnyOfItsTitles()
     {
-        var fixture = await V3CorpusResolveMountTests.EuropeMountedFixture.CreateAsync(withTitles: true);
+        var fixture = await V3CorpusResolveMountTests.EuropeMountedFixture.CreateAsync(withTitles: true, withLuxembourgText: true);
         await using var cleanup = fixture;
         await fixture.AddLuxembourgMountAsync();
         var outcome = NamesMeasurement.Measure(fixture.Directory);
@@ -177,7 +177,7 @@ public sealed class V3CorpusEuropeTitlesMountTests
     [TestMethod]
     public async Task OverAnEuIndex6TheAnswersCarryNoTitleNorReferenceAndSayNoTitleIsHeld()
     {
-        var fixture = await V3CorpusResolveMountTests.EuropeMountedFixture.CreateAsync(withTitles: true);
+        var fixture = await V3CorpusResolveMountTests.EuropeMountedFixture.CreateAsync(withTitles: true, withLuxembourgText: true);
         await using var cleanup = fixture;
         await fixture.AddLuxembourgMountAsync();
         AsSchema6(fixture.Directory);
