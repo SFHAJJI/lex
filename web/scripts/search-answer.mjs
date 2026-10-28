@@ -47,6 +47,7 @@
 // calendar day or two of its dates disagree. Every other answer says the phase read no reference, or did not run
 // because a work was named, and is read as before.
 
+import { readEuropeTitleResolution } from './europe-publication.mjs';
 import { isCalendarDate } from './temporal.mjs';
 import { articlePermalink, escapeSegment, luxembourgPermalink, parseSitePath } from './permalinks.mjs';
 import { AS_PUBLISHED_LABEL } from './as-published.mjs';
@@ -530,6 +531,12 @@ function readMethod(answer, where) {
   };
 }
 
+/** A search that named a work lists no EU act by title: an answer that does is drift. */
+function nullUnlessAbsent(answer, where) {
+  if (Object.hasOwn(answer, 'europe_titles')) throw new Error(`${where} named a work and lists EU acts by title`);
+  return null;
+}
+
 /**
  * Reads one V3 Luxembourg `search` answer into the view a live screen renders.
  *
@@ -574,6 +581,8 @@ export function readSearch(answer) {
     hits: Object.freeze(hits),
     ambiguousWorks: readAmbiguousWorks(requireOwn(answer, 'ambiguous_works', where), requestedDate, hits),
     workResolution: readWorkResolution(requireOwn(answer, 'work_resolution', where), identifier),
+    // The EU acts a search that names no work found by their titles, over an EU index /7 (Release 3's item 1); null otherwise.
+    europeTitles: identifier === null ? readEuropeTitleResolution(answer, where) : nullUnlessAbsent(answer, where),
     reference: readReferencePhase(answer, identifier),
     referenceReason: readReferenceReason(answer),
     acts: readActs(requireOwn(answer, 'acts', where), hits, { whole: after === null && !truncated }),

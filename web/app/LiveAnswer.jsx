@@ -23,9 +23,11 @@
 
 import { Fragment } from 'react';
 
-import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillParts, liveChrome } from '../scripts/live-chrome.mjs';
+import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillParts, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { OFFICIAL_SITES, isFailure } from '../scripts/live-failure.mjs';
 import { EUROPE_TREATY_PART_DISPOSITIONS } from '../scripts/europe-annexes.mjs';
+import { europeReferenceOf, europeShortTitlesOf, europeTitleOf, officialJournalWords } from '../scripts/europe-publication.mjs';
+import { quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { isSiteAddress, permalinkHref } from '../scripts/permalinks.mjs';
 import { GuideLink } from './GuideLink.jsx';
 
@@ -142,6 +144,60 @@ export function EuropeForceDates({ forceDates, notWording = false }) {
       )}
       {/* Said only under dates the page shows (the French review of 2026-10-19): over none, "the dates above" names nothing. */}
       {notWording && forceDates.dates.length > 0 ? <p data-force-dates-not-wording="">{copy.notWording}</p> : null}
+    </section>
+  );
+}
+
+/**
+ * An EU wording's titles and Official Journal reference (`scripts/europe-publication.mjs`; Release 3's item 1), one block per
+ * expression of `expressions` (`{expressionIri, language}`): its title, the publisher's or the act's Formex package's, marked in
+ * its own language as statute text is; the publisher's short titles; and the reference the act's Formex package states, in the
+ * page's words (for a consolidated wording, the publication of the act it consolidates). What is not held is said, never
+ * left out. Nothing for an answer over an EU index that holds neither (`titles` and `officialJournal` null).
+ */
+export function EuropePublication({ titles, officialJournal, expressions }) {
+  if (titles === null && officialJournal === null) return null;
+  const common = liveChrome().common;
+  const copy = common.europePublication;
+  const words = liveChrome().citation;
+  return (
+    <section data-europe-publication={expressions.length}>
+      {expressions.map(({ expressionIri, language }) => {
+        const name = common.languageNames[language] ?? language;
+        const title = europeTitleOf(titles, expressionIri);
+        const reference = europeReferenceOf(officialJournal, expressionIri);
+        return (
+          <div key={expressionIri} data-europe-publication-expression={expressionIri}>
+            {/* No title is said not held only of an expression the answer lists as holding none of any kind (the French
+                review's point 5): one with a short title alone says its short title. */}
+            {titles === null || (title === null && !titles.withoutTitle.includes(expressionIri)) ? null : title === null ? (
+              <p data-europe-title="none">{fillText(copy.noTitle, { language: name })}</p>
+            ) : (
+              <p data-europe-title={title.source}>
+                <Say
+                  template={title.source === 'formex_title' ? copy.titleInPackage : copy.title}
+                  values={{ language: name, title: <span lang={quotationLanguageTag(title.language)}>{title.text}</span> }}
+                />
+              </p>
+            )}
+            {europeShortTitlesOf(titles, expressionIri).map((short) => (
+              <p key={short.identity} data-europe-short-title="">
+                <Say template={copy.shortTitle} values={{ language: name, title: <span lang={quotationLanguageTag(short.language)}>{short.text}</span> }} />
+              </p>
+            ))}
+            {officialJournal === null ? null : reference === null ? (
+              <p data-europe-journal="none">{fillText(copy.noJournal, { language: name })}</p>
+            ) : (
+              <p data-europe-journal={reference.kind} data-europe-journal-form={reference.numberForm}>
+                <Say
+                  template={reference.kind === 'consolidated_act_publication' ? copy.journalConsolidated : copy.journal}
+                  values={{ language: name, reference: officialJournalWords(reference, words) }}
+                />
+              </p>
+            )}
+          </div>
+        );
+      })}
     </section>
   );
 }

@@ -47,7 +47,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { ArticleNotHeld, PageNotHeld, PinnedLead, citedTitle } from './PinnedReading.jsx';
-import { AsPublished, EuropeAnnexes, EuropeForceDates, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
+import { AsPublished, EuropeAnnexes, EuropeForceDates, EuropePublication, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import {
   LIVE_READING_IDLE,
   READING_LANGUAGES,
@@ -531,6 +531,12 @@ export function EuropeReadingView({ view, paging = {}, onNext = null, readableFo
       <p data-guide-note=""><GuideLink section="versions" /></p>
       {/* The act's dates lead the reading, before its wordings, each said with its role: none of them is a wording's date. */}
       <EuropeForceDates forceDates={view.forceDates ?? null} notWording />
+      {/* Each wording's titles and Official Journal reference, over an EU index /7 (Release 3's item 1). */}
+      <EuropePublication
+        titles={view.titles ?? null}
+        officialJournal={view.officialJournal ?? null}
+        expressions={view.wordings.map((wording) => ({ expressionIri: wording.expressionIri, language: wording.language }))}
+      />
       {view.wordings.map((wording) => (
         <EuropeWordingReading key={wording.wordingSha256} wording={wording} celex={view.celex} paging={paging[wording.wordingSha256] ?? null} onNext={onNext} readable={readableFor?.(wording) ?? null} />
       ))}

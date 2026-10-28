@@ -79,7 +79,7 @@ import { replacePageAddress } from './page-address.mjs';
 import { TodayHint, useLuxembourgToday } from './Today.jsx';
 import { OFFICIAL_SEARCH_PAGES } from '../scripts/live-failure.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillCounted, fillText, liveChrome, livePath } from '../scripts/live-chrome.mjs';
-import { articlePermalink, permalinkHref } from '../scripts/permalinks.mjs';
+import { articlePermalink, europeWorkSegment, permalinkHref } from '../scripts/permalinks.mjs';
 import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
@@ -146,6 +146,40 @@ export function SearchWorkResolution({ resolution }) {
     return <p data-work-resolution="no_titles_held">{COPY.noTitlesHeld}</p>;
   }
   return null;
+}
+
+/**
+ * The EU acts a search that names no work found by their titles (EU index /7, Release 3's item 1;
+ * `scripts/europe-publication.mjs`): one act by the title that matched, marked in its own language and linked to the act's
+ * dossier, or the count and every act found, each by its title and CELEX. Their text is not searched here, and the line
+ * under the search's date says so. Nothing when the answer carries none, or no act's title holds the phrase.
+ */
+export function EuropeTitleMatches({ europeTitles }) {
+  if (europeTitles === null || europeTitles.acts.length === 0) return null;
+  // A short title is said as one (the reviewed `dossier.shortTitle`), never as the act's title (the French review's point 4).
+  const said = (entry) => {
+    const words = <span lang={quotationLanguageTag(entry.titleLanguage)}>{entry.title}</span>;
+    return entry.titleKind === 'short_title' ? <Say template={liveChrome().dossier.shortTitle} values={{ title: words }} /> : words;
+  };
+  const act = (entry) => (
+    <a href={permalinkHref(`/eu-eurlex/${europeWorkSegment(entry.seedCelex)}`, CHROME_LOCALE)}>
+      <Say template={COPY.euTitleAct} values={{ title: said(entry), celex: entry.seedCelex }} />
+    </a>
+  );
+  if (europeTitles.acts.length === 1) {
+    const [only] = europeTitles.acts;
+    return (
+      <p data-europe-titles="one_act" data-match-reason={only.matchReason}>
+        <Say template={only.matchReason === 'whole_title' ? COPY.euTitleExact : COPY.euTitlePhrase} values={{ title: act(only) }} />
+      </p>
+    );
+  }
+  return (
+    <div data-europe-titles="several_acts" data-acts={europeTitles.acts.length}>
+      <p><Say template={countedEntry(COPY.euTitles, europeTitles.acts.length)} values={{ count: europeTitles.acts.length }} /></p>
+      <ul>{europeTitles.acts.map((entry) => <li key={entry.seedCelex} data-match-reason={entry.matchReason}>{act(entry)}</li>)}</ul>
+    </div>
+  );
 }
 
 function AmbiguousWorks({ works, date }) {
@@ -363,9 +397,13 @@ function ActGroups({ view }) {
 function SearchedOn({ view }) {
   if (view.publisher === 'eu-eurlex') return null;
   return (
-    <p data-searched-on={view.date ?? ''}>
-      {view.date === null ? COPY.undated : <Say template={COPY.dated} values={{ date: view.date }} />}
-    </p>
+    <>
+      <p data-searched-on={view.date ?? ''}>
+        {view.date === null ? COPY.undated : <Say template={COPY.dated} values={{ date: view.date }} />}
+      </p>
+      {/* Over an EU index /7 a search that names no work also matched the EU acts' titles, and not their text. */}
+      {(view.europeTitles ?? null) === null ? null : <p data-europe-titles-searched="">{COPY.euTitlesSearched}</p>}
+    </>
   );
 }
 
@@ -461,12 +499,15 @@ function NoHitCard({ view, today = null }) {
   const reference = view.reference === 'not_run_identifier_given'
     ? COPY.runReferenceNotRun
     : view.referenceReason === 'title_not_held' ? COPY.titleNotHeld : COPY.runReference;
+  // With the EU acts' titles matched too (EU index /7), the ladder's line names Luxembourg's titles, so the two lines never
+  // contradict each other (the French review of 2026-10-27, its point 2).
+  const europeTitles = view.europeTitles ?? null;
   const titles = {
     not_run_identifier_given: COPY.runTitlesNotRun,
     no_titles_held: COPY.noTitlesHeld,
-    no_title_match: COPY.runTitles,
-    one_work: countedEntry(COPY.runTitlesMatched, 1),
-    several_candidates: countedEntry(COPY.runTitlesMatched, view.workResolution.candidates?.length ?? 2),
+    no_title_match: europeTitles === null ? COPY.runTitles : COPY.runLuxembourgTitles,
+    one_work: countedEntry(europeTitles === null ? COPY.runTitlesMatched : COPY.runLuxembourgTitlesMatched, 1),
+    several_candidates: countedEntry(europeTitles === null ? COPY.runTitlesMatched : COPY.runLuxembourgTitlesMatched, view.workResolution.candidates?.length ?? 2),
   }[resolution];
   // Titles are matched with capitals and accents ignored, as the text is: said where the ladder ran over titles held.
   const titlesFolded = ['no_title_match', 'one_work', 'several_candidates'].includes(resolution);
@@ -480,6 +521,12 @@ function NoHitCard({ view, today = null }) {
       <ul data-searches-run="">
         <li data-search-run="reference">{reference}</li>
         <li data-search-run="titles">{titles}{titlesFolded ? <>{' '}<span data-title-matching="">{COPY.titleMatching}</span></> : null}</li>
+        {europeTitles === null ? null : (
+          <li data-search-run="eu-titles">
+            {europeTitles.acts.length === 0 ? COPY.runEuTitles : countedEntry(COPY.runEuTitlesMatched, europeTitles.acts.length)}
+            {' '}<span data-title-matching="">{COPY.titleMatching}</span>
+          </li>
+        )}
         {view.population.strictHits === null ? null : <li data-search-run="text">{COPY.runText}</li>}
         {view.population.relaxedHits === null ? null : <li data-search-run="every-word">{COPY.runTextWords}</li>}
       </ul>
@@ -512,6 +559,7 @@ export function SearchResultsView({ view, onNextPage, today = null }) {
   return (
     <>
       {resolutionOnTop === null ? null : <SearchWorkResolution resolution={resolutionOnTop} />}
+      {europe ? null : <EuropeTitleMatches europeTitles={view.europeTitles ?? null} />}
       {/* EU text stands below Decision 95's acknowledgement and authenticity statement, as on the reading screen. */}
       {europe && view.hits.length > 0 ? <EuropeStatements view={view} /> : null}
       <Found view={view} />
