@@ -477,6 +477,11 @@ const SEARCH_MAX_CHARACTERS = 512;
 const SEARCH_MAX_TERMS = 32;
 /** How many of the works its search for "loi" lists the probe looks through for an accented title. */
 export const TITLE_WORKS_ASKED = 10;
+/**
+ * How many pages of that search the probe reads, by its `continue_after`, to list those works: a page is the first 200 hits
+ * by work key, and on the Release 2 mount the codes' hits fill the first fourteen (the tenth work is listed on the fifteenth).
+ */
+export const TITLE_SEARCH_PAGES = 25;
 
 /** A title as a reader without accents types it: decomposed, its combining marks dropped. */
 export function withoutAccents(title) {
@@ -514,14 +519,15 @@ function accentedTitlesOf(dossier) {
  * An accented title the revision holds, found (plan 0.8). The image carries no language library, and while the title fold
  * asked for one the server stopped removing the accents from what a reader typed, while every index holds its titles
  * without them: "congé parental" found nothing on the deployed revision. The title is the revision's own: of the works its
- * search for "loi" lists (the first `TITLE_WORKS_ASKED`), the first whose dossier names an accented title that, with its
+ * search for "loi" lists (the first `TITLE_WORKS_ASKED`, read on by the search's own cursor while its pages name fewer, at most
+ * `TITLE_SEARCH_PAGES` pages), the first whose dossier names an accented title that, with its
  * accents removed, resolves to that title's work (the control: a title two works share resolves to neither, and the next
  * is tried). Then the title as published, in capitals and decomposed must each resolve to the same work by the same match,
  * and a strict search for it must name that work alone. Failures, empty when it holds; an index holding no titles has
  * nothing to check, which `notes` says.
  */
 export async function accentedTitleFailures(origin, { ask = askOperation, notes = [] } = {}) {
-  const listed = await ask(origin, "search", { query: "loi", language: "fra" });
+  let listed = await ask(origin, "search", { query: "loi", language: "fra" });
   if (listed === null || (listed.refusal !== null && listed.refusal !== undefined)) {
     return [`search for "loi" answered ${listed === null ? "no envelope" : `a refusal, ${listed.refusal.code}`}, so no accented title could be checked`];
   }
@@ -529,45 +535,71 @@ export async function accentedTitleFailures(origin, { ask = askOperation, notes 
     notes.push("an accented title: not checked, the revision's index holds no titles");
     return [];
   }
-  const works = [...new Set((listed.result?.value?.hits ?? []).map((hit) => hit.work_key).filter(Boolean))].slice(0, TITLE_WORKS_ASKED);
-  for (const work of works) {
-    const dossier = await ask(origin, "dossier", { identifier: `/lu-legilux/${work}` });
-    for (const { title, language, expression } of accentedTitlesOf(dossier)) {
-      const control = await ask(origin, "resolve", { identifier: withoutAccents(title) });
-      const found = control !== null && (control.refusal === null || control.refusal === undefined) ? control.result?.value : null;
-      if (!found?.expressions?.includes(expression)) continue;
-
-      const failures = [];
-      for (const [form, identifier] of [["as published", title], ["in capitals", inCapitals(title)], ["decomposed", title.normalize("NFD")]]) {
-        const answer = await ask(origin, "resolve", { identifier });
-        const value = answer !== null && (answer.refusal === null || answer.refusal === undefined) ? answer.result?.value : null;
-        if (value === null || value === undefined) {
-          failures.push(`resolve of "${title}" ${form} answered ${answer === null ? "no envelope" : `a refusal, ${answer.refusal.code}`}, where without its accents it finds ${found.work_identifier}`);
-        } else if (value.work_identifier !== found.work_identifier || value.match_reason !== found.match_reason) {
-          failures.push(`resolve of "${title}" ${form} finds ${value.work_identifier} by ${value.match_reason}, where without its accents it finds ${found.work_identifier} by ${found.match_reason}`);
-        }
-      }
-      // A title that begins with its act's type and date ("Loi du 3 décembre 2015 …") is read by the exact-reference phase
-      // first (4.2), which opens that act and searches no word: that is the work named alone too. The title's own fold is
-      // held by the three resolves above.
-      const searched = await ask(origin, "search", { query: title, language, mode: "strict", limit: 1 });
-      const resolution = searched?.result?.value?.work_resolution;
-      const reference = searched?.result?.value?.reference;
-      const opensWork = reference?.outcome === "opens" && reference.recognised?.act?.work === work;
-      if (!opensWork && (resolution?.outcome !== "one_work" || resolution.work?.work_identifier !== found.work_identifier)) {
-        // Every answer carries the phase's member; it answered the search only when it opened something or said why not
-        // (on the ladder's answers its outcome is "no_reference", and the ladder's own outcome is the one to report).
-        const phaseAnswered = reference?.outcome === "opens" || reference?.outcome === "not_opened";
-        const said = phaseAnswered
-          ? `the reference phase's ${reference.outcome} of ${reference.recognised?.act?.work ?? "no act"}`
-          : resolution?.outcome ?? (searched === null ? "no envelope" : `a refusal, ${searched.refusal?.code}`);
-        failures.push(`search for "${title}" names ${said}, not ${found.work_identifier} alone`);
-      }
-      notes.push(`an accented title: "${title}" (${found.work_identifier}), asked as published, in capitals and decomposed`);
-      return failures;
+  // The works in the order the search lists them, read on by its own cursor while a page names fewer than
+  // `TITLE_WORKS_ASKED` (search has no ranker: a code holding the word in hundreds of articles fills whole pages, as the
+  // Release 2 mount's codes, first by work key, fill the first fourteen), at most `TITLE_SEARCH_PAGES` pages.
+  const works = [];
+  let pages = 1;
+  for (;;) {
+    const page = listed.result?.value;
+    for (const work of new Set((page?.hits ?? []).map((hit) => hit.work_key).filter(Boolean))) {
+      if (works.length >= TITLE_WORKS_ASKED || works.includes(work)) continue;
+      works.push(work);
+      const checked = await accentedTitleOfWork(origin, work, { ask, notes });
+      if (checked !== null) return checked;
+    }
+    if (works.length >= TITLE_WORKS_ASKED || page?.truncated !== true || typeof page.continue_after !== "string" || pages >= TITLE_SEARCH_PAGES) break;
+    listed = await ask(origin, "search", { query: "loi", language: "fra", after: page.continue_after });
+    pages += 1;
+    if (listed === null || (listed.refusal !== null && listed.refusal !== undefined)) {
+      return [`search for "loi" read on to its page ${pages} answered ${listed === null ? "no envelope" : `a refusal, ${listed.refusal.code}`}, so no accented title could be checked`];
     }
   }
-  return [`none of the ${works.length} works the revision's search for "loi" lists names an accented title it resolves without its accents, so no accented title could be checked`];
+  const read = pages === 1 ? "" : ` in the ${pages} pages read`;
+  return [`none of the ${works.length} works the revision's search for "loi" lists${read} names an accented title it resolves without its accents, so no accented title could be checked`];
+}
+
+/**
+ * One work's accented title checked (`accentedTitleFailures`): its failures once a title of its dossier passes the control,
+ * or null when none does and the next work is tried.
+ */
+async function accentedTitleOfWork(origin, work, { ask, notes }) {
+  const dossier = await ask(origin, "dossier", { identifier: `/lu-legilux/${work}` });
+  for (const { title, language, expression } of accentedTitlesOf(dossier)) {
+    const control = await ask(origin, "resolve", { identifier: withoutAccents(title) });
+    const found = control !== null && (control.refusal === null || control.refusal === undefined) ? control.result?.value : null;
+    if (!found?.expressions?.includes(expression)) continue;
+
+    const failures = [];
+    for (const [form, identifier] of [["as published", title], ["in capitals", inCapitals(title)], ["decomposed", title.normalize("NFD")]]) {
+      const answer = await ask(origin, "resolve", { identifier });
+      const value = answer !== null && (answer.refusal === null || answer.refusal === undefined) ? answer.result?.value : null;
+      if (value === null || value === undefined) {
+        failures.push(`resolve of "${title}" ${form} answered ${answer === null ? "no envelope" : `a refusal, ${answer.refusal.code}`}, where without its accents it finds ${found.work_identifier}`);
+      } else if (value.work_identifier !== found.work_identifier || value.match_reason !== found.match_reason) {
+        failures.push(`resolve of "${title}" ${form} finds ${value.work_identifier} by ${value.match_reason}, where without its accents it finds ${found.work_identifier} by ${found.match_reason}`);
+      }
+    }
+    // A title that begins with its act's type and date ("Loi du 3 décembre 2015 …") is read by the exact-reference phase
+    // first (4.2), which opens that act and searches no word: that is the work named alone too. The title's own fold is
+    // held by the three resolves above.
+    const searched = await ask(origin, "search", { query: title, language, mode: "strict", limit: 1 });
+    const resolution = searched?.result?.value?.work_resolution;
+    const reference = searched?.result?.value?.reference;
+    const opensWork = reference?.outcome === "opens" && reference.recognised?.act?.work === work;
+    if (!opensWork && (resolution?.outcome !== "one_work" || resolution.work?.work_identifier !== found.work_identifier)) {
+      // Every answer carries the phase's member; it answered the search only when it opened something or said why not
+      // (on the ladder's answers its outcome is "no_reference", and the ladder's own outcome is the one to report).
+      const phaseAnswered = reference?.outcome === "opens" || reference?.outcome === "not_opened";
+      const said = phaseAnswered
+        ? `the reference phase's ${reference.outcome} of ${reference.recognised?.act?.work ?? "no act"}`
+        : resolution?.outcome ?? (searched === null ? "no envelope" : `a refusal, ${searched.refusal?.code}`);
+      failures.push(`search for "${title}" names ${said}, not ${found.work_identifier} alone`);
+    }
+    notes.push(`an accented title: "${title}" (${found.work_identifier}), asked as published, in capitals and decomposed`);
+    return failures;
+  }
+  return null;
 }
 
 /**

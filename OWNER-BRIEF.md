@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-10-27 at 12:45 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-10-28 at 14:10 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -25,8 +25,8 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
   contact; accessibility "non-conformant" until an audit. The EU texts date from 5 October, so from 4 November
   every page warns and no new release can be promoted until they are collected again.
 - On 27 October you asked for V3 finished to the specification within 72 hours (to 30 October 01:35 UTC).
-- Next: a release of the new code. With your yes on the date check, it carries the new data too; without it, it
-  carries the first release's data, already checked, so the corrections go live either way.
+- Next: the second release. Its rehearsal on 28 October passed the quality checks, the rebuild and the signing,
+  then failed two of its own probes (one a real fault, now fixed); in review, then the rehearsal runs again.
 
 ## What waits on you
 

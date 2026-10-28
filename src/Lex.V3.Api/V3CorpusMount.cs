@@ -222,6 +222,13 @@ internal sealed partial class V3CorpusMount : IDisposable
                 out var pinnedLanguage,
                 out var pinnedAnchor) && pinnedAnchor is null)
         {
+            // A textless catalogue state's permalink (index 9's events name it) is refused for its text, naming it, as verify,
+            // as_of and evidence_bundle refuse it: never identifier_unknown.
+            if (TextlessRowAt(workKey, applicabilityDate, requestedDigest, pinnedLanguage) is { } textless)
+            {
+                return RefuseTextless(request, observedAt, textless, applicabilityDate, bound: null);
+            }
+
             var states = (_reader?.ResolveState(workKey, applicabilityDate) ?? [])
                 .Where(state => string.Equals(state.Language, pinnedLanguage, StringComparison.Ordinal))
                 .ToArray();
@@ -2512,6 +2519,14 @@ internal sealed partial class V3CorpusMount : IDisposable
                 return V3PlatformOperationOutcome.Refused(
                     Context("refusal", observedAt, PublisherId.LuLegilux),
                     new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
+            }
+
+            // On index 9 the events answer gives a textless catalogue state its permalink (EventsPermalinkRuleNine): verify refuses
+            // it for its text, naming the state, as as_of and evidence_bundle do (RefuseUnlessPinnedState), never identifier_unknown
+            // and never another state's digest in its place (R64: a later withheld text answers text_withheld with the hashes).
+            if (TextlessRowAt(workKey, applicabilityDate, requestedDigest, language) is { } textless)
+            {
+                return RefuseTextless(request, observedAt, textless, applicabilityDate, bound: null);
             }
 
             var pinnedStates = _reader.ResolveState(workKey, applicabilityDate);
