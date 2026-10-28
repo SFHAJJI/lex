@@ -1,3 +1,4 @@
+using Lex.V3.Contracts;
 using Lex.V3.Contracts.Index;
 using Lex.V3.Contracts.Source.Europe;
 using Microsoft.Data.Sqlite;
