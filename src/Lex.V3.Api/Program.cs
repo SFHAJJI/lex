@@ -68,18 +68,17 @@ if (!maintenance)
         // What search's exact references read on their first use, read once here, so no request pays it or waits behind it.
         corpusMount?.Warm();
 
-        // The assistant's switch (R30): LEX_V3_ASSISTANT exactly `on`, and LEX_V3_ASSISTANT_OFF, the operator off-switch, unset
-        // or empty. Both are read once here. No planner exists in this code (no model provider is wired, R33), so the
-        // assistant stays off whatever they say, and ask answers the switched-off card.
-        var assistant = V3AssistantRuntime.FromConfiguration(
+        // The assistant (R30; the owner's order of 2026-10-28): LEX_V3_ASSISTANT exactly `on`; LEX_V3_ASSISTANT_OFF, the operator
+        // off-switch, unset or empty; LEX_V3_ASSISTANT_PREVIEW exactly `unreviewed` while the people's reviews are not done; and
+        // a planner, which exists only when LEX_ASSISTANT_ENDPOINT and its companions name an Azure OpenAI deployment. All are
+        // read once here. Anything less, and ask answers the switched-off card.
+        corpusMount?.UseAssistant(V3AssistantRuntime.FromConfiguration(
             Environment.GetEnvironmentVariable(V3AssistantRuntime.SwitchVariable),
             Environment.GetEnvironmentVariable(V3AssistantRuntime.OffSwitchVariable),
-            planner: null);
-        corpusMount?.UseAssistant(assistant);
-        if (string.Equals(Environment.GetEnvironmentVariable(V3AssistantRuntime.SwitchVariable), "on", StringComparison.Ordinal))
-        {
-            Console.Error.WriteLine($"V3 assistant stays off: {assistant.OffBecause}.");
-        }
+            string.Equals(Environment.GetEnvironmentVariable(V3AssistantRuntime.SwitchVariable), "on", StringComparison.Ordinal)
+                ? AzureOpenAiAssistantPlanner.FromEnvironment(Environment.GetEnvironmentVariable)
+                : null,
+            Environment.GetEnvironmentVariable(V3AssistantRuntime.PreviewVariable)));
     }
     catch (Exception exception)
     {

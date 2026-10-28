@@ -51,6 +51,8 @@ public static class V3AssistantParsers
         new(@"(?<![\w/])(?:\+|00)[1-9][\d ./\-]{6,18}\d(?!\w)", Options, Timeout),
         // A national number of 13 digits, grouped 4, 4, 5 or not.
         new(@"(?<!\d)\d{4} ?\d{4} ?\d{5}(?!\d)", Options, Timeout),
+        // A matricule-like run of 11 to 13 digits, alone (a national, social security or identity number).
+        new(@"(?<![\d\-/.])\d{11,13}(?![\d\-/.])", Options, Timeout),
         // A Luxembourg phone number written in three groups of three.
         new(@"(?<![\d\-])\d{3} \d{3} \d{3}(?![\d\-])", Options, Timeout),
     ];

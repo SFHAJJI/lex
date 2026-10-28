@@ -431,6 +431,137 @@ public sealed class V3AssistantMountTests
         Assert.IsTrue(V3AssistantPipeline.Replay(elsewhere.ToJsonString(), mount.AssistantStepsOn, mount.AssistantEnvironmentAt(ClockB)).SnapshotMismatch);
     }
 
+    // ---- The gates over the real planner: opt-in, never in CI ----------------------------------------------------------
+
+    /// <summary>
+    /// The machine gates over the real planner (the owner's order of 2026-10-28), only when <c>LEX_ASSISTANT_GATES_LIVE</c> is
+    /// exactly <c>1</c> and the deployment's variables are set (AzureOpenAiAssistantPlanner); otherwise inconclusive, so CI
+    /// never calls a model. Each drafted case runs five times (R40). The report gives quote fidelity, non-template sentences,
+    /// trace replay, latency p95 and cost per answer, and goes to <c>LEX_ASSISTANT_GATES_REPORT</c> or the temporary folder,
+    /// never inside the repository. Over <c>LEX_ASSISTANT_GATES_MOUNT</c> (a mount directory) when set, else the fixture.
+    /// The cases are drafted by an agent; not D4 or D1; not a switch-on gate.
+    /// </summary>
+    [TestMethod]
+    public async Task TheGatesOverTheRealPlannerWhenAskedTo()
+    {
+        if (!string.Equals(System.Environment.GetEnvironmentVariable("LEX_ASSISTANT_GATES_LIVE"), "1", StringComparison.Ordinal))
+        {
+            Assert.Inconclusive("LEX_ASSISTANT_GATES_LIVE is not 1: the live gates call a model, and run only when asked to.");
+        }
+
+        using var planner = AzureOpenAiAssistantPlanner.FromEnvironment(System.Environment.GetEnvironmentVariable)
+            ?? throw new AssertInconclusiveException("The deployment's variables are not set (LEX_ASSISTANT_ENDPOINT, _DEPLOYMENT, _API_VERSION, _KEY).");
+        var report = System.Environment.GetEnvironmentVariable("LEX_ASSISTANT_GATES_REPORT") is { Length: > 0 } named
+            ? Path.GetFullPath(named)
+            : Path.Combine(Path.GetTempPath(), $"lex-assistant-gates-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.md");
+        Assert.IsFalse(report.StartsWith(RepositoryRoot(), StringComparison.OrdinalIgnoreCase), "the report is written outside the repository");
+
+        MountedFixture? fixture = null;
+        var directory = System.Environment.GetEnvironmentVariable("LEX_ASSISTANT_GATES_MOUNT");
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            fixture = await MountedFixture.CreateAsync();
+            directory = fixture.Directory;
+        }
+
+        try
+        {
+            using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None) ?? throw new AssertFailedException("the mount did not open");
+            var runtime = On(planner);
+            mount.UseAssistant(runtime);
+            const int Runs = 5;
+            var cases = Cases();
+            var rows = new List<string>();
+            var latencies = new List<double>();
+            var (quotes, quoteFailures, nonTemplate, replays, replayFailures, answered, failedClosed) = (0, 0, 0, 0, 0, 0, 0);
+            foreach (var item in cases)
+            {
+                var id = item.GetProperty("id").GetString()!;
+                var question = Question(item.GetProperty("question").GetString()!);
+                var expect = item.GetProperty("expect");
+                var expected = expect.TryGetProperty("verdict", out var verdictElement) ? verdictElement.GetString() : expect.GetProperty("outcome").GetString();
+                var seen = new List<string>();
+                for (var run = 0; run < Runs; run++)
+                {
+                    var started = System.Diagnostics.Stopwatch.GetTimestamp();
+                    var envelope = V3EnvelopeJson.ParseAndVerify(await PostAsync(mount, DateTimeOffset.UtcNow, "ask", new { question }), V3OperationRegistry.Reviewed);
+                    latencies.Add(System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+                    if (envelope.Result?.ObjectType == "handoff_card")
+                    {
+                        var presented = envelope.Result.Value.GetProperty("presentation_result").GetString()!;
+                        seen.Add(presented);
+                        failedClosed += presented == "assistant_v3_unavailable" ? 1 : 0;
+                        continue;
+                    }
+
+                    answered++;
+                    var dossier = DossierOf(envelope);
+                    seen.Add(dossier.GetProperty("verdict").GetString()!);
+                    quotes += Quotes(dossier).Length;
+                    quoteFailures += (await QuoteFidelityFailures(mount, dossier)).Count;
+                    nonTemplate += NonTemplateStrings(dossier, question).Count;
+                    var trace = dossier.GetProperty("trace").GetRawText();
+                    var first = V3AssistantPipeline.Replay(trace, mount.AssistantStepsOn, mount.AssistantEnvironmentAt(DateTimeOffset.UtcNow));
+                    var second = V3AssistantPipeline.Replay(trace, mount.AssistantStepsOn, mount.AssistantEnvironmentAt(ClockB));
+                    replays++;
+                    var identical = first.Outcome is V3AskAnswered one && second.Outcome is V3AskAnswered two &&
+                        one.Dossier.ToUtf8().SequenceEqual(two.Dossier.ToUtf8()) &&
+                        JsonNode.DeepEquals(JsonNode.Parse(one.Dossier.ToUtf8()), JsonNode.Parse(dossier.GetRawText()));
+                    replayFailures += identical ? 0 : 1;
+                }
+
+                rows.Add($"| {id} | {expected} | {string.Join(", ", seen)} |");
+            }
+
+            latencies.Sort();
+            var p95 = latencies.Count == 0 ? 0 : latencies[(int)Math.Ceiling(latencies.Count * 0.95) - 1];
+            var costPerAsk = runtime.SpentMicroEuros / Math.Max(1.0, cases.Length * Runs) / 1_000_000.0;
+            var fidelity = quotes == 0 ? "no quotation" : $"{1.0 - ((double)quoteFailures / quotes):0.000} ({quoteFailures} failures in {quotes} quotations)";
+            var text = new StringBuilder()
+                .AppendLine("# The assistant's machine gates over the real planner")
+                .AppendLine()
+                .AppendLine($"{DraftedLabel}. Planner: {planner.PlannerId}. Mount: {(fixture is null ? directory : "the test fixture")}. {Runs} runs per case, {DateTimeOffset.UtcNow:u}.")
+                .AppendLine()
+                .AppendLine($"- Quote fidelity: {fidelity}; gate 1.0.")
+                .AppendLine($"- Non-template sentences: {nonTemplate}; gate 0.")
+                .AppendLine($"- Trace replay: {replays - replayFailures} of {replays} byte-identical; gate all.")
+                .AppendLine($"- Latency to the full answer, p95: {p95:0} ms over {latencies.Count} asks (R40: 10 s).")
+                .AppendLine($"- Cost per ask: {costPerAsk:0.0000} EUR from the responses' usage; {answered} answered, {failedClosed} failed closed on the switched-off card.")
+                .AppendLine()
+                .AppendLine("| Case | Drafted expectation | What the runs answered |")
+                .AppendLine("|---|---|---|");
+            foreach (var row in rows)
+            {
+                text.AppendLine(row);
+            }
+
+            await File.WriteAllTextAsync(report, text.ToString());
+            Assert.AreEqual(0, quoteFailures, $"quote fidelity is 1.0 ({report})");
+            Assert.AreEqual(0, nonTemplate, $"zero non-template sentences ({report})");
+            Assert.AreEqual(0, replayFailures, $"every trace replays byte for byte ({report})");
+        }
+        finally
+        {
+            if (fixture is not null)
+            {
+                await fixture.DisposeAsync();
+            }
+        }
+    }
+
+    private static string RepositoryRoot()
+    {
+        for (var current = new DirectoryInfo(AppContext.BaseDirectory); current is not null; current = current.Parent)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "Lex.V3.slnx")))
+            {
+                return current.FullName;
+            }
+        }
+
+        throw new DirectoryNotFoundException("Cannot locate the V3 repository root.");
+    }
+
     // ---- Nothing stored (R32), and what the planner is given (R33) ------------------------------------------------------
 
     private sealed class RecordingPlanner(IAssistantPlanner inner) : IAssistantPlanner

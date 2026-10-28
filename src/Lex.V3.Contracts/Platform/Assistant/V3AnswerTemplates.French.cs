@@ -2,7 +2,7 @@ namespace Lex.V3.Contracts.Platform.Assistant;
 
 /// <summary>
 /// The French of every answer template, keyed by template id: the finals of the independent French review of 2026-10-28
-/// (two rounds, C:\lex-v3\lanes\fr-review-assistant), applied byte for byte, and R50's French, J6's master. Kept apart
+/// (three rounds, C:\lex-v3\lanes\fr-review-assistant), applied byte for byte, and R50's French, J6's master. Kept apart
 /// from the English so the reviewed bytes are one table a later review replaces whole.
 /// </summary>
 public static partial class V3AnswerTemplates
@@ -60,6 +60,7 @@ public static partial class V3AnswerTemplates
         ["notice.assembled_by_model"] = ("Un modèle d’IA a assemblé cette réponse\u00A0: il a planifié les opérations de Lex à exécuter. Le code de Lex a vérifié ce plan, exécuté les opérations et écrit chaque phrase à partir de formules fixes\u00A0; les citations reproduisent le texte publié.", FrenchReviewed),
         ["notice.input"] = ("Ceci est un assistant automatisé qui montre des textes juridiques publiés. Il ne donne pas de conseil juridique et n’applique pas le droit à votre situation. N’écrivez ni noms, ni données de santé, ni autres données personnelles.", FrenchReviewed),
         ["notice.not_legal_advice"] = ("Lex montre le texte de la loi. Il ne dit pas ce qui s’applique à votre situation, et ce n’est pas un conseil juridique.", Master("R50 (J6)")),
+        ["notice.preview"] = ("Phase d’essai\u00A0: l’assistant n’a pas encore été examiné par un avocat ni par des annotateurs indépendants.", FrenchReviewed),
         ["plan.date_today"] = ("Votre question ne donne pas de date\u00A0: Lex a lu le droit tel qu’il se lit aujourd’hui, le {date}.", FrenchReviewed),
         ["plan.follow_up.single_article"] = ("Comme cette étape désignait un seul article, Lex a effectué l’étape suivante\u00A0:", FrenchReviewed),
         ["plan.follow_up.single_work"] = ("Comme cette étape désignait un seul acte, Lex a effectué l’étape suivante\u00A0:", FrenchReviewed),

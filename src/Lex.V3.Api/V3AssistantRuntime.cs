@@ -5,14 +5,15 @@ namespace Lex.V3.Api;
 
 /// <summary>
 /// The assistant's switch (R30), its operator off-switch, its own per-client limit, its money caps (R40, R114) and its
-/// telemetry buckets (R32). Off by default; and while src wires no planner, the switch cannot take effect at all.
+/// telemetry buckets (R32). Off by default, and on only when every condition below holds.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>On only when every condition holds</b> (<see cref="IsOn"/>): <c>LEX_V3_ASSISTANT</c> is exactly <c>on</c>;
 /// <c>LEX_V3_ASSISTANT_OFF</c>, the operator off-switch, is unset or empty (any value turns the assistant off, whatever the
-/// switch says); a planner is wired; R43's qualified person reviewed every template and a person reviewed every handoff
-/// entry; the monthly cap is not reached and no breaker has tripped. Otherwise <c>ask</c> answers the switched-off card,
+/// switch says); a planner is wired (the Azure OpenAI deployment the environment names); R43's qualified person reviewed every
+/// template and a person reviewed every handoff entry, or <c>LEX_V3_ASSISTANT_PREVIEW</c> is exactly <c>unreviewed</c> (the
+/// owner's order of 2026-10-28: a preview, said on every answer); and no breaker has tripped. Otherwise <c>ask</c> answers the switched-off card,
 /// byte for byte the card it answers today, and every other operation is untouched.
 /// </para>
 /// <para>
@@ -33,6 +34,13 @@ internal sealed class V3AssistantRuntime
     internal const string SwitchVariable = "LEX_V3_ASSISTANT";
     internal const string OffSwitchVariable = "LEX_V3_ASSISTANT_OFF";
 
+    /// <summary>
+    /// The preview acknowledgement (the owner's order of 2026-10-28, for a demonstration): exactly <c>unreviewed</c> lets the
+    /// switch take effect while R43's and R42's reviews by people are not done. Every answer then says it is a preview not yet
+    /// reviewed by a lawyer or independent annotators (<c>notice.preview</c>). Unset, the reviews remain a condition.
+    /// </summary>
+    internal const string PreviewVariable = "LEX_V3_ASSISTANT_PREVIEW";
+
     /// <summary>ask's own per-client limit, a minute (R40: below 60).</summary>
     internal const int AskPerMinute = 20;
 
@@ -42,8 +50,8 @@ internal sealed class V3AssistantRuntime
     /// <summary>The monthly spend cap, in micro-euros (20 EUR, O22's recommended answer; the owner decides it).</summary>
     internal const long MonthlyCapMicroEuros = 20_000_000;
 
-    /// <summary>How long a planner may take before the answer is the switched-off card (R40's 10 s to the full answer).</summary>
-    internal static readonly TimeSpan PlannerDeadline = TimeSpan.FromSeconds(8);
+    /// <summary>How long a planner may take before the answer is the switched-off card (about 6 s, inside R40's 10 s).</summary>
+    internal static readonly TimeSpan PlannerDeadline = TimeSpan.FromSeconds(6);
 
     private static readonly AsyncLocal<UInt128?> CurrentClient = new();
 
@@ -78,11 +86,16 @@ internal sealed class V3AssistantRuntime
     internal static V3AssistantRuntime Off { get; } = new(false, false, null);
 
     /// <summary>
-    /// The runtime a server's configuration names (Program.cs reads both variables once at start). No planner exists in src,
-    /// so the server passes none, and the assistant stays off even with the switch set.
+    /// The runtime a server's configuration names (Program.cs reads the variables once at start). The server passes the
+    /// Azure OpenAI planner only when the switch is on and the deployment is configured; otherwise none, and the assistant
+    /// stays off.
     /// </summary>
-    internal static V3AssistantRuntime FromConfiguration(string? switchValue, string? offSwitchValue, IAssistantPlanner? planner) =>
-        new(string.Equals(switchValue, "on", StringComparison.Ordinal), !string.IsNullOrEmpty(offSwitchValue), planner);
+    internal static V3AssistantRuntime FromConfiguration(string? switchValue, string? offSwitchValue, IAssistantPlanner? planner, string? previewValue = null) =>
+        new(
+            string.Equals(switchValue, "on", StringComparison.Ordinal),
+            !string.IsNullOrEmpty(offSwitchValue),
+            planner,
+            requireReviewedWording: !string.Equals(previewValue, "unreviewed", StringComparison.Ordinal));
 
     /// <summary>Whether the assistant answers. Every condition must hold (see the remarks).</summary>
     internal bool IsOn => OffBecause is null;

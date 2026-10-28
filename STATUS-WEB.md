@@ -8,8 +8,8 @@ updates this file, not STATUS.md.
 
 D91's containment ends when this slice merges after review (R30): the answer_dossier/1 slice (S4-A04) and the
 advice-boundary slice (S4-A05), checked against a written contract, `docs/ANSWER-DOSSIER-1.md`. **Ending the containment
-does not switch the assistant on.** The switch is off by default, the operator off-switch always wins, and src wires no
-planner (no model provider), so `ask` answers the switched-off card on every deployment of this code.
+does not switch the assistant on.** The switch is off by default and the operator off-switch always wins, so `ask` answers
+the switched-off card until the driver sets the switch (the owner's order below).
 - **What is built**:
   - the contract and its types (`src/Lex.V3.Contracts/Platform/Assistant/`);
   - the deterministic parsers: language, dates and ranges, R15's pronoun-blind function cues, and the R33 mask;
@@ -43,8 +43,42 @@ planner (no model provider), so `ask` answers the switched-off card on every dep
   - the handoff role `official_source` is added beside R42's four;
   - `answer_with_enrichment` is never emitted;
   - an invalid plan, a failed planner or a failed gate gets the switched-off card.
-- **French**: an independent AI reviewer checked every French template and panel string in two rounds. 33 of the 85 entries
-  changed in round one; round two approved the seven new EU forms. The finals were applied byte for byte. This is not R43's
+- **The owner's order of 2026-10-28, recorded by the driver: the assistant must work end to end for a public
+  demonstration.** It ships switched off, and the driver switches it on once the machine gates pass on the real model. What
+  this adds:
+  - `AzureOpenAiAssistantPlanner`, over an Azure OpenAI chat-completions deployment with strict structured outputs. The plan's
+    wire schema is generated from the grammar, and the validator still judges, with no repair.
+    - Its configuration comes from the environment only (`LEX_ASSISTANT_ENDPOINT`, `_DEPLOYMENT`, `_API_VERSION`, and
+      `_KEY` from a Container Apps secret). With no endpoint there is no planner.
+    - It sends only the masked question and the opaque references.
+    - Its deadline is about 6 s, and any failure gives the switched-off card.
+    - The response's `usage` is counted toward the caps.
+    - Its system prompt is a versioned file (`src/Lex.V3.Api/assistant-planner-prompt.md`).
+  - `LEX_V3_ASSISTANT_PREVIEW=unreviewed`, the explicit acknowledgement that lets the switch take effect while the people's
+    reviews are not done. While they are not done, every answer and the panel carry "Preview: not yet reviewed by a lawyer or
+    by independent annotators." (French: "Phase d'essai : l'assistant n'a pas encore été examiné…", reviewed).
+  - The opt-in live gates (`LEX_ASSISTANT_GATES_LIVE=1`, never in CI): five runs per drafted case, with a report outside
+    the repository.
+  - Draft processor sentences, for the panel under R44's notice and for the privacy notice, shown only when the assistant is
+    switched on.
+  - `PublicRequestRecordingTests` now pins the planner as the public process's one network client, in its one file.
+- **For the owner and the driver before the switch is set** (the French reviewer raised 1 and 2; they are the owner's to
+  decide, and the code does not decide them):
+  1. Switching on with the preview line set means switching on before R30's D4 gates, R33's legal read, R36's avocat and
+     second annotator, and R43's qualified review. The owner's order supersedes those for the demonstration; the record
+     should say so.
+  2. Microsoft's abuse monitoring "may keep data up to 30 days unless modified abuse monitoring applies" does not meet R33's
+     "no retention". **TODO (driver):** confirm the deployment's actual case (modified abuse monitoring approved or not) and
+     state only that case.
+  3. **TODO (driver):** name the contracting Microsoft entity under the data processing terms as the processor.
+  4. **TODO (driver):** set the token prices from the deployment's price list. The defaults are 5 and 20 EUR per million.
+  5. **TODO (driver):** once the assistant is on, the privacy page's sentence that Lex holds nothing it could show, correct
+     or erase needs a caveat for what the processor may keep.
+  6. **TODO (driver):** the panel is built but no page mounts it. Over REST and MCP, `ask` works end to end once the switch
+     is set; a page that shows the panel is the next web step.
+- **French**: an independent AI reviewer checked every French template and panel string in four rounds. 33 of the 85 entries
+  changed in round one; round two approved the seven new EU forms; rounds three and four reviewed the preview and processor
+  sentences. The finals were applied byte for byte. This is not R43's
   qualified-person review, and the code says so (`QualifiedReviewComplete` is false).
 - **What remains for people and the owner before switch-on** (no agent can do these):
   1. A written legal read: GDPR arts. 6 and 9, AI Act art. 50(1) (R33).

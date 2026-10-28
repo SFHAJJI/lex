@@ -8,8 +8,10 @@
 //
 // The panel renders an answer_dossier/1 and adds nothing to it. Every sentence of an answer arrives as text the server
 // filled from its closed template set, as a verbatim quotation or as a span of the question; this module holds only the
-// panel's own words (its heading, its field, its two announcements) in French and English, and the R44 notice, which is the
-// server's `notice.input` template word for word (a test reads both).
+// panel's own words (its heading, its field, its two announcements) in French and English, the R44 notice, which is the
+// server's `notice.input` template word for word (a test reads both), the preview line (`notice.preview`, word for word) and
+// the processor sentence under the notice. TODO (driver): confirm Microsoft's terms for the deployment (see
+// ASSISTANT_PRIVACY_DRAFT) before the switch is set.
 
 export const ASSISTANT_PANEL = 'hidden';
 
@@ -36,6 +38,9 @@ export const ASSISTANT_PANEL_COPY = Object.freeze({
     heading: 'Assistant',
     notice:
       'This is an automated assistant that shows published legal texts. It does not give legal advice or apply the law to your situation. Do not type names, health details or other personal details.',
+    preview: 'Preview: not yet reviewed by a lawyer or by independent annotators.',
+    processor:
+      'Your question, with the e-mail addresses, phone numbers, bank account numbers and identity numbers that Lex\'s code recognises removed, is sent to Microsoft\'s Azure OpenAI service (EU data zone), which plans which of Lex\'s operations to run; nothing else about you is sent. Microsoft does not use it to train models; for abuse monitoring, Microsoft may keep it for up to 30 days, unless modified abuse monitoring applies. Lex keeps nothing.',
     inputLabel: 'Your question',
     submit: 'Ask',
     contextLabel: 'Kept from your last answer',
@@ -52,6 +57,9 @@ export const ASSISTANT_PANEL_COPY = Object.freeze({
     heading: 'Assistant',
     notice:
       'Ceci est un assistant automatisé qui montre des textes juridiques publiés. Il ne donne pas de conseil juridique et n’applique pas le droit à votre situation. N’écrivez ni noms, ni données de santé, ni autres données personnelles.',
+    preview: 'Phase d’essai : l’assistant n’a pas encore été examiné par un avocat ni par des annotateurs indépendants.',
+    processor:
+      'Votre question, dont sont retirés les adresses électroniques, numéros de téléphone, numéros de compte bancaire et numéros d’identification que reconnaît le code de Lex, est envoyée au service Azure OpenAI de Microsoft (zone de données de l’UE), qui planifie les opérations de Lex à exécuter ; rien d’autre vous concernant n’est envoyé. Microsoft ne l’utilise pas pour entraîner des modèles ; aux fins de sa surveillance des abus, Microsoft peut la conserver jusqu’à 30 jours, sauf si la surveillance des abus modifiée s’applique. Lex ne conserve rien.',
     inputLabel: 'Votre question',
     submit: 'Demander',
     contextLabel: 'Repris de la dernière réponse',
@@ -63,6 +71,30 @@ export const ASSISTANT_PANEL_COPY = Object.freeze({
     detailsSummary: 'Éléments de vérification : empreintes et trace',
     announceVerdict: 'Réponse : {label}.',
     announceComplete: 'La réponse est complète.',
+  }),
+});
+
+/**
+ * A DRAFT section of the privacy notice for when the assistant is switched on (the owner's order of 2026-10-28), in French
+ * and English, reviewed by the independent AI reviewer. No page renders it: it joins the privacy notice only in the release
+ * that switches the assistant on, after the driver's TODOs are settled:
+ * - TODO (driver): name the contracting Microsoft entity under the data processing terms as the processor (R33);
+ * - TODO (driver): confirm the deployment's retention case (modified abuse monitoring approved or not) and state only that
+ *   case; R33 asks for no retention;
+ * - TODO (driver): add to the privacy page's sentence that Lex holds nothing it could show, correct or erase, a caveat for
+ *   what the processor may keep.
+ * These are public legal claims, and the owner's.
+ */
+export const ASSISTANT_PRIVACY_DRAFT = Object.freeze({
+  en: Object.freeze({
+    heading: 'The assistant',
+    body:
+      'When the assistant is switched on, the question you type in it is sent to Microsoft\'s Azure OpenAI service (EU data zone), which acts as a processor, after Lex\'s code removes the e-mail addresses, phone numbers, bank account numbers and identity numbers it recognises. This processing has one purpose: to plan which of Lex\'s operations answer the question; the model writes no sentence of the answer. Nothing else is sent: not your IP address, your browser\'s user agent, any cookie or your earlier questions. Lex keeps neither the question nor the answer. Microsoft does not use prompts or answers to train models; for abuse monitoring, Microsoft may keep them for up to 30 days, unless modified abuse monitoring applies. You keep your rights under the GDPR, including the right to complain to the CNPD named on this page.',
+  }),
+  fr: Object.freeze({
+    heading: 'L’assistant',
+    body:
+      'Lorsque l’assistant est activé, la question que vous y saisissez est envoyée au service Azure OpenAI de Microsoft (zone de données de l’UE), qui agit en qualité de sous-traitant, après que le code de Lex en a retiré les adresses électroniques, numéros de téléphone, numéros de compte bancaire et numéros d’identification qu’il reconnaît. Ce traitement a pour seule finalité de planifier les opérations de Lex qui répondent à la question ; le modèle n’écrit aucune phrase de la réponse. Rien d’autre n’est envoyé : ni votre adresse IP, ni l’agent utilisateur de votre navigateur, ni aucun cookie, ni vos questions précédentes. Lex ne conserve ni la question ni la réponse. Microsoft n’utilise ni les invites ni les réponses pour entraîner des modèles ; aux fins de sa surveillance des abus, Microsoft peut les conserver jusqu’à 30 jours, sauf si la surveillance des abus modifiée s’applique. Vous conservez les droits que vous tenez du RGPD, notamment celui d’introduire une réclamation auprès de la CNPD, nommée sur cette page.',
   }),
 });
 

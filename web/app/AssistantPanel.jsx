@@ -53,12 +53,14 @@ function Block({ block }) {
 }
 
 /**
- * The panel: the R44 notice above the field, the field, the kept context chips, and, once an answer arrives, its plan first,
+ * The panel: the R44 notice above the field, with the preview line while the people's reviews are not done and the
+ * processor sentence (the owner's order of 2026-10-28; shown only where the panel is, which is only when the assistant is
+ * switched on), the field, the kept context chips, and, once an answer arrives, its plan first,
  * then its label, its notices and its parts. `phase` is 'idle', 'verdict' or 'complete', and says which announcement the
  * polite region holds. Nothing here asks the server; the page that will mount the panel, once the assistant is switched on,
  * sends `followUpRequest(question, chips)` and nothing else.
  */
-export function AssistantPanel({ locale, dossier = null, phase = 'idle', chips = [], onSubmit = () => {}, onRemoveChip = () => {} }) {
+export function AssistantPanel({ locale, dossier = null, phase = 'idle', chips = [], preview = true, onSubmit = () => {}, onRemoveChip = () => {} }) {
   const copy = panelCopy(locale);
   const field = useRef(null);
   const view = dossier === null ? null : validateDossier(dossier);
@@ -68,6 +70,8 @@ export function AssistantPanel({ locale, dossier = null, phase = 'idle', chips =
     <section className="assistant-panel" aria-labelledby="assistant-heading" {...{ [ASSISTANT_PANEL_MARKER]: 'hidden' }}>
       <h2 id="assistant-heading">{copy.heading}</h2>
       <p className="assistant-notice">{copy.notice}</p>
+      {preview ? <p className="assistant-preview">{copy.preview}</p> : null}
+      <p className="assistant-processor">{copy.processor}</p>
       <form
         className="assistant-form"
         onSubmit={(event) => {

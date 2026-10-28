@@ -343,6 +343,7 @@ public static partial class V3AnswerTemplates
     public const string PlanTimelineEu = "plan.step.timeline_eu";
     public const string RefusalNoVersionForDateEu = "refusal.no_version_for_date_eu";
     public const string ActionReadStateEu = "action.read_state_eu";
+    public const string NoticePreview = "notice.preview";
 
     private static readonly V3TemplateProvenance EnglishDraft = new(null, AgentDraft, null, null, false);
 
@@ -442,6 +443,8 @@ public static partial class V3AnswerTemplates
         (PlanTimelineEu, "Listed the wordings of {identifier} that Lex holds.", EnglishDraft, [("identifier", V3AnswerSlotKind.IdentifierText)]),
         (RefusalNoVersionForDateEu, "Lex holds no wording of {work} for {date}. The absence of a held wording is not evidence that the law was unchanged.", EnglishDraft, [("work", V3AnswerSlotKind.IdentifierText), ("date", V3AnswerSlotKind.CalendarDate)]),
         (ActionReadStateEu, "Read the wording of {work} dated {date}", EnglishDraft, [("work", V3AnswerSlotKind.IdentifierText), ("date", V3AnswerSlotKind.CalendarDate)]),
+        // The preview line (the owner's order of 2026-10-28): on every answer while the people's reviews are not done.
+        (NoticePreview, "Preview: not yet reviewed by a lawyer or by independent annotators.", EnglishDraft, []),
     ];
 
     private static readonly Dictionary<(string, V3AnswerLocale), V3AnswerTemplate> ByIdValue = BuildAll();
@@ -465,6 +468,12 @@ public static partial class V3AnswerTemplates
     /// take effect while it is false (the runtime asks it).
     /// </summary>
     public static bool QualifiedReviewComplete => All.All(static template => template.Provenance.QualifiedPersonReview);
+
+    /// <summary>
+    /// Whether an answer is a preview: the people's reviews (R43's of the templates, R42's of the handoff entries) are not done.
+    /// Every answer then opens with <c>notice.preview</c>.
+    /// </summary>
+    public static bool Preview => !QualifiedReviewComplete || !V3HandoffRegistry.ReviewedByPerson;
 
     public static bool IsDefined(string? templateId) =>
         !string.IsNullOrWhiteSpace(templateId) && ByIdValue.ContainsKey((templateId, V3AnswerLocale.En));

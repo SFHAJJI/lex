@@ -17,6 +17,7 @@ import {
   ASSISTANT_PANEL,
   ASSISTANT_PANEL_COPY,
   ASSISTANT_PANEL_MARKER,
+  ASSISTANT_PRIVACY_DRAFT,
   MAXIMUM_CONTEXT_CHIPS,
   PRESENTATION_RESULTS,
   VERDICTS,
@@ -105,6 +106,9 @@ test('the panel draws the plan first, two polite announcements and no alert, and
   assert.ok(markup.includes(`${ASSISTANT_PANEL_MARKER}="hidden"`));
   assert.ok(markup.indexOf('assistant-notice') < markup.indexOf('assistant-question'), 'R44: the notice sits above the input');
   assert.ok(markup.includes(ASSISTANT_PANEL_COPY.fr.notice));
+  assert.ok(markup.indexOf('assistant-preview') > markup.indexOf('assistant-notice') && markup.indexOf('assistant-preview') < markup.indexOf('assistant-question'),
+    'the preview line sits with the notice, above the field');
+  assert.ok(markup.includes(ASSISTANT_PANEL_COPY.fr.preview) && markup.includes(ASSISTANT_PANEL_COPY.fr.processor));
   assert.ok(markup.indexOf('assistant-plan') < markup.indexOf('assistant-label'), 'R45(c): the validated plan is shown first');
   assert.ok(markup.indexOf('assistant-plan') < markup.indexOf('assistant-quote'));
   assert.match(markup, /role="status" aria-live="polite" aria-atomic="true">Réponse : D’après le texte officiel\.</, 'one announcement at the verdict');
@@ -147,10 +151,17 @@ test('follow-ups carry at most two typed chips from the last trace and never an 
   assert.deepEqual(announcements(view, 'fr'), ['Réponse : D’après le texte officiel.', 'La réponse est complète.']);
 });
 
+test('the privacy draft is rendered by no page until the switch-on release', async () => {
+  assert.deepEqual(Object.keys(ASSISTANT_PRIVACY_DRAFT), ['en', 'fr']);
+  assert.ok(ASSISTANT_PRIVACY_DRAFT.en.body.includes('processor') && ASSISTANT_PRIVACY_DRAFT.fr.body.includes('sous-traitant'));
+  const legal = await readFile(join(web, 'scripts', 'legal-pages.mjs'), 'utf8');
+  assert.ok(!legal.includes('ASSISTANT_PRIVACY_DRAFT'), 'the privacy notice does not carry the draft while the assistant is off');
+});
+
 test('the panel holds French and English only, and its French keeps the no-break spaces', () => {
   assert.deepEqual(Object.keys(ASSISTANT_PANEL_COPY), ['en', 'fr']);
   assert.deepEqual(Object.keys(ASSISTANT_PANEL_COPY.fr), Object.keys(ASSISTANT_PANEL_COPY.en));
-  for (const [key, text] of Object.entries(ASSISTANT_PANEL_COPY.fr)) {
+  for (const [key, text] of [...Object.entries(ASSISTANT_PANEL_COPY.fr), ...Object.entries(ASSISTANT_PRIVACY_DRAFT.fr)]) {
     assert.doesNotMatch(text, / [:;?!»]|« /, `fr.${key}: a no-break space before : ; ? ! and inside guillemets`);
     assert.doesNotMatch(text, /'/, `fr.${key}: the French apostrophe is U+2019`);
   }

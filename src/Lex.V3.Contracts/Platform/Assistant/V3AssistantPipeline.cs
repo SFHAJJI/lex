@@ -681,11 +681,15 @@ public static partial class V3AssistantPipeline
             V3AssistantVerdict.Split => V3AnswerTemplates.VerdictSplit,
             _ => throw new InvalidOperationException("answer_with_enrichment is never emitted."),
         }, locale);
-        var notices = new[]
+        var notices = new List<V3AnswerClaim>();
+        if (V3AnswerTemplates.Preview)
         {
-            V3AnswerClaim.Bind(V3AnswerTemplates.NoticeAssembledByModel, locale),
-            V3AnswerClaim.Bind(V3AnswerTemplates.NoticeNotLegalAdvice, locale),
-        };
+            // The owner's order of 2026-10-28: while the people's reviews are not done, every answer says it is a preview.
+            notices.Add(V3AnswerClaim.Bind(V3AnswerTemplates.NoticePreview, locale));
+        }
+
+        notices.Add(V3AnswerClaim.Bind(V3AnswerTemplates.NoticeAssembledByModel, locale));
+        notices.Add(V3AnswerClaim.Bind(V3AnswerTemplates.NoticeNotLegalAdvice, locale));
 
         return new V3AnswerDossier(overall, locale, label.Claim, notices, PlanLines(plan, question, locale, executed, environment.Today), parts, trace);
     }

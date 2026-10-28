@@ -149,7 +149,7 @@ public sealed class AssistantPipelineTests
         Assert.AreEqual(V3AssistantVerdict.Answer, dossier.Verdict);
         Assert.AreEqual(V3AnswerLocale.Fr, dossier.Locale);
         Assert.AreEqual(V3AnswerTemplates.VerdictAnswer, dossier.Label.TemplateId);
-        CollectionAssert.AreEqual(new[] { V3AnswerTemplates.NoticeAssembledByModel, V3AnswerTemplates.NoticeNotLegalAdvice }, dossier.Notices.Select(static notice => notice.TemplateId).ToArray(), "R33 and R50 on every answer");
+        CollectionAssert.AreEqual(new[] { V3AnswerTemplates.NoticePreview, V3AnswerTemplates.NoticeAssembledByModel, V3AnswerTemplates.NoticeNotLegalAdvice }, dossier.Notices.Select(static notice => notice.TemplateId).ToArray(), "the preview line while the people's reviews are not done, then R33 and R50, on every answer");
         CollectionAssert.AreEqual(
             new[] { V3AnswerTemplates.PlanHeading, V3AnswerTemplates.PlanDateToday, V3AnswerTemplates.PlanSearchDated, V3AnswerTemplates.PlanFollowUpSingleArticle, V3AnswerTemplates.PlanEvidenceBundleArticle },
             dossier.PlanLines.Select(static line => line.TemplateId).ToArray(), "the validated plan, with today said aloud (R13), never a silent date");

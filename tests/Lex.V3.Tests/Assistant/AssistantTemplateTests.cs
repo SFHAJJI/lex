@@ -21,7 +21,7 @@ public sealed class AssistantTemplateTests
     [TestMethod]
     public void EveryTemplateHasItsFrenchAndItsEnglishAndNothingElse()
     {
-        Assert.AreEqual(79, V3AnswerTemplates.Ids.Count, "the set's size; a new sentence is a reviewed change to the set");
+        Assert.AreEqual(80, V3AnswerTemplates.Ids.Count, "the set's size; a new sentence is a reviewed change to the set");
         Assert.AreEqual(V3AnswerTemplates.Ids.Count * 2, V3AnswerTemplates.All.Count);
         foreach (var id in V3AnswerTemplates.Ids)
         {
@@ -85,6 +85,8 @@ public sealed class AssistantTemplateTests
         {
             var text = V3AnswerTemplates.Get(V3AnswerTemplates.NoticeInput, locale).Text;
             StringAssert.Contains(panel, "'" + text + "'", $"the panel's {locale} notice is notice.input's");
+            var preview = V3AnswerTemplates.Get(V3AnswerTemplates.NoticePreview, locale).Text;
+            StringAssert.Contains(panel, "preview: '" + preview + "'", $"the panel's {locale} preview line is notice.preview's");
         }
     }
 
@@ -112,6 +114,8 @@ public sealed class AssistantTemplateTests
     public void ProvenanceClaimsNoReviewNobodyDid()
     {
         Assert.IsFalse(V3AnswerTemplates.QualifiedReviewComplete, "no template has had R43's qualified-person review");
+        Assert.IsTrue(V3AnswerTemplates.Preview, "so every answer is a preview, and says so");
+        Assert.AreEqual("Preview: not yet reviewed by a lawyer or by independent annotators.", V3AnswerTemplates.Get(V3AnswerTemplates.NoticePreview, V3AnswerLocale.En).Text);
         foreach (var template in V3AnswerTemplates.All)
         {
             var provenance = template.Provenance;

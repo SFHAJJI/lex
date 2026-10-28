@@ -4,9 +4,13 @@ This is the contract of record for the assistant's answer, `lex-v3-answer-dossie
 document S4-A04 and S4-A05 are checked against (R30). The code that keeps it lives in
 `src/Lex.V3.Contracts/Platform/Assistant/` and `src/Lex.V3.Api/V3CorpusMount.Assistant.cs`; the tests named in §10 hold it.
 
-**The assistant is switched off.** `ask` answers the typed presentation result `assistant_v3_unavailable` on every
-deployment of this code. Ending D91's containment does not switch the assistant on (R30): switching on is a configuration
-switch, off by default, with an operator off-switch, and it cannot take effect until the people's work of §11 is done.
+**The assistant ships switched off.** `ask` answers the typed presentation result `assistant_v3_unavailable` until the
+switch is set. Ending D91's containment does not switch the assistant on (R30): switching on is a configuration switch,
+off by default, with an operator off-switch.
+
+By the owner's order of 2026-10-28, for a public demonstration, the driver may switch the assistant on once the machine
+gates pass on the real model (§12). The people's work of §11 is not done then. So the switch needs an explicit preview
+acknowledgement, and every answer and the panel say "Preview: not yet reviewed by a lawyer or by independent annotators."
 
 ## 1. What the assistant is
 
@@ -71,7 +75,8 @@ registry, and the base answers are recorded again on Linux.
    ...) and ranges (`r1.from`, `r1.to`), and the function cues of the advice boundary (§6).
 4. **The planner** (`IAssistantPlanner`) is the only model seam. It is given the masked question, the answer locale, the
    opaque references, the search languages and the operation list. It is given nothing else: no address, user agent,
-   cookie or history. No planner exists in `src`; a deterministic test planner lives in the tests.
+   cookie or history. The one planner in `src` calls an Azure OpenAI deployment the environment names (§12). Without
+   that configuration there is no planner. A deterministic test planner lives in the tests.
 5. **The validator** refuses every plan that is not typed, bound and within the caps (§5). A refused plan gets the
    switched-off card.
 6. **Execution**, through the existing operations only. Code builds each request, validates it against its reviewed
@@ -230,12 +235,14 @@ Provenance:
 - **On only when every condition holds:**
   - `LEX_V3_ASSISTANT` is exactly `on`;
   - `LEX_V3_ASSISTANT_OFF`, the operator off-switch, is unset or empty (any value turns it off);
-  - a planner is wired;
-  - every template has R43's qualified-person review;
-  - every handoff entry is reviewed by a person;
+  - a planner is wired: the Azure OpenAI deployment of §12, built only when the switch is on and the deployment is
+    configured;
+  - either every template has R43's qualified-person review and every handoff entry is reviewed by a person, or
+    `LEX_V3_ASSISTANT_PREVIEW` is exactly `unreviewed` (the owner's order of 2026-10-28; every answer then carries
+    `notice.preview`);
   - no breaker has tripped.
 
-  Both variables are read once at start. No deployment of this code meets the conditions.
+  The variables are read once at start. A deployment that sets none of them keeps the assistant off.
 - **ask's own per-client limit:** 20 a minute (below 60, R40). It is keyed by the keyed hash the API's limiter already
   holds, never by an address, and counts only while the switch is on.
 - **Money:**
@@ -245,7 +252,7 @@ Provenance:
 
   At the cap, `ask` answers the switched-off card and search keeps working. The budget is in memory; the provider's own
   hard cap is the backstop and the owner's to set.
-- **Deadline:** a planner gets 8 s.
+- **Deadline:** a planner gets about 6 s.
 - **Telemetry:** in-memory counters keyed by closed vocabularies only (outcome reason, verdict, refusal code, locale,
   latency bucket, error bucket), with no sink (R32).
 
@@ -285,6 +292,50 @@ The machine gates' harness, in the tests, checks again with code of its own:
 
 Each gate has a deliberate-failure control. The harness runs over a small replay set that is **drafted by an agent; not D4
 or D1; not a switch-on gate** (R36, R37 and R39 need people's sets).
+
+## 12. The planner over Azure OpenAI (the owner's order of 2026-10-28)
+
+`AzureOpenAiAssistantPlanner` (`src/Lex.V3.Api`) is the planner for the demonstration.
+
+**The call.** It sends one chat-completions request to the deployment the environment names. Strict structured outputs hold
+the answer to `V3AssistantPlanWire.Schema()`, which is generated from the grammar of §5. Arguments are written as an array of
+`{name, source}` there, because strict mode cannot say an optional member. `V3AssistantPlanWire.ToPlanJson` maps that array
+to the grammar's object and changes nothing else. The validator then judges the result, with no repair.
+
+**Configuration**, from the environment only:
+- `LEX_ASSISTANT_ENDPOINT` (`https://<resource>.openai.azure.com`), `LEX_ASSISTANT_DEPLOYMENT` and
+  `LEX_ASSISTANT_API_VERSION`;
+- the key, `LEX_ASSISTANT_KEY`, from a Container Apps secret, which is never logged, echoed or written;
+- `LEX_ASSISTANT_EUR_PER_MILLION_INPUT` and `LEX_ASSISTANT_EUR_PER_MILLION_OUTPUT`, the token prices. The defaults are 5 and
+  20 EUR, a driver default. **TODO (driver):** set both from the deployment's price list.
+
+**What is sent** (R33): the masked question, the answer locale, the opaque references, the search languages, the operation
+list, and the versioned system prompt `assistant-planner-prompt.md` (`lex-v3-assistant-planner-prompt/1`). The prompt
+explains the operations and the verdict vocabulary. It never asks for visible text. Nothing of the request's headers,
+address, agent or history is sent: the planner is never handed them. This is the public process's one network client, and
+`PublicRequestRecordingTests` pins it to that file.
+
+**Failure:** a timeout of about 6 s, an HTTP error (a 429 included), a refusal by the model, or an answer cut short or
+filtered. Each gives the switched-off card, and search keeps working.
+
+**Cost:** the response's `usage` at the configured prices, counted toward the per-answer ceiling and the monthly cap.
+
+**The live gates:** `V3AssistantMountTests.TheGatesOverTheRealPlannerWhenAskedTo` runs only when
+`LEX_ASSISTANT_GATES_LIVE=1` and the deployment is configured, and never in CI.
+- It runs each drafted case five times (R40).
+- It reports quote fidelity, non-template sentences, trace replay, latency p95 and cost per ask.
+- The report goes to `LEX_ASSISTANT_GATES_REPORT` or the temporary folder, never into the repository.
+- It runs over `LEX_ASSISTANT_GATES_MOUNT` when that is set, else over the fixture.
+
+**The processor sentences** (drafts, shown only when the assistant is switched on):
+- the panel's line under R44's notice (`processor` in `web/scripts/assistant-panel.mjs`);
+- the privacy notice's section (`ASSISTANT_PRIVACY_DRAFT`, rendered by no page yet).
+
+They name Microsoft Azure OpenAI, in the EU data zone, as the processor and say what it does. They also say, as the driver
+gave Microsoft's terms: prompts are not used for training, and abuse monitoring may keep data for up to 30 days unless
+modified abuse monitoring applies. **TODO (driver): confirm these terms against the deployment's actual agreement and data
+zone, and whether modified abuse monitoring was approved, before the switch is set.** These are public legal claims, and the
+owner's.
 
 ## 11. What switching on needs, and who does it
 
