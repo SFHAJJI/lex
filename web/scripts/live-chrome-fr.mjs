@@ -427,6 +427,14 @@
 // données" of an act, a record of the table of modifications is "un enregistrement", an act beside its date is "acte publié le",
 // "Déduit de la relation directe de l’éditeur" for R29's label, "après l’acte modificatif" (never "après lui"), "Ce bandeau nomme
 // l’acte" (G20), and a list joined by " ; " ends with a full stop before the next clause (G28, new: a list's end).
+// R72 after the review of #1009 (held versions, and the versions of acts the publisher records as integrating the changes): 8
+// forms, `dossier.amendedAfterHeading`, `…One`, `…Many`, `…Latest`, `…LatestIntegrating`, `…NoConsolidation`, `…Integrated` and
+// `…Undecided`, reviewed by an independent reviewer under the same delegation in the addendum of 2026-10-28 "R72 held versions
+// and integrating acts" (3 approved as drafted, 5 changed in French, the English of 4 changed): the specification's "this law"
+// is said "this act" / "cet acte", since the banner stands on every class (F12); "une version consolidée détenue par Lex" / "que
+// détient Lex"; "un autre acte dans lequel, selon l’éditeur, des modifications apportées à cet acte ont été intégrées" (never
+// "dont l’éditeur indique qu’il intègre", G20); the heading "Modifié, sans version consolidée détenue par Lex et publiée depuis"
+// (G29, new: two participial phrases on one noun take "et").
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
 
@@ -634,13 +642,13 @@ export const LIVE_CHROME_FR = Object.freeze({
     relationsNotHeldFor: 'Ce site ne détient pas toutes les données de l’éditeur pour : {groups}.',
     relationsNotSeen: 'Ce site a lu les relations que l’éditeur enregistre dans les données des codes, des lois et des règlements grand-ducaux ; une relation enregistrée dans les données d’un acte d’un autre type n’a pas été lue : un acte d’un autre type qui modifie, abroge ou rectifie cet acte, ou que cet acte modifie temporairement, n’est donc pas listé.',
     relationsNotSeenClasses: 'Ce site a lu les relations que l’éditeur enregistre dans les données des actes de ces seules catégories d’identifiants : {classes}. Une relation enregistrée dans les données d’un acte d’une autre catégorie n’a pas été lue : un acte d’une autre catégorie qui modifie, abroge ou rectifie cet acte, ou que cet acte modifie temporairement, n’est donc pas listé.',
-    amendedAfterHeading: 'Modifié, sans version consolidée détenue par Lex publiée depuis',
-    amendedAfterOne: 'Un acte publié le {date} ({act}) modifie cette loi ; aucune version consolidée détenue par Lex n’a été publiée après l’acte modificatif.',
-    amendedAfterMany: 'Ces actes modifient cette loi ; aucune version consolidée détenue par Lex n’a été publiée après eux :',
+    amendedAfterHeading: 'Modifié, sans version consolidée détenue par Lex et publiée depuis',
+    amendedAfterOne: 'Un acte publié le {date} ({act}) modifie cet acte ; aucune version consolidée détenue par Lex n’a été publiée après l’acte modificatif.',
+    amendedAfterMany: 'Ces actes modifient cet acte ; aucune version consolidée détenue par Lex n’a été publiée après eux :',
     amendedAfterAct: '{act}, acte publié le {date} (éditeur)',
     amendedAfterLatest: 'La dernière version consolidée que détient Lex, {version}, a été publiée le {date}.',
-    amendedAfterLatestIntegrating: 'La dernière version consolidée que détient Lex, {version}, est celle d’un acte dont l’éditeur indique qu’il intègre les modifications apportées à cette loi ; elle a été publiée le {date}.',
-    amendedAfterNoConsolidation: 'Lex ne détient aucune version consolidée de cette loi, ni d’un acte dont l’éditeur indique qu’il intègre les modifications qui lui sont apportées.',
+    amendedAfterLatestIntegrating: 'La dernière version consolidée que détient Lex, {version}, a été publiée le {date} ; c’est une version d’un autre acte dans lequel, selon l’éditeur, des modifications apportées à cet acte ont été intégrées.',
+    amendedAfterNoConsolidation: 'Lex ne détient aucune version consolidée de cet acte, ni d’un autre acte dans lequel, selon l’éditeur, des modifications apportées à cet acte ont été intégrées.',
     amendedAfterIntegrated: 'Les actes modificatifs que l’éditeur indique comme intégrés dans une version consolidée détenue par Lex ne sont pas nommés ici : {count}.',
     amendedAfterUndecided: 'Les actes modificatifs pour lesquels le tableau des modifications de l’éditeur nomme plus d’une version consolidée comme intégrant la modification ne sont pas nommés ici : {count}.',
     amendedAfterNote: 'Ceci est déduit de la relation directe de l’éditeur : les données de chaque acte nommé indiquent qu’il modifie cet acte. Ce bandeau nomme l’acte, et non ce que l’acte change. Un acte modificatif qui n’est ni un code, ni une loi, ni un règlement grand-ducal n’est pas vu.',

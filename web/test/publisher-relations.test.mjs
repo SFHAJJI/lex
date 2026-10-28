@@ -114,7 +114,7 @@ function withRelations({
     held_versions: latest === null ? 0 : 1, held_versions_without_publication_date: 0,
     amending_acts: 2 + integrated + undecided, amending_acts_without_publication_date: 0,
     amending_acts_integrated: integrated, amending_acts_integration_undecided: undecided,
-    notice: notice ? "An act published on 2016-06-03 (…) amends this law; no consolidated version Lex holds was published after it." : null,
+    notice: notice ? "An act published on 2016-06-03 (…) amends this act; no consolidated version Lex holds was published after it." : null,
     rule: "R72: an act the publisher records as modifying this act",
   };
   assert.ok(state, "the census's dossier holds a state");
@@ -163,7 +163,7 @@ test("R72's banner says an act published after the latest consolidated version L
   assert.ok(at > 0 && at < markup.indexOf("<section data-relations"), "the banner is above the dossier's body");
   const banner = text(markup.slice(at, markup.indexOf("</aside>", at)));
   assert.ok(banner.includes(LIVE_CHROME.en.dossier.amendedAfterHeading));
-  assert.ok(banner.includes("An act published on 2016-06-03 ( Loi synthétique du 1er juin 2016 ) amends this law; no consolidated version Lex holds was published after it."), banner);
+  assert.ok(banner.includes("An act published on 2016-06-03 ( Loi synthétique du 1er juin 2016 ) amends this act; no consolidated version Lex holds was published after it."), banner);
   assert.ok(markup.includes(`<p data-amended-after-latest="own">The latest consolidated version Lex holds, <a href="/en/lu-legilux/${sample.result.value.work_key}/2015-01-01--${"c".repeat(64)}/fra"><code>/lu-legilux/${sample.result.value.work_key}/2015-01-01</code></a>, was published on <time dateTime="2015-01-10">2015-01-10</time>.</p>`), markup);
   assert.ok(banner.includes("This is derived from the publisher's forward relation"));
   assert.ok(banner.includes("An amending act other than a code, a law or a grand-ducal regulation is not seen."));
@@ -172,18 +172,18 @@ test("R72's banner says an act published after the latest consolidated version L
 
   // Two acts: listed, each with its date.
   const two = text(view(dossierOutcome({ state: "success", envelope: withRelations({ acts: 2 }) })));
-  assert.ok(two.includes("These acts amend this law; no consolidated version Lex holds was published after them:"));
+  assert.ok(two.includes("These acts amend this act; no consolidated version Lex holds was published after them:"));
   assert.ok(two.includes("published on 2017-03-02 (publisher)"));
 
   // An act of which Lex holds no consolidated version: the notice says so, with no date for one.
   const never = view(dossierOutcome({ state: "success", envelope: withRelations({ consolidated: false }) }));
-  assert.ok(text(never).includes("Lex holds no consolidated version of this law, or of an act the publisher records as integrating the changes made to it."), text(never));
+  assert.ok(text(never).includes("Lex holds no consolidated version of this act, or of another act the publisher records as integrating changes made to it."), text(never));
   assert.ok(never.includes('data-amended-after-latest="none"'));
   assert.ok(!text(never).includes("The latest consolidated version Lex holds"));
 
   // The latest version Lex holds is a code's that the publisher records as integrating the act's changes: named as that act's.
   const code = view(dossierOutcome({ state: "success", envelope: withRelations({ consolidated: "integrating", integrated: 3, undecided: 1 }) }));
-  assert.ok(code.includes(`<p data-amended-after-latest="integrating">The latest consolidated version Lex holds, <a href="/en/lu-legilux/code-travail/2015-01-01--${"c".repeat(64)}/fra"><code>/lu-legilux/code-travail/2015-01-01</code></a>, is of an act the publisher records as integrating the changes made to this law; it was published on <time dateTime="2015-01-10">2015-01-10</time>.</p>`), code);
+  assert.ok(code.includes(`<p data-amended-after-latest="integrating">The latest consolidated version Lex holds, <a href="/en/lu-legilux/code-travail/2015-01-01--${"c".repeat(64)}/fra"><code>/lu-legilux/code-travail/2015-01-01</code></a>, was published on <time dateTime="2015-01-10">2015-01-10</time>; it is a version of another act, one the publisher records as integrating changes made to this act.</p>`), code);
   // The amending acts not named: integrated in a held version, or naming more than one version as integrating them.
   assert.ok(code.includes('<p data-amended-after-integrated="3">Amending acts the publisher records as integrated in a consolidated version Lex holds are not named here: 3.</p>'), code);
   assert.ok(code.includes('<p data-amended-after-undecided="1">Amending acts for which the publisher&#x27;s table of modifications names more than one consolidated version as integrating the change are not named here: 1.</p>'), code);
@@ -230,6 +230,14 @@ test("the forms the French review replaced are said nowhere", () => {
   for (const replaced of ["Chaque donnée", "une donnée enregistrée", "et non sur celui-ci", "un enregistrement qui nomme", "}, publié le",
     "publiée après lui", "qu’il recense", "chaque acte nommé enregistre", ". Il nomme l’acte", "Modifié après la dernière"]) {
     assert.ok(!french.includes(replaced), `the French says ${replaced}`);
+  }
+  // The review of 2026-10-28: R72's banner says "this act" of every class of act, and its relative clauses take one antecedent.
+  const banner = (copy) => JSON.stringify(Object.fromEntries(Object.entries(copy).filter(([key]) => key.startsWith("amendedAfter"))));
+  for (const replaced of ["cette loi", "dont l’éditeur indique qu’il intègre", "qui lui sont apportées", "détenue par Lex publiée"]) {
+    assert.ok(!banner(LIVE_CHROME.fr.dossier).includes(replaced), `the French banner says ${replaced}`);
+  }
+  for (const replaced of ["this law", "integrating the changes made to", "is of an act"]) {
+    assert.ok(!banner(LIVE_CHROME.en.dossier).includes(replaced), `the English banner says ${replaced}`);
   }
   const english = JSON.stringify(LIVE_CHROME.en.dossier);
   for (const replaced of ["Amended after the latest consolidated version", "only: {classes};", "in the publisher's catalogue, as this site read it, was published after"]) {

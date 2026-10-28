@@ -31,8 +31,9 @@ public sealed class V3CorpusPublisherRelationsMountTests
     /// The relations fixture (its act amended by an act whose impact record names two integrating versions, its one consolidation's
     /// text not held) and the works for R72: one never consolidated and amended later; one with a held consolidation published after
     /// its amending act; one whose held consolidation names no publication date; one amended by an act of no date; one with no
-    /// relation; one whose held consolidation precedes its amending act and whose later consolidation's text is not held; and an act
-    /// held only as published whose changes a code integrates (the Code du travail's act of 31 July 2006, as run 15 records it).
+    /// relation; one whose held consolidation precedes its amending act and whose later consolidation's text is not held; a grand-ducal
+    /// regulation amended later; and an act held only as published whose changes a code integrates (the Code du travail's act of
+    /// 31 July 2006, as run 15 records it).
     /// </summary>
     private static Harness NoticeFixture()
     {
@@ -63,6 +64,10 @@ public sealed class V3CorpusPublisherRelationsMountTests
             .Held(W("loi/2017/01/01/n1/consolide/20180101"), ["art_1"], inFileDate: "2018-01-01");
         h.State(W("loi/2017/01/01/n1/consolide/20200101"), "2020-01-01", publication: "2020-01-05", memberOf: W("loi/2017/01/01/n1"), expressions: ("fr", Fra));
         h.Fact(W("loi/2019/06/01/n7/jo"), "publicationDate", "2019-06-03").Relation(W("loi/2019/06/01/n7/jo"), "modifies", W("loi/2017/01/01/n1/jo"));
+
+        // A grand-ducal regulation, never consolidated, amended later: the notice says "this act" of it, as of every class.
+        Act("rgd/2016/01/01/n1", "2016-01-05");
+        h.Fact(W("rgd/2016/05/01/n7/jo"), "publicationDate", "2016-05-03").Relation(W("rgd/2016/05/01/n7/jo"), "modifies", W("rgd/2016/01/01/n1/jo"));
 
         // The code's act, held only as published; the code's states are another work's, two held and the latest not.
         Act("loi/2006/07/31/n2", "2006-08-28");
@@ -248,9 +253,9 @@ public sealed class V3CorpusPublisherRelationsMountTests
         Assert.AreEqual("notice", never.GetProperty("status").GetString());
         Assert.AreEqual(JsonValueKind.Null, never.GetProperty("latest_consolidation").ValueKind);
         Assert.AreEqual(
-            "An act published on 2012-01-03 (http://data.legilux.public.lu/eli/etat/leg/loi/2012/01/01/n7/jo) amends this law; no consolidated " +
-            "version Lex holds was published after it. Lex holds no consolidated version of this law, or of an act the publisher records as " +
-            "integrating the changes made to it." + Derived,
+            "An act published on 2012-01-03 (http://data.legilux.public.lu/eli/etat/leg/loi/2012/01/01/n7/jo) amends this act; no consolidated " +
+            "version Lex holds was published after it. Lex holds no consolidated version of this act, or of another act the publisher records " +
+            "as integrating changes made to it." + Derived,
             never.GetProperty("notice").GetString());
 
         // A held consolidation published after its amending act: no notice.
@@ -274,6 +279,13 @@ public sealed class V3CorpusPublisherRelationsMountTests
         // No relation recorded.
         Assert.AreEqual("no_amending_act_recorded", (await NoticeOf("loi-2015-01-01-n1")).GetProperty("status").GetString());
 
+        // A grand-ducal regulation: the sentence says "this act", never "this law".
+        var regulation = await NoticeOf("rgd-2016-01-01-n1");
+        Assert.AreEqual("notice", regulation.GetProperty("status").GetString());
+        StringAssert.StartsWith(regulation.GetProperty("notice").GetString(),
+            "An act published on 2016-05-03 (http://data.legilux.public.lu/eli/etat/leg/rgd/2016/05/01/n7/jo) amends this act; no consolidated version Lex holds was published after it.");
+        Assert.IsFalse(regulation.GetProperty("notice").GetString()!.Contains("this law", StringComparison.Ordinal));
+
         // Held 2018-01-05, amended 2019-06-03, consolidated again on 2020-01-05 in a version whose text is not held: the notice
         // fires, since no version Lex holds was published after the amending act, and names the latest it holds.
         var heldOnly = await NoticeOf("loi-2017-01-01-n1");
@@ -284,7 +296,7 @@ public sealed class V3CorpusPublisherRelationsMountTests
         Assert.IsFalse(heldOnly.GetProperty("latest_consolidation_integrating").GetBoolean());
         Assert.AreEqual(1, heldOnly.GetProperty("held_versions").GetInt32());
         Assert.AreEqual(
-            "An act published on 2019-06-03 (http://data.legilux.public.lu/eli/etat/leg/loi/2019/06/01/n7/jo) amends this law; no consolidated " +
+            "An act published on 2019-06-03 (http://data.legilux.public.lu/eli/etat/leg/loi/2019/06/01/n7/jo) amends this act; no consolidated " +
             "version Lex holds was published after it. The latest consolidated version Lex holds, /lu-legilux/loi-2017-01-01-n1/2018-01-01, " +
             "was published on 2018-01-05." + Derived,
             heldOnly.GetProperty("notice").GetString());
@@ -310,9 +322,9 @@ public sealed class V3CorpusPublisherRelationsMountTests
              code.GetProperty("amending_acts").GetInt32(), code.GetProperty("amending_acts_without_publication_date").GetInt32(),
              code.GetProperty("amending_acts_integrated").GetInt32(), code.GetProperty("amending_acts_integration_undecided").GetInt32()));
         Assert.AreEqual(
-            "2 acts published from 2026-09-03 to 2026-09-22 amend this law; no consolidated version Lex holds was published after them. " +
-            "The latest consolidated version Lex holds, /lu-legilux/code-travail/2026-07-01, is of an act the publisher records as integrating " +
-            "the changes made to this law; it was published on 2026-07-30." + Derived,
+            "2 acts published from 2026-09-03 to 2026-09-22 amend this act; no consolidated version Lex holds was published after them. " +
+            "The latest consolidated version Lex holds, /lu-legilux/code-travail/2026-07-01, was published on 2026-07-30; it is a version of " +
+            "another act, one the publisher records as integrating changes made to this act." + Derived,
             code.GetProperty("notice").GetString());
 
         // The version the impact record of 2026-09-22 names as integrating it is the code's, and its text is not held: its permalink,

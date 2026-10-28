@@ -590,17 +590,18 @@ internal sealed partial class V3CorpusMount
 
         static string Named(OtherAct act) => act.Title is null ? act.Iri : $"{act.Title}, {act.Iri}";
         var acts = reading.Later;
-        // The specification's sentence (R72), word for word, then the version it compared and that it is derived.
+        // The specification's sentence (R72), word for word but "this act" for its "this law", since the notice stands on every class
+        // of act (the French review of 2026-10-28); then the version it compared, and that it is derived.
         var head = acts.Count == 1
-            ? $"An act published on {acts[0].PublicationDate} ({Named(others[acts[0].Iri])}) amends this law; no consolidated version Lex " +
+            ? $"An act published on {acts[0].PublicationDate} ({Named(others[acts[0].Iri])}) amends this act; no consolidated version Lex " +
               "holds was published after it."
             : $"{acts.Count.ToString(CultureInfo.InvariantCulture)} acts published from {acts[0].PublicationDate} to {acts[^1].PublicationDate} " +
-              "amend this law; no consolidated version Lex holds was published after them.";
+              "amend this act; no consolidated version Lex holds was published after them.";
         var latestSaid = latest is null || reading.LatestHeld is null
-            ? "Lex holds no consolidated version of this law, or of an act the publisher records as integrating the changes made to it."
+            ? "Lex holds no consolidated version of this act, or of another act the publisher records as integrating changes made to it."
             : reading.IntegratingWorkKeys.Contains(latest.WorkKey, StringComparer.Ordinal)
-                ? $"The latest consolidated version Lex holds, {StableCoordinateOf(latest)}, is of an act the publisher records as integrating the " +
-                  $"changes made to this law; it was published on {reading.LatestHeld.PublicationDate}."
+                ? $"The latest consolidated version Lex holds, {StableCoordinateOf(latest)}, was published on {reading.LatestHeld.PublicationDate}; " +
+                  "it is a version of another act, one the publisher records as integrating changes made to this act."
                 : $"The latest consolidated version Lex holds, {StableCoordinateOf(latest)}, was published on {reading.LatestHeld.PublicationDate}.";
         return $"{head} {latestSaid} This is derived from the publisher's records ({PublisherRelationsDerivedLabel}).";
     }
