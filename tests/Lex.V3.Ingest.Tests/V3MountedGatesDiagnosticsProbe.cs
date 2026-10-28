@@ -199,6 +199,70 @@ public sealed class V3MountedGatesDiagnosticsProbe
         Assert.Fail($"V3_GATES_DIAGNOSE wrote {output} and checked nothing.");
     }
 
+    /// <summary>
+    /// The EU temporal cases and the refusal set the release gate asks (<c>V3_GATES_DIAGNOSE_EU</c> names the output file), each
+    /// case whose answer is not the one its set derives, with the refusal's code and payload, so the EU and refusal gates can be
+    /// read case by case without the Luxembourg arms. It checks nothing.
+    /// </summary>
+    [TestMethod]
+    public async Task TheEuTemporalAndRefusalCasesThatDifferArePrinted()
+    {
+        var output = Environment.GetEnvironmentVariable("V3_GATES_DIAGNOSE_EU");
+        var directory = Environment.GetEnvironmentVariable("V3_EVALUATE_MOUNT");
+        if (string.IsNullOrWhiteSpace(output) || string.IsNullOrWhiteSpace(directory))
+        {
+            Assert.Inconclusive("V3_GATES_DIAGNOSE_EU and V3_EVALUATE_MOUNT name no output and no mount.");
+        }
+
+        using var mount = await V3CorpusMount.OpenAsync(directory!, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        var text = new StringBuilder();
+        var timelines = V3MountedGatesTests.Sample(V3MountedGatesTests.EuropeTimelines(directory!), 40, 20260930);
+        var acts = timelines.GroupBy(static value => value.WorkKey, StringComparer.Ordinal)
+            .Select(static group => new V3MountedGatesTests.EuropeActTimeline(group.Key, group.ToArray())).ToArray();
+        var arms = timelines.Select(static value => value.Language).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)
+            .Select(language => ($"EU as_of in {language}", (string?)language, timelines.Where(value => value.Language == language).SelectMany(V3MountedGatesTests.Cases).ToArray()))
+            .Append(("EU as_of with no language", null, acts.SelectMany(V3MountedGatesTests.Cases).ToArray()));
+        foreach (var (name, language, cases) in arms)
+        {
+            var wrong = 0;
+            foreach (var one in cases)
+            {
+                var actual = V3MachineGatesTests.EuropeAsOfArm(mount, language)(one.WorkKey, one.AsOf);
+                if (actual == one.ExpectedStateKey)
+                {
+                    continue;
+                }
+
+                wrong++;
+                var request = language is null
+                    ? (object)new { identifier = one.WorkKey, date = one.AsOf.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) }
+                    : new { identifier = one.WorkKey, date = one.AsOf.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), language };
+                var envelope = await EnvelopeAsync(mount, "/api/v3/as_of", "as_of", request);
+                var payload = envelope.Refusal is { } refusal ? refusal.Code + " " + Clip(refusal.HelpfulPayload.GetRawText()) : "answer " + Clip(envelope.Result!.Value.GetRawText());
+                text.AppendLine($"{name} | {one.CaseId} | expected {one.ExpectedStateKey} | actual {actual ?? "null"} | {payload}");
+            }
+
+            text.AppendLine($"== {name}: {wrong} of {cases.Length} differ");
+        }
+
+        text.AppendLine();
+        text.AppendLine("== the refusal set");
+        var set = V3MountedGatesTests.RefusalCases(directory!, V3MountedGatesTests.Sample(V3MountedGatesTests.Timelines(directory!), 40, 20260930));
+        foreach (var (id, request) in set.Requests)
+        {
+            var envelope = await EnvelopeAsync(mount, "/api/v3/" + request.Operation, request.Operation, request.Parameters);
+            var verdict = envelope.Refusal is { } refusal ? refusal.Code : "answer";
+            text.AppendLine($"{(verdict == request.Gold ? "ok  " : "DIFF")} {id} | {request.Operation} {JsonSerializer.Serialize(request.Parameters)} | gold {request.Gold} | actual {verdict}" +
+                            (verdict == request.Gold ? "" : " | " + (envelope.Refusal is { } refused ? Clip(refused.HelpfulPayload.GetRawText()) : Clip(envelope.Result?.Value.GetRawText() ?? ""))));
+        }
+
+        await File.WriteAllTextAsync(output!, text.ToString());
+        Assert.Fail($"V3_GATES_DIAGNOSE_EU wrote {output} and checked nothing.");
+    }
+
+    private static string Clip(string value) => value.Length <= 600 ? value : value[..600] + "…";
+
     /// <summary>The timelines as the release's gate read them: every state row, textless ones included, by work and language.</summary>
     private static V3MountedGatesTests.Timeline[] LexIndexAllRowTimelines(SqliteConnection connection) =>
         LuxembourgIndexBuilderTests.ReadStates(connection)

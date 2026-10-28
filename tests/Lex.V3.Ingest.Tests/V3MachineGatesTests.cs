@@ -672,7 +672,7 @@ public sealed class V3MachineGatesTests
     /// EU <c>as_of</c>'s selection for an act named by its seed CELEX, keyed as the EU cases key it: each wording served by its kind
     /// and hash-pinned permalink (EU <c>as_of</c> serves no state digest), the keys of the languages that answer sorted and joined
     /// with <c>+</c>; a refusal, its code. Null, so the case fails, for anything else: an answer or refusal without EU context, a
-    /// permalink that is not the act's wording in the language, date and digest the answer states, a wording dated after the
+    /// permalink that is not the act's wording in the language, date and digest the answer states (its CELEX one segment, R64), a wording dated after the
     /// requested date, or a request in one language answered by anything but that language's one wording.
     /// </summary>
     internal static TemporalArm EuropeAsOfArm(V3CorpusMount mount, string? language) => (workKey, asOf) =>
@@ -697,7 +697,7 @@ public sealed class V3MachineGatesTests
             var wordingDate = wording.GetProperty("wording_date").GetString();
             var permalink = wording.GetProperty("permalink").GetString();
             if ((language is not null && served != language) || wordingDate is null || string.CompareOrdinal(wordingDate, date) > 0 ||
-                permalink != $"/eu-eurlex/{workKey}/{wordingDate}--{wording.GetProperty("wording_sha256").GetString()}/{served}")
+                permalink != $"/eu-eurlex/{V3MountedGatesTests.EuropePermalinkSegment(workKey)}/{wordingDate}--{wording.GetProperty("wording_sha256").GetString()}/{served}")
             {
                 return null;
             }

@@ -34,13 +34,49 @@ public sealed partial class V3MountedGatesTests
     /// <summary>
     /// The evidence bundle's own rule for a state's text (<c>V3CorpusMount</c>, rights at compose time): its sources are
     /// the members behind its article identities (<c>StateSources</c>), and the text is withheld when it has none, or
-    /// when any source was not acquired or holds another rights disposition than the one admitting one. As SQL over a
-    /// state <c>s</c>; the tokens are the contract's own.
+    /// when any source was not acquired or holds a rights disposition the rights admission policy the corpus file names does
+    /// not admit (none named: policy /1, <c>agreed_same_run_cc_by</c> alone; policy A adds <c>agreed_cc_by_rederived</c>, the
+    /// data design's §3.3 item 11). As SQL over a state <c>s</c>; the tokens are the contract's own.
     /// </summary>
-    private static readonly string StateWithheld =
+    private static string StateWithheld(string? admissionPolicy) =>
         "(NOT EXISTS (SELECT 1 FROM json_each(s.article_identities_json) j JOIN articles a ON a.article_identity_sha256 = j.value JOIN members m ON m.object_ref_sha256 = a.object_ref_sha256) " +
         "OR EXISTS (SELECT 1 FROM json_each(s.article_identities_json) j JOIN articles a ON a.article_identity_sha256 = j.value JOIN members m ON m.object_ref_sha256 = a.object_ref_sha256 " +
-        $"WHERE m.outcome IS NOT '{ContractWire.NameOf(LexCorpus6OutcomeKind.Acquired)}' OR m.rights_disposition IS NOT '{ContractWire.NameOf(LuxembourgRightsChannelDisposition.AgreedSameRunCcBy)}'))";
+        $"WHERE m.outcome IS NOT '{ContractWire.NameOf(LexCorpus6OutcomeKind.Acquired)}' OR m.rights_disposition IS NULL OR m.rights_disposition NOT IN (" +
+        string.Join(", ", LuxembourgRightsAdmissionPolicies.AdmittingDispositions(admissionPolicy).Select(static disposition => $"'{ContractWire.NameOf(disposition)}'")) + ")))";
+
+    /// <summary>
+    /// The rights admission policy a mount's corpus file names (its header's <c>luxembourg_rights_admission_policy</c>, read from
+    /// the file before its members), or null when it names none.
+    /// </summary>
+    internal static string? CorpusAdmissionPolicy(string mountDirectory)
+    {
+        var path = Path.Combine(mountDirectory, V3CorpusMount.CorpusFileName);
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        var reader = new System.Text.Json.Utf8JsonReader(File.ReadAllBytes(path));
+        reader.Read();
+        while (reader.Read() && reader.TokenType == System.Text.Json.JsonTokenType.PropertyName)
+        {
+            var name = reader.GetString();
+            reader.Read();
+            if (name == "luxembourg_rights_admission_policy")
+            {
+                return reader.TokenType == System.Text.Json.JsonTokenType.String ? reader.GetString() : null;
+            }
+
+            if (name == "members")
+            {
+                return null;
+            }
+
+            reader.Skip();
+        }
+
+        return null;
+    }
     private static readonly string[] CandidateLanguages = ["eng", "deu", "fra", "ltz"];
     private static readonly string[] CandidateFormats = ["docx", "epub", "odt", "rtf"];
 
@@ -180,18 +216,20 @@ public sealed partial class V3MountedGatesTests
 
         // A state held alone on its date whose text the bundle withholds by its own rule (review of #839: the first
         // version guessed a "non_admitting" prefix and missed a disposition such as `conflict`); and one whose text it
-        // does not withhold but whose every article holds none, since rights are decided before any text is read.
-        var withheld = StateWhere(connection, StateWithheld, ServedAlone);
+        // does not withhold but whose every article holds none, since rights are decided before any text is read. The rule is
+        // the one of the rights admission policy the corpus names (Release 2's derive names policy A).
+        var stateWithheld = StateWithheld(CorpusAdmissionPolicy(mountDirectory));
+        var withheld = StateWhere(connection, stateWithheld, ServedAlone);
         if (withheld is { } blocked)
         {
             requests["rights-not-agreed"] = new("evidence_bundle", new { identifier = $"/lu-legilux/{blocked.Work}", date = blocked.Date, language = blocked.Language }, "text_withheld");
         }
         else
         {
-            notProduced["text_withheld"] = "every state's sources were acquired under the one admitting rights disposition";
+            notProduced["text_withheld"] = "every state's sources were acquired under a rights disposition the corpus's admission policy admits";
         }
 
-        var empty = StateWhere(connection, $"NOT {StateWithheld} AND NOT EXISTS (SELECT 1 FROM articles a WHERE a.expression_iri = s.expression_iri AND a.searchable_text <> '')", ServedAlone);
+        var empty = StateWhere(connection, $"NOT {stateWithheld} AND NOT EXISTS (SELECT 1 FROM articles a WHERE a.expression_iri = s.expression_iri AND a.searchable_text <> '')", ServedAlone);
         if (empty is { } textless)
         {
             requests["no-text-held"] = new("evidence_bundle", new { identifier = $"/lu-legilux/{textless.Work}", date = textless.Date, language = textless.Language }, "text_not_available");
@@ -222,7 +260,7 @@ public sealed partial class V3MountedGatesTests
                 requests["twin-states"] = new("as_of", new { identifier = $"/lu-legilux/{ambiguous.Work}", date = ambiguous.Date, language = "fra" }, "ambiguous_version");
             }
 
-            ReasonOnIndexNine(notProduced, "text_withheld", "no state without text that as_of refuses on its own date is withheld by its rights, and every held state's sources were acquired under the one admitting rights disposition");
+            ReasonOnIndexNine(notProduced, "text_withheld", "no state without text that as_of refuses on its own date is withheld by its rights, and every held state's sources were acquired under a rights disposition the corpus's admission policy admits");
             ReasonOnIndexNine(notProduced, "text_not_available", "no state without text that as_of refuses on its own date lacks it for a reason other than its rights, and every held state whose text is admitted holds text");
             ReasonOnIndexNine(notProduced, "ambiguous_version", "no day a French state of a served work begins or ends on is one the rules call ambiguous (states of one wording are served once)");
             ReasonOnIndexNine(notProduced, "profiles_differ", "no two held states of one work, each served alone on its own date, differ in rule profile");
@@ -343,9 +381,10 @@ public sealed partial class V3MountedGatesTests
         var (workId, expressionId, wordingDate) = (wordings[0][0], wordings[0][1], wordings[0][2]);
         var articles = Rows(connection, $"SELECT publisher_identifier, article_identity_sha256 FROM articles WHERE publisher_expression_id = '{expressionId.Replace("'", "''", StringComparison.Ordinal)}' ORDER BY publisher_identifier, article_identity_sha256");
         var digest = V3EuropePermalinkTests.WordingSha256ByTheStatedRule(celex, workId, expressionId, language, wordingDate, articles.Select(static row => row[1]));
-        var wording = $"/eu-eurlex/{celex}/{wordingDate}--{digest}/{language}";
+        // R64: the CELEX is one segment of the permalink (the Treaties' and the Charter's carry a solidus, written %2F).
+        var wording = $"/eu-eurlex/{EuropePermalinkSegment(celex)}/{wordingDate}--{digest}/{language}";
         requests["eu-pinned-provision"] = new("verify", new { identifier = $"{wording}/{Uri.EscapeDataString(articles[0][0])}" }, "answer");
-        requests["eu-pinned-digest-not-held"] = new("verify", new { identifier = $"/eu-eurlex/{celex}/{wordingDate}--{new string('0', 64)}/{language}" }, "pinned_digest_mismatch");
+        requests["eu-pinned-digest-not-held"] = new("verify", new { identifier = $"/eu-eurlex/{EuropePermalinkSegment(celex)}/{wordingDate}--{new string('0', 64)}/{language}" }, "pinned_digest_mismatch");
         requests["eu-provision-not-held"] = new("verify", new { identifier = $"{wording}/lex-no-such-provision" }, "anchor_not_in_version");
     }
 
@@ -509,6 +548,45 @@ public sealed partial class V3MountedGatesTests
         Assert.IsFalse(derived.NotProduced.ContainsKey("text_withheld"), string.Join("; ", derived.NotProduced.Select(static pair => pair.Key + " (" + pair.Value + ")")));
         Assert.AreEqual("text_withheld", derived.Requests["rights-not-agreed"].Gold);
         Assert.AreEqual(GateVerdict.Pass, set.Gates.Single().Verdict, "the handler withholds it, as derived");
+    }
+
+    [TestMethod]
+    public async Task TheWithheldRuleIsTheOneOfTheAdmissionPolicyTheCorpusNames()
+    {
+        // Release 2's derive names policy A, which admits agreed_cc_by_rederived (the data design's §3.3 item 11), and its bundle
+        // serves such a state: the set took derive-r2's code-procedure_civile of 2023-02-01 as withheld by policy /1's rule.
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await fixture.SetMemberRightsDispositionAsync(ContractWire.NameOf(LuxembourgRightsChannelDisposition.AgreedCcByRederived));
+        using (var connection = LuxembourgIndexBuilder.Open(Path.Combine(fixture.Directory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly))
+        {
+            long Withheld(string? policy) => long.Parse(Scalar(connection, $"SELECT COUNT(*) FROM states s WHERE {StateWithheld(policy)}")!, CultureInfo.InvariantCulture);
+            Assert.IsGreaterThan(0L, Withheld(null), "policy /1 admits agreed_same_run_cc_by alone");
+            Assert.AreEqual(0L, Withheld(LuxembourgRightsAdmissionPolicies.PolicyASha256), "policy A admits a re-derived agreement");
+        }
+
+        Assert.IsNull(CorpusAdmissionPolicy(fixture.Directory), "the fixture's corpus names no policy");
+        var named = Path.Combine(Path.GetTempPath(), "lex-gates-policy-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(named);
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(named, V3CorpusMount.CorpusFileName),
+                $"{{\"schema\":\"s\",\"profile_identities\":[\"p\"],\"luxembourg_rederivation\":\"r\",\"luxembourg_rights_admission_policy\":\"{LuxembourgRightsAdmissionPolicies.PolicyASha256}\",\"members\":[]}}");
+            Assert.AreEqual(LuxembourgRightsAdmissionPolicies.PolicyASha256, CorpusAdmissionPolicy(named));
+        }
+        finally
+        {
+            Directory.Delete(named, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public void AnEuCelexIsOneSegmentOfItsPermalink()
+    {
+        // R64: the Treaties' and the Charter's CELEX numbers carry a solidus, which derive-r2's EU index serves (main-body profile
+        // /5); the gates' EU keys and permalinks write it %2F, as every other CELEX keeps its bytes.
+        Assert.AreEqual("12016E%2FTXT", EuropePermalinkSegment("12016E/TXT"));
+        Assert.AreEqual("32016R0679", EuropePermalinkSegment("32016R0679"));
     }
 
     [TestMethod]
