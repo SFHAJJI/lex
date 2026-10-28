@@ -113,9 +113,9 @@ public sealed class VocabularyRegistryCensusTests
                     + "AdministrativeMemorialPrefix, const ExpectedResourceHost, "
                     + "const LegislativeMemorialPrefix, const RuleProfile, "
                     + "static property RuleProfileSha256",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgRederivation: ImplementedRuleSets=2, "
+                "Lex.V3.Ingest.Luxembourg.LuxembourgRederivation: ImplementedRuleSets=3, "
                     + "const InFileEvidenceTwoSchema, const NoPublisherSession, "
-                    + "const Release1RuleSet, const Release2RuleSet, const RightsAsAcquired, "
+                    + "const Release1RuleSet, const Release2RuleSet, const Release3RuleSet, const RightsAsAcquired, "
                     + "const RightsReResolved",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgReferralDateComposition: const HasOpinion, "
                     + "const IriKind, const ReferralDate",

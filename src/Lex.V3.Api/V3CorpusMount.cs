@@ -223,10 +223,16 @@ internal sealed partial class V3CorpusMount : IDisposable
                 out var pinnedAnchor) && pinnedAnchor is null)
         {
             // A textless catalogue state's permalink (index 9's events name it) is refused for its text, naming it, as verify,
-            // as_of and evidence_bundle refuse it: never identifier_unknown.
+            // as_of and evidence_bundle refuse it: never identifier_unknown. So is a digest the work no longer has, at a
+            // coordinate whose states in its language hold no text (R64; the review of #1008).
             if (TextlessRowAt(workKey, applicabilityDate, requestedDigest, pinnedLanguage) is { } textless)
             {
                 return RefuseTextless(request, observedAt, textless, applicabilityDate, bound: null);
+            }
+
+            if (TextlessCoordinateAt(workKey, applicabilityDate, requestedDigest, pinnedLanguage) is { Length: > 0 } textlessHere)
+            {
+                return RefuseAtTextlessCoordinate(request, identifier, observedAt, textlessHere, applicabilityDate, requestedDigest);
             }
 
             var states = (_reader?.ResolveState(workKey, applicabilityDate) ?? [])
@@ -2527,6 +2533,15 @@ internal sealed partial class V3CorpusMount : IDisposable
             if (TextlessRowAt(workKey, applicabilityDate, requestedDigest, language) is { } textless)
             {
                 return RefuseTextless(request, observedAt, textless, applicabilityDate, bound: null);
+            }
+
+            // A digest the work no longer has, at a coordinate whose states in its language hold no text, is refused for that
+            // text, naming the state there (R64; the review of #1008), unless a retained generation still holds the digest, which
+            // verifies it below as it always has.
+            if (TextlessCoordinateAt(workKey, applicabilityDate, requestedDigest, language) is { Length: > 0 } textlessHere &&
+                FromGeneration(workKey, applicabilityDate, language, requestedDigest) is null)
+            {
+                return RefuseAtTextlessCoordinate(request, identifier, observedAt, textlessHere, applicabilityDate, requestedDigest);
             }
 
             var pinnedStates = _reader.ResolveState(workKey, applicabilityDate);
