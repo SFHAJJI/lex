@@ -4,6 +4,70 @@ Updated 2026-10-28. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The assistant, built to its contract and switched off: answer_dossier/1, the advice boundary, the gates (writer/assistant, 2026-10-28)
+
+D91's containment ends when this slice merges after review (R30): the answer_dossier/1 slice (S4-A04) and the
+advice-boundary slice (S4-A05), checked against a written contract, `docs/ANSWER-DOSSIER-1.md`. **Ending the containment
+does not switch the assistant on.** The switch is off by default, the operator off-switch always wins, and src wires no
+planner (no model provider), so `ask` answers the switched-off card on every deployment of this code.
+- **What is built**:
+  - the contract and its types (`src/Lex.V3.Contracts/Platform/Assistant/`);
+  - the deterministic parsers: language, dates and ranges, R15's pronoun-blind function cues, and the R33 mask;
+  - the plan grammar and its validator;
+  - the pipeline through the existing operations, with at most two typed follow-ups (R35);
+  - the verdict computed by code, biased to refusal;
+  - the composer: law first, the boundary line, the handoff (R45(b));
+  - the closed template set in French and English, and the gates in the code path;
+  - the handoff registry (four entries, every one "not yet reviewed by a person", no adviser);
+  - the runtime: the switch, the off-switch, ask's own limit of 20 a minute, a 0.02 EUR per-answer ceiling, a 20 EUR monthly
+    cap, and telemetry in buckets;
+  - the hidden web panel (`web/app/AssistantPanel.jsx`, imported by no page).
+- **The machine gates' harness** (V3AssistantMountTests): quote fidelity by an independent checker, zero non-template
+  sentences by a walk of its own, and byte-identical replay under two clocks, each with a deliberate-failure control. It runs
+  over a replay set that is **drafted by an agent; not D4 or D1; not a switch-on gate**.
+- **The driver's decisions of 2026-10-28** (under the owner's standing yes of 2026-10-27):
+  1. The ask/1 request schema stays frozen. The answering locale, the follow-up context and replay are typed pipeline inputs
+     the tests drive; extending the schema is the switch-on release's first step.
+  2. The switched-off card's sentence, which became untrue on merge ("until … integrated"), now reads "The assistant is
+     switched off on Lex; search, reading and the other operations work."
+     - Its French is the template `presentation.assistant_unavailable`.
+     - The MCP description of ask no longer says "contained".
+     - Only the ask rows of `answer-samples.json` and `envelope-samples.json` move. The legacy and EU base answers record
+       no ask row, and the registry digest does not move.
+  3. R14's master says "here is who can advise you", and no adviser may be invented. The answer therefore says "Lex does
+     not yet name who can advise you: that list must first be checked by a person."
+- **Reversible driver decisions, recorded here**:
+  - the presentation results keep the envelope's `point` slot, as the card always has; they are counted apart;
+  - a refusal travels as the registry's `advice_boundary`, whose payload carries the whole answer;
+  - an undetermined question language falls to English;
+  - the handoff role `official_source` is added beside R42's four;
+  - `answer_with_enrichment` is never emitted;
+  - an invalid plan, a failed planner or a failed gate gets the switched-off card.
+- **French**: an independent AI reviewer checked every French template and panel string in two rounds. 33 of the 85 entries
+  changed in round one; round two approved the seven new EU forms. The finals were applied byte for byte. This is not R43's
+  qualified-person review, and the code says so (`QualifiedReviewComplete` is false).
+- **What remains for people and the owner before switch-on** (no agent can do these):
+  1. A written legal read: GDPR arts. 6 and 9, AI Act art. 50(1) (R33).
+  2. An EU-region model under a processing agreement, with no retention and no training, or a self-hosted model; the
+     processor named in the privacy notice (R33, R49).
+  3. A Luxembourg avocat's review of the D4 refusal and split gold set, the advice templates and the not-legal-advice line
+     (R36; O4).
+  4. A qualified person's review of every French and English template (R43).
+  5. D4 from the hashed catalogue two, and D1's 320 fresh V3 queries, written by people, with at least ten paraphrases per
+     row of sections L and M per language, and a second, independent annotator on 15 to 20 percent (R36, R37).
+  6. The handoff registry's advisers by theme, with cost, limits and languages; the high-stakes blocks; a reviewer and
+     date for every entry; the weekly link check (R42).
+  7. The owner's sign-off, the spend cap at the provider (O22 recommends about 20 EUR a month), and the R44 notice
+     wording (O22, O4).
+  - Then the switch-on release, on its exact tuple:
+    - the staged ask inputs, with the base answers recorded again;
+    - the provider adapter;
+    - the D4 gates, five runs per case;
+    - quote fidelity 1.0, zero non-template sentences and byte-identical replay;
+    - the budget gate (p95 3 s and 10 s), with R39's grader reported and never gating;
+    - the panel's flag.
+- **Counts**: filled in after the build (Phase 3).
+
 ## Release 2's no-browser probes: textless permalinks verified as the log says, the title search read on (sole driver, 2026-10-28)
 
 The Release 2 rehearsal (`image-rehearsal.mjs` over `derive-r2` at 220c05dc) passed the gates, the reproducibility check and

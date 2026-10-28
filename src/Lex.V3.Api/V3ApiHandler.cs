@@ -104,8 +104,11 @@ internal sealed class V3ApiHandler
         if (binding is not null || string.Equals(rawTarget, McpRawTarget, StringComparison.Ordinal))
         {
             // An operation, over REST or MCP: counted against its client's limit (R109), and holding one of the client's
-            // in-flight places until it is answered.
-            using var admission = _limiter.AdmitApi(ClientOf(context));
+            // in-flight places until it is answered. The same keyed hash names the client to ask's own limit (R40), which
+            // counts only while the assistant is switched on.
+            var client = ClientOf(context);
+            using var admission = _limiter.AdmitApi(client);
+            using var askClient = V3AssistantRuntime.EnterClient(client?.Key);
             if (binding is null)
             {
                 await HandleMcpAsync(context, admission, cancellationToken).ConfigureAwait(false);

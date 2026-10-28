@@ -5171,17 +5171,19 @@ internal sealed partial class V3CorpusMount : IDisposable
             new V3PlatformOperationResult(request, "coverage_report", result.RootElement));
     }
 
-    /// <summary>The typed presentation result every <c>ask</c> answers while the assistant is contained (Decision 91).</summary>
+    /// <summary>The typed presentation result every <c>ask</c> answers while the assistant is switched off (Decision 91; R30).</summary>
     internal const string AssistantUnavailable = "assistant_v3_unavailable";
 
     internal const string AskPresentationNote =
         "a typed presentation result of ask (Decisions 51 and 91), not a refusal code: the closed refusal registry stays at its twenty codes, " +
         "and this is neither an answer from held law nor a refusal";
 
-    internal const string AskContainmentReason =
-        "the assistant is contained: no model answers, retrieves, reranks or authors authoritative text, and the legacy assistant route stays disabled " +
-        "until the answer_dossier/1 (S4-A04) and advice-boundary (S4-A05) slices are independently reviewed and integrated; " +
-        "the deterministic operations below answer from held law";
+    /// <summary>
+    /// The card's one sentence of why (the driver's decision of 2026-10-28, STATUS-WEB.md): true before and after D91's
+    /// containment ends (R30), since ending it does not switch the assistant on. Its French is the template
+    /// <c>presentation.assistant_unavailable</c> (V3AnswerTemplates), reviewed with the assistant's templates.
+    /// </summary>
+    internal const string AskContainmentReason = "The assistant is switched off on Lex; search, reading and the other operations work.";
 
     internal const string AskQuestionNote =
         "the question is checked to be a non-blank string and is not read, stored or echoed; nothing in this answer depends on it";
@@ -5199,7 +5201,8 @@ internal sealed partial class V3CorpusMount : IDisposable
     ];
 
     /// <summary>
-    /// <c>ask</c> while the assistant is contained (Decisions 51 and 91, S4-A05): every request answers
+    /// <c>ask</c> while the assistant is switched off (Decisions 51 and 91; R30; V3CorpusMount.Assistant.cs), which it is by
+    /// default and on every deployment of this code: every request answers
     /// the typed presentation result <c>assistant_v3_unavailable</c> as a <c>handoff_card</c> under the
     /// <c>point</c> verdict, never a refusal code and never an answer from held law. The question is
     /// checked by the request schema and not read, so the card is the same for every question: the
@@ -5218,7 +5221,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             throw new InvalidOperationException("The mounted corpus ask operation only accepts ask/1.");
         }
 
-        _ = RequiredString(request.Parameters, "question");
+        var question = RequiredString(request.Parameters, "question");
         if (_reader is null)
         {
             using var unmounted = JsonSerializer.SerializeToDocument(new { required_corpus = "lu" });
@@ -5227,7 +5230,9 @@ internal sealed partial class V3CorpusMount : IDisposable
                 new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
         }
 
-        return V3PlatformOperationOutcome.Success(
+        // The assistant answers only while every condition of its switch holds (R30), which no deployment of this code meets;
+        // otherwise, and whenever it fails closed, the switched-off card below, the same for every question.
+        return AskAssistant(request, observedAt, question) ?? V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             AskContained(request, _reader.SearchableLanguages()));
     }
