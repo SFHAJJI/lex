@@ -20,7 +20,9 @@ internal sealed partial class V3CorpusMount
     /// resolver recognizes (the resolver's never types, ACCA and RC, are out of scope). Run 15's families (codes, lois and grand-ducal
     /// regulations: CODE, LOI and RGD) are held and are not declared here: the text yield counts them; nor is CODE_RECUEIL, whose
     /// catalogue records run 15 collected with the codes (the review of #1004, F4: "not collected" was not true of it). No class is
-    /// said to come first: the order of later runs is the owner's (O7), still open.
+    /// said to come first: the order of later runs is the owner's (O7), still open. The Constitution's row is served only while
+    /// the mounted index holds nothing of it (<see cref="HoldsLuxembourgConstitution"/>): a mount of a population that declares its
+    /// range and collected it does not say it is not held.
     /// </summary>
     internal static readonly IReadOnlyList<(string Class, string Disposition)> LuxembourgClassesNotHeld = Array.AsReadOnly(new[]
     {
@@ -52,6 +54,12 @@ internal sealed partial class V3CorpusMount
         ("PA", "no_ruling_admits_it"),
         ("RECUEIL", "no_ruling_admits_it"),
     });
+
+    /// <summary>The ELI under which the publisher names the Constitution, its states and its expressions.</summary>
+    internal const string LuxembourgConstitutionEli = "http://data.legilux.public.lu/eli/etat/leg/constitution/";
+
+    // Whether the mounted Luxembourg index holds anything of the Constitution, read once per mount: 0 not read yet, 1 no, 2 yes.
+    private int _luxembourgConstitutionHeld;
 
     /// <summary>The dispositions a class not held may have, closed (R78).</summary>
     internal static readonly IReadOnlyList<string> LuxembourgClassDispositions = Array.AsReadOnly(new[]
@@ -107,9 +115,11 @@ internal sealed partial class V3CorpusMount
             begins.Add(ObservationsBegin("eu-eurlex", europe?.NewestCompletedObservation, "acquisition_completed"));
         }
 
+        var holdsConstitution = HoldsLuxembourgConstitution();
         return new
         {
             luxembourg_classes_not_held = LuxembourgClassesNotHeld
+                .Where(row => !(holdsConstitution && row.Class == "Constitution"))
                 .Select(static row => new { @class = row.Class, disposition = row.Disposition })
                 .ToArray(),
             europe_languages = _europeReader is null
@@ -122,6 +132,26 @@ internal sealed partial class V3CorpusMount
             observations_begin = begins,
             rule = DeclaredScopeRule,
         };
+    }
+
+    /// <summary>
+    /// Whether the mounted Luxembourg index holds the Constitution: a subject of its catalogue facts or a state under
+    /// <see cref="LuxembourgConstitutionEli"/>. Read from the mount, once: the static list says "not held" of a class only while
+    /// the served mount lacks it.
+    /// </summary>
+    private bool HoldsLuxembourgConstitution()
+    {
+        var held = Volatile.Read(ref _luxembourgConstitutionHeld);
+        if (held == 0)
+        {
+            held = _reader!.ResolveSubjectsUnder(LuxembourgConstitutionEli).Count != 0 ||
+                   _reader.ResolveWorksUnder(LuxembourgConstitutionEli).Count != 0
+                ? 2
+                : 1;
+            Volatile.Write(ref _luxembourgConstitutionHeld, held);
+        }
+
+        return held == 2;
     }
 
     private static object ObservationsBegin(string publisher, DateTimeOffset? at, string basis) => new

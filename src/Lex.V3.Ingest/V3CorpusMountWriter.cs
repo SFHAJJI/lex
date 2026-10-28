@@ -413,11 +413,17 @@ public static class V3CorpusMountWriter
         };
         var options = new JsonSerializerOptions { WriteIndented = true };
         var resumption = Resumption(build.EuropeResumption, build.LuxembourgResumption);
+        var completion = Completion(build.EuropeCatalogedAt, build.LuxembourgCatalogedAt);
         var derivation = Derivation(build.LuxembourgDerivation, build.LuxembourgResumption);
         var node = JsonSerializer.SerializeToNode(report, options)!.AsObject();
         if (resumption is not null)
         {
             node["resumption"] = JsonSerializer.SerializeToNode(resumption, options);
+        }
+
+        if (completion is not null)
+        {
+            node["completion"] = JsonSerializer.SerializeToNode(completion, options);
         }
 
         if (derivation is not null)
@@ -509,6 +515,28 @@ public static class V3CorpusMountWriter
                 + "catalog states.",
             europe = ResumedHalf(europe),
             luxembourg = ResumedHalf(luxembourg),
+        };
+
+    /// <summary>
+    /// When each half's collection completed, as a dated catalog states it (the instant the run that observed the half, and
+    /// was not resumed, retained its catalog); null when neither catalog is dated, and the report is then exactly what it
+    /// was. A resumed half states its own under <see cref="Resumption"/>; a half whose catalog states no time names none
+    /// here, and its completion is unstated (the API's freshness, R87).
+    /// </summary>
+    /// <remarks>
+    /// Every value comes from the catalogs, so an offline derivation writes these bytes exactly as the acquiring build did,
+    /// and a build that reused a dated population states the time of the run that observed it, never its own.
+    /// </remarks>
+    internal static object? Completion(DateTimeOffset? europe, DateTimeOffset? luxembourg) =>
+        europe is null && luxembourg is null ? null : new
+        {
+            statement = "A half that names a completion was observed by one run that was not resumed: catalogedAt is the "
+                + "instant that run retained the half's catalog, after every unit of the half had been observed, as the "
+                + "catalog states it. A build that reuses a population keeps the time of the run that observed it. A half "
+                + "acquired across an interruption states its time under resumption instead; a half whose catalog states no "
+                + "time names none.",
+            europe = europe is { } europeAt ? new { catalogedAt = europeAt } : null,
+            luxembourg = luxembourg is { } luxembourgAt ? new { catalogedAt = luxembourgAt } : null,
         };
 
     /// <summary>One resumed half as its catalog states it: the journal and earlier runs it resumed from, replayed and live units per phase, and the resumed run's spend and time when the catalog was retained.</summary>

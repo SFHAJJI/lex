@@ -60,10 +60,11 @@ internal sealed partial class V3CorpusMount
     /// <remarks>
     /// <para>
     /// A half's completion is the time its acquisition's catalog was retained, which the report states for a half acquired
-    /// across an interruption (<c>resumption.{half}.catalogedAt</c>): the latest time the mount states for that half, so the
-    /// age counted from it is never less than the data's; it is read down to the whole second. A half acquired in one window
-    /// is not dated by the report, and its completion is then said to be unstated rather than taken from the index's build
-    /// time, which bounds when the Luxembourg half was observed and says nothing of an EU half the build reused.
+    /// across an interruption (<c>resumption.{half}.catalogedAt</c>) and for a half whose catalog is dated
+    /// (<c>completion.{half}.catalogedAt</c>, a run that was not resumed): the latest time the mount states for that half,
+    /// read down to the whole second. A half whose catalog states no time (written before catalogs were dated) is not dated
+    /// by the report, and its completion is then said to be unstated rather than taken from the index's build time, which
+    /// bounds when the Luxembourg half was observed and says nothing of an EU half the build reused.
     /// </para>
     /// <para>
     /// The commit is the report's <c>indexBuilderSource</c> (the code that wrote the mount), or for a mount re-derived from
@@ -165,8 +166,15 @@ internal sealed partial class V3CorpusMount
 
         static DateTimeOffset? CatalogedAt(JsonElement root, string half)
         {
-            if (!root.TryGetProperty("resumption", out var resumption) || resumption.ValueKind != JsonValueKind.Object ||
-                !resumption.TryGetProperty(half, out var stated) || stated.ValueKind != JsonValueKind.Object)
+            var resumed = StatedAt(root, "resumption", half);
+            var dated = StatedAt(root, "completion", half);
+            return resumed is null ? dated : dated is null ? resumed : resumed > dated ? resumed : dated;
+        }
+
+        static DateTimeOffset? StatedAt(JsonElement root, string member, string half)
+        {
+            if (!root.TryGetProperty(member, out var block) || block.ValueKind != JsonValueKind.Object ||
+                !block.TryGetProperty(half, out var stated) || stated.ValueKind != JsonValueKind.Object)
             {
                 return null;
             }

@@ -37,6 +37,19 @@ public sealed class LuxembourgPopulationScope
 
     public static LuxembourgPopulationScope Legislative { get; } = new(LegislativePolicy, LegislativeRanges());
 
+    /// <summary>
+    /// The legislative families and the Constitution (<c>http://data.legilux.public.lu/eli/etat/leg/constitution/</c>), four declared ranges in the
+    /// publisher's key order, under <see cref="DeclaredRangePolicy"/>: the scope of a Luxembourg population that serves the
+    /// Constitution, since a mount takes one Luxembourg catalog. <see cref="Legislative"/> is unchanged.
+    /// </summary>
+    public static LuxembourgPopulationScope LegislativeWithConstitution { get; } = new(DeclaredRangePolicy,
+    [
+        new("legislative-code", Legislation + "code/", Legislation + "code0"),
+        new("legislative-constitution", Legislation + "constitution/", Legislation + "constitution0"),
+        new("legislative-loi", Legislation + "loi/", Legislation + "loi0"),
+        new("legislative-rgd", Legislation + "rgd/", Legislation + "rgd0"),
+    ]);
+
     public static LuxembourgPopulationScope FromRange(LuxembourgActRange range) =>
         new(DeclaredRangePolicy, [range ?? throw new ArgumentNullException(nameof(range))]);
 

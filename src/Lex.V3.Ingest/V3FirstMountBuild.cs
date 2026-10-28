@@ -152,6 +152,12 @@ public sealed class V3FirstMountBuildResult : IDisposable
     /// <summary>What the Luxembourg catalog says about the resumed run that acquired its population; null for one observed in one run.</summary>
     public AcquisitionResumption? LuxembourgResumption { get; }
 
+    /// <summary>When the EU catalog states its run retained it (a dated catalog of a run that was not resumed); null otherwise.</summary>
+    public DateTimeOffset? EuropeCatalogedAt { get; private init; }
+
+    /// <summary>When the Luxembourg catalog states its run retained it (a dated catalog of a run that was not resumed); null otherwise.</summary>
+    public DateTimeOffset? LuxembourgCatalogedAt { get; private init; }
+
     public V3FirstMountBuildRefusal? Refusal { get; }
 
     public string? Detail { get; }
@@ -178,6 +184,8 @@ public sealed class V3FirstMountBuildResult : IDisposable
     /// <param name="luxembourgResumption">The Luxembourg acquisition's resumption, carried to the build report.</param>
     /// <param name="luxembourgDerivation">The re-derivation the Luxembourg derivations come from, carried to the build report;
     /// its record must be the one the corpus header names.</param>
+    /// <param name="europeCatalogedAt">When the EU catalog states it was retained, carried to the build report.</param>
+    /// <param name="luxembourgCatalogedAt">When the Luxembourg catalog states it was retained, carried to the build report.</param>
     internal static V3FirstMountBuildResult Success(
         LexCorpus6BuildResult corpus,
         V3BuiltIndexFile luxembourgIndex,
@@ -185,7 +193,9 @@ public sealed class V3FirstMountBuildResult : IDisposable
         V3MountStaging staging,
         AcquisitionResumption? europeResumption = null,
         AcquisitionResumption? luxembourgResumption = null,
-        V3LuxembourgDerivation? luxembourgDerivation = null)
+        V3LuxembourgDerivation? luxembourgDerivation = null,
+        DateTimeOffset? europeCatalogedAt = null,
+        DateTimeOffset? luxembourgCatalogedAt = null)
     {
         ArgumentNullException.ThrowIfNull(corpus);
         ArgumentNullException.ThrowIfNull(luxembourgIndex);
@@ -196,7 +206,11 @@ public sealed class V3FirstMountBuildResult : IDisposable
             throw new ArgumentException("A build states the re-derivation its corpus header names, and only that one.", nameof(luxembourgDerivation));
         }
 
-        return new(corpus, luxembourgIndex, europeIndex, null, null, europeResumption, luxembourgResumption, luxembourgDerivation, staging);
+        return new(corpus, luxembourgIndex, europeIndex, null, null, europeResumption, luxembourgResumption, luxembourgDerivation, staging)
+        {
+            EuropeCatalogedAt = europeCatalogedAt,
+            LuxembourgCatalogedAt = luxembourgCatalogedAt,
+        };
     }
 
     public static V3FirstMountBuildResult Refused(V3FirstMountBuildRefusal refusal, string detail)
@@ -491,10 +505,12 @@ public sealed class V3FirstMountBuild
 
             File.Delete(europeSecond.Path);
 
-            // A population acquired across an interruption says so in the build report (V3CorpusMountWriter). The catalogs
-            // carry the resumption, so an offline derivation states it exactly as the acquiring build did.
+            // A population acquired across an interruption says so in the build report (V3CorpusMountWriter), and a dated
+            // catalog says when its collection completed. The catalogs carry both, so an offline derivation states them exactly
+            // as the acquiring build did.
             var result = V3FirstMountBuildResult.Success(corpus, luxembourgIndex.Index, europeIndex.Index, staging, europe.Resumption,
-                luxembourg.Resumption, luxembourg.Rederivation is { } record ? new V3LuxembourgDerivation(record, luxembourg.DerivedAt!.Value) : null);
+                luxembourg.Resumption, luxembourg.Rederivation is { } record ? new V3LuxembourgDerivation(record, luxembourg.DerivedAt!.Value) : null,
+                europe.CatalogedAt, luxembourg.CatalogedAt);
             delivered = true;
             return result;
         }

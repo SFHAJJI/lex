@@ -361,6 +361,7 @@ public static class LuxembourgRederivation
             .ToHashSet();
         var vocabularyCheckpoint = verified.VocabularyCheckpointRef;
         var resumption = verified.Resumption;
+        var catalogedAt = verified.CatalogedAt;
         var scopeManifest = verified.PopulationScopeManifestRef;
 
         // R0's digests matched when it was reopened, and R1 has taken every fact it records from it: from here on R1 holds
@@ -461,7 +462,7 @@ public static class LuxembourgRederivation
             result = result.WithVocabularyCheckpoint(vocabularyCheckpoint);
         }
 
-        result = result.WithCheckpoint(catalog, resumption);
+        result = result.WithCheckpoint(catalog, resumption, catalogedAt);
         if (scopeManifest is not null)
         {
             result = result.WithPopulationScopeManifest(scopeManifest);

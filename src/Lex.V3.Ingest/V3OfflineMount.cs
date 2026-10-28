@@ -183,6 +183,77 @@ public static class V3OfflineMount
     }
 
     /// <summary>
+    /// Writes inputs that pair one acquisition's EU catalog with another acquisition's Luxembourg half: the retained inputs /1
+    /// or /2 of the acquisition whose Luxembourg half is kept (<paramref name="baseInputs"/>), with its EU catalog replaced by
+    /// <paramref name="europeCatalog"/>. Nothing is held until both halves are reopened on their own, as R0 reopens them: the EU
+    /// catalog against the base's seeds and the Luxembourg catalog against the base's act range or population scope, each
+    /// through its own checked reader, so a catalog of other seeds, another scope or a missing object refuses here. The base's
+    /// schema, seeds, Luxembourg half, act or scope, predecessor and referenced generations are kept.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The EU catalog must state when its collection completed (a dated catalog, or a resumed one's resumption): the build time
+    /// stays an upper bound of both halves' observations, so it is the later of the base's and that instant (rounded up to
+    /// the whole second), and a re-derivation over these inputs is then stated to run no earlier. An undated catalog cannot
+    /// bound it and refuses.
+    /// </para>
+    /// <para>
+    /// The inputs are an ordinary /1 or /2, so <see cref="DeriveAsync"/> and <see cref="CaptureRederivationAsync"/> read them
+    /// unchanged. They are held under a resource identity derived from their bytes, so the same arguments give the same reference.
+    /// </para>
+    /// </remarks>
+    public static async Task<SourceArtifactRef> ComposeAsync(ICustodyStore store, SourceArtifactRef baseInputs,
+        SourceArtifactRef europeCatalog, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(baseInputs);
+        ArgumentNullException.ThrowIfNull(europeCatalog);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!CustodyDigest.IsLowercaseSha256(baseInputs.Sha256) || !CustodyDigest.IsLowercaseSha256(europeCatalog.Sha256))
+            throw new ArgumentException("A composition names its base inputs and its EU catalog by their lowercase SHA-256.");
+        var baseBytes = await CustodyRestore.ReadByDigestCheckedAsync(store, baseInputs.Sha256, cancellationToken).ConfigureAwait(false);
+        if (SchemaOf(baseBytes) == RederivationSchema)
+            throw new CustodyIntegrityException("A composition's base is an acquisition's inputs /1 or /2, never a re-derivation's.");
+        var (root, populationScope) = ReadBase(baseBytes);
+
+        // Each half reopened on its own, the EU half first, and released before the next is read.
+        var europeCompleted = await ReopenEuropeHalfAsync(store, europeCatalog, root.Seeds, cancellationToken).ConfigureAwait(false);
+        await ReopenLuxembourgHalfAsync(store, root, populationScope, cancellationToken).ConfigureAwait(false);
+
+        var baseTime = root.BuildTime;
+        var europeBound = V3FirstMountBuild.BuildTimeOf(europeCompleted);
+        var buildTime = europeBound > baseTime ? europeBound : baseTime;
+        var encoded = populationScope is null
+            ? Encode(root with { Europe = europeCatalog, BuildTime = buildTime })
+            : Encoding.UTF8.GetBytes(ContractJson.Serialize(new PopulationInputs(root.Schema, europeCatalog, root.Luxembourg,
+                root.Seeds, populationScope.Policy, populationScope.Ranges.ToArray(), buildTime, root.Predecessor, root.Referenced)));
+        // Held only once they read back exactly as a derivation will read them.
+        var (composed, composedScope) = ReadBase(encoded);
+        if (composed.Europe != europeCatalog || composed.Luxembourg != root.Luxembourg || (composedScope is null) != (populationScope is null))
+            throw new CustodyIntegrityException("Composed offline mount inputs do not read back as composed.");
+        await HoldAsync(store, encoded, cancellationToken).ConfigureAwait(false);
+        return new SourceArtifactRef(ContentDerivedIdentity.DeriveUuidUrn(root.Schema, encoded), CustodyDigest.Of(encoded));
+    }
+
+    /// <summary>
+    /// R0's EU half for a composition: the catalog reopened against the seeds, and when its collection completed, which it must
+    /// state. Nothing it reopened outlives this call.
+    /// </summary>
+    private static async Task<DateTimeOffset> ReopenEuropeHalfAsync(ICustodyStore store, SourceArtifactRef catalog,
+        IReadOnlyList<string> seeds, CancellationToken cancellationToken)
+    {
+        var europe = await EuFirstMountAcquisition.ReopenAsync(store, catalog, seeds, cancellationToken).ConfigureAwait(false);
+        return europe.CatalogedAt ?? europe.Resumption?.CatalogedAt
+            ?? throw new CustodyIntegrityException(
+                "The EU catalog states no time its collection completed (an undated catalog), so no build time can bound it.");
+    }
+
+    /// <summary>R0's Luxembourg half for a composition: the base's catalog reopened against its act range or scope.</summary>
+    private static async Task ReopenLuxembourgHalfAsync(ICustodyStore store, Inputs root, LuxembourgPopulationScope? populationScope,
+        CancellationToken cancellationToken) =>
+        _ = await ReopenLuxembourgAsync(store, root, populationScope, cancellationToken).ConfigureAwait(false);
+
+    /// <summary>
     /// Seals unsealed inputs /3 after their derivation: the same inputs, now expecting exactly the record
     /// <paramref name="recordSha256"/>, held in custody. A derivation of the sealed inputs refuses any other record. Sealed
     /// inputs are never sealed again; their unsealed inputs stay in custody.

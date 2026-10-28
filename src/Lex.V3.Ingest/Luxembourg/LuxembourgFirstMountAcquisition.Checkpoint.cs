@@ -16,6 +16,11 @@ public sealed partial class LuxembourgFirstMountAcquisition
     private const string ResumedAcquisitionCheckpointSchema = "lex-lu-first-mount-acquisition/3";
     private const string ResumedPopulationCheckpointSchema = "lex-lu-first-mount-acquisition/4";
 
+    // A run that was not resumed wraps the same records with the instant it retained its catalog: /5 the act's, /6 the
+    // population's. A resumed run's /3 and /4 state theirs in their resumption.
+    private const string DatedAcquisitionCheckpointSchema = "lex-lu-first-mount-acquisition/5";
+    private const string DatedPopulationCheckpointSchema = "lex-lu-first-mount-acquisition/6";
+
     /// <summary>Restores vocabulary, query acquisition and AKN derivation from checked custody without HTTP.</summary>
     public static async Task<LuxembourgFirstMountAcquisitionResult> ReopenAsync(ICustodyStore store,
         SourceArtifactRef checkpoint, LuxembourgActRange expectedAct, CancellationToken cancellationToken)
@@ -28,19 +33,26 @@ public sealed partial class LuxembourgFirstMountAcquisition
         try
         {
             var text = new UTF8Encoding(false, true).GetString(bytes.Span);
-            var resumed = SchemaOf(text) == ResumedAcquisitionCheckpointSchema
+            var schema = SchemaOf(text);
+            var resumed = schema == ResumedAcquisitionCheckpointSchema
                 ? ContractJson.Deserialize<ResumedAcquisitionCheckpoint>(text)
                 : null;
-            var document = resumed?.Acquisition ?? ContractJson.Deserialize<AcquisitionCheckpoint>(text);
-            if (document is null || document.Schema != AcquisitionCheckpointSchema || document.Act != expectedAct ||
-                !bytes.Span.SequenceEqual(resumed is null ? EncodeAcquisition(document) : Encoding.UTF8.GetBytes(ContractJson.Serialize(resumed))) ||
-                resumed is { Resume: null } || document.Vocabulary is null ||
+            var dated = schema == DatedAcquisitionCheckpointSchema
+                ? ContractJson.Deserialize<DatedAcquisitionCheckpoint>(text)
+                : null;
+            var document = resumed?.Acquisition ?? dated?.Acquisition ?? ContractJson.Deserialize<AcquisitionCheckpoint>(text);
+            var canonical = resumed is not null ? Encoding.UTF8.GetBytes(ContractJson.Serialize(resumed))
+                : dated is not null ? Encoding.UTF8.GetBytes(ContractJson.Serialize(dated))
+                : document is null ? null : EncodeAcquisition(document);
+            if (document is null || canonical is null || document.Schema != AcquisitionCheckpointSchema || document.Act != expectedAct ||
+                !bytes.Span.SequenceEqual(canonical) ||
+                resumed is { Resume: null } || dated is not null && dated.CatalogedAt == default || document.Vocabulary is null ||
                 document.Observation is null || document.Query is null || document.Corpus is null || document.Observed is null ||
                 document.QueryRenderer is null || document.DocumentRenderer is null)
                 throw new CustodyIntegrityException("LU acquisition catalog framing or intended act differs.");
             return await RestorePartsAsync(store, checkpoint, new AcquisitionParts(document.Vocabulary, document.Observation, document.Query, document.QueryRenderer, document.DocumentRenderer, document.Corpus, document.Observed, document.InventorySha256, document.ContentSha256),
                 LuxembourgActRange.Families.Select(expectedAct.FamilyRange).ToArray(), null, cancellationToken,
-                resumed?.Resume).ConfigureAwait(false);
+                resumed?.Resume, dated?.CatalogedAt).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is ArgumentException or JsonException or DecoderFallbackException)
         {
@@ -58,13 +70,19 @@ public sealed partial class LuxembourgFirstMountAcquisition
         try
         {
             var text = new UTF8Encoding(false, true).GetString(bytes.Span);
-            var resumed = SchemaOf(text) == ResumedPopulationCheckpointSchema
+            var schema = SchemaOf(text);
+            var resumed = schema == ResumedPopulationCheckpointSchema
                 ? ContractJson.Deserialize<ResumedPopulationCheckpoint>(text)
                 : null;
-            var document = resumed?.Population ?? ContractJson.Deserialize<PopulationCheckpoint>(text);
+            var dated = schema == DatedPopulationCheckpointSchema
+                ? ContractJson.Deserialize<DatedPopulationCheckpoint>(text)
+                : null;
+            var document = resumed?.Population ?? dated?.Population ?? ContractJson.Deserialize<PopulationCheckpoint>(text);
             if (document is null || document.Schema != PopulationCheckpointSchema || resumed is { Resume: null } ||
+                dated is not null && dated.CatalogedAt == default ||
                 document.ScopeDefinition is null || document.ScopeManifest is null || document.Ranges is null || document.Parts is null ||
-                !bytes.Span.SequenceEqual(Encoding.UTF8.GetBytes(resumed is null ? ContractJson.Serialize(document) : ContractJson.Serialize(resumed))))
+                !bytes.Span.SequenceEqual(Encoding.UTF8.GetBytes(resumed is not null ? ContractJson.Serialize(resumed)
+                    : dated is not null ? ContractJson.Serialize(dated) : ContractJson.Serialize(document))))
                 throw new CustodyIntegrityException("LU population catalog framing is invalid.");
             var declared = new LuxembourgPopulationScope(document.Policy, document.Ranges);
             if (!declared.SameScope(expectedScope))
@@ -75,7 +93,7 @@ public sealed partial class LuxembourgFirstMountAcquisition
                 throw new CustodyIntegrityException("LU population scope declaration differs from its ranges or policy.");
             var restored = await RestorePartsAsync(store, checkpoint, document.Parts,
                 declared.Ranges.SelectMany(range => LuxembourgActRange.Families.Select(range.FamilyRange)).ToArray(),
-                document.ScopeDefinition, cancellationToken, resumed?.Resume).ConfigureAwait(false);
+                document.ScopeDefinition, cancellationToken, resumed?.Resume, dated?.CatalogedAt).ConfigureAwait(false);
             var manifestBytes = await CustodyRestore.ReadByDigestCheckedAsync(store, document.ScopeManifest.Sha256,
                 cancellationToken).ConfigureAwait(false);
             if (!manifestBytes.Span.SequenceEqual(declared.ManifestBytes(restored.Profile!, document.ScopeDefinition, restored.VocabularyEvidenceRef!)))
@@ -91,7 +109,8 @@ public sealed partial class LuxembourgFirstMountAcquisition
     private static async Task<LuxembourgFirstMountAcquisitionResult> RestorePartsAsync(ICustodyStore store,
         SourceArtifactRef checkpoint, AcquisitionParts parts,
         IReadOnlyList<Lex.V3.Contracts.Source.Luxembourg.LuxembourgQueryPartitionRange> ranges,
-        SourceArtifactRef? expectedScopeDefinition, CancellationToken cancellationToken, AcquisitionResumption? resumption = null)
+        SourceArtifactRef? expectedScopeDefinition, CancellationToken cancellationToken, AcquisitionResumption? resumption = null,
+        DateTimeOffset? catalogedAt = null)
     {
         if (parts.Vocabulary is null || parts.Observation is null || parts.Query is null ||
             parts.QueryRenderer is null || parts.DocumentRenderer is null || parts.Corpus is null || parts.Observed is null)
@@ -115,13 +134,15 @@ public sealed partial class LuxembourgFirstMountAcquisition
         if (inventory.IdentitySha256 != parts.InventorySha256 || content.IdentitySha256 != parts.ContentSha256)
             throw new CustodyIntegrityException("LU AKN derivation differs from the original acquisition.");
         return LuxembourgFirstMountAcquisitionResult.Success(run, profile, parts.Observation, inventory, content)
-            .WithVocabularyCheckpoint(parts.Vocabulary).WithCheckpoint(checkpoint, resumption);
+            .WithVocabularyCheckpoint(parts.Vocabulary).WithCheckpoint(checkpoint, resumption, catalogedAt);
     }
 
     private async Task<SourceArtifactRef> RetainAcquisitionCheckpointAsync(LuxembourgPopulationScope scope, bool preserveLegacy,
         SourceArtifactRef scopeDefinition, LuxembourgRendererSources renderers, LuxembourgFirstMountAcquisitionResult result,
-        AcquisitionResumption? resumption, CancellationToken cancellationToken)
+        AcquisitionResumption? resumption, DateTimeOffset? catalogedAt, CancellationToken cancellationToken)
     {
+        if (resumption is not null && catalogedAt is not null)
+            throw new ArgumentException("A resumed catalog states its time in its resumption, never beside it.", nameof(catalogedAt));
         if (result.Run?.AcquisitionCheckpointRef is not { } query || result.VocabularyCheckpointRef is not { } vocabulary ||
             result.VocabularyEvidenceRef is not { } observation || result.Run.CorpusRecordSetRef is not { } corpus ||
             result.Run.ObservedObjectIdentitySetRef is not { } observed || result.AknInventory is not { } inventory ||
@@ -139,19 +160,24 @@ public sealed partial class LuxembourgFirstMountAcquisition
         {
             var acquisition = new AcquisitionCheckpoint(AcquisitionCheckpointSchema, scope.Ranges.Single(),
                 parts.Vocabulary, parts.Observation, parts.Query, parts.QueryRenderer, parts.DocumentRenderer, parts.Corpus, parts.Observed, parts.InventorySha256, parts.ContentSha256);
-            bytes = resumption is null
-                ? EncodeAcquisition(acquisition)
-                : Encoding.UTF8.GetBytes(ContractJson.Serialize(
-                    new ResumedAcquisitionCheckpoint(ResumedAcquisitionCheckpointSchema, acquisition, resumption)));
+            bytes = resumption is not null
+                ? Encoding.UTF8.GetBytes(ContractJson.Serialize(
+                    new ResumedAcquisitionCheckpoint(ResumedAcquisitionCheckpointSchema, acquisition, resumption)))
+                : catalogedAt is { } at
+                    ? Encoding.UTF8.GetBytes(ContractJson.Serialize(
+                        new DatedAcquisitionCheckpoint(DatedAcquisitionCheckpointSchema, acquisition, at)))
+                    : EncodeAcquisition(acquisition);
         }
         else
         {
             var population = new PopulationCheckpoint(
                 PopulationCheckpointSchema, scope.Policy, scope.Ranges.ToArray(), scopeDefinition,
                 result.PopulationScopeManifestRef ?? throw new CustodyRequiredException("Population family dispositions are not retained."), parts);
-            bytes = Encoding.UTF8.GetBytes(resumption is null
-                ? ContractJson.Serialize(population)
-                : ContractJson.Serialize(new ResumedPopulationCheckpoint(ResumedPopulationCheckpointSchema, population, resumption)));
+            bytes = Encoding.UTF8.GetBytes(resumption is not null
+                ? ContractJson.Serialize(new ResumedPopulationCheckpoint(ResumedPopulationCheckpointSchema, population, resumption))
+                : catalogedAt is { } at
+                    ? ContractJson.Serialize(new DatedPopulationCheckpoint(DatedPopulationCheckpointSchema, population, at))
+                    : ContractJson.Serialize(population));
         }
 
         await HoldAcquisitionBytesAsync(bytes, cancellationToken).ConfigureAwait(false);
@@ -180,6 +206,12 @@ public sealed partial class LuxembourgFirstMountAcquisition
 
     /// <summary>A resumed population acquisition's catalog: the uninterrupted run's record and the resumption.</summary>
     private sealed record ResumedPopulationCheckpoint(string Schema, PopulationCheckpoint Population, AcquisitionResumption Resume);
+
+    /// <summary>The catalog of an act acquisition that was not resumed: the record and the instant the run retained it.</summary>
+    private sealed record DatedAcquisitionCheckpoint(string Schema, AcquisitionCheckpoint Acquisition, DateTimeOffset CatalogedAt);
+
+    /// <summary>The catalog of a population acquisition that was not resumed: the record and the instant the run retained it.</summary>
+    private sealed record DatedPopulationCheckpoint(string Schema, PopulationCheckpoint Population, DateTimeOffset CatalogedAt);
 
     /// <summary>A catalog's <c>schema</c>, read before the record it names is deserialized strictly.</summary>
     private static string? SchemaOf(string json)
