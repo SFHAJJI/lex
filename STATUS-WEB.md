@@ -1,8 +1,37 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-27. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-28. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## Release 2's no-browser probes: textless permalinks verified as the log says, the title search read on (sole driver, 2026-10-28)
+
+The Release 2 rehearsal (`image-rehearsal.mjs` over `derive-r2` at 220c05dc) passed the gates, the reproducibility check and
+the signing, then failed two no-browser probes. Both reproduced without a browser against the API over `derive-r2`, linked
+read-only (`startApi`'s `linkMount`), and fixed on `writer/release-2-probes`:
+- **J8: three event permalinks "did not verify".** Root cause in the product: `derive-r2` is the first mount serving codes,
+  and its log (index 9, S7c) sights textless states with their permalinks, as its `permalink_rule` says (events 6 and 10,
+  Code civil 2018-11-01 and 2022-01-01, `withheld_rights`; event 7, 2019-04-28, `not_available_misfiled`). `as_of` and
+  `evidence_bundle` refused them for their text, but `verify` and `resolve` answered `identifier_unknown`: the textless-row
+  branch (`TextlessRowAt`, `RefuseTextless`) was never added to them. Both now refuse `text_withheld` (with the hashes,
+  R64) or `text_not_available`, naming the state, before any other reading. Only index 9 has textless rows: the schema-8 and
+  EU /5 base answers and every sample are unchanged (rendered again: no byte moved). The probe was right to fail, and is
+  made exact, not weaker: each checked event's permalink must answer what its `text_status` says (`digest_matches` where
+  held, else that refusal code), naming the event's own digest, permalink and status; only an event naming no expression
+  may lack a permalink; at least one checked permalink must match a digest. Over the whole `derive-r2` log: 4,065 events
+  (3,387 held, 591 withheld, 2 misfiled, 2 derivation gaps, 83 not acquired), 0 failures; J6, J7 (17 requests) and J8 pass.
+- **"none of the 1 works … lists names an accented title".** The search is right: "loi" has 12,466 strict hits in 1,926
+  works; no reference is recognised; the page is the first 200 hits by work key (no ranker, said in `ranking` and
+  `page_is`), and the codes come first: the Code civil's 291 hits fill page 1, the eight codes the first 14 pages. The probe
+  assumed one page names ten works. It now reads on by the search's own `continue_after` until it has listed
+  `TITLE_WORKS_ASKED` works, at most `TITLE_SEARCH_PAGES` (25); every check on the title found is unchanged. On `derive-r2`
+  it reads 4 pages and checks "Code pénal" (as published, in capitals, decomposed, and the strict search naming it alone).
+- **Tests**: `EveryEventsPermalinkAnswersVerifyAndResolveAsTheLogSaysOfItsStatesText` (the S7a fixture's log: held, withheld,
+  PDF and the code's misfiled state; fails without the fix with derive-r2's `identifier_unknown`); J8's stand-in log with
+  derive-r2's textless events and each wrong answer failing alone; the title probe paged, bounded and refused. Counts:
+  Lex.V3.Tests 3,387 (3,381 passed, 6 skipped on Windows); the Ingest classes touched, the census, event, verify,
+  resolve, sample and recorded-answer classes 151 + 12 + 7, all passed but the recordings, skipped without their variable;
+  web 1,489 (1,485 passed, 3 skipped, and `image-run`'s awk test, which needs awk on the path, passed with Git's).
 
 ## Review and repair (#1005): R92 on every EU search, J2's walk, the apostrophes and no-break spaces folded (sole driver, 2026-10-27)
 

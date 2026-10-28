@@ -168,6 +168,10 @@ public sealed class LuxembourgIndexCatalogueStatesTests
             return this;
         }
 
+        /// <summary>The held bodies as the corpus's members would give them: each one's root, expression and member outcome.</summary>
+        internal IReadOnlyDictionary<(string Root, string Expression), string> MemberOutcomes =>
+            _bodies.GroupBy(static body => (body.RootIri, body.ExpressionIri)).ToDictionary(static group => group.Key, static group => group.First().MemberOutcome);
+
         internal LuxembourgIndexBuilder.WorkFactRow[] Facts => _facts
             .Distinct()
             .OrderBy(static row => row.SubjectIri, StringComparer.Ordinal)

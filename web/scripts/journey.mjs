@@ -2020,13 +2020,55 @@ async function postJson(url, body) {
   return { status: answer.status, protocolVersion: answer.headers.get("mcp-protocol-version"), json };
 }
 
+/** The text status index 9's log gives a state whose text the index holds; an older log names none, and every state it sights holds its text. */
+export const TEXT_HELD = "held";
+
+/**
+ * What `verify` answers for an event's permalink, by what the log says of the event's state (the events answer's
+ * `permalink_rule` on index 9; R64): `digest_matches` where the index holds its text; where it does not (the detail's
+ * `text_status`), the refusal for its text: `text_withheld` for a rights reason (`withheld_rights`), `text_not_available`
+ * otherwise (a PDF, a derivation gap, a misfiled file). Never `identifier_unknown`, and never another state in its place.
+ */
+export function expectedPermalinkAnswer(event) {
+  const status = event?.detail?.text_status ?? TEXT_HELD;
+  if (status === TEXT_HELD) return "digest_matches";
+  return status === "withheld_rights" ? "text_withheld" : "text_not_available";
+}
+
+/**
+ * `verify`'s envelope for one event's permalink held to the log, as a failure or null: the answer the event's text status
+ * says (`expectedPermalinkAnswer`), naming the event's own state by its digest and permalink, and a refusal its text status.
+ */
+export function eventPermalinkFailure(event, envelope) {
+  const expected = expectedPermalinkAnswer(event);
+  const said = `event ${event.seq}'s permalink ${event.permalink} (text ${event.detail?.text_status ?? TEXT_HELD})`;
+  const answered = envelope?.verdict === "answer" ? envelope.result?.value?.verdict : envelope?.refusal?.code ?? envelope?.verdict;
+  if (answered !== expected) return `${said} answered ${answered ?? "no envelope"}, not ${expected}`;
+  const named = expected === "digest_matches" ? envelope.result.value : envelope.refusal.helpful_payload;
+  if (named?.state_sha256 !== event.state_sha256 || named?.permalink !== event.permalink) {
+    return `${said} answered ${expected} naming ${named?.permalink} (state ${named?.state_sha256}), not its own state`;
+  }
+  if (expected !== "digest_matches" && named.text_status !== event.detail.text_status) {
+    return `${said} was refused ${expected} with the text status ${named.text_status}, not the log's ${event.detail.text_status}`;
+  }
+  return null;
+}
+
+/** An event with no permalink, held to the log's rule: only a state the catalogue names no expression of has none, and its text is not held. */
+export function unpermalinkedEventFailures(event) {
+  if (event.language === "" && expectedPermalinkAnswer(event) !== "digest_matches") return [];
+  return [`event ${event.seq} at ${event.stable_coordinate} has no permalink, though ${event.language === "" ? "its text is held" : `it names the language ${event.language}`}`];
+}
+
 /**
  * Journey J8, monitoring, at the API: the event log polled as a client polls it, as failures. The same
  * request answers the same events (the log is append-only); the first page is numbered without a gap; from its own
  * `next_after` a log that said it has more answers the next events, starting where the first page ended and repeating
  * none, and one that said it has no more answers nothing more;
- * a cursor from another log is refused `snapshot_unknown`, never read as this log's; every event's permalink
- * verifies (the first `verifyAtMost` of the first page, on a real mount whose log holds thousands); and
+ * a cursor from another log is refused `snapshot_unknown`, never read as this log's; every event's permalink answers
+ * `verify` as the log says of its state (`eventPermalinkFailure`: `digest_matches` where its text is held, the typed refusal
+ * for its text where it is not, each naming that state), at least one of them `digest_matches`, and only a state naming no
+ * expression has none (the first `verifyAtMost` of the first page, on a real mount whose log holds thousands); and
  * `answer_drift` on a genesis log names no invalidated answer and asserts no absence of drift.
  */
 export async function eventsFailures(origin, { verifyAtMost = Number.POSITIVE_INFINITY } = {}) {
@@ -2062,10 +2104,19 @@ export async function eventsFailures(origin, { verifyAtMost = Number.POSITIVE_IN
   }
   const foreign = await ask("events", { after: `${"0".repeat(64)}:1` });
   if (foreign.json?.refusal?.code !== "snapshot_unknown") failures.push(`a cursor from another log answered ${foreign.json?.refusal?.code ?? foreign.json?.verdict}, not snapshot_unknown`);
-  for (const event of value.events.slice(0, verifyAtMost)) {
-    const checked = await ask("verify", { identifier: event.permalink });
-    if (checked.json?.result?.value?.verdict !== "digest_matches") failures.push(`event ${event.seq}'s permalink ${event.permalink} does not verify`);
+  const checked = value.events.slice(0, verifyAtMost);
+  let matched = 0;
+  for (const event of checked) {
+    if (event.permalink === null || event.permalink === undefined) {
+      failures.push(...unpermalinkedEventFailures(event));
+      continue;
+    }
+    const failure = eventPermalinkFailure(event, (await ask("verify", { identifier: event.permalink })).json);
+    if (failure !== null) failures.push(failure);
+    else if (expectedPermalinkAnswer(event) === "digest_matches") matched += 1;
   }
+  // A log none of whose checked permalinks verified a digest showed nothing of R64's cited bytes.
+  if (checked.length > 0 && matched === 0) failures.push(`none of the ${checked.length} events checked has a permalink that verifies digest_matches`);
   const drift = await ask("answer_drift", {});
   const driftValue = drift.json?.result?.value;
   if (!Array.isArray(driftValue?.invalidated_answers) || driftValue.invalidated_answers.length !== 0) {

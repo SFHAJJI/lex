@@ -216,7 +216,8 @@ public sealed partial class V3MountedGatesTests
 
             var (workId, expressionId, wordingDate) = (wordings[0][0], wordings[0][1], wordings[0][2]);
             var articles = Rows(connection, $"SELECT publisher_identifier, article_identity_sha256 FROM articles WHERE publisher_expression_id = '{expressionId.Replace("'", "''", StringComparison.Ordinal)}' ORDER BY publisher_identifier, article_identity_sha256");
-            var wording = $"/eu-eurlex/{celex}/{wordingDate}--" +
+            // R64: the CELEX is one segment of the permalink (the Treaties' and the Charter's carry a solidus, written %2F).
+            var wording = $"/eu-eurlex/{EuropePermalinkSegment(celex)}/{wordingDate}--" +
                 V3EuropePermalinkTests.WordingSha256ByTheStatedRule(celex, workId, expressionId, language, wordingDate, articles.Select(static row => row[1])) +
                 $"/{language}";
             foreach (var provision in articles.Select(static row => row[0]).Distinct(StringComparer.Ordinal).Take(3))

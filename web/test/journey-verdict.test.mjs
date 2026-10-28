@@ -59,6 +59,8 @@ import {
   UNKNOWN_LAW_STEP,
   UNKNOWN_LAW_WHO_TO_ASK,
   eventsFailures,
+  expectedPermalinkAnswer,
+  unpermalinkedEventFailures,
   apiJourneyRuns,
   specificationJourneyExpectations,
   twoStateExpectations,
@@ -1417,12 +1419,34 @@ test("the real-mount runs give each step its expectations, then the API journeys
  * A stand-in API answering events, verify and answer_drift as a genesis log of `count` events does, counting verify
  * requests. It pages as the real `events` does: at most `limit` events after the cursor, `has_more`, and `next_after`
  * naming the last event served (the log's last when there is no more); a cursor past the last event is refused.
- * `overlap` makes the second page repeat the first page's last event, as a broken log would.
+ * `overlap` makes the second page repeat the first page's last event, as a broken log would. `textless` gives events
+ * (by seq) the text status index 9's log names for a state whose text is not held ("" for one naming no expression, which
+ * has no language and no permalink); `verifyAs(event, answer)` replaces what verify answers, as a faulty server would. Verify
+ * answers as the API does: held text `digest_matches`, a rights reason `text_withheld`, else `text_not_available`, naming the
+ * event's state.
  */
-async function eventLogServer(count, { limit = 200, overlap = false } = {}) {
+async function eventLogServer(count, { limit = 200, overlap = false, textless = {}, verifyAs = (_, answer) => answer } = {}) {
   const { createServer } = await import("node:http");
   const logId = "e".repeat(64);
-  const events = Array.from({ length: count }, (_, index) => ({ seq: index + 1, permalink: `/lu-legilux/w${index}/2024-02-01--${"f".repeat(64)}/fra` }));
+  const events = Array.from({ length: count }, (_, index) => {
+    const state = index.toString(16).padStart(64, "f");
+    const status = textless[index + 1];
+    const named = status !== "";
+    return {
+      seq: index + 1,
+      language: named ? "fra" : "",
+      state_sha256: state,
+      stable_coordinate: `/lu-legilux/w${index}/2024-02-01`,
+      permalink: named ? `/lu-legilux/w${index}/2024-02-01--${state}/fra` : null,
+      detail: status === undefined ? {} : { text_status: status === "" ? "not_acquired" : status },
+    };
+  });
+  const verifyAnswer = (event) => {
+    const status = event.detail.text_status ?? "held";
+    if (status === "held") return { verdict: "answer", result: { value: { verdict: "digest_matches", state_sha256: event.state_sha256, permalink: event.permalink } } };
+    const code = status === "withheld_rights" ? "text_withheld" : "text_not_available";
+    return { verdict: "refuse", refusal: { code, helpful_payload: { state_sha256: event.state_sha256, permalink: event.permalink, text_status: status } } };
+  };
   const page = (after) => {
     const rest = events.filter((event) => event.seq > (overlap && after > 0 ? after - 1 : after));
     const served = rest.slice(0, limit);
@@ -1448,7 +1472,10 @@ async function eventLogServer(count, { limit = 200, overlap = false } = {}) {
       }
       else if (operation === "verify") {
         verified += 1;
-        body = { verdict: "answer", result: { value: { verdict: "digest_matches" } } };
+        const event = events.find((candidate) => candidate.permalink === parameters.identifier);
+        body = event === undefined
+          ? { verdict: "refuse", refusal: { code: "identifier_unknown", helpful_payload: { requested_identifier: parameters.identifier } } }
+          : verifyAs(event, verifyAnswer(event));
       } else if (operation === "answer_drift") body = { verdict: "answer", result: { value: { invalidated_answers: [], asserts_no_drift_in_law: false } } };
       else body = { verdict: "refuse", refusal: { code: "operation_unknown" } };
       response.writeHead(200, { "content-type": "application/json" });
@@ -1494,6 +1521,74 @@ test("journey J8 on a real mount follows the log's own cursor, verifies a bounde
   } finally {
     await empty.close();
   }
+});
+
+test("journey J8 holds each event's permalink to what the log says of its state's text, as the Release 2 rehearsal needed", async () => {
+  // derive-r2's first events: a code's states, two withheld for rights (6, 10) and the misfiled one (7), each with its
+  // permalink, as the log's permalink_rule says; event 12 names no expression and has none.
+  const textless = { 6: "withheld_rights", 7: "not_available_misfiled", 10: "withheld_rights", 12: "" };
+  const served = await eventLogServer(25, { textless });
+  try {
+    assert.deepEqual(await eventsFailures(served.origin, { verifyAtMost: REAL_MOUNT_EVENTS_VERIFIED }), []);
+    assert.equal(served.verified(), 24, "every event with a permalink is verified; the one naming no expression has none to ask");
+  } finally {
+    await served.close();
+  }
+
+  // The rehearsal's fault: verify answered identifier_unknown for the states the log had just named.
+  const unknown = await eventLogServer(25, {
+    textless,
+    verifyAs: (event, answer) => event.detail.text_status === undefined ? answer : { verdict: "refuse", refusal: { code: "identifier_unknown", helpful_payload: {} } },
+  });
+  try {
+    assert.deepEqual(await eventsFailures(unknown.origin, { verifyAtMost: REAL_MOUNT_EVENTS_VERIFIED }), [
+      `event 6's permalink /lu-legilux/w5/2024-02-01--${(5).toString(16).padStart(64, "f")}/fra (text withheld_rights) answered identifier_unknown, not text_withheld`,
+      `event 7's permalink /lu-legilux/w6/2024-02-01--${(6).toString(16).padStart(64, "f")}/fra (text not_available_misfiled) answered identifier_unknown, not text_not_available`,
+      `event 10's permalink /lu-legilux/w9/2024-02-01--${(9).toString(16).padStart(64, "f")}/fra (text withheld_rights) answered identifier_unknown, not text_withheld`,
+    ]);
+  } finally {
+    await unknown.close();
+  }
+
+  // Nothing else passes in the refusal's place: a textless state verified as if held, refused with the other code, a refusal
+  // naming another state or another status, a held state refused, or an event naming a language with no permalink.
+  for (const [what, options, expected] of [
+    ["a withheld state verified", { verifyAs: (event, answer) => event.seq === 6 ? { verdict: "answer", result: { value: { verdict: "digest_matches", state_sha256: event.state_sha256, permalink: event.permalink } } } : answer },
+      /^event 6's permalink .* \(text withheld_rights\) answered digest_matches, not text_withheld$/],
+    ["the misfiled state refused as withheld", { verifyAs: (event, answer) => event.seq === 7 ? { ...answer, refusal: { ...answer.refusal, code: "text_withheld" } } : answer },
+      /^event 7's permalink .* answered text_withheld, not text_not_available$/],
+    ["a refusal naming another state", { verifyAs: (event, answer) => event.seq === 10 ? { ...answer, refusal: { ...answer.refusal, helpful_payload: { ...answer.refusal.helpful_payload, state_sha256: "0".repeat(64) } } } : answer },
+      /^event 10's permalink .* answered text_withheld naming .* \(state 0{64}\), not its own state$/],
+    ["a refusal naming another status", { verifyAs: (event, answer) => event.seq === 7 ? { ...answer, refusal: { ...answer.refusal, helpful_payload: { ...answer.refusal.helpful_payload, text_status: "not_available_pdf" } } } : answer },
+      /^event 7's permalink .* was refused text_not_available with the text status not_available_pdf, not the log's not_available_misfiled$/],
+    ["a held state refused", { verifyAs: (event, answer) => event.seq === 1 ? { verdict: "refuse", refusal: { code: "pinned_digest_mismatch", helpful_payload: {} } } : answer },
+      /^event 1's permalink .* \(text held\) answered pinned_digest_mismatch, not digest_matches$/],
+    ["a held state verified as another", { verifyAs: (event, answer) => event.seq === 2 ? { ...answer, result: { value: { ...answer.result.value, permalink: "/lu-legilux/other" } } } : answer },
+      /^event 2's permalink .* answered digest_matches naming \/lu-legilux\/other .*, not its own state$/],
+  ]) {
+    const server = await eventLogServer(25, { textless, ...options });
+    try {
+      const failures = await eventsFailures(server.origin, { verifyAtMost: REAL_MOUNT_EVENTS_VERIFIED });
+      assert.equal(failures.length, 1, `${what}: ${JSON.stringify(failures)}`);
+      assert.match(failures[0], expected, what);
+    } finally {
+      await server.close();
+    }
+  }
+  assert.deepEqual(unpermalinkedEventFailures({ seq: 3, language: "fra", stable_coordinate: "/lu-legilux/w2/2024-02-01", detail: { text_status: "not_acquired" } }),
+    ["event 3 at /lu-legilux/w2/2024-02-01 has no permalink, though it names the language fra"]);
+  assert.deepEqual(unpermalinkedEventFailures({ seq: 3, language: "", stable_coordinate: "/lu-legilux/w2/2024-02-01", detail: {} }),
+    ["event 3 at /lu-legilux/w2/2024-02-01 has no permalink, though its text is held"]);
+
+  // A log none of whose checked events verified a digest shows nothing of the cited bytes.
+  const allTextless = await eventLogServer(2, { textless: { 1: "withheld_rights", 2: "not_available_pdf" } });
+  try {
+    assert.deepEqual(await eventsFailures(allTextless.origin), ["none of the 2 events checked has a permalink that verifies digest_matches"]);
+  } finally {
+    await allTextless.close();
+  }
+  assert.deepEqual([{}, { text_status: "held" }, { text_status: "withheld_rights" }, { text_status: "not_available_misfiled" }, { text_status: "not_acquired" }]
+    .map((detail) => expectedPermalinkAnswer({ detail })), ["digest_matches", "digest_matches", "text_withheld", "text_not_available", "text_not_available"]);
 });
 
 test("the API journeys run against the server the caller starts (the release image, a deployed revision) and close it", async () => {
