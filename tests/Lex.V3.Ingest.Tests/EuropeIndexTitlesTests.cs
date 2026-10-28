@@ -33,8 +33,8 @@ public sealed class EuropeIndexTitlesTests
         var observed = run.ObservedExpressionTitles;
         Assert.HasCount(2, observed, "a German expression's title is not read: Lex acquires English and French expressions only");
         var root = EuAxiomWiringHarness.SeedRoot("32016R0679");
-        Assert.IsTrue(observed.All(title => title.PublisherWorkIri == root && title.PublisherExpressionIri == EnglishExpression));
-        Assert.IsTrue(observed.All(static title => title.LanguageIri == "http://publications.europa.eu/resource/authority/language/ENG"));
+        Assert.IsTrue(observed.All(value => value.PublisherWorkIri == root && value.PublisherExpressionIri == EnglishExpression));
+        Assert.IsTrue(observed.All(static value => value.LanguageIri == "http://publications.europa.eu/resource/authority/language/ENG"));
         var title = observed.Single(static value => value.PredicateIri.EndsWith("#expression_title", StringComparison.Ordinal));
         Assert.AreEqual(EuTitlesFixture.EnglishTitle, title.RawLexical);
         Assert.IsNull(title.RawLanguageTag);
