@@ -120,8 +120,9 @@ public sealed partial class V3MountedGatesTests
 
     /// <summary>
     /// The works each stratum of the temporal gate holds, at least, the seeded sample's included (the data design's §3.5): every
-    /// code, every overlap, every unclear end day and every invalid interval; 10 consolidated works of three states or more;
-    /// six of each other class. A class the population holds fewer works of is held whole.
+    /// code, every overlap, every unclear end day and every invalid interval, and every state without text whose file the corpus
+    /// acquired (the review of the R1 gates: derive-r2's misfiled and derivation-gap states); 10 consolidated works of three
+    /// states or more; six of each other class. A class the population holds fewer works of is held whole.
     /// </summary>
     internal static readonly IReadOnlyDictionary<string, int> StratumWorks = new Dictionary<string, int>(StringComparer.Ordinal)
     {
@@ -129,6 +130,7 @@ public sealed partial class V3MountedGatesTests
         ["multi_state"] = 10,
         ["single_act"] = 6,
         ["withheld_after_act"] = 6,
+        ["textless_acquired"] = int.MaxValue,
         ["hole"] = 6,
         ["overlap"] = int.MaxValue,
         ["same_date"] = 6,

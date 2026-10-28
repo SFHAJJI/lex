@@ -238,8 +238,9 @@ public sealed partial class V3MountedGatesTests
         /// <summary>
         /// The classes of the interval rules a work's catalogue holds, by the oracle's own reading of its rows: a code, a
         /// consolidated work of three states or more, a single act, an act with a later consolidation withheld by its rights, a
-        /// hole, an overlap, a same-date group, an invalid interval, an unclear end day, a state without text after a held one or
-        /// before the first held one, a translation, a state naming no expression. What the gate's sample is stratified by.
+        /// state without text whose file the corpus acquired (a misfiled file, a derivation gap, a PDF), a hole, an overlap, a
+        /// same-date group, an invalid interval, an unclear end day, a state without text after a held one or before the first held
+        /// one, a translation, a state naming no expression. What the gate's sample is stratified by.
         /// </summary>
         public IReadOnlyList<string> Classes(string work)
         {
@@ -254,6 +255,8 @@ public sealed partial class V3MountedGatesTests
             {
                 classes.Add("withheld_after_act");
             }
+
+            if (rows.Any(row => !row.Held && MemberOutcomeOf(row) == "acquired")) classes.Add("textless_acquired");
 
             var starts = chain.Select(static row => row.From).Distinct().Order().ToArray();
             for (var at = 0; at + 1 < starts.Length; at++)
@@ -391,13 +394,13 @@ public sealed partial class V3MountedGatesTests
         /// The refusal of a state whose text is not held: <c>text_withheld</c> when the corpus file's member of its expression was
         /// withheld for its rights, else <c>text_not_available</c>.
         /// </summary>
-        private string TextlessCode(Row row)
+        private string TextlessCode(Row row) => MemberOutcomeOf(row) == "rights_withheld" ? "text_withheld" : "text_not_available";
+
+        /// <summary>The outcome of the corpus file's member of a row's expression, or null (no expression, or no member).</summary>
+        private string? MemberOutcomeOf(Row row)
         {
             _memberOutcomes ??= MemberOutcomes(_corpusPath);
-            return row.Expression.Length > 0 &&
-                   _memberOutcomes.TryGetValue((row.LegalResource, row.Expression), out var outcome) && outcome == "rights_withheld"
-                ? "text_withheld"
-                : "text_not_available";
+            return row.Expression.Length > 0 && _memberOutcomes.TryGetValue((row.LegalResource, row.Expression), out var outcome) ? outcome : null;
         }
 
         /// <summary>Each Luxembourg member's outcome by its selected root and expression, read from the corpus file.</summary>

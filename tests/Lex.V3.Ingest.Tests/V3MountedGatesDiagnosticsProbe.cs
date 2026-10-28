@@ -261,6 +261,57 @@ public sealed class V3MountedGatesDiagnosticsProbe
         Assert.Fail($"V3_GATES_DIAGNOSE_EU wrote {output} and checked nothing.");
     }
 
+    /// <summary>
+    /// The interval arms over one stratum's works in the stratified sample (<c>V3_GATES_STRATUM</c> names the stratum,
+    /// <c>V3_GATES_DIAGNOSE</c> the output file): the works, each arm's cases and the ones that differ, so a stratum can be
+    /// confirmed over a mount without the whole gate. It checks nothing.
+    /// </summary>
+    [TestMethod]
+    public async Task TheIntervalArmsOverOneStratumArePrinted()
+    {
+        var output = Environment.GetEnvironmentVariable("V3_GATES_DIAGNOSE");
+        var stratum = Environment.GetEnvironmentVariable("V3_GATES_STRATUM");
+        var directory = Environment.GetEnvironmentVariable("V3_EVALUATE_MOUNT");
+        if (string.IsNullOrWhiteSpace(output) || string.IsNullOrWhiteSpace(stratum) || string.IsNullOrWhiteSpace(directory))
+        {
+            Assert.Inconclusive("V3_GATES_DIAGNOSE, V3_GATES_STRATUM and V3_EVALUATE_MOUNT name no output, stratum or mount.");
+        }
+
+        using var mount = await V3CorpusMount.OpenAsync(directory!, CancellationToken.None);
+        Assert.IsNotNull(mount);
+        using var oracle = IndexNineOracle(directory!);
+        var population = V3MountedGatesTests.Timelines(directory!);
+        var stratified = V3MountedGatesTests.Stratified(V3MountedGatesTests.Sample(population, 40, 20260930), population, oracle);
+        var works = stratified.Select(static value => value.WorkKey).Distinct(StringComparer.Ordinal).Where(work => oracle.Classes(work).Contains(stratum!)).Order(StringComparer.Ordinal).ToArray();
+        var text = new StringBuilder($"== stratum {stratum}: {works.Length} works in the sample: {string.Join(", ", works)}\n");
+        var languages = stratified.Where(value => works.Contains(value.WorkKey)).Select(static value => (string?)value.Language).Distinct().Order(StringComparer.Ordinal).Append(null);
+        foreach (var language in languages)
+        {
+            foreach (var (name, arm, expected) in new[]
+                     {
+                         ($"as_of in {language ?? "no language"}", V3MountedGatesTests.IntervalAsOfArm(mount, language), (Func<string, string?, DateOnly, string>)oracle.AsOf),
+                         ($"in_force_on in {language ?? "no language"}", V3MountedGatesTests.IntervalInForceOnArm(mount, language), oracle.InForceOn),
+                     })
+            {
+                var asked = (language is null ? works : stratified.Where(value => value.Language == language && works.Contains(value.WorkKey)).Select(static value => value.WorkKey).Distinct().ToArray())
+                    .SelectMany(work => V3MountedGatesTests.IntervalCases(oracle, work, language, expected)).ToArray();
+                var wrong = asked.Where(one => arm(one.WorkKey, one.AsOf) != one.ExpectedStateKey).ToArray();
+                foreach (var one in wrong)
+                {
+                    text.AppendLine($"{name} | {one.CaseId} | expected {one.ExpectedStateKey} | actual {arm(one.WorkKey, one.AsOf) ?? "null"}");
+                }
+
+                text.AppendLine($"== {name}: {wrong.Length} of {asked.Length} differ");
+            }
+        }
+
+        await File.WriteAllTextAsync(output!, text.ToString());
+        Assert.Fail($"V3_GATES_DIAGNOSE wrote {output} and checked nothing.");
+    }
+
+    private static V3MountedGatesTests.IntervalOracle IndexNineOracle(string directory) =>
+        V3MountedGatesTests.IntervalOracle.Open(directory) ?? throw new AssertInconclusiveException($"{directory} holds no index 9.");
+
     private static string Clip(string value) => value.Length <= 600 ? value : value[..600] + "…";
 
     /// <summary>The timelines as the release's gate read them: every state row, textless ones included, by work and language.</summary>

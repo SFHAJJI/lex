@@ -180,6 +180,7 @@ public sealed class V3MountedGatesOracleTests
                      ("loi-2004-04-04-n1", "hole"), ("loi-2004-04-04-n1", "overlap"),
                      ("loi-2001-01-01-n1", "multi_state"), ("loi-2008-08-08-n1", "multi_state"), ("loi-2010-03-03-n1", "single_act"),
                      ("loi-1798-11-03-n1", "withheld_after_act"), ("loi-2001-01-01-n1", "withheld_after_act"),
+                     ("loi-2002-02-02-n1", "textless_acquired"), ("loi-2001-01-01-n1", "textless_acquired"),
                  })
         {
             CollectionAssert.Contains(oracle.Classes(work).ToArray(), kind, work);
