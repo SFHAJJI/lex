@@ -129,7 +129,7 @@ public sealed partial class V3MountedGatesTests
                     "SELECT article_identity_sha256 FROM articles WHERE publisher_expression_id = $expression ORDER BY publisher_identifier, article_identity_sha256",
                     ("$expression", expression))
                 .Select(static row => row[0]!);
-            return $"{(work.Original ? "original_wording" : "consolidated_version")}:/eu-eurlex/{act}/{date}--" +
+            return $"{(work.Original ? "original_wording" : "consolidated_version")}:/eu-eurlex/{EuropePermalinkSegment(act)}/{date}--" +
                 V3EuropePermalinkTests.WordingSha256ByTheStatedRule(act, work.Work, expression, language, date, identities) + $"/{language}";
         }
 
@@ -209,6 +209,12 @@ public sealed partial class V3MountedGatesTests
 
         return timelines;
     }
+
+    /// <summary>
+    /// A CELEX as R64's one <c>{work}</c> segment of a permalink, by the grammar's own rule (RFC 3986 writes a solidus inside a
+    /// segment <c>%2F</c>): the Treaties' and the Charter's numbers (<c>12016E/TXT</c>) carry one; every other CELEX keeps its bytes.
+    /// </summary>
+    internal static string EuropePermalinkSegment(string celex) => celex.Replace("/", "%2F", StringComparison.Ordinal);
 
     /// <summary>The CELEX the publisher gives a consolidated version of <paramref name="act"/> dated <paramref name="date"/>.</summary>
     internal static string EuropeConsolidatedCelex(string act, string date) =>

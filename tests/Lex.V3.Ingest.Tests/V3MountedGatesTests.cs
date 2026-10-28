@@ -18,8 +18,17 @@ namespace Lex.V3.Ingest.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Temporal: each work's held states in one language, grouped by applicability date, are a timeline, and the
-/// timeline says what a dated request must select on any day: nothing before the first date
+/// Temporal, over <c>lex-v3-luxembourg-index/9</c>: the interval oracle (<see cref="IntervalOracle"/>, the data design's §3.5)
+/// says what a dated request must select from the catalogue's own facts by the specification's interval rules, apart from the
+/// reader and from the index's own chain; each arm is held to its own operation's answer (<c>as_of</c> refuses a state whose
+/// text is not held, for its reason; <c>in_force_on</c> names it in a row) and every refusal to its code and, for
+/// <c>no_version_for_date</c>, its reason. The cases are each day a chain's rules change on (each start and each end), a day
+/// inside and the last day of each span between them, the day before the first and a day long after the last.
+/// </para>
+/// <para>
+/// Temporal, over an index of schema 8 or 6 (the rule those readers keep): each work's held states in one language, grouped
+/// by applicability date, are a timeline, and the timeline says what a dated request must select on any day: nothing before
+/// the first date
 /// (<c>no_version_for_date</c>), the one state of the latest date on or before the day, or
 /// <c>ambiguous_version</c> where two states share that date. The cases are the day before the first date,
 /// each date, a day inside and the last day of each window, and a day long after the latest date, for a
@@ -83,7 +92,10 @@ public sealed partial class V3MountedGatesTests
         }
     }
 
-    /// <summary>The timelines of a mount's Luxembourg index, per work and language.</summary>
+    /// <summary>
+    /// The timelines of a mount's Luxembourg index, per work and language: its held states, the states whose text it holds
+    /// (on index 9 the states table also names the catalogue's states without text, which bind no article).
+    /// </summary>
     internal static IReadOnlyList<Timeline> Timelines(string mountDirectory)
     {
         var index = Path.Combine(mountDirectory, V3CorpusMount.IndexFileName);
@@ -94,6 +106,7 @@ public sealed partial class V3MountedGatesTests
 
         using var connection = LuxembourgIndexBuilder.Open(index, SqliteOpenMode.ReadOnly);
         return ReadStates(connection)
+            .Where(static row => row.ArticleIdentitiesJson != "[]")
             .GroupBy(static row => (row.WorkKey, row.Language))
             .OrderBy(static group => group.Key.WorkKey, StringComparer.Ordinal)
             .ThenBy(static group => group.Key.Language, StringComparer.Ordinal)
@@ -105,10 +118,70 @@ public sealed partial class V3MountedGatesTests
             .ToArray();
     }
 
+    /// <summary>
+    /// The works each stratum of the temporal gate holds, at least, the seeded sample's included (the data design's §3.5): every
+    /// code, every overlap, every unclear end day and every invalid interval, and every state without text whose file the corpus
+    /// acquired (the review of the R1 gates: derive-r2's misfiled and derivation-gap states); 10 consolidated works of three
+    /// states or more; six of each other class. A class the population holds fewer works of is held whole.
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<string, int> StratumWorks = new Dictionary<string, int>(StringComparer.Ordinal)
+    {
+        ["code"] = int.MaxValue,
+        ["multi_state"] = 10,
+        ["single_act"] = 6,
+        ["withheld_after_act"] = 6,
+        ["textless_acquired"] = int.MaxValue,
+        ["hole"] = 6,
+        ["overlap"] = int.MaxValue,
+        ["same_date"] = 6,
+        ["invalid"] = int.MaxValue,
+        ["unclear_end"] = int.MaxValue,
+        ["textless_after_held"] = 6,
+        ["textless_before_held"] = 6,
+        ["translation"] = 6,
+        ["no_expression"] = 6,
+    };
+
+    /// <summary>
+    /// The temporal gate's sample over index 9 (the data design's §3.5): the seeded sample, and in each class of the interval
+    /// rules the oracle reads in the population's catalogue (<see cref="IntervalOracle.Classes"/>), works more in the seeded
+    /// order until the class holds its <see cref="StratumWorks"/>, so the classes a random sample may miss are asked of the
+    /// reader on every mount that holds them.
+    /// </summary>
+    internal static IReadOnlyList<Timeline> Stratified(IReadOnlyList<Timeline> sample, IReadOnlyList<Timeline> population, IntervalOracle oracle)
+    {
+        var chosen = sample.Select(static value => value.WorkKey).ToHashSet(StringComparer.Ordinal);
+        var counted = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var work in SeededOrder(population.Select(static value => value.WorkKey).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(), Seed))
+        {
+            var classes = oracle.Classes(work);
+            if (chosen.Contains(work))
+            {
+                foreach (var one in classes) counted[one] = counted.GetValueOrDefault(one) + 1;
+                continue;
+            }
+
+            if (classes.Any(one => counted.GetValueOrDefault(one) < StratumWorks[one]))
+            {
+                chosen.Add(work);
+                foreach (var one in classes) counted[one] = counted.GetValueOrDefault(one) + 1;
+            }
+        }
+
+        return population.Where(value => chosen.Contains(value.WorkKey)).ToArray();
+    }
+
     /// <summary>A seeded sample of the works, all of each chosen work's languages kept together.</summary>
     internal static IReadOnlyList<Timeline> Sample(IReadOnlyList<Timeline> timelines, int works, ulong seed)
     {
-        var keys = timelines.Select(static value => value.WorkKey).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var keys = SeededOrder(timelines.Select(static value => value.WorkKey).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(), seed);
+        var chosen = keys.Take(works).ToHashSet(StringComparer.Ordinal);
+        return timelines.Where(value => chosen.Contains(value.WorkKey)).ToArray();
+    }
+
+    /// <summary>The keys in the seeded sample's order (a Fisher-Yates shuffle by <see cref="SplitMix64"/>).</summary>
+    private static string[] SeededOrder(string[] keys, ulong seed)
+    {
         var random = new SplitMix64(seed);
         for (var at = keys.Length - 1; at > 0; at--)
         {
@@ -116,8 +189,7 @@ public sealed partial class V3MountedGatesTests
             (keys[at], keys[other]) = (keys[other], keys[at]);
         }
 
-        var chosen = keys.Take(works).ToHashSet(StringComparer.Ordinal);
-        return timelines.Where(value => chosen.Contains(value.WorkKey)).ToArray();
+        return keys;
     }
 
     /// <summary>The temporal cases a timeline gives, each with what the timeline says it must select.</summary>
@@ -154,6 +226,56 @@ public sealed partial class V3MountedGatesTests
         days.Add(("after-latest", dates[^1].AddDays(AfterLatestDays)));
         return days.Select(value => new TemporalCase($"{id}/{value.Label}", workKey, value.Day, expected(value.Day))).ToArray();
     }
+
+    /// <summary>
+    /// The days the interval oracle asks of one work in one language, or with none (<paramref name="language"/> null): the day
+    /// before its first boundary, each boundary (each start and each end of its chain), a day inside and the last day of each
+    /// span between two, and a day long after the last; each with what the operation must answer, by the oracle.
+    /// </summary>
+    internal static IReadOnlyList<TemporalCase> IntervalCases(IntervalOracle oracle, string workKey, string? language, Func<string, string?, DateOnly, string> expected)
+    {
+        var dates = oracle.Boundaries(workKey, language);
+        return dates.Count == 0
+            ? []
+            : Cases($"{workKey}/{language ?? "any"}", workKey, dates, day => expected(workKey, language, day));
+    }
+
+    /// <summary>
+    /// <c>as_of</c> over index 9, in a language or with none, keyed as the oracle keys it: the sorted states served; a refusal by
+    /// its code, and <c>no_version_for_date</c> with its reason.
+    /// </summary>
+    internal static TemporalArm IntervalAsOfArm(V3CorpusMount mount, string? language) => (workKey, asOf) =>
+    {
+        var envelope = EnvelopeAsync(mount, "/api/v3/as_of", "as_of", DatedRequest(workKey, asOf, language)).GetAwaiter().GetResult();
+        return envelope.Refusal is { } refusal
+            ? RefusalKey(refusal)
+            : string.Join('+', envelope.Result!.Value.GetProperty("states").EnumerateArray()
+                .Select(static state => state.GetProperty("state_sha256").GetString()!).Order(StringComparer.Ordinal));
+    };
+
+    /// <summary><c>in_force_on</c> for a named work over index 9, keyed the same way: its rows' states, each the one it names.</summary>
+    internal static TemporalArm IntervalInForceOnArm(V3CorpusMount mount, string? language) => (workKey, asOf) =>
+    {
+        var envelope = EnvelopeAsync(mount, "/api/v3/in_force_on", "in_force_on", DatedRequest(workKey, asOf, language)).GetAwaiter().GetResult();
+        if (envelope.Refusal is { } refusal)
+        {
+            return RefusalKey(refusal);
+        }
+
+        var rows = envelope.Result!.Value.GetProperty("states").EnumerateArray().ToArray();
+        return rows.Any(static row => row.GetProperty("state").ValueKind != System.Text.Json.JsonValueKind.Object)
+            ? null
+            : string.Join('+', rows.Select(static row => row.GetProperty("state").GetProperty("state_sha256").GetString()!).Order(StringComparer.Ordinal));
+    };
+
+    private static string RefusalKey(Lex.V3.Contracts.Platform.V3EnvelopeRefusal refusal) =>
+        "refusal:" + refusal.Code +
+        (refusal.Code == "no_version_for_date" && refusal.HelpfulPayload.TryGetProperty("reason", out var reason) ? ":" + reason.GetString() : "");
+
+    private static object DatedRequest(string workKey, DateOnly asOf, string? language) =>
+        language is null
+            ? new { identifier = $"/lu-legilux/{workKey}", date = asOf.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) }
+            : new { identifier = $"/lu-legilux/{workKey}", date = asOf.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), language };
 
     /// <summary>
     /// <c>as_of</c> asked with no language, keyed as a work timeline keys it: a refusal by its code, an answer by the
@@ -198,7 +320,41 @@ public sealed partial class V3MountedGatesTests
     /// work with no language, with its date control.
     /// </summary>
     internal static EvaluationCardSet[] RunTemporalGate(V3CorpusMount mount, string mountDirectory) =>
-        RunTemporalGate(mount, Sample(Timelines(mountDirectory), WorkSample, Seed));
+        RunTemporalGate(mount, Sample(Timelines(mountDirectory), WorkSample, Seed), mountDirectory);
+
+    /// <summary>
+    /// The temporal gate over the sample's works: on index 9 by the interval oracle, an arm per language and operation and
+    /// one per operation with no language, each held to its own operation's answer; on an index of schema 8 or 6 by the works'
+    /// timelines, as those readers select.
+    /// </summary>
+    internal static EvaluationCardSet[] RunTemporalGate(V3CorpusMount mount, IReadOnlyList<Timeline> timelines, string mountDirectory, IReadOnlyList<Timeline>? population = null)
+    {
+        using var oracle = IntervalOracle.Open(mountDirectory);
+        return oracle is null
+            ? RunTemporalGate(mount, timelines)
+            : RunIntervalGate(mount, population is null ? timelines : Stratified(timelines, population, oracle), oracle);
+    }
+
+    internal static EvaluationCardSet[] RunIntervalGate(V3CorpusMount mount, IReadOnlyList<Timeline> timelines, IntervalOracle oracle)
+    {
+        var shift = ShiftDays(timelines);
+        var arms = new List<(string Name, TemporalArm Arm, IReadOnlyList<TemporalCase> Cases, Func<string, DateOnly, string> ExpectedAt)>();
+        var works = timelines.Select(static value => value.WorkKey).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        foreach (var language in timelines.Select(static value => value.Language).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+        {
+            var held = timelines.Where(value => value.Language == language).Select(static value => value.WorkKey).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            arms.Add(($"as_of in {language}", IntervalAsOfArm(mount, language),
+                held.SelectMany(work => IntervalCases(oracle, work, language, oracle.AsOf)).ToArray(), (work, day) => oracle.AsOf(work, language, day)));
+            arms.Add(($"in_force_on in {language}", IntervalInForceOnArm(mount, language),
+                held.SelectMany(work => IntervalCases(oracle, work, language, oracle.InForceOn)).ToArray(), (work, day) => oracle.InForceOn(work, language, day)));
+        }
+
+        arms.Add(("as_of with no language", IntervalAsOfArm(mount, null),
+            works.SelectMany(work => IntervalCases(oracle, work, null, oracle.AsOf)).ToArray(), (work, day) => oracle.AsOf(work, null, day)));
+        arms.Add(("in_force_on with no language", IntervalInForceOnArm(mount, null),
+            works.SelectMany(work => IntervalCases(oracle, work, null, oracle.InForceOn)).ToArray(), (work, day) => oracle.InForceOn(work, null, day)));
+        return TemporalSets(arms, shift, "there is no temporal case to shift: the mount holds no Luxembourg state for this arm");
+    }
 
     internal static EvaluationCardSet[] RunTemporalGate(V3CorpusMount mount, IReadOnlyList<Timeline> timelines)
     {
@@ -224,28 +380,35 @@ public sealed partial class V3MountedGatesTests
 
     /// <summary>
     /// One card set per arm, over its cases, with the date control over the cases its timeline says the shift changes; an arm
-    /// with no case is not measured, and its control says why (<paramref name="noCase"/>).
+    /// with no case is not measured, and its control says why (<paramref name="noCase"/>). The control's cases are read from
+    /// the oracle first, one arm after another; then each arm asks the mount on a thread of its own, as the server answers
+    /// concurrent requests over one mount. What is asked, and what each answer is held to, are the same as in one arm after
+    /// another; the sets come in the arms' order.
     /// </summary>
     private static EvaluationCardSet[] TemporalSets(
         IReadOnlyList<(string Name, TemporalArm Arm, IReadOnlyList<TemporalCase> Cases, Func<string, DateOnly, string> ExpectedAt)> arms,
         int shift,
         string noCase)
     {
-        var sets = new List<EvaluationCardSet>();
-        foreach (var (name, arm, cases, expectedAt) in arms)
+        var controlCases = arms
+            .Select(value => (IReadOnlyList<TemporalCase>)value.Cases.Where(one => value.ExpectedAt(one.WorkKey, one.AsOf.AddDays(shift)) != one.ExpectedStateKey).ToArray())
+            .ToArray();
+        var measured = new (TemporalReport Report, ControlResult Control)[arms.Count];
+        Parallel.For(0, arms.Count, at =>
         {
+            var (_, arm, cases, _) = arms[at];
             var report = TemporalEvaluation.Evaluate(cases, arm, floor: Math.Max(1, cases.Count));
-            var controlCases = cases.Where(value => expectedAt(value.WorkKey, value.AsOf.AddDays(shift)) != value.ExpectedStateKey).ToArray();
             var control = cases.Count == 0
                 ? new ControlResult(ShuffledControlNames.DateShuffle, ControlVerdict.NotApplicable, noCase, Seed)
                 : ShuffledControls.DateShuffle(
-                    controlCases, arm, (set, run) => TemporalEvaluation.Evaluate(set, run, floor: Math.Max(1, set.Count)), [shift], Seed);
-            sets.Add(EvaluationCard.Temporal(
-                name, cases, report, controlCases, control,
-                $"the control shifts every case forward by {shift} days, the median gap between held dates; a case the shift cannot change (its timeline selects the same after it) is outside the control by its design"));
-        }
+                    controlCases[at], arm, (set, run) => TemporalEvaluation.Evaluate(set, run, floor: Math.Max(1, set.Count)), [shift], Seed);
+            measured[at] = (report, control);
+        });
 
-        return [.. sets];
+        return arms.Select((value, at) => EvaluationCard.Temporal(
+                value.Name, value.Cases, measured[at].Report, controlCases[at], measured[at].Control,
+                $"the control shifts every case forward by {shift} days, the median gap between held dates; a case the shift cannot change (its timeline selects the same after it) is outside the control by its design"))
+            .ToArray();
     }
 
     private static DateOnly Day(string date) => DateOnly.ParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
@@ -363,8 +526,9 @@ public sealed partial class V3MountedGatesTests
 
         using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None);
         Assert.IsNotNull(mount, $"{directory} does not mount.");
-        var timelines = Sample(Timelines(directory), WorkSample, Seed);
-        var temporal = RunTemporalGate(mount, timelines);
+        var population = Timelines(directory);
+        var timelines = Sample(population, WorkSample, Seed);
+        var temporal = RunTemporalGate(mount, timelines, directory, population);
         var europeTemporal = RunEuropeTemporalGate(mount, directory);
         var (refusal, derived) = RunRefusalGate(mount, directory, timelines);
         // An EU index that holds a usable word in a wording EU search answers must give the EU requests (review of #846).

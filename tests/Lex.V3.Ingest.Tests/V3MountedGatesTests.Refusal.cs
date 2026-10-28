@@ -34,17 +34,53 @@ public sealed partial class V3MountedGatesTests
     /// <summary>
     /// The evidence bundle's own rule for a state's text (<c>V3CorpusMount</c>, rights at compose time): its sources are
     /// the members behind its article identities (<c>StateSources</c>), and the text is withheld when it has none, or
-    /// when any source was not acquired or holds another rights disposition than the one admitting one. As SQL over a
-    /// state <c>s</c>; the tokens are the contract's own.
+    /// when any source was not acquired or holds a rights disposition the rights admission policy the corpus file names does
+    /// not admit (none named: policy /1, <c>agreed_same_run_cc_by</c> alone; policy A adds <c>agreed_cc_by_rederived</c>, the
+    /// data design's §3.3 item 11). As SQL over a state <c>s</c>; the tokens are the contract's own.
     /// </summary>
-    private static readonly string StateWithheld =
+    private static string StateWithheld(string? admissionPolicy) =>
         "(NOT EXISTS (SELECT 1 FROM json_each(s.article_identities_json) j JOIN articles a ON a.article_identity_sha256 = j.value JOIN members m ON m.object_ref_sha256 = a.object_ref_sha256) " +
         "OR EXISTS (SELECT 1 FROM json_each(s.article_identities_json) j JOIN articles a ON a.article_identity_sha256 = j.value JOIN members m ON m.object_ref_sha256 = a.object_ref_sha256 " +
-        $"WHERE m.outcome IS NOT '{ContractWire.NameOf(LexCorpus6OutcomeKind.Acquired)}' OR m.rights_disposition IS NOT '{ContractWire.NameOf(LuxembourgRightsChannelDisposition.AgreedSameRunCcBy)}'))";
+        $"WHERE m.outcome IS NOT '{ContractWire.NameOf(LexCorpus6OutcomeKind.Acquired)}' OR m.rights_disposition IS NULL OR m.rights_disposition NOT IN (" +
+        string.Join(", ", LuxembourgRightsAdmissionPolicies.AdmittingDispositions(admissionPolicy).Select(static disposition => $"'{ContractWire.NameOf(disposition)}'")) + ")))";
+
+    /// <summary>
+    /// The rights admission policy a mount's corpus file names (its header's <c>luxembourg_rights_admission_policy</c>, read from
+    /// the file before its members), or null when it names none.
+    /// </summary>
+    internal static string? CorpusAdmissionPolicy(string mountDirectory)
+    {
+        var path = Path.Combine(mountDirectory, V3CorpusMount.CorpusFileName);
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        var reader = new System.Text.Json.Utf8JsonReader(File.ReadAllBytes(path));
+        reader.Read();
+        while (reader.Read() && reader.TokenType == System.Text.Json.JsonTokenType.PropertyName)
+        {
+            var name = reader.GetString();
+            reader.Read();
+            if (name == "luxembourg_rights_admission_policy")
+            {
+                return reader.TokenType == System.Text.Json.JsonTokenType.String ? reader.GetString() : null;
+            }
+
+            if (name == "members")
+            {
+                return null;
+            }
+
+            reader.Skip();
+        }
+
+        return null;
+    }
     private static readonly string[] CandidateLanguages = ["eng", "deu", "fra", "ltz"];
     private static readonly string[] CandidateFormats = ["docx", "epub", "odt", "rtf"];
 
-    internal static RefusalSet RefusalCases(string mountDirectory, IReadOnlyList<Timeline> timelines)
+    internal static RefusalSet RefusalCases(string mountDirectory, IReadOnlyList<Timeline> timelines, IReadOnlyDictionary<(string Root, string Expression), string>? memberOutcomes = null)
     {
         // Coverage answers about the Luxembourg index, and refuses no_corpus_mounted when the mount holds none (an EU index
         // alone): the handler's own rule (its Luxembourg reader is null).
@@ -68,10 +104,18 @@ public sealed partial class V3MountedGatesTests
             notProduced["no_corpus_mounted"] = "the mount holds an EU index, so an EU request is not refused for want of one";
         }
 
+        // On index 9 the interval oracle says what the rules serve on a day (the data design's §3.5), so an anchor is a state
+        // the rules serve alone on its own date, a date before the history is before the catalogue's first state (a state
+        // without text may begin before the first held one), and two states of one date are ambiguous only when the oracle
+        // says so (one wording is served once). On an index of schema 8 or 6 the timelines say it (the R1 gates, 2026-10-26).
+        using var oracle = IntervalOracle.Open(mountDirectory, memberOutcomes);
+        bool ServedAlone(string work, string language, DateOnly date, string state) =>
+            oracle is null || oracle.AsOf(work, language, date) == state;
+
         // A dated state held alone on its date: the anchor of every request that names one state.
         var held = timelines
             .SelectMany(static timeline => timeline.Dates.Where(static date => date.States.Count == 1).Select(date => (Timeline: timeline, date.Date, State: date.States[0])))
-            .FirstOrDefault();
+            .FirstOrDefault(value => ServedAlone(value.Timeline.WorkKey, value.Timeline.Language, value.Date, value.State));
         if (held.Timeline is null)
         {
             foreach (var code in new[] { "identifier_unknown", "language_not_available", "no_version_for_date", "anchor_not_in_version", "pinned_digest_mismatch", "retrieval_mode_unavailable", "snapshot_unknown", "format_not_available", "ambiguous_version", "ambiguous_identifier", "profiles_differ", "text_withheld", "text_not_available" })
@@ -89,7 +133,8 @@ public sealed partial class V3MountedGatesTests
         requests["a-held-state"] = new("as_of", new { identifier = work, date = day, language }, "answer");
         requests["the-held-permalink"] = new("verify", new { identifier = $"{work}/{day}--{state}/{language}", language }, "answer");
         requests["unknown-work"] = new("as_of", new { identifier = NoSuchWork, date = day }, "identifier_unknown");
-        requests["before-history"] = new("as_of", new { identifier = work, date = timeline.Dates[0].Date.AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), language }, "no_version_for_date");
+        var first = oracle is null ? timeline.Dates[0].Date : oracle.Boundaries(timeline.WorkKey, language)[0];
+        requests["before-history"] = new("as_of", new { identifier = work, date = first.AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), language }, "no_version_for_date");
         requests["anchor-not-held"] = new("article_history", new { identifier = work, anchor = "art_no_such_anchor", language }, "anchor_not_in_version");
         requests["pinned-digest-not-held"] = new("verify", new { identifier = $"{work}/{day}--{new string('0', 64)}/{language}", language }, "pinned_digest_mismatch");
         requests["mode-not-held"] = new("search", new { query = "loi", language, mode = "bm25" }, "retrieval_mode_unavailable");
@@ -107,7 +152,8 @@ public sealed partial class V3MountedGatesTests
             notProduced["language_not_available"] = $"{timeline.WorkKey} is held in every candidate language";
         }
 
-        var twin = timelines.SelectMany(static value => value.Dates.Where(static date => date.States.Count > 1).Select(date => (Timeline: value, date.Date))).FirstOrDefault();
+        var twin = timelines.SelectMany(static value => value.Dates.Where(static date => date.States.Count > 1).Select(date => (Timeline: value, date.Date)))
+            .FirstOrDefault(value => oracle is null || oracle.AsOf(value.Timeline.WorkKey, value.Timeline.Language, value.Date) == Ambiguous);
         if (twin.Timeline is not null)
         {
             requests["twin-states"] = new("as_of", new { identifier = $"/lu-legilux/{twin.Timeline.WorkKey}", date = twin.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), language = twin.Timeline.Language }, "ambiguous_version");
@@ -150,10 +196,12 @@ public sealed partial class V3MountedGatesTests
         }
 
         // Two states of one work in one language, each alone on its date, whose rule profiles differ.
-        var profiles = Rows(connection, "SELECT work_key, language, applicability_date, rule_profiles_json FROM states ORDER BY work_key, language, applicability_date")
+        // Held states only (on index 9 a state without text binds no article), each the one the rules serve on its date.
+        var profiles = Rows(connection, "SELECT work_key, language, applicability_date, rule_profiles_json, state_sha256 FROM states WHERE article_identities_json <> '[]' ORDER BY work_key, language, applicability_date")
             .GroupBy(static row => (row[0], row[1], row[2]))
             .Where(static group => group.Count() == 1)
             .Select(static group => group.Single())
+            .Where(row => ServedAlone(row[0], row[1], Day(row[2]), row[4]))
             .GroupBy(static row => (row[0], row[1]))
             .SelectMany(static group => group.Zip(group.Skip(1), static (from, to) => (From: from, To: to)))
             .FirstOrDefault(static pair => pair.From[3] != pair.To[3]);
@@ -168,18 +216,20 @@ public sealed partial class V3MountedGatesTests
 
         // A state held alone on its date whose text the bundle withholds by its own rule (review of #839: the first
         // version guessed a "non_admitting" prefix and missed a disposition such as `conflict`); and one whose text it
-        // does not withhold but whose every article holds none, since rights are decided before any text is read.
-        var withheld = StateWhere(connection, StateWithheld);
+        // does not withhold but whose every article holds none, since rights are decided before any text is read. The rule is
+        // the one of the rights admission policy the corpus names (Release 2's derive names policy A).
+        var stateWithheld = StateWithheld(CorpusAdmissionPolicy(mountDirectory));
+        var withheld = StateWhere(connection, stateWithheld, ServedAlone);
         if (withheld is { } blocked)
         {
             requests["rights-not-agreed"] = new("evidence_bundle", new { identifier = $"/lu-legilux/{blocked.Work}", date = blocked.Date, language = blocked.Language }, "text_withheld");
         }
         else
         {
-            notProduced["text_withheld"] = "every state's sources were acquired under the one admitting rights disposition";
+            notProduced["text_withheld"] = "every state's sources were acquired under a rights disposition the corpus's admission policy admits";
         }
 
-        var empty = StateWhere(connection, $"NOT {StateWithheld} AND NOT EXISTS (SELECT 1 FROM articles a WHERE a.expression_iri = s.expression_iri AND a.searchable_text <> '')");
+        var empty = StateWhere(connection, $"NOT {stateWithheld} AND NOT EXISTS (SELECT 1 FROM articles a WHERE a.expression_iri = s.expression_iri AND a.searchable_text <> '')", ServedAlone);
         if (empty is { } textless)
         {
             requests["no-text-held"] = new("evidence_bundle", new { identifier = $"/lu-legilux/{textless.Work}", date = textless.Date, language = textless.Language }, "text_not_available");
@@ -189,8 +239,64 @@ public sealed partial class V3MountedGatesTests
             notProduced["text_not_available"] = "every state whose text is admitted holds text";
         }
 
+        // On index 9 a date a state without text covers is refused by as_of with the state's own reason (the specification's
+        // R83 and R77, and the data design's §3.5): text_withheld when its member's rights withhold it, else text_not_available. Each is
+        // asked on the first such state the oracle says as_of refuses so on its own date. A not-produced reason says what the
+        // catalogue holds, since index 9 holds states without text (the R1 gates, 2026-10-27).
+        if (oracle is not null)
+        {
+            foreach (var (code, id) in new[] { ("text_withheld", "state-text-withheld"), ("text_not_available", "state-text-not-available") })
+            {
+                if (TextlessStateRefused(connection, oracle, code) is { } refused)
+                {
+                    requests[id] = new("as_of", new { identifier = $"/lu-legilux/{refused.Work}", date = refused.Date, language = refused.Language }, code);
+                }
+            }
+
+            // An ambiguity the sample does not hold may be in the catalogue: the first day, in work order, on which the rules say
+            // two French states cover a work's date and are not one wording (a pair of one date, or one state nested in another).
+            if (!requests.ContainsKey("twin-states") && AmbiguousInCatalogue(connection, oracle) is { } ambiguous)
+            {
+                requests["twin-states"] = new("as_of", new { identifier = $"/lu-legilux/{ambiguous.Work}", date = ambiguous.Date, language = "fra" }, "ambiguous_version");
+            }
+
+            ReasonOnIndexNine(notProduced, "text_withheld", "no state without text that as_of refuses on its own date is withheld by its rights, and every held state's sources were acquired under a rights disposition the corpus's admission policy admits");
+            ReasonOnIndexNine(notProduced, "text_not_available", "no state without text that as_of refuses on its own date lacks it for a reason other than its rights, and every held state whose text is admitted holds text");
+            ReasonOnIndexNine(notProduced, "ambiguous_version", "no day a French state of a served work begins or ends on is one the rules call ambiguous (states of one wording are served once)");
+            ReasonOnIndexNine(notProduced, "profiles_differ", "no two held states of one work, each served alone on its own date, differ in rule profile");
+        }
+
         return Finished(mountDirectory, requests, notProduced);
     }
+
+    private static void ReasonOnIndexNine(IDictionary<string, string> notProduced, string code, string reason)
+    {
+        if (notProduced.ContainsKey(code))
+        {
+            notProduced[code] = reason;
+        }
+    }
+
+    /// <summary>
+    /// The first day, in work key order then date order, of a French chain's starts and ends on which the interval oracle says
+    /// <c>as_of</c> in French is <c>ambiguous_version</c>, or none.
+    /// </summary>
+    private static (string Work, string Date)? AmbiguousInCatalogue(SqliteConnection connection, IntervalOracle oracle) =>
+        Rows(connection, "SELECT DISTINCT work_key FROM states ORDER BY work_key")
+            .SelectMany(row => oracle.Boundaries(row[0], "fra").Select(day => (Work: row[0], Day: day)))
+            .Where(value => oracle.AsOf(value.Work, "fra", value.Day) == Ambiguous)
+            .Select(static value => ((string Work, string Date)?)(value.Work, value.Day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))
+            .FirstOrDefault();
+
+    /// <summary>
+    /// The first state without text, in the catalogue's order, on whose own date the interval oracle says <c>as_of</c> refuses
+    /// with <paramref name="code"/> (no held state of its language covers that date beside it).
+    /// </summary>
+    private static (string Work, string Date, string Language)? TextlessStateRefused(SqliteConnection connection, IntervalOracle oracle, string code) =>
+        Rows(connection, "SELECT work_key, applicability_date, language FROM states WHERE article_identities_json = '[]' AND language <> '' ORDER BY work_key, applicability_date, language, state_sha256")
+            .Where(row => oracle.AsOf(row[0], row[2], Day(row[1])) == "refusal:" + code)
+            .Select(static row => ((string Work, string Date, string Language)?)(row[0], row[1], row[2]))
+            .FirstOrDefault();
 
     /// <summary>
     /// The set with the EU requests the mount's EU index gives, and without a not-produced entry for a code some request
@@ -275,9 +381,10 @@ public sealed partial class V3MountedGatesTests
         var (workId, expressionId, wordingDate) = (wordings[0][0], wordings[0][1], wordings[0][2]);
         var articles = Rows(connection, $"SELECT publisher_identifier, article_identity_sha256 FROM articles WHERE publisher_expression_id = '{expressionId.Replace("'", "''", StringComparison.Ordinal)}' ORDER BY publisher_identifier, article_identity_sha256");
         var digest = V3EuropePermalinkTests.WordingSha256ByTheStatedRule(celex, workId, expressionId, language, wordingDate, articles.Select(static row => row[1]));
-        var wording = $"/eu-eurlex/{celex}/{wordingDate}--{digest}/{language}";
+        // R64: the CELEX is one segment of the permalink (the Treaties' and the Charter's carry a solidus, written %2F).
+        var wording = $"/eu-eurlex/{EuropePermalinkSegment(celex)}/{wordingDate}--{digest}/{language}";
         requests["eu-pinned-provision"] = new("verify", new { identifier = $"{wording}/{Uri.EscapeDataString(articles[0][0])}" }, "answer");
-        requests["eu-pinned-digest-not-held"] = new("verify", new { identifier = $"/eu-eurlex/{celex}/{wordingDate}--{new string('0', 64)}/{language}" }, "pinned_digest_mismatch");
+        requests["eu-pinned-digest-not-held"] = new("verify", new { identifier = $"/eu-eurlex/{EuropePermalinkSegment(celex)}/{wordingDate}--{new string('0', 64)}/{language}" }, "pinned_digest_mismatch");
         requests["eu-provision-not-held"] = new("verify", new { identifier = $"{wording}/lex-no-such-provision" }, "anchor_not_in_version");
     }
 
@@ -319,13 +426,16 @@ public sealed partial class V3MountedGatesTests
         text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(static token => token.Length >= 6 && token.All(char.IsLetter));
 
     /// <summary>A state alone on its date, with articles, that meets a condition on its articles (as <c>s</c>).</summary>
-    private static (string Work, string Date, string Language)? StateWhere(SqliteConnection connection, string condition)
+    private static (string Work, string Date, string Language)? StateWhere(
+        SqliteConnection connection, string condition, Func<string, string, DateOnly, string, bool> servedAlone)
     {
+        // The first such state the rules serve alone on its own date (on index 9 another state may cover it too).
         var row = Rows(connection,
-            "SELECT s.work_key, s.applicability_date, s.language FROM states s " +
+            "SELECT s.work_key, s.applicability_date, s.language, s.state_sha256 FROM states s " +
             "WHERE EXISTS (SELECT 1 FROM articles a WHERE a.expression_iri = s.expression_iri) AND " + condition + " " +
             "AND (SELECT COUNT(*) FROM states t WHERE t.work_key = s.work_key AND t.language = s.language AND t.applicability_date = s.applicability_date) = 1 " +
-            "ORDER BY s.work_key, s.applicability_date, s.language LIMIT 1").FirstOrDefault();
+            "ORDER BY s.work_key, s.applicability_date, s.language LIMIT 64")
+            .FirstOrDefault(candidate => servedAlone(candidate[0], candidate[2], Day(candidate[1]), candidate[3]));
         return row is null ? null : (row[0], row[1], row[2]);
     }
 
@@ -359,9 +469,10 @@ public sealed partial class V3MountedGatesTests
     }
 
     /// <summary>The refusal gate over a mount: every request answered with its one code, and the verdict control.</summary>
-    internal static (EvaluationCardSet Set, RefusalSet Cases) RunRefusalGate(V3CorpusMount mount, string mountDirectory, IReadOnlyList<Timeline> timelines)
+    internal static (EvaluationCardSet Set, RefusalSet Cases) RunRefusalGate(
+        V3CorpusMount mount, string mountDirectory, IReadOnlyList<Timeline> timelines, IReadOnlyDictionary<(string Root, string Expression), string>? memberOutcomes = null)
     {
-        var derived = RefusalCases(mountDirectory, timelines);
+        var derived = RefusalCases(mountDirectory, timelines, memberOutcomes);
         var cases = derived.Requests.Select(static pair => new VerdictCase(pair.Key, pair.Value.Gold)).ToArray();
         VerdictArm arm = caseId =>
         {
@@ -437,6 +548,45 @@ public sealed partial class V3MountedGatesTests
         Assert.IsFalse(derived.NotProduced.ContainsKey("text_withheld"), string.Join("; ", derived.NotProduced.Select(static pair => pair.Key + " (" + pair.Value + ")")));
         Assert.AreEqual("text_withheld", derived.Requests["rights-not-agreed"].Gold);
         Assert.AreEqual(GateVerdict.Pass, set.Gates.Single().Verdict, "the handler withholds it, as derived");
+    }
+
+    [TestMethod]
+    public async Task TheWithheldRuleIsTheOneOfTheAdmissionPolicyTheCorpusNames()
+    {
+        // Release 2's derive names policy A, which admits agreed_cc_by_rederived (the data design's §3.3 item 11), and its bundle
+        // serves such a state: the set took derive-r2's code-procedure_civile of 2023-02-01 as withheld by policy /1's rule.
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        await fixture.SetMemberRightsDispositionAsync(ContractWire.NameOf(LuxembourgRightsChannelDisposition.AgreedCcByRederived));
+        using (var connection = LuxembourgIndexBuilder.Open(Path.Combine(fixture.Directory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly))
+        {
+            long Withheld(string? policy) => long.Parse(Scalar(connection, $"SELECT COUNT(*) FROM states s WHERE {StateWithheld(policy)}")!, CultureInfo.InvariantCulture);
+            Assert.IsGreaterThan(0L, Withheld(null), "policy /1 admits agreed_same_run_cc_by alone");
+            Assert.AreEqual(0L, Withheld(LuxembourgRightsAdmissionPolicies.PolicyASha256), "policy A admits a re-derived agreement");
+        }
+
+        Assert.IsNull(CorpusAdmissionPolicy(fixture.Directory), "the fixture's corpus names no policy");
+        var named = Path.Combine(Path.GetTempPath(), "lex-gates-policy-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(named);
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(named, V3CorpusMount.CorpusFileName),
+                $"{{\"schema\":\"s\",\"profile_identities\":[\"p\"],\"luxembourg_rederivation\":\"r\",\"luxembourg_rights_admission_policy\":\"{LuxembourgRightsAdmissionPolicies.PolicyASha256}\",\"members\":[]}}");
+            Assert.AreEqual(LuxembourgRightsAdmissionPolicies.PolicyASha256, CorpusAdmissionPolicy(named));
+        }
+        finally
+        {
+            Directory.Delete(named, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public void AnEuCelexIsOneSegmentOfItsPermalink()
+    {
+        // R64: the Treaties' and the Charter's CELEX numbers carry a solidus, which derive-r2's EU index serves (main-body profile
+        // /5); the gates' EU keys and permalinks write it %2F, as every other CELEX keeps its bytes.
+        Assert.AreEqual("12016E%2FTXT", EuropePermalinkSegment("12016E/TXT"));
+        Assert.AreEqual("32016R0679", EuropePermalinkSegment("32016R0679"));
     }
 
     [TestMethod]

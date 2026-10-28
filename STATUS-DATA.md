@@ -1,6 +1,48 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-27.
+Updated 2026-10-28.
+
+## The machine gates' oracle for Luxembourg temporal exactness; the gates pass over derive-r1 and derive-r2 (sole driver, 2026-10-28)
+
+`data/r1-gates`. Release 2's data (derive-r2, D1 at 98eef6c6) failed only Luxembourg temporal exactness (as_of, fra) under
+the old oracle, which read index 9's chain by the index 8 rule. No publisher traffic, no browser, no Azure.
+- **The oracle** (`V3MountedGatesTests.IntervalOracle`; the data design's §3.5, R86(3)): each state's start and the
+  publisher's end from the catalogue's facts (`work_facts`: a consolidation's or code state's one exact `dateApplicability`,
+  an act's file date else its `dateEntryInForce`, `dateEndApplicability`), text held from the articles a state binds, a
+  textless state's rights from the corpus file's member. It never reads `applicability_date`, `applicable_to`, `boundary`,
+  `text_status`, `translation_of` or `intervals`, and applies §3.2's table itself: holes and closed ends refused, never
+  bridged; the unclear end day; invalid intervals; translations on their French state; same-date states of one wording
+  served once (the act, else the one that begins last: the recorded decision below); `as_of` refuses a textless state
+  `text_withheld` or `text_not_available`, `in_force_on` names it.
+- **The sample**: the seeded 40 and §3.5's strata: every code, overlap, unclear end, invalid interval and textless state
+  with an acquired file; 10 consolidated works of 3 states or more; 6 of each other class. Cases: each start and end, a
+  day inside and the last day of each span, the day before and 1,000 days after; `as_of` and `in_force_on`, per language
+  and with none.
+- **The refusal set over index 9**: `as_of` on a textless state for both text codes; an ambiguity from the catalogue when the
+  sample holds none; the withheld rule of the admission policy the corpus names (policy A on derive-r2).
+- **What derive-r2 showed** (the reader was right each time): the gates wrote the Treaties' and the Charter's CELEX with a
+  raw solidus (R64: `12016E%2FTXT`), and judged rights by policy /1. Both corrected in the gates.
+- **Measured at c5f3142c** (`TheGatesOverTheMountTheReleaseNames`, every gate at 1.0, every shuffle caught):
+
+  | Arm | derive-r1 | derive-r2 |
+  |---|---|---|
+  | LU `as_of` / `in_force_on`, fra | 1,087 each | 1,219 each |
+  | LU `as_of` / `in_force_on`, no language | 1,090 each | 1,222 each |
+  | LU `as_of` / `in_force_on`, eng | 3 each | 3 each |
+  | EU `as_of`, eng / fra / none | 562 each | 498 each |
+  | Refusal | 26 | 26 |
+  | Retrieval | 77 | 77 |
+
+  Date controls over 541 to 741 (r1) and 604 to 798 (r2) LU cases per arm; 93 and 104 minutes on this PC.
+- **The review's hardenings, at 9f79df3f**: the index's states held to the catalogue and the corpus (derive-r1 3,311
+  catalogue states and 2,690 held rows, derive-r2 4,064 and 3,387, none missing or unadmitted); the EU retrieval
+  permalinks; the textless-acquired stratum (derive-r2: 4 works, 111 cases per arm, none differing).
+- **Driver decisions (reversible):** the strata's quotas as above, "every" uncapped; the arms ask the mount concurrently
+  (the reader's lock keeps a run near one core); same-date states of one wording designate the one that begins last
+  (recorded 2026-10-26 below), which the oracle follows.
+- **Tests at 9f79df3f:** `dotnet build Lex.V3.slnx -c Release` 0 warnings; `Lex.V3.Tests` 3,387 (3,381 passed, 6 skipped);
+  the gates' classes 41 (39 passed, 2 env-gated); the census and touched classes 117 (115 passed, 2 skipped);
+  `eng/verify-v3-tree.ps1` 1,803 paths.
 
 ## Where the data stands at the end of 27 October, and what Release 3's derive would add (sole driver, 2026-10-27)
 

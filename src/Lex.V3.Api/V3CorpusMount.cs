@@ -3899,12 +3899,15 @@ internal sealed partial class V3CorpusMount : IDisposable
             firstHeld = heldDates[0];
             lastHeld = heldDates[^1];
             var applies = string.CompareOrdinal(firstHeld, requestedDate) <= 0;
-            if (!applies)
+            if (!applies && !RulesByInterval)
             {
                 // One work, one date: as_of refuses this with no_version_for_date, and two operations
                 // that answer "what applied to this work on this date" must not disagree about whether
                 // that has an answer. Without a work named the question is about the whole index, and
-                // "nothing held" is its answer.
+                // "nothing held" is its answer. On index 9 a date before the first held state may still be
+                // covered by a state of the catalogue whose text is not held, which is a row naming it, as
+                // after it (InForceOnRuleNine); a date no state covers is as_of's refusal below, through the
+                // same builder (the R1 gates, 2026-10-26).
                 return RefuseNoVersionForDate(request, observedAt, scoped, requestedDate, bound: null);
             }
 
