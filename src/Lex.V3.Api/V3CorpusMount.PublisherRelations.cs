@@ -34,15 +34,18 @@ internal sealed partial class V3CorpusMount
     internal const string PublisherRelationsDerivedLabel = "derived from the publisher's forward relation";
 
     internal const string AmendedAfterConsolidationRule =
-        "R72: an act the publisher records as modifying this act (jolux:modifies, asserted on the amending act and read from this act's side, so " +
-        "derived from the publisher's forward relation) whose publication date is later than the publication date of every consolidated " +
-        "version of this act in the publisher's catalogue as this index read it (its consolidation and code states, whether or not their text " +
-        "is held); status notice names each such act with its publication date; no_later_amending_act says each recorded amending act was " +
-        "published on or before the publication date of a consolidated version; undetermined says a consolidated version or an amending act " +
-        "has no publication date the publisher's facts state as one date, so the comparison cannot be made; no_amending_act_recorded says the " +
-        "relation records name none, said only of a modifies relation acquired in full; not_acquired says none is recorded and the modifies " +
-        "relation was not acquired in full, so nothing is said; the notice names " +
-        "the act and never its effect, and it does not say that the consolidated version leaves the change out; a temporary modification " +
+        "R72, as the specification of record writes it: an act the publisher records as modifying this act (jolux:modifies, asserted on " +
+        "the amending act and read from this act's side, so derived from the publisher's forward relation) that was published after the " +
+        "latest consolidated version this index holds, that is, whose publication date is later than the publication date of every " +
+        "consolidation or code state whose text this index holds, of this act and of every act the publisher's table of modifications " +
+        "(jolux:impactConsolidatedBy, on the impact records this act received) names as integrating its changes; an amending act whose " +
+        "impact record names, as integrating it, a version whose text this index holds is never later; status notice names each such act " +
+        "with its publication date, never its effect, and does not say that a version leaves the change out; no_later_amending_act says " +
+        "each recorded amending act was published on or before a held version's publication date or is integrated in a held version; " +
+        "undetermined says a held version or an amending act has no publication date the publisher's facts state as one date, or an " +
+        "impact record names its integrating version more than once, so the comparison cannot be made for an act it would name; " +
+        "no_amending_act_recorded says the relation records name none, said only of a modifies relation acquired in full; not_acquired says " +
+        "none is recorded and the modifies relation was not acquired in full, so nothing is said; a temporary modification " +
         "(jolux:modifiedTempBy) is listed among the relations and does not raise it; an act this act names as amending itself is not counted";
 
     // ---- The views of an edge, from this act's side, in the order a dossier lists them. ----
@@ -99,50 +102,115 @@ internal sealed partial class V3CorpusMount
     /// <summary>One amending act R72 compares: its IRI, its publication date (null when none is one date) and its evidence.</summary>
     internal sealed record AmendingAct(string Iri, string? PublicationDate, string EvidenceSha256);
 
-    /// <summary>R72's reading of one act: its status, the acts published after every consolidated version, and what it compared.</summary>
+    /// <summary>
+    /// One consolidation or code state R72 may compare against: its work, its legal resource, its kind, its text status and its
+    /// publication date (null when the catalogue states none as one date).
+    /// </summary>
+    internal sealed record ConsolidationFacts(string WorkKey, string LegalResourceIri, string? StateKind, string TextStatus, string? PublicationDate);
+
+    /// <summary>
+    /// One impact record this act received: the act the change comes from, the version the publisher says integrated it (null when it
+    /// names none, or more than one), and whether it names more than one.
+    /// </summary>
+    internal sealed record ReceivedImpact(string FromIri, string? ConsolidatedByIri, bool ConsolidatedByAmbiguous);
+
+    /// <summary>R72's reading of one act: its status, the acts it names, and what it compared.</summary>
     internal sealed record AmendedAfter(
         string Status,
         IReadOnlyList<AmendingAct> Later,
-        string? LatestConsolidationPublicationDate,
-        int Consolidations,
-        int ConsolidationsWithoutPublicationDate,
+        ConsolidationFacts? LatestHeld,
+        int HeldVersions,
+        int HeldVersionsWithoutPublicationDate,
+        IReadOnlyList<string> IntegratingWorkKeys,
         int AmendingActs,
-        int AmendingActsWithoutPublicationDate);
+        int AmendingActsWithoutPublicationDate,
+        int AmendingActsIntegrated,
+        int AmendingActsIntegrationUndecided);
 
     /// <summary>
-    /// R72's rule (<see cref="AmendedAfterConsolidationRule"/>) over one act's consolidated versions (the publication date of each,
-    /// null when its facts state none as one date) and its recorded amending acts, each once: a notice when an amending act's
-    /// publication date is later than every consolidated version's (or there is none); undetermined when a date it needs is not
-    /// held; else no later amending act, or none recorded. A pure function, so the run-15 probe measures what the server says.
+    /// R72's rule (<see cref="AmendedAfterConsolidationRule"/>), as the specification of record writes it: over the consolidation and
+    /// code states whose text this index holds, of this act (<paramref name="ownStates"/>) and of every act the impact records it
+    /// received name as integrating its changes (<paramref name="statesOfWork"/>, by work key), and its recorded amending acts, each
+    /// once. An amending act an impact record says is integrated in a held version is never later; one whose impact record names its
+    /// integrating version more than once is undecided. A notice when an amending act is later than every held version (or none is
+    /// held) and no date it needs is missing; undetermined when one is, or the act would be named and is undecided; else no later
+    /// amending act, or none recorded. A pure function, so the run-15 probe measures what the server says.
     /// </summary>
-    internal static AmendedAfter AmendedAfterLatestConsolidation(
-        IReadOnlyList<string?> consolidationPublicationDates,
-        IReadOnlyList<AmendingAct> amendingActs)
+    internal static AmendedAfter AmendedAfterLatestHeldConsolidation(
+        string workKey,
+        IReadOnlyList<ConsolidationFacts> ownStates,
+        Func<string, IReadOnlyList<ConsolidationFacts>> statesOfWork,
+        IReadOnlyList<AmendingAct> amendingActs,
+        IReadOnlyList<ReceivedImpact> impacts)
     {
-        ArgumentNullException.ThrowIfNull(consolidationPublicationDates);
+        ArgumentNullException.ThrowIfNull(ownStates);
+        ArgumentNullException.ThrowIfNull(statesOfWork);
         ArgumentNullException.ThrowIfNull(amendingActs);
+        ArgumentNullException.ThrowIfNull(impacts);
         var acts = amendingActs
             .GroupBy(static act => act.Iri, StringComparer.Ordinal)
             .Select(static group => group.First())
             .ToArray();
-        var known = consolidationPublicationDates.Where(static date => date is not null).Select(static date => date!).ToArray();
-        var missing = consolidationPublicationDates.Count - known.Length;
-        var latest = known.Length == 0 ? null : known.Max(StringComparer.Ordinal);
-        var undated = acts.Count(static act => act.PublicationDate is null);
-        var later = acts
-            .Where(act => act.PublicationDate is not null && (latest is null || string.CompareOrdinal(act.PublicationDate, latest) > 0))
+        // The acts the publisher's table of modifications names as integrating this act's changes, other than this act itself.
+        var integrating = impacts
+            .Select(static impact => impact.ConsolidatedByIri)
+            .Where(static iri => iri is not null)
+            .Select(static iri => PrivateIndividuals.LuxembourgWorkIriOf(iri!) is { } work ? WorkKeyOfIri(work) : null)
+            .Where(key => key is not null && !string.Equals(key, workKey, StringComparison.Ordinal))
+            .Select(static key => key!)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        // The held versions: each consolidation or code state whose text this index holds, once per legal resource, with its one
+        // publication date (null when its rows state none or two).
+        var held = ownStates.Concat(integrating.SelectMany(statesOfWork))
+            .Where(static state => state.StateKind is StateKindConsolidation or StateKindCode &&
+                                   string.Equals(state.TextStatus, TextHeld, StringComparison.Ordinal))
+            .GroupBy(static state => state.LegalResourceIri, StringComparer.Ordinal)
+            .Select(static group => group.Select(static state => state.PublicationDate).Distinct(StringComparer.Ordinal).ToArray() is [var one]
+                ? group.First() with { PublicationDate = one }
+                : group.First() with { PublicationDate = null })
+            .ToArray();
+        var heldResources = held.Select(static state => state.LegalResourceIri).ToHashSet(StringComparer.Ordinal);
+        var dated = held.Where(static state => state.PublicationDate is not null).ToArray();
+        var missing = held.Length - dated.Length;
+        var latest = dated
+            .OrderByDescending(static state => state.PublicationDate, StringComparer.Ordinal)
+            .ThenBy(static state => string.Equals(state.WorkKey, workKey, StringComparison.Ordinal) ? 0 : 1)
+            .ThenByDescending(static state => state.LegalResourceIri, StringComparer.Ordinal)
+            .FirstOrDefault();
+        // An impact record belongs to an amending act when both name the same act (its work, its act as published or a part of it).
+        static string ActOf(string iri) => PrivateIndividuals.LuxembourgWorkIriOf(iri) ?? iri;
+        var integrated = acts
+            .Where(act => impacts.Any(impact => string.Equals(ActOf(impact.FromIri), ActOf(act.Iri), StringComparison.Ordinal) &&
+                                                 impact.ConsolidatedByIri is { } version && heldResources.Contains(version)))
+            .Select(static act => act.Iri)
+            .ToHashSet(StringComparer.Ordinal);
+        var undecided = acts
+            .Where(act => !integrated.Contains(act.Iri) &&
+                          impacts.Any(impact => string.Equals(ActOf(impact.FromIri), ActOf(act.Iri), StringComparison.Ordinal) &&
+                                                impact.ConsolidatedByAmbiguous))
+            .Select(static act => act.Iri)
+            .ToHashSet(StringComparer.Ordinal);
+        var candidates = acts.Where(act => !integrated.Contains(act.Iri)).ToArray();
+        var undated = candidates.Count(static act => act.PublicationDate is null);
+        var later = candidates
+            .Where(act => act.PublicationDate is not null &&
+                          (latest is null || string.CompareOrdinal(act.PublicationDate, latest.PublicationDate) > 0))
             .OrderBy(static act => act.PublicationDate, StringComparer.Ordinal)
             .ThenBy(static act => act.Iri, StringComparer.Ordinal)
             .ToArray();
+        var named = later.Where(act => !undecided.Contains(act.Iri)).ToArray();
         var status = acts.Length == 0
             ? AmendedAfterNoAct
-            : missing > 0
-                ? later.Length > 0 || undated > 0 ? AmendedAfterUndetermined : AmendedAfterNoLaterAct
-                : later.Length > 0
-                    ? AmendedAfterNotice
-                    : undated > 0 ? AmendedAfterUndetermined : AmendedAfterNoLaterAct;
+            : named.Length > 0 && missing == 0
+                ? AmendedAfterNotice
+                : later.Length > 0 || undated > 0
+                    ? AmendedAfterUndetermined
+                    : AmendedAfterNoLaterAct;
         return new AmendedAfter(
-            status, status == AmendedAfterNotice ? later : [], latest, consolidationPublicationDates.Count, missing, acts.Length, undated);
+            status, status == AmendedAfterNotice ? named : [], latest, held.Length, missing, integrating, acts.Length, undated,
+            integrated.Count, undecided.Count);
     }
 
     /// <summary>Whether the mounted Luxembourg index holds the publisher's relation records (index 10).</summary>
@@ -200,6 +268,7 @@ internal sealed partial class V3CorpusMount
         var families = FamiliesOf(_reader!.ResolveRelationFamilies());
         var others = OtherActsOf(edges.Select(static edge => edge.OtherIri));
         var listed = edges.Where(edge => direction == "both" || string.Equals(edge.Direction, direction, StringComparison.Ordinal)).ToArray();
+        var stateOf = StateOfLegalResource(catalogue);
         node["publisher_relations"] = new JsonObject
         {
             ["rule"] = PublisherRelationsRule,
@@ -219,9 +288,9 @@ internal sealed partial class V3CorpusMount
             ["edge_count"] = listed.Length,
             ["edge_counts"] = new JsonObject(PublisherRelationViews.Select(view =>
                 new KeyValuePair<string, JsonNode?>(view, listed.Count(edge => string.Equals(edge.View, view, StringComparison.Ordinal))))),
-            ["edges"] = new JsonArray(listed.Select(edge => (JsonNode)EdgeNode(edge, others[edge.OtherIri], catalogue)).ToArray()),
+            ["edges"] = new JsonArray(listed.Select(edge => (JsonNode)EdgeNode(edge, others[edge.OtherIri], stateOf)).ToArray()),
         };
-        node["amended_after_consolidation"] = AmendedAfterNode(catalogue, edges, families, others);
+        node["amended_after_consolidation"] = AmendedAfterNode(workKey, catalogue, edges, families, others);
         return node;
     }
 
@@ -389,7 +458,7 @@ internal sealed partial class V3CorpusMount
         ["entry_into_force"] = other.EntryIntoForce,
     };
 
-    private static JsonObject EdgeNode(RelationEdge edge, OtherAct other, CatalogueWork catalogue)
+    private static JsonObject EdgeNode(RelationEdge edge, OtherAct other, Func<string, LuxembourgIndexCatalogueState?> stateOf)
     {
         var node = new JsonObject
         {
@@ -412,14 +481,9 @@ internal sealed partial class V3CorpusMount
         };
         if (edge.Impact is { } impact)
         {
-            // The consolidated version the publisher says integrated the change, as this work's catalogue names it, where it does.
-            var state = impact.ConsolidatedByIri is null
-                ? null
-                : catalogue.Rows
-                    .Where(row => string.Equals(row.PublisherLegalResourceIri, impact.ConsolidatedByIri, StringComparison.Ordinal))
-                    .OrderBy(static row => row.Language == FrenchLanguage ? 0 : 1)
-                    .ThenBy(static row => row.Language, StringComparer.Ordinal)
-                    .FirstOrDefault();
+            // The consolidated version the publisher says integrated the change, as this work's catalogue or its own act's names it
+            // (a code state, for an act whose changes a code integrates), where one does.
+            var state = impact.ConsolidatedByIri is null ? null : stateOf(impact.ConsolidatedByIri);
             node["impact"] = new JsonObject
             {
                 ["impact_iri"] = impact.ImpactIri,
@@ -436,34 +500,56 @@ internal sealed partial class V3CorpusMount
         return node;
     }
 
+    /// <summary>One catalogue row as R72 compares it.</summary>
+    private static ConsolidationFacts FactsOf(LuxembourgIndexCatalogueState row) =>
+        new(row.WorkKey, row.PublisherLegalResourceIri, row.StateKind, row.TextStatus, row.PublicationDate);
+
+    /// <summary>
+    /// The catalogue row of a legal resource, French first, in this work's catalogue or in the catalogue of the act its IRI belongs
+    /// to (a code state an impact record names as integrating a change): what an impact's integrating version is named by.
+    /// </summary>
+    private Func<string, LuxembourgIndexCatalogueState?> StateOfLegalResource(CatalogueWork own) => iri =>
+    {
+        var rows = own.Rows.Where(row => string.Equals(row.PublisherLegalResourceIri, iri, StringComparison.Ordinal)).ToArray();
+        if (rows.Length == 0 && PrivateIndividuals.LuxembourgWorkIriOf(iri) is { } work && WorkKeyOfIri(work) is { } key)
+        {
+            rows = CatalogueOf(key).Rows.Where(row => string.Equals(row.PublisherLegalResourceIri, iri, StringComparison.Ordinal)).ToArray();
+        }
+
+        return rows
+            .OrderBy(static row => row.Language == FrenchLanguage ? 0 : 1)
+            .ThenBy(static row => row.Language, StringComparer.Ordinal)
+            .FirstOrDefault();
+    };
+
     /// <summary>R72's member: its status, the acts it names, what it compared, its rule, and the notice sentence when it fires.</summary>
-    private static JsonObject AmendedAfterNode(
-        CatalogueWork catalogue, IReadOnlyList<RelationEdge> edges, IReadOnlyList<EdgeFamily> families, IReadOnlyDictionary<string, OtherAct> others)
+    private JsonObject AmendedAfterNode(
+        string workKey, CatalogueWork catalogue, IReadOnlyList<RelationEdge> edges, IReadOnlyList<EdgeFamily> families,
+        IReadOnlyDictionary<string, OtherAct> others)
     {
         var modifies = families.Single(static family => family.EdgeType == EdgeModifies);
-        var consolidations = catalogue.Rows
-            .Where(static row => row.StateKind is StateKindConsolidation or StateKindCode)
-            .GroupBy(static row => row.PublisherLegalResourceIri, StringComparer.Ordinal)
-            .Select(static group => group.Select(static row => row.PublicationDate).Distinct(StringComparer.Ordinal).ToArray() is [var one] ? one : null)
-            .ToArray();
         var amending = edges
             .Where(static edge => edge.View == ViewAmendedBy && !edge.IsSelfReference)
             .Select(static edge => new AmendingAct(edge.ActingIri!, edge.ActingPublicationDate, edge.EvidenceSha256))
             .ToArray();
+        var received = edges
+            .Where(static edge => edge.View == ViewImpactReceived && edge.Impact is not null)
+            .Select(static edge => new ReceivedImpact(
+                edge.Impact!.FromLegalResourceIri!, edge.Impact.ConsolidatedByIri,
+                edge.Impact.AmbiguousParts.Contains("jolux:impactConsolidatedBy", StringComparer.Ordinal)))
+            .ToArray();
+        IReadOnlyList<ConsolidationFacts> StatesOf(string key) => CatalogueOf(key).Rows.Select(FactsOf).ToArray();
         // A recorded amending act is the publisher's record whatever its family's state; that none is recorded is said only of a
         // relation acquired in full.
-        var reading = amending.Length > 0 || string.Equals(modifies.State, FamilyAcquiredComplete, StringComparison.Ordinal)
-            ? AmendedAfterLatestConsolidation(consolidations, amending)
-            : new AmendedAfter(AmendedAfterNotAcquired, [], null, consolidations.Length, consolidations.Count(static date => date is null), 0, 0);
-        var latest = reading.LatestConsolidationPublicationDate is not { } date
+        var reading = AmendedAfterLatestHeldConsolidation(workKey, catalogue.Rows.Select(FactsOf).ToArray(), StatesOf, amending, received);
+        if (amending.Length == 0 && !string.Equals(modifies.State, FamilyAcquiredComplete, StringComparison.Ordinal))
+        {
+            reading = reading with { Status = AmendedAfterNotAcquired };
+        }
+
+        var latest = reading.LatestHeld is not { } held
             ? null
-            : catalogue.Rows
-                .Where(row => row.StateKind is StateKindConsolidation or StateKindCode &&
-                              string.Equals(row.PublicationDate, date, StringComparison.Ordinal))
-                .OrderByDescending(static row => row.ApplicabilityDate, StringComparer.Ordinal)
-                .ThenBy(static row => row.Language == FrenchLanguage ? 0 : 1)
-                .ThenBy(static row => row.Language, StringComparer.Ordinal)
-                .First();
+            : StateOfLegalResource(catalogue)(held.LegalResourceIri);
         return new JsonObject
         {
             ["status"] = reading.Status,
@@ -477,18 +563,25 @@ internal sealed partial class V3CorpusMount
                 ["evidence_sha256"] = act.EvidenceSha256,
             }).ToArray()),
             ["latest_consolidation"] = latest is null ? null : CatalogueRowSummary(latest),
-            ["latest_consolidation_publication_date"] = reading.LatestConsolidationPublicationDate,
-            ["consolidations"] = reading.Consolidations,
-            ["consolidations_without_publication_date"] = reading.ConsolidationsWithoutPublicationDate,
+            ["latest_consolidation_publication_date"] = reading.LatestHeld?.PublicationDate,
+            ["latest_consolidation_integrating"] = reading.LatestHeld is { } version && !string.Equals(version.WorkKey, workKey, StringComparison.Ordinal),
+            ["integrating_work_keys"] = new JsonArray(reading.IntegratingWorkKeys.Select(static key => (JsonNode)key).ToArray()),
+            ["held_versions"] = reading.HeldVersions,
+            ["held_versions_without_publication_date"] = reading.HeldVersionsWithoutPublicationDate,
             ["amending_acts"] = reading.AmendingActs,
             ["amending_acts_without_publication_date"] = reading.AmendingActsWithoutPublicationDate,
-            ["notice"] = NoticeOf(reading, others),
+            ["amending_acts_integrated"] = reading.AmendingActsIntegrated,
+            ["amending_acts_integration_undecided"] = reading.AmendingActsIntegrationUndecided,
+            ["notice"] = NoticeOf(reading, others, latest),
             ["rule"] = AmendedAfterConsolidationRule,
         };
     }
 
-    /// <summary>R72's sentence, in its own words with the dates and acts filled in (the site says it in its reviewed languages).</summary>
-    private static string? NoticeOf(AmendedAfter reading, IReadOnlyDictionary<string, OtherAct> others)
+    /// <summary>
+    /// R72's sentence, as the specification of record writes it, with the dates and acts filled in and the latest held version named
+    /// (the site says it in its reviewed languages).
+    /// </summary>
+    private static string? NoticeOf(AmendedAfter reading, IReadOnlyDictionary<string, OtherAct> others, LuxembourgIndexCatalogueState? latest)
     {
         if (reading.Status != AmendedAfterNotice)
         {
@@ -497,13 +590,20 @@ internal sealed partial class V3CorpusMount
 
         static string Named(OtherAct act) => act.Title is null ? act.Iri : $"{act.Title}, {act.Iri}";
         var acts = reading.Later;
-        var tail = reading.LatestConsolidationPublicationDate is null
-            ? "the publisher's catalogue, as this index read it, lists no consolidated version of this act"
-            : $"no consolidated version in the publisher's catalogue, as this index read it, was published after {(acts.Count == 1 ? "it" : "them")} " +
-              $"(the latest was published on {reading.LatestConsolidationPublicationDate})";
+        // The specification's sentence (R72), word for word, then the version it compared and that it is derived.
         var head = acts.Count == 1
-            ? $"An act published on {acts[0].PublicationDate} ({Named(others[acts[0].Iri])}) amends this act"
-            : $"{acts.Count.ToString(CultureInfo.InvariantCulture)} acts published from {acts[0].PublicationDate} to {acts[^1].PublicationDate} amend this act";
-        return head + ", according to the publisher's relation records (" + PublisherRelationsDerivedLabel + "); " + tail + ".";
+            ? $"An act published on {acts[0].PublicationDate} ({Named(others[acts[0].Iri])}) amends this law; no consolidated version Lex " +
+              "holds was published after it."
+            : $"{acts.Count.ToString(CultureInfo.InvariantCulture)} acts published from {acts[0].PublicationDate} to {acts[^1].PublicationDate} " +
+              "amend this law; no consolidated version Lex holds was published after them.";
+        var latestSaid = latest is null || reading.LatestHeld is null
+            ? "Lex holds no consolidated version of this law, or of an act the publisher records as integrating the changes made to it."
+            : reading.IntegratingWorkKeys.Contains(latest.WorkKey, StringComparer.Ordinal)
+                ? $"The latest consolidated version Lex holds, {StableCoordinateOf(latest)}, is of an act the publisher records as integrating the " +
+                  $"changes made to this law; it was published on {reading.LatestHeld.PublicationDate}."
+                : $"The latest consolidated version Lex holds, {StableCoordinateOf(latest)}, was published on {reading.LatestHeld.PublicationDate}.";
+        return $"{head} {latestSaid} This is derived from the publisher's records ({PublisherRelationsDerivedLabel}).";
     }
+
+    private static string StableCoordinateOf(LuxembourgIndexCatalogueState row) => $"/lu-legilux/{row.WorkKey}/{row.ApplicabilityDate}";
 }

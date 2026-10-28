@@ -226,8 +226,17 @@ function OtherActName({ other, self = false }) {
   return other.titleWithheld ? <>{linked} ({COPY.relationTitleWithheld})</> : linked;
 }
 
-/** One edge: the other act, and its own publication date and entry into force, each with its role (R21). */
-function RelationRow({ edge }) {
+/** A consolidated version an answer names, by its stable coordinate, linked to its permalink where it has one. */
+function VersionName({ version }) {
+  const name = <code>{version.stableCoordinate}</code>;
+  return version.permalink === null ? name : <a href={permalinkHref(version.permalink, CHROME_LOCALE)}>{name}</a>;
+}
+
+/**
+ * One edge: the other act, and its own publication date and entry into force, each with its role (R21); for an impact record,
+ * the version the publisher says integrated the change, dated when it is this act's own and named when it is another act's.
+ */
+function RelationRow({ edge, workKey }) {
   const act = <OtherActName other={edge.other} self={edge.isSelfReference} />;
   const { publicationDate, entryIntoForce } = edge.other;
   const said = publicationDate === null
@@ -242,8 +251,10 @@ function RelationRow({ edge }) {
   return (
     <li data-relation-evidence={edge.evidenceSha256}>
       {said}
-      {edge.consolidatedBy !== null ? (
+      {edge.consolidatedBy !== null && edge.consolidatedBy.stableCoordinate.split('/')[2] === workKey ? (
         <> <Say template={COPY.relationIntegrated} values={{ date: <time dateTime={edge.consolidatedBy.applicabilityDate}>{edge.consolidatedBy.applicabilityDate}</time> }} /></>
+      ) : edge.consolidatedBy !== null ? (
+        <> <Say template={COPY.relationIntegratedOther} values={{ version: <VersionName version={edge.consolidatedBy} /> }} /></>
       ) : edge.consolidatedByIri !== null ? (
         <> <Say template={COPY.relationIntegratedOther} values={{ version: <code>{edge.consolidatedByIri}</code> }} /></>
       ) : null}
@@ -258,7 +269,7 @@ function RelationRow({ edge }) {
  * forward relation), then the kinds acquired in full that name no act, the kinds not acquired, and what the family does not
  * see. Nothing on an index of schema 9, 8 or 6.
  */
-function PublisherRelations({ relations }) {
+function PublisherRelations({ relations, workKey }) {
   if (relations === null) return null;
   if (relations.edgeCount === 0 && relations.families.every((family) => !family.acquired)) {
     return (
@@ -297,7 +308,7 @@ function PublisherRelations({ relations }) {
           <h4>{COPY.relationGroups[group.view]}</h4>
           {group.edgeType === 'impact' ? <p>{COPY.relationImpact}</p> : group.derived ? <p data-derived-label="">{COPY.relationDerived}</p> : null}
           <ul>
-            {group.edges.map((edge, index) => <RelationRow key={`${index}.${edge.other.iri}`} edge={edge} />)}
+            {group.edges.map((edge, index) => <RelationRow key={`${index}.${edge.other.iri}`} edge={edge} workKey={workKey} />)}
           </ul>
         </section>
       ))}
@@ -316,10 +327,11 @@ function PublisherRelations({ relations }) {
 
 /**
  * R72's banner (index 10's `amended_after_consolidation`, read by `publisher-relations.mjs`): when the publisher's relation
- * records name an act published after every consolidated version in its catalogue, that act (or each such act) with its
- * publication date, that no consolidated version was published after it, the latest one's publication date or that there is
- * none, and that the notice is derived and names the act, never its effect. Nothing otherwise, and nothing on an index of
- * schema 9, 8 or 6.
+ * records name an act published after every consolidated version Lex holds (of this act, and of an act the publisher records as
+ * integrating its changes), the specification's sentence for that act (or each such act) with its publication date; the latest
+ * version Lex holds, with its publication date, or that it holds none; how many amending acts the publisher records as
+ * integrated in a held version, or names more than one version for, and so are not named; and that the notice is derived and
+ * names the act, never its effect. Nothing otherwise, and nothing on an index of schema 9, 8 or 6.
  */
 function AmendedAfterBanner({ amendedAfter, relations }) {
   if (amendedAfter === null || amendedAfter.status !== 'notice') return null;
@@ -328,6 +340,8 @@ function AmendedAfterBanner({ amendedAfter, relations }) {
   const modifies = relations === null ? undefined : relations.families.find((family) => family.edgeType === 'modifies');
   const classes = modifies === undefined || !modifies.acquired ? null : modifies.subjectClasses;
   const [first] = amendedAfter.acts;
+  const latest = amendedAfter.latestConsolidation;
+  const latestDate = amendedAfter.latestConsolidationPublicationDate;
   return (
     <aside className="relation-notice" role="note" aria-label={COPY.amendedAfterHeading} data-amended-after={amendedAfter.acts.length}>
       <p><strong>{COPY.amendedAfterHeading}</strong></p>
@@ -350,11 +364,24 @@ function AmendedAfterBanner({ amendedAfter, relations }) {
           </ul>
         </>
       )}
-      <p>
-        {amendedAfter.latestConsolidationPublicationDate === null
+      <p data-amended-after-latest={latest === null ? 'none' : amendedAfter.latestConsolidationIntegrating ? 'integrating' : 'own'}>
+        {latest === null
           ? COPY.amendedAfterNoConsolidation
-          : <Say template={COPY.amendedAfterLatest} values={{ date: <time dateTime={amendedAfter.latestConsolidationPublicationDate}>{amendedAfter.latestConsolidationPublicationDate}</time> }} />}
+          : <Say template={amendedAfter.latestConsolidationIntegrating ? COPY.amendedAfterLatestIntegrating : COPY.amendedAfterLatest} values={{
+              version: <VersionName version={latest} />,
+              date: <time dateTime={latestDate}>{latestDate}</time>,
+            }} />}
       </p>
+      {amendedAfter.amendingActsIntegrated > 0 ? (
+        <p data-amended-after-integrated={amendedAfter.amendingActsIntegrated}>
+          <Say template={COPY.amendedAfterIntegrated} values={{ count: amendedAfter.amendingActsIntegrated }} />
+        </p>
+      ) : null}
+      {amendedAfter.amendingActsIntegrationUndecided > 0 ? (
+        <p data-amended-after-undecided={amendedAfter.amendingActsIntegrationUndecided}>
+          <Say template={COPY.amendedAfterUndecided} values={{ count: amendedAfter.amendingActsIntegrationUndecided }} />
+        </p>
+      ) : null}
       <p data-derived-label="">
         {classes === null
           ? COPY.amendedAfterNoteUnscoped
@@ -415,7 +442,7 @@ export function DossierView({ view, today = null }) {
       </TableRegion>
       {view.states.some(datedByEntryIntoForce) ? <p data-entry-into-force-note="">{COPY.entryIntoForceNote}</p> : null}
       <CatalogueChain chain={view.chain} />
-      <PublisherRelations relations={view.relations ?? null} />
+      <PublisherRelations relations={view.relations ?? null} workKey={view.workKey} />
       <p lang={ENGLISH_LANG}>{asSentence(view.articlesNotAdmittedNote)}</p>
       <h3>{COPY.notHeldHeading}</h3>
       <ul data-not-held={view.notHeld.length}>

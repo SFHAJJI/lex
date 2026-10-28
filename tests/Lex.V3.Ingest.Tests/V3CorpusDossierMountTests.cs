@@ -329,9 +329,11 @@ public sealed class V3CorpusDossierMountTests
             // is named not acquired, no edge is listed and the notice is not_acquired (V3CorpusPublisherRelationsMountTests holds
             // the rows).
             "amended_after_consolidation", "amended_after_consolidation.acts", "amended_after_consolidation.amending_acts",
-            "amended_after_consolidation.amending_acts_without_publication_date", "amended_after_consolidation.consolidations",
-            "amended_after_consolidation.consolidations_without_publication_date", "amended_after_consolidation.derived",
-            "amended_after_consolidation.latest_consolidation", "amended_after_consolidation.latest_consolidation_publication_date",
+            "amended_after_consolidation.amending_acts_integrated", "amended_after_consolidation.amending_acts_integration_undecided",
+            "amended_after_consolidation.amending_acts_without_publication_date", "amended_after_consolidation.derived",
+            "amended_after_consolidation.held_versions", "amended_after_consolidation.held_versions_without_publication_date",
+            "amended_after_consolidation.integrating_work_keys", "amended_after_consolidation.latest_consolidation",
+            "amended_after_consolidation.latest_consolidation_integrating", "amended_after_consolidation.latest_consolidation_publication_date",
             "amended_after_consolidation.notice", "amended_after_consolidation.rule", "amended_after_consolidation.source_predicate",
             "amended_after_consolidation.status",
             "publisher_relations", "publisher_relations.edge_count", "publisher_relations.edge_counts", "publisher_relations.edges",

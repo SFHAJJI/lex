@@ -5,7 +5,8 @@
 // with the other act's identifier, its title where the catalogue states one, its address on this site where it has one, and the
 // acting act's publication date and entry into force, each its own value (R21). An edge read from a record kept on another
 // resource is derived from the publisher's forward relation, and the view says so (R29). R72's notice says an act published
-// after every consolidated version amends this act; it names the act, never its effect. An answer over an older index carries
+// after every consolidated version Lex holds (of this act, and of an act the publisher records as integrating its changes)
+// amends this act; it names the act, never its effect. An answer over an older index carries
 // neither member, and this reads it as null; a row that breaks the answer's own rules is drift and is thrown, never rendered.
 // It renders nothing itself.
 
@@ -230,8 +231,10 @@ export function readPublisherRelations(answer) {
  * R72's reading of the act an answer carries, or null when it carries none (an answer over an index of schema 9, 8 or 6).
  *
  * @param {object} answer the `result.value` of a Luxembourg dossier or relations answer
- * @param {string} workKey the answer's work, which a consolidated version it names is of
- * @returns {object|null} a frozen view `{status, acts, latestConsolidation, latestConsolidationPublicationDate, notice, rule}`
+ * @param {string} workKey the answer's work, which a consolidated version it names is of unless it is an integrating act's
+ * @returns {object|null} a frozen view `{status, acts, latestConsolidation, latestConsolidationPublicationDate,
+ *   latestConsolidationIntegrating, integratingWorkKeys, heldVersions, amendingActs, amendingActsIntegrated,
+ *   amendingActsIntegrationUndecided, notice, rule}`
  */
 export function readAmendedAfter(answer, workKey) {
   if (!Object.hasOwn(answer, 'amended_after_consolidation')) return null;
@@ -246,7 +249,7 @@ export function readAmendedAfter(answer, workKey) {
     const publicationDate = own(act, 'publication_date', at);
     if (!isCalendarDate(publicationDate)) throw new Error(`${at}.publication_date is not a calendar date`);
     if (latestDate !== null && publicationDate <= latestDate) {
-      throw new Error(`${at} was published on ${publicationDate}, not after the latest consolidated version's ${latestDate}`);
+      throw new Error(`${at} was published on ${publicationDate}, not after the latest held consolidated version's ${latestDate}`);
     }
     return Object.freeze({
       actingIri: text(act, 'acting_iri', at),
@@ -258,13 +261,35 @@ export function readAmendedAfter(answer, workKey) {
   if ((status === 'notice') !== (acts.length > 0)) throw new Error(`${where} names the acts exactly when its notice is raised`);
   const notice = textOrNull(value, 'notice', where);
   if ((status === 'notice') !== (notice !== null)) throw new Error(`${where} says its sentence exactly when its notice is raised`);
-  const latest = readStateSummary(own(value, 'latest_consolidation', where), `${where}.latest_consolidation`, workKey);
-  if ((latest === null) !== (latestDate === null)) throw new Error(`${where} names its latest consolidated version exactly when it has its publication date`);
+  // The acts the publisher's table of modifications names as integrating this act's changes, never this act itself.
+  const integratingWorkKeys = Object.freeze(list(value, 'integrating_work_keys', where).map((key, index) => {
+    if (typeof key !== 'string' || !/^[a-z0-9_-]+$/.test(key) || key === workKey) {
+      throw new Error(`${where}.integrating_work_keys[${index}] is not another act's work key`);
+    }
+    return key;
+  }));
+  // The latest held version: this act's own, or an integrating act's when the answer says so; its coordinate names that work.
+  const integrating = boolean(value, 'latest_consolidation_integrating', where);
+  const latest = readStateSummary(own(value, 'latest_consolidation', where), `${where}.latest_consolidation`);
+  if ((latest === null) !== (latestDate === null)) throw new Error(`${where} names its latest held consolidated version exactly when it has its publication date`);
+  if (latest === null && integrating) throw new Error(`${where} says its latest held version is an integrating act's, and names none`);
+  if (latest !== null) {
+    const key = latest.stableCoordinate.split('/')[2];
+    if (integrating ? !integratingWorkKeys.includes(key) : key !== workKey) {
+      throw new Error(`${where}.latest_consolidation's coordinate ${latest.stableCoordinate} does not name ${integrating ? 'an integrating act' : 'this act'}`);
+    }
+  }
   return Object.freeze({
     status,
     acts,
     latestConsolidation: latest,
     latestConsolidationPublicationDate: latestDate,
+    latestConsolidationIntegrating: integrating,
+    integratingWorkKeys,
+    heldVersions: count(value, 'held_versions', where),
+    amendingActs: count(value, 'amending_acts', where),
+    amendingActsIntegrated: count(value, 'amending_acts_integrated', where),
+    amendingActsIntegrationUndecided: count(value, 'amending_acts_integration_undecided', where),
     notice,
     rule: text(value, 'rule', where),
   });

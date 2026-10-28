@@ -14,8 +14,10 @@ namespace Lex.V3.Ingest.Tests;
 /// <summary>
 /// The publisher's relation records served (R29, R72, R21): over a verified mount of index 10, <c>relations</c> returns the typed
 /// edges of a work in both directions, each with the acting act's dates by role and the inverse views derived; the dossier carries
-/// the relation tabs' data and R72's notice, which fires when every consolidated version in the catalogue was published before an
-/// amending act (or there is none), and not otherwise; an index 9 mount of the same rows answers as before, claiming nothing.
+/// the relation tabs' data and R72's notice, which fires when an amending act was published after every consolidated version whose
+/// text the index holds, of the act and of every act the publisher records as integrating its changes (or there is none), and the
+/// act is not recorded as integrated in a held version; and not otherwise; an index 9 mount of the same rows answers as before,
+/// claiming nothing.
 /// Every value is synthetic, driven through the real handler.
 /// </summary>
 [TestClass]
@@ -23,9 +25,14 @@ public sealed class V3CorpusPublisherRelationsMountTests
 {
     private const string Fra = "http://publications.europa.eu/resource/authority/language/FRA";
 
+    private static readonly string CodeActAsPublished = W("loi/2006/07/31/n2/jo");
+
     /// <summary>
-    /// The relations fixture and five works for R72: one never consolidated and amended later, one consolidated after its
-    /// amending act, one whose consolidation names no publication date, one amended by an act of no date, one with no relation.
+    /// The relations fixture (its act amended by an act whose impact record names two integrating versions, its one consolidation's
+    /// text not held) and the works for R72: one never consolidated and amended later; one with a held consolidation published after
+    /// its amending act; one whose held consolidation names no publication date; one amended by an act of no date; one with no
+    /// relation; one whose held consolidation precedes its amending act and whose later consolidation's text is not held; and an act
+    /// held only as published whose changes a code integrates (the Code du travail's act of 31 July 2006, as run 15 records it).
     /// </summary>
     private static Harness NoticeFixture()
     {
@@ -39,14 +46,55 @@ public sealed class V3CorpusPublisherRelationsMountTests
         Act("loi/2011/01/01/n1", "2011-01-05");
         h.Fact(W("loi/2012/01/01/n7/jo"), "publicationDate", "2012-01-03").Relation(W("loi/2012/01/01/n7/jo"), "modifies", W("loi/2011/01/01/n1/jo"));
         Act("loi/2012/01/01/n1", "2012-01-05");
-        h.State(W("loi/2012/01/01/n1/consolide/20190101"), "2019-01-01", publication: "2019-01-05", memberOf: W("loi/2012/01/01/n1"), expressions: ("fr", Fra));
+        h.State(W("loi/2012/01/01/n1/consolide/20190101"), "2019-01-01", publication: "2019-01-05", memberOf: W("loi/2012/01/01/n1"), expressions: ("fr", Fra))
+            .Held(W("loi/2012/01/01/n1/consolide/20190101"), ["art_1"], inFileDate: "2019-01-01");
         h.Fact(W("loi/2018/01/01/n7/jo"), "publicationDate", "2018-01-03").Relation(W("loi/2018/01/01/n7/jo"), "modifies", W("loi/2012/01/01/n1/jo"));
         Act("loi/2013/01/01/n1", "2013-01-05");
-        h.State(W("loi/2013/01/01/n1/consolide/20190101"), "2019-01-01", memberOf: W("loi/2013/01/01/n1"), expressions: ("fr", Fra));
+        h.State(W("loi/2013/01/01/n1/consolide/20190101"), "2019-01-01", memberOf: W("loi/2013/01/01/n1"), expressions: ("fr", Fra))
+            .Held(W("loi/2013/01/01/n1/consolide/20190101"), ["art_1"], inFileDate: "2019-01-01");
         h.Fact(W("loi/2020/01/01/n7/jo"), "publicationDate", "2020-01-03").Relation(W("loi/2020/01/01/n7/jo"), "modifies", W("loi/2013/01/01/n1/jo"));
         Act("loi/2014/01/01/n1", "2014-01-05");
         h.Relation(W("loi/2021/01/01/n7/jo"), "modifies", W("loi/2014/01/01/n1/jo"));
         Act("loi/2015/01/01/n1", "2015-01-05");
+
+        // Held 2018, amended 2019, consolidated again in 2020 in a version whose text is not held: R72 compares held versions only.
+        Act("loi/2017/01/01/n1", "2017-01-05");
+        h.State(W("loi/2017/01/01/n1/consolide/20180101"), "2018-01-01", "2020-01-01", publication: "2018-01-05", memberOf: W("loi/2017/01/01/n1"), expressions: ("fr", Fra))
+            .Held(W("loi/2017/01/01/n1/consolide/20180101"), ["art_1"], inFileDate: "2018-01-01");
+        h.State(W("loi/2017/01/01/n1/consolide/20200101"), "2020-01-01", publication: "2020-01-05", memberOf: W("loi/2017/01/01/n1"), expressions: ("fr", Fra));
+        h.Fact(W("loi/2019/06/01/n7/jo"), "publicationDate", "2019-06-03").Relation(W("loi/2019/06/01/n7/jo"), "modifies", W("loi/2017/01/01/n1/jo"));
+
+        // The code's act, held only as published; the code's states are another work's, two held and the latest not.
+        Act("loi/2006/07/31/n2", "2006-08-28");
+        h.Fact(W("code/travail"), "rdf:type", "http://data.legilux.public.lu/resource/ontology/jolux#ComplexWork");
+        h.State(W("code/travail/20250401"), "2025-04-01", "2026-07-01", publication: "2025-04-05", expressions: ("fr", Fra))
+            .Held(W("code/travail/20250401"), ["art_1"]);
+        h.State(W("code/travail/20260701"), "2026-07-01", "2026-10-01", publication: "2026-07-30", expressions: ("fr", Fra))
+            .Held(W("code/travail/20260701"), ["art_1"]);
+        h.State(W("code/travail/20261001"), "2026-10-01", publication: "2026-10-02", expressions: ("fr", Fra));
+        void Amends(string act, string published, params string[] consolidatedBy)
+        {
+            h.Fact(W(act + "/jo"), "publicationDate", published).Relation(W(act + "/jo"), "modifies", CodeActAsPublished);
+            if (consolidatedBy.Length == 0)
+            {
+                return;
+            }
+
+            var impact = W(act + "/legal-analysis/LegalResourceImpact/1");
+            h.Relation(impact, "impactFromLegalResource", W(act + "/jo"))
+                .Relation(impact, "impactToLegalResource", CodeActAsPublished)
+                .Relation(impact, "legalResourceImpactHasType", "http://data.legilux.public.lu/resource/authority/impact-type/1");
+            foreach (var version in consolidatedBy)
+            {
+                h.Relation(impact, "impactConsolidatedBy", W(version));
+            }
+        }
+
+        Amends("loi/2026/01/01/n1", "2026-01-03", "code/travail/20250401");
+        Amends("loi/2026/08/01/n1", "2026-08-03", "code/travail/20260701");
+        Amends("loi/2026/09/01/n1", "2026-09-03");
+        Amends("loi/2026/09/20/n1", "2026-09-22", "code/travail/20261001");
+        Amends("loi/2026/09/25/n1", "2026-09-27", "code/travail/20260701", "code/travail/20261001");
         return h;
     }
 
@@ -171,7 +219,7 @@ public sealed class V3CorpusPublisherRelationsMountTests
     }
 
     [TestMethod]
-    public async Task TheDossierCarriesTheRelationTabsAndR72FiresOnlyWhenAnAmendingActIsLaterThanEveryConsolidatedVersion()
+    public async Task TheDossierCarriesTheRelationTabsAndR72FiresOnlyWhenAnAmendingActIsLaterThanEveryHeldConsolidatedVersion()
     {
         await using var fixture = await RelationsMount.CreateAsync(NoticeFixture());
         async Task<JsonElement> NoticeOf(string work)
@@ -184,46 +232,38 @@ public sealed class V3CorpusPublisherRelationsMountTests
             return notice;
         }
 
-        // Consolidated on 2015-01-10, amended by an act published on 2016-06-03 (and by none other recorded).
-        var fires = await NoticeOf("loi-2010-01-01-n1");
-        Assert.AreEqual("notice", fires.GetProperty("status").GetString());
-        Assert.AreEqual("2015-01-10", fires.GetProperty("latest_consolidation_publication_date").GetString());
-        Assert.AreEqual("2015-01-01", fires.GetProperty("latest_consolidation").GetProperty("applicability_date").GetString());
-        // The latest consolidated version is a state whose text is not held: its permalink, as the notice names it, is refused by
-        // verify and resolve for its text (#1008), naming that state, never identifier_unknown.
-        var latest = fires.GetProperty("latest_consolidation");
-        Assert.AreEqual("not_acquired", latest.GetProperty("text_status").GetString());
-        foreach (var operation in new[] { "verify", "resolve" })
-        {
-            var refused = await V3CorpusIntervalMountTests.AskAsync(fixture.Mount, operation, new { identifier = latest.GetProperty("permalink").GetString() });
-            Assert.AreEqual(V3Verdicts.Refuse, refused.Verdict, operation);
-            Assert.AreEqual("text_not_available", refused.Refusal!.Code, operation);
-            StringAssert.Contains(refused.Refusal.HelpfulPayload.GetRawText(), latest.GetProperty("state_sha256").GetString(), operation);
-        }
-        var act = fires.GetProperty("acts").EnumerateArray().Single();
-        Assert.AreEqual(("2016-06-03", W("loi/2016/06/01/n1/jo")), (act.GetProperty("publication_date").GetString(), act.GetProperty("acting_iri").GetString()));
-        Assert.AreEqual(
-            "An act published on 2016-06-03 (Loi synthétique du 1er juin 2016 modifiant une loi, http://data.legilux.public.lu/eli/etat/leg/loi/2016/06/01/n1/jo) " +
-            "amends this act, according to the publisher's relation records (derived from the publisher's forward relation); no consolidated version in the " +
-            "publisher's catalogue, as this index read it, was published after it (the latest was published on 2015-01-10).",
-            fires.GetProperty("notice").GetString());
+        const string Derived = " This is derived from the publisher's records (derived from the publisher's forward relation).";
+
+        // Amended by an act published on 2016-06-03, consolidated on 2015-01-10 in a version whose text is not held; the amending
+        // act's impact record names two versions as integrating it, so whether one this index holds does is not decided.
+        var undecided = await NoticeOf("loi-2010-01-01-n1");
+        Assert.AreEqual("undetermined", undecided.GetProperty("status").GetString());
+        Assert.AreEqual(0, undecided.GetProperty("held_versions").GetInt32(), "a consolidation whose text is not held is not compared");
+        Assert.AreEqual(1, undecided.GetProperty("amending_acts_integration_undecided").GetInt32());
+        Assert.AreEqual(JsonValueKind.Null, undecided.GetProperty("latest_consolidation").ValueKind);
+        Assert.AreEqual(JsonValueKind.Null, undecided.GetProperty("notice").ValueKind);
 
         // Never consolidated, amended later: fires, naming no consolidated version.
         var never = await NoticeOf("loi-2011-01-01-n1");
         Assert.AreEqual("notice", never.GetProperty("status").GetString());
         Assert.AreEqual(JsonValueKind.Null, never.GetProperty("latest_consolidation").ValueKind);
-        StringAssert.EndsWith(never.GetProperty("notice").GetString(), "the publisher's catalogue, as this index read it, lists no consolidated version of this act.");
+        Assert.AreEqual(
+            "An act published on 2012-01-03 (http://data.legilux.public.lu/eli/etat/leg/loi/2012/01/01/n7/jo) amends this law; no consolidated " +
+            "version Lex holds was published after it. Lex holds no consolidated version of this law, or of an act the publisher records as " +
+            "integrating the changes made to it." + Derived,
+            never.GetProperty("notice").GetString());
 
-        // Consolidated after its amending act: no notice.
+        // A held consolidation published after its amending act: no notice.
         var consolidated = await NoticeOf("loi-2012-01-01-n1");
         Assert.AreEqual("no_later_amending_act", consolidated.GetProperty("status").GetString());
+        Assert.AreEqual(1, consolidated.GetProperty("held_versions").GetInt32());
         Assert.AreEqual(0, consolidated.GetProperty("acts").GetArrayLength());
         Assert.AreEqual(JsonValueKind.Null, consolidated.GetProperty("notice").ValueKind);
 
-        // A consolidated version without a publication date: the comparison cannot be made.
+        // A held consolidation without a publication date: the comparison cannot be made.
         var undated = await NoticeOf("loi-2013-01-01-n1");
         Assert.AreEqual("undetermined", undated.GetProperty("status").GetString());
-        Assert.AreEqual(1, undated.GetProperty("consolidations_without_publication_date").GetInt32());
+        Assert.AreEqual(1, undated.GetProperty("held_versions_without_publication_date").GetInt32());
         Assert.AreEqual(JsonValueKind.Null, undated.GetProperty("notice").ValueKind);
 
         // An amending act without a publication date, no consolidated version: undetermined.
@@ -233,6 +273,65 @@ public sealed class V3CorpusPublisherRelationsMountTests
 
         // No relation recorded.
         Assert.AreEqual("no_amending_act_recorded", (await NoticeOf("loi-2015-01-01-n1")).GetProperty("status").GetString());
+
+        // Held 2018-01-05, amended 2019-06-03, consolidated again on 2020-01-05 in a version whose text is not held: the notice
+        // fires, since no version Lex holds was published after the amending act, and names the latest it holds.
+        var heldOnly = await NoticeOf("loi-2017-01-01-n1");
+        Assert.AreEqual("notice", heldOnly.GetProperty("status").GetString());
+        Assert.AreEqual(("2018-01-01", "2018-01-05"),
+            (heldOnly.GetProperty("latest_consolidation").GetProperty("applicability_date").GetString(),
+             heldOnly.GetProperty("latest_consolidation_publication_date").GetString()));
+        Assert.IsFalse(heldOnly.GetProperty("latest_consolidation_integrating").GetBoolean());
+        Assert.AreEqual(1, heldOnly.GetProperty("held_versions").GetInt32());
+        Assert.AreEqual(
+            "An act published on 2019-06-03 (http://data.legilux.public.lu/eli/etat/leg/loi/2019/06/01/n7/jo) amends this law; no consolidated " +
+            "version Lex holds was published after it. The latest consolidated version Lex holds, /lu-legilux/loi-2017-01-01-n1/2018-01-01, " +
+            "was published on 2018-01-05." + Derived,
+            heldOnly.GetProperty("notice").GetString());
+
+        // The code's act, held only as published: the code's held states are compared, as the impact records name them as
+        // integrating its changes. Of its five amending acts, the one of 2026-01-03 precedes the latest held code state (2026-07-30);
+        // the one of 2026-08-03 is integrated in a held state, so it is never later; the one of 2026-09-27 names two versions, so it
+        // is not named; the two of 2026-09-03 and 2026-09-22 are named, the second integrated in a state whose text is not held.
+        var code = await NoticeOf("loi-2006-07-31-n2");
+        Assert.AreEqual("notice", code.GetProperty("status").GetString());
+        CollectionAssert.AreEqual(
+            new[] { "2026-09-03 loi/2026/09/01/n1/jo", "2026-09-22 loi/2026/09/20/n1/jo" },
+            code.GetProperty("acts").EnumerateArray()
+                .Select(static act => $"{act.GetProperty("publication_date").GetString()} {Short(act.GetProperty("acting_iri").GetString()!)}").ToArray());
+        var latestCode = code.GetProperty("latest_consolidation");
+        Assert.AreEqual(("/lu-legilux/code-travail/2026-07-01", "code", "held"),
+            (latestCode.GetProperty("stable_coordinate").GetString(), latestCode.GetProperty("state_kind").GetString(), latestCode.GetProperty("text_status").GetString()));
+        Assert.AreEqual("2026-07-30", code.GetProperty("latest_consolidation_publication_date").GetString());
+        Assert.IsTrue(code.GetProperty("latest_consolidation_integrating").GetBoolean());
+        CollectionAssert.AreEqual(new[] { "code-travail" }, code.GetProperty("integrating_work_keys").EnumerateArray().Select(static key => key.GetString()).ToArray());
+        Assert.AreEqual((2, 0, 5, 0, 2, 1),
+            (code.GetProperty("held_versions").GetInt32(), code.GetProperty("held_versions_without_publication_date").GetInt32(),
+             code.GetProperty("amending_acts").GetInt32(), code.GetProperty("amending_acts_without_publication_date").GetInt32(),
+             code.GetProperty("amending_acts_integrated").GetInt32(), code.GetProperty("amending_acts_integration_undecided").GetInt32()));
+        Assert.AreEqual(
+            "2 acts published from 2026-09-03 to 2026-09-22 amend this law; no consolidated version Lex holds was published after them. " +
+            "The latest consolidated version Lex holds, /lu-legilux/code-travail/2026-07-01, is of an act the publisher records as integrating " +
+            "the changes made to this law; it was published on 2026-07-30." + Derived,
+            code.GetProperty("notice").GetString());
+
+        // The version the impact record of 2026-09-22 names as integrating it is the code's, and its text is not held: its permalink,
+        // as the relation tab names it, is refused by verify and resolve for its text (#1008), naming that state, never
+        // identifier_unknown.
+        var dossier = await AnswerAsync(fixture.Mount, "dossier", new { identifier = "/lu-legilux/loi-2006-07-31-n2" });
+        var textless = dossier.GetProperty("publisher_relations").GetProperty("edges").EnumerateArray()
+            .Single(static edge => edge.GetProperty("view").GetString() == "impact_received" &&
+                                   edge.GetProperty("other").GetProperty("iri").GetString() == W("loi/2026/09/20/n1/jo"))
+            .GetProperty("impact").GetProperty("consolidated_by_state");
+        Assert.AreEqual(("/lu-legilux/code-travail/2026-10-01", "not_acquired"),
+            (textless.GetProperty("stable_coordinate").GetString(), textless.GetProperty("text_status").GetString()));
+        foreach (var operation in new[] { "verify", "resolve" })
+        {
+            var refused = await V3CorpusIntervalMountTests.AskAsync(fixture.Mount, operation, new { identifier = textless.GetProperty("permalink").GetString() });
+            Assert.AreEqual(V3Verdicts.Refuse, refused.Verdict, operation);
+            Assert.AreEqual("text_not_available", refused.Refusal!.Code, operation);
+            StringAssert.Contains(refused.Refusal.HelpfulPayload.GetRawText(), textless.GetProperty("state_sha256").GetString(), operation);
+        }
     }
 
     [TestMethod]

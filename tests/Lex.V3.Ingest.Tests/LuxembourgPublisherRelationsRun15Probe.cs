@@ -28,8 +28,9 @@ namespace Lex.V3.Ingest.Tests;
 /// row is a resolved, accepted relation of the run's one observation (the scope resolver accepts every predicate but
 /// consolidates by its rule, and consolidates is not projected). The production projection
 /// (<see cref="LuxembourgIndexBuilder.ProjectPublisherRelations"/>) makes the rows, and R72's rule
-/// (<see cref="V3CorpusMount.AmendedAfterLatestConsolidation"/>) reads them for each act derive-r1 holds as published, over its
-/// catalogue states, as the server reads a dossier.
+/// (<see cref="V3CorpusMount.AmendedAfterLatestHeldConsolidation"/>) reads them for each act the index holds as published, over the
+/// held consolidation and code states of the act and of every act its received impact records name as integrating its changes, as
+/// the server reads a dossier.
 /// </para>
 /// </remarks>
 [TestClass]
@@ -208,10 +209,17 @@ public sealed class LuxembourgPublisherRelationsRun15Probe
             ["with_publication_date"] = rows.Impacts.Count(static row => row.ActingPublicationDate is not null),
         };
 
-        // ---- R72 over the acts derive-r1 serves: each held as published, over its catalogue states, as a dossier reads it. ----
+        // ---- R72 over the acts the index serves: each held as published, over the held versions, as a dossier reads it. ----
         var byObject = rows.Relations.ToLookup(static row => row.ObjectIri, StringComparer.Ordinal);
+        var impactsTo = rows.Impacts.Where(static row => row.ToLegalResourceIri is not null && row.FromLegalResourceIri is not null)
+            .ToLookup(static row => row.ToLegalResourceIri!, StringComparer.Ordinal);
+        var factsOfWork = states
+            .Select(static state => new V3CorpusMount.ConsolidationFacts(state.WorkKey, state.LegalResource, state.Kind, state.Text, state.Publication))
+            .ToLookup(static state => state.WorkKey, StringComparer.Ordinal);
+        IReadOnlyList<V3CorpusMount.ConsolidationFacts> StatesOf(string key) => factsOfWork[key].ToArray();
         var statuses = new SortedDictionary<string, int>(StringComparer.Ordinal);
         int served = 0, amended = 0, amendingEdges = 0, repealed = 0, noticeWithoutConsolidation = 0, noticeAfterConsolidation = 0;
+        int noticeAfterIntegrating = 0, withIntegratingActs = 0, integratedActs = 0, undecidedActs = 0;
         foreach (var work in states.GroupBy(static state => state.WorkKey, StringComparer.Ordinal))
         {
             if (!work.Any(static state => state.Kind == "as_published" && state.Text == "held"))
@@ -240,16 +248,19 @@ public sealed class LuxembourgPublisherRelationsRun15Probe
                 repealed++;
             }
 
-            var consolidations = work
-                .Where(static state => state.Kind is "consolidation" or "code")
-                .GroupBy(static state => state.LegalResource, StringComparer.Ordinal)
-                .Select(static group => group.Select(static state => state.Publication).Distinct(StringComparer.Ordinal).ToArray() is [var one] ? one : null)
+            var received = own.SelectMany(iri => impactsTo[iri]).Distinct()
+                .Select(static row => new V3CorpusMount.ReceivedImpact(
+                    row.FromLegalResourceIri!, row.ConsolidatedByIri, row.AmbiguousPartsJson.Contains("jolux:impactConsolidatedBy", StringComparison.Ordinal)))
                 .ToArray();
-            var reading = V3CorpusMount.AmendedAfterLatestConsolidation(consolidations, amending);
+            var reading = V3CorpusMount.AmendedAfterLatestHeldConsolidation(work.Key, StatesOf(work.Key), StatesOf, amending, received);
             statuses[reading.Status] = statuses.GetValueOrDefault(reading.Status) + 1;
+            withIntegratingActs += reading.IntegratingWorkKeys.Count > 0 ? 1 : 0;
+            integratedActs += reading.AmendingActsIntegrated;
+            undecidedActs += reading.AmendingActsIntegrationUndecided;
             if (reading.Status == V3CorpusMount.AmendedAfterNotice)
             {
-                if (reading.LatestConsolidationPublicationDate is null) noticeWithoutConsolidation++;
+                if (reading.LatestHeld is null) noticeWithoutConsolidation++;
+                else if (reading.LatestHeld.WorkKey != work.Key) noticeAfterIntegrating++;
                 else noticeAfterConsolidation++;
             }
         }
@@ -261,8 +272,12 @@ public sealed class LuxembourgPublisherRelationsRun15Probe
             ["amending_edges"] = amendingEdges,
             ["repealed_acts"] = repealed,
             ["statuses"] = new JsonObject(statuses.Select(static entry => new KeyValuePair<string, JsonNode?>(entry.Key, entry.Value))),
-            ["notice_with_no_consolidation"] = noticeWithoutConsolidation,
-            ["notice_after_the_latest_consolidation"] = noticeAfterConsolidation,
+            ["notice_with_no_held_consolidation"] = noticeWithoutConsolidation,
+            ["notice_after_the_latest_held_consolidation"] = noticeAfterConsolidation,
+            ["notice_after_the_latest_held_integrating_version"] = noticeAfterIntegrating,
+            ["acts_with_an_integrating_act"] = withIntegratingActs,
+            ["amending_acts_integrated_in_a_held_version"] = integratedActs,
+            ["amending_acts_whose_integration_is_undecided"] = undecidedActs,
         };
         summary["seconds"] = Math.Round(clock.Elapsed.TotalSeconds, 1);
         summary["peak_working_set_mib"] = Process.GetCurrentProcess().PeakWorkingSet64 / (1024 * 1024);

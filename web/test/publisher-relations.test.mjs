@@ -2,8 +2,9 @@
 // specification of record's R29, R72 and R21), read by `scripts/publisher-relations.mjs` and laid out by `LiveDossier.jsx`:
 // one tab per kind of relation the records name, the inverse views labelled derived from the publisher's forward relation,
 // the acting act's dates each with its role, the kinds that name no act said only of a relation read in full, what the family
-// does not see, and R72's banner when an act published after every consolidated version amends the act. An answer over an
-// older index carries neither member and shows neither. Every value is synthetic, set on the census's own dossier answer.
+// does not see, and R72's banner when an act published after every consolidated version Lex holds (of the act, or of an act
+// the publisher records as integrating its changes) amends the act. An answer over an older index carries neither member and
+// shows neither. Every value is synthetic, set on the census's own dossier answer.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -42,8 +43,23 @@ function edge(view, edgeType, direction, derived, otherAct, published, entry = n
   };
 }
 
-/** The census's dossier with index 10's two members, consistent with its own work. */
-function withRelations({ status = "notice", acts = 1, families = "acquired_complete", familyStates = {}, consolidated = true } = {}) {
+/** A consolidated version as an answer names it, of the given work. */
+function version(workKey, legalResource, date, published) {
+  const digest = "c".repeat(64);
+  return {
+    state_sha256: digest, language: "fra", applicability_date: date,
+    stable_coordinate: `/lu-legilux/${workKey}/${date}`, permalink: `/lu-legilux/${workKey}/${date}--${digest}/fra`,
+    expression_iri: null, publisher_legal_resource_iri: legalResource, publication_date: published,
+  };
+}
+
+/**
+ * The census's dossier with index 10's two members, consistent with its own work. `consolidated` is the latest version Lex holds:
+ * this act's own ("own"), a code's that the publisher records as integrating its changes ("integrating"), or none (false).
+ */
+function withRelations({
+  status = "notice", acts = 1, families = "acquired_complete", familyStates = {}, consolidated = "own", integrated = 0, undecided = 0,
+} = {}) {
   const envelope = structuredClone(sample);
   const value = envelope.result.value;
   const amending = other(`${ELI}loi/2016/06/01/n1/jo`, { title: "Loi synthétique du 1er juin 2016", address: "/lu-legilux/loi-2016-06-01-n1", published: "2016-06-03", entry: "2016-06-07" });
@@ -57,6 +73,11 @@ function withRelations({ status = "notice", acts = 1, families = "acquired_compl
       impact_iri: `${ELI}loi/2016/06/01/n1/legal-analysis/LegalResourceImpact/1`, type_iri: "http://data.legilux.public.lu/resource/authority/impact-type/1",
       type_code: "1", to_expression_iri: null, consolidated_by_iri: `${ELI}loi/1991/08/10/n3/consolide/20170101`, consolidated_by_expression_iri: null,
       consolidated_by_state: null, ambiguous_parts: [],
+    }),
+    edge("impact_received", "impact", "inbound", true, second, "2017-03-02", null, {
+      impact_iri: `${ELI}loi/2017/03/01/n2/legal-analysis/LegalResourceImpact/1`, type_iri: "http://data.legilux.public.lu/resource/authority/impact-type/1",
+      type_code: "1", to_expression_iri: null, consolidated_by_iri: `${ELI}code/travail/20170401`, consolidated_by_expression_iri: null,
+      consolidated_by_state: version("code-travail", `${ELI}code/travail/20170401`, "2017-04-01", "2017-04-05"), ambiguous_parts: [],
     }),
   ] : [];
   const counts = Object.fromEntries(RELATION_VIEWS.map((entry) => [entry.view, edges.filter((candidate) => candidate.view === entry.view).length]));
@@ -80,17 +101,20 @@ function withRelations({ status = "notice", acts = 1, families = "acquired_compl
   const listed = [{ acting_iri: amending.iri, publication_date: "2016-06-03", other: amending, evidence_sha256: EVIDENCE },
     { acting_iri: second.iri, publication_date: "2017-03-02", other: second, evidence_sha256: EVIDENCE }].slice(0, acts);
   const state = value.states[0];
+  const latest = consolidated === "own"
+    ? version(value.work_key, `${value.publisher_work_iri}/consolide/20150101`, "2015-01-01", "2015-01-10")
+    : consolidated === "integrating" ? version("code-travail", `${ELI}code/travail/20150101`, "2015-01-01", "2015-01-10") : null;
   value.amended_after_consolidation = {
     status, derived: true, source_predicate: "jolux:modifies",
     acts: notice ? listed : [],
-    latest_consolidation: consolidated ? {
-      state_sha256: "c".repeat(64), language: "fra", applicability_date: "2015-01-01",
-      stable_coordinate: `/lu-legilux/${value.work_key}/2015-01-01`, permalink: `/lu-legilux/${value.work_key}/2015-01-01--${"c".repeat(64)}/fra`,
-      expression_iri: null, publisher_legal_resource_iri: `${value.publisher_work_iri}/consolide/20150101`, publication_date: "2015-01-10",
-    } : null,
-    latest_consolidation_publication_date: consolidated ? "2015-01-10" : null,
-    consolidations: consolidated ? 1 : 0, consolidations_without_publication_date: 0, amending_acts: 2, amending_acts_without_publication_date: 0,
-    notice: notice ? "An act published on 2016-06-03 (…) amends this act, according to the publisher's relation records." : null,
+    latest_consolidation: latest,
+    latest_consolidation_publication_date: latest === null ? null : "2015-01-10",
+    latest_consolidation_integrating: consolidated === "integrating",
+    integrating_work_keys: consolidated === "integrating" ? ["code-travail"] : [],
+    held_versions: latest === null ? 0 : 1, held_versions_without_publication_date: 0,
+    amending_acts: 2 + integrated + undecided, amending_acts_without_publication_date: 0,
+    amending_acts_integrated: integrated, amending_acts_integration_undecided: undecided,
+    notice: notice ? "An act published on 2016-06-03 (…) amends this law; no consolidated version Lex holds was published after it." : null,
     rule: "R72: an act the publisher records as modifying this act",
   };
   assert.ok(state, "the census's dossier holds a state");
@@ -102,7 +126,7 @@ test("the dossier lists the publisher's relations by kind, the inverse views der
   assert.equal(outcome.state, "success", outcome.sentence);
   const markup = view(outcome);
   const shown = text(markup);
-  assert.ok(markup.includes('<section data-relations="5">'), markup);
+  assert.ok(markup.includes('<section data-relations="6">'), markup);
   assert.ok(shown.includes("Relations in the publisher's records"));
   // The tabs: one per kind the records name, each an in-page link to its section, with its count.
   assert.ok(markup.includes('<nav aria-label="Relations listed"><ul data-relation-tabs="4">'), markup);
@@ -124,33 +148,46 @@ test("the dossier lists the publisher's relations by kind, the inverse views der
   // The impact record: read from the publisher's table of modifications, with the consolidated version it names.
   assert.ok(shown.includes("Read from the publisher's table of modifications"));
   assert.ok(markup.includes(`The publisher records this change as integrated in <code>${ELI}loi/1991/08/10/n3/consolide/20170101</code>.`));
+  // A version of another act (a code integrating this act's change) is named by its coordinate, never dated as this act's own.
+  assert.ok(markup.includes(`The publisher records this change as integrated in <a href="/en/lu-legilux/code-travail/2017-04-01--${"c".repeat(64)}/fra"><code>/lu-legilux/code-travail/2017-04-01</code></a>.`), markup);
+  assert.ok(!markup.includes("consolidated version applicable from <time dateTime=\"2017-04-01\">"), "a code's version is not said to be this act's");
   // The kinds read in full that name no act, and what the family does not see.
   assert.ok(shown.includes("The publisher's records, as this site read them, name no act for: Acts this act repeals; Acts that modify this act for a time;"), shown);
   assert.ok(shown.includes("This site read the relation records the publisher keeps on codes, laws and grand-ducal regulations"));
   assertTimeVocabulary(text(markup.slice(markup.indexOf("<section data-relations"))), "the dossier's relations");
 });
 
-test("R72's banner says an act published after the latest consolidated version amends the act, names it and its date, and is derived", () => {
+test("R72's banner says an act published after the latest consolidated version Lex holds amends the act, names it and its date, and is derived", () => {
   const markup = view(dossierOutcome({ state: "success", envelope: withRelations() }));
   const at = markup.indexOf('<aside class="relation-notice"');
   assert.ok(at > 0 && at < markup.indexOf("<section data-relations"), "the banner is above the dossier's body");
   const banner = text(markup.slice(at, markup.indexOf("</aside>", at)));
-  assert.ok(banner.includes("Amended, with no consolidated version published since"));
-  assert.ok(banner.includes("An act published on 2016-06-03 ( Loi synthétique du 1er juin 2016 ) amends this act, according to the publisher's relation records; no consolidated version in the publisher's catalogue, as this site read it, was published after it."), banner);
-  assert.ok(markup.includes('The latest consolidated version listed there was published on <time dateTime="2015-01-10">2015-01-10</time>.'), banner);
+  assert.ok(banner.includes(LIVE_CHROME.en.dossier.amendedAfterHeading));
+  assert.ok(banner.includes("An act published on 2016-06-03 ( Loi synthétique du 1er juin 2016 ) amends this law; no consolidated version Lex holds was published after it."), banner);
+  assert.ok(markup.includes(`<p data-amended-after-latest="own">The latest consolidated version Lex holds, <a href="/en/lu-legilux/${sample.result.value.work_key}/2015-01-01--${"c".repeat(64)}/fra"><code>/lu-legilux/${sample.result.value.work_key}/2015-01-01</code></a>, was published on <time dateTime="2015-01-10">2015-01-10</time>.</p>`), markup);
   assert.ok(banner.includes("This is derived from the publisher's forward relation"));
   assert.ok(banner.includes("An amending act other than a code, a law or a grand-ducal regulation is not seen."));
+  assert.ok(!markup.includes("data-amended-after-integrated") && !markup.includes("data-amended-after-undecided"), "no count of acts not named when there is none");
   assertTimeVocabulary(banner, "R72's banner");
 
   // Two acts: listed, each with its date.
   const two = text(view(dossierOutcome({ state: "success", envelope: withRelations({ acts: 2 }) })));
-  assert.ok(two.includes("These acts amend this act, according to the publisher's relation records; no consolidated version in the publisher's catalogue, as this site read it, was published after them:"));
+  assert.ok(two.includes("These acts amend this law; no consolidated version Lex holds was published after them:"));
   assert.ok(two.includes("published on 2017-03-02 (publisher)"));
 
-  // An act whose catalogue lists no consolidated version: the notice says so, with no date for one.
-  const never = text(view(dossierOutcome({ state: "success", envelope: withRelations({ consolidated: false }) })));
-  assert.ok(never.includes("That catalogue lists no consolidated version of this act."), never);
-  assert.ok(!never.includes("The latest consolidated version listed there"));
+  // An act of which Lex holds no consolidated version: the notice says so, with no date for one.
+  const never = view(dossierOutcome({ state: "success", envelope: withRelations({ consolidated: false }) }));
+  assert.ok(text(never).includes("Lex holds no consolidated version of this law, or of an act the publisher records as integrating the changes made to it."), text(never));
+  assert.ok(never.includes('data-amended-after-latest="none"'));
+  assert.ok(!text(never).includes("The latest consolidated version Lex holds"));
+
+  // The latest version Lex holds is a code's that the publisher records as integrating the act's changes: named as that act's.
+  const code = view(dossierOutcome({ state: "success", envelope: withRelations({ consolidated: "integrating", integrated: 3, undecided: 1 }) }));
+  assert.ok(code.includes(`<p data-amended-after-latest="integrating">The latest consolidated version Lex holds, <a href="/en/lu-legilux/code-travail/2015-01-01--${"c".repeat(64)}/fra"><code>/lu-legilux/code-travail/2015-01-01</code></a>, is of an act the publisher records as integrating the changes made to this law; it was published on <time dateTime="2015-01-10">2015-01-10</time>.</p>`), code);
+  // The amending acts not named: integrated in a held version, or naming more than one version as integrating them.
+  assert.ok(code.includes('<p data-amended-after-integrated="3">Amending acts the publisher records as integrated in a consolidated version Lex holds are not named here: 3.</p>'), code);
+  assert.ok(code.includes('<p data-amended-after-undecided="1">Amending acts for which the publisher&#x27;s table of modifications names more than one consolidated version as integrating the change are not named here: 1.</p>'), code);
+  assertTimeVocabulary(text(code.slice(code.indexOf('<aside class="relation-notice"'), code.indexOf("</aside>"))), "R72's banner, integrating");
 
   // The note is the modifies family's: when it was not read in full, it names no class it would claim to have read.
   const unscoped = text(view(dossierOutcome({ state: "success", envelope: withRelations({ familyStates: { modifies: "incomplete" } }) })));
@@ -195,7 +232,7 @@ test("the forms the French review replaced are said nowhere", () => {
     assert.ok(!french.includes(replaced), `the French says ${replaced}`);
   }
   const english = JSON.stringify(LIVE_CHROME.en.dossier);
-  for (const replaced of ["Amended after the latest consolidated version", "only: {classes};"]) {
+  for (const replaced of ["Amended after the latest consolidated version", "only: {classes};", "in the publisher's catalogue, as this site read it, was published after"]) {
     assert.ok(!english.includes(replaced), `the English says ${replaced}`);
   }
 });
@@ -207,6 +244,12 @@ test("an answer that breaks its own rules is drift, never rendered", () => {
     ["a view of another type", (value) => { value.publisher_relations.edges[0].edge_type = "repeals"; }],
     ["a notice naming no act", (value) => { value.amended_after_consolidation.acts = []; }],
     ["an act not after the latest consolidated version", (value) => { value.amended_after_consolidation.acts[0].publication_date = "2015-01-10"; }],
+    ["a latest version of another act not said integrating", (value) => {
+      value.amended_after_consolidation.latest_consolidation.stable_coordinate = "/lu-legilux/code-travail/2015-01-01";
+    }],
+    ["a latest version said integrating of an act not named integrating", (value) => { value.amended_after_consolidation.latest_consolidation_integrating = true; }],
+    ["this act named as integrating its own changes", (value) => { value.amended_after_consolidation.integrating_work_keys = [value.work_key]; }],
+    ["a count that is not a count", (value) => { value.amended_after_consolidation.amending_acts_integrated = -1; }],
     ["a family acquired in full with no family", (value) => { value.publisher_relations.families[0].family_keys = []; }],
     ["an address of another work", (value) => { value.publisher_relations.edges[0].other.address = "/lu-legilux/loi-1999-01-01-n1"; }],
     ["a date that is not a date", (value) => { value.publisher_relations.edges[0].acting_publication_date = "2016-06"; }],
