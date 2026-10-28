@@ -17,7 +17,7 @@ import { CARD_ROUTE } from "../scripts/evaluation-card.mjs";
 import { redirectFor } from "../scripts/permalinks.mjs";
 import { INDEXED, KEPT_OUT, ROBOTS_KEPT_OUT, SITEMAP_INDEX_HEAD, robotsTxt } from "../scripts/search-engines.mjs";
 import {
-  NOT_FOUND_PROBE, REMOTE_PRIVACY_NOTE, accentedTitleFailures, browserFailures, cardPromotionFailures, clockFailures, deployedReleaseFailures, homePageFailures,
+  NOT_FOUND_PROBE, REMOTE_PRIVACY_NOTE, TITLE_SEARCH_PAGES, TITLE_WORKS_ASKED, accentedTitleFailures, browserFailures, cardPromotionFailures, clockFailures, deployedReleaseFailures, homePageFailures,
   legalPageFailures, liveFilesOf, luxembourgTodayNote, remoteRevision, renderedHomePage, revisionFailures,
 } from "../scripts/deploy-probe.mjs";
 import { LEGAL_PAGE_PATHS, openingFailures } from "../scripts/legal-pages.mjs";
@@ -343,6 +343,62 @@ test("a title the exact-reference phase reads as its act's type and date passes 
       await served.close();
     }
   }
+});
+
+/**
+ * An `ask` for `accentedTitleFailures` whose search for "loi" pages as the API does (`continue_after` naming the page served,
+ * read back from `after`): pages 1 to `pagesOfCodes` list only `codesOf(page)` (codes come first by work key, and their titles
+ * here carry no accent), the next lists the stand-in's work; the search ends after `pagesHeld`; `refuseAt` refuses that page.
+ * Every other request is the stand-in's (`titleAnswer`). `asked` collects each "loi" search's cursor and each dossier asked.
+ */
+function pagedAsk({ pagesOfCodes, codesOf = () => ["code-civil"], pagesHeld = Number.POSITIVE_INFINITY, refuseAt = null, asked }) {
+  return async (origin, operation, parameters) => {
+    if (operation === "search" && parameters.query === "loi") {
+      asked.searches.push(parameters.after ?? null);
+      const page = parameters.after === undefined ? 1 : Number(parameters.after.split(".")[1]) + 1;
+      if (page === refuseAt) return { refusal: { code: "request_schema_invalid" }, result: null };
+      const truncated = page < pagesHeld;
+      const works = page <= pagesOfCodes ? codesOf(page) : [WORK_KEY];
+      return { refusal: null, result: { value: {
+        work_resolution: { outcome: "several_candidates" }, hits: works.map((work) => ({ work_key: work })), truncated, continue_after: truncated ? `strict.${page}.x` : null,
+      } } };
+    }
+    if (operation === "dossier") asked.dossiers.push(parameters.identifier);
+    if (operation === "dossier" && parameters.identifier !== `/lu-legilux/${WORK_KEY}`) {
+      const code = parameters.identifier.split("/").at(-1);
+      return { refusal: null, result: { value: { titles: [{ language: "fra", expression_iri: `http://data.legilux.public.lu/eli/etat/leg/code/${code}/fr`, titles: [{ title: `Code ${code}` }], short_titles: [] }] } } };
+    }
+    return titleAnswer(operation, parameters, { folds: true, titlesHeld: true });
+  };
+}
+
+test("the accented title is looked for past the pages a code fills, by the search's own cursor, as on the Release 2 mount", async () => {
+  // derive-r2: search has no ranker and codes come first by work key, so the first fourteen pages of "loi" are codes' hits.
+  const asked = { searches: [], dossiers: [] };
+  const notes = [];
+  assert.deepEqual(await accentedTitleFailures("http://revision", { ask: pagedAsk({ pagesOfCodes: 14, asked }), notes }), []);
+  assert.deepEqual(notes, [`an accented title: "${TITLE}" (${WORK}), asked as published, in capitals and decomposed`]);
+  assert.deepEqual(asked.searches, [null, ...Array.from({ length: 14 }, (_, index) => `strict.${index + 1}.x`)], "each page asked with the page before's own cursor");
+  assert.deepEqual(asked.dossiers, ["/lu-legilux/code-civil", `/lu-legilux/${WORK_KEY}`], "each work's dossier asked once");
+
+  // Bounded: at most TITLE_SEARCH_PAGES pages, and the failure says how many were read; a search that ends says so too.
+  for (const [what, options, pages] of [["the ceiling", { pagesOfCodes: TITLE_SEARCH_PAGES + 5 }, TITLE_SEARCH_PAGES], ["a search that ends", { pagesOfCodes: 5, pagesHeld: 3 }, 3]]) {
+    const bounded = { searches: [], dossiers: [] };
+    assert.deepEqual(await accentedTitleFailures("http://revision", { ask: pagedAsk({ ...options, asked: bounded }) }),
+      [`none of the 1 works the revision's search for "loi" lists in the ${pages} pages read names an accented title it resolves without its accents, so no accented title could be checked`], what);
+    assert.equal(bounded.searches.length, pages, what);
+  }
+
+  // A page refused on reading on fails with its page, never passes.
+  assert.deepEqual(await accentedTitleFailures("http://revision", { ask: pagedAsk({ pagesOfCodes: 14, refuseAt: 2, asked: { searches: [], dossiers: [] } }) }),
+    [`search for "loi" read on to its page 2 answered a refusal, request_schema_invalid, so no accented title could be checked`]);
+
+  // The works asked stay TITLE_WORKS_ASKED: once that many are listed no further page is read and no further dossier asked.
+  const many = { searches: [], dossiers: [] };
+  const failures = await accentedTitleFailures("http://revision", { ask: pagedAsk({ pagesOfCodes: 20, codesOf: (page) => [1, 2, 3].map((n) => `c${page}-${n}`), asked: many }) });
+  assert.equal(many.dossiers.length, TITLE_WORKS_ASKED);
+  assert.equal(many.searches.length, Math.ceil(TITLE_WORKS_ASKED / 3));
+  assert.match(failures[0], new RegExp(`^none of the ${TITLE_WORKS_ASKED} works the revision's search for "loi" lists in the ${Math.ceil(TITLE_WORKS_ASKED / 3)} pages read`));
 });
 
 test("an index that holds no titles is said, not failed", async () => {
