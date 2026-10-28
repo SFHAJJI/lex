@@ -360,13 +360,23 @@ public sealed class V3AnswerSamplesTests
 
         // An EU mount for EU `search` in one work, so the search screen's EU reader sees what an EU answer carries: the
         // one held English wording of the GDPR, pinned, and each hit's hash-pinned provision permalink. The phrase has
-        // two strict hits and one relaxed hit in that wording, so one small answer holds both lanes. Its EU index /6 holds the
-        // GDPR's three dated statements as run 16 holds them, so the EU dossier says the act's dates by role (the plan's item 2.1).
-        var europe = await EuropeMountedFixture.CreateAsync(withForceDates: true);
+        // two strict hits and one relaxed hit in that wording, so one small answer holds both lanes. Its EU index /7 holds the
+        // GDPR's three dated statements as run 16 holds them, so the EU dossier says the act's dates by role (the plan's item 2.1),
+        // and its titles and Official Journal reference (Release 3's item 1).
+        var europe = await EuropeMountedFixture.CreateAsync(withForceDates: true, withTitles: true);
         await using var cleanupEurope = europe;
         using var europeMount = await V3CorpusMount.OpenAsync(europe.Directory, CancellationToken.None);
         Assert.IsNotNull(europeMount);
         var europeFirstPage = await DriveAsync(europeMount, "search", "the same EU phrase, one hit per page: the first hit and the cursor to the next page", new { query = "joint controllers", language = "eng", identifier = "32016R0679", limit = 1 });
+
+        // A search that names no work over a mount holding the EU index /7 and a Luxembourg index: the EU acts its query names by
+        // title are listed beside the Luxembourg answer (Release 3's item 1).
+        var titled = await EuropeMountedFixture.CreateAsync(withTitles: true);
+        await using var cleanupTitled = titled;
+        await titled.AddLuxembourgMountAsync();
+        using var titledMount = await V3CorpusMount.OpenAsync(titled.Directory, CancellationToken.None);
+        Assert.IsNotNull(titledMount);
+        var titledSearch = await DriveAsync(titledMount, "search", "a phrase of an EU act's title, no work named: the Luxembourg answer, and the EU act whose title holds it listed by its CELEX", new { query = "general data protection regulation", language = "fra" });
 
         var parameters = new
         {
@@ -417,6 +427,7 @@ public sealed class V3AnswerSamplesTests
             europeFirstPage,
             await DriveAsync(europeMount, "search", "the EU page after the first one-hit page, no limit: the rest of the result, whose population is still the whole result's", new { query = "joint controllers", language = "eng", identifier = "32016R0679", after = europeFirstPage.Body["continue_after"]!.GetValue<string>() }),
             await DriveAsync(europeMount, "search", "a word the EU work's held wording does not carry: no hit is an answer, not a refusal", new { query = "zephyr", language = "eng", identifier = "32016R0679" }),
+            titledSearch,
             // Exact references first (the plan's item 4.2): a search that names no work reads its query as a reference before
             // any word, and a reference the index holds opens its act, as the address the page goes to, with no word searched.
             await DriveAsync(mount, "search", "an act by its type and date, no article and no date: the phase opens its dossier, and no word is searched", new { query = "loi du 10 août 1991", language = "fra" }),

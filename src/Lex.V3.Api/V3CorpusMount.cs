@@ -4606,7 +4606,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         }, folds, wantStrict ? hitsBeforeFold.Strict : null, wantRelaxed ? hitsBeforeFold.Relaxed : null));
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
-            new V3PlatformOperationResult(request, "quote", result.RootElement));
+            new V3PlatformOperationResult(request, "quote",
+                identifier is null ? WithEuropeTitleResolution(result.RootElement, query, language) : result.RootElement));
     }
 
     internal const string EuropeSearchScope =
@@ -6422,7 +6423,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt, PublisherId.EuEurLex),
-            new V3PlatformOperationResult(request, "work_record", WithEuropeForceDates(result.RootElement, dossierSeed)));
+            new V3PlatformOperationResult(request, "work_record", WithEuropePublication(WithEuropeForceDates(result.RootElement, dossierSeed),
+                listed.Select(static expression => expression.PublisherExpressionId))));
     }
 
     internal const string EuropeEvidenceBundleScope =
@@ -6779,7 +6781,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt, PublisherId.EuEurLex),
-            new V3PlatformOperationResult(request, "evidence_bundle", result.RootElement));
+            new V3PlatformOperationResult(request, "evidence_bundle", WithEuropePublication(result.RootElement,
+                selected.Select(static wording => wording.ExpressionId))));
     }
 
     internal const string DossierScope =
