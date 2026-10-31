@@ -60,7 +60,11 @@ acquisition, no publisher traffic, no browser, no Azure.
   - The dossier names its original wording's reference; a consolidated wording's is said where it is read.
   - The reviewer's point 3 (an act R92 withholds is still held, so "no EU act this site holds" is narrower than said where
     one is withheld) is left as the reviewed `runTitles` leaves it.
-- **Not done here.** A derive: Release 3's derive builds index /7 over run 16's custody.
+- **Not done here.**
+  - A derive: Release 3's derive builds index /7 over run 16's custody.
+  - The EU titles ride on the Luxembourg search's answer. A search in a language the Luxembourg index holds no text in
+    (English, today) is refused `language_not_available` before any title is matched. The page's default search
+    language is French, so the default search lists them. Listing them in that refusal too is a follow-up.
 
 ## Where the data stands at the end of 27 October, and what Release 3's derive would add (sole driver, 2026-10-27)
 
