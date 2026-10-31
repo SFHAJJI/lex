@@ -1582,6 +1582,28 @@ public sealed class V3CorpusResolveMountTests
                 Assert.AreEqual(1, set.ExecuteNonQuery());
             });
 
+        /// <summary>
+        /// Drops one expression's state rows and leaves its articles and references where the derive put them, as derive-r3
+        /// left two acts' (2026-10-31): the articles then belong to no state. The index is re-stamped and the manifest
+        /// re-measured, so the mount still verifies.
+        /// </summary>
+        public Task DropStateAsync(string expressionIri) =>
+            MutateArticlesAsync(connection =>
+            {
+                using var delete = connection.CreateCommand();
+                delete.CommandText = "DELETE FROM states WHERE expression_iri=$expression";
+                delete.Parameters.AddWithValue("$expression", expressionIri);
+                Assert.IsGreaterThan(0, delete.ExecuteNonQuery());
+            });
+
+        /// <summary>How many articles the index holds of one expression, whether or not a state references them.</summary>
+        public long ArticleCount(string expressionIri)
+        {
+            using var connection = LuxembourgIndexBuilder.Open(
+                Path.Combine(Directory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly);
+            return ReadArticles(connection).LongCount(article => string.Equals(article.ExpressionIri, expressionIri, StringComparison.Ordinal));
+        }
+
         /// <summary>The stored token stream of the article with this publisher id in one expression.</summary>
         public string ArticleTokensJson(string expressionIri, string publisherId)
         {

@@ -655,7 +655,19 @@ function publishTool(into, log) {
   log("publishing the measurement tool from this checkout (Lex.V3.Tool)");
   run("dotnet", ["publish", join(repository, "src", "Lex.V3.Tool", "Lex.V3.Tool.csproj"), "-c", "Release", "-o", into, "-m:1", "-nodeReuse:false", "-v", "q"]);
   spawnSync("dotnet", ["build-server", "shutdown"], { encoding: "utf8" });
+  assertPublishedTool(into);
   return join(into, "Lex.V3.Tool.dll");
+}
+
+/**
+ * A publish that exits 0 can still leave its dependencies out (2026-10-31: two rehearsals publishing the same project at once
+ * left a tool without Microsoft.Data.Sqlite, and the names measurement failed an hour later); the tool's own assembly and the
+ * SQLite provider it reads every index with must both be there before the tool runs.
+ */
+export function assertPublishedTool(into) {
+  for (const name of ["Lex.V3.Tool.dll", "Microsoft.Data.Sqlite.dll", "SQLitePCLRaw.core.dll"]) {
+    if (!existsSync(join(into, name))) throw new Error(`the published measurement tool is incomplete: ${name} is missing from ${into}`);
+  }
 }
 
 async function measureNames({ mountPath, into, tool = null, log }) {
@@ -669,6 +681,7 @@ async function measureNames({ mountPath, into, tool = null, log }) {
     const output = join(into, "tool");
     run("dotnet", ["publish", join(repository, "src", "Lex.V3.Tool", "Lex.V3.Tool.csproj"), "-c", "Release", "-o", output, "-m:1", "-nodeReuse:false", "-v", "q"]);
     spawnSync("dotnet", ["build-server", "shutdown"], { encoding: "utf8" });
+    assertPublishedTool(output);
     runner = join(output, "Lex.V3.Tool.dll");
   }
   log("measuring which works name private individuals (R92), read-only over the mount (Lex.V3.Tool names-records)");

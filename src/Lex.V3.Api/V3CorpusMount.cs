@@ -2968,11 +2968,12 @@ internal sealed partial class V3CorpusMount : IDisposable
             var citingStates = _reader.ResolveStatesOfExpressions(
                     inboundEdges.Select(static edge => edge.ExpressionIri).Distinct(StringComparer.Ordinal).ToArray())
                 .ToDictionary(static state => state.ExpressionIri, StringComparer.Ordinal);
+            // A citing article whose expression no state holds is served nowhere (every reader query reaches an article
+            // through a state) and has no address to cite from: its edge is left out. The names measurement records such
+            // articles (unserved_articles), so the index's gap is on record rather than a refusal here.
             inbound.AddRange(inboundEdges
-                .Select(edge => (State: citingStates.TryGetValue(edge.ExpressionIri, out var state)
-                        ? state
-                        : throw new InvalidDataException("An article of the index belongs to no state."),
-                    Edge: edge))
+                .Where(edge => citingStates.ContainsKey(edge.ExpressionIri))
+                .Select(edge => (State: citingStates[edge.ExpressionIri], Edge: edge))
                 // R92: an article of a work the names record withholds is not quoted here (its label is its text), as cited_by.
                 .Where(entry => !CitingWithheld(entry.State))
                 .OrderBy(static entry => entry.State.ApplicabilityDate, StringComparer.Ordinal)
@@ -3179,11 +3180,10 @@ internal sealed partial class V3CorpusMount : IDisposable
                 inbound.Select(static edge => edge.ExpressionIri).Distinct(StringComparer.Ordinal).ToArray())
             .ToDictionary(static state => state.ExpressionIri, StringComparer.Ordinal);
         var workKey = states[0].WorkKey;
+        // As above: a citing article of no state is served nowhere and is left out.
         var edges = inbound
-            .Select(edge => (State: citingStates.TryGetValue(edge.ExpressionIri, out var state)
-                    ? state
-                    : throw new InvalidDataException("An article of the index belongs to no state."),
-                Edge: edge))
+            .Where(edge => citingStates.ContainsKey(edge.ExpressionIri))
+            .Select(edge => (State: citingStates[edge.ExpressionIri], Edge: edge))
             // R92: an article of a work the names record withholds is not quoted here (its label is its text).
             .Where(entry => !CitingWithheld(entry.State))
             .OrderBy(static entry => entry.State.ApplicabilityDate, StringComparer.Ordinal)

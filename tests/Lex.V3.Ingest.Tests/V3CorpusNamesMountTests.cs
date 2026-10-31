@@ -330,6 +330,66 @@ public sealed class V3CorpusNamesMountTests
     }
 
     [TestMethod]
+    public async Task AnArticleOfNoStateIsServedNowhereAndRecordedAsUnserved()
+    {
+        // derive-r3 (2026-10-31): two acts admitted by the rulings kept their articles and references in the index after the
+        // derive dropped their states. No reader query reaches an article but through a state, so such an article is served
+        // nowhere; cited_by and relations leave its edge out instead of refusing, and the measurement records it.
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        var date = DateOnly.ParseExact(fixture.ApplicabilityDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
+            .AddDays(400).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var citing = await fixture.AddStateAsync(date, "citing", workLeaf: "n9");
+        const string Label = "ORPHAN-LABEL-TEXT";
+        var tokens = "[" + JsonSerializer.Serialize(new
+        {
+            kind = "reference", text = Label, target = "/eli/etat/leg/loi/1991/08/10/n3/jo", marker = (string?)null, note_body = (object?)null,
+        }) + "]";
+        await fixture.SetArticleTokensAsync(citing.ExpressionIri, "art_1er", Label, tokens);
+        var work = $"/lu-legilux/{fixture.WorkKey}";
+        using (var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount);
+            Assert.IsTrue((await AskAsync(mount, "cited_by", new() { ["identifier"] = work })).Result!.Value.GetRawText().Contains(Label, StringComparison.Ordinal),
+                "with its state, the citing article's edge is served");
+        }
+
+        // The citing state goes; its articles and references stay, as the derive left them.
+        await fixture.DropStateAsync(citing.ExpressionIri);
+        var articles = fixture.ArticleCount(citing.ExpressionIri);
+        Assert.IsGreaterThan(0, articles);
+
+        var outcome = NamesMeasurement.Measure(fixture.Directory);
+        Assert.IsEmpty(outcome.Withheld);
+        var held = JsonDocument.Parse(outcome.MeasurementBytes).RootElement.GetProperty("luxembourg_held");
+        Assert.AreEqual(articles, held.GetProperty("unserved_articles").GetInt64());
+        Assert.AreEqual(articles, held.GetProperty("unserved_expressions").GetProperty(citing.ExpressionIri).GetInt64());
+        Assert.AreEqual(1, held.GetProperty("works").GetInt32(), "the work of no state is not a held work");
+        AssertNoPersonalData(outcome);
+        CollectionAssert.AreEqual(outcome.MeasurementBytes, NamesMeasurement.Measure(fixture.Directory).MeasurementBytes, "one form for one mount");
+
+        NamesMeasurement.WriteFiles(outcome, fixture.Directory);
+        using (var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount);
+            foreach (var (operation, parameters) in new (string Operation, Dictionary<string, object> Parameters)[]
+                     {
+                         ("cited_by", new() { ["identifier"] = work }),
+                         ("relations", new() { ["identifier"] = work, ["direction"] = "inbound" }),
+                         ("relations", new() { ["identifier"] = work, ["direction"] = "both" }),
+                     })
+            {
+                var envelope = await AskAsync(mount, operation, parameters);
+                Assert.IsNull(envelope.Refusal, operation);
+                var value = envelope.Result!.Value;
+                Assert.IsFalse(value.GetRawText().Contains(Label, StringComparison.Ordinal), $"{operation}: an article of no state is served nowhere");
+                Assert.IsFalse(value.GetProperty("edges").EnumerateArray()
+                    .Any(edge => string.Equals(edge.GetProperty("citing_work_key").GetString(), citing.WorkKey, StringComparison.Ordinal)), operation);
+            }
+        }
+    }
+
+    [TestMethod]
     public async Task APersonNamedOnlyInAnArticlesNoteIsFound()
     {
         // The review of #1001: the searchable text holds no note body, and the API serves the notes; the measurement reads them.

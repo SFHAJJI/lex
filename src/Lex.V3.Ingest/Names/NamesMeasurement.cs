@@ -17,7 +17,7 @@ public static class NamesMeasurement
 {
     public const string MeasurementFileName = "names-measurement.json";
 
-    public const string MeasurementSchema = "lex-v3-names-measurement/1";
+    public const string MeasurementSchema = "lex-v3-names-measurement/2";
 
     private const string LuxembourgIndexFile = "luxembourg-index.sqlite3";
 
@@ -55,6 +55,13 @@ public static class NamesMeasurement
         public long WithheldByText;
         public long Indexed;
         public SortedDictionary<string, long> NotListed { get; } = new(StringComparer.Ordinal);
+
+        // Articles the index holds that no state references: every reader query reaches an article through a state, so
+        // they are served nowhere and the detector does not read them; the measurement records them, per expression, so
+        // the index's own gap is on record (derive-r3, 2026-10-31: two 2026 acts admitted by the rulings whose states
+        // the derive then dropped kept their 52 articles).
+        public long UnservedArticles;
+        public SortedDictionary<string, long> UnservedExpressions { get; } = new(StringComparer.Ordinal);
     }
 
     // One work as the measurement reads it: its identity, titles, text languages, state digests and what its text showed.
@@ -279,9 +286,11 @@ public static class NamesMeasurement
             }
         }
 
-        // Every served article, read once: the detector's findings and signals per work.
+        // Every served article, read once: the detector's findings and signals per work. An article of an expression no
+        // state references is served nowhere (every reader query reaches an article through a state), so it is not read:
+        // it is counted, per expression, and the tally records it (unserved_articles).
         log($"reading the Luxembourg articles of {works.Count} works");
-        long orphans = 0;
+        var unserved = new SortedDictionary<string, long>(StringComparer.Ordinal);
         using (var command = connection.CreateCommand())
         {
             command.CommandText = "SELECT expression_iri, searchable_text, tokens_json FROM articles";
@@ -295,17 +304,23 @@ public static class NamesMeasurement
                 }
                 else
                 {
-                    orphans++;
+                    Increment(unserved, reader.GetString(0));
                 }
             }
         }
 
-        if (orphans > 0)
+        var heldTally = new Tally();
+        foreach (var (expression, count) in unserved)
         {
-            throw new InvalidDataException($"{orphans} Luxembourg articles belong to no state's expression: the index is not one the measurement can read.");
+            heldTally.UnservedArticles += count;
+            heldTally.UnservedExpressions[expression] = count;
         }
 
-        var heldTally = new Tally();
+        if (heldTally.UnservedArticles > 0)
+        {
+            log($"{heldTally.UnservedArticles} Luxembourg articles of {unserved.Count} expressions belong to no state: served nowhere, not read, recorded");
+        }
+
         foreach (var work in works.Values)
         {
             heldTally.Works++;
@@ -388,7 +403,7 @@ public static class NamesMeasurement
         }
 
         log($"reading the EU articles of {acts.Count} acts");
-        long orphans = 0;
+        var unservedEu = new SortedDictionary<string, long>(StringComparer.Ordinal);
         using (var command = connection.CreateCommand())
         {
             command.CommandText = "SELECT publisher_work_id, language, searchable_text, heading, tokens_json FROM articles";
@@ -403,14 +418,10 @@ public static class NamesMeasurement
                 }
                 else
                 {
-                    orphans++;
+                    // An article of a version no state names: served nowhere, not read, recorded (as the Luxembourg side does).
+                    Increment(unservedEu, reader.GetString(0));
                 }
             }
-        }
-
-        if (orphans > 0)
-        {
-            throw new InvalidDataException($"{orphans} EU articles belong to no state's work: the index is not one the measurement can read.");
         }
 
         // An EU index /7 serves its expressions' titles: each is read by the detector as served text is, so a title that names
@@ -441,6 +452,17 @@ public static class NamesMeasurement
         }
 
         var tally = new Tally();
+        foreach (var (version, count) in unservedEu)
+        {
+            tally.UnservedArticles += count;
+            tally.UnservedExpressions[version] = count;
+        }
+
+        if (tally.UnservedArticles > 0)
+        {
+            log($"{tally.UnservedArticles} EU articles of {unservedEu.Count} versions belong to no state: served nowhere, not read, recorded");
+        }
+
         foreach (var act in acts.Values)
         {
             tally.Works++;
@@ -602,6 +624,14 @@ public static class NamesMeasurement
         writer.WriteString("scope", scope);
         writer.WriteNumber("works", tally.Works);
         writer.WriteNumber("articles_read", tally.Articles);
+        writer.WriteNumber("unserved_articles", tally.UnservedArticles);
+        writer.WriteStartObject("unserved_expressions");
+        foreach (var (key, count) in tally.UnservedExpressions)
+        {
+            writer.WriteNumber(key, count);
+        }
+
+        writer.WriteEndObject();
         writer.WriteStartObject("classes");
         foreach (var (key, count) in tally.Classes)
         {
