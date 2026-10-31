@@ -1,6 +1,6 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-28.
+Updated 2026-10-31.
 
 ## EU titles and Official Journal references: the EU index /7, its answers, pages and citation (sole driver, 2026-10-28)
 
@@ -41,17 +41,18 @@ acquisition, no publisher traffic, no browser, no Azure.
     no-hit card names the Luxembourg and EU titles apart.
   - The evidence form says "Published in: OJ L 119, 4.5.2016, p. 1" ("OJ L, 2024/1689, 12.7.2024"; for a consolidated
     wording, the act it consolidates) and the publisher's title, where held.
-- **Measured read-only over run 16's custody** (Python, brotli, SHA-256 checked; the C# probe below to confirm):
-  - Family X: 15,855 expressions in 24 languages, every one titled. English and French: 1,327 expressions (640 and 687), all
-    titled; 55 short titles. Census works titled: 640 in English and 687 in French of 1,170; all 82 seeds in both; 558 and
-    605 of the 1,088 consolidated works.
-  - The 892 held Formex packages (1,120 package-expression pairs): every main unit read states a reference with its date:
-    act publications 146 (128 by issue, 18 by act number) and 4 Charter `GENERAL` units; consolidations 966 (932 by issue,
-    34 by act number). 4 pairs (the 2012 Treaties' packages) have no single main unit.
+- **Measured read-only over run 16's custody** (`EuTitlesRun16Probe`, opt-in; the acquisition reopened with its query
+  checkpoint `37a649de…` held to its stored digest, the main-body producer and the build's projections run, 1,732 s,
+  2.5 GiB; the Python pre-check agreed on every title count and per-seed class):
+  - Titles: 1,382 English and French literals (1,327 titles, 55 short titles). All 1,327 English and French expressions are
+    titled; all 82 seeds in both languages; census works 640 in English and 687 in French of 1,170; consolidated works 558
+    and 605 of 1,088. 1,112 Formex titles, one per admitted main body with articles. 2,494 title rows.
+  - References: 1,112 admitted main bodies with articles, 1,112 referenced, every one dated and paged. Act publications 148
+    (130 by issue, 18 by act number); consolidations 964 (930 by issue, 34 by act number); series L 1,060, C 52.
   - Per seed: 69 by issue, 9 by act number, 4 with none: 12012E and 12012M, whose packages the build refuses
-    (`PackageDoesNotIdentifyFormex`), and the two acts held only as HTML (32003L0088, 32004R0139). The scope note's six also
-    counted the two Charters, whose main units (`GENERAL`) state a reference. 32003R0001, 12016E and 12016M are referenced
-    through their consolidations only.
+    (`PackageDoesNotIdentifyFormex`), and the two acts held only as HTML (32003L0088, 32004R0139). 12016E, 12016M,
+    32003L0087 and 32003R0001 are referenced through their consolidations only. The scope note's "67 classic" left the two
+    Charters out; their `GENERAL` units state a reference.
 - **Driver decisions (reversible).**
   - Titles are held for English and French expressions only (Decision 89).
   - The Charter's `GENERAL` unit is read like an act's main unit: it states a `DOCUMENT.REF`.
