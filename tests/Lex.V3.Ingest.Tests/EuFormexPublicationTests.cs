@@ -150,6 +150,36 @@ public sealed class EuFormexPublicationTests
     }
 
     [TestMethod]
+    public void AStoredFormWithACarriageReturnInTextOrALineFeedInAnAttributeReopensToTheSameBytes()
+    {
+        // The review of #1015: a writer that replaces nothing writes a carriage return in text, and a line feed, tab or carriage
+        // return in an attribute value, as the raw character, which the next parse normalises to a line feed or a space, so the
+        // stored form would not re-serialise to itself and the open would refuse. The reader's writer entitises them, and the
+        // form parses and serialises again to the same bytes, twice over; a text line feed stays one raw line feed.
+        var unit = Encoding.UTF8.GetBytes(
+            "<ACT><TITLE><TI><P>on the&#xD;common\nsystem</P></TI></TITLE>" +
+            "<BIB.INSTANCE><DOCUMENT.REF FILE=\"L_2006347EN&#xA;.01000101&#x9;.doc&#xD;.xml\"><COLL>L</COLL><NO.OJ>347</NO.OJ><YEAR>2006</YEAR><PAGE.FIRST>1</PAGE.FIRST></DOCUMENT.REF></BIB.INSTANCE></ACT>");
+        var root = XDocument.Load(new MemoryStream(unit), LoadOptions.PreserveWhitespace).Root!;
+        var publication = EuFormexPublicationReader.Read(root, "L_2006347EN.01000101.xml", new Dictionary<string, XElement>(StringComparer.Ordinal))!;
+
+        Assert.AreEqual("<TITLE><TI><P>on the&#xD;common\nsystem</P></TI></TITLE>", publication.TitleXml, "the carriage return entitised, the line feed raw");
+        Assert.AreEqual("on the\rcommon system".Replace("\r", " ", StringComparison.Ordinal), publication.TitleText, "a carriage return is white space between words");
+        Assert.AreEqual("<DOCUMENT.REF FILE=\"L_2006347EN&#xA;.01000101&#x9;.doc&#xD;.xml\"><COLL>L</COLL><NO.OJ>347</NO.OJ><YEAR>2006</YEAR><PAGE.FIRST>1</PAGE.FIRST></DOCUMENT.REF>",
+            publication.Reference!.ReferenceXml, "the attribute's control characters entitised");
+        foreach (var stored in new[] { publication.TitleXml!, publication.Reference.ReferenceXml })
+        {
+            var once = EuFormexPublicationReader.Serialise(XElement.Parse(stored, LoadOptions.PreserveWhitespace));
+            var twice = EuFormexPublicationReader.Serialise(XElement.Parse(once, LoadOptions.PreserveWhitespace));
+            Assert.AreEqual(stored, once, "parse and serialise: the same bytes");
+            Assert.AreEqual(once, twice, "and again");
+        }
+
+        Assert.AreEqual(publication.TitleText, EuFormexPublicationReader.TitleTextOfXml(publication.TitleXml!));
+        Assert.AreEqual(publication.Reference, EuFormexPublicationReader.ReferenceOfXml(publication.Reference.Kind, publication.Reference.ReferenceXml, null));
+        Assert.IsNull(EuFormexPublicationReader.TitleTextOfXml("<TITLE><TI><P>on the\rcommon</P></TI></TITLE>"), "a raw carriage return is not a form the reader stores");
+    }
+
+    [TestMethod]
     public void ATitlesWordsLeaveOutItsNotesAndKeepItsQuotationMarks()
     {
         var title = XElement.Parse(

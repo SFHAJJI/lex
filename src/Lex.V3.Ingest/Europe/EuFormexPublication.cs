@@ -296,8 +296,8 @@ public static class EuFormexPublicationReader
     /// same element is the same text on every system. <c>XElement.ToString</c> writes through a writer whose default newline
     /// handling replaces each line feed in a text node with the system's line ending, so a title stored by a derive on Linux
     /// ("\n") was not the title the reader re-serialised on Windows ("\r\n"), and derive-r3's index refused to open there
-    /// (2026-10-31); this writer replaces nothing. A parse has already made every line ending one line feed (XML's own rule),
-    /// so the stored forms of an index derived on Linux are what this writes.
+    /// (2026-10-31); this writer never writes the system's line ending. A parse has already made every line ending one line
+    /// feed (XML's own rule), so the stored forms of an index derived on Linux are what this writes.
     /// </summary>
     internal static string Serialise(XElement element)
     {
@@ -311,7 +311,11 @@ public static class EuFormexPublicationReader
     {
         OmitXmlDeclaration = true,
         Indent = false,
-        NewLineHandling = NewLineHandling.None,
+        // Entitize, not None: None writes a carriage return in text, and a tab, carriage return or line feed in an attribute
+        // value, as the raw character, which the next parse normalises away (the review of #1015), so the form would not reopen
+        // to itself; Entitize writes a text line feed raw (every form a Linux derive stored re-serialises to the same bytes) and
+        // those characters as references, which survive the parse. It never writes the system's line ending.
+        NewLineHandling = NewLineHandling.Entitize,
         ConformanceLevel = ConformanceLevel.Fragment,
         CheckCharacters = false,
     };
