@@ -56,7 +56,8 @@ acquisition, no publisher traffic, no browser, no Azure.
   - Titles are held for English and French expressions only (Decision 89).
   - The Charter's `GENERAL` unit is read like an act's main unit: it states a `DOCUMENT.REF`.
   - A document record dates the reference only when its series and number agree with it.
-  - The reference is said in EUR-Lex's form ("4.5.2016"), a citation's convention, not R62's written-out page date.
+  - The citation says the reference in EUR-Lex's form ("OJ L 119, 4.5.2016, p. 1"), a citation's convention; the pages state
+    its date as they state every date (ISO: "OJ L 119, 2016-05-04, p. 1"), the one date rule of the interface.
   - The dossier names its original wording's reference; a consolidated wording's is said where it is read.
   - The reviewer's point 3 (an act R92 withholds is still held, so "no EU act this site holds" is narrower than said where
     one is withheld) is left as the reviewed `runTitles` leaves it.

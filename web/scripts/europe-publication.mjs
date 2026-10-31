@@ -186,13 +186,14 @@ export function journalDate(date) {
  * A reference in its usual form, in the words of one language's table (`citation.europe.journal`): "OJ L 119, 4.5.2016,
  * p. 1", "OJ L, 2024/1689, 12.7.2024", "JO L 119 du 4.5.2016, p. 1". An issue number is written without its leading zeros
  * ("011" is 11), as the Official Journal prints it; a field the package does not state is left out, and a reference with no
- * publication date is said with its year.
+ * publication date is said with its year. The date is written as EUR-Lex writes it by default (the citation's convention);
+ * a live screen passes `dateOf` as the identity, so the page states the date as it states every date (ISO, R62).
  */
-export function officialJournalWords(reference, words) {
+export function officialJournalWords(reference, words, dateOf = journalDate) {
   const journal = words.europe.journal;
   const series = reference.series;
   const dated = reference.publicationDate !== null;
-  const date = dated ? journalDate(reference.publicationDate) : null;
+  const date = dated ? dateOf(reference.publicationDate) : null;
   if (reference.numberForm === 'act_number') {
     return dated
       ? fillText(journal.act, { series, number: reference.actNumber, date })

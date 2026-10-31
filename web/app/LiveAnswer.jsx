@@ -191,7 +191,7 @@ export function EuropePublication({ titles, officialJournal, expressions }) {
               <p data-europe-journal={reference.kind} data-europe-journal-form={reference.numberForm}>
                 <Say
                   template={reference.kind === 'consolidated_act_publication' ? copy.journalConsolidated : copy.journal}
-                  values={{ language: name, reference: officialJournalWords(reference, words) }}
+                  values={{ language: name, reference: officialJournalWords(reference, words, (date) => date) }}
                 />
               </p>
             )}

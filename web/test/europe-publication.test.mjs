@@ -83,6 +83,7 @@ test("a reference is said in EUR-Lex's form, in English and in French, for both 
   assert.equal(journalDate("2016-05-04"), "4.5.2016");
   assert.equal(officialJournalWords(reference, citationWords("eng")), "OJ L 119, 4.5.2016, p. 1");
   assert.equal(officialJournalWords(reference, citationWords("fra")), "JO L 119 du 4.5.2016, p. 1");
+  assert.equal(officialJournalWords(reference, citationWords("eng"), (date) => date), "OJ L 119, 2016-05-04, p. 1", "a live screen states the date as ISO");
   assert.equal(officialJournalWords({ ...reference, ojNumber: "011", publicationDate: "2019-01-14", firstPage: "3" }, citationWords("eng")), "OJ L 11, 14.1.2019, p. 3",
     "an issue number is printed without its leading zeros");
   const act = { ...reference, numberForm: "act_number", ojNumber: null, actNumber: "2026/1965", year: "2026", publicationDate: "2026-08-27" };
@@ -144,7 +145,7 @@ test("the EU reading and dossier say each wording's title and reference, and ove
   const markup = renderToStaticMarkup(h(ReadingAnswerView, { outcome }));
   assert.ok(markup.includes(`Title in English, as the publisher records it: <span lang="en">${TITLE}</span>`), "the title, marked in its own language");
   assert.ok(markup.includes("Short title in English, as the publisher records it:"));
-  assert.ok(markup.includes("Official Journal reference of the English wording: OJ L 119, 4.5.2016, p. 1"));
+  assert.ok(markup.includes("Official Journal reference of the English wording: OJ L 119, 2016-05-04, p. 1"), "the page states the date as ISO");
   const plain = renderToStaticMarkup(h(ReadingAnswerView, { outcome: readingOutcome({ state: "success", envelope: europeEnvelope(europeBundle()) }) }));
   assert.ok(!plain.includes("data-europe-publication"), "an answer over an index /6 says no title and no reference");
 
@@ -165,12 +166,17 @@ test("the EU reading and dossier say each wording's title and reference, and ove
   assert.equal(dossierOutcomeValue.state, "success", dossierOutcomeValue.sentence);
   const dossierMarkup = renderToStaticMarkup(h(DossierAnswerView, { outcome: dossierOutcomeValue }));
   assert.match(dossierMarkup, /Title in English, as the publisher records it:/);
-  assert.match(dossierMarkup, /Official Journal reference of the English wording: OJ L 119, 4\.5\.2016, p\. 1/);
+  assert.match(dossierMarkup, /Official Journal reference of the English wording: OJ L 119, 2016-05-04, p\. 1/, "the page states the date as ISO");
 });
 
 test("a search that names no work lists the EU acts its phrase names by title, linked to their dossiers", () => {
   const sample = answers.sampled.find((entry) => entry.operation === "search" && Object.hasOwn(entry.answer, "europe_titles"));
-  const value = sample ? structuredClone(sample.answer) : null;
+  // The census writes the digests that vary per run as a placeholder; the reader wants a SHA-256, so one is filled in.
+  let n = 0;
+  const withDigests = (node) => node === "<varies-per-run>" ? (String(n += 1) + "0123456789abcdef".repeat(4)).slice(0, 64)
+    : Array.isArray(node) ? node.map(withDigests)
+      : node !== null && typeof node === "object" ? Object.fromEntries(Object.entries(node).map(([key, item]) => [key, withDigests(item)])) : node;
+  const value = sample ? withDigests(structuredClone(sample.answer)) : null;
   const resolution = readEuropeTitleResolution({
     europe_titles: {
       retrieval_lane: "eu_title_discovery",
