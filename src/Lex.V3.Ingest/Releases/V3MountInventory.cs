@@ -63,7 +63,7 @@ public sealed record V3HeldFile(
 /// What one mount serves, read in place and read-only from its corpus and its indexes, as the release-over-release check
 /// (R106) and the consolidation text check (R86(2)) compare and list it: every version by its served identity, every article
 /// by its coordinate with the digest of its served text, and every held publisher file with its typed outcome. Reads a
-/// Luxembourg index of schema 6 to 9 and an EU index of schema 5 or 6, so a candidate can be held to the release serving
+/// Luxembourg index of schema 6 to 10 and an EU index of schema 5 or 6, so a candidate can be held to the release serving
 /// now, whose mount may be older. Writes nothing.
 /// </summary>
 public sealed record V3MountInventory(
