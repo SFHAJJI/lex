@@ -243,28 +243,16 @@ public static partial class EuropeIndexBuilder
         var works = states.Select(static state => state.PublisherWorkIri).ToHashSet(StringComparer.Ordinal);
         foreach (var row in titles)
         {
-            var formex = row.Source == EuropeTitleSources.FormexTitle;
-            var text = formex ? EuFormexPublicationReader.TitleTextOfXml(row.RawValue) : LiteralTitleText(row.RawValue);
-            if (!EuropeTitleSources.InOrder.Contains(row.Source, StringComparer.Ordinal) ||
-                row.TitleKind != EuropeTitleSources.KindOf(row.Source) ||
-                text != row.TitleText ||
-                row.TitleIdentitySha256 != TitleIdentity(row.PublisherExpressionIri, row.Source, row.RawValue, row.RawLanguageTag,
-                    row.RawDatatypeIri, row.SourceReference, row.SourceSha256) ||
-                (formex ? row.RawLanguageTag is not null || row.RawDatatypeIri is not null || !holdsArticlesOf(row.PublisherExpressionIri)
-                    : !works.Contains(row.PublisherWorkIri)) ||
-                row.Language is not ("eng" or "fra") || !IsLowerSha256(row.SourceSha256))
-                throw new InvalidDataException("An EU expression title disagrees with the raw form or the source it was read from.");
+            if (TitleDisagreement(row, works, holdsArticlesOf) is { } field)
+                throw new InvalidDataException(
+                    $"An EU expression title disagrees with the raw form or the source it was read from: {field} of the {row.Source} title of {row.PublisherExpressionIri}.");
         }
 
         foreach (var row in references)
         {
-            var read = EuFormexPublicationReader.ReferenceOfXml(row.Kind, row.ReferenceXml, row.PublicationXml);
-            if (read is null || read.Kind != row.Kind || read.NumberForm != row.NumberForm || read.Series != row.Series ||
-                read.OjNumber != row.OjNumber || read.ActNumber != row.ActNumber || read.Year != row.Year || read.FirstPage != row.FirstPage ||
-                read.PublicationDate != row.PublicationDate || read.PublicationXml != row.PublicationXml ||
-                row.ReferenceIdentitySha256 != ReferenceIdentity(row) || !holdsArticlesOf(row.PublisherExpressionIri) ||
-                row.Language is not ("eng" or "fra") || !IsLowerSha256(row.PackageSha256))
-                throw new InvalidDataException("An EU Official Journal reference disagrees with the elements it was read from.");
+            if (ReferenceDisagreement(row, holdsArticlesOf) is { } field)
+                throw new InvalidDataException(
+                    $"An EU Official Journal reference disagrees with the elements it was read from: {field} of the {row.Kind} reference of {row.PublisherExpressionIri}.");
         }
 
         static bool InIdentityOrder<T>(IReadOnlyList<T> rows, Func<T, string> identity) =>
@@ -273,6 +261,50 @@ public static partial class EuropeIndexBuilder
         if (!InIdentityOrder(titles, static row => row.TitleIdentitySha256) ||
             !InIdentityOrder(references, static row => row.ReferenceIdentitySha256))
             throw new InvalidDataException("EU titles or Official Journal references repeat or are out of identity order.");
+    }
+
+    /// <summary>
+    /// The first field of a stored title that is not what its raw form and source give, named, or null when every field is
+    /// (<see cref="ValidateTitleEvidence"/>); the name says what disagreed, never the title's words.
+    /// </summary>
+    internal static string? TitleDisagreement(EuropeIndexExpressionTitle row, IReadOnlySet<string> censusWorks, Func<string, bool> holdsArticlesOf)
+    {
+        var formex = row.Source == EuropeTitleSources.FormexTitle;
+        if (!EuropeTitleSources.InOrder.Contains(row.Source, StringComparer.Ordinal)) return "source";
+        if (row.TitleKind != EuropeTitleSources.KindOf(row.Source)) return "title_kind";
+        var text = formex ? EuFormexPublicationReader.TitleTextOfXml(row.RawValue) : LiteralTitleText(row.RawValue);
+        if (text is null) return "raw_value (not one TITLE element that serialises to itself)";
+        if (!string.Equals(text, row.TitleText, StringComparison.Ordinal)) return "title_text (the words read again from raw_value differ)";
+        if (!string.Equals(row.TitleIdentitySha256, TitleIdentity(row.PublisherExpressionIri, row.Source, row.RawValue, row.RawLanguageTag,
+                row.RawDatatypeIri, row.SourceReference, row.SourceSha256), StringComparison.Ordinal))
+            return "title_identity_sha256";
+        if (formex && (row.RawLanguageTag is not null || row.RawDatatypeIri is not null)) return "raw_language_tag or raw_datatype_iri (a package's title has none)";
+        if (formex ? !holdsArticlesOf(row.PublisherExpressionIri) : !censusWorks.Contains(row.PublisherWorkIri))
+            return formex ? "publisher_expression_iri (no article is held of it)" : "publisher_work_iri (not a census work)";
+        if (row.Language is not ("eng" or "fra")) return "language";
+        if (!IsLowerSha256(row.SourceSha256)) return "source_sha256";
+        return null;
+    }
+
+    /// <summary>The first field of a stored reference that is not what its raw elements give, named, or null when every field is.</summary>
+    internal static string? ReferenceDisagreement(EuropeIndexOfficialJournalReference row, Func<string, bool> holdsArticlesOf)
+    {
+        var read = EuFormexPublicationReader.ReferenceOfXml(row.Kind, row.ReferenceXml, row.PublicationXml);
+        if (read is null) return "reference_xml or publication_xml (not the elements a reading makes, or not a reference of that kind)";
+        if (read.Kind != row.Kind) return "kind";
+        if (read.NumberForm != row.NumberForm) return "number_form";
+        if (read.Series != row.Series) return "series";
+        if (read.OjNumber != row.OjNumber) return "oj_number";
+        if (read.ActNumber != row.ActNumber) return "act_number";
+        if (read.Year != row.Year) return "year";
+        if (read.FirstPage != row.FirstPage) return "first_page";
+        if (read.PublicationDate != row.PublicationDate) return "publication_date";
+        if (read.PublicationXml != row.PublicationXml) return "publication_xml";
+        if (!string.Equals(row.ReferenceIdentitySha256, ReferenceIdentity(row), StringComparison.Ordinal)) return "reference_identity_sha256";
+        if (!holdsArticlesOf(row.PublisherExpressionIri)) return "publisher_expression_iri (no article is held of it)";
+        if (row.Language is not ("eng" or "fra")) return "language";
+        if (!IsLowerSha256(row.PackageSha256)) return "package_sha256";
+        return null;
     }
 
     private static bool IsLowerSha256(string value) => value.Length == 64 && value.All(char.IsAsciiHexDigitLower);

@@ -291,8 +291,30 @@ public static class EuFormexPublicationReader
         return true;
     }
 
-    /// <summary>An element as this reader stores it: without formatting, so the same element is the same text on every system.</summary>
-    internal static string Serialise(XElement element) => element.ToString(SaveOptions.DisableFormatting);
+    /// <summary>
+    /// An element as this reader stores it: without formatting, and with every character of its text written as it is, so the
+    /// same element is the same text on every system. <c>XElement.ToString</c> writes through a writer whose default newline
+    /// handling replaces each line feed in a text node with the system's line ending, so a title stored by a derive on Linux
+    /// ("\n") was not the title the reader re-serialised on Windows ("\r\n"), and derive-r3's index refused to open there
+    /// (2026-10-31); this writer replaces nothing. A parse has already made every line ending one line feed (XML's own rule),
+    /// so the stored forms of an index derived on Linux are what this writes.
+    /// </summary>
+    internal static string Serialise(XElement element)
+    {
+        var builder = new StringBuilder();
+        using (var writer = XmlWriter.Create(builder, SerialisationSettings))
+            element.WriteTo(writer);
+        return builder.ToString();
+    }
+
+    private static readonly XmlWriterSettings SerialisationSettings = new()
+    {
+        OmitXmlDeclaration = true,
+        Indent = false,
+        NewLineHandling = NewLineHandling.None,
+        ConformanceLevel = ConformanceLevel.Fragment,
+        CheckCharacters = false,
+    };
 
     private static XElement? ParseElement(string xml)
     {
