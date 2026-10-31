@@ -131,7 +131,8 @@ public sealed class V3CorpusEuropeAuthenticityTests
                 Assert.AreEqual(V3CorpusMount.EuropeTextAuthenticity[basis], value.GetProperty("authenticity").GetString(), what);
                 Assert.AreEqual(basis, value.GetProperty("authenticity_basis").GetString(), what);
                 CollectionAssert.AreEqual(new[] { actDate }, value.GetProperty("authenticity_act_dates").EnumerateArray().Select(static date => date.GetString()).ToArray(), what);
-                Assert.AreEqual(V3CorpusMount.EuropeAuthenticityRule, value.GetProperty("authenticity_rule").GetString(), what);
+                // Over an index /7 the rule no longer says no publication date is held (the reference is), and still chooses by the act's date.
+                Assert.AreEqual(V3CorpusMount.EuropeAuthenticityRuleWithJournal, value.GetProperty("authenticity_rule").GetString(), what);
                 Assert.AreEqual("© European Union, https://eur-lex.europa.eu", value.GetProperty("acknowledgement").GetString(), what);
             }
 

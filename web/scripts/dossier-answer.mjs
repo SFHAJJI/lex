@@ -29,6 +29,7 @@ import { readAnnexesNotServed } from './europe-annexes.mjs';
 import { readAsPublished } from './as-published.mjs';
 import { readCatalogueFacts, readDateFacts } from './date-role.mjs';
 import { readEuropeForceDates } from './europe-force-dates.mjs';
+import { readEuropeOfficialJournal, readEuropeTitles } from './europe-publication.mjs';
 import { readAmendedAfter, readPublisherRelations } from './publisher-relations.mjs';
 
 /** The text statuses a version of the catalogue held without text names (index 9's `text_status`, S7a). */
@@ -473,6 +474,10 @@ export function readEuropeDossier(answer) {
     consolidationsHeld: requireBoolean(requireOwn(answer, 'consolidations_held', where), 'consolidations_held'),
     // The act's dates as the publisher records them, over an EU index /6; null over an older one (`europe-force-dates.mjs`).
     forceDates: readEuropeForceDates(answer, where),
+    // The titles and Official Journal references of its expressions, over an EU index /7; null over an older one
+    // (`europe-publication.mjs`).
+    titles: readEuropeTitles(answer, where),
+    officialJournal: readEuropeOfficialJournal(answer, where),
     notHeld: readNotHeld(requireOwn(answer, 'not_held', where)),
     scope: requireText(requireOwn(answer, 'scope', where), 'scope'),
     corpusSha256: requireDigest(requireOwn(answer, 'corpus_sha256', where), 'corpus_sha256'),

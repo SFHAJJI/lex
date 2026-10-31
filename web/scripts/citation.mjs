@@ -29,8 +29,9 @@
 //   - An EU act is named as EUR-Lex numbers it, from its CELEX's type (R, L, D), year and number: "Regulation (EU)
 //     2016/679", "Regulation (EU) No 575/2013", "Directive 2006/112/EC", a year before 1999 on two digits. The domain is
 //     the numbering's for the act's year (EEC before 1993, EC from 1994 to 2008, EU from 2010); in 1993 and 2009, whose acts
-//     carry either, none is written. The index holds no title, author or domain of an EU act, so a Euratom or CFSP act is
-//     named as the Union's: a limit the slice records (STATUS-WEB.md). Any other type is given no usual form.
+//     carry either, none is written. The index holds no author or domain of an EU act, so a Euratom or CFSP act is named as
+//     the Union's: a limit the slice records (STATUS-WEB.md). Any other type is given no usual form; an EU title the index
+//     /7 holds is quoted by the evidence form, never read into the usual one.
 //   - The version date is added when the version is not known to be the one that answers today in Luxembourg: a Luxembourg
 //     state with a later held state applicable on or before today, or held only as published (R76: it may have been amended
 //     since); an EU wording that a later one answers today, or the original wording of a bundle that holds no consolidation.
@@ -38,8 +39,10 @@
 //     date for the EU (never an EU applicability date).
 //   - The evidence form's lines: the usual form (the permalink alone when there is none), the permalink, the ELI of the
 //     resource quoted (or the CELEX of the wording), the publisher's title, the version's date or the wording's, the gazette
-//     reference (a Luxembourg act's Mémorial A issue, "not held" when the index holds none; an EU act's Official Journal
-//     reference, which no index holds, "not held"), the publication date when the index holds one, the text's SHA-256 (the
+//     reference (a Luxembourg act's Mémorial A issue, "not held" when the index holds none; an EU wording's Official Journal
+//     reference as its Formex file states it, over an EU index /7, in EUR-Lex's form: the act's own, or for a consolidated
+//     wording the act's it consolidates, and "not held" where the index holds none), the publication date when the index
+//     holds one, the text's SHA-256 (the
 //     provision's text_sha256, R64), the date Lex was consulted (the answer's own date in Luxembourg; the index holds no
 //     time the publisher served the bytes), an act held only as published's label, and the authenticity sentence: the
 //     as-published sentence of its case, the site's sentence for consolidated text, or the EU's statement its act's own date
@@ -57,6 +60,7 @@ import { articlePermalink } from './permalinks.mjs';
 import { CANONICAL_HOST } from './routes.mjs';
 import { isCalendarDate, luxembourgDate } from './temporal.mjs';
 import { datedByEntryIntoForce, holdsToday } from './date-role.mjs';
+import { europeReferenceOf, europeTitleOf, officialJournalWords } from './europe-publication.mjs';
 
 /** The origin a citation's permalink is printed under: the site's own (`Document.jsx`'s canonical links). */
 export const CITATION_ORIGIN = `https://${CANONICAL_HOST}`;
@@ -276,9 +280,17 @@ export function citationForms({ view, version, article, observedAt }) {
   lines.push(fillText(evidence.permalink, { permalink }));
   if (europe) {
     lines.push(fillText(evidence.celex, { celex: version.wordingCelex ?? view.celex }));
+    // The publisher's title of the wording's expression, over an EU index /7, as the evidence form quotes a Luxembourg one.
+    const title = europeTitleOf(view.titles ?? null, version.expressionIri);
+    if (title !== null && title.source === 'cellar_expression_title') lines.push(fillText(evidence.title, { title: title.text }));
     lines.push(fillText(version.kind === 'consolidated_version' ? evidence.consolidatedWording : evidence.originalWording, { date: version.wordingDate }));
-    // The index holds no Official Journal reference of an EU act: said, never guessed from a file name.
-    lines.push(evidence.officialJournalNotHeld);
+    // The Official Journal reference the wording's Formex file states (EU index /7): the act's own, or for a consolidated
+    // wording that of the act it consolidates; "not held" where the index holds none, never guessed from a file name.
+    const reference = europeReferenceOf(view.officialJournal ?? null, version.expressionIri);
+    lines.push(reference === null
+      ? evidence.officialJournalNotHeld
+      : fillText(reference.kind === 'consolidated_act_publication' ? evidence.officialJournalConsolidated : evidence.officialJournal,
+        { reference: officialJournalWords(reference, words) }));
   } else {
     const facts = view.citationFacts;
     lines.push(fillText(evidence.eli, { eli: version.publisherLegalResourceIri }));

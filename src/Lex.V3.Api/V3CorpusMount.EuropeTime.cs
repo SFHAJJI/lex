@@ -861,7 +861,8 @@ internal sealed partial class V3CorpusMount
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt, PublisherId.EuEurLex),
-            new V3PlatformOperationResult(request, "version_state", WithEuropeForceDates(result.RootElement, seed)));
+            new V3PlatformOperationResult(request, "version_state", WithEuropePublication(WithEuropeForceDates(result.RootElement, seed),
+                answered.Select(static selection => selection.Entry!.Answer!.ExpressionId))));
     }
 
     /// <summary>
@@ -1070,7 +1071,8 @@ internal sealed partial class V3CorpusMount
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt, PublisherId.EuEurLex),
-            new V3PlatformOperationResult(request, "evidence_bundle", WithEuropeForceDates(result.RootElement, seed)));
+            new V3PlatformOperationResult(request, "evidence_bundle", WithEuropePublication(WithEuropeForceDates(result.RootElement, seed),
+                answered.Select(static selection => selection.Entry!.Answer!.ExpressionId))));
     }
 
     /// <summary>Whether the corpus holds the text of any consolidated version of the act, in any language.</summary>

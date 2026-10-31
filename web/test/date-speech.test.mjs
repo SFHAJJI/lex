@@ -116,6 +116,13 @@ const EUROPE_ENTRIES = new Set([
   "common.europeForceDates.qualifier", "common.europeForceDates.roleNames.entry_into_force", "common.europeForceDates.roleNames.application",
   "common.europeForceDates.roleNames.end_of_validity", "common.europeForceDates.roleNames.deadline", "common.europeForceDates.notHeld",
   "common.europeForceDates.conflict", "common.europeForceDates.notWording",
+  // An EU wording's titles and Official Journal reference (Release 3's item 1; `europe-publication.mjs`): EU pages only, and
+  // the citation's EU reference forms and lines (the French review of 2026-10-27, its point 7).
+  "common.europePublication.title", "common.europePublication.titleInPackage", "common.europePublication.shortTitle",
+  "common.europePublication.noTitle", "common.europePublication.journal", "common.europePublication.journalConsolidated",
+  "common.europePublication.noJournal", "citation.europe.journal.issue", "citation.europe.journal.issueNoPage",
+  "citation.europe.journal.issueUndated", "citation.europe.journal.issueUndatedNoPage", "citation.europe.journal.act",
+  "citation.europe.journal.actUndated", "citation.evidence.officialJournal", "citation.evidence.officialJournalConsolidated",
 ]);
 
 /**

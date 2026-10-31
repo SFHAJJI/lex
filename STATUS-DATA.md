@@ -2,6 +2,72 @@
 
 Updated 2026-10-31.
 
+## EU titles and Official Journal references: the EU index /7, its answers, pages and citation (sole driver, 2026-10-28)
+
+Release 3's item 1 (`data/eu-titles-oj`; the specification of record's search, the dossier, R65's evidence form, R21). No
+acquisition, no publisher traffic, no browser, no Azure.
+- **Where they were.** Run 16's family X delivered every expression's `cdm:expression_title` (some an `_short` too) and
+  nothing read it (`EuLanguageScopedExpressionDecode.cs:573`). Every admitted Formex package states its `TITLE` and an
+  Official Journal reference: an act's `DOCUMENT.REF`, dated by its document record's `PUBLICATION.REF`; a consolidation's
+  base-act `DOCUMENT.REF.CONS`, dated by its bibliography's `DATE`.
+- **The derive reads them, no acquisition added.**
+  - The query run projects the English and French titles from the checked family-X rows
+    (`EuQueryExecutionResult.ObservedExpressionTitles`). They stand outside the result digest and the Formex population's
+    input digest, so run 16's query checkpoint reopens with its stored bytes.
+  - The main-body producer reads each admitted main unit's title and reference beside its articles
+    (`EuFormexPublicationReader`, `EuFormexMainBodyLegalContentOutcome.Publication`), outside the outcome's identity: the
+    corpus and every article identity are unchanged.
+- **EU index /7** (`EuropeIndexTitles.cs`).
+  - `expression_titles`: per expression and language, the words, the raw form (the literal with its tag or datatype, or the
+    `TITLE` markup), the source (`cellar_expression_title`, `cellar_expression_title_short`, `formex_title`) and the batch or
+    package it was read from.
+  - `official_journal_references`: kind (`act_publication`, `consolidated_act_publication`), number form (`series_number`,
+    `act_number`), series, issue or act number, year, first page, publication date, the raw elements, the package entry and
+    digest.
+  - The reader reads every row again from its raw form at open and refuses one that disagrees. A literal's identity names
+    no per-acquisition batch. An index /6 or older is read with its own DDL and holds none.
+- **The answers over /7.**
+  - `dossier`, `as_of`, `evidence_bundle` and an EU `search` carry `titles` and `official_journal` for the expressions
+    they list. The not-held row `titles` goes where a title is held; a `titles` or `official_journal` row stays only where
+    one is not held.
+  - The authenticity rule no longer says no publication date is held; it still chooses by the act's own date.
+  - A search that names no work lists, under `europe_titles`, the EU acts whose titles hold the query (`TextFolding`),
+    each once, whole titles first; an act R92 withholds is not listed.
+  - Over an EU index /6 every answer is unchanged: derive-c and derive-r2 answer as today.
+- **The pages and the citation** (EN and reviewed FR: 24 forms, 21 approved, 3 changed in French; the reviewer's forms for
+  its points 2 and 6 taken byte for byte; addendum of 2026-10-27 appended to the review record).
+  - The EU dossier and reading say each wording's title, short title and reference, or that none is held.
+  - The search page lists the EU acts found by title, linked to their dossiers, says their text was not searched, and the
+    no-hit card names the Luxembourg and EU titles apart.
+  - The evidence form says "Published in: OJ L 119, 4.5.2016, p. 1" ("OJ L, 2024/1689, 12.7.2024"; for a consolidated
+    wording, the act it consolidates) and the publisher's title, where held.
+- **Measured read-only over run 16's custody** (`EuTitlesRun16Probe`, opt-in; the acquisition reopened with its query
+  checkpoint `37a649de…` held to its stored digest, the main-body producer and the build's projections run, 1,732 s,
+  2.5 GiB; the Python pre-check agreed on every title count and per-seed class):
+  - Titles: 1,382 English and French literals (1,327 titles, 55 short titles). All 1,327 English and French expressions are
+    titled; all 82 seeds in both languages; census works 640 in English and 687 in French of 1,170; consolidated works 558
+    and 605 of 1,088. 1,112 Formex titles, one per admitted main body with articles. 2,494 title rows.
+  - References: 1,112 admitted main bodies with articles, 1,112 referenced, every one dated and paged. Act publications 148
+    (130 by issue, 18 by act number); consolidations 964 (930 by issue, 34 by act number); series L 1,060, C 52.
+  - Per seed: 69 by issue, 9 by act number, 4 with none: 12012E and 12012M, whose packages the build refuses
+    (`PackageDoesNotIdentifyFormex`), and the two acts held only as HTML (32003L0088, 32004R0139). 12016E, 12016M,
+    32003L0087 and 32003R0001 are referenced through their consolidations only. The scope note's "67 classic" left the two
+    Charters out; their `GENERAL` units state a reference.
+- **Driver decisions (reversible).**
+  - Titles are held for English and French expressions only (Decision 89).
+  - The Charter's `GENERAL` unit is read like an act's main unit: it states a `DOCUMENT.REF`.
+  - A document record dates the reference only when its series and number agree with it.
+  - The citation says the reference in EUR-Lex's form ("OJ L 119, 4.5.2016, p. 1"), a citation's convention; the pages state
+    its date as they state every date (ISO: "OJ L 119, 2016-05-04, p. 1"), the one date rule of the interface.
+  - The dossier names its original wording's reference; a consolidated wording's is said where it is read.
+  - The reviewer's point 3 (an act R92 withholds is still held, so "no EU act this site holds" is narrower than said where
+    one is withheld) is left as the reviewed `runTitles` leaves it.
+- **Not done here.**
+  - A derive: Release 3's derive builds index /7 over run 16's custody.
+  - The EU titles ride on the Luxembourg search's answer. A search in a language the Luxembourg index holds no text in
+    (English, today) is refused `language_not_available` before any title is matched. The page's default search
+    language is French, so the default search lists them. Listing them in that refusal too is a follow-up.
+
 ## Release 3's rulings: L1, L1b and L2 on with option (a); the privacy notice on named people; textless permalinks after #1008; the image build's order (sole driver, 2026-10-28)
 
 `writer/release-3-rulings`. Each decision is the owner's standing yes of 2026-10-27 to the driver's recommendation. No

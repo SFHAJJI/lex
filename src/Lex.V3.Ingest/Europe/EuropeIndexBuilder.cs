@@ -79,7 +79,7 @@ public sealed record EuropeIndexResolvedExpression(
 /// <summary>Builds the immutable EU index from one proof-complete Stage 3 envelope.</summary>
 public static partial class EuropeIndexBuilder
 {
-    public const string Schema = "lex-v3-europe-index/6";
+    public const string Schema = "lex-v3-europe-index/7";
     internal const string DigestSchema = "lex-v3-europe-index/4";
     internal const string SourceSchema = "lex-v3-europe-index/3";
     internal const string LegacySchema = "lex-v3-europe-index/2";
@@ -163,7 +163,11 @@ public static partial class EuropeIndexBuilder
         "publisher_work_celex TEXT COLLATE BINARY,", StringComparison.Ordinal) + StatesDdl;
 
     // Schema 6 is schema 5 and the acts' force dates (the plan's item 2.1); schema 5 is read with its own exact DDL above.
-    private static readonly string Ddl = StatesFullDdl + ForceDatesDdl;
+    private static readonly string ForceDatesFullDdl = StatesFullDdl + ForceDatesDdl;
+
+    // Schema 7 is schema 6 and the expressions' titles and Official Journal references (Release 3's item 1); schema 6 is read with
+    // its own exact DDL above.
+    private static readonly string Ddl = ForceDatesFullDdl + TitlesDdl;
 
     public static EuropeIndexBuildResult? TryBuild(
         Stage3DerivationProfileEnvelope envelope,
@@ -264,14 +268,18 @@ public static partial class EuropeIndexBuilder
         try
         {
             if (!TryProjectRows(envelope, corpus, out var members, out var lines, out var gaps,
-                    out var articles, out var sources, out var digests, out refusal, out detail))
+                    out var articles, out var sources, out var digests, out var publications, out refusal, out detail))
                 return null;
             var states = ProjectStates(envelope.BodyComposition.Envelope.Europe.ObservedWorkFacts);
             // The run's reified date statements (family A), decoded from the same retained rows the derive reopened.
             var forceDates = ProjectForceDates(envelope.BodyComposition.Envelope.Europe.DateAxioms, states);
-            var logicalRowsSha256 = HashLogicalRows(members, lines, gaps, articles, sources, digests, states, forceDates);
+            // The census expressions' titles (family X's literals) and the admitted main bodies' titles and Official Journal
+            // references (their packages' markup), from the same retained rows and packages.
+            var titles = ProjectTitles(envelope.BodyComposition.Envelope.Europe.ObservedExpressionTitles, states, publications);
+            var references = ProjectOfficialJournalReferences(publications);
+            var logicalRowsSha256 = HashLogicalRows(members, lines, gaps, articles, sources, digests, states, forceDates, titles, references);
             BuildDatabase(path, corpus.ArtifactRef.Sha256, logicalRowsSha256,
-                members, lines, gaps, articles, sources, digests, states, forceDates);
+                members, lines, gaps, articles, sources, digests, states, forceDates, titles, references);
             var (digest, length) = V3BuiltIndexFile.Sha256OfFile(path);
             var indexRef = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(digest), digest);
             var manifest = MeasureCapabilities(digest, articles);
@@ -301,11 +309,14 @@ public static partial class EuropeIndexBuilder
         out ArticleRow[] articles,
         out ArticleSourceRow[] sources,
         out ArticleDigestRow[] digests,
+        out IndexedPublication[] publications,
         out EuropeIndexBuildRefusal refusal,
         out string? detail)
     {
         sources = [];
         digests = [];
+        publications = [];
+        var projectedPublications = new List<IndexedPublication>();
         var projectedDigests = new List<ArticleDigestRow>();
         var projectedSources = new List<ArticleSourceRow>();
         var set = corpus.VerifiedSet.Set;
@@ -423,6 +434,10 @@ public static partial class EuropeIndexBuilder
 
             var inventory = outcome.Source.AcquiredInventory ?? outcome.Source.RetainedInventory
                 ?? throw new InvalidDataException("An admitted Formex outcome has no retained inventory.");
+            if (outcome.Publication is { } publication && outcome.Articles.Count > 0)
+                projectedPublications.Add(new IndexedPublication(outcome.Source.ExpressionIdentity.PublisherWorkId,
+                    outcome.Source.ExpressionIdentity.PublisherExpressionId, LanguageToken(outcome.Articles[0].Language),
+                    inventory.SourceReceipt.Reference.ContentSha256, publication));
             foreach (var article in outcome.Articles)
             {
                 projectedDigests.Add(new ArticleDigestRow(article.IdentitySha256, article.SourceEntrySha256, article.TextSha256));
@@ -458,6 +473,7 @@ public static partial class EuropeIndexBuilder
         digests = projectedDigests.OrderBy(static row => row.ArticleIdentitySha256, StringComparer.Ordinal).ToArray();
         sources = projectedSources.OrderBy(static row => row.ArticleIdentitySha256, StringComparer.Ordinal).ToArray();
         articles = projected.OrderBy(static row => row.ArticleIdentitySha256, StringComparer.Ordinal).ToArray();
+        publications = projectedPublications.ToArray();
         if (articles.Select(static row => row.ArticleIdentitySha256).Distinct(StringComparer.Ordinal).Count() != articles.Length)
         {
             refusal = EuropeIndexBuildRefusal.DerivationMismatch;
@@ -496,7 +512,9 @@ public static partial class EuropeIndexBuilder
         IReadOnlyList<ArticleSourceRow> sources,
         IReadOnlyList<ArticleDigestRow> digests,
         IReadOnlyList<EuropeIndexState> states,
-        IReadOnlyList<EuropeIndexForceDate> forceDates)
+        IReadOnlyList<EuropeIndexForceDate> forceDates,
+        IReadOnlyList<EuropeIndexExpressionTitle> titles,
+        IReadOnlyList<EuropeIndexOfficialJournalReference> references)
     {
         using var connection = Open(path, SqliteOpenMode.ReadWriteCreate);
         Execute(connection, "PRAGMA page_size=4096");
@@ -506,7 +524,7 @@ public static partial class EuropeIndexBuilder
         Execute(connection, "PRAGMA synchronous=FULL");
         Execute(connection, "PRAGMA foreign_keys=ON");
         Execute(connection, $"PRAGMA application_id={ApplicationId}");
-        Execute(connection, "PRAGMA user_version=6");
+        Execute(connection, "PRAGMA user_version=7");
         using var transaction = connection.BeginTransaction();
         Execute(connection, Ddl.Replace("\r\n", "\n", StringComparison.Ordinal), transaction);
         foreach (var row in members)
@@ -538,6 +556,7 @@ public static partial class EuropeIndexBuilder
                 row.StateIdentitySha256, row.SeedCelex, row.RootWorkIri, row.PublisherWorkIri,
                 row.PublisherWorkCelex, (int)row.DateStatus, row.PublisherConsolidationDate, row.FactsJson);
         InsertForceDates(connection, transaction, forceDates);
+        InsertTitles(connection, transaction, titles, references);
         var provenance = SqliteProvenance.Read(connection);
         Insert(connection, transaction, "INSERT INTO stamp VALUES(1,$p0,$p1,$p2,$p3,$p4,$p5)",
             Schema, corpusSha256, logicalRowsSha256, provenance.Version,
@@ -575,7 +594,7 @@ public static partial class EuropeIndexBuilder
         try
         {
             BuildDatabase(path, new string('a', 64),
-                HashLogicalRows(members, lines, gaps, articles, sources, digests, [], []), members, lines, gaps, articles, sources, digests, [], []);
+                HashLogicalRows(members, lines, gaps, articles, sources, digests, [], [], [], []), members, lines, gaps, articles, sources, digests, [], [], [], []);
             return File.ReadAllBytes(path);
         }
         finally
@@ -625,8 +644,17 @@ public static partial class EuropeIndexBuilder
         IReadOnlyList<ArticleSourceRow>? sources = null,
         IReadOnlyList<ArticleDigestRow>? digests = null,
         IReadOnlyList<EuropeIndexState>? states = null,
-        IReadOnlyList<EuropeIndexForceDate>? forceDates = null) =>
-        forceDates is not null
+        IReadOnlyList<EuropeIndexForceDate>? forceDates = null,
+        IReadOnlyList<EuropeIndexExpressionTitle>? titles = null,
+        IReadOnlyList<EuropeIndexOfficialJournalReference>? references = null) =>
+        titles is not null
+            ? ContractJson.Sha256OfDefaultJson(new LogicalRowsWithTitles(members, lines, gaps, articles,
+                sources ?? throw new ArgumentNullException(nameof(sources)),
+                digests ?? throw new ArgumentNullException(nameof(digests)),
+                states ?? throw new ArgumentNullException(nameof(states)),
+                forceDates ?? throw new ArgumentNullException(nameof(forceDates)), titles,
+                references ?? throw new ArgumentNullException(nameof(references))))
+            : forceDates is not null
             ? ContractJson.Sha256OfDefaultJson(new LogicalRowsWithForceDates(members, lines, gaps, articles,
                 sources ?? throw new ArgumentNullException(nameof(sources)),
                 digests ?? throw new ArgumentNullException(nameof(digests)),
@@ -688,7 +716,7 @@ public static partial class EuropeIndexBuilder
         command.ExecuteNonQuery();
     }
 
-    internal static void EnsureExactSchema(SqliteConnection actual, int version = 6)
+    internal static void EnsureExactSchema(SqliteConnection actual, int version = 7)
     {
         using var expected = new SqliteConnection(new SqliteConnectionStringBuilder
         {
@@ -696,7 +724,7 @@ public static partial class EuropeIndexBuilder
             Cache = SqliteCacheMode.Private, Pooling = false,
         }.ToString());
         expected.Open();
-        Execute(expected, (version switch { 2 => LegacyDdl, 3 => SourceDdl, 4 => DigestDdl, 5 => StatesFullDdl, 6 => Ddl, _ => throw new InvalidDataException("Unsupported EU schema.") }).Replace("\r\n", "\n", StringComparison.Ordinal));
+        Execute(expected, (version switch { 2 => LegacyDdl, 3 => SourceDdl, 4 => DigestDdl, 5 => StatesFullDdl, 6 => ForceDatesFullDdl, 7 => Ddl, _ => throw new InvalidDataException("Unsupported EU schema.") }).Replace("\r\n", "\n", StringComparison.Ordinal));
         if (!ReadSchema(expected).SequenceEqual(ReadSchema(actual), StringComparer.Ordinal))
             throw new InvalidDataException("The EU index schema differs from the exact terminal schema.");
     }
@@ -1053,7 +1081,7 @@ public sealed partial class EuropeIndexReader : IDisposable
         {
             connection = EuropeIndexBuilder.Open(path, SqliteOpenMode.ReadOnly);
             var version = Convert.ToInt32(Scalar(connection, "PRAGMA user_version"), CultureInfo.InvariantCulture);
-            if (version is not (2 or 3 or 4 or 5 or 6)) throw new InvalidDataException("Unsupported EU index version.");
+            if (version is not (2 or 3 or 4 or 5 or 6 or 7)) throw new InvalidDataException("Unsupported EU index version.");
             var legacy = version == 2;
             EuropeIndexBuilder.EnsureExactSchema(connection, version);
             if (!string.Equals(Scalar(connection, "PRAGMA integrity_check"), "ok", StringComparison.Ordinal) ||
@@ -1064,7 +1092,7 @@ public sealed partial class EuropeIndexReader : IDisposable
             stamp.CommandText = "SELECT schema_identity,corpus_sha256,logical_rows_sha256,sqlite_version,sqlite_source_id,compile_options_sha256 FROM stamp WHERE stamp_id=1";
             using var stampReader = stamp.ExecuteReader();
             if (!stampReader.Read() ||
-                !string.Equals(stampReader.GetString(0), (version switch { 2 => EuropeIndexBuilder.LegacySchema, 3 => EuropeIndexBuilder.SourceSchema, 4 => EuropeIndexBuilder.DigestSchema, 5 => EuropeIndexBuilder.StatesSchema, _ => EuropeIndexBuilder.Schema }), StringComparison.Ordinal) ||
+                !string.Equals(stampReader.GetString(0), (version switch { 2 => EuropeIndexBuilder.LegacySchema, 3 => EuropeIndexBuilder.SourceSchema, 4 => EuropeIndexBuilder.DigestSchema, 5 => EuropeIndexBuilder.StatesSchema, 6 => EuropeIndexBuilder.ForceDatesSchema, _ => EuropeIndexBuilder.Schema }), StringComparison.Ordinal) ||
                 !string.Equals(stampReader.GetString(1), expectedCorpusRef.Sha256, StringComparison.Ordinal))
                 throw new InvalidDataException("The EU index stamp does not bind the expected corpus.");
             var expectedLogical = stampReader.GetString(2);
@@ -1083,9 +1111,14 @@ public sealed partial class EuropeIndexReader : IDisposable
             // Schema 6's force dates, each reopened through the accepted contract against its own retained statement.
             var forceDates = version >= 6 ? ReadForceDateRows(connection) : null;
             if (forceDates is not null) EuropeIndexBuilder.ValidateForceDateEvidence(forceDates, states!);
+            // Schema 7's titles and Official Journal references, each read again from its raw form once the articles are read.
+            var titles = version >= 7 ? ReadTitleRows(connection) : null;
+            var references = version >= 7 ? ReadReferenceRows(connection) : null;
             var checks = new StreamedArticleChecks(connection, sources: !legacy, digests: version >= 4);
-            var logical = EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, checks.Articles, checks.Sources, checks.Digests, states, forceDates);
+            var logical = EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, checks.Articles, checks.Sources, checks.Digests, states, forceDates, titles, references);
             checks.RequireComplete();
+            if (titles is not null)
+                EuropeIndexBuilder.ValidateTitleEvidence(titles, references!, states!, expression => checks.Objects.OfExpression(expression).Any());
             if (!string.Equals(logical, expectedLogical, StringComparison.Ordinal))
                 throw new InvalidDataException("The EU index logical rows do not match their stamp.");
             var measured = EuropeIndexBuilder.MeasureCapabilities(digest, checks.SearchableArticles);
@@ -1093,8 +1126,10 @@ public sealed partial class EuropeIndexReader : IDisposable
                 throw new InvalidDataException("The EU capability manifest was not measured from the index.");
             // Verified: from here the connection serves requests.
             EuropeIndexBuilder.KeepTemporaryStorageInMemory(connection);
-            return new EuropeIndexReader(
+            var opened = new EuropeIndexReader(
                 path, connection, capabilityManifest, indexRef, expectedCorpusRef, !legacy, version >= 4, version >= 5, version >= 6, checks.Objects);
+            if (titles is not null) opened.HoldTitles(titles, references!);
+            return opened;
         }
         catch
         {
