@@ -1369,6 +1369,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       other: '{count} articles',
     }),
     links: 'Ailleurs sur ce site',
+    assistantLink: 'Assistant',
     examplesHeading: 'Exemples de recherche',
     examplesIntro: 'Chaque exemple lance la recherche d’un article que ce site détient, désigné par sa citation usuelle, et mène à son texte.',
   }),

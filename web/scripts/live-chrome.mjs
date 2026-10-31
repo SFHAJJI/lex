@@ -783,6 +783,8 @@ const EN = Object.freeze({
       other: "{count} articles",
     }),
     links: "Elsewhere on this site",
+    // The assistant's page, linked only while the server reports the assistant switched on (the coverage answer's flag).
+    assistantLink: "Assistant",
     // The example searches (R47; `home-examples.mjs`): each a usual citation of an article this site holds, derived from the
     // mount at build and kept only when searching it opens that article's text; the citations themselves are data, said in
     // their text's language.

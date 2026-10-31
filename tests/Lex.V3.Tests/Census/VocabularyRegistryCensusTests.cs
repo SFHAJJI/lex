@@ -68,8 +68,8 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Api.V3HostHeaders: const MachineContentSecurityPolicy, const ReferrerPolicy, "
                     + "const StrictTransportSecurity",
                 "Lex.V3.Api.V3KeySet: Document=1985, const RawTarget, const ResourceName",
-                "Lex.V3.Api.V3McpJsonRpc: const Instructions, const ProtocolVersion, "
-                    + "const ServerName",
+                "Lex.V3.Api.V3McpJsonRpc: const AskOnDescription, const Instructions, "
+                    + "const ProtocolVersion, const ServerName",
                 "Lex.V3.Api.V3StaleIndexCopies: const CopyPattern, "
                     + "const PrivateTemporaryFolderVariable",
                 "Lex.V3.Artifacts.AdmissionHeaderReader: AttestationMembers=4, "
@@ -122,6 +122,55 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Contracts.Index.TitleFolding: Folds=2140",
                 "Lex.V3.Contracts.Index.V3IndexCapabilityManifestArtifact: Domain=35, "
                     + "const SchemaId",
+                "Lex.V3.Contracts.Platform.Assistant.V3AnswerGates: ConsolidatedKinds=3",
+                "Lex.V3.Contracts.Platform.Assistant.V3AnswerTemplates: ByIdValue=160, "
+                    + "Definitions=80, EnglishMonths=12, FrenchMonths=12, LanguageNames=4, All=160, "
+                    + "Ids=80, LanguageCodes=4, const ActionCandidate, const ActionOpenWork, "
+                    + "const ActionReadArticle, const ActionReadState, const ActionReadStateEu, "
+                    + "const AgentDraft, const BoundaryLine, const BoundaryNoAdviser, "
+                    + "const BoundaryWhole, const BoundaryWholeNoAdviser, const BoundaryWholeNoText, "
+                    + "const ClarifyWhichAct, const ClarifyWhichArticle, "
+                    + "const ClarifyWhichArticleOfAct, const ClarifyWhichIdentifier, "
+                    + "const ClarifyWhichState, const ClarifyWhichWordingEu, "
+                    + "const DisclosureAuthenticityEu, const DisclosureAuthenticityEuOriginal, "
+                    + "const DisclosureAuthenticityLu, const DisclosureCorrigendum, "
+                    + "const DisclosureDerogation, const DisclosureNoLegalEffect, "
+                    + "const DisclosurePreApplication, const DisclosureProvisional, "
+                    + "const DisclosureTitleDistrust, const DisclosureValidityConflict, "
+                    + "const FrenchReviewer, const HandoffAdvice, const HandoffComplaint, "
+                    + "const HandoffInformation, const HandoffMediation, "
+                    + "const HandoffOfficialSource, const LawContentHash, "
+                    + "const LawDatedByEntryIntoForce, const LawEuOriginalWording, "
+                    + "const LawIntervalEu, const LawIntervalEuOpen, const LawIntervalLu, "
+                    + "const LawIntervalLuOpen, const LawOfficialSource, const LawPermalink, "
+                    + "const LawQuoteHeading, const LawQuoteShortened, const NoticeAssembledByModel, "
+                    + "const NoticeInput, const NoticeNotLegalAdvice, const NoticePreview, "
+                    + "const PlanArticleHistory, const PlanAsOf, const PlanChangesInPeriod, "
+                    + "const PlanDateToday, const PlanDiff, const PlanDossier, "
+                    + "const PlanEvidenceBundle, const PlanEvidenceBundleArticle, "
+                    + "const PlanFollowUpSingleArticle, const PlanFollowUpSingleWork, "
+                    + "const PlanHeading, const PlanResolve, const PlanSearch, "
+                    + "const PlanSearchDated, const PlanSplit, const PlanTimeline, "
+                    + "const PlanTimelineEu, const PointNoHit, const PointNotHeld, "
+                    + "const PresentationAssistantUnavailable, "
+                    + "const PresentationLocalizationUnavailable, const RefusalAnchorNotInVersion, "
+                    + "const RefusalIdentifierUnknown, const RefusalNoVersionForDate, "
+                    + "const RefusalNoVersionForDateEu, const RefusalOther, "
+                    + "const RefusalOutOfCorpusScope, const RefusalTextNotAvailable, "
+                    + "const RefusalTextWithheld, const SetId, const VerdictAnswer, "
+                    + "const VerdictClarify, const VerdictPoint, const VerdictRefuse, "
+                    + "const VerdictSplit, static property Sha256",
+                "Lex.V3.Contracts.Platform.Assistant.V3AssistantParsers: CuePatterns=9, "
+                    + "EnglishMonths=12, FrenchMonths=12, IdentifierPatterns=6, LanguageWords=5, "
+                    + "RangeConnectors=13",
+                "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline: ClarifyCodes=2",
+                "Lex.V3.Contracts.Platform.Assistant.V3AssistantPlanValidator: ChoiceOnly=1, "
+                    + "DateSources=2, FollowUpOperations=5, Grammar=9, IdentifierSources=3, "
+                    + "RangeSources=1, ResultOnly=1, SpanOnly=1, AllowedOperations=9, const Schema",
+                "Lex.V3.Contracts.Platform.Assistant.V3AssistantPlanWire: ArgumentNames=8, "
+                    + "FollowUpOperations=5, const SchemaName",
+                "Lex.V3.Contracts.Platform.Assistant.V3HandoffRegistry: Bytes=2566, Entries=4, "
+                    + "const Resource, const Schema, const SchemaResource, static property Sha256",
                 "Lex.V3.Contracts.Platform.V3ClaimTemplates: ByIdValue=4, All=4, "
                     + "const NoStateForDate, const PublisherReference, const StateInterval, "
                     + "const TextOnDate",
