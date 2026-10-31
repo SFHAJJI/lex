@@ -418,6 +418,17 @@
 // typographic apostrophes, no-break spaces and soft hyphen" (1 form, changed in French only): "étant lues comme" written out
 // once more (G24), "une espace insécable comme une espace ordinaire", "un trait d’union conditionnel n’étant pas lu" (never
 // "comme rien", G13), and "chacun des autres caractères de l’expression" (G20).
+// EU titles and Official Journal references (Release 3's item 1, data/eu-titles-oj) were reviewed by an independent reviewer
+// under the same delegation in the addendum of 2026-10-27 "EU titles and Official Journal references" (24 forms, 21 approved
+// as drafted, 3 changed in French only): `common.europePublication.*` ("Intitulé court", never "titre abrégé", T6; "le
+// libellé en {language}"; "l’acte que le libellé en {language} consolide"), `citation.europe.journal.*` (EUR-Lex's French,
+// "JO L 119 du 4.5.2016, p. 1" and "JO L, 2024/1689, 12.7.2024", never "du" in the act-by-act form),
+// `citation.evidence.officialJournal` and `officialJournalConsolidated` ("l’acte que ce libellé consolide", never "l’acte
+// consolidé", G26), and the search's `euTitleExact`, `euTitlePhrase`, `euTitles`, `euTitleAct`, `euTitlesSearched` ("comparés
+// à l’expression", G24), `runEuTitles` and `runEuTitlesMatched` ("Intitulés de l’UE"). The reviewer's own forms for its points
+// 2 and 6, taken byte for byte: `search.runLuxembourgTitles` and `search.runLuxembourgTitlesMatched` ("Intitulés
+// luxembourgeois", said when the EU titles were matched too) and `common.europePublication.titleInPackage` ("le paquet
+// Formex de l’acte", as the reviewed headings say it).
 // The dossier's relation tabs and R72's notice (Release 3's item 2; R29, R72, R21): 37 forms, `dossier.relations*`,
 // `dossier.relationGroups.*`, `dossier.relation*` and `dossier.amendedAfter*`, reviewed by an independent reviewer (Claude, AI
 // reviewer, not the author) under the same delegation in the addendum of 2026-10-27 "the dossier's relation tabs and R72's
@@ -479,6 +490,19 @@ export const LIVE_CHROME_FR = Object.freeze({
       other: '{count} autres actes',
     }),
     noTitlesHeld: 'Cet index ne contient aucun intitulé d’acte ; l’expression a donc été recherchée dans le seul texte des articles.',
+    euTitleExact: 'L’expression est l’intitulé d’un acte de l’UE que ce site détient : {title}',
+    euTitlePhrase: 'L’expression figure dans l’intitulé d’un acte de l’UE que ce site détient : {title}',
+    euTitles: Object.freeze({
+      one: 'L’expression figure dans l’intitulé de {count} acte de l’UE que ce site détient :',
+      other: 'L’expression figure dans les intitulés de {count} actes de l’UE que ce site détient :',
+    }),
+    euTitleAct: '{title} ({celex})',
+    euTitlesSearched: 'Les intitulés des actes de l’UE que ce site détient ont aussi été comparés à l’expression ; le texte de ces actes n’a pas été interrogé.',
+    runEuTitles: 'Intitulés de l’UE : l’expression ne figure dans aucun intitulé d’un acte de l’UE que ce site détient.',
+    runEuTitlesMatched: Object.freeze({
+      one: 'Intitulés de l’UE : l’expression figure dans l’intitulé de l’acte de l’UE indiqué ci-dessus.',
+      other: 'Intitulés de l’UE : l’expression figure dans les intitulés des actes de l’UE indiqués ci-dessus.',
+    }),
     ambiguousHeading: 'Actes ayant plusieurs versions au {date}',
     ambiguousNote: 'Ces actes ont plus d’une version applicable à cette date ; aucune n’est donc retenue et aucune ne fournit de résultat.',
     ambiguousWork: '{work} : {candidates}',
@@ -560,6 +584,11 @@ export const LIVE_CHROME_FR = Object.freeze({
     }),
     titleMatching: 'Les intitulés sont comparés sans tenir compte des majuscules ni des accents.',
     runTitlesNotRun: 'Intitulés : non recherchés, un acte ayant été désigné.',
+    runLuxembourgTitles: 'Intitulés luxembourgeois : aucun intitulé d’un acte luxembourgeois que ce site détient ne correspond à l’expression.',
+    runLuxembourgTitlesMatched: Object.freeze({
+      one: 'Intitulés luxembourgeois : l’expression correspond à l’intitulé de l’acte luxembourgeois indiqué ci-dessus.',
+      other: 'Intitulés luxembourgeois : l’expression correspond aux intitulés des actes luxembourgeois indiqués ci-dessus.',
+    }),
     runText: 'Texte : aucun article interrogé ne contient l’expression, même sans tenir compte des majuscules ni des accents.',
     runTextWords: 'Texte, chacun des mots dans un ordre quelconque : aucun article interrogé ne les contient tous.',
     exactOnly: 'Seule l’expression a été recherchée dans le texte, sans tenir compte des majuscules ni des accents, œ et æ étant lus oe et ae, les apostrophes typographiques étant lues comme l’apostrophe droite, une espace insécable comme une espace ordinaire, et un trait d’union conditionnel n’étant pas lu : chacun des autres caractères de l’expression compte, traits d’union et ponctuation compris, et rien n’est réduit à son radical ni étendu. Une recherche moins stricte dans le texte reste désactivée tant que sa propre vérification n’est pas réussie.',
@@ -1953,6 +1982,15 @@ export const LIVE_CHROME_FR = Object.freeze({
       conflict: 'L’éditeur enregistre plus d’une date d’entrée en vigueur pour cet acte ({dates}) : chacune est indiquée, et ce site n’en choisit aucune.',
       notWording: 'Aucune des dates ci-dessus ne sert à choisir un libellé : chaque libellé ci-dessous porte sa propre date.',
     }),
+    europePublication: Object.freeze({
+      title: 'Intitulé en {language}, tel que l’éditeur l’enregistre : {title}',
+      titleInPackage: 'Intitulé en {language}, tel que le paquet Formex de l’acte le donne : {title}',
+      shortTitle: 'Intitulé court en {language}, tel que l’éditeur l’enregistre : {title}',
+      noTitle: 'Ce site ne détient aucun intitulé du libellé en {language}.',
+      journal: 'Référence au Journal officiel du libellé en {language} : {reference}',
+      journalConsolidated: 'Référence au Journal officiel de l’acte que le libellé en {language} consolide : {reference}',
+      noJournal: 'Ce site ne détient aucune référence au Journal officiel du libellé en {language}.',
+    }),
     asPublished: Object.freeze({
       label: 'tel que publié ; peut avoir été modifié depuis ; aucun texte consolidé détenu',
       laterNotHeld: 'Versions ultérieures : non détenues.',
@@ -2012,6 +2050,14 @@ export const LIVE_CHROME_FR = Object.freeze({
       suffixed: '{year}/{number}/{domain}',
       plain: '{year}/{number}',
       version: '{citation}, au {date}',
+      journal: Object.freeze({
+        issue: 'JO {series} {number} du {date}, p. {page}',
+        issueNoPage: 'JO {series} {number} du {date}',
+        issueUndated: 'JO {series} {number} ({year}), p. {page}',
+        issueUndatedNoPage: 'JO {series} {number} ({year})',
+        act: 'JO {series}, {number}, {date}',
+        actUndated: 'JO {series}, {number}',
+      }),
       authenticity: Object.freeze({
         electronic_edition: 'Seul le Journal officiel de l’Union européenne publié sous forme électronique fait foi et produit des effets juridiques (règlement (UE) n° 216/2013, article 1er, paragraphe 2) ; ce texte est une reproduction lue dans le paquet Formex de l’Office des publications, et non l’édition qui fait foi.',
         edition_by_publication_date: 'Pour un acte publié avant le 1er juillet 2013, l’édition imprimée du Journal officiel de l’Union européenne fait foi ; l’édition électronique fait foi depuis cette date (règlement (UE) n° 216/2013). Ce texte est une reproduction lue dans le paquet Formex de l’Office des publications, et non l’édition qui fait foi.',
@@ -2031,6 +2077,8 @@ export const LIVE_CHROME_FR = Object.freeze({
       originalWording: 'Libellé : le libellé original du {date}',
       consolidatedWording: 'Libellé : le libellé consolidé du {date}',
       officialJournalNotHeld: 'Publication : la référence au Journal officiel n’est pas détenue par cet index.',
+      officialJournal: 'Publication : {reference}',
+      officialJournalConsolidated: 'Publication de l’acte que ce libellé consolide : {reference}',
       textSha256: 'Empreinte du texte (SHA-256) : {digest}',
       noText: 'Empreinte du texte (SHA-256) : aucune, l’article est détenu sans texte.',
       consulted: 'Consulté sur Lex le {date} (date au Luxembourg).',

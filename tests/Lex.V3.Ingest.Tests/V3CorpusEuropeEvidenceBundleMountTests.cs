@@ -53,7 +53,7 @@ public sealed class V3CorpusEuropeEvidenceBundleMountTests
         Assert.AreEqual(V3CorpusMount.EuropeTextAuthenticity[V3CorpusMount.EuropeElectronicEdition], bundle.GetProperty("authenticity").GetString());
         Assert.AreEqual(V3CorpusMount.EuropeElectronicEdition, bundle.GetProperty("authenticity_basis").GetString());
         CollectionAssert.AreEqual(new[] { wordingDate }, bundle.GetProperty("authenticity_act_dates").EnumerateArray().Select(static date => date.GetString()).ToArray());
-        Assert.AreEqual(V3CorpusMount.EuropeAuthenticityRule, bundle.GetProperty("authenticity_rule").GetString());
+        Assert.AreEqual(V3CorpusMount.EuropeAuthenticityRuleWithJournal, bundle.GetProperty("authenticity_rule").GetString(), "an index /7 holds the reference");
         Assert.IsFalse(bundle.GetProperty("consolidations_held").GetBoolean());
 
         var wording = bundle.GetProperty("wordings").EnumerateArray().Single();

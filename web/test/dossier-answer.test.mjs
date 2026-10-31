@@ -201,7 +201,7 @@ test("each rule an EU dossier states about itself is refused when broken, with t
     ["no expression", (a) => { a.expressions = []; a.expression_count = 0; }, /at least one held expression/],
     ["one expression twice", (a) => { a.expressions.push(structuredClone(a.expressions[0])); a.expression_count = 2; }, /listed twice/],
     ["a count that is not the list's", (a) => { a.expressions.push(second(a)); }, /expression_count is 1, and the dossier lists 2/],
-    ["an item not held named twice", (a) => { a.not_held.push(structuredClone(a.not_held[0])); }, /not_held names titles twice/],
+    ["an item not held named twice", (a) => { a.not_held.push(structuredClone(a.not_held[0])); }, /not_held names \w+ twice/],
     ["the date's meaning dropped", (a) => { delete a.date_semantics; }, /does not carry date_semantics/],
     ["the digest rule dropped", (a) => { delete a.digest_rule; }, /does not carry digest_rule/],
     ["a member's digest unfilled", (a) => { a.expressions[0].members[0].object_ref_sha256 = PLACEHOLDER; }, /object_ref_sha256 is not a SHA-256 digest/],

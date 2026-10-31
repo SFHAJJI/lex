@@ -23,7 +23,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { DOSSIER_LANGUAGES, LIVE_DOSSIER_IDLE, createDossierSession, dossierOutcome } from '../scripts/live-dossier.mjs';
-import { AsPublished, EuropeAnnexes, EuropeForceDates, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, TableRegion, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
+import { AsPublished, EuropeAnnexes, EuropeForceDates, EuropePublication, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, TableRegion, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { parseSitePath, permalinkHref } from '../scripts/permalinks.mjs';
@@ -465,6 +465,12 @@ export function EuropeDossierView({ view, today = null }) {
   return (
     <>
       <h2>{view.celex}</h2>
+      {/* The act's titles and Official Journal reference, over an EU index /7 (Release 3's item 1): its original wording's. */}
+      <EuropePublication
+        titles={view.titles ?? null}
+        officialJournal={view.officialJournal ?? null}
+        expressions={view.expressions.map((expression) => ({ expressionIri: expression.expressionIri, language: expression.language }))}
+      />
       <p>
         <Say template={COPY.heldIn} values={{ iri: <code>{view.publisherWorkIri}</code>, languages: view.availableLanguages.join(', ') }} />
       </p>

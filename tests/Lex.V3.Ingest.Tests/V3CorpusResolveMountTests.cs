@@ -985,6 +985,11 @@ public sealed class V3CorpusResolveMountTests
     /// <summary>The force dates an EU index /6 holds, read as its logical-row hash reads them.</summary>
     private static EuropeIndexForceDate[] ReadEuropeForceDates(SqliteConnection connection) => EuropeIndexReader.ReadForceDateRows(connection);
 
+    /// <summary>The titles and Official Journal references an EU index /7 holds, read as its logical-row hash reads them.</summary>
+    private static EuropeIndexExpressionTitle[] ReadEuropeTitles(SqliteConnection connection) => EuropeIndexReader.ReadTitleRowsOf(connection);
+
+    private static EuropeIndexOfficialJournalReference[] ReadEuropeReferences(SqliteConnection connection) => EuropeIndexReader.ReadReferenceRowsOf(connection);
+
     private static DefaultHttpContext Request(string identifier)
     {
         return RequestBody(
@@ -1176,7 +1181,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection), ReadEuropeStates(connection), ReadEuropeForceDates(connection)));
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection), ReadEuropeStates(connection), ReadEuropeForceDates(connection), ReadEuropeTitles(connection), ReadEuropeReferences(connection)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1235,7 +1240,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection), ReadEuropeStates(connection), ReadEuropeForceDates(connection)));
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection), ReadEuropeStates(connection), ReadEuropeForceDates(connection), ReadEuropeTitles(connection), ReadEuropeReferences(connection)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -2327,9 +2332,15 @@ public sealed class V3CorpusResolveMountTests
         public string CorpusSha256 { get; }
         public string IndexSha256 { get; private set; }
 
-        public static async Task<EuropeMountedFixture> CreateAsync(bool acquireFrenchExpression = false, bool withForceDates = false) =>
+        /// <summary>
+        /// The retained GDPR's mount; with <paramref name="withLuxembourgText"/>, its envelope's Luxembourg half is an AKN act held in
+        /// French, so <see cref="AddLuxembourgMountAsync"/> mounts a Luxembourg index a search that names no work answers over.
+        /// </summary>
+        public static async Task<EuropeMountedFixture> CreateAsync(bool acquireFrenchExpression = false, bool withForceDates = false, bool withTitles = false,
+            bool withLuxembourgText = false) =>
             await FromEnvelopeAsync(await EuropeIndexBuilderTests.RetainedGdprEnvelopeAsync(
-                acquireFrenchExpression: acquireFrenchExpression, withForceDates: withForceDates));
+                acquireFrenchExpression: acquireFrenchExpression, withForceDates: withForceDates, withTitles: withTitles,
+                withLuxembourgText: withLuxembourgText));
 
         /// <summary>
         /// The mount of one EU envelope: its corpus and EU index built and written where the API mounts them, named by its one
@@ -2430,7 +2441,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection), ReadEuropeStates(connection), ReadEuropeForceDates(connection)));
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection), ReadEuropeStates(connection), ReadEuropeForceDates(connection), ReadEuropeTitles(connection), ReadEuropeReferences(connection)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
