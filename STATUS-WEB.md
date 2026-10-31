@@ -115,6 +115,12 @@ the switched-off card until the driver sets the switch (the owner's order below)
   line each (the ask row's sentence; the registry digest did not move); no base answer moved, so none was recorded again;
   web 1,506 (1,499 passed, 3 skipped; the two WSL/awk tests of `image-run` pass from Git's shell, 5 of 5); the V3 tree
   verified across 1,845 paths. The live gates were not run: they need the deployment.
+- **Review and repair (#1013, one round).** The on-path card now says truly that the question was read and sent masked to
+  the processor (`question_read: true`, `AskQuestionReadNote`), and the MCP tool list describes ask by its state; the off
+  card's bytes and the two sample files are unchanged. The home page bundles nothing of the panel's copy (the link's name
+  comes from the chrome tables), and the built `.js` bundles are scanned for it. Stale statements fixed; ask's buckets swept
+  once a minute; a reversed span refused, not thrown. After the repair: Lex.V3.Tests 3,427 (0 failed), Ingest touched
+  classes 106 (0 failed), web 1,510 (0 failed), the tree verified.
 
 ## Release 2's candidate never listened in time: the startup deadline and the replica (sole driver, 2026-10-31)
 

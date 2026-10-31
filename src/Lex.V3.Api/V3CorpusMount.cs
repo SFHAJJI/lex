@@ -5230,6 +5230,14 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// </summary>
     internal const string AskFailedReason = "The assistant could not answer this question; search, reading and the other operations do not depend on it.";
 
+    /// <summary>
+    /// The card's question note while the assistant is on and could not answer one question (<see cref="AskFailedReason"/>):
+    /// what was done with the question, said truly. Never sent while the assistant is off.
+    /// </summary>
+    internal const string AskQuestionReadNote =
+        "the question was read: normalised, its obvious identifiers masked by code, and the masked text with opaque references sent to the " +
+        "configured processor to plan (R33); it is not stored or echoed; whether it could be answered depended on it";
+
     internal const string AskQuestionNote =
         "the question is checked to be a non-blank string and is not read, stored or echoed; nothing in this answer depends on it";
 
@@ -5281,7 +5289,7 @@ internal sealed partial class V3CorpusMount : IDisposable
         {
             return AskAssistant(request, observedAt, question) ?? V3PlatformOperationOutcome.Success(
                 Context("success", observedAt),
-                AskContained(request, _reader.SearchableLanguages(), AskFailedReason));
+                AskContained(request, _reader.SearchableLanguages(), AskFailedReason, questionRead: true));
         }
 
         return V3PlatformOperationOutcome.Success(
@@ -5291,13 +5299,15 @@ internal sealed partial class V3CorpusMount : IDisposable
 
     /// <summary>
     /// The card <see cref="Ask"/> answers, given the languages the mount holds searchable text in.
-    /// It reads nothing of the question, which is why it can be built here without a mount and put to
-    /// every scope-line question in the contracts suite.
+    /// While the assistant is off it reads nothing of the question, which is why it can be built here without a mount and put
+    /// to every scope-line question in the contracts suite. While the assistant is on and could not answer one question
+    /// (<paramref name="questionRead"/>), the card says the question was read and what was done with it.
     /// </summary>
     internal static V3PlatformOperationResult AskContained(
         V3PlatformOperationRequest request,
         IEnumerable<string> searchableLanguages,
-        string reason = AskContainmentReason)
+        string reason = AskContainmentReason,
+        bool questionRead = false)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(searchableLanguages);
@@ -5329,8 +5339,8 @@ internal sealed partial class V3CorpusMount : IDisposable
                 reason,
                 model_gloss = "disabled",
             },
-            question_read = false,
-            question_note = AskQuestionNote,
+            question_read = questionRead,
+            question_note = questionRead ? AskQuestionReadNote : AskQuestionNote,
             deterministic_actions = actions,
         });
         return new V3PlatformOperationResult(request, "handoff_card", result.RootElement, V3Verdicts.Point);

@@ -1,7 +1,8 @@
 // The Assistant panel, as React (R47, R52, R55, R45(c)-(e); docs/ANSWER-DOSSIER-1.md).
 //
-// Built, tested and HIDDEN. No page imports this file while `ASSISTANT_PANEL` is 'hidden' (scripts/assistant-panel.mjs), and
-// the web suite checks that no built page carries the panel's marker. The panel draws an answer_dossier/1 and adds nothing to
+// Reached by one page, the assistant's (`live-assistant-page.jsx`), which the server renders and serves only while it reports
+// the assistant switched on; no built page carries the panel, and no other bundle carries its copy (the web suite checks both).
+// The panel draws an answer_dossier/1 and adds nothing to
 // it: every sentence of an answer is text the server filled from its closed template set, a verbatim quotation or a span of
 // the question; the panel's own words come from its copy table, and every rule lives in the shared module.
 //

@@ -68,8 +68,8 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Api.V3HostHeaders: const MachineContentSecurityPolicy, const ReferrerPolicy, "
                     + "const StrictTransportSecurity",
                 "Lex.V3.Api.V3KeySet: Document=1985, const RawTarget, const ResourceName",
-                "Lex.V3.Api.V3McpJsonRpc: const Instructions, const ProtocolVersion, "
-                    + "const ServerName",
+                "Lex.V3.Api.V3McpJsonRpc: const AskOnDescription, const Instructions, "
+                    + "const ProtocolVersion, const ServerName",
                 "Lex.V3.Api.V3StaleIndexCopies: const CopyPattern, "
                     + "const PrivateTemporaryFolderVariable",
                 "Lex.V3.Artifacts.AdmissionHeaderReader: AttestationMembers=4, "

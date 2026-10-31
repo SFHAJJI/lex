@@ -31,7 +31,6 @@ import { indexOlderThanToday } from '../scripts/live-search.mjs';
 import { useLuxembourgToday } from './Today.jsx';
 import { HOME_EXAMPLES, exampleHref, examplesShown } from '../scripts/home-examples.mjs';
 import { citationLang } from '../scripts/citation.mjs';
-import { panelCopy } from '../scripts/assistant-panel.mjs';
 
 const COPY = liveChrome().home;
 
@@ -91,7 +90,7 @@ export function HomeLinks({ assistant = false }) {
         <li><a href={livePath('coverage.html')}>{liveChrome().coverage.title}</a></li>
         <li><a href={livePath(referencePage('developers').file)}>{liveChrome().developers.title}</a></li>
         <li><a href={livePath(referencePage('help').file)}>{liveChrome().help.title}</a></li>
-        {assistant ? <li><a href={livePath('assistant')} data-home-assistant="">{panelCopy(CHROME_LOCALE).heading}</a></li> : null}
+        {assistant ? <li><a href={livePath('assistant')} data-home-assistant="">{COPY.assistantLink}</a></li> : null}
       </ul>
     </nav>
   );

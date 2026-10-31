@@ -61,6 +61,7 @@ internal sealed class V3AssistantRuntime
     private readonly IAssistantPlanner? _planner;
     private readonly TimeProvider _time;
     private readonly ConcurrentDictionary<UInt128, Bucket> _buckets = new();
+    private long _lastSweepTicks;
     private readonly ConcurrentDictionary<string, long> _telemetry = new(StringComparer.Ordinal);
     private readonly object _budgetLock = new();
     private (int Year, int Month) _budgetMonth;
@@ -148,6 +149,7 @@ internal sealed class V3AssistantRuntime
         }
 
         var now = _time.GetTimestamp();
+        SweepFilledBuckets(now);
         var bucket = _buckets.GetOrAdd(client, _ => new Bucket { LastTicks = now });
         lock (bucket)
         {
@@ -161,6 +163,39 @@ internal sealed class V3AssistantRuntime
             }
 
             return (int)Math.Ceiling((1 - bucket.Tokens) * 60.0 / AskPerMinute);
+        }
+    }
+
+    /// <summary>The buckets held, for a test of the sweep; nothing else reads them.</summary>
+    internal int BucketsHeld => _buckets.Count;
+
+    /// <summary>
+    /// Forgets the buckets that have filled again (a minute after their client's last ask), at most once a minute, as
+    /// <see cref="V3ClientLimiter"/> forgets its entries: no bucket outlives its client's last ask by more than about two
+    /// minutes, and nothing is kept of a client who stopped asking.
+    /// </summary>
+    private void SweepFilledBuckets(long now)
+    {
+        var last = Volatile.Read(ref _lastSweepTicks);
+        if (last != 0 && _time.GetElapsedTime(last, now) < TimeSpan.FromMinutes(1))
+        {
+            return;
+        }
+
+        if (Interlocked.CompareExchange(ref _lastSweepTicks, now, last) != last)
+        {
+            return;
+        }
+
+        foreach (var (key, bucket) in _buckets)
+        {
+            lock (bucket)
+            {
+                if (_time.GetElapsedTime(bucket.LastTicks, now) >= TimeSpan.FromMinutes(1))
+                {
+                    _buckets.TryRemove(key, out _);
+                }
+            }
         }
     }
 

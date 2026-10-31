@@ -133,7 +133,21 @@ public sealed class V3AssistantMountTests
         Assert.AreEqual("assistant_v3_unavailable", capped.Result!.Value.GetProperty("presentation_result").GetString(), "R40: at a cap, ask answers assistant_v3_unavailable");
         Assert.AreEqual(V3CorpusMount.AskFailedReason, capped.Result.Value.GetProperty("containment").GetProperty("reason").GetString(),
             "while on, the card says the assistant could not answer this question, never that it is switched off");
-        Assert.AreNotEqual(Encoding.UTF8.GetString(baseline), Encoding.UTF8.GetString(cappedBytes), "the off card and the on card differ in that one sentence");
+        Assert.AreNotEqual(Encoding.UTF8.GetString(baseline), Encoding.UTF8.GetString(cappedBytes), "the off card and the on card differ");
+        // The review of #1013, HIGH 1: on this path the question was read and sent masked to the processor; the card says so.
+        Assert.AreEqual(JsonValueKind.True, capped.Result.Value.GetProperty("question_read").ValueKind, "while on, the question was read");
+        Assert.AreEqual(V3CorpusMount.AskQuestionReadNote, capped.Result.Value.GetProperty("question_note").GetString());
+        StringAssert.Contains(V3CorpusMount.AskQuestionReadNote, "sent to the configured processor");
+        StringAssert.Contains(V3CorpusMount.AskQuestionReadNote, "not stored");
+
+        // And the MCP tool list says what ask does while on, and the off sentence while off.
+        var listing = Encoding.UTF8.GetBytes("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}");
+        var onList = Encoding.UTF8.GetString((await V3McpJsonRpc.HandleAsync(listing, new V3PlatformHost(), mount, () => ClockA, "assistant-mount-tests", CancellationToken.None))!);
+        StringAssert.Contains(onList, "switched on as a labelled preview");
+        mount.UseAssistant(V3AssistantRuntime.Off);
+        var offList = Encoding.UTF8.GetString((await V3McpJsonRpc.HandleAsync(listing, new V3PlatformHost(), mount, () => ClockA, "assistant-mount-tests", CancellationToken.None))!);
+        StringAssert.Contains(offList, "The assistant, switched off on Lex");
+        Assert.IsFalse(offList.Contains("labelled preview", StringComparison.Ordinal));
         var search = V3EnvelopeJson.ParseAndVerify(await PostAsync(mount, ClockA, "search", new { query = "assemblée générale", language = "fra" }), V3OperationRegistry.Reviewed);
         Assert.IsNull(search.Refusal, "search keeps working at the assistant's cap (R40)");
         Assert.IsTrue(runtime.Telemetry.ContainsKey("outcome:cap_reached"));

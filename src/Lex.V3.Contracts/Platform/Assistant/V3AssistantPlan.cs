@@ -58,9 +58,9 @@ public sealed record V3PlannerOutput(string PlanJson, long CostMicroEuros);
 
 /// <summary>
 /// The one model seam (R31): a planner proposes a split, a verdict per part and a typed plan over opaque references, and
-/// nothing else. Code validates the plan, runs it through the existing operations and decides the verdict. No
-/// implementation exists in src: a real provider needs the legal read, the processing agreement and the owner's sign-off
-/// (R33, O22). Tests implement it deterministically.
+/// nothing else. Code validates the plan, runs it through the existing operations and decides the verdict. The one
+/// implementation in src is the Azure OpenAI planner (Lex.V3.Api), wired only when the environment names its deployment and
+/// the switch is on (R30, R33); the tests implement it deterministically.
 /// </summary>
 public interface IAssistantPlanner
 {
@@ -669,6 +669,11 @@ public static class V3AssistantPlanValidator
             !element[0].TryGetInt32(out var start) || !element[1].TryGetInt32(out var end))
         {
             throw new PlanRefused(V3PlanRefusal.Malformed, "a span is [start, end], two whole numbers");
+        }
+
+        if (start < 0 || end < start)
+        {
+            throw new PlanRefused(V3PlanRefusal.SpanOutOfBounds, "a span's start is at least 0 and not after its end");
         }
 
         return new V3PlanSpan(start, end);

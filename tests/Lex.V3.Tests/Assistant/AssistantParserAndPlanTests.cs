@@ -138,6 +138,8 @@ public sealed class AssistantParserAndPlanTests
             ("ask itself", Plan(GoodSearch.Replace("\"search\"", "\"ask\"", StringComparison.Ordinal)), V3PlanRefusal.OperationNotAllowed),
             ("an operation outside the allowlist", Plan(GoodSearch.Replace("\"search\"", "\"events\"", StringComparison.Ordinal)), V3PlanRefusal.OperationNotAllowed),
             ("a span past the question", Plan(GoodSearch.Replace("[10,47]", "[8,460]", StringComparison.Ordinal)), V3PlanRefusal.SpanOutOfBounds),
+            ("a span whose end is before its start (the review of #1013, LOW 5)", Plan(GoodSearch.Replace("[10,47]", "[47,10]", StringComparison.Ordinal)), V3PlanRefusal.SpanOutOfBounds),
+            ("a negative span", Plan(GoodSearch.Replace("[10,47]", "[-1,10]", StringComparison.Ordinal)), V3PlanRefusal.SpanOutOfBounds),
             ("a date reference the question does not hold", Plan(GoodSearch.Replace("\"d2\"", "\"d9\"", StringComparison.Ordinal)), V3PlanRefusal.UnboundArgument),
             ("a language outside the mount's", Plan(GoodSearch.Replace("\"fra\"", "\"spa\"", StringComparison.Ordinal)), V3PlanRefusal.OutsideClosedSet),
             ("a verdict outside the six", Plan(GoodSearch, parts: "[{\"part_id\":\"p1\",\"span\":[0,64],\"proposed_verdict\":\"assistant_v3_unavailable\"}]"), V3PlanRefusal.OutsideClosedSet),

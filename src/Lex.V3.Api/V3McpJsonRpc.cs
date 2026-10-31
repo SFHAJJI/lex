@@ -170,7 +170,7 @@ internal static class V3McpJsonRpc
                 "initialize" => Result(id, Initialize()),
                 // The MCP specification's ping (2025-06-18, basic utilities): the receiver answers promptly with an empty result.
                 "ping" => Result(id, EmptyResult()),
-                "tools/list" => Result(id, ToolsList()),
+                "tools/list" => Result(id, ToolsList(corpusMount?.Assistant.IsOn == true)),
                 "tools/call" => await ToolsCallAsync(
                         id, parameters, host, corpusMount, utcNow, requestReference, rateLimitedRetryAfterSeconds, cancellationToken)
                     .ConfigureAwait(false),
@@ -307,7 +307,13 @@ internal static class V3McpJsonRpc
 
     private static JsonElement EmptyResult() => Empty();
 
-    private static JsonElement ToolsList()
+    /// <summary>The assistant's tool description while it is switched on (the owner's order of 2026-10-28): what ask does then.</summary>
+    internal const string AskOnDescription =
+        "The assistant, switched on as a labelled preview: the question, with obvious identifiers masked by code, is sent to the configured " +
+        "processor, which only plans which operations to run; code runs them, decides the verdict and writes every sentence from fixed " +
+        "wording; the answer is an answer_dossier (or the refusal advice_boundary), and a question it cannot answer gets assistant_v3_unavailable.";
+
+    private static JsonElement ToolsList(bool assistantOn)
     {
         var writer = new ArrayBufferWriter<byte>();
         using (var jsonWriter = new Utf8JsonWriter(writer))
@@ -320,7 +326,7 @@ internal static class V3McpJsonRpc
                 using var requestSchema = JsonDocument.Parse(V3PlatformSchemaExporter.ExportRequestUtf8(binding.OperationId));
                 jsonWriter.WriteStartObject();
                 jsonWriter.WriteString("name", binding.OperationId);
-                jsonWriter.WriteString("description", DescriptionOf(binding.OperationId));
+                jsonWriter.WriteString("description", assistantOn && binding.OperationId == "ask" ? AskOnDescription : DescriptionOf(binding.OperationId));
                 jsonWriter.WritePropertyName("inputSchema");
                 requestSchema.RootElement.GetProperty("properties").GetProperty("parameters").WriteTo(jsonWriter);
                 jsonWriter.WriteEndObject();

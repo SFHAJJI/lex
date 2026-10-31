@@ -75,7 +75,7 @@ test('the panel is hidden: the module admits only that, and only the assistant p
   // The panel is drawn by the assistant's page and its entry alone, which the server serves only while the assistant is on
   // (V3WebRoot); `ssr-entry.jsx` renders that page for the server; the home page imports the copy module for the one link's
   // name, which it shows only then (`LiveHome.jsx`). No other module reaches the panel.
-  const reaching = ['AssistantPanel.jsx', 'assistant-panel.mjs', 'live-assistant-page.jsx', 'client-live-assistant-entry.jsx', 'ssr-entry.jsx', 'LiveHome.jsx'];
+  const reaching = ['AssistantPanel.jsx', 'assistant-panel.mjs', 'live-assistant-page.jsx', 'client-live-assistant-entry.jsx', 'ssr-entry.jsx'];
   for (const directory of ['app', 'scripts']) {
     for (const name of await readdir(join(web, directory))) {
       if (!/\.(mjs|jsx)$/.test(name) || reaching.includes(name)) continue;
@@ -84,7 +84,7 @@ test('the panel is hidden: the module admits only that, and only the assistant p
     }
   }
   const home = await readFile(join(web, 'app', 'LiveHome.jsx'), 'utf8');
-  assert.doesNotMatch(home, /AssistantPanel\.jsx|LiveAssistant/, 'the home page imports the copy, never the panel');
+  assert.doesNotMatch(home, /assistant-panel|AssistantPanel/, "the home page names the link from the chrome table and bundles nothing of the panel's copy");
 });
 
 test('no built page carries the panel or any assistant control', async () => {
@@ -101,6 +101,13 @@ test('no built page carries the panel or any assistant control', async () => {
           const html = await readFile(path, 'utf8');
           assert.ok(!html.includes(ASSISTANT_PANEL_MARKER), `${path} carries the assistant panel`);
           assert.ok(!html.includes('assistant-question'), `${path} carries the assistant's field`);
+        } else if (entry.name.endsWith('.js') && entry.name !== 'client-live-assistant.js') {
+          // The processor and preview sentences reach a visitor's browser only in the assistant page's own script, which the
+          // server serves only while the assistant is on; no other bundle (the home page's included) carries the panel's copy.
+          const js = await readFile(path, 'utf8');
+          for (const needle of [ASSISTANT_PANEL_MARKER, 'Azure OpenAI', ASSISTANT_PANEL_COPY.en.preview, ASSISTANT_PANEL_COPY.fr.preview]) {
+            assert.ok(!js.includes(needle), `${path} carries the assistant panel's copy (${needle.slice(0, 30)})`);
+          }
         }
       }
     }

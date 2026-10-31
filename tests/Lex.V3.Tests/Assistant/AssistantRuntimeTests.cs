@@ -76,6 +76,16 @@ public sealed class AssistantRuntimeTests
             time.Advance(TimeSpan.FromSeconds(3));
             Assert.AreEqual(0, runtime.AdmitAsk(), "one token comes back every three seconds");
         }
+
+        // The review of #1013, LOW 4: a bucket filled again is forgotten, so nothing is kept of a client who stopped asking.
+        Assert.AreEqual(1, runtime.BucketsHeld);
+        time.Advance(TimeSpan.FromMinutes(2));
+        using (V3AssistantRuntime.EnterClient((UInt128)8))
+        {
+            Assert.AreEqual(0, runtime.AdmitAsk());
+        }
+
+        Assert.AreEqual(1, runtime.BucketsHeld, "the first client's bucket, filled again, was swept when the next ask came");
     }
 
     [TestMethod]

@@ -7,9 +7,10 @@ using Lex.V3.Contracts.Platform.Assistant;
 namespace Lex.V3.Api;
 
 /// <summary>
-/// The assistant behind <c>ask</c> (docs/ANSWER-DOSSIER-1.md): switched off by default, with no planner wired in src. While
-/// it is off, <see cref="Ask"/> answers the switched-off card byte for byte; this file only adds what answers when every
-/// condition of <see cref="V3AssistantRuntime.IsOn"/> holds, which no deployment of this code can meet.
+/// The assistant behind <c>ask</c> (docs/ANSWER-DOSSIER-1.md): switched off by default; on only when every condition of
+/// <see cref="V3AssistantRuntime.IsOn"/> holds (the switch, no off-switch, the Azure OpenAI deployment configured, and the
+/// people's reviews done or the preview acknowledged). While it is off, <see cref="Ask"/> answers the switched-off card byte
+/// for byte; this file adds what answers while it is on.
 /// </summary>
 internal sealed partial class V3CorpusMount
 {
