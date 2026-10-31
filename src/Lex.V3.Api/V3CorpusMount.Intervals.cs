@@ -831,6 +831,11 @@ internal sealed partial class V3CorpusMount
         "(withheld_rights, not_available_pdf, not_available_derivation, not_available_misfiled or not_acquired) and text_status_reason " +
         "in the index's words; no other state is served in its place, and an absence of text here is not an absence of law";
 
+    internal const string TextlessCoordinateRule =
+        "the permalink's digest (requested_digest) is none of this work's states in this index, so it names a state this index no " +
+        "longer holds (R64); the state at its stable coordinate in its language holds no text, so that state is named, by its own " +
+        "digest and permalink, for its text: neither verified nor served, and no state that holds text is offered in its place";
+
     /// <summary>
     /// The refusal for a date no held state covers, on index 9: <c>no_version_for_date</c> with its reason, the states it
     /// names, the nearest dates and a hole's span; or, when the state covering the date holds no text, <c>text_withheld</c>
@@ -932,14 +937,17 @@ internal sealed partial class V3CorpusMount
     /// The refusal for a state covering the date whose text this index does not hold (design §3.2): <c>text_withheld</c> for a
     /// rights reason, with the official identity and link and, since the index binds no body to a textless row, the state's
     /// digest as the content digest; <c>text_not_available</c> otherwise (a PDF, a derivation gap, a misfiled file, a state not
-    /// acquired), with the official source and no transport evidence. Both name the state, its status and its reason.
+    /// acquired), with the official source and no transport evidence. Both name the state, its status and its reason. A
+    /// permalink whose digest names no state of the work any more (<paramref name="requestedDigest"/>) adds that digest and
+    /// <see cref="TextlessCoordinateRule"/>; every other refusal keeps its bytes.
     /// </summary>
     private V3PlatformOperationOutcome RefuseTextless(
         V3PlatformOperationRequest request,
         DateTimeOffset observedAt,
         LuxembourgIndexCatalogueState row,
         string? requestedDate,
-        string? bound)
+        string? bound,
+        string? requestedDigest = null)
     {
         var withheld = string.Equals(row.TextStatus, "withheld_rights", StringComparison.Ordinal);
         var payload = new JsonObject { ["official_identity"] = row.PublisherLegalResourceIri };
@@ -973,6 +981,12 @@ internal sealed partial class V3CorpusMount
         payload["text_status"] = row.TextStatus;
         payload["text_status_reason"] = row.TextStatusReason;
         payload["rule"] = TextlessRule;
+        if (requestedDigest is not null)
+        {
+            payload["requested_digest"] = requestedDigest;
+            payload["requested_digest_rule"] = TextlessCoordinateRule;
+        }
+
         payload["what_would_answer"] = new JsonArray((JsonNode)"new_official_observation");
         payload["asserts_absence_of_law"] = false;
         using var document = JsonSerializer.SerializeToDocument(payload);
@@ -1051,20 +1065,90 @@ internal sealed partial class V3CorpusMount
 
     /// <summary>
     /// The state a hash-pinned permalink names when it is a textless row of index 9: its text is not held, so the permalink is
-    /// refused for that, naming it, rather than unknown.
+    /// refused for that, naming it, rather than unknown. A work whose every row is textless is read too (the review of #1008):
+    /// no held state is needed for the index to name the state.
     /// </summary>
     private LuxembourgIndexCatalogueState? TextlessRowAt(string workKey, string date, string digest, string language)
     {
-        if (!RulesByInterval || _reader!.ResolveWorkStates(workKey).Count == 0)
+        if (!RulesByInterval)
         {
             return null;
         }
 
-        return CatalogueOf(workKey).ByDigest.GetValueOrDefault(digest) is { } row &&
+        return PermalinkCatalogueOf(workKey).ByDigest.GetValueOrDefault(digest) is { } row &&
                string.Equals(row.ApplicabilityDate, date, StringComparison.Ordinal) &&
                string.Equals(row.Language, language, StringComparison.Ordinal) &&
                !string.Equals(row.TextStatus, TextHeld, StringComparison.Ordinal)
             ? row
             : null;
     }
+
+    /// <summary>
+    /// The textless states at a hash-pinned permalink's stable coordinate, when its digest is none of its work's states in this
+    /// index (a digest this index no longer holds, R64) and no state there in its language holds text: every row of that date in
+    /// that language (for French, with the rows that name no expression, which stand in the French chain). Empty otherwise: on
+    /// any other index, for a digest the work holds (a textless one is <see cref="TextlessRowAt"/>'s; a held one, or one of
+    /// another date or language, is the held states' question), and for a coordinate whose language holds text, where a
+    /// changed digest is <c>pinned_digest_mismatch</c> naming the current state (the review of #1008).
+    /// </summary>
+    private LuxembourgIndexCatalogueState[] TextlessCoordinateAt(string workKey, string date, string digest, string language)
+    {
+        if (!RulesByInterval)
+        {
+            return [];
+        }
+
+        var work = PermalinkCatalogueOf(workKey);
+        if (work.ByDigest.ContainsKey(digest))
+        {
+            return [];
+        }
+
+        var here = work.Rows
+            .Where(row => string.Equals(row.ApplicabilityDate, date, StringComparison.Ordinal) &&
+                          (string.Equals(row.Language, language, StringComparison.Ordinal) ||
+                           (row.Language.Length == 0 && string.Equals(language, FrenchLanguage, StringComparison.Ordinal))))
+            .ToArray();
+        return here.Length > 0 && here.All(static row => !string.Equals(row.TextStatus, TextHeld, StringComparison.Ordinal)) ? here : [];
+    }
+
+    /// <summary>
+    /// The refusal for a hash-pinned permalink whose digest names no state of its work any more, at a coordinate that holds no
+    /// text in its language (<see cref="TextlessCoordinateAt"/>): the one textless state there, refused for its text as
+    /// <see cref="RefuseTextless"/> refuses it, with the digest asked beside its own; several, <c>ambiguous_identifier</c>
+    /// naming each by its address, since none of them is the one the permalink named. Never <c>identifier_unknown</c>, and never
+    /// <c>pinned_digest_mismatch</c>, whose current link would open no text.
+    /// </summary>
+    private V3PlatformOperationOutcome RefuseAtTextlessCoordinate(
+        V3PlatformOperationRequest request,
+        string identifier,
+        DateTimeOffset observedAt,
+        IReadOnlyList<LuxembourgIndexCatalogueState> rows,
+        string date,
+        string requestedDigest)
+    {
+        if (rows.Count == 1)
+        {
+            return RefuseTextless(request, observedAt, rows[0], date, bound: null, requestedDigest);
+        }
+
+        using var ambiguous = JsonSerializer.SerializeToDocument(new
+        {
+            requested_identifier = identifier,
+            candidates = rows.Select(RowAddress).ToArray(),
+        });
+        return V3PlatformOperationOutcome.Refused(
+            Context("refusal", observedAt),
+            new V3PlatformOperationRefusal(request, "ambiguous_identifier", ambiguous.RootElement));
+    }
+
+    /// <summary>
+    /// A work's catalogue for a permalink's question: the one kept for the mount (<see cref="CatalogueOf"/>) when the work holds
+    /// a state with text or is kept already, else read for this question alone and not kept, so a permalink naming a key the
+    /// index holds no text of never grows the mount's cache.
+    /// </summary>
+    private CatalogueWork PermalinkCatalogueOf(string workKey) =>
+        _catalogueWorks.TryGetValue(workKey, out var kept) ? kept
+        : _reader!.ResolveWorkStates(workKey).Count > 0 ? CatalogueOf(workKey)
+        : CatalogueWork.Of(_reader!, workKey);
 }

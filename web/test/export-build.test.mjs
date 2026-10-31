@@ -337,7 +337,7 @@ test("with one of the owner's switches on, every export carries the text's right
   const pins = state.articles.slice(0, 2).map((article) => ({ stateSha256: state.stateSha256, publisherId: article.publisherId }));
   const model = composeExport({ view, pinned: pins, observedAt: OBSERVED });
   const sentence = fillText(LIVE_CHROME.en.reading.disclosure.lu_rights_publisher_catalogue_only_file_silent, { date: "2026-10-11" });
-  assert.match(sentence, /served on the publisher's catalogue alone, which declares CC BY 4\.0 for this file, as observed on 2026-10-11\.$/);
+  assert.match(sentence, /^This file's metadata states no licence\. The text of this file is served on the basis of the publisher's catalogue alone: a licence row in that catalogue declares CC BY 4\.0 for this file, on a page that this site read on 2026-10-11\.$/);
   const said = { code: "lu_rights_publisher_catalogue_only_file_silent", licence_page_sha256: "a".repeat(64), licence_page_observed_on: "2026-10-11", licence_page_observed_live: true, sentence };
 
   const json = JSON.parse(exportJson(model));
@@ -356,7 +356,7 @@ test("with one of the owner's switches on, every export carries the text's right
   const pdf = Buffer.from(exportPdf(model)).toString("latin1");
   const words = (text) => text.replace(/\s+/g, " ");
   const runs = words([...pdf.matchAll(/\(((?:\\[\s\S]|[^\\)])*)\) Tj/g)].map((match) => match[1]).join(" "));
-  for (const fragment of ["served on the publisher", "catalogue alone, which declares CC BY 4.0 for this file, as observed on 2026-10-11."]) {
+  for (const fragment of ["The text of this file is served on the basis of the publisher", "catalogue alone: a licence row in that catalogue declares CC BY 4.0 for this file, on a page that this site read on 2026-10-11."]) {
     assert.ok(runs.includes(fragment), `the PDF says: ${fragment}`);
   }
   assert.ok(runs.includes(`Licence page sha-256 ${"a".repeat(64)}.`), "each item names the licence page it rests on");

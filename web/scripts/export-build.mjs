@@ -92,7 +92,7 @@ export const CSV_COLUMNS = Object.freeze([
 /**
  * A rights disclosure as an export carries it (`readDisclosure`'s view, `reading-answer.mjs`): its code, the licence page it
  * rests on and when that page was observed, and the platform's English sentence for it, the reading page's (the L5 single-channel
- * disclosure; drafts the owner revises). Null for null.
+ * disclosure, final under the owner's standing yes of 2026-10-27 to the driver's recommendation). Null for null.
  */
 export function exportDisclosure(disclosure) {
   if (disclosure === null || disclosure === undefined) return null;

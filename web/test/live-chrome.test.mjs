@@ -229,3 +229,34 @@ test("the table answers only for a reviewed interface language", () => {
     assert.ok(text.length > 0 && (SEPARATORS.has(path) || text.trim() === text), `${path}: ${JSON.stringify(text)}`);
   }
 });
+
+test("the L5 single-channel disclosures are final, in the review's words: the file's licence metadata, one licence row of the publisher's catalogue, the page and the day this site read it (the owner's standing yes of 2026-10-27; the addendum of 2026-10-28)", () => {
+  // Byte for byte as the review's addendum of 2026-10-28 gave them (a no-break space before the French colon).
+  const finals = {
+    en: {
+      lu_rights_publisher_catalogue_only_file_silent: "This file's metadata states no licence. The text of this file is served on the basis of the publisher's catalogue alone: a licence row in that catalogue declares CC BY 4.0 for this file, on a page that this site read on {date}.",
+      lu_rights_publisher_catalogue_only_own_block_empty: "This file's own metadata names it but does not state its licence. The text of this file is served on the basis of the publisher's catalogue alone: a licence row in that catalogue declares CC BY 4.0 for this file, on a page that this site read on {date}.",
+      lu_rights_publisher_catalogue_only_file_names_other_identity: "This file's licence statement names another file, not this file. The text of this file is served on the basis of the publisher's catalogue alone: a licence row in that catalogue declares CC BY 4.0 for this file, on a page that this site read on {date}.",
+    },
+    fr: {
+      lu_rights_publisher_catalogue_only_file_silent: "Les métadonnées de ce fichier n’indiquent aucune licence. Le texte de ce fichier est communiqué sur la seule base du catalogue de l’éditeur : une ligne de licence de ce catalogue déclare la licence CC BY 4.0 pour ce fichier, sur une page que ce site a lue le {date}.",
+      lu_rights_publisher_catalogue_only_own_block_empty: "Les métadonnées propres de ce fichier le désignent sans indiquer sa licence. Le texte de ce fichier est communiqué sur la seule base du catalogue de l’éditeur : une ligne de licence de ce catalogue déclare la licence CC BY 4.0 pour ce fichier, sur une page que ce site a lue le {date}.",
+      lu_rights_publisher_catalogue_only_file_names_other_identity: "La mention de licence de ce fichier désigne un autre fichier, et non ce fichier. Le texte de ce fichier est communiqué sur la seule base du catalogue de l’éditeur : une ligne de licence de ce catalogue déclare la licence CC BY 4.0 pour ce fichier, sur une page que ce site a lue le {date}.",
+    },
+  };
+  for (const language of ["en", "fr"]) {
+    const disclosure = LIVE_CHROME[language].reading.disclosure;
+    assert.deepEqual({ ...disclosure }, finals[language], `${language}: the three final sentences, and no other`);
+    for (const [code, sentence] of Object.entries(disclosure)) {
+      assert.equal(sentence.split("{date}").length, 2, `${language} ${code}: the day the page was read, once`);
+      assert.match(sentence, language === "en" ? /a licence row in that catalogue declares CC BY 4\.0 for this file, on a page that this site read on \{date\}\.$/
+        : /une ligne de licence de ce catalogue déclare la licence CC BY 4\.0 pour ce fichier, sur une page que ce site a lue le \{date\}\.$/, `${language} ${code}`);
+    }
+  }
+  // The drafts' words the review withdrew are said nowhere: "served on" a party, "sur la seule foi" beside "Seuls font foi",
+  // a page "de celui-ci" (the file's), and "another publication", which the code does not check.
+  const english = JSON.stringify(LIVE_CHROME.en.reading.disclosure);
+  const french = JSON.stringify(LIVE_CHROME.fr.reading.disclosure);
+  for (const withdrawn of ["It is served on the publisher's catalogue", "another publication", "as observed on"]) assert.ok(!english.includes(withdrawn), withdrawn);
+  for (const withdrawn of ["sur la seule foi", "page de celui-ci", "Il est communiqué sur", "une autre publication", "tel qu’observé"]) assert.ok(!french.includes(withdrawn), withdrawn);
+});
