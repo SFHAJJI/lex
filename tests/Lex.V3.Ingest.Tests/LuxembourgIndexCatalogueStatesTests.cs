@@ -38,6 +38,42 @@ public sealed class LuxembourgIndexCatalogueStatesTests
         private readonly List<LuxembourgIndexBuilder.CatalogueBody> _bodies = [];
         private readonly List<LuxembourgIndexBuilder.CatalogueRecord> _records = [];
         private readonly Dictionary<string, string> _bodyDigests = new(StringComparer.Ordinal);
+        private readonly List<LuxembourgIndexBuilder.ProjectionRelation> _relations = [];
+        private readonly List<LuxembourgIndexBuilder.ProjectionRelationFamily> _families = [];
+
+        /// <summary>The evidence digest every relation of the harness was read from, as one run's are (its one observation).</summary>
+        internal static string RelationEvidence { get; } = Digest("evidence:relations");
+
+        /// <summary>One relation the publisher asserts, by its JOLux local name, as the run's relation family delivers it.</summary>
+        internal Harness Relation(string subject, string predicate, string target)
+        {
+            _relations.Add(new(subject, LuxembourgIndexBuilder.JoluxNamespace + predicate, target, RelationEvidence));
+            return this;
+        }
+
+        /// <summary>
+        /// The acquisition state of the relation predicates index 10 projects (the four act-level ones and the six impact parts):
+        /// acquired in full by the three legislative families, or, with <paramref name="state"/>, not, with its reason.
+        /// </summary>
+        internal Harness RelationFamilies(string state = "acquired_complete")
+        {
+            foreach (var local in new[]
+                     {
+                         "modifies", "repeals", "rectifies", "modifiedTempBy", "impactFromLegalResource", "impactToLegalResource",
+                         "impactToExpression", "legalResourceImpactHasType", "impactConsolidatedBy", "impactConsolidatedByExpression",
+                     })
+            {
+                _families.Add(state == "acquired_complete"
+                    ? new(LuxembourgIndexBuilder.JoluxNamespace + local, state, ["legislative-code-g", "legislative-loi-g", "legislative-rgd-g"], null)
+                    : new(LuxembourgIndexBuilder.JoluxNamespace + local, state, [], "no relation-assertions family was designated for this run"));
+            }
+
+            return this;
+        }
+
+        /// <summary>Index 10's relation rows of the harness, by the builder's own projection over its relations, families and facts.</summary>
+        internal LuxembourgIndexBuilder.PublisherRelationRows PublisherRows =>
+            LuxembourgIndexBuilder.ProjectPublisherRelations(_relations, _families, Facts);
 
         internal static string Digest(string value) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
@@ -192,7 +228,8 @@ public sealed class LuxembourgIndexCatalogueStatesTests
             var built = LuxembourgIndexBuilder.WriteIndex(
                 corpusRef,
                 _members.OrderBy(static row => row.ObjectRefSha256, StringComparer.Ordinal).ToArray(),
-                articles, states, intervals, [], Facts, bodyDigests, predecessor, builtAt, derivedAt, null, out var refusal, out var detail);
+                articles, states, intervals, [], Facts, bodyDigests, predecessor, builtAt, derivedAt, null, out var refusal, out var detail,
+                PublisherRows);
             Assert.IsNotNull(built, $"{refusal}: {detail}");
             return built;
         }
