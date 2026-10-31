@@ -473,7 +473,8 @@ public sealed class V3CorpusCitationMountTests
             {
                 "no type of relationship is assessed or held for a reference: relationship_type_assessed is false",
                 "no legal effect of a reference is assessed or held: current_legal_effect_assessed is false",
-                "the publisher's structured relation records (modifies, repeals, based on, transposes) are not held by this index, so these edges are only the references written in the text",
+                // On lex-v3-luxembourg-index/10 the publisher's relation records are held, and served by relations.
+                V3CorpusMount.ReferencesStructuredRelationsTen,
                 "which texts refer to this work is not answered here: it is the inverse of these edges and its own operation",
             },
             notHeld.Select(static row => row.GetProperty("reason").GetString()).ToArray());
