@@ -30,7 +30,7 @@ run today. It names no person: "the owner" and "the driver" are roles.
 ## 2. The platform
 
 - **Hosting** (R113): Azure Container Apps, app `ca-lex-v3` in `rg-lex-v3`, France Central, environment `cae-lex-v3`. One
-  server answers the pages, `/api/v3` and `/mcp` on one origin. One replica of 1 vCPU and 2 GiB per active revision; the
+  server answers the pages, `/api/v3` and `/mcp` on one origin. One replica of 2 vCPUs and 4 GiB per active revision (1 vCPU and 2 GiB until Release 2, 2026-10-31); the
   indexes are inside the signed image. Multiple-revision mode: a release is a new revision, given traffic only by
   promotion.
 - **No record of readers** (R109, R110): the server clears its logging providers and writes nothing about a request; the
@@ -178,7 +178,7 @@ Not yet watched from outside: latency budgets, error rates and restarts (R107); 
 
 ## 7. Money
 
-- **Measured costs:** one active replica of 1 vCPU and 2 GiB is about 23 to 26 EUR a month; a second active revision
+- **Measured costs:** one active replica of 1 vCPU and 2 GiB was about 23 to 26 EUR a month; the 2 vCPU and 4 GiB replica since Release 2 is expected at about twice that, to be read from the budget; a second active revision
   during a release doubles that while it lasts. An idle Flex profile cost about 0.09 EUR an hour, and a premium file share
   left behind about 10 EUR a week, until both were deleted: a build environment is deleted after each derive.
 - **The ceiling** (R114): 150 EUR a month over `rg-lex-v3`, the plan's N1 amount, with alerts at 50, 80 and 100 per cent
