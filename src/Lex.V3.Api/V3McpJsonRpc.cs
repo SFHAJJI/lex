@@ -66,7 +66,7 @@ internal static class V3McpJsonRpc
         "manifestation" => "The publisher's manifestations of a Luxembourg work's expressions with their formats and items, the retained one marked with its body digest.",
         "status_on" => "The publisher's force assertions about a Luxembourg work (its inForceStatus, dateEntryInForce and dateNoLongerInForce facts), verbatim, beside the state applicable on a date, with one fixed reading of the dates.",
         "browse" => "The Luxembourg works this mount holds, one ordered and paged list with their identifiers, languages, state dates and the publisher's document types; filter by type or language.",
-        "ask" => "The contained assistant (Decisions 51 and 91): every question answers the typed presentation result assistant_v3_unavailable, naming the deterministic operations that answer from held law; no model answers.",
+        "ask" => "The assistant, switched off on Lex: every question answers the typed presentation result assistant_v3_unavailable (Decisions 51 and 91), naming the deterministic operations that answer from held law; no model answers.",
         "events" => "The Luxembourg event log, polled by cursor, at least once: a genesis log holds one first_sighting per held state; a chained log adds each later build's comparison events; each build's time, never an observation time.",
         "answer_drift" => "The past dated answers a publisher revision invalidated, enumerated from the log's revising events; a genesis log holds none, and the answer says why rather than asserting that nothing drifted.",
         "as_observed" => "The state of a Luxembourg act applicable on a date (publisher) as one build of the mounted log held it, named by that build's index digest, with its build time as an upper bound on observation; a time refuses, since no observation time is held.",
@@ -170,7 +170,7 @@ internal static class V3McpJsonRpc
                 "initialize" => Result(id, Initialize()),
                 // The MCP specification's ping (2025-06-18, basic utilities): the receiver answers promptly with an empty result.
                 "ping" => Result(id, EmptyResult()),
-                "tools/list" => Result(id, ToolsList()),
+                "tools/list" => Result(id, ToolsList(corpusMount?.Assistant.IsOn == true)),
                 "tools/call" => await ToolsCallAsync(
                         id, parameters, host, corpusMount, utcNow, requestReference, rateLimitedRetryAfterSeconds, cancellationToken)
                     .ConfigureAwait(false),
@@ -307,7 +307,13 @@ internal static class V3McpJsonRpc
 
     private static JsonElement EmptyResult() => Empty();
 
-    private static JsonElement ToolsList()
+    /// <summary>The assistant's tool description while it is switched on (the owner's order of 2026-10-28): what ask does then.</summary>
+    internal const string AskOnDescription =
+        "The assistant, switched on as a labelled preview: the question, with obvious identifiers masked by code, is sent to the configured " +
+        "processor, which only plans which operations to run; code runs them, decides the verdict and writes every sentence from fixed " +
+        "wording; the answer is an answer_dossier (or the refusal advice_boundary), and a question it cannot answer gets assistant_v3_unavailable.";
+
+    private static JsonElement ToolsList(bool assistantOn)
     {
         var writer = new ArrayBufferWriter<byte>();
         using (var jsonWriter = new Utf8JsonWriter(writer))
@@ -320,7 +326,7 @@ internal static class V3McpJsonRpc
                 using var requestSchema = JsonDocument.Parse(V3PlatformSchemaExporter.ExportRequestUtf8(binding.OperationId));
                 jsonWriter.WriteStartObject();
                 jsonWriter.WriteString("name", binding.OperationId);
-                jsonWriter.WriteString("description", DescriptionOf(binding.OperationId));
+                jsonWriter.WriteString("description", assistantOn && binding.OperationId == "ask" ? AskOnDescription : DescriptionOf(binding.OperationId));
                 jsonWriter.WritePropertyName("inputSchema");
                 requestSchema.RootElement.GetProperty("properties").GetProperty("parameters").WriteTo(jsonWriter);
                 jsonWriter.WriteEndObject();

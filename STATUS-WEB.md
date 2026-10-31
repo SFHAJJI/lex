@@ -4,6 +4,124 @@ Updated 2026-10-31. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The assistant, built to its contract and switched off: answer_dossier/1, the advice boundary, the gates (writer/assistant, 2026-10-28)
+
+D91's containment ends when this slice merges after review (R30): the answer_dossier/1 slice (S4-A04) and the
+advice-boundary slice (S4-A05), checked against a written contract, `docs/ANSWER-DOSSIER-1.md`. **Ending the containment
+does not switch the assistant on.** The switch is off by default and the operator off-switch always wins, so `ask` answers
+the switched-off card until the driver sets the switch (the owner's order below).
+- **What is built**:
+  - the contract and its types (`src/Lex.V3.Contracts/Platform/Assistant/`);
+  - the deterministic parsers: language, dates and ranges, R15's pronoun-blind function cues, and the R33 mask;
+  - the plan grammar and its validator;
+  - the pipeline through the existing operations, with at most two typed follow-ups (R35);
+  - the verdict computed by code, biased to refusal;
+  - the composer: law first, the boundary line, the handoff (R45(b));
+  - the closed template set in French and English, and the gates in the code path;
+  - the handoff registry (four entries, every one "not yet reviewed by a person", no adviser);
+  - the runtime: the switch, the off-switch, ask's own limit of 20 a minute, a 0.02 EUR per-answer ceiling, a 20 EUR monthly
+    cap, and telemetry in buckets;
+  - the hidden web panel (`web/app/AssistantPanel.jsx`, imported by no page).
+- **The machine gates' harness** (V3AssistantMountTests): quote fidelity by an independent checker, zero non-template
+  sentences by a walk of its own, and byte-identical replay under two clocks, each with a deliberate-failure control. It runs
+  over a replay set that is **drafted by an agent; not D4 or D1; not a switch-on gate**.
+- **The driver's decisions of 2026-10-28** (under the owner's standing yes of 2026-10-27):
+  1. The ask/1 request schema stays frozen. The answering locale, the follow-up context and replay are typed pipeline inputs
+     the tests drive; extending the schema is the switch-on release's first step.
+  2. The switched-off card's sentence, which became untrue on merge ("until … integrated"), now reads "The assistant is
+     switched off on Lex; search, reading and the other operations work."
+     - Its French is the template `presentation.assistant_unavailable`.
+     - The MCP description of ask no longer says "contained".
+     - Only the ask rows of `answer-samples.json` and `envelope-samples.json` move. The legacy and EU base answers record
+       no ask row, and the registry digest does not move.
+  3. R14's master says "here is who can advise you", and no adviser may be invented. The answer therefore says "Lex does
+     not yet name who can advise you: that list must first be checked by a person."
+- **Reversible driver decisions, recorded here**:
+  - the presentation results keep the envelope's `point` slot, as the card always has; they are counted apart;
+  - a refusal travels as the registry's `advice_boundary`, whose payload carries the whole answer;
+  - an undetermined question language falls to English;
+  - the handoff role `official_source` is added beside R42's four;
+  - `answer_with_enrichment` is never emitted;
+  - an invalid plan, a failed planner or a failed gate gets the switched-off card.
+- **The owner's order of 2026-10-28, recorded by the driver: the assistant must work end to end for a public
+  demonstration.** It ships switched off, and the driver switches it on once the machine gates pass on the real model. What
+  this adds:
+  - `AzureOpenAiAssistantPlanner`, over an Azure OpenAI chat-completions deployment with strict structured outputs. The plan's
+    wire schema is generated from the grammar, and the validator still judges, with no repair.
+    - Its configuration comes from the environment only (`LEX_ASSISTANT_ENDPOINT`, `_DEPLOYMENT`, `_API_VERSION`, and
+      `_KEY` from a Container Apps secret). With no endpoint there is no planner.
+    - It sends only the masked question and the opaque references.
+    - Its deadline is about 6 s, and any failure gives the switched-off card.
+    - The response's `usage` is counted toward the caps.
+    - Its system prompt is a versioned file (`src/Lex.V3.Api/assistant-planner-prompt.md`).
+  - `LEX_V3_ASSISTANT_PREVIEW=unreviewed`, the explicit acknowledgement that lets the switch take effect while the people's
+    reviews are not done. While they are not done, every answer and the panel carry "Preview: not yet reviewed by a lawyer or
+    by independent annotators." (French: "Phase d'essai : l'assistant n'a pas encore été examiné…", reviewed).
+  - The opt-in live gates (`LEX_ASSISTANT_GATES_LIVE=1`, never in CI): five runs per drafted case, with a report outside
+    the repository.
+  - Draft processor sentences, for the panel under R44's notice and for the privacy notice, shown only when the assistant is
+    switched on.
+  - `PublicRequestRecordingTests` now pins the planner as the public process's one network client, in its one file.
+- **The driver's record of 2026-10-31:** "The owner's order of 2026-10-28 (the whole app, the assistant included, within 48
+  hours) and the standing yes of 2026-10-27 supersede R30's, R33's, R36's and R43's people checks, for a labelled preview
+  only." Those checks stay listed below as owed before the preview label can be removed. Retention, the Microsoft entity and
+  the prices stay TODO until the resource exists (the owner first registers Microsoft.CognitiveServices); the placeholders are
+  marked, and the driver confirms the privacy sentences before switching on.
+- **The page and the home entry** (code only): `/{fr,en}/assistant` and one more home-page link, both only while the server
+  reports the assistant on. The flag is a member `assistant` the coverage answer carries only then, so no recorded base answer
+  moves and the home page is byte-identical while it is off. While off, the page and its script are paths the site does not
+  hold, answered as any unknown page (`V3WebRootAssistantTests`; `live-home.test.mjs` and `assistant-panel.test.mjs` cover
+  both states). The live panel asks `ask` with the question alone, and a card while on says the assistant could not answer
+  this question (`AskFailedReason`), never that it is switched off.
+- **For the owner and the driver before the switch is set** (the French reviewer raised 1 and 2; they are the owner's to
+  decide, and the code does not decide them):
+  1. Switching on with the preview line set means switching on before R30's D4 gates, R33's legal read, R36's avocat and
+     second annotator, and R43's qualified review. The owner's order supersedes those for the demonstration; the record
+     should say so.
+  2. Microsoft's abuse monitoring "may keep data up to 30 days unless modified abuse monitoring applies" does not meet R33's
+     "no retention". **TODO (driver):** confirm the deployment's actual case (modified abuse monitoring approved or not) and
+     state only that case.
+  3. **TODO (driver):** name the contracting Microsoft entity under the data processing terms as the processor.
+  4. **TODO (driver):** set the token prices from the deployment's price list. The defaults are 5 and 20 EUR per million.
+  5. **TODO (driver):** once the assistant is on, the privacy page's sentence that Lex holds nothing it could show, correct
+     or erase needs a caveat for what the processor may keep.
+- **French**: an independent AI reviewer checked every French template and panel string in four rounds. 33 of the 85 entries
+  changed in round one; round two approved the seven new EU forms; rounds three and four reviewed the preview and processor
+  sentences. The finals were applied byte for byte. This is not R43's
+  qualified-person review, and the code says so (`QualifiedReviewComplete` is false).
+- **What remains for people and the owner before switch-on** (no agent can do these):
+  1. A written legal read: GDPR arts. 6 and 9, AI Act art. 50(1) (R33).
+  2. An EU-region model under a processing agreement, with no retention and no training, or a self-hosted model; the
+     processor named in the privacy notice (R33, R49).
+  3. A Luxembourg avocat's review of the D4 refusal and split gold set, the advice templates and the not-legal-advice line
+     (R36; O4).
+  4. A qualified person's review of every French and English template (R43).
+  5. D4 from the hashed catalogue two, and D1's 320 fresh V3 queries, written by people, with at least ten paraphrases per
+     row of sections L and M per language, and a second, independent annotator on 15 to 20 percent (R36, R37).
+  6. The handoff registry's advisers by theme, with cost, limits and languages; the high-stakes blocks; a reviewer and
+     date for every entry; the weekly link check (R42).
+  7. The owner's sign-off, the spend cap at the provider (O22 recommends about 20 EUR a month), and the R44 notice
+     wording (O22, O4).
+  - Then the switch-on release, on its exact tuple:
+    - the staged ask inputs, with the base answers recorded again;
+    - the provider adapter;
+    - the D4 gates, five runs per case;
+    - quote fidelity 1.0, zero non-template sentences and byte-identical replay;
+    - the budget gate (p95 3 s and 10 s), with R39's grader reported and never gating;
+    - the panel's flag.
+- **Counts** (2026-10-31, after merging integration at 57fe2990): build 0 warnings; Lex.V3.Tests 3,426 (3,420 passed,
+  6 skipped), the censuses re-derived (661 candidates, 286 vocabularies, 224 guarded types, 98 registries, 206 fully
+  declared); the touched Ingest classes 106 (101 passed, 5 skipped behind their variables); the two samples moved by one
+  line each (the ask row's sentence; the registry digest did not move); no base answer moved, so none was recorded again;
+  web 1,506 (1,499 passed, 3 skipped; the two WSL/awk tests of `image-run` pass from Git's shell, 5 of 5); the V3 tree
+  verified across 1,845 paths. The live gates were not run: they need the deployment.
+- **Review and repair (#1013, one round).** The on-path card now says truly that the question was read and sent masked to
+  the processor (`question_read: true`, `AskQuestionReadNote`), and the MCP tool list describes ask by its state; the off
+  card's bytes and the two sample files are unchanged. The home page bundles nothing of the panel's copy (the link's name
+  comes from the chrome tables), and the built `.js` bundles are scanned for it. Stale statements fixed; ask's buckets swept
+  once a minute; a reversed span refused, not thrown. After the repair: Lex.V3.Tests 3,427 (0 failed), Ingest touched
+  classes 106 (0 failed), web 1,510 (0 failed), the tree verified.
+
 ## Release 2's candidate never listened in time: the startup deadline and the replica (sole driver, 2026-10-31)
 
 Release 2 (v3-20261028T142935Z-7583e4d0032d, built at 7583e4d0 over derive-r2) was deployed as a candidate with no traffic.

@@ -67,6 +67,18 @@ if (!maintenance)
 
         // What search's exact references read on their first use, read once here, so no request pays it or waits behind it.
         corpusMount?.Warm();
+
+        // The assistant (R30; the owner's order of 2026-10-28): LEX_V3_ASSISTANT exactly `on`; LEX_V3_ASSISTANT_OFF, the operator
+        // off-switch, unset or empty; LEX_V3_ASSISTANT_PREVIEW exactly `unreviewed` while the people's reviews are not done; and
+        // a planner, which exists only when LEX_ASSISTANT_ENDPOINT and its companions name an Azure OpenAI deployment. All are
+        // read once here. Anything less, and ask answers the switched-off card.
+        corpusMount?.UseAssistant(V3AssistantRuntime.FromConfiguration(
+            Environment.GetEnvironmentVariable(V3AssistantRuntime.SwitchVariable),
+            Environment.GetEnvironmentVariable(V3AssistantRuntime.OffSwitchVariable),
+            string.Equals(Environment.GetEnvironmentVariable(V3AssistantRuntime.SwitchVariable), "on", StringComparison.Ordinal)
+                ? AzureOpenAiAssistantPlanner.FromEnvironment(Environment.GetEnvironmentVariable)
+                : null,
+            Environment.GetEnvironmentVariable(V3AssistantRuntime.PreviewVariable)));
     }
     catch (Exception exception)
     {

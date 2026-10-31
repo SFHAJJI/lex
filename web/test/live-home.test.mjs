@@ -295,3 +295,31 @@ test("under the home page's box and the 404 page's, a line says a search by word
   assert.equal(liveChrome("fr").search.searchScope, "La recherche par mots porte sur le droit luxembourgeois. Un ELI, un numéro CELEX, une référence au Mémorial, un permalien ou la citation d’un article d’un acte, avec ou sans date, ouvre cet acte, luxembourgeois ou de l’UE, lorsque ce site le détient. Pour interroger un acte de l’UE, désignez-le par son numéro CELEX sur la {link}.");
   assert.equal(liveChrome("fr").search.searchPage, "page de recherche");
 });
+
+test("the assistant's entry exists only while the server reports the assistant on, and the home page is byte-identical otherwise (R47, R52)", () => {
+  // Off: a coverage answer without the capability flag (every recorded answer), the facts it gives and the page rendered
+  // from them, are exactly what they were before the flag existed: no member, no link, no mention of the assistant.
+  const off = homeFacts(COVERAGE, LIVE_CONTRACT);
+  assert.equal(Object.hasOwn(off, "assistant"), false, "the facts carry no assistant member while it is off");
+  for (const html of [rendered(COVERAGE), renderLiveHomePage()]) {
+    assert.doesNotMatch(html, /data-home-assistant|\/en\/assistant/, "no link, button or route to the assistant while it is off");
+  }
+  assert.deepEqual(readHomeFactsValue(JSON.parse(JSON.stringify(off))), off, "the facts read back are the same facts");
+  assert.equal(readHomeFactsValue({ ...off, assistant: "on" }), null, "a flag that is not exactly true is not the facts");
+
+  // On: the server's coverage answer carries the flag, the facts carry `assistant: true`, and the links gain one entry, to the
+  // assistant's page, by the panel's own name for it.
+  const on = homeFacts(coverageAt("2026-10-15T10:00:00.0000000Z", (value) => ({ ...value, assistant: { state: "on", operation_id: "ask", page: "assistant", preview: true } })), LIVE_CONTRACT);
+  assert.equal(on.assistant, true);
+  assert.deepEqual(readHomeFactsValue(JSON.parse(JSON.stringify(on))), on);
+  const html = renderLiveHomePage({ facts: on });
+  const links = /<nav aria-label="([^"]*)" class="home-links" data-home-links="">([\s\S]*?)<\/nav>/.exec(html);
+  const entries = [...links[2].matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map(([, href, text]) => [href, text]);
+  assert.deepEqual(entries.at(-1), ["/en/assistant", "Assistant"], "one more link, last, to the assistant's page");
+  assert.equal(entries.length, 5);
+  assert.ok(html.includes('data-home-assistant=""'));
+  // And the same facts without the flag render the page without it: the flag is the only difference.
+  const { assistant, ...without } = on;
+  assert.equal(assistant, true);
+  assert.equal(renderLiveHomePage({ facts: without }).includes("/en/assistant"), false);
+});

@@ -60,6 +60,11 @@ public sealed class GuardedConstructionCensusTests
     {
         var expected = new[]
             {
+                "Lex.V3.Api.AzureOpenAiAssistantPlanner: constructor internal instance "
+                    + "Lex.V3.Api.AzureOpenAiAssistantPlanner::.ctor, "
+                    + "constructor private static Lex.V3.Api.AzureOpenAiAssistantPlanner::.cctor, "
+                    + "method internal static "
+                    + "Lex.V3.Api.AzureOpenAiAssistantPlanner::FromEnvironment",
                 "Lex.V3.Api.SyntheticApiState: constructor private instance "
                     + "Lex.V3.Api.SyntheticApiState::.ctor, "
                     + "constructor private static Lex.V3.Api.SyntheticApiState::.cctor, "
@@ -68,6 +73,10 @@ public sealed class GuardedConstructionCensusTests
                 "Lex.V3.Api.SyntheticIndexResolver: constructor private instance "
                     + "Lex.V3.Api.SyntheticIndexResolver::.ctor, "
                     + "method public static Lex.V3.Api.SyntheticIndexResolver::Open",
+                "Lex.V3.Api.V3AssistantRuntime: constructor internal instance "
+                    + "Lex.V3.Api.V3AssistantRuntime::.ctor, "
+                    + "constructor private static Lex.V3.Api.V3AssistantRuntime::.cctor, "
+                    + "method internal static Lex.V3.Api.V3AssistantRuntime::FromConfiguration",
                 "Lex.V3.Api.V3ClientLimiter: constructor internal instance "
                     + "Lex.V3.Api.V3ClientLimiter::.ctor, "
                     + "constructor private static Lex.V3.Api.V3ClientLimiter::.cctor",
@@ -83,19 +92,24 @@ public sealed class GuardedConstructionCensusTests
                     + "method public static Lex.V3.Api.V3CorpusMount::OpenAsync",
                 "Lex.V3.Api.V3PageRenderer: constructor private instance Lex.V3.Api.V3PageRenderer::.ctor, "
                     + "method internal static Lex.V3.Api.V3PageRenderer::Open",
+                    // The names record's gate on every answer (R92; V3CorpusMount.Names.cs).
+                    // R77: an act only the catalogue holds is refused with its record (V3CorpusMount.CatalogueRecords.cs).
+                    // EU search over the act's time view (the audit of 2026-10-27, gap 5; V3CorpusMount.EuropeSearch.cs).
+                    // An EU act outside the mounted EU population, refused out of scope (R80; V3CorpusMount.Scope.cs).
+                    // ExecuteFor's dispatch names each operation's method, so its one lambda is the gates'.
                 "Lex.V3.Api.V3PlatformOperationOutcome: constructor private instance "
                     + "Lex.V3.Api.V3PlatformOperationOutcome::.ctor, "
                     + "method internal instance Lex.V3.Api.V3CorpusMount::RefuseOutOfScope, "
                     + "method internal instance Lex.V3.Api.V3CorpusMount::Unserved, "
-                    // The names record's gate on every answer (R92; V3CorpusMount.Names.cs).
                     + "method internal instance Lex.V3.Api.V3CorpusMount::WithNamesWithheld, "
                     + "method internal static Lex.V3.Api.V3ApiHandler::ExecuteFor, "
                     + "method internal static Lex.V3.Api.V3ApiHandler::RateLimitedOutcome, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::AnchorNotInVersion, "
+                    + "method private instance Lex.V3.Api.V3CorpusMount::AnswerOf, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::AsOfEurope, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::AsOfEuropeOf, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::AsOfEuropePinned, "
-                    // R77: an act only the catalogue holds is refused with its record (V3CorpusMount.CatalogueRecords.cs).
+                    + "method private instance Lex.V3.Api.V3CorpusMount::AskAssistant, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::CatalogueOnlyRefusal, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::CatalogueRecordRefusal, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::DossierEurope, "
@@ -105,7 +119,6 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::EvidenceBundleEuropeOf, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::EvidenceBundleEuropePinned, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::LocateEuropeSeed, "
-                    // EU search over the act's time view (the audit of 2026-10-27, gap 5; V3CorpusMount.EuropeSearch.cs).
                     + "method private instance Lex.V3.Api.V3CorpusMount::LocateEuropeSeedForSearch, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::LocateEuropeSeedForTime, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::LocateEuropeWork, "
@@ -123,8 +136,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNamesWithheld, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNoVersionForDate, "
-                    // An EU act outside the mounted EU population, refused out of scope (R80; V3CorpusMount.Scope.cs).
-                    + "method private instance Lex.V3.Api.V3CorpusMount::RefuseOutsideEuropePopulation, "
+                    + "method private instance "
+                    + "Lex.V3.Api.V3CorpusMount::RefuseOutsideEuropePopulation, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseOutsideScope, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefusePageNotInVersion, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseTextless, "
@@ -178,7 +191,6 @@ public sealed class GuardedConstructionCensusTests
                     + "method public instance Lex.V3.Api.V3CorpusMount::Verify, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Refused, "
                     + "method public static Lex.V3.Api.V3PlatformOperationOutcome::Success, "
-                    // ExecuteFor's dispatch names each operation's method, so its one lambda is the gates'.
                     + "3 compiler-generated",
                 "Lex.V3.Api.V3PlatformSchemaDocuments: constructor private instance "
                     + "Lex.V3.Api.V3PlatformSchemaDocuments::.ctor, "
@@ -340,6 +352,83 @@ public sealed class GuardedConstructionCensusTests
                     + "Lex.V3.Contracts.Index.V3IndexCapabilityManifest::.ctor, "
                     + "method public static "
                     + "Lex.V3.Contracts.Index.V3IndexCapabilityManifestArtifact::ParseAndVerify",
+                "Lex.V3.Contracts.Platform.Assistant.V3AnswerClaim: constructor private instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AnswerClaim::.ctor, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::DisclosureClaim, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::PlanLines, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::StepLine, "
+                    + "method public static Lex.V3.Contracts.Platform.Assistant.V3AnswerClaim::Bind, "
+                    + "1 compiler-generated",
+                "Lex.V3.Contracts.Platform.Assistant.V3AnswerDossier: constructor internal "
+                    + "instance Lex.V3.Contracts.Platform.Assistant.V3AnswerDossier::.ctor, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::Compose, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::Run",
+                "Lex.V3.Contracts.Platform.Assistant.V3AnswerTemplate: constructor private "
+                    + "instance Lex.V3.Contracts.Platform.Assistant.V3AnswerTemplate::.ctor, "
+                    + "constructor private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AnswerTemplate::.cctor, "
+                    + "method internal static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AnswerTemplate::Define, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AnswerTemplates::BuildAll, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AnswerTemplates::Get",
+                "Lex.V3.Contracts.Platform.Assistant.V3AskOutcome: by-ref-method public instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3ReplayResult::Deconstruct, "
+                    + "constructor private-protected instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AskOutcome::.ctor, "
+                    + "constructor public instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AskAnswered::.ctor, "
+                    + "constructor public instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AskPresented::.ctor, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::Answer",
+                "Lex.V3.Contracts.Platform.Assistant.V3AssistantPlan: by-ref-method public "
+                    + "instance Lex.V3.Contracts.Platform.Assistant.V3AnswerTrace::Deconstruct, "
+                    + "by-ref-method public instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3PlanValidation::Deconstruct, "
+                    + "constructor private instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPlan::.ctor, "
+                    + "method internal static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPlan::Create",
+                "Lex.V3.Contracts.Platform.Assistant.V3DossierBlock: by-ref-method public instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3DossierPart::Deconstruct, "
+                    + "constructor private-protected instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3DossierBlock::.ctor, "
+                    + "constructor public instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3ActionBlock::.ctor, "
+                    + "constructor public instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3ClaimBlock::.ctor, "
+                    + "constructor public instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3DisclosureBlock::.ctor, "
+                    + "constructor public instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3HandoffBlock::.ctor, "
+                    + "constructor public instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3QuestionSpanBlock::.ctor, "
+                    + "constructor public instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3QuoteBlock::.ctor, "
+                    + "constructor public instance "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3RefusalBlock::.ctor, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::Action, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::Claim, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::Handoffs, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::OfficialSources, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::OutcomeBlocks, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::QuoteBlocks, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline::RefusalBlocks, "
+                    + "10 compiler-generated",
                 "Lex.V3.Contracts.Platform.V3AuthoritativeClaim: constructor private instance "
                     + "Lex.V3.Contracts.Platform.V3AuthoritativeClaim::.ctor, "
                     + "constructor private instance "
