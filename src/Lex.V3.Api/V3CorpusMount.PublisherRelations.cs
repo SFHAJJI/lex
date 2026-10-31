@@ -176,7 +176,7 @@ internal sealed partial class V3CorpusMount
         var missing = held.Length - dated.Length;
         var latest = dated
             .OrderByDescending(static state => state.PublicationDate, StringComparer.Ordinal)
-            .ThenBy(static state => string.Equals(state.WorkKey, workKey, StringComparison.Ordinal) ? 0 : 1)
+            .ThenBy(state => string.Equals(state.WorkKey, workKey, StringComparison.Ordinal) ? 0 : 1)
             .ThenByDescending(static state => state.LegalResourceIri, StringComparer.Ordinal)
             .FirstOrDefault();
         // An impact record belongs to an amending act when both name the same act (its work, its act as published or a part of it).

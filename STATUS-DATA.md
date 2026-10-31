@@ -25,42 +25,57 @@ browser, no Azure; custody read only.
   the other act's identifier, title where the catalogue states one (R92 withholds a withheld act's), site address where this
   site answers for it, the acting act's publication date and entry into force as separate values; the families' states and
   what they do not see), served whole on every page and filtered by `direction`. The dossier carries the same and
-  `amended_after_consolidation` (R72): `notice` when an amending act's publication date is later than every consolidated
-  version's in the catalogue (held or not), or there is none, naming each act and its date, never its effect, with the
-  sentence; else `no_later_amending_act`, `undetermined` (a date it needs is not held), `no_amending_act_recorded` (said only
-  of a family acquired in full) or `not_acquired`. Temporary modifications and self-references do not raise it. On
+  `amended_after_consolidation` (R72, as the specification writes it; repaired after the review of #1009): `notice` when an
+  amending act was published after every consolidated version whose text Lex holds, of the act and of every act its received
+  impact records name as integrating its changes (a code, for the Code du travail's act), or none is held, naming each act and
+  its date, never its effect, with the sentence ("amends this act; no consolidated version Lex holds was published after it",
+  the latest held version, derived from the publisher's records); an amending act whose impact record names a held version as
+  integrating it is never later, and one naming more than one version is undecided and not named; else
+  `no_later_amending_act`, `undetermined` (a date it needs is not held, or the act it would name is undecided),
+  `no_amending_act_recorded` (said only of a family acquired in full) or `not_acquired`. The member says what it compared
+  (held versions, integrating work keys, acts integrated and undecided). Temporary modifications and self-references do not
+  raise it. On
   index /10 the `structured_relations` row of `relations`, `citation` and `cited_by` says where the records are served; on
   /9, /8 and /6 every answer is as before, no member added (the legacy base answers replay unchanged).
 - **Web.** The dossier's relation tabs (an in-page list of the kinds named, each a section; inverse views labelled derived;
   dates by role; the kinds read in full that name no act; what the family does not see) and R72's banner above the
   dossier, EN and FR. The independent French review (addendum "the dossier's relation tabs and R72's notice"): 37 forms, 22
-  approved, 15 changed in French, the English of 3 changed (the banner's heading is now "Amended, with no consolidated version
-  published since"); finals applied byte for byte. The banner's note is chosen by the `modifies` family alone, the Unscoped one
-  when that family is not read in full (the driver's decision).
+  approved, 15 changed in French, the English of 3 changed; finals applied byte for byte. The banner's note is chosen by the
+  `modifies` family alone, the Unscoped one when that family is not read in full (the driver's decision). After the review of
+  #1009 the independent French review of the 8 changed R72 forms (addendum "R72 held versions and integrating acts"): 3
+  approved, 5 changed in French, the English of 4 changed, applied byte for byte; the specification's "this law" is said "this
+  act" / "cet acte", since the banner stands on every class (a grand-ducal regulation is not a law); the heading is "Amended,
+  with no consolidated version Lex holds published since". A code's version is named by its coordinate, as another act's.
 - **Measured over run 15's custody** (`LuxembourgPublisherRelationsRun15Probe`, opt-in, read-only, 41 s, 374 MiB; no derive,
   no network): set G 95,431 rows (code 0, loi 32,148, rgd 63,283; both passes equal), none excluded (every subject is in the
   census of 260,236). Projected: modifies 15,078 (9,325 acting acts, 4,263 acted on, every one with its publication date),
   repeals 7,879 (3,425 to 7,768), modifiedTempBy 20 (11 to 18), rectifies 1, impacts 343 (all with both acts, 129 naming the
-  integrating consolidation, none ambiguous). R72 over derive-r2's 2,810 served acts: 380 amended (1,215 edges), 223 repealed;
-  notice 73 (65 with no consolidated version, 8 amended after the latest), undetermined 8, no later amending act 299, none
-  recorded 2,430. derive-r1 is no longer on this PC; over its 2,564 acts (states and facts exported read-only on 27 October,
-  the same rule in a script whose projection counts equal the probe's): 276 amended (617 edges), 174 repealed, notice 50 (43 +
-  7), undetermined 4 (the scope note's 54 counted those 4 as notices).
-- **Driver decisions (reversible).** R72 compares publication dates, strictly later, against every consolidation and code
-  state of the work in the catalogue (held or not); a consolidated version or an amending act with no publication date makes
-  it `undetermined` (the scope note's 54 counted those 4 as notices); only `jolux:modifies` raises it; a recorded edge is
+  integrating consolidation, none ambiguous). R72 over derive-r2's 2,810 served acts, with the repaired rule (held versions,
+  integrating acts): 380 amended (1,215 edges), 223 repealed; notice 281 (232 with no held consolidated version, 47 after the
+  latest held version of the act, 2 after the latest held version of an integrating act, the Code du travail's among them),
+  undetermined 0, no later amending act 99, none recorded 2,430; 2 acts have an integrating act and 4 amending acts are
+  integrated in a held version. The review's held-only measure of 281 is reproduced. Before the repair the same index gave 73
+  notices and 8 undetermined: the catalogue's textless consolidations (every consolidation of Release 2 is textless) hid the
+  notice on 208 acts, and their undated rows made 8 undetermined. derive-r1 is no longer on this PC.
+- **Driver decisions (reversible).** R72 follows the specification's sentence: publication dates, strictly later, against
+  every consolidation and code state whose text Lex holds, of the act and of the acts its received impact records name as
+  integrating its changes (the review of #1009, F1 and F2; the owner's standing yes); a held version or an amending act with
+  no publication date makes it `undetermined`, as does an impact record naming two integrating versions for an act it would
+  name; the specification's "this law" is said "this act" (the independent French review, blocking); only `jolux:modifies`
+  raises it; a recorded edge is
   listed whatever its family's state, and an absence is said only of a family acquired in full; the work's act as published
   (`{work}/jo`) is among its IRIs even when the catalogue dates no state of it; a multi-valued impact part is null and named.
-- **Tests** (Windows; merged with 7583e4d0). `dotnet build Lex.V3.slnx -c Release`: 0 warnings, 0 errors. `Lex.V3.Tests`
-  3,388 (3,382 passed, 6 skipped), the wire pin among them. Ingest: the Luxembourg, corpus-mount, first-mount, release-check,
-  names, gates, journey and offline-mount classes 2,162 (2,126 passed, 33 skipped; 3 pins of the old answer shape fixed, their
-  classes then 55 passed); the censuses, construction surfaces, PublicRequestRecording, the three sample censuses (answer and
-  envelope samples re-rendered: the dossier gains the two members), the builder and the query plans 124 passed; the new
-  `LuxembourgPublisherRelationsTests`, `V3CorpusPublisherRelationsMountTests` (each relation type, R72 firing with and without
-  a consolidation, not firing, undetermined both ways, not acquired, #1008's refusal of the notice's textless permalink, /9 =
-  /10 less its members) and `LuxembourgPublisherRelationsDeriveTests` (two derives, five files byte-identical) 12 passed. The
-  fixed-input index pin moved to b2a99e3f…. Web: `npm run build`; `npm test` 1,496 (1,493 passed, 3 skipped).
-  `eng/verify-v3-tree.ps1`: 1,813 tracked paths.
+- **Tests** (Windows; merged with 7583e4d0; run again after the repair). `dotnet build Lex.V3.slnx -c Release`: 0 warnings,
+  0 errors. `Lex.V3.Tests` 3,388 (3,382 passed, 6 skipped), the wire pin among them. Ingest after the repair: the Luxembourg,
+  corpus-mount, first-mount, release-check, names, gates, journey, offline-mount, census, construction-surface,
+  PublicRequestRecording and sample classes 2,296 (2,259 passed, 37 skipped); the answer and envelope samples re-rendered
+  (R72's member says what it compared). `V3CorpusPublisherRelationsMountTests` holds each relation type, R72 on a law never
+  consolidated, on one whose held version precedes its amending act and whose later version is textless, on the Code du
+  travail's act (the code's held states compared, acts integrated and undecided counted, #1008's refusal of the textless code
+  state the impact names), on a grand-ducal regulation ("this act"), not firing, undetermined, not acquired, and /9 = /10
+  less its members; `LuxembourgPublisherRelationsDeriveTests` two derives byte-identical. The fixed-input index pin is
+  b2a99e3f…. Web: `npm run build`; `npm test` 1,496 (1,493 passed, 3 skipped; `image-run`'s awk test needs Git's `awk` on
+  PATH). `eng/verify-v3-tree.ps1`: 1,813 tracked paths. The probe over derive-r2: 1 passed, 21 s, 379 MiB.
 - **What the derive needs.** No acquisition: a D1 at the merged head writes index /10 from run 15's custody (the relations
   are in R0's replay). The R72 counts above are what Release 3 would show over Release 2's population.
 - **Not in this slice.** R72 in the exports and the reading screen's banner; the EU relations (scope item 2's EU half);
