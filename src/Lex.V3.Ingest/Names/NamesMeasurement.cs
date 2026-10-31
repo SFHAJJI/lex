@@ -17,7 +17,7 @@ public static class NamesMeasurement
 {
     public const string MeasurementFileName = "names-measurement.json";
 
-    public const string MeasurementSchema = "lex-v3-names-measurement/1";
+    public const string MeasurementSchema = "lex-v3-names-measurement/2";
 
     private const string LuxembourgIndexFile = "luxembourg-index.sqlite3";
 
@@ -55,6 +55,14 @@ public static class NamesMeasurement
         public long WithheldByText;
         public long Indexed;
         public SortedDictionary<string, long> NotListed { get; } = new(StringComparer.Ordinal);
+
+        // Luxembourg articles the index holds that no state references: served nowhere (the Luxembourg reader reaches an
+        // article only through a state, and an exact identifier of such an expression resolves to nothing), so the detector
+        // does not read them; the measurement records them, per expression, so the index's own gap is on record
+        // (derive-r3, 2026-10-31: two 2026 acts admitted by the rulings whose states the derive then dropped kept their 52
+        // articles). Zero for the EU scope: the EU reader is not state-bound, so the measurement refuses such an EU index.
+        public long UnservedArticles;
+        public SortedDictionary<string, long> UnservedExpressions { get; } = new(StringComparer.Ordinal);
     }
 
     // One work as the measurement reads it: its identity, titles, text languages, state digests and what its text showed.
@@ -279,9 +287,12 @@ public static class NamesMeasurement
             }
         }
 
-        // Every served article, read once: the detector's findings and signals per work.
+        // Every served article, read once: the detector's findings and signals per work. An article of an expression no
+        // state references is served nowhere: no text, label, permalink, search hit or dossier reaches a Luxembourg article
+        // but through a state, and an exact identifier of such an expression resolves to nothing (ResolveExact). So it is not
+        // read: it is counted, per expression, and the tally records it (unserved_articles).
         log($"reading the Luxembourg articles of {works.Count} works");
-        long orphans = 0;
+        var unserved = new SortedDictionary<string, long>(StringComparer.Ordinal);
         using (var command = connection.CreateCommand())
         {
             command.CommandText = "SELECT expression_iri, searchable_text, tokens_json FROM articles";
@@ -295,17 +306,23 @@ public static class NamesMeasurement
                 }
                 else
                 {
-                    orphans++;
+                    Increment(unserved, reader.GetString(0));
                 }
             }
         }
 
-        if (orphans > 0)
+        var heldTally = new Tally();
+        foreach (var (expression, count) in unserved)
         {
-            throw new InvalidDataException($"{orphans} Luxembourg articles belong to no state's expression: the index is not one the measurement can read.");
+            heldTally.UnservedArticles += count;
+            heldTally.UnservedExpressions[expression] = count;
         }
 
-        var heldTally = new Tally();
+        if (heldTally.UnservedArticles > 0)
+        {
+            log($"{heldTally.UnservedArticles} Luxembourg articles of {unserved.Count} expressions belong to no state: served nowhere, not read, recorded");
+        }
+
         foreach (var work in works.Values)
         {
             heldTally.Works++;
@@ -387,6 +404,10 @@ public static class NamesMeasurement
             }
         }
 
+        // Every EU article, read once. Unlike the Luxembourg reader, the EU reader is not state-bound (ResolveExact,
+        // ResolveExpressionArticles and the search read the articles table by work, CELEX, expression and identity), so an
+        // article of a version no state names could still be served: the measurement refuses such an index, as before, rather
+        // than record what it cannot vouch for.
         log($"reading the EU articles of {acts.Count} acts");
         long orphans = 0;
         using (var command = connection.CreateCommand())
@@ -602,6 +623,14 @@ public static class NamesMeasurement
         writer.WriteString("scope", scope);
         writer.WriteNumber("works", tally.Works);
         writer.WriteNumber("articles_read", tally.Articles);
+        writer.WriteNumber("unserved_articles", tally.UnservedArticles);
+        writer.WriteStartObject("unserved_expressions");
+        foreach (var (key, count) in tally.UnservedExpressions)
+        {
+            writer.WriteNumber(key, count);
+        }
+
+        writer.WriteEndObject();
         writer.WriteStartObject("classes");
         foreach (var (key, count) in tally.Classes)
         {
