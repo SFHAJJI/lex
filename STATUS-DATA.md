@@ -68,6 +68,128 @@ acquisition, no publisher traffic, no browser, no Azure.
     (English, today) is refused `language_not_available` before any title is matched. The page's default search
     language is French, so the default search lists them. Listing them in that refusal too is a follow-up.
 
+## Index /10: the publisher's relation records, typed, both directions, and R72's notice (Release 3's item 2; sole driver, 2026-10-28)
+
+The scope note's item 2 (`data/lu-relations`): run 15's set G was resolved and never projected. No publisher traffic, no
+browser, no Azure; custody read only.
+- **Index /10** (`lex-v3-luxembourg-index/10`) is index /9's tables unchanged and three more: `publisher_relations` (the
+  act-level `jolux:modifies`, `repeals`, `rectifies` and `modifiedTempBy`, each in the publisher's own direction, keyed by
+  type and both IRIs, with the evidence digest and the acting act's `publicationDate` and `dateEntryInForce`, each the one
+  date the facts state, else none), `publisher_impacts` (each `LegalResourceImpact`: from, to, expression, type, the
+  consolidation the publisher says integrated it; a part given twice is null and named in `ambiguous_parts_json`) and
+  `relation_families` (each predicate's acquisition state and the families that proved it). The projection
+  (`ProjectPublisherRelations`) reads the envelope's accepted resolved relations and family states, so the derive projects
+  what R0 replays; `cites` stays the text's references, and `basedOn`, `transposes`, `consolidates`, `basicAct` are not
+  projected. The reader holds every row's dates to the index's own facts, and reads index /9, /8 and /6 as before (/9 is
+  /10 less the three tables). Log /3 is unchanged, so an index /10 build carries an index /9 log forward.
+- **R0 stays byte-compatible.** No contract type changes (`src/Lex.V3.Contracts` is untouched); the query checkpoint's result
+  digest hashes the resolved relations, local inbound relations and family acquisitions as before.
+  `LuxembourgRelationWirePinTests` pins their exact JSON and `ContractJson.Sha256` on run 15's own rows and observation.
+- **API.** On index /10, `relations` adds `publisher_relations` (every edge from the work's side, with its view: amends,
+  amended by, repeals, repealed by, modified for a time by, modifies for a time, rectifies, rectified by, and the impact
+  records made and received; inbound and impact views `derived: true`, "derived from the publisher's forward relation";
+  the other act's identifier, title where the catalogue states one (R92 withholds a withheld act's), site address where this
+  site answers for it, the acting act's publication date and entry into force as separate values; the families' states and
+  what they do not see), served whole on every page and filtered by `direction`. The dossier carries the same and
+  `amended_after_consolidation` (R72, as the specification writes it; repaired after the review of #1009): `notice` when an
+  amending act was published after every consolidated version whose text Lex holds, of the act and of every act its received
+  impact records name as integrating its changes (a code, for the Code du travail's act), or none is held, naming each act and
+  its date, never its effect, with the sentence ("amends this act; no consolidated version Lex holds was published after it",
+  the latest held version, derived from the publisher's records); an amending act whose impact record names a held version as
+  integrating it is never later, and one naming more than one version is undecided and not named; else
+  `no_later_amending_act`, `undetermined` (a date it needs is not held, or the act it would name is undecided),
+  `no_amending_act_recorded` (said only of a family acquired in full) or `not_acquired`. The member says what it compared
+  (held versions, integrating work keys, acts integrated and undecided). Temporary modifications and self-references do not
+  raise it. On
+  index /10 the `structured_relations` row of `relations`, `citation` and `cited_by` says where the records are served; on
+  /9, /8 and /6 every answer is as before, no member added (the legacy base answers replay unchanged).
+- **Web.** The dossier's relation tabs (an in-page list of the kinds named, each a section; inverse views labelled derived;
+  dates by role; the kinds read in full that name no act; what the family does not see) and R72's banner above the
+  dossier, EN and FR. The independent French review (addendum "the dossier's relation tabs and R72's notice"): 37 forms, 22
+  approved, 15 changed in French, the English of 3 changed; finals applied byte for byte. The banner's note is chosen by the
+  `modifies` family alone, the Unscoped one when that family is not read in full (the driver's decision). After the review of
+  #1009 the independent French review of the 8 changed R72 forms (addendum "R72 held versions and integrating acts"): 3
+  approved, 5 changed in French, the English of 4 changed, applied byte for byte; the specification's "this law" is said "this
+  act" / "cet acte", since the banner stands on every class (a grand-ducal regulation is not a law); the heading is "Amended,
+  with no consolidated version Lex holds published since". A code's version is named by its coordinate, as another act's.
+- **Measured over run 15's custody** (`LuxembourgPublisherRelationsRun15Probe`, opt-in, read-only, 41 s, 374 MiB; no derive,
+  no network): set G 95,431 rows (code 0, loi 32,148, rgd 63,283; both passes equal), none excluded (every subject is in the
+  census of 260,236). Projected: modifies 15,078 (9,325 acting acts, 4,263 acted on, every one with its publication date),
+  repeals 7,879 (3,425 to 7,768), modifiedTempBy 20 (11 to 18), rectifies 1, impacts 343 (all with both acts, 129 naming the
+  integrating consolidation, none ambiguous). R72 over derive-r2's 2,810 served acts, with the repaired rule (held versions,
+  integrating acts): 380 amended (1,215 edges), 223 repealed; notice 281 (232 with no held consolidated version, 47 after the
+  latest held version of the act, 2 after the latest held version of an integrating act, the Code du travail's among them),
+  undetermined 0, no later amending act 99, none recorded 2,430; 2 acts have an integrating act and 4 amending acts are
+  integrated in a held version. The review's held-only measure of 281 is reproduced. Before the repair the same index gave 73
+  notices and 8 undetermined: the catalogue's textless consolidations (every consolidation of Release 2 is textless) hid the
+  notice on 208 acts, and their undated rows made 8 undetermined. derive-r1 is no longer on this PC.
+- **Driver decisions (reversible).** R72 follows the specification's sentence: publication dates, strictly later, against
+  every consolidation and code state whose text Lex holds, of the act and of the acts its received impact records name as
+  integrating its changes (the review of #1009, F1 and F2; the owner's standing yes); a held version or an amending act with
+  no publication date makes it `undetermined`, as does an impact record naming two integrating versions for an act it would
+  name; the specification's "this law" is said "this act" (the independent French review, blocking); only `jolux:modifies`
+  raises it; a recorded edge is
+  listed whatever its family's state, and an absence is said only of a family acquired in full; the work's act as published
+  (`{work}/jo`) is among its IRIs even when the catalogue dates no state of it; a multi-valued impact part is null and named.
+- **Tests** (Windows; merged with 7583e4d0; run again after the repair). `dotnet build Lex.V3.slnx -c Release`: 0 warnings,
+  0 errors. `Lex.V3.Tests` 3,388 (3,382 passed, 6 skipped), the wire pin among them. Ingest after the repair: the Luxembourg,
+  corpus-mount, first-mount, release-check, names, gates, journey, offline-mount, census, construction-surface,
+  PublicRequestRecording and sample classes 2,296 (2,259 passed, 37 skipped); the answer and envelope samples re-rendered
+  (R72's member says what it compared). `V3CorpusPublisherRelationsMountTests` holds each relation type, R72 on a law never
+  consolidated, on one whose held version precedes its amending act and whose later version is textless, on the Code du
+  travail's act (the code's held states compared, acts integrated and undecided counted, #1008's refusal of the textless code
+  state the impact names), on a grand-ducal regulation ("this act"), not firing, undetermined, not acquired, and /9 = /10
+  less its members; `LuxembourgPublisherRelationsDeriveTests` two derives byte-identical. The fixed-input index pin is
+  b2a99e3f…. Web: `npm run build`; `npm test` 1,496 (1,493 passed, 3 skipped; `image-run`'s awk test needs Git's `awk` on
+  PATH). `eng/verify-v3-tree.ps1`: 1,813 tracked paths. The probe over derive-r2: 1 passed, 21 s, 379 MiB.
+- **What the derive needs.** No acquisition: a D1 at the merged head writes index /10 from run 15's custody (the relations
+  are in R0's replay). The R72 counts above are what Release 3 would show over Release 2's population.
+- **Not in this slice.** R72 in the exports and the reading screen's banner; the EU relations (scope item 2's EU half);
+  Coverage's attribution rate (R29's per-period rate is about wording changes, not act-level edges); the review's point 4
+  (nested brackets around a withheld title in the one-act notice).
+
+## The machine gates' oracle for Luxembourg temporal exactness; the gates pass over derive-r1 and derive-r2 (sole driver, 2026-10-28)
+
+`data/r1-gates`. Release 2's data (derive-r2, D1 at 98eef6c6) failed only Luxembourg temporal exactness (as_of, fra) under
+the old oracle, which read index 9's chain by the index 8 rule. No publisher traffic, no browser, no Azure.
+- **The oracle** (`V3MountedGatesTests.IntervalOracle`; the data design's §3.5, R86(3)): each state's start and the
+  publisher's end from the catalogue's facts (`work_facts`: a consolidation's or code state's one exact `dateApplicability`,
+  an act's file date else its `dateEntryInForce`, `dateEndApplicability`), text held from the articles a state binds, a
+  textless state's rights from the corpus file's member. It never reads `applicability_date`, `applicable_to`, `boundary`,
+  `text_status`, `translation_of` or `intervals`, and applies §3.2's table itself: holes and closed ends refused, never
+  bridged; the unclear end day; invalid intervals; translations on their French state; same-date states of one wording
+  served once (the act, else the one that begins last: the recorded decision below); `as_of` refuses a textless state
+  `text_withheld` or `text_not_available`, `in_force_on` names it.
+- **The sample**: the seeded 40 and §3.5's strata: every code, overlap, unclear end, invalid interval and textless state
+  with an acquired file; 10 consolidated works of 3 states or more; 6 of each other class. Cases: each start and end, a
+  day inside and the last day of each span, the day before and 1,000 days after; `as_of` and `in_force_on`, per language
+  and with none.
+- **The refusal set over index 9**: `as_of` on a textless state for both text codes; an ambiguity from the catalogue when the
+  sample holds none; the withheld rule of the admission policy the corpus names (policy A on derive-r2).
+- **What derive-r2 showed** (the reader was right each time): the gates wrote the Treaties' and the Charter's CELEX with a
+  raw solidus (R64: `12016E%2FTXT`), and judged rights by policy /1. Both corrected in the gates.
+- **Measured at c5f3142c** (`TheGatesOverTheMountTheReleaseNames`, every gate at 1.0, every shuffle caught):
+
+  | Arm | derive-r1 | derive-r2 |
+  |---|---|---|
+  | LU `as_of` / `in_force_on`, fra | 1,087 each | 1,219 each |
+  | LU `as_of` / `in_force_on`, no language | 1,090 each | 1,222 each |
+  | LU `as_of` / `in_force_on`, eng | 3 each | 3 each |
+  | EU `as_of`, eng / fra / none | 562 each | 498 each |
+  | Refusal | 26 | 26 |
+  | Retrieval | 77 | 77 |
+
+  Date controls over 541 to 741 (r1) and 604 to 798 (r2) LU cases per arm; 93 and 104 minutes on this PC.
+- **The review's hardenings, at 9f79df3f**: the index's states held to the catalogue and the corpus (derive-r1 3,311
+  catalogue states and 2,690 held rows, derive-r2 4,064 and 3,387, none missing or unadmitted); the EU retrieval
+  permalinks; the textless-acquired stratum (derive-r2: 4 works, 111 cases per arm, none differing).
+- **Driver decisions (reversible):** the strata's quotas as above, "every" uncapped; the arms ask the mount concurrently
+  (the reader's lock keeps a run near one core); same-date states of one wording designate the one that begins last
+  (recorded 2026-10-26 below), which the oracle follows.
+- **Tests at 9f79df3f:** `dotnet build Lex.V3.slnx -c Release` 0 warnings; `Lex.V3.Tests` 3,387 (3,381 passed, 6 skipped);
+  the gates' classes 41 (39 passed, 2 env-gated); the census and touched classes 117 (115 passed, 2 skipped);
+  `eng/verify-v3-tree.ps1` 1,803 paths.
+
 ## Where the data stands at the end of 27 October, and what Release 3's derive would add (sole driver, 2026-10-27)
 
 - **Release 2's data is derived and waits.** The D1 at 98eef6c6 (rule set lu-release-2, policy A; derive A and B

@@ -25,6 +25,9 @@ public static class NamesMeasurement
 
     private const string LuxembourgSchema = "lex-v3-luxembourg-index/9";
 
+    /// <summary>Index 10: index 9's tables, which the measurement reads, and the relation records, which it does not.</summary>
+    private const string LuxembourgSchemaTen = "lex-v3-luxembourg-index/10";
+
     private const string EuropeSchema = "lex-v3-europe-index/6";
 
     /// <summary>The EU index /7: schema 6 and the expressions' titles, which the measurement reads as it reads a Luxembourg title.</summary>
@@ -137,9 +140,11 @@ public static class NamesMeasurement
             luxembourgDigest = FileSha256(luxembourgPath, cancellationToken);
             using var connection = OpenReadOnly(luxembourgPath);
             var (schema, stampedCorpus) = Stamp(connection);
-            if (!string.Equals(schema, LuxembourgSchema, StringComparison.Ordinal))
+            if (!string.Equals(schema, LuxembourgSchema, StringComparison.Ordinal) &&
+                !string.Equals(schema, LuxembourgSchemaTen, StringComparison.Ordinal))
             {
-                throw new InvalidDataException($"The Luxembourg index is {schema}; the measurement reads {LuxembourgSchema}.");
+                throw new InvalidDataException(
+                    $"The Luxembourg index is {schema}; the measurement reads {LuxembourgSchema} and {LuxembourgSchemaTen}.");
             }
 
             corpus = stampedCorpus;

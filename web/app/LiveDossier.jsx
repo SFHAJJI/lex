@@ -25,8 +25,8 @@ import { RefusalCard } from './RefusalCard.jsx';
 import { DOSSIER_LANGUAGES, LIVE_DOSSIER_IDLE, createDossierSession, dossierOutcome } from '../scripts/live-dossier.mjs';
 import { AsPublished, EuropeAnnexes, EuropeForceDates, EuropePublication, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, TableRegion, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
-import { ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
-import { parseSitePath } from '../scripts/permalinks.mjs';
+import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
+import { parseSitePath, permalinkHref } from '../scripts/permalinks.mjs';
 import { answerHandedWith } from '../scripts/v3-client.mjs';
 import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
 import { catalogueRecord, fillCard, versionNameKey } from '../scripts/refusal-card.mjs';
@@ -195,14 +195,213 @@ function ForceFacts({ force }) {
   );
 }
 
+/** The classes of identifier every relation family read in full covers, or null when one names none (`subject_classes`). */
+function relationClasses(relations) {
+  const acquired = relations.families.filter((family) => family.acquired);
+  if (acquired.length === 0 || acquired.some((family) => family.subjectClasses === null)) return null;
+  return [...new Set(acquired.flatMap((family) => family.subjectClasses))].sort();
+}
+
+/** Whether the classes are exactly the codes, laws and grand-ducal regulations the fixed sentences name. */
+function codesLawsRegulations(classes) {
+  return classes !== null && classes.length === 3 && classes[0] === 'code' && classes[1] === 'loi' && classes[2] === 'rgd';
+}
+
+/** A list of class codes, each set as code, between the table's separators. */
+function classCodes(classes) {
+  return classes.map((value, index) => <Fragment key={value}>{index === 0 ? '' : COMMON.listSeparator}<code>{value}</code></Fragment>);
+}
+
 /**
- * One dossier view, laid out: the work, its titles, its held states, today (`today`, the date in Luxembourg the answer was
- * given on, or null) and what it does not hold.
+ * The other act an edge or R72's notice names: its title in its own language where the catalogue states one, else its
+ * identifier as code, linked to this site's page for it (its dossier, or the catalogue's record) where it has one; an act whose
+ * title R92 withholds is named by its identifier, with the table's words for that.
+ */
+function OtherActName({ other, self = false }) {
+  if (self) return <>{COPY.relationSelf}</>;
+  const name = other.title === null
+    ? <code>{other.iri}</code>
+    : <span lang={quotationLanguageTag(other.titleLanguage)}>{other.title}</span>;
+  const linked = other.address === null ? name : <a href={permalinkHref(other.address, CHROME_LOCALE)}>{name}</a>;
+  return other.titleWithheld ? <>{linked} ({COPY.relationTitleWithheld})</> : linked;
+}
+
+/** A consolidated version an answer names, by its stable coordinate, linked to its permalink where it has one. */
+function VersionName({ version }) {
+  const name = <code>{version.stableCoordinate}</code>;
+  return version.permalink === null ? name : <a href={permalinkHref(version.permalink, CHROME_LOCALE)}>{name}</a>;
+}
+
+/**
+ * One edge: the other act, and its own publication date and entry into force, each with its role (R21); for an impact record,
+ * the version the publisher says integrated the change, dated when it is this act's own and named when it is another act's.
+ */
+function RelationRow({ edge, workKey }) {
+  const act = <OtherActName other={edge.other} self={edge.isSelfReference} />;
+  const { publicationDate, entryIntoForce } = edge.other;
+  const said = publicationDate === null
+    ? <Say template={COPY.relationUndated} values={{ act }} />
+    : entryIntoForce === null
+      ? <Say template={COPY.relationPublished} values={{ act, published: <time dateTime={publicationDate}>{publicationDate}</time> }} />
+      : <Say template={COPY.relationPublishedEntry} values={{
+          act,
+          published: <time dateTime={publicationDate}>{publicationDate}</time>,
+          entry: <time dateTime={entryIntoForce}>{entryIntoForce}</time>,
+        }} />;
+  return (
+    <li data-relation-evidence={edge.evidenceSha256}>
+      {said}
+      {edge.consolidatedBy !== null && edge.consolidatedBy.stableCoordinate.split('/')[2] === workKey ? (
+        <> <Say template={COPY.relationIntegrated} values={{ date: <time dateTime={edge.consolidatedBy.applicabilityDate}>{edge.consolidatedBy.applicabilityDate}</time> }} /></>
+      ) : edge.consolidatedBy !== null ? (
+        <> <Say template={COPY.relationIntegratedOther} values={{ version: <VersionName version={edge.consolidatedBy} /> }} /></>
+      ) : edge.consolidatedByIri !== null ? (
+        <> <Say template={COPY.relationIntegratedOther} values={{ version: <code>{edge.consolidatedByIri}</code> }} /></>
+      ) : null}
+    </li>
+  );
+}
+
+/**
+ * The publisher's relation records of the act (index 10's `publisher_relations`, read by `publisher-relations.mjs`; R29):
+ * one tab per kind of relation the records name, each a section reached from the list at its head (an in-page link, so it
+ * works without the script and prints whole), saying who records it (an act's own record, or derived from the publisher's
+ * forward relation), then the kinds acquired in full that name no act, the kinds not acquired, and what the family does not
+ * see. Nothing on an index of schema 9, 8 or 6.
+ */
+function PublisherRelations({ relations, workKey }) {
+  if (relations === null) return null;
+  if (relations.edgeCount === 0 && relations.families.every((family) => !family.acquired)) {
+    return (
+      <section data-relations="not_acquired">
+        <h3>{COPY.relationsHeading}</h3>
+        <p>{COPY.relationsNotAcquired}</p>
+      </section>
+    );
+  }
+  const listed = relations.groups.filter((group) => group.edges.length > 0);
+  const none = relations.groups.filter((group) => group.edges.length === 0 && group.family.acquired);
+  const notHeld = relations.groups.filter((group) => !group.family.acquired);
+  const names = (groups) => groups.map((group, index) => (
+    <Fragment key={group.view}>{index === 0 ? '' : COMMON.listSeparator}{COPY.relationGroups[group.view]}</Fragment>
+  ));
+  const classes = relationClasses(relations);
+  return (
+    <section data-relations={relations.edgeCount}>
+      <h3>{COPY.relationsHeading}</h3>
+      <p>{COPY.relationsIntro}</p>
+      {listed.length > 0 ? (
+        <nav aria-label={COPY.relationsNav}>
+          <ul data-relation-tabs={listed.length}>
+            {listed.map((group) => (
+              <li key={group.view}>
+                <a href={`#relations-${group.view}`}>
+                  <Say template={COPY.relationTab} values={{ group: COPY.relationGroups[group.view], count: group.edges.length }} />
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      ) : null}
+      {listed.map((group) => (
+        <section key={group.view} id={`relations-${group.view}`} data-relation-group={group.view} data-derived={group.derived ? 'true' : 'false'}>
+          <h4>{COPY.relationGroups[group.view]}</h4>
+          {group.edgeType === 'impact' ? <p>{COPY.relationImpact}</p> : group.derived ? <p data-derived-label="">{COPY.relationDerived}</p> : null}
+          <ul>
+            {group.edges.map((edge, index) => <RelationRow key={`${index}.${edge.other.iri}`} edge={edge} workKey={workKey} />)}
+          </ul>
+        </section>
+      ))}
+      {none.length > 0 ? <p data-relations-none={none.length}><Say template={COPY.relationsNone} values={{ groups: names(none) }} /></p> : null}
+      {notHeld.length > 0 ? <p data-relations-not-held={notHeld.length}><Say template={COPY.relationsNotHeldFor} values={{ groups: names(notHeld) }} /></p> : null}
+      {classes === null ? null : (
+        <p data-relations-not-seen="">
+          {codesLawsRegulations(classes)
+            ? COPY.relationsNotSeen
+            : <Say template={COPY.relationsNotSeenClasses} values={{ classes: classCodes(classes) }} />}
+        </p>
+      )}
+    </section>
+  );
+}
+
+/**
+ * R72's banner (index 10's `amended_after_consolidation`, read by `publisher-relations.mjs`): when the publisher's relation
+ * records name an act published after every consolidated version Lex holds (of this act, and of an act the publisher records as
+ * integrating its changes), the specification's sentence for that act (or each such act) with its publication date; the latest
+ * version Lex holds, with its publication date, or that it holds none; how many amending acts the publisher records as
+ * integrated in a held version, or names more than one version for, and so are not named; and that the notice is derived and
+ * names the act, never its effect. Nothing otherwise, and nothing on an index of schema 9, 8 or 6.
+ */
+function AmendedAfterBanner({ amendedAfter, relations }) {
+  if (amendedAfter === null || amendedAfter.status !== 'notice') return null;
+  // The note says what the modifies family does not see, by that family's own classes; when it was not read in full, only that
+  // an amending act whose record was not read is not seen (the French review of the relation tabs, point 3).
+  const modifies = relations === null ? undefined : relations.families.find((family) => family.edgeType === 'modifies');
+  const classes = modifies === undefined || !modifies.acquired ? null : modifies.subjectClasses;
+  const [first] = amendedAfter.acts;
+  const latest = amendedAfter.latestConsolidation;
+  const latestDate = amendedAfter.latestConsolidationPublicationDate;
+  return (
+    <aside className="relation-notice" role="note" aria-label={COPY.amendedAfterHeading} data-amended-after={amendedAfter.acts.length}>
+      <p><strong>{COPY.amendedAfterHeading}</strong></p>
+      {amendedAfter.acts.length === 1 ? (
+        <p>
+          <Say template={COPY.amendedAfterOne} values={{
+            date: <time dateTime={first.publicationDate}>{first.publicationDate}</time>,
+            act: <OtherActName other={first.other} />,
+          }} />
+        </p>
+      ) : (
+        <>
+          <p>{COPY.amendedAfterMany}</p>
+          <ul>
+            {amendedAfter.acts.map((act) => (
+              <li key={act.actingIri}>
+                <Say template={COPY.amendedAfterAct} values={{ act: <OtherActName other={act.other} />, date: <time dateTime={act.publicationDate}>{act.publicationDate}</time> }} />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <p data-amended-after-latest={latest === null ? 'none' : amendedAfter.latestConsolidationIntegrating ? 'integrating' : 'own'}>
+        {latest === null
+          ? COPY.amendedAfterNoConsolidation
+          : <Say template={amendedAfter.latestConsolidationIntegrating ? COPY.amendedAfterLatestIntegrating : COPY.amendedAfterLatest} values={{
+              version: <VersionName version={latest} />,
+              date: <time dateTime={latestDate}>{latestDate}</time>,
+            }} />}
+      </p>
+      {amendedAfter.amendingActsIntegrated > 0 ? (
+        <p data-amended-after-integrated={amendedAfter.amendingActsIntegrated}>
+          <Say template={COPY.amendedAfterIntegrated} values={{ count: amendedAfter.amendingActsIntegrated }} />
+        </p>
+      ) : null}
+      {amendedAfter.amendingActsIntegrationUndecided > 0 ? (
+        <p data-amended-after-undecided={amendedAfter.amendingActsIntegrationUndecided}>
+          <Say template={COPY.amendedAfterUndecided} values={{ count: amendedAfter.amendingActsIntegrationUndecided }} />
+        </p>
+      ) : null}
+      <p data-derived-label="">
+        {classes === null
+          ? COPY.amendedAfterNoteUnscoped
+          : codesLawsRegulations(classes)
+            ? COPY.amendedAfterNote
+            : <Say template={COPY.amendedAfterNoteClasses} values={{ classes: classCodes(classes) }} />}
+      </p>
+    </aside>
+  );
+}
+
+/**
+ * One dossier view, laid out: the work, R72's banner when it is raised, its titles, its held states, today (`today`, the date
+ * in Luxembourg the answer was given on, or null), its relations in the publisher's records and what it does not hold.
  */
 export function DossierView({ view, today = null }) {
   return (
     <>
       <h2>{view.workKey}</h2>
+      <AmendedAfterBanner amendedAfter={view.amendedAfter ?? null} relations={view.relations ?? null} />
       <p>
         <Say template={COPY.heldIn} values={{ iri: <code>{view.publisherWorkIri}</code>, languages: view.availableLanguages.join(', ') }} />
       </p>
@@ -243,6 +442,7 @@ export function DossierView({ view, today = null }) {
       </TableRegion>
       {view.states.some(datedByEntryIntoForce) ? <p data-entry-into-force-note="">{COPY.entryIntoForceNote}</p> : null}
       <CatalogueChain chain={view.chain} />
+      <PublisherRelations relations={view.relations ?? null} workKey={view.workKey} />
       <p lang={ENGLISH_LANG}>{asSentence(view.articlesNotAdmittedNote)}</p>
       <h3>{COPY.notHeldHeading}</h3>
       <ul data-not-held={view.notHeld.length}>

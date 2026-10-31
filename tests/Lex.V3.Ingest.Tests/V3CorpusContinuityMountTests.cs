@@ -228,6 +228,75 @@ public sealed class V3CorpusContinuityMountTests
         Assert.AreEqual(withheld.GetProperty("state_sha256").GetString(), refused.Refusal.HelpfulPayload.GetProperty("state_sha256").GetString());
     }
 
+    /// <summary>
+    /// The Release 2 rehearsal's J8 failure (derive-r2, the first mount serving codes): the log gives a code's withheld and
+    /// misfiled states their permalinks, as its permalink_rule says, but verify and resolve answered those permalinks
+    /// identifier_unknown, so a monitoring client read a state the log had just named as unknown. Every event's permalink now
+    /// answers verify and resolve as the log says of its state: held text verifies digest_matches; a rights reason is refused
+    /// text_withheld with the hashes (R64); any other textless state text_not_available; each naming that state, and as_of
+    /// refusing it alike.
+    /// </summary>
+    [TestMethod]
+    public async Task EveryEventsPermalinkAnswersVerifyAndResolveAsTheLogSaysOfItsStatesText()
+    {
+        await using var fixture = await IntervalMount.CreateAsync();
+        var mount = fixture.Mount;
+
+        var rows = Value(await AskAsync(mount, "events", new { limit = 200 })).GetProperty("events").EnumerateArray()
+            .Where(static row => row.GetProperty("permalink").ValueKind == JsonValueKind.String)
+            .ToArray();
+        var statuses = rows.Select(static row => row.GetProperty("detail").GetProperty("text_status").GetString()!).ToArray();
+        // The fixture's log holds held text, a rights withholding, a PDF and the code's misfiled state, each with its permalink.
+        foreach (var status in new[] { "held", "withheld_rights", "not_available_pdf", "not_available_misfiled" })
+        {
+            CollectionAssert.Contains(statuses, status);
+        }
+
+        foreach (var row in rows)
+        {
+            var permalink = row.GetProperty("permalink").GetString()!;
+            var state = row.GetProperty("state_sha256").GetString();
+            var status = row.GetProperty("detail").GetProperty("text_status").GetString();
+            var verified = await AskAsync(mount, "verify", new { identifier = permalink });
+            var resolved = await AskAsync(mount, "resolve", new { identifier = permalink });
+            if (status == "held")
+            {
+                var value = Value(verified);
+                Assert.AreEqual("digest_matches", value.GetProperty("verdict").GetString(), permalink);
+                Assert.AreEqual(state, value.GetProperty("state_sha256").GetString(), permalink);
+                Assert.AreEqual(permalink, value.GetProperty("permalink").GetString(), permalink);
+                Assert.AreEqual(state, Value(resolved).GetProperty("state_sha256").GetString(), permalink);
+                continue;
+            }
+
+            var code = status == "withheld_rights" ? "text_withheld" : "text_not_available";
+            foreach (var (operation, envelope) in new[] { ("verify", verified), ("resolve", resolved) })
+            {
+                Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict, $"{operation} {permalink}");
+                Assert.AreEqual(code, envelope.Refusal!.Code, $"{operation} {permalink}: {envelope.Refusal.HelpfulPayload.GetRawText()}");
+                var payload = envelope.Refusal.HelpfulPayload;
+                Assert.AreEqual(state, payload.GetProperty("state_sha256").GetString(), $"{operation} {permalink}");
+                Assert.AreEqual(permalink, payload.GetProperty("permalink").GetString(), $"{operation} {permalink}");
+                Assert.AreEqual(status, payload.GetProperty("text_status").GetString(), $"{operation} {permalink}");
+                Assert.AreEqual(row.GetProperty("applicability_date").GetString(), payload.GetProperty("requested_date").GetString(), $"{operation} {permalink}");
+                if (code == "text_withheld")
+                {
+                    Assert.AreEqual(state, payload.GetProperty("content_sha256").GetString(), $"{operation} {permalink}: the hashes (R64)");
+                }
+            }
+
+            Assert.AreEqual(code, (await AskAsync(mount, "as_of", new { identifier = permalink, date = row.GetProperty("applicability_date").GetString() })).Refusal!.Code, permalink);
+        }
+
+        // An article permalink under a textless state is refused for its text too; a digest the catalogue never named stays a
+        // mismatch or unknown, never a textless refusal.
+        var misfiled = rows.First(static row => row.GetProperty("detail").GetProperty("text_status").GetString() == "not_available_misfiled");
+        Assert.AreEqual("text_not_available",
+            (await AskAsync(mount, "verify", new { identifier = misfiled.GetProperty("permalink").GetString() + "/art_1" })).Refusal!.Code);
+        var other = misfiled.GetProperty("permalink").GetString()!.Replace(misfiled.GetProperty("state_sha256").GetString()!, new string('0', 64), StringComparison.Ordinal);
+        Assert.IsFalse((await AskAsync(mount, "verify", new { identifier = other })).Refusal!.Code is "text_withheld" or "text_not_available");
+    }
+
     [TestMethod]
     public async Task CoveragesBuildTimeRowSaysABuildsTimeIsItsAcquisitionsAndTheDerivationsIsTheLogs()
     {

@@ -91,7 +91,11 @@ function envelopeFor(operation, parameters, events) {
     if (parameters.after === last) return answer({ events: [], has_more: false, next_after: last });
     return { verdict: "refuse", ...head, refusal: { code: "snapshot_unknown" }, result: null };
   }
-  if (operation === "verify") return answer({ verdict: "digest_matches" });
+  if (operation === "verify") {
+    // As the API answers a held state's permalink: digest_matches, naming the state the log names.
+    const event = events.find((candidate) => candidate.permalink === parameters.identifier);
+    return answer({ verdict: "digest_matches", state_sha256: event?.state_sha256 ?? null, permalink: event?.permalink ?? null });
+  }
   if (operation === "answer_drift") return answer({ invalidated_answers: [], asserts_no_drift_in_law: false });
   return answer({ operation, parameters });
 }
@@ -106,7 +110,9 @@ function envelopeFor(operation, parameters, events) {
 async function standInImage({ records = false, cookie = false, card = CARD, events = 30 } = {}) {
   const seen = [];
   const counts = { starts: 0, closes: 0 };
-  const log = Array.from({ length: events }, (_, index) => ({ seq: index + 1, permalink: `/lu-legilux/w/2024-02-01--${"a".repeat(64)}/fra#event-${index + 1}` }));
+  const log = Array.from({ length: events }, (_, index) => ({
+    seq: index + 1, language: "fra", state_sha256: "a".repeat(64), permalink: `/lu-legilux/w/2024-02-01--${"a".repeat(64)}/fra#event-${index + 1}`,
+  }));
   let output = "the API's startup lines\n";
   const tmpEvents = [];
   const server = createServer((request, response) => {

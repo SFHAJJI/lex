@@ -3824,6 +3824,24 @@
           "object_type": "work_record",
           "schema": "lex-v3-dossier-result/1",
           "value": {
+            "amended_after_consolidation": {
+              "acts": [],
+              "amending_acts": 0,
+              "amending_acts_integrated": 0,
+              "amending_acts_integration_undecided": 0,
+              "amending_acts_without_publication_date": 0,
+              "derived": true,
+              "held_versions": 0,
+              "held_versions_without_publication_date": 0,
+              "integrating_work_keys": [],
+              "latest_consolidation": null,
+              "latest_consolidation_integrating": false,
+              "latest_consolidation_publication_date": null,
+              "notice": null,
+              "rule": "R72, as the specification of record writes it: an act the publisher records as modifying this act (jolux:modifies, asserted on the amending act and read from this act\u0027s side, so derived from the publisher\u0027s forward relation) that was published after the latest consolidated version this index holds, that is, whose publication date is later than the publication date of every consolidation or code state whose text this index holds, of this act and of every act the publisher\u0027s table of modifications (jolux:impactConsolidatedBy, on the impact records this act received) names as integrating its changes; an amending act whose impact record names, as integrating it, a version whose text this index holds is never later; status notice names each such act with its publication date, never its effect, and does not say that a version leaves the change out; no_later_amending_act says each recorded amending act was published on or before a held version\u0027s publication date or is integrated in a held version; undetermined says a held version or an amending act has no publication date the publisher\u0027s facts state as one date, or an impact record names its integrating version more than once, so the comparison cannot be made for an act it would name; no_amending_act_recorded says the relation records name none, said only of a modifies relation acquired in full; not_acquired says none is recorded and the modifies relation was not acquired in full, so nothing is said; a temporary modification (jolux:modifiedTempBy) is listed among the relations and does not raise it; an act this act names as amending itself is not counted",
+              "source_predicate": "jolux:modifies",
+              "status": "not_acquired"
+            },
             "articles_not_admitted_note": "articles_not_admitted counts the articles the corpus recorded for the publisher\u0027s document for this state that this state does not hold; the number of articles in this state plus articles_not_admitted is the number of articles the corpus recorded for that document, which provenance counts by disposition token; which articles they are is not held. An article is not admitted whole when the reviewed profile cannot represent every element in it: that can be an article the publisher struck out, and it can equally be an article whose text is complete but which carries a mark the profile does not accept, such as an empty placeholder where a list item was removed",
             "as_published": {
               "authenticity": {
@@ -3905,6 +3923,82 @@
             ],
             "overlaps": [],
             "publisher": "lu-legilux",
+            "publisher_relations": {
+              "edge_count": 0,
+              "edge_counts": {
+                "amended_by": 0,
+                "amends": 0,
+                "impact_made": 0,
+                "impact_received": 0,
+                "modified_temporarily_by": 0,
+                "modifies_temporarily": 0,
+                "rectified_by": 0,
+                "rectifies": 0,
+                "repealed_by": 0,
+                "repeals": 0
+              },
+              "edges": [],
+              "families": [
+                {
+                  "edge_type": "modifies",
+                  "family_keys": [],
+                  "reason": "no relation-assertions family was designated for this run",
+                  "source_predicates": [
+                    "jolux:modifies"
+                  ],
+                  "state": "unacquired",
+                  "subject_classes": null
+                },
+                {
+                  "edge_type": "repeals",
+                  "family_keys": [],
+                  "reason": "no relation-assertions family was designated for this run",
+                  "source_predicates": [
+                    "jolux:repeals"
+                  ],
+                  "state": "unacquired",
+                  "subject_classes": null
+                },
+                {
+                  "edge_type": "rectifies",
+                  "family_keys": [],
+                  "reason": "no relation-assertions family was designated for this run",
+                  "source_predicates": [
+                    "jolux:rectifies"
+                  ],
+                  "state": "unacquired",
+                  "subject_classes": null
+                },
+                {
+                  "edge_type": "modified_temporarily_by",
+                  "family_keys": [],
+                  "reason": "no relation-assertions family was designated for this run",
+                  "source_predicates": [
+                    "jolux:modifiedTempBy"
+                  ],
+                  "state": "unacquired",
+                  "subject_classes": null
+                },
+                {
+                  "edge_type": "impact",
+                  "family_keys": [],
+                  "reason": "no relation-assertions family was designated for this run",
+                  "source_predicates": [
+                    "jolux:impactFromLegalResource",
+                    "jolux:impactToLegalResource",
+                    "jolux:impactToExpression",
+                    "jolux:legalResourceImpactHasType",
+                    "jolux:impactConsolidatedBy",
+                    "jolux:impactConsolidatedByExpression"
+                  ],
+                  "state": "unacquired",
+                  "subject_classes": null
+                }
+              ],
+              "inverse_label": "derived from the publisher\u0027s forward relation",
+              "not_seen": "no relation family is held as acquired in full by classes of identifier, so no relation record is said to be absent",
+              "rule": "the publisher\u0027s relation records about this act, read from the index\u0027s relation tables (lex-v3-luxembourg-index/10): the act-level relations jolux:modifies, jolux:repeals and jolux:rectifies (the publisher\u0027s subject amends, repeals or rectifies its object) and jolux:modifiedTempBy (the subject is modified for a time by the object), and the publisher\u0027s jolux:LegalResourceImpact records, its table of modifications (the act a change comes from, the act it is made to, its type and the consolidated version the publisher says integrated it); each edge is listed from this act\u0027s side, outbound when this act is the publisher\u0027s subject (for an impact record, the act the change comes from) and inbound when it is the object (the act the change is made to); an edge whose derived is true is read from a record the publisher keeps on another resource (an act-level relation asserted on the other act, or an impact record), so it is derived from the publisher\u0027s forward relation and not asserted on this act; each other act is named by its identifier, with its title where the publisher\u0027s catalogue states one; the acting act\u0027s publication date and entry into force are the publisher\u0027s own facts, each the one date stated, said with its role and never as an interval; an edge says that the publisher records the relation and nothing about its effect on any provision or date; the records are of the act as a whole, served whole whatever date, language, direction or page is asked of the references; families gives each relation\u0027s acquisition state, and an absence is said only of a relation acquired in full"
+            },
             "publisher_work_iri": "http://data.legilux.public.lu/eli/etat/leg/loi/1991/08/10/n3",
             "requested_identifier": "/lu-legilux/loi-1991-08-10-n3",
             "requested_language": "fra",

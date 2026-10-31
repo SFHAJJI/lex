@@ -30,6 +30,7 @@ import { readAsPublished } from './as-published.mjs';
 import { readCatalogueFacts, readDateFacts } from './date-role.mjs';
 import { readEuropeForceDates } from './europe-force-dates.mjs';
 import { readEuropeOfficialJournal, readEuropeTitles } from './europe-publication.mjs';
+import { readAmendedAfter, readPublisherRelations } from './publisher-relations.mjs';
 
 /** The text statuses a version of the catalogue held without text names (index 9's `text_status`, S7a). */
 export const TEXTLESS_STATUSES = Object.freeze([
@@ -350,6 +351,9 @@ export function readDossier(answer) {
     chain: readCatalogueChain(answer, workKey, seen),
     // Index 9's force facts of the act (R79), or null on an index of schema 8 or 6.
     force: readForce(answer, workIri),
+    // Index 10's relation records of the act (R29) and R72's notice, or null on an index of schema 9, 8 or 6.
+    relations: readPublisherRelations(answer),
+    amendedAfter: readAmendedAfter(answer, workKey),
     scope: requireText(requireOwn(answer, 'scope', where), 'scope'),
     articlesNotAdmittedNote: requireText(requireOwn(answer, 'articles_not_admitted_note', where), 'articles_not_admitted_note'),
     corpusSha256: requireDigest(requireOwn(answer, 'corpus_sha256', where), 'corpus_sha256'),
