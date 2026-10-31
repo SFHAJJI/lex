@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Text;
 using System.Xml.Linq;
 using Lex.V3.Ingest.Europe;
 
@@ -109,6 +110,73 @@ public sealed class EuFormexPublicationTests
         StringAssert.StartsWith(reference.PublicationXml!, "<DATE ISO=\"20160504\">");
         if (language == "eng") Assert.AreEqual(GdprWords, publication.TitleText);
         Assert.AreEqual(reference, EuFormexPublicationReader.ReferenceOfXml(reference.Kind, reference.ReferenceXml, reference.PublicationXml));
+    }
+
+    [TestMethod]
+    public void AStoredRawFormIsTheSameBytesOnEverySystemWhateverItsLineEndingsSpacesAndMarks()
+    {
+        // The repair of 2026-10-31: derive-r3's index, derived on Linux, refused to open on Windows because the reader
+        // re-serialised a title with a line feed as "\r\n" (XElement.ToString's newline handling replaces each line feed with
+        // the system's line ending). A package's CRLF is one line feed once parsed (XML's own rule), and the stored form keeps it
+        // as one line feed on every system; a no-break space, a combining mark and a decomposed accent are kept as the code
+        // points the package states, never normalised, and the words are read alike under invariant globalization.
+        const string Decomposed = "e\u0301";
+        var unit = Encoding.UTF8.GetBytes(
+            "<ACT><TITLE><TI>\r\n<P><HT TYPE=\"UC\">Council Directive</HT> 2006/112/EC</P>\r\n<P>of <DATE ISO=\"20061128\">28\u00a0November 2006</DATE></P>" +
+            "<P>on the common syst" + Decomposed + "me of value added tax, d\u00e9j\u00e0 r\u00e9vis" + Decomposed + "e</P></TI></TITLE>" +
+            "<BIB.INSTANCE><DOCUMENT.REF FILE=\"L_2006347EN.01000101.doc.xml\">\r\n<COLL>L</COLL>\r\n<NO.OJ>347</NO.OJ><YEAR>2006</YEAR><PAGE.FIRST>1</PAGE.FIRST></DOCUMENT.REF></BIB.INSTANCE></ACT>");
+        var root = XDocument.Load(new MemoryStream(unit), LoadOptions.PreserveWhitespace).Root!;
+        var publication = EuFormexPublicationReader.Read(root, "L_2006347EN.01000101.xml", new Dictionary<string, XElement>(StringComparer.Ordinal))!;
+
+        var expectedXml = "<TITLE><TI>\n<P><HT TYPE=\"UC\">Council Directive</HT> 2006/112/EC</P>\n<P>of <DATE ISO=\"20061128\">28\u00a0November 2006</DATE></P>" +
+            "<P>on the common syst" + Decomposed + "me of value added tax, d\u00e9j\u00e0 r\u00e9vis" + Decomposed + "e</P></TI></TITLE>";
+        Assert.AreEqual(expectedXml, publication.TitleXml, "one line feed per line ending, the code points as stated, on this system");
+        Assert.DoesNotContain('\r', publication.TitleXml!);
+        Assert.AreEqual("Council Directive 2006/112/EC of 28 November 2006 on the common syst" + Decomposed + "me of value added tax, d\u00e9j\u00e0 r\u00e9vis" + Decomposed + "e",
+            publication.TitleText, "a no-break space is white space between words; the marks are kept as stated");
+        Assert.AreEqual(publication.TitleText, EuFormexPublicationReader.TitleTextOfXml(publication.TitleXml!), "the stored form reads back to the same words");
+        Assert.AreEqual(publication.TitleXml, EuFormexPublicationReader.Serialise(XElement.Parse(publication.TitleXml!, LoadOptions.PreserveWhitespace)),
+            "serialising the stored form again gives the same bytes");
+        Assert.IsNull(EuFormexPublicationReader.TitleTextOfXml(publication.TitleXml!.Replace("\n", "\r\n", StringComparison.Ordinal)),
+            "a form with the system's line ending is not the reader's own");
+
+        var reference = publication.Reference!;
+        Assert.AreEqual("<DOCUMENT.REF FILE=\"L_2006347EN.01000101.doc.xml\">\n<COLL>L</COLL>\n<NO.OJ>347</NO.OJ><YEAR>2006</YEAR><PAGE.FIRST>1</PAGE.FIRST></DOCUMENT.REF>",
+            reference.ReferenceXml);
+        Assert.AreEqual(("L", "347", "2006", "1", (string?)null), (reference.Series, reference.OjNumber, reference.Year, reference.FirstPage, reference.PublicationDate));
+        Assert.AreEqual(reference, EuFormexPublicationReader.ReferenceOfXml(reference.Kind, reference.ReferenceXml, null), "the stored elements read back to the same reference");
+        Assert.AreEqual("d\u00e9j\u00e0 r\u00e9vis" + Decomposed + "e", EuropeIndexBuilder.LiteralTitleText(" d\u00e9j\u00e0\u00a0r\u00e9vis" + Decomposed + "e\r\n"),
+            "a literal's words: the same rule, no normalisation");
+    }
+
+    [TestMethod]
+    public void AStoredFormWithACarriageReturnInTextOrALineFeedInAnAttributeReopensToTheSameBytes()
+    {
+        // The review of #1015: a writer that replaces nothing writes a carriage return in text, and a line feed, tab or carriage
+        // return in an attribute value, as the raw character, which the next parse normalises to a line feed or a space, so the
+        // stored form would not re-serialise to itself and the open would refuse. The reader's writer entitises them, and the
+        // form parses and serialises again to the same bytes, twice over; a text line feed stays one raw line feed.
+        var unit = Encoding.UTF8.GetBytes(
+            "<ACT><TITLE><TI><P>on the&#xD;common\nsystem</P></TI></TITLE>" +
+            "<BIB.INSTANCE><DOCUMENT.REF FILE=\"L_2006347EN&#xA;.01000101&#x9;.doc&#xD;.xml\"><COLL>L</COLL><NO.OJ>347</NO.OJ><YEAR>2006</YEAR><PAGE.FIRST>1</PAGE.FIRST></DOCUMENT.REF></BIB.INSTANCE></ACT>");
+        var root = XDocument.Load(new MemoryStream(unit), LoadOptions.PreserveWhitespace).Root!;
+        var publication = EuFormexPublicationReader.Read(root, "L_2006347EN.01000101.xml", new Dictionary<string, XElement>(StringComparer.Ordinal))!;
+
+        Assert.AreEqual("<TITLE><TI><P>on the&#xD;common\nsystem</P></TI></TITLE>", publication.TitleXml, "the carriage return entitised, the line feed raw");
+        Assert.AreEqual("on the\rcommon system".Replace("\r", " ", StringComparison.Ordinal), publication.TitleText, "a carriage return is white space between words");
+        Assert.AreEqual("<DOCUMENT.REF FILE=\"L_2006347EN&#xA;.01000101&#x9;.doc&#xD;.xml\"><COLL>L</COLL><NO.OJ>347</NO.OJ><YEAR>2006</YEAR><PAGE.FIRST>1</PAGE.FIRST></DOCUMENT.REF>",
+            publication.Reference!.ReferenceXml, "the attribute's control characters entitised");
+        foreach (var stored in new[] { publication.TitleXml!, publication.Reference.ReferenceXml })
+        {
+            var once = EuFormexPublicationReader.Serialise(XElement.Parse(stored, LoadOptions.PreserveWhitespace));
+            var twice = EuFormexPublicationReader.Serialise(XElement.Parse(once, LoadOptions.PreserveWhitespace));
+            Assert.AreEqual(stored, once, "parse and serialise: the same bytes");
+            Assert.AreEqual(once, twice, "and again");
+        }
+
+        Assert.AreEqual(publication.TitleText, EuFormexPublicationReader.TitleTextOfXml(publication.TitleXml!));
+        Assert.AreEqual(publication.Reference, EuFormexPublicationReader.ReferenceOfXml(publication.Reference.Kind, publication.Reference.ReferenceXml, null));
+        Assert.IsNull(EuFormexPublicationReader.TitleTextOfXml("<TITLE><TI><P>on the\rcommon</P></TI></TITLE>"), "a raw carriage return is not a form the reader stores");
     }
 
     [TestMethod]
