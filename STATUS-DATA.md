@@ -49,7 +49,11 @@ publisher traffic, no browser, no Azure, no derive; nothing was measured again.
 - **Driver decisions (reversible).** The switches are Release 3's and `lu-release-2` keeps policy A. Only the entry of the
   recommendation carries the owner's words. Two textless states at a stale coordinate are an ambiguity, not one chosen.
   A stale digest's refusal names the digest asked beside the state's own.
-- **Tests:** pending the build.
+- **Tests at 388a350e** (Windows, 2026-10-31; no browser, no publisher traffic, no Azure): `dotnet build Lex.V3.slnx -c Release`
+  0 warnings; `Lex.V3.Tests` 3,388 (3,382 passed, 6 skipped); the touched Ingest classes, every census and every
+  construction-surface class 202 (200 passed, 2 skipped); web `npm run build`, then `npm test` 1,493 (1,489 passed, 3
+  skipped, 1 failed for want of `awk` on this path, `image-run`, which passes with Git's `awk`); `eng/verify-v3-tree.ps1`
+  1,803 tracked paths.
 
 `data/r1-gates`. Release 2's data (derive-r2, D1 at 98eef6c6) failed only Luxembourg temporal exactness (as_of, fra) under
 the old oracle, which read index 9's chain by the index 8 rule. No publisher traffic, no browser, no Azure.
