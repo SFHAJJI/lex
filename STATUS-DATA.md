@@ -7,15 +7,18 @@ Updated 2026-10-31.
 **What is served.** Release 3's mount (derive-r3, D3 at 6d71aeb6, rules `lu-release-3`) holds 237,090 Luxembourg articles, of
 which 52 belong to an expression no state references: 49 of `loi/2026/03/03/a115/jo/fr` and 3 of `rgd/2026/06/12/a299/jo/fr`,
 both admitted by the rulings (`sparql_cc_by_in_file_silent`, `akn_admit`) and both without any state row; 151 `cites` edges
-start from those articles. Every reader query reaches an article through a state (`LuxembourgIndexQueries`: the article
-identities of a state, or a relation's `from_ref` joined back to its state), so these articles are served nowhere: no
-permalink, no search hit, no dossier. Two readers refused them instead of leaving them out: the R92 measurement
-(`NamesMeasurement`) refused the whole index ("52 Luxembourg articles belong to no state's expression"), which stopped
-Release 3's build after its gates; and `cited_by` / `relations` (`V3CorpusMount`) threw on an inbound edge whose citing
-expression has no state. Both now leave such articles out: the measurement counts them per expression in the
-measurement's tally (`unserved_articles`, `unserved_expressions`; schema `lex-v3-names-measurement/2`), and the API skips the
-edge, so an act cited by one of those articles answers as before. A test drops a citing state from a fixture's index and
-checks both.
+start from those articles. No text, label, permalink, search hit or dossier reaches a Luxembourg article but through a
+state (`LuxembourgIndexQueries`: the article identities of a state, or a relation's `from_ref` joined back to its state),
+so these articles are served nowhere. Three readers answered otherwise: the R92 measurement (`NamesMeasurement`) refused
+the whole index ("52 Luxembourg articles belong to no state's expression"), which stopped Release 3's build after its
+gates; `cited_by` / `relations` (`V3CorpusMount`) threw on an inbound edge whose citing expression has no state; and
+`resolve` (`ResolveExact`, which reads `articles` by expression, wid and identity) would have named the expression and
+listed its article identities (no text). Now the measurement counts them per expression in its tally (`unserved_articles`,
+`unserved_expressions`; schema `lex-v3-names-measurement/2`), the API skips the edge, and `ResolveExact` keeps only
+expressions a state references, so the identifier is `identifier_unknown`. The EU branch of the measurement keeps
+refusing an article of no state: the EU reader is not state-bound (`EuropeIndexBuilder.ResolveExact`,
+`ResolveExpressionArticles`, the search read the articles table directly), so there the old refusal is the guard. A test
+drops a citing state from a fixture's index and checks the measurement, `cited_by`, `relations` and `resolve`.
 
 **What is next.** Why the derive wrote the articles and references of a state it then dropped is the next data release's
 question (the two acts are 2026 acts whose only file is the published form; the state was refused after the article
@@ -23,10 +26,12 @@ extraction, probably by the content-consistency rule of reading /2). The article
 the files, and the next derive either seats their states or writes no articles for them. Until then the measurement's
 record names them.
 
-**Driver decisions (reversible).** Recording and skipping, not refusing: an unserved article cannot expose a name
-(R92 measures served text) and has no address to cite from; the index's gap is on the measurement's record rather than in
-a refusal that stops a release whose gates passed. The image rehearsal also verifies that the published measurement tool
-holds its SQLite provider before running it (attempt 4's failure).
+**Driver decisions (reversible).** Recording and skipping, not refusing, on the Luxembourg side only: an unserved
+article cannot expose a name (R92 measures served text) and has no address to cite from; the index's gap is on the
+measurement's record rather than in a refusal that stops a release whose gates passed. The image rehearsal also verifies
+that the published measurement tool holds its SQLite provider and batteries before running it (attempt 4's failure).
+Review of #1016 (read-only): REPAIR, two findings, both taken: `resolve` could name an unserved expression (now
+`identifier_unknown`), and the EU branch keeps its refusal.
 
 **Updated:** 2026-10-31.
 

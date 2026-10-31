@@ -1296,6 +1296,16 @@ public sealed class V3CorpusResolveMountTests
                     Assert.AreEqual(1, insert.ExecuteNonQuery());
                 }
 
+                // The alternate expression is a served one: a state of the same work and date names it and its article (an
+                // expression no state names is served nowhere and resolves to nothing, #1016).
+                var own = ReadStates(connection).Single(row =>
+                    string.Equals(row.ExpressionIri, ExpressionIri, StringComparison.Ordinal) && string.Equals(row.Language, "fra", StringComparison.Ordinal));
+                LuxembourgIndexBuilderTests.RewriteStates(connection, ReadStates(connection).Append(own with
+                {
+                    ExpressionIri = alternateExpression,
+                    ArticleIdentitiesJson = System.Text.Json.JsonSerializer.Serialize(new[] { new string('f', 64) }),
+                }));
+
                 members = ReadMembers(connection);
                 articles = ReadArticles(connection);
                 states = ReadStates(connection);
@@ -1595,6 +1605,17 @@ public sealed class V3CorpusResolveMountTests
                 delete.Parameters.AddWithValue("$expression", expressionIri);
                 Assert.IsGreaterThan(0, delete.ExecuteNonQuery());
             });
+
+        /// <summary>The article identities the index holds of one expression, whether or not a state references them.</summary>
+        public IReadOnlyList<string> ArticleIdentities(string expressionIri)
+        {
+            using var connection = LuxembourgIndexBuilder.Open(
+                Path.Combine(Directory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly);
+            return ReadArticles(connection)
+                .Where(article => string.Equals(article.ExpressionIri, expressionIri, StringComparison.Ordinal))
+                .Select(static article => article.ArticleIdentitySha256)
+                .ToArray();
+        }
 
         /// <summary>How many articles the index holds of one expression, whether or not a state references them.</summary>
         public long ArticleCount(string expressionIri)

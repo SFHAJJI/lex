@@ -56,10 +56,11 @@ public static class NamesMeasurement
         public long Indexed;
         public SortedDictionary<string, long> NotListed { get; } = new(StringComparer.Ordinal);
 
-        // Articles the index holds that no state references: every reader query reaches an article through a state, so
-        // they are served nowhere and the detector does not read them; the measurement records them, per expression, so
-        // the index's own gap is on record (derive-r3, 2026-10-31: two 2026 acts admitted by the rulings whose states
-        // the derive then dropped kept their 52 articles).
+        // Luxembourg articles the index holds that no state references: served nowhere (the Luxembourg reader reaches an
+        // article only through a state, and an exact identifier of such an expression resolves to nothing), so the detector
+        // does not read them; the measurement records them, per expression, so the index's own gap is on record
+        // (derive-r3, 2026-10-31: two 2026 acts admitted by the rulings whose states the derive then dropped kept their 52
+        // articles). Zero for the EU scope: the EU reader is not state-bound, so the measurement refuses such an EU index.
         public long UnservedArticles;
         public SortedDictionary<string, long> UnservedExpressions { get; } = new(StringComparer.Ordinal);
     }
@@ -287,8 +288,9 @@ public static class NamesMeasurement
         }
 
         // Every served article, read once: the detector's findings and signals per work. An article of an expression no
-        // state references is served nowhere (every reader query reaches an article through a state), so it is not read:
-        // it is counted, per expression, and the tally records it (unserved_articles).
+        // state references is served nowhere: no text, label, permalink, search hit or dossier reaches a Luxembourg article
+        // but through a state, and an exact identifier of such an expression resolves to nothing (ResolveExact). So it is not
+        // read: it is counted, per expression, and the tally records it (unserved_articles).
         log($"reading the Luxembourg articles of {works.Count} works");
         var unserved = new SortedDictionary<string, long>(StringComparer.Ordinal);
         using (var command = connection.CreateCommand())
@@ -402,8 +404,12 @@ public static class NamesMeasurement
             }
         }
 
+        // Every EU article, read once. Unlike the Luxembourg reader, the EU reader is not state-bound (ResolveExact,
+        // ResolveExpressionArticles and the search read the articles table by work, CELEX, expression and identity), so an
+        // article of a version no state names could still be served: the measurement refuses such an index, as before, rather
+        // than record what it cannot vouch for.
         log($"reading the EU articles of {acts.Count} acts");
-        var unservedEu = new SortedDictionary<string, long>(StringComparer.Ordinal);
+        long orphans = 0;
         using (var command = connection.CreateCommand())
         {
             command.CommandText = "SELECT publisher_work_id, language, searchable_text, heading, tokens_json FROM articles";
@@ -418,10 +424,14 @@ public static class NamesMeasurement
                 }
                 else
                 {
-                    // An article of a version no state names: served nowhere, not read, recorded (as the Luxembourg side does).
-                    Increment(unservedEu, reader.GetString(0));
+                    orphans++;
                 }
             }
+        }
+
+        if (orphans > 0)
+        {
+            throw new InvalidDataException($"{orphans} EU articles belong to no state's work: the index is not one the measurement can read.");
         }
 
         // An EU index /7 serves its expressions' titles: each is read by the detector as served text is, so a title that names
@@ -452,17 +462,6 @@ public static class NamesMeasurement
         }
 
         var tally = new Tally();
-        foreach (var (version, count) in unservedEu)
-        {
-            tally.UnservedArticles += count;
-            tally.UnservedExpressions[version] = count;
-        }
-
-        if (tally.UnservedArticles > 0)
-        {
-            log($"{tally.UnservedArticles} EU articles of {unservedEu.Count} versions belong to no state: served nowhere, not read, recorded");
-        }
-
         foreach (var act in acts.Values)
         {
             tally.Works++;

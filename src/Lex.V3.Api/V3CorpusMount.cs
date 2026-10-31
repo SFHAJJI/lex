@@ -2968,9 +2968,10 @@ internal sealed partial class V3CorpusMount : IDisposable
             var citingStates = _reader.ResolveStatesOfExpressions(
                     inboundEdges.Select(static edge => edge.ExpressionIri).Distinct(StringComparer.Ordinal).ToArray())
                 .ToDictionary(static state => state.ExpressionIri, StringComparer.Ordinal);
-            // A citing article whose expression no state holds is served nowhere (every reader query reaches an article
-            // through a state) and has no address to cite from: its edge is left out. The names measurement records such
-            // articles (unserved_articles), so the index's gap is on record rather than a refusal here.
+            // A citing article whose expression no state holds is served nowhere (no text, label, permalink, search hit or
+            // dossier reaches a Luxembourg article but through a state, and its exact identifier resolves to nothing) and has
+            // no address to cite from: its edge is left out. The names measurement records such articles (unserved_articles),
+            // so the index's gap is on record rather than a refusal here.
             inbound.AddRange(inboundEdges
                 .Where(edge => citingStates.ContainsKey(edge.ExpressionIri))
                 .Select(edge => (State: citingStates[edge.ExpressionIri], Edge: edge))

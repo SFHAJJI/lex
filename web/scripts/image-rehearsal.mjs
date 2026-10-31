@@ -665,7 +665,7 @@ function publishTool(into, log) {
  * SQLite provider it reads every index with must both be there before the tool runs.
  */
 export function assertPublishedTool(into) {
-  for (const name of ["Lex.V3.Tool.dll", "Microsoft.Data.Sqlite.dll", "SQLitePCLRaw.core.dll"]) {
+  for (const name of ["Lex.V3.Tool.dll", "Microsoft.Data.Sqlite.dll", "SQLitePCLRaw.core.dll", "SQLitePCLRaw.provider.e_sqlite3.dll", "SQLitePCLRaw.batteries_v2.dll"]) {
     if (!existsSync(join(into, name))) throw new Error(`the published measurement tool is incomplete: ${name} is missing from ${into}`);
   }
 }

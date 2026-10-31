@@ -386,6 +386,16 @@ public sealed class V3CorpusNamesMountTests
                 Assert.IsFalse(value.GetProperty("edges").EnumerateArray()
                     .Any(edge => string.Equals(edge.GetProperty("citing_work_key").GetString(), citing.WorkKey, StringComparison.Ordinal)), operation);
             }
+
+            // The review of #1016, F1: an exact identifier of the expression (its IRI, or one of its article identities)
+            // resolves to nothing, as the expression is served nowhere.
+            var identity = fixture.ArticleIdentities(citing.ExpressionIri).First();
+            foreach (var identifier in new[] { citing.ExpressionIri, identity })
+            {
+                var resolved = await AskAsync(mount, "resolve", new() { ["identifier"] = identifier });
+                Assert.AreEqual("identifier_unknown", resolved.Refusal?.Code, identifier);
+                Assert.IsNull(resolved.Result, identifier);
+            }
         }
     }
 

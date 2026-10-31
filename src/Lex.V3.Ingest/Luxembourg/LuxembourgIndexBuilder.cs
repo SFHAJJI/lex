@@ -3815,7 +3815,15 @@ public sealed partial class LuxembourgIndexReader : IDisposable
                     reader.GetString(3)));
             }
 
+            // An expression no state references is served nowhere (every other query reaches an article through a state), so
+            // an exact identifier of it resolves to nothing rather than to a work the index cannot show (derive-r3, 2026-10-31:
+            // two acts whose states the derive dropped kept their articles; the names measurement records them).
+            var expressions = rows.Select(static row => row.Expression).Distinct(StringComparer.Ordinal).ToArray();
+            var held = expressions.Length == 0
+                ? new HashSet<string>(StringComparer.Ordinal)
+                : ResolveStatesOfExpressionsUnlocked(expressions).Select(static state => state.ExpressionIri).ToHashSet(StringComparer.Ordinal);
             return rows
+                .Where(row => held.Contains(row.Expression))
                 .GroupBy(static row => (row.Expression, row.Wid, row.Language))
                 .Select(static group => new LuxembourgIndexResolvedExpression(
                     group.Key.Expression,
@@ -4874,11 +4882,17 @@ public sealed partial class LuxembourgIndexReader : IDisposable
 
         lock (_gate)
         {
-            using var command = _connection.CreateCommand();
-            command.CommandText = _version == 9 ? LuxembourgIndexQueries.StatesOfExpressionsNine : LuxembourgIndexQueries.StatesOfExpressions;
-            command.Parameters.AddWithValue("$expressions", JsonSerializer.Serialize(expressionIris.Distinct(StringComparer.Ordinal)));
-            return ReadResolvedStates(command);
+            return ResolveStatesOfExpressionsUnlocked(expressionIris);
         }
+    }
+
+    /// <summary><see cref="ResolveStatesOfExpressions"/> for a caller that holds the gate.</summary>
+    private IReadOnlyList<LuxembourgIndexResolvedState> ResolveStatesOfExpressionsUnlocked(IReadOnlyList<string> expressionIris)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = _version == 9 ? LuxembourgIndexQueries.StatesOfExpressionsNine : LuxembourgIndexQueries.StatesOfExpressions;
+        command.Parameters.AddWithValue("$expressions", JsonSerializer.Serialize(expressionIris.Distinct(StringComparer.Ordinal)));
+        return ReadResolvedStates(command);
     }
 
     private static IReadOnlyList<LuxembourgIndexResolvedState> ReadResolvedStates(SqliteCommand command)
