@@ -19,7 +19,7 @@ public sealed class LuxembourgIndexBuilderTests
     {
         var digest = Convert.ToHexStringLower(SHA256.HashData(
             LuxembourgIndexBuilder.BuildFixedInputDeterminismEvidence()));
-        Assert.AreEqual("7cfd99881fc878616e96b067342f955df11ae908147f69c04ff64fcfce439184", digest);
+        Assert.AreEqual("b2a99e3fe4c48cf4a638a8f7510e99430090e8848dcd23bdf755d78390f33e23", digest);
     }
 
     /// <summary>
@@ -121,7 +121,7 @@ public sealed class LuxembourgIndexBuilderTests
         var schema = (string)typeof(LuxembourgIndexBuilder)
             .GetField(nameof(LuxembourgIndexBuilder.Schema))!
             .GetRawConstantValue()!;
-        Assert.AreEqual("lex-v3-luxembourg-index/9", schema);
+        Assert.AreEqual("lex-v3-luxembourg-index/10", schema);
         Assert.IsTrue(typeof(LuxembourgIndexBuilder).GetMethods().Any(static method => method.Name == nameof(LuxembourgIndexBuilder.TryBuild)));
         Assert.IsNotNull(typeof(LuxembourgIndexReader).GetMethod(nameof(LuxembourgIndexReader.OpenAndVerify)));
     }
@@ -573,6 +573,7 @@ public sealed class LuxembourgIndexBuilderTests
     [TestMethod]
     [DataRow("PRAGMA user_version=2", "schema differs from the exact terminal schema")]
     [DataRow("PRAGMA user_version=6", "schema differs from the exact terminal schema")]
+    [DataRow("PRAGMA user_version=9", "schema differs from the exact terminal schema")]
     [DataRow("UPDATE states SET state_sha256='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'", "digest is not derived")]
     [DataRow("UPDATE articles SET expression_iri=expression_iri || '/other'", "does not bind its exact article population")]
     [DataRow("UPDATE states SET work_key='wrong-work-key'", "not canonical")]
@@ -1388,7 +1389,7 @@ public sealed class LuxembourgIndexBuilderTests
     internal static LuxembourgIndexBuilder.ObservationRow[] ReadObservations(SqliteConnection connection) =>
         LuxembourgIndexBuilder.ReadLogObservations(connection, LogSchemaOf(connection));
 
-    /// <summary>The index's schema version (<c>user_version</c>): 9, or a legacy 8 or 6 a test rewrote it into.</summary>
+    /// <summary>The index's schema version (<c>user_version</c>): 10, or a 9, 8 or 6 a test rewrote it into.</summary>
     internal static int IndexVersion(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
@@ -1396,9 +1397,12 @@ public sealed class LuxembourgIndexBuilderTests
         return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
-    /// <summary>The log schema of the index's version: log /3 for 9, log /2 otherwise.</summary>
+    /// <summary>The generation of the index's states, articles and log: 9 for an index of schema 10 or 9 (index 10 adds tables only).</summary>
+    internal static int TablesVersion(SqliteConnection connection) => IndexVersion(connection) is var version && version == 10 ? 9 : version;
+
+    /// <summary>The log schema of the index's version: log /3 for 10 and 9, log /2 otherwise.</summary>
     internal static string LogSchemaOf(SqliteConnection connection) =>
-        IndexVersion(connection) == 9 ? LuxembourgIndexBuilder.EventLogSchema : LuxembourgIndexBuilder.LegacyEventLogSchema8;
+        TablesVersion(connection) == 9 ? LuxembourgIndexBuilder.EventLogSchema : LuxembourgIndexBuilder.LegacyEventLogSchema8;
 
     /// <summary>The digest of the index's log as it now stands, as its log stamp records it for its schema.</summary>
     internal static string LogStampOf(SqliteConnection connection) =>
@@ -1406,7 +1410,12 @@ public sealed class LuxembourgIndexBuilderTests
 
     /// <summary>The digest of the index's logical rows as they now stand, as its stamp records it for its schema.</summary>
     internal static string LogicalRowsOf(SqliteConnection connection) =>
-        IndexVersion(connection) == 9
+        IndexVersion(connection) == 10
+            ? LuxembourgIndexBuilder.HashLogicalRows(
+                ReadMembers(connection), ReadArticles(connection), ReadStates(connection), ReadWorkTitles(connection),
+                ReadRelations(connection), ReadWorkFacts(connection), ReadEvents(connection), ReadIntervals(connection),
+                LuxembourgIndexReader.ReadPublisherRelationRows(connection))
+            : IndexVersion(connection) == 9
             ? LuxembourgIndexBuilder.HashLogicalRows(
                 ReadMembers(connection), ReadArticles(connection), ReadStates(connection), ReadWorkTitles(connection),
                 ReadRelations(connection), ReadWorkFacts(connection), ReadEvents(connection), ReadIntervals(connection))
@@ -1416,7 +1425,7 @@ public sealed class LuxembourgIndexBuilderTests
 
     /// <summary>The index's interval transitions (none before index 9).</summary>
     internal static LuxembourgIndexBuilder.IntervalRow[] ReadIntervals(SqliteConnection connection) =>
-        IndexVersion(connection) == 9 ? LuxembourgIndexReader.ReadIntervals(connection) : [];
+        TablesVersion(connection) == 9 ? LuxembourgIndexReader.ReadIntervals(connection) : [];
 
     /// <summary>
     /// Rewrites the states table as <paramref name="rows"/>, each completed as its schema's builder writes it: under index
@@ -1428,7 +1437,7 @@ public sealed class LuxembourgIndexBuilderTests
     internal static LuxembourgIndexBuilder.StateRow[] RewriteStates(SqliteConnection connection, IEnumerable<LuxembourgIndexBuilder.StateRow> rows)
     {
         var source = rows.ToArray();
-        var version = IndexVersion(connection);
+        var version = TablesVersion(connection);
         LuxembourgIndexBuilder.StateRow[] written;
         LuxembourgIndexBuilder.IntervalRow[] intervals = [];
         if (version == 9)
@@ -1501,7 +1510,7 @@ public sealed class LuxembourgIndexBuilderTests
     /// </summary>
     internal static void ReplaceStatesRedigested(SqliteConnection connection, IEnumerable<LuxembourgIndexBuilder.StateRow> rows)
     {
-        var version = IndexVersion(connection);
+        var version = TablesVersion(connection);
         var redigested = rows.Select(row => row with
         {
             StateSha256 = version == 9
@@ -1541,6 +1550,23 @@ public sealed class LuxembourgIndexBuilderTests
                 ("$p8", row.ArticleIdentitiesJson));
         }
     }
+
+    /// <summary>
+    /// A built index 10 rewritten into schema 9, as schema 9 wrote it: its three relation tables dropped (their indexes with
+    /// them), user_version 9, and the stamp naming schema 9 with its logical rows re-sealed as schema 9 hashes them. Every other
+    /// table is unchanged, so the file is the index 9 a build before index 10 wrote from the same rows.
+    /// </summary>
+    internal static byte[] Schema9Of(ReadOnlySpan<byte> schema10) =>
+        MutateDatabase(schema10, static connection =>
+        {
+            Execute(connection, "DROP TABLE publisher_relations");
+            Execute(connection, "DROP TABLE publisher_impacts");
+            Execute(connection, "DROP TABLE relation_families");
+            Execute(connection, "PRAGMA user_version=9");
+            Execute(connection, "UPDATE stamp SET schema_identity=$p0 WHERE stamp_id=1", ("$p0", LuxembourgIndexBuilder.LegacySchema9));
+            Execute(connection, "UPDATE stamp SET logical_rows_sha256=$p0 WHERE stamp_id=1", ("$p0", LogicalRowsOf(connection)));
+            Execute(connection, "VACUUM");
+        });
 
     /// <summary>
     /// A built index 9 rewritten into schema 8's tables, as schema 8 wrote them: its held rows only, with schema 8's nine
@@ -1826,7 +1852,7 @@ public sealed class LuxembourgIndexBuilderTests
     /// <summary>Every article row in identity order, with its document position on an index 9.</summary>
     internal static LuxembourgIndexBuilder.ArticleRow[] ReadArticles(SqliteConnection connection)
     {
-        var nine = IndexVersion(connection) == 9;
+        var nine = TablesVersion(connection) == 9;
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT article_identity_sha256,object_ref_sha256,expression_iri,publisher_id,publisher_wid,applicability_date,language,rule_profile_sha256,searchable_text,tokens_json" +
             (nine ? ",document_position" : "") + " FROM articles ORDER BY article_identity_sha256";
@@ -1853,7 +1879,7 @@ public sealed class LuxembourgIndexBuilderTests
     }
 
     internal static LuxembourgIndexBuilder.StateRow[] ReadStates(SqliteConnection connection) =>
-        LuxembourgIndexReader.ReadStates(connection, IndexVersion(connection));
+        LuxembourgIndexReader.ReadStates(connection, TablesVersion(connection));
 
     internal static LuxembourgIndexBuilder.WorkTitleRow[] ReadWorkTitles(SqliteConnection connection)
     {
