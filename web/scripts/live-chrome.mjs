@@ -64,6 +64,22 @@ const EN = Object.freeze({
       other: "{count} more acts",
     }),
     noTitlesHeld: "This index holds no work titles, so the phrase was matched against article text only.",
+    // The EU acts a search that names no work found by their titles (EU index /7, Release 3's item 1;
+    // `europe-publication.mjs`): each act once, by its title in the language that matched, linked to its dossier; their text
+    // is not searched here.
+    euTitleExact: "The phrase is the title of an EU act this site holds: {title}",
+    euTitlePhrase: "The phrase is in the title of an EU act this site holds: {title}",
+    euTitles: Object.freeze({
+      one: "The phrase is in the title of {count} EU act this site holds:",
+      other: "The phrase is in the titles of {count} EU acts this site holds:",
+    }),
+    euTitleAct: "{title} ({celex})",
+    euTitlesSearched: "The titles of the EU acts this site holds were matched too; the text of those acts was not searched.",
+    runEuTitles: "EU titles: the phrase is in no title of an EU act this site holds.",
+    runEuTitlesMatched: Object.freeze({
+      one: "EU titles: the phrase is in the title of the EU act shown above.",
+      other: "EU titles: the phrase is in the titles of the EU acts shown above.",
+    }),
     ambiguousHeading: "Works with several versions on {date}",
     ambiguousNote: "These works have more than one version that applies on that date, so none is chosen and none contributes a hit.",
     ambiguousWork: "{work}: {candidates}",
@@ -172,6 +188,13 @@ const EN = Object.freeze({
     // ignored (the French review of this slice, its point 4).
     titleMatching: "Titles are matched with capitals and accents ignored.",
     runTitlesNotRun: "Titles: not searched, since a work was named.",
+    // The title ladder's line when the EU acts' titles were matched too (EU index /7): the Luxembourg titles said as such, so
+    // the two lines never contradict each other (the French review of 2026-10-27, its point 2).
+    runLuxembourgTitles: "Luxembourg titles: no title of a Luxembourg act this site holds matches the phrase.",
+    runLuxembourgTitlesMatched: Object.freeze({
+      one: "Luxembourg titles: the phrase matches the title of the Luxembourg act shown above.",
+      other: "Luxembourg titles: the phrase matches the titles of the Luxembourg acts shown above.",
+    }),
     runText: "Text: no article searched contains the phrase, even with capitals and accents ignored.",
     runTextWords: "Text, every word in any order: no article searched contains them all.",
     exactOnly: "Only the phrase was matched in the text, with capitals and accents ignored, œ and æ read as oe and ae, the typographic apostrophes as the straight one, a no-break space as a space and a soft hyphen as nothing: every other character of it counts, hyphens and punctuation included, and nothing is stemmed or expanded. A looser search of the text stays off until its own check has passed.",
@@ -1424,6 +1447,19 @@ const EN = Object.freeze({
       conflict: "The publisher records more than one entry into force for this act ({dates}): each is shown, and this site chooses none.",
       notWording: "None of the dates above is used to choose a wording: each wording below carries its own date.",
     }),
+    // An EU wording's titles and Official Journal reference, as the EU index /7 holds them (Release 3's item 1;
+    // `europe-publication.mjs`): the publisher's title, or the one the act's Formex package gives, in its own language; the
+    // publisher's short title; and the reference the act's Formex package states, which for a consolidated wording is the
+    // publication of the act it consolidates. Said only where the answer carries them; what is not held is said apart.
+    europePublication: Object.freeze({
+      title: "Title in {language}, as the publisher records it: {title}",
+      titleInPackage: "Title in {language}, as the act's Formex package gives it: {title}",
+      shortTitle: "Short title in {language}, as the publisher records it: {title}",
+      noTitle: "This site holds no title of the {language} wording.",
+      journal: "Official Journal reference of the {language} wording: {reference}",
+      journalConsolidated: "Official Journal reference of the act the {language} wording consolidates: {reference}",
+      noJournal: "This site holds no Official Journal reference of the {language} wording.",
+    }),
     // A Luxembourg act held only as first published (the plan's item 0.6, `as-published.mjs`): its label, what this site
     // holds of later versions, and the authenticity sentence of its case, with the act as published in {act}. The label
     // and the authenticity sentences are drafts pending the lawyer's read (the owner's item O4).
@@ -1494,6 +1530,17 @@ const EN = Object.freeze({
       suffixed: "{year}/{number}/{domain}",
       plain: "{year}/{number}",
       version: "{citation}, as at {date}",
+      // An Official Journal reference as EUR-Lex writes it (`europe-publication.mjs`): an issue with its date and first page,
+      // or, since October 2023, the act's own number and its date; a reference whose date the package does not state is
+      // said with its year.
+      journal: Object.freeze({
+        issue: "OJ {series} {number}, {date}, p. {page}",
+        issueNoPage: "OJ {series} {number}, {date}",
+        issueUndated: "OJ {series} {number} ({year}), p. {page}",
+        issueUndatedNoPage: "OJ {series} {number} ({year})",
+        act: "OJ {series}, {number}, {date}",
+        actUndated: "OJ {series}, {number}",
+      }),
       // The platform's authenticity statements for EU text (`V3CorpusMount.EuropeTextAuthenticity`), word for word, one for
       // each basis the act's own date chooses (the owner's decision of 2026-10-18, O4): the generator says the cited text's
       // language's only when the answer says exactly one of these.
@@ -1516,6 +1563,10 @@ const EN = Object.freeze({
       originalWording: "Wording: the original wording of {date}",
       consolidatedWording: "Wording: the consolidated wording of {date}",
       officialJournalNotHeld: "Published in: the Official Journal reference is not held by this index.",
+      // The reference the wording's Formex file states (EU index /7): the act's own, or for a consolidated wording that of the
+      // act it consolidates, which is not itself published in the Official Journal.
+      officialJournal: "Published in: {reference}",
+      officialJournalConsolidated: "The act consolidated was published in: {reference}",
       textSha256: "Text digest (SHA-256): {digest}",
       noText: "Text digest (SHA-256): none, the article is held without text.",
       consulted: "Consulted on Lex on {date} (date in Luxembourg).",

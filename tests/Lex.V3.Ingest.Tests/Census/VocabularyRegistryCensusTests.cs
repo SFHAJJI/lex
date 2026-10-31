@@ -71,13 +71,20 @@ public sealed class VocabularyRegistryCensusTests
                     + "DigestDomain, const Schema",
                 "Lex.V3.Ingest.Europe.EuObjectFactsBatchFactory: SetsOverObservedObjects=5, "
                     + "SetsOverPackRootsOnly=1",
+                "Lex.V3.Ingest.Europe.EuOfficialJournalNumberForms: All=2, const ActNumber, const SeriesNumber",
+                "Lex.V3.Ingest.Europe.EuOfficialJournalReferenceKinds: All=2, const ActPublication, "
+                    + "const ConsolidatedActPublication",
                 "Lex.V3.Ingest.Europe.EuropeForceDateRoles: InOrder=6, Named=4, const Application, "
                     + "const Deadline, const EndOfValidity, const EntryIntoForce, const NotPinned, const Signature",
                 "Lex.V3.Ingest.Europe.EuropeIndexBuilder: const AnnotatedPropertyIri, const AnnotatedSourceIri, "
                     + "const AnnotatedTargetIri, const CommentOnDateIri, static readonly Ddl, const DigestDdl, "
-                    + "const DigestSchema, const ForceDatesDdl, const LegacyDdl, const LegacySchema, const Schema, "
+                    + "const DigestSchema, const ForceDatesDdl, static readonly ForceDatesFullDdl, const ForceDatesSchema, "
+                    + "const LegacyDdl, const LegacySchema, const Schema, "
                     + "const SourceDdl, const SourceSchema, const StatesDdl, static readonly StatesFullDdl, "
-                    + "const StatesSchema, const TypeOfDateIri",
+                    + "const StatesSchema, const TitlesDdl, const TypeOfDateIri",
+                "Lex.V3.Ingest.Europe.EuropeTitleKinds: const ShortTitle, const Title",
+                "Lex.V3.Ingest.Europe.EuropeTitleSources: InOrder=3, const CellarExpressionTitle, "
+                    + "const CellarExpressionTitleShort, const FormexTitle",
                 "Lex.V3.Ingest.LexCorpus6Builder: Domain=13, const Schema",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgInFileRightsReader: const ReadingTwoProfileName, "
                     + "const ReadingTwoProfileText, static property ReadingTwoProfileSha256",
@@ -127,7 +134,7 @@ public sealed class VocabularyRegistryCensusTests
                     + "const IriKind, const ReferralDate",
                 "Lex.V3.Ingest.Names.IndexingRecord: const FileName, const Schema",
                 "Lex.V3.Ingest.Names.NamesMeasurement: const EuropeIndexFile, const EuropeSchema, "
-                    + "const LuxembourgIndexFile, const LuxembourgSchema, const "
+                    + "const EuropeTitlesSchema, const LuxembourgIndexFile, const LuxembourgSchema, const "
                     + "LuxembourgSchemaTen, const MeasurementFileName, const MeasurementSchema",
                 "Lex.V3.Ingest.Names.NamesRecord: const EuropePublisher, const FileName, "
                     + "const LuxembourgPublisher, const Rule, const Schema",

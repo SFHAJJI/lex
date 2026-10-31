@@ -62,8 +62,9 @@ public sealed class V3EnvelopeSamplesTests
         Assert.IsNotNull(longActMount);
 
         // An EU mount (the GDPR's one held English wording), for the search screen's EU answers and refusals.
-        // The GDPR's three dated statements as run 16 holds them: the EU dossier says the act's dates by role (the plan's item 2.1).
-        var europe = await EuropeMountedFixture.CreateAsync(withForceDates: true);
+        // The GDPR's three dated statements as run 16 holds them: the EU dossier says the act's dates by role (the plan's item 2.1),
+        // and its titles and Official Journal reference over the EU index /7 (Release 3's item 1).
+        var europe = await EuropeMountedFixture.CreateAsync(withForceDates: true, withTitles: true);
         await using var cleanupEurope = europe;
         using var europeMount = await V3CorpusMount.OpenAsync(europe.Directory, CancellationToken.None);
         Assert.IsNotNull(europeMount);
