@@ -55,12 +55,15 @@ test("one server, with a private writable /tmp, its probes on the image's own ro
   const probes = template.variables.releaseProbes;
   assert.deepEqual(probes.map((probe) => [probe.type, probe.httpGet.path, probe.httpGet.port]),
     [["Startup", "/", 8080], ["Liveness", "/", 8080], ["Readiness", "/health/ready", 8080]]);
-  // The API listens only once its mount is verified: the startup probe gives it about four and a half minutes before the
-  // container is restarted, at the probe's last failure (initial delay and every period but the last).
+  // The API listens only once its mount is copied, verified and warmed: the startup probe gives it about twenty minutes before
+  // the container is restarted, at the probe's last failure (initial delay and every period but the last). Release 2's first
+  // candidate, 2.97 GB of indexes on one vCPU, was restarted three times at a four-and-a-half-minute deadline (2026-10-31).
   const startup = probes[0];
-  assert.ok(startup.initialDelaySeconds + startup.periodSeconds * (startup.failureThreshold - 1) >= 270, "four and a half minutes to open the mount");
-  // One vCPU: a replica's ephemeral storage holds the verified index copies only from one vCPU up (4 GiB; 2 GiB at half).
-  assert.deepEqual(containers[0].resources, { cpu: "[json('1.0')]", memory: "2Gi" });
+  assert.ok(startup.initialDelaySeconds + startup.periodSeconds * (startup.failureThreshold - 1) >= 1170, "twenty minutes to open the mount");
+  assert.ok(startup.initialDelaySeconds + startup.periodSeconds * (startup.failureThreshold - 1) <= 1800, "and not more than thirty");
+  // Two vCPUs: the replica's ephemeral storage (8 GiB; 4 at one vCPU, 2 at half) holds the verified index copies of a data
+  // release larger than Release 2's, and the second core halves the start.
+  assert.deepEqual(containers[0].resources, { cpu: "[json('2.0')]", memory: "4Gi" });
   // The replica's /tmp outlives a container restart: the API is told it is its own, and removes a previous start's copies.
   assert.ok(containers[0].env.some((variable) => variable.name === "LEX_V3_TEMP_IS_PRIVATE" && variable.value === "1"));
   assert.equal(app.properties.configuration.ingress.targetPort, 8080);
@@ -101,7 +104,7 @@ test("the release's maintenance revision is the same image with LEX_V3_MAINTENAN
   assert.ok(traffic.startsWith(branch), traffic);
   assert.equal((traffic.match(/'label', 'maintenance'/g) ?? []).length, 1);
   // Everything else is the release's revision's: the same resources, volume, scale, registry and ingress rules.
-  assert.deepEqual(container.resources, { cpu: "[json('1.0')]", memory: "2Gi" });
+  assert.deepEqual(container.resources, { cpu: "[json('2.0')]", memory: "4Gi" });
   assert.ok(!/maintenance/.test(JSON.stringify(app.properties.configuration.ingress.ipSecurityRestrictions)));
 
   // The kit: -Maintenance in the deployment's parameter set; refused without -LiveRevision (never a first deployment) or with

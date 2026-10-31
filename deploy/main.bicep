@@ -65,9 +65,10 @@ param maintenance bool = false
 
 var firstDeployment = empty(liveRevision)
 
-// A revision that holds the law: the API listens only once its mount is open and verified (32 s on one core over the
-// population mount), so a startup probe gives it about four and a half minutes (restarted at the tenth failure, 10 + 9 x
-// 30 s) before the liveness probe, which would otherwise restart it, begins. Ready only while it holds the law: the API
+// A revision that holds the law: the API listens only once its mount is copied into its /tmp, hash-verified and warmed (under
+// 90 s on this PC's 16 cores for Release 2's 2.97 GB of indexes; over four and a half minutes on one Azure vCPU, where Release
+// 2's first candidate was restarted three times at its tenth failure, 2026-10-31), so a startup probe gives it about twenty
+// minutes (restarted at the fortieth failure, 10 + 39 x 30 s) before the liveness probe, which would otherwise restart it, begins. Ready only while it holds the law: the API
 // answers 503 at /health/ready when no corpus is mounted (plan 0.7), so a replica whose mount was refused takes no traffic,
 // and monitoring can ask the same route.
 var releaseProbes = [
@@ -79,7 +80,7 @@ var releaseProbes = [
     }
     initialDelaySeconds: 10
     periodSeconds: 30
-    failureThreshold: 10
+    failureThreshold: 40
   }
   {
     type: 'Liveness'
@@ -223,12 +224,12 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'lex-v3'
           image: image
-          // One vCPU and 2 GiB, measured over the combined population mount (2026-10-13, STATUS-WEB.md): the API opens it with
-          // a 0.5 GB peak, and its private /tmp holds 2.15 GB of verified index copies, more than the 2 GiB of ephemeral
-          // storage a half-vCPU replica has (one vCPU has 4 GiB).
+          // Two vCPUs and 4 GiB since Release 2 (2026-10-31; one vCPU and 2 GiB before): the API opens the mount with a 0.5 GB
+          // peak, and its private /tmp holds the verified index copies, 2.97 GB for Release 2 and more for each data release,
+          // within the 8 GiB of ephemeral storage two vCPUs have (4 GiB at one). The second core halves the start.
           resources: {
-            cpu: json('1.0')
-            memory: '2Gi'
+            cpu: json('2.0')
+            memory: '4Gi'
           }
           env: [
             {
