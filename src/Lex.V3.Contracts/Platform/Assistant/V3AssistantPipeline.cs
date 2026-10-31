@@ -351,7 +351,7 @@ public static class V3AssistantPipeline
         }
 
         using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
         {
             writer.WriteStartObject();
             foreach (var (name, value) in values)

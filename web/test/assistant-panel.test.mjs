@@ -70,15 +70,21 @@ async function Panel() {
   return panel;
 }
 
-test('the panel is hidden: the module admits only that, and no page imports it', async () => {
-  assert.equal(ASSISTANT_PANEL, 'hidden', 'the assistant is switched off on Lex (R30), so its entry stays hidden (R47, R52)');
+test('the panel is hidden: the module admits only that, and only the assistant page reaches it', async () => {
+  assert.equal(ASSISTANT_PANEL, 'hidden', 'the assistant ships switched off (R30), so its entry stays hidden until the server reports it on (R47, R52)');
+  // The panel is drawn by the assistant's page and its entry alone, which the server serves only while the assistant is on
+  // (V3WebRoot); `ssr-entry.jsx` renders that page for the server; the home page imports the copy module for the one link's
+  // name, which it shows only then (`LiveHome.jsx`). No other module reaches the panel.
+  const reaching = ['AssistantPanel.jsx', 'assistant-panel.mjs', 'live-assistant-page.jsx', 'client-live-assistant-entry.jsx', 'ssr-entry.jsx', 'LiveHome.jsx'];
   for (const directory of ['app', 'scripts']) {
     for (const name of await readdir(join(web, directory))) {
-      if (!/\.(mjs|jsx)$/.test(name) || ['AssistantPanel.jsx', 'assistant-panel.mjs'].includes(name)) continue;
+      if (!/\.(mjs|jsx)$/.test(name) || reaching.includes(name)) continue;
       const source = await readFile(join(web, directory, name), 'utf8');
-      assert.doesNotMatch(source, /(?:from\s+|import\s*\(\s*)["'][^"']*(?:AssistantPanel|assistant-panel)(?:\.jsx|\.mjs)?["']/, `${directory}/${name} imports the hidden panel`);
+      assert.doesNotMatch(source, /(?:from\s+|import\s*\(\s*)["'][^"']*(?:AssistantPanel|assistant-panel|live-assistant-page)(?:\.jsx|\.mjs)?["']/, `${directory}/${name} imports the hidden panel`);
     }
   }
+  const home = await readFile(join(web, 'app', 'LiveHome.jsx'), 'utf8');
+  assert.doesNotMatch(home, /AssistantPanel\.jsx|LiveAssistant/, 'the home page imports the copy, never the panel');
 });
 
 test('no built page carries the panel or any assistant control', async () => {
@@ -174,7 +180,8 @@ test("the assistant's page renders the live panel, never indexed, and is built a
   const html = renderLiveAssistantPage();
   assert.ok(html.includes(`id="${LIVE_ASSISTANT_ROOT}"`));
   assert.ok(html.includes(`${ASSISTANT_PANEL_MARKER}="hidden"`), "the panel's marker, so the built-pages check sees it if a page ever carried it");
-  assert.ok(html.includes(ASSISTANT_PANEL_COPY.en.notice) && html.includes(ASSISTANT_PANEL_COPY.en.preview) && html.includes(ASSISTANT_PANEL_COPY.en.processor));
+  const escaped = (text) => text.replaceAll('&', '&amp;').replaceAll("'", '&#x27;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
+  for (const key of ['notice', 'preview', 'processor']) assert.ok(html.includes(escaped(ASSISTANT_PANEL_COPY.en[key])), key);
   assert.match(html, /<meta name="robots" content="noindex/, "never indexed");
   assert.ok(html.includes('src="/en/client-live-assistant.js"'));
   assert.equal(existsSync(join(web, 'dist-live', 'en', 'assistant.html')), false, "the page is rendered by the server only while the assistant is on, never built as a file");

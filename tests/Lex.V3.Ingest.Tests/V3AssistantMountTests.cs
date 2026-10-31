@@ -128,7 +128,12 @@ public sealed class V3AssistantMountTests
 
         Assert.IsTrue(runtime.CapReached);
         mount.UseAssistant(runtime);
-        CollectionAssert.AreEqual(baseline, await PostAsync(mount, ClockA, "ask", new { question = "Que dit l'article 1er de la loi du 10 août 1991 ?" }));
+        var cappedBytes = await PostAsync(mount, ClockA, "ask", new { question = "Que dit l'article 1er de la loi du 10 août 1991 ?" });
+        var capped = V3EnvelopeJson.ParseAndVerify(cappedBytes, V3OperationRegistry.Reviewed);
+        Assert.AreEqual("assistant_v3_unavailable", capped.Result!.Value.GetProperty("presentation_result").GetString(), "R40: at a cap, ask answers assistant_v3_unavailable");
+        Assert.AreEqual(V3CorpusMount.AskFailedReason, capped.Result.Value.GetProperty("containment").GetProperty("reason").GetString(),
+            "while on, the card says the assistant could not answer this question, never that it is switched off");
+        Assert.AreNotEqual(Encoding.UTF8.GetString(baseline), Encoding.UTF8.GetString(cappedBytes), "the off card and the on card differ in that one sentence");
         var search = V3EnvelopeJson.ParseAndVerify(await PostAsync(mount, ClockA, "search", new { query = "assemblée générale", language = "fra" }), V3OperationRegistry.Reviewed);
         Assert.IsNull(search.Refusal, "search keeps working at the assistant's cap (R40)");
         Assert.IsTrue(runtime.Telemetry.ContainsKey("outcome:cap_reached"));
@@ -628,7 +633,8 @@ public sealed class V3AssistantMountTests
         var (fixture, mount) = await MountAsync();
         await using var cleanup = fixture;
         using var mounted = mount;
-        Assert.IsTrue(V3AssistantRuntime.AskPerMinute < 60, "R40: below 60 a minute");
+        int[] limits = [V3AssistantRuntime.AskPerMinute];
+        Assert.IsTrue(limits[0] < 60, "R40: below 60 a minute");
         mount.UseAssistant(On());
         var request = new V3PlatformOperationRequest(
             V3OperationRegistry.Reviewed.Operation("ask"),

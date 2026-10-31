@@ -964,7 +964,7 @@
                 "91"
               ],
               "model_gloss": "disabled",
-              "reason": "the assistant is contained: no model answers, retrieves, reranks or authors authoritative text, and the legacy assistant route stays disabled until the answer_dossier/1 (S4-A04) and advice-boundary (S4-A05) slices are independently reviewed and integrated; the deterministic operations below answer from held law"
+              "reason": "The assistant is switched off on Lex; search, reading and the other operations work."
             },
             "deterministic_actions": [
               {

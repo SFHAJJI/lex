@@ -109,7 +109,12 @@ the switched-off card until the driver sets the switch (the owner's order below)
     - quote fidelity 1.0, zero non-template sentences and byte-identical replay;
     - the budget gate (p95 3 s and 10 s), with R39's grader reported and never gating;
     - the panel's flag.
-- **Counts**: filled in after the build (Phase 3).
+- **Counts** (2026-10-31, after merging integration at 57fe2990): build 0 warnings; Lex.V3.Tests 3,426 (3,420 passed,
+  6 skipped), the censuses re-derived (661 candidates, 286 vocabularies, 224 guarded types, 98 registries, 206 fully
+  declared); the touched Ingest classes 106 (101 passed, 5 skipped behind their variables); the two samples moved by one
+  line each (the ask row's sentence; the registry digest did not move); no base answer moved, so none was recorded again;
+  web 1,506 (1,499 passed, 3 skipped; the two WSL/awk tests of `image-run` pass from Git's shell, 5 of 5); the V3 tree
+  verified across 1,845 paths. The live gates were not run: they need the deployment.
 
 ## Release 2's no-browser probes: textless permalinks verified as the log says, the title search read on (sole driver, 2026-10-28)
 
