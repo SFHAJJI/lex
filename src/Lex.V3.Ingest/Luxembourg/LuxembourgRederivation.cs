@@ -126,12 +126,21 @@ public static class LuxembourgRederivation
     /// </summary>
     public const string Release2RuleSet = "lu-release-2";
 
+    /// <summary>
+    /// Release 3's rule set: Release 2's rules, digest for digest, under the policy the owner's rulings L1, L1b and L2 name
+    /// with option (a), every licence page of the acquisition counting (LU-DATA-DESIGN v2 §5; the owner's standing yes of
+    /// 2026-10-27 to the driver's recommendation). A rule set names its policy, and inputs sealed under
+    /// <see cref="Release2RuleSet"/> name policy A, so the switches are Release 3's and Release 2 keeps policy A: a derive of
+    /// Release 2's sealed inputs still runs as it did.
+    /// </summary>
+    public const string Release3RuleSet = "lu-release-3";
+
     /// <summary>The value of the record's <c>rights_resolution</c> under Release 1: the acquisition's own, re-read by nothing.</summary>
     private const string RightsAsAcquired = "as_acquired";
 
     /// <summary>
-    /// The value of the record's <c>rights_resolution</c> under Release 2: every held body re-read by reading /2 and
-    /// re-resolved by resolution /2, the acquisition's admissions kept where /2 agrees with them.
+    /// The value of the record's <c>rights_resolution</c> under Release 2 and Release 3: every held body re-read by reading /2
+    /// and re-resolved by resolution /2, the acquisition's admissions kept where /2 agrees with them.
     /// </summary>
     private const string RightsReResolved = "re_resolved_reading_2_keeping_agreed_admissions";
 
@@ -145,16 +154,21 @@ public static class LuxembourgRederivation
     private const string NoPublisherSession = "none_on_this_path";
 
     /// <summary>The rule sets this build implements, sorted ordinally.</summary>
-    public static IReadOnlyList<string> ImplementedRuleSets { get; } = Array.AsReadOnly(new[] { Release1RuleSet, Release2RuleSet });
+    public static IReadOnlyList<string> ImplementedRuleSets { get; } =
+        Array.AsReadOnly(new[] { Release1RuleSet, Release2RuleSet, Release3RuleSet });
+
+    /// <summary>Whether <paramref name="ruleSet"/> re-reads and re-resolves the rights of every held body (Release 2 and 3).</summary>
+    private static bool RederivesRights(string? ruleSet) =>
+        string.Equals(ruleSet, Release2RuleSet, StringComparison.Ordinal) || string.Equals(ruleSet, Release3RuleSet, StringComparison.Ordinal);
 
     /// <summary>
     /// The rules this build runs for <paramref name="ruleSet"/>; a set it does not implement throws. Release 2 names the rights
-    /// rules first (reading /2, then resolution /2), then Release 1's three.
+    /// rules first (reading /2, then resolution /2), then Release 1's three; Release 3 names Release 2's five.
     /// </summary>
     public static IReadOnlyList<LuxembourgRederivationRule> RulesOf(string ruleSet) => ruleSet switch
     {
         Release1RuleSet => Array.AsReadOnly(ProfileRules()),
-        Release2RuleSet => Array.AsReadOnly(new[]
+        Release2RuleSet or Release3RuleSet => Array.AsReadOnly(new[]
         {
             new LuxembourgRederivationRule(
                 FirstLine(LuxembourgInFileRightsReader.CopyReadingTwoProfileBytes()),
@@ -183,31 +197,35 @@ public static class LuxembourgRederivation
             LuxembourgIndexBuilder.StateRuleProfileSha256),
     ];
 
-    // ---- The owner's rulings Release 2 applies (LU-DATA-DESIGN v2 §5, asked 2026-10-27), each OFF until the owner's yes. ----
+    // ---- The owner's rulings Release 3 applies (LU-DATA-DESIGN v2 §5, asked 2026-10-27). ----
     // A yes sets its switch here and gives the policy entry the owner's words (LuxembourgRightsAdmissionPolicies); the rule
-    // set then names that entry, its digest changes, and so do the inputs a derive is sealed with. Nothing else changes.
+    // set then names that entry, its digest changes, and so do the inputs a derive is sealed with. Nothing else changes. The
+    // owner's standing yes of 2026-10-27 to the driver's recommendation set all three, with option (a). Release 2 names
+    // policy A, as its sealed inputs do, so its derive is unchanged.
 
     /// <summary>L2: files whose only licence statement names another identity, on the SPARQL declaration alone.</summary>
-    private const bool Release2RulingL2 = false;
+    private const bool Release3RulingL2 = true;
 
     /// <summary>L1: files that state no licence at all, on the SPARQL declaration alone.</summary>
-    private const bool Release2RulingL1 = false;
+    private const bool Release3RulingL1 = true;
 
     /// <summary>L1b: files whose own block states no licence, on the SPARQL declaration alone.</summary>
-    private const bool Release2RulingL1b = false;
+    private const bool Release3RulingL1b = true;
 
     /// <summary>Option (b) of the rulings above: only licence pages the acquisition observed live. Option (a) when false.</summary>
-    private const bool Release2LivePagesOnly = false;
+    private const bool Release3LivePagesOnly = false;
 
     /// <summary>
     /// The admission policy <paramref name="ruleSet"/> names: Release 1 changes no rights, so its policy is /1; Release 2
-    /// names policy A, which adds <c>agreed_cc_by_rederived</c>, with the owner's rulings its switches turn on (none yet).
+    /// names policy A, which adds <c>agreed_cc_by_rederived</c>; Release 3 names policy A with the owner's rulings its
+    /// switches turn on (L1, L1b and L2, option (a): <c>lex-lu-rights-admission-policy/A+L1+L1b+L2(a)</c>).
     /// </summary>
     public static string AdmissionPolicyOf(string ruleSet) => ruleSet switch
     {
         Release1RuleSet => LuxembourgRightsAdmissionPolicies.Policy1Sha256,
-        Release2RuleSet => LuxembourgRightsAdmissionPolicies.PolicyFor(
-            Release2RulingL1, Release2RulingL1b, Release2RulingL2, Release2LivePagesOnly),
+        Release2RuleSet => LuxembourgRightsAdmissionPolicies.PolicyASha256,
+        Release3RuleSet => LuxembourgRightsAdmissionPolicies.PolicyFor(
+            Release3RulingL1, Release3RulingL1b, Release3RulingL2, Release3LivePagesOnly),
         _ => throw new ArgumentException(
             $"Rule set '{ruleSet}' is not one this build implements ({string.Join(", ", ImplementedRuleSets)}).",
             nameof(ruleSet)),
@@ -261,10 +279,10 @@ public static class LuxembourgRederivation
     }
 
     /// <summary>
-    /// Release 2 under one of the owner's rulings before the owner gives it: the rule set's rules exactly, under a registered
-    /// policy over policy A that the rule set does not name yet (<see cref="LuxembourgRightsAdmissionPolicies.PolicyFor"/>).
-    /// What a yes would serve is measured and tested this way; the derive's path (<see cref="ApplyAsync"/>, inputs /3) never
-    /// substitutes a policy, and the record names the policy this ran under.
+    /// A rights rule set (Release 2's or Release 3's) under another of the owner's rulings than the one it names: the rule set's
+    /// rules exactly, under a registered policy over policy A (<see cref="LuxembourgRightsAdmissionPolicies.PolicyFor"/>). What
+    /// a ruling or an option would serve is measured and tested this way; the derive's path (<see cref="ApplyAsync"/>, inputs
+    /// /3) never substitutes a policy, and the record names the policy this ran under.
     /// </summary>
     internal static Task<LuxembourgFirstMountAcquisitionResult> ApplyUnderOwnersRulingAsync(
         ICustodyStore custodyStore,
@@ -274,11 +292,11 @@ public static class LuxembourgRederivation
     {
         ArgumentNullException.ThrowIfNull(request);
         RequireImplemented(request.RuleSet, request.Rules, AdmissionPolicyOf(request.RuleSet));
-        if (request.RuleSet != Release2RuleSet || !LuxembourgRightsAdmissionPolicies.IsRegistered(request.AdmissionPolicySha256) ||
+        if (!RederivesRights(request.RuleSet) || !LuxembourgRightsAdmissionPolicies.IsRegistered(request.AdmissionPolicySha256) ||
             !LuxembourgRightsAdmissionPolicies.Admits(request.AdmissionPolicySha256, LuxembourgRightsChannelDisposition.AgreedCcByRederived))
         {
             throw new CustodyIntegrityException(
-                $"The owner's rulings are measured under Release 2 and a registered policy over policy A, not {request.AdmissionPolicySha256}.");
+                $"The owner's rulings are measured under a rights rule set and a registered policy over policy A, not {request.AdmissionPolicySha256}.");
         }
 
         return ApplyCoreAsync(custodyStore, verified, request, cancellationToken);
@@ -370,10 +388,10 @@ public static class LuxembourgRederivation
         frozenInventory = null!;
         frozenContent = null!;
 
-        // ---- Release 2: rights re-read by reading /2 and re-resolved by resolution /2, then bound on a run of R0's own. ----
+        // ---- Release 2 and 3: rights re-read by reading /2 and re-resolved by resolution /2, then bound on a run of R0's own. ----
         var acquiredDispositions = BodyCounts(population.Inputs.Select(static input => ContractWire.NameOf(input.RightsResolution!.Disposition)));
         RightsPart? rights = null;
-        if (string.Equals(request.RuleSet, Release2RuleSet, StringComparison.Ordinal))
+        if (RederivesRights(request.RuleSet))
         {
             (var rebound, rights) = await RederiveRightsAsync(custodyStore, run.TypedAssertions, population, acquiredDispositions,
                     request.AdmissionPolicySha256, resumption?.ResumedAt, cancellationToken)

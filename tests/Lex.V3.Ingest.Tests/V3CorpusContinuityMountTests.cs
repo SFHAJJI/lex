@@ -288,13 +288,148 @@ public sealed class V3CorpusContinuityMountTests
             Assert.AreEqual(code, (await AskAsync(mount, "as_of", new { identifier = permalink, date = row.GetProperty("applicability_date").GetString() })).Refusal!.Code, permalink);
         }
 
-        // An article permalink under a textless state is refused for its text too; a digest the catalogue never named stays a
-        // mismatch or unknown, never a textless refusal.
+        // An article permalink under a textless state is refused for its text too. A digest the catalogue never named, at that
+        // textless coordinate, is never verified as the state there: it is refused for the text the coordinate does not hold,
+        // naming the state there by its own digest beside the digest asked (R64; the review of #1008, which answered it
+        // identifier_unknown before: TextlessDigestsAndWorksAreRefusedForTheirTextNeverUnknown below).
         var misfiled = rows.First(static row => row.GetProperty("detail").GetProperty("text_status").GetString() == "not_available_misfiled");
         Assert.AreEqual("text_not_available",
             (await AskAsync(mount, "verify", new { identifier = misfiled.GetProperty("permalink").GetString() + "/art_1" })).Refusal!.Code);
         var other = misfiled.GetProperty("permalink").GetString()!.Replace(misfiled.GetProperty("state_sha256").GetString()!, new string('0', 64), StringComparison.Ordinal);
-        Assert.IsFalse((await AskAsync(mount, "verify", new { identifier = other })).Refusal!.Code is "text_withheld" or "text_not_available");
+        var refused = await AskAsync(mount, "verify", new { identifier = other });
+        Assert.AreEqual("text_not_available", refused.Refusal!.Code);
+        Assert.AreEqual(misfiled.GetProperty("state_sha256").GetString(), refused.Refusal.HelpfulPayload.GetProperty("state_sha256").GetString());
+        Assert.AreEqual(new string('0', 64), refused.Refusal.HelpfulPayload.GetProperty("requested_digest").GetString(), "the digest asked is said, and not as the state's");
+    }
+
+    /// <summary>
+    /// The review of #1008's two notes, answered as R64 wants (a later withheld text answers <c>text_withheld</c> with the hashes;
+    /// a text not available is <c>text_not_available</c>), never <c>identifier_unknown</c> and never a
+    /// <c>pinned_digest_mismatch</c> whose current link opens no text:
+    /// <list type="bullet">
+    /// <item>a digest the index no longer holds, at a stable coordinate whose states in the permalink's language hold no text, is
+    /// refused for that text naming the state there (its digest, permalink and status, the digest asked and the rule), through
+    /// verify, resolve, as_of and evidence_bundle alike; two such states there are an ambiguity naming both;</item>
+    /// <item>a coordinate that holds text keeps its answer: a changed digest is <c>pinned_digest_mismatch</c> naming the current
+    /// state, and a coordinate the index holds no state at stays unknown.</item>
+    /// </list>
+    /// Before this repair each of the textless cases answered <c>identifier_unknown</c>.
+    /// </summary>
+    [TestMethod]
+    public async Task TextlessDigestsAndWorksAreRefusedForTheirTextNeverUnknown()
+    {
+        await using var fixture = await IntervalMount.CreateAsync(RepairFixture());
+        var mount = fixture.Mount;
+        var stale = new string('0', 64);
+
+        // The code's misfiled state (2018-04-01) and an act's withheld consolidation (2020-01-01), each alone at its coordinate.
+        foreach (var (work, date, code, status, resource) in new[]
+                 {
+                     ("code-civil", "2018-04-01", "text_not_available", "not_available_misfiled", "code/civil/20180401"),
+                     ("loi-1798-11-03-n1", "2020-01-01", "text_withheld", "withheld_rights", "loi/1798/11/03/n1/consolide/20200101"),
+                 })
+        {
+            var permalink = $"/lu-legilux/{work}/{date}--{stale}/fra";
+            foreach (var (operation, parameters) in new (string, object)[]
+                     {
+                         ("verify", new { identifier = permalink }),
+                         ("resolve", new { identifier = permalink }),
+                         ("as_of", new { identifier = permalink, date }),
+                         ("evidence_bundle", new { identifier = permalink, date }),
+                     })
+            {
+                var envelope = await AskAsync(mount, operation, parameters);
+                Assert.AreEqual(V3Verdicts.Refuse, envelope.Verdict, $"{operation} {permalink}");
+                Assert.AreEqual(code, envelope.Refusal!.Code, $"{operation} {permalink}: {envelope.Refusal.HelpfulPayload.GetRawText()}");
+                var payload = envelope.Refusal.HelpfulPayload;
+                Assert.AreEqual(W(resource), payload.GetProperty("official_identity").GetString(), operation);
+                Assert.AreEqual(status, payload.GetProperty("text_status").GetString(), operation);
+                var state = payload.GetProperty("state_sha256").GetString()!;
+                Assert.AreNotEqual(stale, state, operation);
+                Assert.AreEqual($"/lu-legilux/{work}/{date}--{state}/fra", payload.GetProperty("permalink").GetString(), $"{operation}: the state's own permalink");
+                Assert.AreEqual(stale, payload.GetProperty("requested_digest").GetString(), operation);
+                Assert.AreEqual(V3CorpusMount.TextlessCoordinateRule, payload.GetProperty("requested_digest_rule").GetString(), operation);
+                Assert.AreEqual(date, payload.GetProperty("requested_date").GetString(), operation);
+                if (code == "text_withheld")
+                {
+                    Assert.AreEqual(state, payload.GetProperty("content_sha256").GetString(), $"{operation}: the hashes (R64)");
+                }
+
+                // The state's own permalink is refused alike, without a digest asked beside it (#1008's answer, unchanged).
+                var own = await AskAsync(mount, operation, operation is "verify" or "resolve"
+                    ? new { identifier = payload.GetProperty("permalink").GetString() }
+                    : (object)new { identifier = payload.GetProperty("permalink").GetString(), date });
+                Assert.AreEqual(code, own.Refusal!.Code, $"{operation}, the state's own permalink");
+                Assert.IsFalse(own.Refusal.HelpfulPayload.TryGetProperty("requested_digest", out _), $"{operation}, the state's own permalink");
+            }
+        }
+
+        // Two textless states on one date (a withheld consolidation and a PDF, 2010-01-01): neither is the one a stale digest
+        // named, so the answer names both, each by its permalink.
+        var pair = $"/lu-legilux/loi-2001-01-01-n1/2010-01-01--{stale}/fra";
+        foreach (var operation in new[] { "verify", "resolve" })
+        {
+            var envelope = await AskAsync(mount, operation, new { identifier = pair });
+            Assert.AreEqual("ambiguous_identifier", envelope.Refusal!.Code, $"{operation}: {envelope.Refusal.HelpfulPayload.GetRawText()}");
+            var candidates = Strings(envelope.Refusal.HelpfulPayload.GetProperty("candidates"));
+            Assert.HasCount(2, candidates, operation);
+            foreach (var candidate in candidates)
+            {
+                StringAssert.StartsWith(candidate, "/lu-legilux/loi-2001-01-01-n1/2010-01-01--", operation);
+                var named = await AskAsync(mount, "verify", new { identifier = candidate });
+                Assert.IsTrue(named.Refusal!.Code is "text_withheld" or "text_not_available", $"{candidate}: {named.Refusal.Code}");
+            }
+        }
+
+        // A coordinate that holds text keeps R64's mismatch naming the current state; one the index holds no state at stays unknown.
+        var held = $"/lu-legilux/code-civil/2016-09-01--{stale}/fra";
+        foreach (var operation in new[] { "verify", "resolve" })
+        {
+            var mismatch = await AskAsync(mount, operation, new { identifier = held });
+            Assert.AreEqual("pinned_digest_mismatch", mismatch.Refusal!.Code, operation);
+            StringAssert.StartsWith(mismatch.Refusal.HelpfulPayload.GetProperty("current_hash_pinned_url").GetString(), "/lu-legilux/code-civil/2016-09-01--", operation);
+            Assert.AreEqual("identifier_unknown",
+                (await AskAsync(mount, operation, new { identifier = $"/lu-legilux/code-civil/2016-09-02--{stale}/fra" })).Refusal!.Code, operation);
+        }
+    }
+
+    /// <summary>
+    /// A work whose every state in the index is textless (the review of #1008: the builder writes no such work today, since index
+    /// 9 records the catalogue's states of works with a held state, so the index is written here with the work's one held row
+    /// taken out): its textless state's permalink is refused for its text, naming it, through verify, resolve and as_of, as
+    /// every other textless state's is; before this repair it was <c>identifier_unknown</c>.
+    /// </summary>
+    [TestMethod]
+    public async Task AWorkWhoseEveryStateIsTextlessAnswersItsStatesPermalinkForItsText()
+    {
+        const string Fra = "http://publications.europa.eu/resource/authority/language/FRA";
+        var harness = IntervalFixture();
+        harness.State(W("loi/2009/09/09/n1/jo"), entryIntoForce: "2009-09-09", memberOf: W("loi/2009/09/09/n1"), expressions: ("fr", Fra))
+            .Held(W("loi/2009/09/09/n1/jo"), ["art_1"], inFileDate: "2009-09-09");
+        harness.State(W("loi/2009/09/09/n1/consolide/20150101"), "2015-01-01", memberOf: W("loi/2009/09/09/n1"), expressions: ("fr", Fra))
+            .Withheld(W("loi/2009/09/09/n1/consolide/20150101"), inFileDate: "2015-01-01");
+        await using var fixture = await IntervalMount.CreateAsync(harness, withoutHeldStatesOf: "loi-2009-09-09-n1");
+        var mount = fixture.Mount;
+
+        var (states, _) = harness.Project();
+        var withheld = states.Single(static row => row.PublisherLegalResourceIri == W("loi/2009/09/09/n1/consolide/20150101"));
+        var permalink = $"/lu-legilux/loi-2009-09-09-n1/2015-01-01--{withheld.StateSha256}/fra";
+        foreach (var (operation, parameters) in new (string, object)[]
+                 {
+                     ("verify", new { identifier = permalink }),
+                     ("resolve", new { identifier = permalink }),
+                     ("as_of", new { identifier = permalink, date = "2015-01-01" }),
+                 })
+        {
+            var envelope = await AskAsync(mount, operation, parameters);
+            Assert.AreEqual("text_withheld", envelope.Refusal!.Code, $"{operation}: {envelope.Refusal.HelpfulPayload.GetRawText()}");
+            var payload = envelope.Refusal.HelpfulPayload;
+            Assert.AreEqual(withheld.StateSha256, payload.GetProperty("state_sha256").GetString(), operation);
+            Assert.AreEqual(withheld.StateSha256, payload.GetProperty("content_sha256").GetString(), $"{operation}: the hashes (R64)");
+            Assert.AreEqual(permalink, payload.GetProperty("permalink").GetString(), operation);
+            Assert.AreEqual("withheld_rights", payload.GetProperty("text_status").GetString(), operation);
+            Assert.IsFalse(payload.TryGetProperty("requested_digest", out _), $"{operation}: the permalink names this state");
+        }
     }
 
     [TestMethod]

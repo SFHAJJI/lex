@@ -446,6 +446,15 @@
 // détient Lex"; "un autre acte dans lequel, selon l’éditeur, des modifications apportées à cet acte ont été intégrées" (never
 // "dont l’éditeur indique qu’il intègre", G20); the heading "Modifié, sans version consolidée détenue par Lex et publiée depuis"
 // (G29, new: two participial phrases on one noun take "et").
+// Release 3's rulings (writer/release-3-rulings; the owner's standing yes of 2026-10-27 to the driver's recommendation): the
+// three L5 single-channel disclosures (`reading.disclosure.*`), until then drafts the owner revised, and the privacy notice's
+// new `privacy.sections.named.withheld` (R92, O28), reviewed by an independent reviewer (Claude, AI reviewer, not the author)
+// under the same delegation in the addendum of 2026-10-28 "the L5 disclosure sentences made final, and the privacy notice's
+// sentence on people named in acts" (4 forms, each changed in both languages): the file's licence metadata, never the whole
+// file (F12); "sans indiquer sa licence" (a sibling block may state the PDF twin's); "un autre fichier", never "une autre
+// publication"; "Le texte de ce fichier est communiqué sur la seule base du catalogue de l’éditeur", never "Il" (Lex serves
+// the text, T8) nor "sur la seule foi" beside "Seuls font foi" (G26); "sur une page que ce site a lue le {date}", never "de
+// celui-ci" (G20); and "renvoie à l’éditeur", never "à son éditeur" after "Lex" (G20).
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
 
@@ -707,9 +716,9 @@ export const LIVE_CHROME_FR = Object.freeze({
     rights: 'Texte communiqué sous {rights}. Lu au {date}.',
     rightsIn: 'Texte communiqué sous {rights}. Lu au {date} en {language}.',
     disclosure: Object.freeze({
-      lu_rights_publisher_catalogue_only_file_silent: 'Ce fichier n’indique pas lui-même sa licence. Il est communiqué sur la seule foi du catalogue de l’éditeur, qui déclare la licence CC BY 4.0 pour ce fichier, tel qu’observé le {date}.',
-      lu_rights_publisher_catalogue_only_own_block_empty: 'Les métadonnées propres de ce fichier le désignent sans indiquer de licence. Il est communiqué sur la seule foi du catalogue de l’éditeur, qui déclare la licence CC BY 4.0 pour ce fichier, tel qu’observé le {date}.',
-      lu_rights_publisher_catalogue_only_file_names_other_identity: 'La mention de licence de ce fichier désigne une autre publication, et non ce fichier. Il est communiqué sur la seule foi du catalogue de l’éditeur, qui déclare la licence CC BY 4.0 pour ce fichier, tel qu’observé le {date}.',
+      lu_rights_publisher_catalogue_only_file_silent: 'Les métadonnées de ce fichier n’indiquent aucune licence. Le texte de ce fichier est communiqué sur la seule base du catalogue de l’éditeur : une ligne de licence de ce catalogue déclare la licence CC BY 4.0 pour ce fichier, sur une page que ce site a lue le {date}.',
+      lu_rights_publisher_catalogue_only_own_block_empty: 'Les métadonnées propres de ce fichier le désignent sans indiquer sa licence. Le texte de ce fichier est communiqué sur la seule base du catalogue de l’éditeur : une ligne de licence de ce catalogue déclare la licence CC BY 4.0 pour ce fichier, sur une page que ce site a lue le {date}.',
+      lu_rights_publisher_catalogue_only_file_names_other_identity: 'La mention de licence de ce fichier désigne un autre fichier, et non ce fichier. Le texte de ce fichier est communiqué sur la seule base du catalogue de l’éditeur : une ligne de licence de ce catalogue déclare la licence CC BY 4.0 pour ce fichier, sur une page que ce site a lue le {date}.',
     }),
     stateHeading: '{work}, {language}, la version applicable à partir du {from}',
     stateHeadingNext: '{work}, {language}, la version applicable à partir du {from} (la version suivante détenue s’applique à partir du {next})',
@@ -1447,6 +1456,7 @@ export const LIVE_CHROME_FR = Object.freeze({
         heading: 'Personnes nommées dans les actes publiés',
         why: 'Certains actes publiés nomment des personnes, par exemple une loi conférant la nationalité. Lex reproduit les textes tels que les journaux officiels les publient, le Journal officiel du Grand-Duché de Luxembourg et le Journal officiel de l’Union européenne, afin que le droit puisse être lu à une date et vérifié auprès de sa source officielle.',
         searchEngines: 'Les moteurs de recherche ne sont autorisés à indexer la page d’un acte qu’une fois qu’une vérification a constaté que l’acte ne nomme aucune personne privée ; la page de tout autre acte leur demande de ne pas l’indexer.',
+        withheld: 'Un acte dont la vérification constate qu’il nomme des personnes privées n’est pas reproduit : Lex n’en montre ni le texte ni les intitulés et renvoie à l’éditeur, par le lien officiel de l’acte.',
       }),
       rights: Object.freeze({
         heading: 'Vos droits',

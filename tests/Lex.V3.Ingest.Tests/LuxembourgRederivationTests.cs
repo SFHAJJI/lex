@@ -41,6 +41,15 @@ public sealed class LuxembourgRederivationTests
     private const string State2RuleSha256 = LuxembourgIndexCatalogueStatesTests.PinnedStateRuleProfileSha256;
     private const string Policy1Sha256 = "a477f4f2e6e0468bc9069da742f6f34f248ec831e01277a40552cb1e5bad2abb";
 
+    /// <summary>Policy A, which Release 2 names (unchanged by the owner's rulings).</summary>
+    private const string PolicyASha256 = "b9687998dcde76930137a913f54b753d3f496a13da1c7d827d3f1573dcf3dc41";
+
+    /// <summary>
+    /// The entry Release 3 names, <c>lex-lu-rights-admission-policy/A+L1+L1b+L2(a)</c> with the owner's words of 2026-10-27 on
+    /// its ruling line, recomputed in Python from its text (<c>LuxembourgRightsResolutionTwoTests</c> pins the text).
+    /// </summary>
+    internal const string Release3PolicySha256 = "2b049e7650b3c5a1250ad60ac263ffb50d11398945fe5e92ac6049634bfc4b43";
+
     private static readonly DateTimeOffset DerivedAt = new(2026, 10, 17, 6, 0, 0, TimeSpan.Zero);
 
     /// <summary>
@@ -93,8 +102,9 @@ public sealed class LuxembourgRederivationTests
         Assert.AreEqual(Content1RuleSha256, LuxembourgAknLegalContentProfileProducer.RuleProfileSha256);
 
         CollectionAssert.AreEqual(
-            new[] { LuxembourgRederivation.Release1RuleSet, LuxembourgRederivation.Release2RuleSet },
+            new[] { LuxembourgRederivation.Release1RuleSet, LuxembourgRederivation.Release2RuleSet, LuxembourgRederivation.Release3RuleSet },
             LuxembourgRederivation.ImplementedRuleSets.ToArray());
+        CollectionAssert.AreEqual(new[] { "lu-release-1", "lu-release-2", "lu-release-3" }, LuxembourgRederivation.ImplementedRuleSets.ToArray());
         CollectionAssert.AreEqual(
             new[]
             {
@@ -125,6 +135,18 @@ public sealed class LuxembourgRederivationTests
             },
             LuxembourgRederivation.RulesOf(LuxembourgRederivation.Release2RuleSet).ToArray());
         Assert.AreEqual(LuxembourgRightsAdmissionPolicies.PolicyASha256, LuxembourgRederivation.AdmissionPolicyOf(LuxembourgRederivation.Release2RuleSet));
+        Assert.AreEqual(PolicyASha256, LuxembourgRederivation.AdmissionPolicyOf(LuxembourgRederivation.Release2RuleSet),
+            "Release 2 keeps policy A, as the inputs sealed under it name");
+
+        // Release 3: Release 2's five rules, digest for digest, under the owner's rulings L1, L1b and L2 with option (a) (the
+        // owner's standing yes of 2026-10-27 to the driver's recommendation): the policy entry and its digest are what moved.
+        CollectionAssert.AreEqual(
+            LuxembourgRederivation.RulesOf(LuxembourgRederivation.Release2RuleSet).ToArray(),
+            LuxembourgRederivation.RulesOf(LuxembourgRederivation.Release3RuleSet).ToArray());
+        Assert.AreEqual(
+            LuxembourgRightsAdmissionPolicies.PolicyFor(l1: true, l1b: true, l2: true, livePagesOnly: false),
+            LuxembourgRederivation.AdmissionPolicyOf(LuxembourgRederivation.Release3RuleSet));
+        Assert.AreEqual(Release3PolicySha256, LuxembourgRederivation.AdmissionPolicyOf(LuxembourgRederivation.Release3RuleSet));
         Assert.IsTrue(LuxembourgRightsAdmissionPolicies.IsRegistered(Policy1Sha256));
         Assert.IsFalse(LuxembourgRightsAdmissionPolicies.IsRegistered(new string('a', 64)));
         Assert.IsFalse(LuxembourgRightsAdmissionPolicies.IsRegistered(null));

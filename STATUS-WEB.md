@@ -1,8 +1,26 @@
 # Lex V3 status: the web lane
 
-Updated 2026-10-28. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-10-31. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## Release 2's candidate never listened in time: the startup deadline and the replica (sole driver, 2026-10-31)
+
+Release 2 (v3-20261028T142935Z-7583e4d0032d, built at 7583e4d0 over derive-r2) was deployed as a candidate with no traffic.
+The platform restarted its replica three times at the startup probe's tenth failure: every probe answered "failed with status
+code: " with no code, so nothing was listening. The API listens only once the mount is copied into its private /tmp,
+hash-verified and warmed; Release 2's indexes are 2.97 GB (Release 1: 2.15 GB), the WSL probe opened them in under 90 s on
+this PC's sixteen cores, and one Azure vCPU needs more than the four and a half minutes the kit allowed. No memory event.
+- `deploy/main.bicep`: the release revision's startup probe allows 10 + 39 x 30 s (about twenty minutes) before a restart;
+  the liveness and readiness probes are unchanged. The replica is 2 vCPUs and 4 GiB (8 GiB of ephemeral storage, room for
+  larger data releases; the second core halves the start). Driver decision under the owner's standing yes of 2026-10-27:
+  about twice the 23 to 26 EUR a month, within the 150 EUR ceiling (R114); the month's spend was 53.55 EUR on 2026-10-31.
+- `web/test/deploy-kit.test.mjs` pins the deadline between twenty and thirty minutes and the new size; OPERATING.md and
+  INCIDENT-RUNBOOK.md say the size.
+- Not measured: the actual start time on one vCPU (an out-of-kit measurement was refused); the first deployment with this
+  kit records it from the platform log, and the deadline may then be shortened.
+- The candidate ca-lex-v3--v3-20261028t142935z-7583e4d0032d-2bcee044 is deactivated by the kit; Release 2 is deployed again
+  from this merge (a new settings digest, so a new revision).
 
 ## Release 2's no-browser probes: textless permalinks verified as the log says, the title search read on (sole driver, 2026-10-28)
 

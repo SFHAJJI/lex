@@ -20,14 +20,15 @@ namespace Lex.V3.Contracts.Source.Luxembourg;
 /// disposition, so it rests on no owner's ruling. Release 2's re-derivation names it.
 /// </para>
 /// <para>
-/// The owner's rulings (§5), each a switch over policy A, every one OFF until the owner answers: L2 admits
-/// <c>sparql_cc_by_in_file_names_other_identity</c>, L1 <c>sparql_cc_by_in_file_silent</c>, L1b
-/// <c>sparql_cc_by_in_file_own_block_empty</c>, each on the publisher's SPARQL declaration of exactly CC BY 4.0 alone,
-/// bound to its retained licence page and disclosed with that page's observation date; with option (a) every page of the
-/// acquisition counts, with option (b) only the pages it observed live. Every combination is an entry
-/// (<see cref="PolicyFor"/>), so a yes changes the release rule set's policy to one of them and records the owner's words
-/// on its ruling line; until then no rule set names one. L3 (PDFs) and L4 (conflicts) have no entry: a PDF yields no text
-/// at launch, and a conflict is never admissible.
+/// The owner's rulings (§5), each a switch over policy A: L2 admits <c>sparql_cc_by_in_file_names_other_identity</c>, L1
+/// <c>sparql_cc_by_in_file_silent</c>, L1b <c>sparql_cc_by_in_file_own_block_empty</c>, each on the publisher's SPARQL
+/// declaration of exactly CC BY 4.0 alone, bound to its retained licence page and disclosed with that page's observation
+/// date; with option (a) every page of the acquisition counts, with option (b) only the pages it observed live. Every
+/// combination is an entry (<see cref="PolicyFor"/>), so a yes changes the release rule set's policy to one of them and
+/// records the owner's words on its ruling line. The owner's standing yes of 2026-10-27 to the driver's recommendation
+/// (L1, L1b and L2, each with option (a)) stands on exactly that entry (<see cref="OwnersWords"/>), which Release 3's rule
+/// set names; every other entry keeps its ruling line as asked, and no rule set names one. L3 (PDFs) and L4 (conflicts)
+/// have no entry: a PDF yields no text at launch, and a conflict is never admissible.
 /// </para>
 /// <para>
 /// The type refuses to compose an admitting set naming anything but <c>agreed_same_run_cc_by</c>,
@@ -69,6 +70,18 @@ public static class LuxembourgRightsAdmissionPolicies
 
     private const string WindowLivePages =
         "single-channel-evidence-window=(b)only-licence-pages-the-acquisition-observed-live,on-or-after-its-resumption\n";
+
+    /// <summary>
+    /// The owner's words on the rulings, dated: the owner's standing yes of 2026-10-27 to the driver's recommendation, which was
+    /// L1, L1b and L2 together, each with option (a). They stand on the ruling line of exactly that entry, once per ruling, in
+    /// place of <see cref="WordsNotYetGiven"/>; that entry's digest changes with them, and no other entry's does.
+    /// </summary>
+    private const string OwnersWords =
+        "the-owner's-words-2026-10-27:the-owner's-standing-yes-of-2026-10-27-to-the-driver's-recommendation,L1-L1b-and-L2-each-with-option-(a)," +
+        "so-the-release-rule-set-names-this-entry";
+
+    /// <summary>The ruling line's last part on every entry the owner's words were not given for.</summary>
+    private const string WordsNotYetGiven = "the-owner's-words-not-yet-given,so-no-release-rule-set-names-this-entry";
 
     /// <summary>The owner's three rulings over policy A, in the order an entry's name lists them.</summary>
     private static readonly (string Name, LuxembourgRightsChannelDisposition Admits, string Question)[] Rulings =
@@ -215,12 +228,14 @@ public static class LuxembourgRightsAdmissionPolicies
 
     /// <summary>
     /// The canonical text of policy A with rulings switched on: its name lists them and the option
-    /// (<c>lex-lu-rights-admission-policy/A+L1+L2(a)</c>); its ruling line states each question as asked and that the owner's
-    /// words are not yet given, which a yes replaces with the owner's words, dated.
+    /// (<c>lex-lu-rights-admission-policy/A+L1+L2(a)</c>); its ruling line states each question as asked, then the owner's
+    /// words, dated, on the one entry they were given for (all three rulings with option (a): <see cref="OwnersWords"/>), and
+    /// on every other entry that they are not yet given.
     /// </summary>
     private static string SwitchedText(bool l1, bool l1b, bool l2, bool livePagesOnly)
     {
         var on = Rulings.Where(ruling => ruling.Name switch { "L1" => l1, "L1b" => l1b, _ => l2 }).ToArray();
+        var words = l1 && l1b && l2 && !livePagesOnly ? OwnersWords : WordsNotYetGiven;
         var admits = new[] { LuxembourgRightsChannelDisposition.AgreedSameRunCcBy, LuxembourgRightsChannelDisposition.AgreedCcByRederived }
             .Concat(on.Select(static ruling => ruling.Admits))
             .Select(static disposition => ContractWire.NameOf(disposition))
@@ -231,7 +246,7 @@ public static class LuxembourgRightsAdmissionPolicies
             (livePagesOnly ? WindowLivePages : WindowEveryPage) +
             "ruling=" + string.Join("|", on.Select(ruling =>
                 $"{ruling.Name}({(livePagesOnly ? "b" : "a")}):{ruling.Question};asked-of-the-owner-2026-10-27-(LU-DATA-DESIGN-2026-10-14-v2-§5),recommended-(a);" +
-                "the-owner's-words-not-yet-given,so-no-release-rule-set-names-this-entry")) + "\n";
+                words)) + "\n";
     }
 
     private static Dictionary<string, Entry> BuildEntries()
