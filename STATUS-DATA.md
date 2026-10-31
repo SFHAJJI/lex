@@ -1,6 +1,59 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-28.
+Updated 2026-10-31.
+
+## Release 3's rulings: L1, L1b and L2 on with option (a); the privacy notice on named people; textless permalinks after #1008; the image build's order (sole driver, 2026-10-28)
+
+`writer/release-3-rulings`. Each decision is the owner's standing yes of 2026-10-27 to the driver's recommendation. No
+publisher traffic, no browser, no Azure, no derive; nothing was measured again.
+- **The rulings (LU-DATA-DESIGN v2 §5).** A new rule set, `lu-release-3`, names Release 2's five rules digest for digest
+  under `lex-lu-rights-admission-policy/A+L1+L1b+L2(a)`: every licence page of the acquisition counts, replayed ones
+  included. Its four switches (`Release3RulingL1`, `L1b`, `L2`, `Release3LivePagesOnly`) are true, true, true and false.
+  - `lu-release-2` keeps policy A (`b9687998…`), so Release 2's sealed inputs over derive-r2 still derive as they did. A rule
+    set names its policy, and no policy is substituted (`RequireImplemented`).
+  - The entry's ruling line carries, once per ruling, "the-owner's-words-2026-10-27:the-owner's-standing-yes-of-2026-10-27-
+    to-the-driver's-recommendation,L1-L1b-and-L2-each-with-option-(a),so-the-release-rule-set-names-this-entry". Its digest
+    moves from `e52372f9…` (no longer registered) to `2b049e76…`, recomputed in Python from the text. The 15 other entries
+    keep their texts and digests, and still say the owner's words are not given.
+  - D1 for Release 3: `rederive-inputs … --rules lu-release-3 --policy 2b049e7650b3c5a1250ad60ac263ffb50d11398945fe5e92ac6049634bfc4b43`,
+    then `derive`, `rederive-seal` and a second derive, as for Release 2. R1 now reads the licence-page index and binds each
+    single-channel admission to its page.
+  - What it adds, measured over run 15 under content /3 by #999's probe and not measured again: 1,043 (L2) + 2,196 (L1) + 31
+    (L1b) = 3,270 files over policy A; 6,697 bodies, 6,630 with text, 237,090 articles (+85,059).
+  - **The L5 sentences are final** (EN and FR, the reading screen and every export). Each says what the file's licence
+    metadata states, then: "The text of this file is served on the basis of the publisher's catalogue alone: a licence row in
+    that catalogue declares CC BY 4.0 for this file, on a page that this site read on {date}." Nothing else.
+- **The privacy notice (O28, R92).** The section on people named in acts adds one sentence after the search-engine one: "An
+  act the check finds to name private persons is not reproduced: Lex shows neither its text nor its titles, and points to the
+  publisher through the act's official link." The legal pages' date is 2026-10-28.
+- **French** (Decision 41): one independent reviewer (Claude, AI reviewer, not the author), the addendum of 2026-10-28 of
+  `C:\lex-v3\lanes\fr-review\review.md`. All 4 forms changed in both languages, and the finals were applied byte for byte.
+  - The file's licence metadata, never the whole file.
+  - "does not state its licence" (a sibling block may state the PDF twin's), and "another file", never "another publication".
+  - "The text of this file is served on the basis of", never "It is served on". In French, "sur la seule base", never "sur
+    la seule foi" beside "Seuls font foi".
+  - "a page that this site read", never "de celui-ci", and "the publisher", never "its publisher" after "Lex".
+- **#1008's open notes (R64).** On index 9 only (schema 8, 6 and the EU are untouched, so no recorded base answer moves):
+  - a work whose every state is textless answers its states' permalinks `text_withheld` or `text_not_available`, naming the
+    state. `TextlessRowAt` no longer needs a held state; a work with none is read for the question and not cached.
+  - a digest the work no longer has, at a coordinate whose states in that language hold no text, is refused for that text,
+    naming the state there with `requested_digest` and `requested_digest_rule`. Before, it was `identifier_unknown`. Two
+    such states are `ambiguous_identifier` naming both. Through `verify`, `resolve`, `as_of` and `evidence_bundle` alike;
+    a digest a retained generation holds still verifies there.
+  - a coordinate that holds text keeps `pinned_digest_mismatch` naming the current state.
+- **The image build's order** (`image-rehearsal.mjs`, `finishImageBuild`). The code already removed a build's publish
+  output (the artifacts directory) and its SDK archive before the next build (since 2e7a7153): the publish output once
+  the SDK has written its archive, the SDK archive once the reproducible archive is written, before the digests are read.
+  The step is now one exported function, and two tests pin that order, one on disk. Digests, the comparison and the
+  reports do not change.
+- **Driver decisions (reversible).** The switches are Release 3's and `lu-release-2` keeps policy A. Only the entry of the
+  recommendation carries the owner's words. Two textless states at a stale coordinate are an ambiguity, not one chosen.
+  A stale digest's refusal names the digest asked beside the state's own.
+- **Tests at 388a350e** (Windows, 2026-10-31; no browser, no publisher traffic, no Azure): `dotnet build Lex.V3.slnx -c Release`
+  0 warnings; `Lex.V3.Tests` 3,388 (3,382 passed, 6 skipped); the touched Ingest classes, every census and every
+  construction-surface class 202 (200 passed, 2 skipped); web `npm run build`, then `npm test` 1,493 (1,489 passed, 3
+  skipped, 1 failed for want of `awk` on this path, `image-run`, which passes with Git's `awk`); `eng/verify-v3-tree.ps1`
+  1,803 tracked paths.
 
 ## Index /10: the publisher's relation records, typed, both directions, and R72's notice (Release 3's item 2; sole driver, 2026-10-28)
 

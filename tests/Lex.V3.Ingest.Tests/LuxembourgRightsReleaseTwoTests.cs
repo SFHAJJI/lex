@@ -42,6 +42,14 @@ public sealed class LuxembourgRightsReleaseTwoTests
             DerivedAt,
             expected);
 
+    /// <summary>Release 3's request: Release 2's rules under the policy of the owner's rulings L1, L1b and L2, option (a).</summary>
+    internal static LuxembourgRederivationRequest Release3(string? expected = null) =>
+        new(LuxembourgRederivation.Release3RuleSet,
+            LuxembourgRederivation.RulesOf(LuxembourgRederivation.Release3RuleSet),
+            LuxembourgRederivationTests.Release3PolicySha256,
+            DerivedAt,
+            expected);
+
     /// <summary>
     /// The finding's shape (run 15's <c>loi/2021/01/22/a45/consolide/20211217</c>): one FRBRthis of the XML manifestation and
     /// two blocks, the XML file's and its PDF twin's, both CC BY. Reading /1 refuses the file for its second block, so the
@@ -246,16 +254,18 @@ public sealed class LuxembourgRightsReleaseTwoTests
     }
 
     /// <summary>
-    /// The owner's ruling L1b, switched on for this test only (it is OFF in the release rule set): a file whose own block names
-    /// the fetched file but states no licence is served on the publisher's SPARQL declaration alone, bound to the retained
-    /// licence page holding its row and disclosed with that page's observation date, in the corpus and in the bundle. Under
-    /// policy A the same body stays withheld (the test above). A corpus whose policy would not admit it refuses to read.
+    /// The owner's ruling L1b alone, an entry no rule set names (Release 2 names policy A; Release 3 all three rulings): a file
+    /// whose own block names the fetched file but states no licence is served on the publisher's SPARQL declaration alone,
+    /// bound to the retained licence page holding its row and disclosed with that page's observation date, in the corpus and in
+    /// the bundle. Under policy A the same body stays withheld (the test above). A corpus whose policy would not admit it
+    /// refuses to read.
     /// </summary>
     [TestMethod]
     public async Task UnderTheOwnersRulingL1bAnOwnBlockWithoutALicenceIsServedWithItsDisclosure()
     {
         var policy = LuxembourgRightsAdmissionPolicies.PolicyFor(l1: false, l1b: true, l2: false, livePagesOnly: false);
-        Assert.AreNotEqual(LuxembourgRederivation.AdmissionPolicyOf(LuxembourgRederivation.Release2RuleSet), policy, "the switch is off in the release");
+        Assert.AreNotEqual(LuxembourgRederivation.AdmissionPolicyOf(LuxembourgRederivation.Release2RuleSet), policy, "Release 2 names policy A");
+        Assert.AreNotEqual(LuxembourgRederivation.AdmissionPolicyOf(LuxembourgRederivation.Release3RuleSet), policy, "Release 3 names all three");
         var outcome = await DeriveAsync(Body(Block(Xml, null), Block(Pdf, CcBy)), openMount: true, policy: policy);
 
         Assert.AreEqual(LuxembourgRightsChannelDisposition.SparqlCcByInFileOwnBlockEmpty, outcome.Rederived.Disposition);
@@ -354,6 +364,87 @@ public sealed class LuxembourgRightsReleaseTwoTests
             await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => LuxembourgRederivation.ApplyUnderOwnersRulingAsync(
                 store, verified, Release2() with { AdmissionPolicySha256 = other }, CancellationToken.None), other);
         }
+    }
+
+    /// <summary>
+    /// Release 3 (<c>lu-release-3</c>; the owner's standing yes of 2026-10-27 to the driver's recommendation): through the
+    /// derive's own door, not the rulings' door, each shape the rulings L1, L1b and L2 name is admitted on its retained licence
+    /// page, with option (a), and carries its disclosure, under the one entry the rule set names. What no ruling admits stays
+    /// withheld (a conflict, an identity the catalogue does not know), and the door holds each rule set to its own policy.
+    /// </summary>
+    [TestMethod]
+    public async Task ReleaseThreeAdmitsTheThreeSingleChannelShapesWithTheirDisclosuresThroughTheDerivesOwnDoor()
+    {
+        var policy = LuxembourgRederivation.AdmissionPolicyOf(LuxembourgRederivation.Release3RuleSet);
+        Assert.AreEqual(LuxembourgRightsAdmissionPolicies.PolicyFor(l1: true, l1b: true, l2: true, livePagesOnly: false), policy);
+        Assert.IsFalse(LuxembourgRightsAdmissionPolicies.LivePagesOnly(policy), "option (a): every licence page counts");
+        foreach (var (what, body, catalogue, disposition, code) in new (string, byte[], (string, string)[], LuxembourgRightsChannelDisposition, string)[]
+                 {
+                     ("L1: a file that states no licence", Body(), Array.Empty<(string, string)>(),
+                         LuxembourgRightsChannelDisposition.SparqlCcByInFileSilent, "lu_rights_publisher_catalogue_only_file_silent"),
+                     ("L1b: an own block without a licence", Body(Block(Xml, null), Block(Pdf, CcBy)), Array.Empty<(string, string)>(),
+                         LuxembourgRightsChannelDisposition.SparqlCcByInFileOwnBlockEmpty, "lu_rights_publisher_catalogue_only_own_block_empty"),
+                     ("L2: a block naming another identity the catalogue licenses CC BY", Body(Block(ActXml, CcBy)), new[] { (ActXml, CcBy) },
+                         LuxembourgRightsChannelDisposition.SparqlCcByInFileNamesOtherIdentity, "lu_rights_publisher_catalogue_only_file_names_other_identity"),
+                 })
+        {
+            var served = await DeriveAsync(body, catalogue, request: Release3());
+            Assert.AreEqual(disposition, served.Rederived.Disposition, what);
+            var page = served.Rederived.LicencePage();
+            Assert.IsNotNull(page, $"{what}: bound to its licence page");
+            Assert.AreEqual(LexCorpus6OutcomeKind.Acquired, served.Member.Outcome, what);
+            var disclosure = served.Member.LuxembourgRights!.RightsDisclosure;
+            Assert.IsNotNull(disclosure, what);
+            Assert.AreEqual(code, disclosure.Code, what);
+            Assert.AreEqual(page.PageRef, disclosure.LicencePage, what);
+            CollectionAssert.Contains(served.Member.LuxembourgRights.EvidenceRefs.ToArray(), page.PageRef, $"{what}: the admission cites its page");
+            Assert.AreEqual(policy, served.Policy, $"{what}: the corpus names Release 3's policy");
+            using var record = JsonDocument.Parse(served.Record.CanonicalBytes);
+            Assert.AreEqual("lu-release-3", record.RootElement.GetProperty("rules").GetProperty("rule_set").GetString(), what);
+            Assert.AreEqual(policy, record.RootElement.GetProperty("rules").GetProperty("admission_policy_sha256").GetString(), what);
+            Assert.AreEqual(1, record.RootElement.GetProperty("rights").GetProperty("single_channel_admitted").GetInt32(), what);
+        }
+
+        // The texts L1 and L1b admit are indexed (L2's shape names the act's file, which the inventory reads as its own question).
+        Assert.AreEqual(2L, (await DeriveAsync(Body(), request: Release3())).Articles, "L1's text is indexed");
+        Assert.AreEqual("held", (await DeriveAsync(Body(Block(Xml, null), Block(Pdf, CcBy)), request: Release3())).TextStatus, "L1b's text is held");
+
+        // No ruling admits a conflict or an identity the catalogue does not know.
+        var conflict = await DeriveAsync(Body(Block(Xml, CcBy), Block(Pdf, Scl)), request: Release3());
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.Conflict, conflict.Rederived.Disposition);
+        Assert.AreEqual(LexCorpus6OutcomeKind.RightsWithheld, conflict.Member.Outcome);
+        var unknown = await DeriveAsync(Body(Block(ActXml, CcBy)), request: Release3());
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.TypedQuarantineInFileIdentityUnknown, unknown.Rederived.Disposition);
+        Assert.AreEqual(LexCorpus6OutcomeKind.RightsWithheld, unknown.Member.Outcome);
+
+        // The derive's door substitutes no policy: Release 3 under policy A, or Release 2 under Release 3's policy, refuses.
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var (europe, verified) = await V3FirstMountBuildTests.AcquireAsync(store, V3FirstMountBuildTests.CheckoutRoot(), Body());
+        foreach (var request in new[] { Release3() with { AdmissionPolicySha256 = LuxembourgRightsAdmissionPolicies.PolicyASha256 }, Release2() with { AdmissionPolicySha256 = policy } })
+        {
+            var refused = await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(
+                () => LuxembourgRederivation.ApplyAsync(store, verified, request, CancellationToken.None));
+            StringAssert.Contains(refused.Message, "no policy is substituted", request.RuleSet);
+        }
+
+        // D1's first step for Release 3: rederive-inputs under lu-release-3 names its five rules and its policy, and refuses
+        // policy A, the policy Release 2's inputs name (which still capture under lu-release-2).
+        var baseInputs = await V3OfflineMount.CaptureAsync(store, europe, verified, [EuAxiomWiringHarness.Seed(null).Celex],
+            LuxembourgFirstMountAcquisitionTests.ActRange, BuildTime, null, CancellationToken.None);
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => V3OfflineMount.CaptureRederivationAsync(store, baseInputs,
+            LuxembourgRederivation.Release3RuleSet, LuxembourgRightsAdmissionPolicies.PolicyASha256, DerivedAt, CancellationToken.None));
+        await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => V3OfflineMount.CaptureRederivationAsync(store, baseInputs,
+            LuxembourgRederivation.Release2RuleSet, policy, DerivedAt, CancellationToken.None));
+        Assert.IsNotNull(await V3OfflineMount.CaptureRederivationAsync(store, baseInputs, LuxembourgRederivation.Release2RuleSet,
+            LuxembourgRightsAdmissionPolicies.PolicyASha256, DerivedAt, CancellationToken.None));
+        var inputs = await V3OfflineMount.CaptureRederivationAsync(store, baseInputs, LuxembourgRederivation.Release3RuleSet,
+            policy, DerivedAt, CancellationToken.None);
+        using var captured = JsonDocument.Parse(await CustodyRestore.ReadByDigestCheckedAsync(store, inputs.Sha256, CancellationToken.None));
+        Assert.AreEqual("lu-release-3", captured.RootElement.GetProperty("rule_set").GetString());
+        Assert.AreEqual(policy, captured.RootElement.GetProperty("admission_policy").GetString());
+        CollectionAssert.AreEqual(
+            LuxembourgRederivation.RulesOf(LuxembourgRederivation.Release2RuleSet).Select(static rule => rule.Sha256).ToArray(),
+            captured.RootElement.GetProperty("rules").EnumerateArray().Select(static rule => rule.GetProperty("sha256").GetString()).ToArray());
     }
 
     /// <summary>
@@ -585,7 +676,8 @@ public sealed class LuxembourgRightsReleaseTwoTests
     /// verified; the Release 2 mount opened by the API when <paramref name="openMount"/>, and its evidence bundle asked.
     /// </summary>
     private static async Task<Outcome> DeriveAsync(
-        byte[] body, (string Manifestation, string Licence)[]? catalogue = null, bool openMount = false, string? policy = null)
+        byte[] body, (string Manifestation, string Licence)[]? catalogue = null, bool openMount = false, string? policy = null,
+        LuxembourgRederivationRequest? request = null)
     {
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
         var (europe, verified) = await V3FirstMountBuildTests.AcquireAsync(store, V3FirstMountBuildTests.CheckoutRoot(), body);
@@ -598,7 +690,7 @@ public sealed class LuxembourgRightsReleaseTwoTests
         using (var network = new V3NetworkActivityListener())
         {
             rederived = policy is null
-                ? await LuxembourgRederivation.ApplyAsync(store, verified, Release2(), CancellationToken.None)
+                ? await LuxembourgRederivation.ApplyAsync(store, verified, request ?? Release2(), CancellationToken.None)
                 : await LuxembourgRederivation.ApplyUnderOwnersRulingAsync(
                     store, verified, Release2() with { AdmissionPolicySha256 = policy }, CancellationToken.None);
             Assert.AreEqual(0L, network.Total, "R1 with rights starts no network operation: " + network.Describe());

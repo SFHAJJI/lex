@@ -129,6 +129,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method private instance Lex.V3.Api.V3CorpusMount::ReferenceAnswer, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseAmbiguousVersion, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseArticleNotInVersion, "
+                    // A digest its work no longer has at a coordinate that holds no text (R64; the review of #1008).
+                    + "method private instance Lex.V3.Api.V3CorpusMount::RefuseAtTextlessCoordinate, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseEuropeLanguage, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseEuropeSearchMode, "
                     + "method private instance Lex.V3.Api.V3CorpusMount::RefuseNamesWithheld, "

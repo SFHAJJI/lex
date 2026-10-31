@@ -199,17 +199,36 @@ public sealed class LuxembourgIndexCatalogueStatesTests
         /// for the handler-level tests): its log names no source body, as a build names none for a member the corpus holds no
         /// body of, so the mount's check of the log against its corpus holds.
         /// </summary>
-        internal LuxembourgIndexBuildResult BuildFor(SourceArtifactRef corpusRef, string builtAt = BuiltAtText, string? derivedAt = DerivedAtText) =>
-            BuildFor(corpusRef, new Dictionary<string, string>(StringComparer.Ordinal), builtAt, derivedAt, null);
+        internal LuxembourgIndexBuildResult BuildFor(
+            SourceArtifactRef corpusRef, string builtAt = BuiltAtText, string? derivedAt = DerivedAtText, string? withoutHeldStatesOf = null) =>
+            BuildFor(corpusRef, new Dictionary<string, string>(StringComparer.Ordinal), builtAt, derivedAt, null, withoutHeldStatesOf);
 
+        /// <summary>
+        /// The index of the projected rows; with <paramref name="withoutHeldStatesOf"/>, that work's held rows and their articles
+        /// are left out and the chains completed again over what is left (<see cref="LuxembourgIndexBuilder.CompleteIntervals"/>),
+        /// so the index holds only textless states of that work: a shape the builder does not write (index 9 records the states
+        /// of works with a held state), for a reader's test of it.
+        /// </summary>
         private LuxembourgIndexBuildResult BuildFor(
-            SourceArtifactRef corpusRef, IReadOnlyDictionary<string, string> bodyDigests, string builtAt, string? derivedAt, LuxembourgIndexPredecessor? predecessor)
+            SourceArtifactRef corpusRef, IReadOnlyDictionary<string, string> bodyDigests, string builtAt, string? derivedAt, LuxembourgIndexPredecessor? predecessor,
+            string? withoutHeldStatesOf = null)
         {
             var (states, intervals) = Project(builtAt);
+            var articles = Articles;
+            if (withoutHeldStatesOf is not null)
+            {
+                var dropped = states.Where(row => row.WorkKey == withoutHeldStatesOf && row.Held).ToArray();
+                Assert.IsNotEmpty(dropped, $"{withoutHeldStatesOf} has a held row to leave out");
+                var expressions = dropped.Select(static row => row.ExpressionIri).ToHashSet(StringComparer.Ordinal);
+                articles = articles.Where(article => !expressions.Contains(article.ExpressionIri)).ToArray();
+                (states, intervals) = LuxembourgIndexBuilder.CompleteIntervals(states.Except(dropped));
+                Assert.IsTrue(states.Any(row => row.WorkKey == withoutHeldStatesOf), $"{withoutHeldStatesOf} keeps its textless rows");
+            }
+
             var built = LuxembourgIndexBuilder.WriteIndex(
                 corpusRef,
                 _members.OrderBy(static row => row.ObjectRefSha256, StringComparer.Ordinal).ToArray(),
-                Articles, states, intervals, [], Facts, bodyDigests, predecessor, builtAt, derivedAt, null, out var refusal, out var detail,
+                articles, states, intervals, [], Facts, bodyDigests, predecessor, builtAt, derivedAt, null, out var refusal, out var detail,
                 PublisherRows);
             Assert.IsNotNull(built, $"{refusal}: {detail}");
             return built;

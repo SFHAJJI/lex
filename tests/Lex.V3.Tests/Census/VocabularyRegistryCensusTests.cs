@@ -288,10 +288,10 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRelationVocabulary: Authorities=2, "
                     + "Predicates=18",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsAdmissionPolicies: Admissible=6, "
-                    + "Entries=16, Rulings=3, RegisteredSha256s=16, const Policy1Name, "
+                    + "Entries=16, Rulings=3, RegisteredSha256s=16, const OwnersWords, const Policy1Name, "
                     + "const Policy1Text, const PolicyAName, const PolicyAText, "
                     + "const SingleChannelAdmission, const WindowEveryPage, const WindowLivePages, "
-                    + "static property Policy1Sha256, static property PolicyASha256",
+                    + "const WordsNotYetGiven, static property Policy1Sha256, static property PolicyASha256",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannels: const "
                     + "ResolutionTwoProfileName, const ResolutionTwoProfileText, "
                     + "static property ResolutionTwoProfileSha256",

@@ -314,11 +314,13 @@ const EN = Object.freeze({
     rights: "Text served under {rights}. Read on {date}.",
     rightsIn: "Text served under {rights}. Read on {date} in {language}.",
     // The L5 single-channel disclosure (LU-DATA-DESIGN v2 §1.2, §5): a text served on the publisher's catalogue alone, under
-    // one of the owner's rulings, says so beside the text with the date its licence page was observed. Drafts the owner revises.
+    // one of the owner's rulings, says so beside the text: what the file itself states, the one channel (a licence row of the
+    // publisher's catalogue), the page that holds the row and the date that page was read. Final under the owner's standing yes
+    // of 2026-10-27 to the driver's recommendation, which turned L1, L1b and L2 on for Release 3.
     disclosure: Object.freeze({
-      lu_rights_publisher_catalogue_only_file_silent: "This file does not state its own licence. It is served on the publisher's catalogue alone, which declares CC BY 4.0 for this file, as observed on {date}.",
-      lu_rights_publisher_catalogue_only_own_block_empty: "This file's own metadata names it but states no licence. It is served on the publisher's catalogue alone, which declares CC BY 4.0 for this file, as observed on {date}.",
-      lu_rights_publisher_catalogue_only_file_names_other_identity: "This file's licence statement names another publication, not this file. It is served on the publisher's catalogue alone, which declares CC BY 4.0 for this file, as observed on {date}.",
+      lu_rights_publisher_catalogue_only_file_silent: "This file's metadata states no licence. The text of this file is served on the basis of the publisher's catalogue alone: a licence row in that catalogue declares CC BY 4.0 for this file, on a page that this site read on {date}.",
+      lu_rights_publisher_catalogue_only_own_block_empty: "This file's own metadata names it but does not state its licence. The text of this file is served on the basis of the publisher's catalogue alone: a licence row in that catalogue declares CC BY 4.0 for this file, on a page that this site read on {date}.",
+      lu_rights_publisher_catalogue_only_file_names_other_identity: "This file's licence statement names another file, not this file. The text of this file is served on the basis of the publisher's catalogue alone: a licence row in that catalogue declares CC BY 4.0 for this file, on a page that this site read on {date}.",
     }),
     stateHeading: "{work}, {language}, the state applying from {from}",
     stateHeadingNext: "{work}, {language}, the state applying from {from} (the next state held applies from {next})",
@@ -866,6 +868,9 @@ const EN = Object.freeze({
         heading: "People named in published acts",
         why: "Some published acts name people, for example a law granting nationality. Lex reproduces texts as the official journals publish them, the Journal officiel du Grand-Duché de Luxembourg and the Official Journal of the European Union, so that the law can be read at a date and checked against its official source.",
         searchEngines: "Search engines may index the page of an act only once a check has found that the act names no private person; the page of any other act asks them not to.",
+        // R92 (owner item O28; the owner's standing yes of 2026-10-27 to the driver's recommendation): the names record withholds
+        // such an act's text and titles, and the API answers text_withheld (reason names_private_individuals) with its official link.
+        withheld: "An act the check finds to name private persons is not reproduced: Lex shows neither its text nor its titles, and points to the publisher through the act's official link.",
       }),
       // The reader's right to complain to the supervisory authority (GDPR art. 77): the regulator, named with a link to its
       // site and no postal address, not a contact of Lex's (the driver's decision of 2026-10-19, STATUS-WEB.md).

@@ -52,9 +52,9 @@ export const LEGAL_PAGE_PATHS = Object.freeze(INTERFACE_LANGUAGES.flatMap((langu
 /**
  * The date the five texts were last changed, which each page prints ("Last updated"): changed with any of their words (on
  * 2026-10-26, the legal notice's "for the texts and dates it holds", the review of #990; on 2026-10-27, the privacy notice's
- * per-client limit, R109).
+ * per-client limit, R109; on 2026-10-28, the privacy notice's sentence on an act that names private persons, R92 and O28).
  */
-export const LEGAL_TEXTS_UPDATED = "2026-10-27";
+export const LEGAL_TEXTS_UPDATED = "2026-10-28";
 
 /**
  * The supervisory authority a reader may complain to (GDPR art. 77), which the privacy notice names, as a link to its site
