@@ -22,6 +22,30 @@ internal sealed partial class V3CorpusMount
     internal void UseAssistant(V3AssistantRuntime runtime) => _assistant = runtime ?? throw new ArgumentNullException(nameof(runtime));
 
     /// <summary>
+    /// The coverage answer with the assistant's capability flag while it is switched on: a member <c>assistant</c> naming its
+    /// state, the operation that answers and the page under each interface language, and whether its answers are a preview.
+    /// While it is off, the answer itself, untouched, byte for byte (the recorded base answers and every page stay as they are).
+    /// The home page reads the flag from this answer, as it reads the coverage line, and shows the assistant's entry only then.
+    /// </summary>
+    internal JsonElement WithAssistantFlag(JsonElement coverage)
+    {
+        if (!_assistant.IsOn)
+        {
+            return coverage;
+        }
+
+        var answer = System.Text.Json.Nodes.JsonNode.Parse(coverage.GetRawText())!.AsObject();
+        answer["assistant"] = new System.Text.Json.Nodes.JsonObject
+        {
+            ["state"] = "on",
+            ["operation_id"] = "ask",
+            ["page"] = V3WebRoot.AssistantPageName,
+            ["preview"] = V3AnswerTemplates.Preview,
+        };
+        return JsonSerializer.SerializeToElement(answer);
+    }
+
+    /// <summary>
     /// What <c>ask</c> answers while the assistant is on, or null while it is off (the caller then answers the switched-off
     /// card). A question the assistant does not answer, a planner that fails, a plan the validator refuses, a gate that fails
     /// and the monthly cap all answer the switched-off card too; the per-client limit answers <c>rate_limited</c>.

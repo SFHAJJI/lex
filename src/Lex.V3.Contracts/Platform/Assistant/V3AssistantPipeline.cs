@@ -112,7 +112,7 @@ public sealed record V3ReplayResult(V3AskOutcome? Outcome, bool SnapshotMismatch
 /// execution through the existing operations, at most two follow-ups, the verdict computed by code, the composer, and the
 /// gates in the code path. Nothing is written anywhere: the answer and its trace are returned to the caller (R32).
 /// </summary>
-public static partial class V3AssistantPipeline
+public static class V3AssistantPipeline
 {
     /// <summary>The most quotations one answer carries (R45(f)).</summary>
     public const int MaximumQuotes = 5;
@@ -394,10 +394,12 @@ public static partial class V3AssistantPipeline
     /// </summary>
     internal static bool IsEurope(string? identifier, JsonElement? result = null) =>
         (result is { } value && Text(value, "publisher") == "eu-eurlex")
-        || (identifier is not null && (identifier.StartsWith("/eu-eurlex/", StringComparison.Ordinal) || Celex().IsMatch(identifier)));
+        || (identifier is not null && (identifier.StartsWith("/eu-eurlex/", StringComparison.Ordinal) || CelexPattern.IsMatch(identifier)));
 
-    [System.Text.RegularExpressions.GeneratedRegex(@"^[0-9][0-9]{4}[A-Z]{1,2}[0-9]{3,4}", System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
-    private static partial System.Text.RegularExpressions.Regex Celex();
+    // A plain pattern, not a source-generated one: the generator adds types of its own to the assembly, which the
+    // closed-surface census would then have to pin (as V3WebRoot says of its own).
+    private static readonly System.Text.RegularExpressions.Regex CelexPattern = new(
+        "^[0-9][0-9]{4}[A-Z]{1,2}[0-9]{3,4}", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>A work's address on this site, from its publisher and key (an EU act by its CELEX as one segment).</summary>
     internal static string WorkAddress(string publisher, string work) =>

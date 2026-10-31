@@ -5166,9 +5166,11 @@ internal sealed partial class V3CorpusMount : IDisposable
                 .Select(static row => new { item = row[0], reason = row[1] })
                 .ToArray(),
         }));
+        // The assistant's capability flag (V3CorpusMount.Assistant.cs): a member only while the assistant is on, so the answer
+        // is byte for byte what it was while it is off, and the pages show no entry to it then (R47, R52).
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
-            new V3PlatformOperationResult(request, "coverage_report", result.RootElement));
+            new V3PlatformOperationResult(request, "coverage_report", WithAssistantFlag(result.RootElement)));
     }
 
     /// <summary>The typed presentation result every <c>ask</c> answers while the assistant is switched off (Decision 91; R30).</summary>
@@ -5184,6 +5186,13 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// <c>presentation.assistant_unavailable</c> (V3AnswerTemplates), reviewed with the assistant's templates.
     /// </summary>
     internal const string AskContainmentReason = "The assistant is switched off on Lex; search, reading and the other operations work.";
+
+    /// <summary>
+    /// The card's sentence while the assistant is on and could not answer one question (a planner that failed or timed out, a
+    /// plan refused, a gate failed, a cap reached): still <c>assistant_v3_unavailable</c> (R40), said truly. Never sent while
+    /// the assistant is off, so the recorded answers keep the sentence above. Its French is the panel's <c>failed</c>.
+    /// </summary>
+    internal const string AskFailedReason = "The assistant could not answer this question; search, reading and the other operations do not depend on it.";
 
     internal const string AskQuestionNote =
         "the question is checked to be a non-blank string and is not read, stored or echoed; nothing in this answer depends on it";
@@ -5230,9 +5239,16 @@ internal sealed partial class V3CorpusMount : IDisposable
                 new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
         }
 
-        // The assistant answers only while every condition of its switch holds (R30), which no deployment of this code meets;
-        // otherwise, and whenever it fails closed, the switched-off card below, the same for every question.
-        return AskAssistant(request, observedAt, question) ?? V3PlatformOperationOutcome.Success(
+        // The assistant answers only while every condition of its switch holds (R30). While it is on and cannot answer one
+        // question, the card says so; while it is off, the switched-off card below, the same for every question.
+        if (_assistant.IsOn)
+        {
+            return AskAssistant(request, observedAt, question) ?? V3PlatformOperationOutcome.Success(
+                Context("success", observedAt),
+                AskContained(request, _reader.SearchableLanguages(), AskFailedReason));
+        }
+
+        return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             AskContained(request, _reader.SearchableLanguages()));
     }
@@ -5244,7 +5260,8 @@ internal sealed partial class V3CorpusMount : IDisposable
     /// </summary>
     internal static V3PlatformOperationResult AskContained(
         V3PlatformOperationRequest request,
-        IEnumerable<string> searchableLanguages)
+        IEnumerable<string> searchableLanguages,
+        string reason = AskContainmentReason)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(searchableLanguages);
@@ -5273,7 +5290,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             containment = new
             {
                 decisions = new[] { "51", "91" },
-                reason = AskContainmentReason,
+                reason,
                 model_gloss = "disabled",
             },
             question_read = false,

@@ -62,6 +62,17 @@ the switched-off card until the driver sets the switch (the owner's order below)
   - Draft processor sentences, for the panel under R44's notice and for the privacy notice, shown only when the assistant is
     switched on.
   - `PublicRequestRecordingTests` now pins the planner as the public process's one network client, in its one file.
+- **The driver's record of 2026-10-31:** "The owner's order of 2026-10-28 (the whole app, the assistant included, within 48
+  hours) and the standing yes of 2026-10-27 supersede R30's, R33's, R36's and R43's people checks, for a labelled preview
+  only." Those checks stay listed below as owed before the preview label can be removed. Retention, the Microsoft entity and
+  the prices stay TODO until the resource exists (the owner first registers Microsoft.CognitiveServices); the placeholders are
+  marked, and the driver confirms the privacy sentences before switching on.
+- **The page and the home entry** (code only): `/{fr,en}/assistant` and one more home-page link, both only while the server
+  reports the assistant on. The flag is a member `assistant` the coverage answer carries only then, so no recorded base answer
+  moves and the home page is byte-identical while it is off. While off, the page and its script are paths the site does not
+  hold, answered as any unknown page (`V3WebRootAssistantTests`; `live-home.test.mjs` and `assistant-panel.test.mjs` cover
+  both states). The live panel asks `ask` with the question alone, and a card while on says the assistant could not answer
+  this question (`AskFailedReason`), never that it is switched off.
 - **For the owner and the driver before the switch is set** (the French reviewer raised 1 and 2; they are the owner's to
   decide, and the code does not decide them):
   1. Switching on with the preview line set means switching on before R30's D4 gates, R33's legal read, R36's avocat and
@@ -74,8 +85,6 @@ the switched-off card until the driver sets the switch (the owner's order below)
   4. **TODO (driver):** set the token prices from the deployment's price list. The defaults are 5 and 20 EUR per million.
   5. **TODO (driver):** once the assistant is on, the privacy page's sentence that Lex holds nothing it could show, correct
      or erase needs a caveat for what the processor may keep.
-  6. **TODO (driver):** the panel is built but no page mounts it. Over REST and MCP, `ask` works end to end once the switch
-     is set; a page that shows the panel is the next web step.
 - **French**: an independent AI reviewer checked every French template and panel string in four rounds. 33 of the 85 entries
   changed in round one; round two approved the seven new EU forms; rounds three and four reviewed the preview and processor
   sentences. The finals were applied byte for byte. This is not R43's

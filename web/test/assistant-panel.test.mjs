@@ -13,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import * as ASSISTANT_PANEL_IO from '../scripts/assistant-panel.mjs';
 import {
   ASSISTANT_PANEL,
   ASSISTANT_PANEL_COPY,
@@ -165,4 +166,28 @@ test('the panel holds French and English only, and its French keeps the no-break
     assert.doesNotMatch(text, / [:;?!»]|« /, `fr.${key}: a no-break space before : ; ? ! and inside guillemets`);
     assert.doesNotMatch(text, /'/, `fr.${key}: the French apostrophe is U+2019`);
   }
+});
+
+test("the assistant's page renders the live panel, never indexed, and is built as no file", async () => {
+  const out = await bundle('app/live-assistant-page.jsx', 'live-assistant-page-test.mjs');
+  const { renderLiveAssistantPage, LIVE_ASSISTANT_ROOT } = await import(pathToFileURL(out).href);
+  const html = renderLiveAssistantPage();
+  assert.ok(html.includes(`id="${LIVE_ASSISTANT_ROOT}"`));
+  assert.ok(html.includes(`${ASSISTANT_PANEL_MARKER}="hidden"`), "the panel's marker, so the built-pages check sees it if a page ever carried it");
+  assert.ok(html.includes(ASSISTANT_PANEL_COPY.en.notice) && html.includes(ASSISTANT_PANEL_COPY.en.preview) && html.includes(ASSISTANT_PANEL_COPY.en.processor));
+  assert.match(html, /<meta name="robots" content="noindex/, "never indexed");
+  assert.ok(html.includes('src="/en/client-live-assistant.js"'));
+  assert.equal(existsSync(join(web, 'dist-live', 'en', 'assistant.html')), false, "the page is rendered by the server only while the assistant is on, never built as a file");
+});
+
+test("the panel reads an ask envelope: an answer, a refuse as advice_boundary, a presentation result, and ask's limit", () => {
+  const { askOutcome, askRequest } = ASSISTANT_PANEL_IO;
+  assert.deepEqual(askRequest('Que dit la loi ?'), { operation_id: 'ask', parameters: { question: 'Que dit la loi ?' } }, 'the question alone (R45(e))');
+  const dossier = drafted();
+  assert.equal(askOutcome({ result: { object_type: 'answer_dossier', value: dossier }, refusal: null }, 'fr').dossier, dossier);
+  assert.equal(askOutcome({ result: null, refusal: { code: 'advice_boundary', helpful_payload: { answer_dossier: dossier } } }, 'fr').dossier, dossier);
+  assert.equal(askOutcome({ result: null, refusal: { code: 'rate_limited', helpful_payload: {} } }, 'fr').sentence, ASSISTANT_PANEL_COPY.fr.rateLimited);
+  assert.equal(askOutcome({ result: { object_type: 'handoff_card', value: { presentation_result: 'assistant_v3_unavailable' } } }, 'en').sentence, ASSISTANT_PANEL_COPY.en.failed);
+  assert.equal(askOutcome({ result: { object_type: 'handoff_card', value: { presentation_result: 'localization_unavailable', sentences: { fr: 'FR', en: 'EN' } } } }, 'fr').sentence, 'FR');
+  assert.equal(askOutcome(null, 'en').dossier, null);
 });

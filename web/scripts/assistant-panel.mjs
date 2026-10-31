@@ -15,6 +15,9 @@
 
 export const ASSISTANT_PANEL = 'hidden';
 
+/** The assistant's page under each interface language, served only while the server reports the assistant on (V3WebRoot). */
+export const ASSISTANT_PAGE = 'assistant';
+
 /** The attribute every element of the panel's root carries, which the build checks no page holds. */
 export const ASSISTANT_PANEL_MARKER = 'data-lex-assistant-panel';
 
@@ -52,6 +55,8 @@ export const ASSISTANT_PANEL_COPY = Object.freeze({
     detailsSummary: 'Details for checking: hashes and the trace',
     announceVerdict: 'Answer: {label}.',
     announceComplete: 'The answer is complete.',
+    failed: 'The assistant could not answer this question; search, reading and the other operations do not depend on it.',
+    rateLimited: 'Many questions were asked from this connection in a short time; ask again in a minute.',
   }),
   fr: Object.freeze({
     heading: 'Assistant',
@@ -71,6 +76,8 @@ export const ASSISTANT_PANEL_COPY = Object.freeze({
     detailsSummary: 'Éléments de vérification : empreintes et trace',
     announceVerdict: 'Réponse : {label}.',
     announceComplete: 'La réponse est complète.',
+    failed: 'L’assistant n’a pas pu répondre à cette question ; la recherche, la lecture et les autres opérations ne dépendent pas de l’assistant.',
+    rateLimited: 'Beaucoup de questions ont été posées depuis cette connexion en peu de temps ; reposez la vôtre dans une minute.',
   }),
 });
 
@@ -209,4 +216,28 @@ export function followUpRequest(question, chips) {
 export function chipLabel(chip, locale) {
   const copy = panelCopy(locale);
   return fill(chip.kind === 'work' ? copy.chipWork : copy.chipDate, { value: chip.value });
+}
+
+/** What the panel sends: ask/1's request, the question alone. */
+export function askRequest(question) {
+  return { operation_id: 'ask', parameters: { question } };
+}
+
+/**
+ * What an `ask` envelope gives the panel to draw: `{ dossier }`, the answer_dossier/1 a result carries, or the one a refusal
+ * `advice_boundary` carries in its payload (a refuse travels as that refusal); or `{ dossier: null, sentence }`, the sentence
+ * of a presentation result (a type apart, R45(a)), of ask's own limit, or of an answer that could not be read. The panel is
+ * shown only while the assistant is on, so the switched-off card there means it could not answer this one question.
+ */
+export function askOutcome(envelope, locale) {
+  const copy = panelCopy(locale);
+  const value = envelope?.result?.value;
+  if (envelope?.result?.object_type === 'answer_dossier' && value?.schema === DOSSIER_SCHEMA) return { dossier: value };
+  const payload = envelope?.refusal?.helpful_payload;
+  if (envelope?.refusal?.code === 'advice_boundary' && payload?.answer_dossier?.schema === DOSSIER_SCHEMA) return { dossier: payload.answer_dossier };
+  if (envelope?.refusal?.code === 'rate_limited') return { dossier: null, sentence: copy.rateLimited };
+  if (value?.presentation_result === 'localization_unavailable' && typeof value?.sentences?.[locale] === 'string') {
+    return { dossier: null, sentence: value.sentences[locale] };
+  }
+  return { dossier: null, sentence: copy.failed };
 }

@@ -10,10 +10,12 @@
 // reader put it, and removing a context chip returns it to the question field. Follow-up context is removable chips
 // (R45(e)), and no earlier question is ever sent again.
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import {
   ASSISTANT_PANEL_MARKER,
   announcements,
+  askOutcome,
+  askRequest,
   chipLabel,
   fill,
   panelCopy,
@@ -60,12 +62,13 @@ function Block({ block }) {
  * polite region holds. Nothing here asks the server; the page that will mount the panel, once the assistant is switched on,
  * sends `followUpRequest(question, chips)` and nothing else.
  */
-export function AssistantPanel({ locale, dossier = null, phase = 'idle', chips = [], preview = true, onSubmit = () => {}, onRemoveChip = () => {} }) {
+export function AssistantPanel({ locale, dossier = null, phase = 'idle', chips = [], preview = true, message = null, onSubmit = () => {}, onRemoveChip = () => {} }) {
   const copy = panelCopy(locale);
   const field = useRef(null);
   const view = dossier === null ? null : validateDossier(dossier);
   const [verdictLine, completeLine] = view === null ? ['', ''] : announcements(view, locale);
-  const announced = phase === 'verdict' ? verdictLine : phase === 'complete' ? completeLine : '';
+  // A presentation result is said once in the same polite region, never as an alert, and is no verdict (R45(a)).
+  const announced = message !== null ? message : phase === 'verdict' ? verdictLine : phase === 'complete' ? completeLine : '';
   return (
     <section className="assistant-panel" aria-labelledby="assistant-heading" {...{ [ASSISTANT_PANEL_MARKER]: 'hidden' }}>
       <h2 id="assistant-heading">{copy.heading}</h2>
@@ -138,4 +141,39 @@ export function AssistantPanel({ locale, dossier = null, phase = 'idle', chips =
       )}
     </section>
   );
+}
+
+/**
+ * The panel on the assistant's page: it asks `ask` with the question alone (ask/1 carries nothing else: no earlier question,
+ * no context, R45(e)), draws the answer the envelope carries (`askOutcome`), and makes the two polite announcements, the
+ * verdict and then completion (R45(d)). Focus stays in the field. A presentation result is said as one sentence, a type
+ * apart from the six verdicts.
+ */
+export function LiveAssistant({ locale, fetchImpl = (...args) => globalThis.fetch(...args) }) {
+  const [dossier, setDossier] = useState(null);
+  const [phase, setPhase] = useState('idle');
+  const [message, setMessage] = useState(null);
+  const submit = async (question) => {
+    if (typeof question !== 'string' || question.trim().length === 0) return;
+    setPhase('idle');
+    setMessage(null);
+    let outcome;
+    try {
+      const response = await fetchImpl('/api/v3/ask', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(askRequest(question)) });
+      outcome = askOutcome(await response.json(), locale);
+    } catch {
+      outcome = askOutcome(null, locale);
+    }
+
+    if (outcome.dossier === null) {
+      setDossier(null);
+      setMessage(outcome.sentence);
+      return;
+    }
+
+    setDossier(outcome.dossier);
+    setPhase('verdict');
+    setTimeout(() => setPhase('complete'), 0);
+  };
+  return <AssistantPanel locale={locale} dossier={dossier} phase={phase} message={message} onSubmit={submit} />;
 }
