@@ -9693,20 +9693,20 @@
           "freshness": {
             "channels": [
               {
-                "age_days": null,
+                "age_days": 15,
                 "lag_days": null,
                 "lag_observations": 0,
-                "newest_completed_observation": null,
+                "newest_completed_observation": "2026-09-03T00:17:44Z",
                 "publisher": "lu-legilux",
-                "stale": null
+                "stale": false
               },
               {
-                "age_days": null,
+                "age_days": 14,
                 "lag_days": null,
                 "lag_observations": 0,
-                "newest_completed_observation": null,
+                "newest_completed_observation": "2026-09-04T00:33:22Z",
                 "publisher": "eu-eurlex",
-                "stale": null
+                "stale": false
               }
             ],
             "index_built_at": "2027-01-15T08:00:00Z",
@@ -10683,20 +10683,20 @@
           "freshness": {
             "channels": [
               {
-                "age_days": null,
+                "age_days": 15,
                 "lag_days": null,
                 "lag_observations": 0,
-                "newest_completed_observation": null,
+                "newest_completed_observation": "2026-09-03T00:17:44Z",
                 "publisher": "lu-legilux",
-                "stale": null
+                "stale": false
               },
               {
-                "age_days": null,
+                "age_days": 14,
                 "lag_days": null,
                 "lag_observations": 0,
-                "newest_completed_observation": null,
+                "newest_completed_observation": "2026-09-04T00:33:22Z",
                 "publisher": "eu-eurlex",
-                "stale": null
+                "stale": false
               }
             ],
             "index_built_at": "2027-01-15T08:00:00Z",
@@ -10761,20 +10761,20 @@
           "freshness": {
             "channels": [
               {
-                "age_days": null,
+                "age_days": 15,
                 "lag_days": null,
                 "lag_observations": 0,
-                "newest_completed_observation": null,
+                "newest_completed_observation": "2026-09-03T00:17:44Z",
                 "publisher": "lu-legilux",
-                "stale": null
+                "stale": false
               },
               {
-                "age_days": null,
+                "age_days": 14,
                 "lag_days": null,
                 "lag_observations": 0,
-                "newest_completed_observation": null,
+                "newest_completed_observation": "2026-09-04T00:34:32Z",
                 "publisher": "eu-eurlex",
-                "stale": null
+                "stale": false
               }
             ],
             "index_built_at": "2027-01-15T08:00:00Z",
@@ -11088,20 +11088,20 @@
           "freshness": {
             "channels": [
               {
-                "age_days": null,
+                "age_days": 15,
                 "lag_days": null,
                 "lag_observations": 0,
-                "newest_completed_observation": null,
+                "newest_completed_observation": "2026-09-03T00:17:44Z",
                 "publisher": "lu-legilux",
-                "stale": null
+                "stale": false
               },
               {
-                "age_days": null,
+                "age_days": 14,
                 "lag_days": null,
                 "lag_observations": 0,
-                "newest_completed_observation": null,
+                "newest_completed_observation": "2026-09-04T00:34:32Z",
                 "publisher": "eu-eurlex",
-                "stale": null
+                "stale": false
               }
             ],
             "index_built_at": "2027-01-15T08:00:00Z",
@@ -11466,20 +11466,20 @@
           "freshness": {
             "channels": [
               {
-                "age_days": null,
+                "age_days": 15,
                 "lag_days": null,
                 "lag_observations": 0,
-                "newest_completed_observation": null,
+                "newest_completed_observation": "2026-09-03T00:17:44Z",
                 "publisher": "lu-legilux",
-                "stale": null
+                "stale": false
               },
               {
-                "age_days": null,
+                "age_days": 14,
                 "lag_days": null,
                 "lag_observations": 0,
-                "newest_completed_observation": null,
+                "newest_completed_observation": "2026-09-04T00:34:32Z",
                 "publisher": "eu-eurlex",
-                "stale": null
+                "stale": false
               }
             ],
             "index_built_at": "2027-01-15T08:00:00Z",
@@ -11916,20 +11916,20 @@
           "freshness": {
             "channels": [
               {
-                "age_days": null,
+                "age_days": 15,
                 "lag_days": null,
                 "lag_observations": 0,
-                "newest_completed_observation": null,
+                "newest_completed_observation": "2026-09-03T00:17:44Z",
                 "publisher": "lu-legilux",
-                "stale": null
+                "stale": false
               },
               {
-                "age_days": null,
+                "age_days": 14,
                 "lag_days": null,
                 "lag_observations": 0,
-                "newest_completed_observation": null,
+                "newest_completed_observation": "2026-09-04T00:33:22Z",
                 "publisher": "eu-eurlex",
-                "stale": null
+                "stale": false
               }
             ],
             "index_built_at": "2027-01-15T08:00:00Z",
