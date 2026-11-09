@@ -27,22 +27,34 @@ function pwsh(script, env = {}) {
 const quote = (text) => `'${text.replaceAll("'", "''")}'`;
 const privateCopy = quote(`${deployDirectory}private-copy.ps1`);
 
-test("the template holds no secret: no secure parameter, no secret, no key listed, no registry password", () => {
+test("the template holds no secret but the assistant's key, which Azure reads from its account as it deploys, only while the assistant is configured", () => {
   for (const [name, parameter] of Object.entries(template.parameters)) {
     assert.ok(!/^secure/i.test(parameter.type), `parameter ${name} is ${parameter.type}`);
   }
   const text = JSON.stringify(template);
-  for (const banned of ["listKeys", "listCredentials", "passwordSecretRef", "\"secrets\"", "secretRef", "@secure"]) {
+  for (const banned of ["listCredentials", "passwordSecretRef", "@secure"]) {
     assert.ok(!text.includes(banned), `the template carries ${banned}`);
   }
   assert.ok(!bicep.includes("@secure"), "main.bicep declares a secure parameter");
+  // The one secret: the assistant's key (R30; the owner's order of 2026-10-28), listed by Azure Resource Manager from the
+  // Azure OpenAI account the deployment names, in this resource group, so the key never passes through the deploying
+  // machine, a file or a command line; none at all while the assistant is not configured, and never in the maintenance revision.
+  assert.deepEqual(template.parameters.assistant, { ...template.parameters.assistant, type: "object", defaultValue: {} });
+  assert.equal(template.variables.assistantOn, "[and(not(empty(parameters('assistant'))), not(parameters('maintenance')))]");
+  assert.equal(template.variables.assistantAccountId,
+    "[if(variables('assistantOn'), resourceId('Microsoft.CognitiveServices/accounts', parameters('assistant').account), '')]");
+  assert.equal(app.properties.configuration.secrets,
+    "[if(variables('assistantOn'), createArray(createObject('name', 'assistant-key', 'value', listKeys(variables('assistantAccountId'), '2024-10-01').key1)), createArray())]");
+  assert.equal(text.split("listKeys(").length - 1, 1, "the key is listed once");
+  assert.equal(text.split("secretRef").length - 1, 1, "and read by one variable");
+  assert.ok(text.includes("createObject('name', 'LEX_ASSISTANT_KEY', 'secretRef', 'assistant-key')"), "LEX_ASSISTANT_KEY");
 });
 
 test("the image is pulled with the user-assigned identity the owner names", () => {
   assert.equal(app.identity.type, "UserAssigned");
   assert.deepEqual(app.properties.configuration.registries, [{ server: "[parameters('registryServer')]", identity: "[parameters('identityResourceId')]" }]);
   assert.equal(app.properties.template.containers[0].image, "[parameters('image')]");
-  assert.ok(!("env" in app.properties.template.containers[0]) || app.properties.template.containers[0].env.every((variable) => !("secretRef" in variable)));
+  assert.ok(template.variables.baseEnvironment.every((variable) => !("secretRef" in variable)), "the base environment holds no secret");
 });
 
 test("one server, with a private writable /tmp, its probes on the image's own routes, ready only with the law mounted", () => {
@@ -65,7 +77,7 @@ test("one server, with a private writable /tmp, its probes on the image's own ro
   // release larger than Release 2's, and the second core halves the start.
   assert.deepEqual(containers[0].resources, { cpu: "[json('2.0')]", memory: "4Gi" });
   // The replica's /tmp outlives a container restart: the API is told it is its own, and removes a previous start's copies.
-  assert.ok(containers[0].env.some((variable) => variable.name === "LEX_V3_TEMP_IS_PRIVATE" && variable.value === "1"));
+  assert.ok(template.variables.baseEnvironment.some((variable) => variable.name === "LEX_V3_TEMP_IS_PRIVATE" && variable.value === "1"));
   assert.equal(app.properties.configuration.ingress.targetPort, 8080);
   assert.equal(app.properties.configuration.ingress.allowInsecure, false);
 });
@@ -87,7 +99,7 @@ test("the release's maintenance revision is the same image with LEX_V3_MAINTENAN
   const variable = /internal const string MaintenanceVariable = "([^"]+)";/.exec(api)?.[1];
   const on = /internal const string MaintenanceOn = "([^"]+)";/.exec(api)?.[1];
   assert.deepEqual([variable, on], ["LEX_V3_MAINTENANCE", "on"]);
-  assert.deepEqual(container.env.filter((entry) => entry.name === variable), [{ name: variable, value: `[if(parameters('maintenance'), '${on}', 'off')]` }],
+  assert.deepEqual(template.variables.baseEnvironment.filter((entry) => entry.name === variable), [{ name: variable, value: `[if(parameters('maintenance'), '${on}', 'off')]` }],
     "on only for the maintenance revision; every other revision says off, which the API reads as off");
   // It mounts nothing, so it listens within seconds, and its `/` is the maintenance page (503): each probe asks readiness,
   // which is 204 only while it holds a maintenance page in each language, and soon.
@@ -206,7 +218,7 @@ test("search engines are kept out unless the deployment says indexed, and the AP
   // The owner's answer to O27 on 2026-10-18 is yes; the switch is set at the opening, never by default.
   assert.deepEqual(template.parameters.searchEngines.allowedValues, ["kept-out", "indexed"]);
   assert.equal(template.parameters.searchEngines.defaultValue, "kept-out");
-  const env = app.properties.template.containers[0].env;
+  const env = template.variables.baseEnvironment;
   assert.ok(env.some((variable) => variable.name === "LEX_V3_SEARCH_ENGINES" && variable.value === "[parameters('searchEngines')]"));
   assert.match(code, /\[ValidateSet\('kept-out', 'indexed', IgnoreCase = \$false\)\] \[string\] \$SearchEngines = 'kept-out'/);
   assert.match(code, /searchEngines = \$SearchEngines/);
@@ -413,3 +425,29 @@ test("the script deploys only a release that verifies, and only by the image's d
   assert.match(code, /if \(\$IfActive\) \{\s*\$active = az containerapp revision show -g \$ResourceGroup -n \$AppName --revision \$candidate --query properties\.active -o tsv 2>\$null\s*if \(\$LASTEXITCODE -ne 0 -or \$active -ne 'true'\) \{ return \}/);
   assert.ok(code.indexOf("az deployment group create") < code.indexOf("Disable-Candidate 'the deployment failed'"), "the catch is the deployment's own");
 });
+
+test("the assistant's variables are the API's own: on, with the planner's settings and its key, only while configured; off otherwise", () => {
+  const runtime = readFileSync(new URL("../../src/Lex.V3.Api/V3AssistantRuntime.cs", import.meta.url), "utf8");
+  const planner = readFileSync(new URL("../../src/Lex.V3.Api/AzureOpenAiAssistantPlanner.cs", import.meta.url), "utf8");
+  const constant = (source, name) => new RegExp(`internal const string ${name} = "([^"]+)";`).exec(source)?.[1];
+  const names = {
+    switch: constant(runtime, "SwitchVariable"), preview: constant(runtime, "PreviewVariable"), endpoint: constant(planner, "EndpointVariable"),
+    deployment: constant(planner, "DeploymentVariable"), apiVersion: constant(planner, "ApiVersionVariable"), key: constant(planner, "KeyVariable"),
+    input: constant(planner, "InputPriceVariable"), output: constant(planner, "OutputPriceVariable"),
+  };
+  assert.ok(Object.values(names).every(Boolean), JSON.stringify(names));
+  const env = app.properties.template.containers[0].env;
+  assert.ok(env.startsWith("[concat(variables('baseEnvironment'), if(variables('assistantOn'), createArray("), env);
+  for (const [name, value] of [
+    [names.switch, "'on'"], [names.preview, "parameters('assistant').preview"],
+    [names.endpoint, "reference(variables('assistantAccountId'), '2024-10-01').endpoint"],
+    [names.deployment, "parameters('assistant').deployment"], [names.apiVersion, "parameters('assistant').apiVersion"],
+    [names.input, "parameters('assistant').eurPerMillionInput"], [names.output, "parameters('assistant').eurPerMillionOutput"],
+  ]) {
+    assert.ok(env.includes(`createObject('name', '${name}', 'value', ${value})`), `${name} = ${value}`);
+  }
+  assert.ok(env.includes(`createObject('name', '${names.key}', 'secretRef', 'assistant-key')`), names.key);
+  assert.ok(env.endsWith(`createArray(createObject('name', '${names.switch}', 'value', 'off'))))]`), "off, and nothing else, while not configured");
+  assert.ok(!env.includes(constant(runtime, "OffSwitchVariable")), "the operator's off-switch is never set by a deployment");
+});
+

@@ -4,8 +4,11 @@ targetScope = 'resourceGroup'
 // release image holds them (STATUS, "The release pipeline's image steps"). Deployed only by deploy.ps1, and only
 // when the owner decides to go live: production credentials, deployment and promotion are the owner's.
 //
-// The template holds no secret and reads none. The image is pulled with the user-assigned managed identity the owner
-// names (no registry password), and the app runs with no environment secret. The app keeps every revision it deploys
+// The template holds no secret. The image is pulled with the user-assigned managed identity the owner names (no registry
+// password). The app runs with no environment secret but one, and only while the assistant is configured (`assistant`, R30;
+// the owner's order of 2026-10-28): its Azure OpenAI key, which Azure Resource Manager reads from the named account in this
+// resource group as it deploys (listKeys) and keeps as the app's Container Apps secret, so the key never passes through the
+// deploying machine, a file or a command line. The maintenance revision never holds it. The app keeps every revision it deploys
 // (multiple revision mode): a new revision arrives as the `candidate` label with no traffic while a live revision
 // serves, so the zero-traffic probe runs against the candidate's own URL before anything is promoted. On a first
 // deployment there is no live revision to keep the traffic, so the candidate takes it.
@@ -60,10 +63,83 @@ param searchEngines string = 'kept-out'
 @description('The custom domains bound to the app, as Azure holds them (name, bindingType, certificateId): deploy.ps1 reads them back and passes them on every deployment, so a redeployment keeps the binding. Empty until law.soufien.lu is bound (deploy/bind-domain.ps1).')
 param customDomains array = []
 
+@description('The assistant (R30; the owner\'s order of 2026-10-28), or empty for none (the switched-off card, as every deployment before it): account, the Azure OpenAI account in this resource group whose key Azure reads as it deploys; deployment, its model deployment; apiVersion; eurPerMillionInput and eurPerMillionOutput, the deployment\'s prices; preview, exactly `unreviewed` while the people\'s reviews are not done. Ignored by the maintenance revision.')
+param assistant object = {}
+
 @description('True for the release\'s maintenance revision (deploy.ps1 -Maintenance; R60, R108, R115): the same image with LEX_V3_MAINTENANCE=on, serving only the maintenance page, deployed with no traffic beside the live revision, which keeps 100 per cent.')
 param maintenance bool = false
 
 var firstDeployment = empty(liveRevision)
+
+// The environment every revision holds; the assistant's, when it is configured, follows it (assistantEnvironment).
+var baseEnvironment = [
+  {
+    name: 'ASPNETCORE_HTTP_PORTS'
+    value: '8080'
+  }
+  // The replica's /tmp is this container's alone and outlives a restart of it: the API removes the index copies an
+  // earlier start left there before it mounts again (V3StaleIndexCopies).
+  {
+    name: 'LEX_V3_TEMP_IS_PRIVATE'
+    value: '1'
+  }
+  // Search engines (3.6): only the exact value `indexed` opens the pages the indexing record lists.
+  {
+    name: 'LEX_V3_SEARCH_ENGINES'
+    value: searchEngines
+  }
+  // The maintenance revision (R60): only the exact value `on` makes the API mount nothing and serve the maintenance
+  // page alone (V3WebRoot.Maintenance.cs); every other revision says `off`.
+  {
+    name: 'LEX_V3_MAINTENANCE'
+    value: maintenance ? 'on' : 'off'
+  }
+]
+
+// The assistant is on in this revision only when it is configured and the revision is not the maintenance one.
+var assistantOn = !empty(assistant) && !maintenance
+var assistantAccountId = assistantOn ? resourceId('Microsoft.CognitiveServices/accounts', assistant.account) : ''
+var assistantEnvironment = assistantOn
+  ? [
+      {
+        name: 'LEX_V3_ASSISTANT'
+        value: 'on'
+      }
+      {
+        name: 'LEX_V3_ASSISTANT_PREVIEW'
+        value: assistant.preview
+      }
+      {
+        name: 'LEX_ASSISTANT_ENDPOINT'
+        value: reference(assistantAccountId, '2024-10-01').endpoint
+      }
+      {
+        name: 'LEX_ASSISTANT_DEPLOYMENT'
+        value: assistant.deployment
+      }
+      {
+        name: 'LEX_ASSISTANT_API_VERSION'
+        value: assistant.apiVersion
+      }
+      {
+        name: 'LEX_ASSISTANT_EUR_PER_MILLION_INPUT'
+        value: assistant.eurPerMillionInput
+      }
+      {
+        name: 'LEX_ASSISTANT_EUR_PER_MILLION_OUTPUT'
+        value: assistant.eurPerMillionOutput
+      }
+      {
+        name: 'LEX_ASSISTANT_KEY'
+        secretRef: 'assistant-key'
+      }
+    ]
+  : [
+      {
+        name: 'LEX_V3_ASSISTANT'
+        value: 'off'
+      }
+    ]
 
 // A revision that holds the law: the API listens only once its mount is copied into its /tmp, hash-verified and warmed (under
 // 90 s on this PC's 16 cores for Release 2's 2.97 GB of indexes; over four and a half minutes on one Azure vCPU, where Release
@@ -217,6 +293,14 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
           identity: identityResourceId
         }
       ]
+      secrets: assistantOn
+        ? [
+            {
+              name: 'assistant-key'
+              value: listKeys(assistantAccountId, '2024-10-01').key1
+            }
+          ]
+        : []
     }
     template: {
       revisionSuffix: revisionSuffix
@@ -231,29 +315,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
             cpu: json('2.0')
             memory: '4Gi'
           }
-          env: [
-            {
-              name: 'ASPNETCORE_HTTP_PORTS'
-              value: '8080'
-            }
-            // The replica's /tmp is this container's alone and outlives a restart of it: the API removes the index copies an
-            // earlier start left there before it mounts again (V3StaleIndexCopies).
-            {
-              name: 'LEX_V3_TEMP_IS_PRIVATE'
-              value: '1'
-            }
-            // Search engines (3.6): only the exact value `indexed` opens the pages the indexing record lists.
-            {
-              name: 'LEX_V3_SEARCH_ENGINES'
-              value: searchEngines
-            }
-            // The maintenance revision (R60): only the exact value `on` makes the API mount nothing and serve the maintenance
-            // page alone (V3WebRoot.Maintenance.cs); every other revision says `off`.
-            {
-              name: 'LEX_V3_MAINTENANCE'
-              value: maintenance ? 'on' : 'off'
-            }
-          ]
+          env: concat(baseEnvironment, assistantEnvironment)
           probes: maintenance ? maintenanceProbes : releaseProbes
           // Mounting a corpus verifies its index into a private temporary file, so the container needs a writable,
           // private /tmp (the image run's finding, PR #825); nothing else of its filesystem is written.
