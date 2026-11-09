@@ -96,7 +96,7 @@ public sealed partial class V3FirstMountBuildTests
             CollectionAssert.AreEqual(MountDigests(expected), MountDigests(derived),
                 "the derive of the composed inputs and an in-process build of the pair\nExpected:\n" + string.Join("\n", MountDigests(expected))
                 + "\nActual:\n" + string.Join("\n", MountDigests(derived)));
-            using (var report = JsonDocument.Parse(await File.ReadAllBytesAsync(Path.Combine(derived, V3CorpusMountWriter.ReportFileName))))
+            using (var report = JsonDocument.Parse(await File.ReadAllBytesAsync(Path.Combine(derived, "build-report.json"))))
             {
                 var completion = report.RootElement.GetProperty("completion");
                 Assert.AreEqual(europeB.CatalogedAt, completion.GetProperty("europe").GetProperty("catalogedAt").GetDateTimeOffset(),
