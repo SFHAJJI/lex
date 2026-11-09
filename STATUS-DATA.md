@@ -84,6 +84,13 @@ possible and launches neither. Served now: EU 2026-10-05T03:50:08Z (stale from 1
 - **Run 17 started** on 2026-11-09 at 18:54 UTC (#1018 merged): `C:\lex-v3\eu-population-20261109-17`, tool 6950cf87 from
   CI run 42672657539 (the pull request's green run; its head is merged), wire ceiling 45,000, the Constitution as its
   Luxembourg companion, acquire-only.
+- **Run 18 started** on Azure on 2026-11-09 at 19:07 UTC: execution `lex-v3-acquire-g5ovs3k` in `cae-lex-v3-build`
+  (recreated today, Sweden Central, Flex), 8 vCPU and 32 GiB (its acquisition peaked near 13 GB on the PC), tool 6950cf87,
+  custody streamed to `custody/lu-population-20261109-18/`. **Driver decision (reversible):** it reuses run 16's EU catalog
+  (`eu-population-20261004-16`, `eu-acquisition-767ceba4…`), not run 17's, so it does not wait about 17 hours for run 17;
+  the derive then composes run 17's dated EU catalog onto run 18's inputs (`compose-inputs --base <run 18's inputs>
+  --europe <run 17's catalog>`). Both halves are then fresh, and the release can be promoted before the Luxembourg half
+  turns stale on 11-11T18:17Z. Month-to-date Azure cost on 11-09: 24.50 EUR.
 - **Tests**: see the pull request (counts at the head).
 
 ## derive-r3's two acts of no state: 52 articles and 151 references the derive kept after dropping their states; served nowhere, recorded by R92's measurement, left out of cited_by (sole driver, 2026-10-31)
