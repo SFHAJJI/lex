@@ -14,7 +14,9 @@ public sealed partial class EuFirstMountAcquisition
     /// <remarks>
     /// <para>
     /// A population acquired across an interruption keeps saying so: the renewed catalog carries the
-    /// reused catalog's resumption forward, and with it the windows of the runs that observed it.
+    /// reused catalog's resumption forward, and with it the windows of the runs that observed it. A dated
+    /// population (catalog <c>/3</c>) keeps its time the same way; an undated one (<c>/1</c>) is renewed
+    /// as the <c>/1</c> it always was.
     /// </para>
     /// <para>
     /// A resumed build records a resumption of its own for the EU half only when the interrupted run
@@ -49,17 +51,22 @@ public sealed partial class EuFirstMountAcquisition
                 $"{rights.Refusal}: {rights.Detail}", original.Run, original.Formex);
         try
         {
+            // The population's collection completed when the run that observed it retained its catalog. A renewal fetches
+            // only the rights notice, so it never moves that time forward: a dated original keeps its own, whether it is
+            // renewed as a dated catalog or, observed by the interrupted run, under this run's resumption.
             var observedByInterruptedRun = _replay is not null && _replay.Catalog == checkpoint && _replay.CatalogAcquiredByInterruptedRun;
             var resumption = original.Resumption ?? (observedByInterruptedRun
                 ? _resume!.Summarize([new AcquisitionResumedPhase(AcquisitionJournal.EuropeCatalogPhase, 1, 0)],
-                    wireBudget.Spent, _timeProvider.GetUtcNow())
+                    wireBudget.Spent, original.CatalogedAt ?? _timeProvider.GetUtcNow())
                 : null);
+            var catalogedAt = resumption is null ? original.CatalogedAt : null;
             var renewed = await RetainAcquisitionAsync(seeds, sources, original.Run!, original.Formex!, rights,
-                resumption, cancellationToken).ConfigureAwait(false);
+                resumption, catalogedAt, cancellationToken).ConfigureAwait(false);
             if (_journal is not null)
                 await _journal.AppendAsync(AcquisitionJournal.EuropeCatalogPhase, CatalogKey,
                     AcquisitionJournal.Payload(renewed), [renewed.Sha256]).ConfigureAwait(false);
-            return EuFirstMountAcquisitionResult.Success(original.Run!, original.Formex!, rights).WithCheckpoint(renewed, resumption);
+            return EuFirstMountAcquisitionResult.Success(original.Run!, original.Formex!, rights)
+                .WithCheckpoint(renewed, resumption, catalogedAt);
         }
         catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
         {

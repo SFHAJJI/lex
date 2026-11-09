@@ -203,8 +203,17 @@ public sealed class EuFirstMountAcquisitionResult
     /// </summary>
     public AcquisitionResumption? Resumption { get; private init; }
 
-    internal EuFirstMountAcquisitionResult WithCheckpoint(SourceArtifactRef checkpoint, AcquisitionResumption? resumption = null) =>
-        new(Run, Formex, LegalNotice, Refusal, Detail) { CheckpointRef = checkpoint, Resumption = resumption };
+    /// <summary>
+    /// When the run that observed this population retained its catalog, as the catalog of a run that was not resumed states it
+    /// (<c>lex-eu-first-mount-acquisition/3</c>): the EU half's newest completed collection (R87). Null for a catalog that
+    /// states no time (<c>/1</c>, written before catalogs were dated) and for a resumed one, whose <see cref="Resumption"/>
+    /// states its own.
+    /// </summary>
+    public DateTimeOffset? CatalogedAt { get; private init; }
+
+    internal EuFirstMountAcquisitionResult WithCheckpoint(SourceArtifactRef checkpoint, AcquisitionResumption? resumption = null,
+        DateTimeOffset? catalogedAt = null) =>
+        new(Run, Formex, LegalNotice, Refusal, Detail) { CheckpointRef = checkpoint, Resumption = resumption, CatalogedAt = catalogedAt };
 
     public static EuFirstMountAcquisitionResult Success(
         EuQueryExecutionResult run,
@@ -488,7 +497,8 @@ public sealed partial class EuFirstMountAcquisition
         try
         {
             // A resumed run's catalog says so: what it replayed and what it acquired live, per phase, and its own
-            // spend and time so far (AcquisitionResumption). A run that was not resumed retains the catalog it always did.
+            // spend and time so far (AcquisitionResumption). A run that was not resumed states when it retained its catalog
+            // (catalog /3), read at the same point, once every unit of the population has been observed.
             var resumption = _resume?.Summarize(
             [
                 new AcquisitionResumedPhase(AcquisitionJournal.EuropeAdapterPhase, replayedRun is null ? 0 : 1, replayedRun is null ? 1 : 0),
@@ -497,12 +507,13 @@ public sealed partial class EuFirstMountAcquisition
                 new AcquisitionResumedPhase(AcquisitionJournal.EuropeFormexPackagePhase,
                     progress?.ReplayedPackages ?? 0, progress?.LivePackages ?? 0),
             ], wireBudget.Spent, _timeProvider.GetUtcNow());
+            DateTimeOffset? catalogedAt = resumption is null ? _timeProvider.GetUtcNow() : null;
             var checkpoint = await RetainAcquisitionAsync(selected, rendererSources, run, formex, legalNotice,
-                resumption, cancellationToken).ConfigureAwait(false);
+                resumption, catalogedAt, cancellationToken).ConfigureAwait(false);
             if (_journal is not null)
                 await _journal.AppendAsync(AcquisitionJournal.EuropeCatalogPhase, CatalogKey,
                     AcquisitionJournal.Payload(checkpoint), [checkpoint.Sha256]).ConfigureAwait(false);
-            return EuFirstMountAcquisitionResult.Success(run, formex, legalNotice).WithCheckpoint(checkpoint, resumption);
+            return EuFirstMountAcquisitionResult.Success(run, formex, legalNotice).WithCheckpoint(checkpoint, resumption, catalogedAt);
         }
         catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
         {

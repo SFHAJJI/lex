@@ -17,9 +17,12 @@
 // is acquired live; the run's catalogs and build report then say it resumed, from what and with
 // what spends. A journal that does not verify is a usage error: nothing is spent.
 //
-// Exit codes: 0 built and verified; 1 an unexpected failure (printed); 2 usage, or a --resume-from
-// journal that does not verify; 3 a typed refusal (printed with the wire spend); 4 the written
-// directory did not verify; 130 cancelled.
+// --acquire-only stops once the offline inputs are retained and their pointer written: no mount is built in this
+// process (for an EU population the in-process build is the whole memory peak), and `derive` builds it from the pointer.
+//
+// Exit codes: 0 built and verified (with --acquire-only: acquired and its inputs retained); 1 an unexpected failure
+// (printed); 2 usage, or a --resume-from journal that does not verify; 3 a typed refusal (printed with the wire spend);
+// 4 the written directory did not verify; 130 cancelled.
 
 using System.Runtime.InteropServices;
 using Lex.V3.Artifacts;
@@ -31,18 +34,21 @@ using Lex.V3.Ingest.Luxembourg;
 if (args.Length > 0 && args[0] == "derive") return await OfflineDeriveCommand.RunAsync(args[1..]);
 if (args.Length > 0 && args[0] == "rederive-inputs") return await RederiveCommands.InputsAsync(args[1..]);
 if (args.Length > 0 && args[0] == "rederive-seal") return await RederiveCommands.SealAsync(args[1..]);
+if (args.Length > 0 && args[0] == "compose-inputs") return await ComposeInputsCommand.RunAsync(args[1..]);
 if (args.Length > 0 && args[0] == "names-records") return NamesRecordsCommand.Run(args[1..]);
 if (args.Length > 0 && args[0] == "release-checks") return ReleaseChecksCommand.Run(args[1..]);
 
 const string Usage =
     "Usage: Lex.V3.Tool build --celex <CELEX[,CELEX...]|all> --lu-name <key> --lu-start <IRI> --lu-end <IRI>\n"
-    + "   or: Lex.V3.Tool build --celex <CELEX[,CELEX...]|all> --lu-population <all|legislative>\n"
-    + "                         --custody <directory> --out <directory> --checkout <directory> --wire-ceiling <n>\n"
-    + "   or: Lex.V3.Tool derive | rederive-inputs | rederive-seal | names-records | release-checks ...  (offline; each prints its own usage)\n"
+    + "   or: Lex.V3.Tool build --celex <CELEX[,CELEX...]|all> --lu-population <all|legislative|legislative-constitution>\n"
+    + "                         --custody <directory> --out <directory> --checkout <directory> --wire-ceiling <n> [--acquire-only]\n"
+    + "   or: Lex.V3.Tool derive | rederive-inputs | rederive-seal | compose-inputs | names-records | release-checks ...\n"
+    + "                         (offline; each prints its own usage)\n"
     + "  --celex        an Appendix A seed, comma-separated seeds, or all for the 82-seed population\n"
     + "  --eu-checkpoint  retained EU acquisition reference JSON in this custody; reuse its population and renew only the rights notice\n"
     + "  --lu-population all  all publisher IRI keys through S/A/G, with existing scope and rights rules\n"
     + "  --lu-population legislative  explicit code/loi/rgd ranges, including descendants; other URI families typed unenumerated\n"
+    + "  --lu-population legislative-constitution  the declared ranges code/, constitution/, loi/ and rgd/, in that order\n"
     + "  --lu-name      lowercase ASCII key prefixing the act's three family keys\n"
     + "  --lu-start/--lu-end  an ELI key range on the publisher's key order (start inclusive, end exclusive)\n"
     + "  --custody      the run's custody root (FileSystemCustodyStore); everything the run holds goes here\n"
@@ -56,7 +62,9 @@ const string Usage =
     + "                 each kept indefinitely (none is recorded anywhere else)\n"
     + "  --resume-from  an interrupted run's progress journal (acquisition-progress-*.jsonl), verified before any request; the same\n"
     + "                 arguments and source build are required, and --custody holds the interrupted run's objects (never the journal)\n"
-    + "Exit codes: 0 built and verified, 1 unexpected failure, 2 usage or a journal that does not verify, 3 typed refusal,\n"
+    + "  --acquire-only stop once the offline inputs and their pointer are written: no mount here (no --out), derive builds it;\n"
+    + "                 not an acquisition argument, so a run resumes with or without it\n"
+    + "Exit codes: 0 built and verified (acquired, with --acquire-only), 1 unexpected failure, 2 usage or a journal that does not verify, 3 typed refusal,\n"
     + "            4 written directory did not verify, 130 cancelled";
 
 string[] required = ["--celex", "--custody", "--out", "--checkout", "--wire-ceiling"];
@@ -64,6 +72,18 @@ string[] rangeOptions = ["--lu-name", "--lu-start", "--lu-end"];
 string[] admitted = [.. required, .. rangeOptions, "--lu-population", "--custody-encoding", "--predecessor", "--referenced", "--eu-checkpoint",
     "--resume-from"];
 
+// --acquire-only is the one option without a value: taken out before the options are read in pairs.
+const string AcquireOnly = "--acquire-only";
+var acquireOnlyCount = args.Count(static argument => string.Equals(argument, AcquireOnly, StringComparison.Ordinal));
+var acquireOnly = acquireOnlyCount == 1;
+if (acquireOnlyCount > 1)
+{
+    Console.Error.WriteLine($"Repeated option: {AcquireOnly}");
+    Console.Error.WriteLine(Usage);
+    return 2;
+}
+
+args = args.Where(static argument => !string.Equals(argument, AcquireOnly, StringComparison.Ordinal)).ToArray();
 if (args.Length == 0 || !string.Equals(args[0], "build", StringComparison.Ordinal) || (args.Length - 1) % 2 != 0)
 {
     Console.Error.WriteLine(Usage);
@@ -97,12 +117,21 @@ if (custodyEncoding is not ("raw" or "brotli"))
 }
 
 var populationRequested = options.TryGetValue("--lu-population", out var population);
-if (populationRequested && (population is not ("all" or "legislative") || rangeOptions.Any(options.ContainsKey)))
+if (populationRequested && (population is not ("all" or "legislative" or "legislative-constitution") || rangeOptions.Any(options.ContainsKey)))
 {
-    Console.Error.WriteLine("--lu-population must be all or legislative and cannot be combined with --lu-name, --lu-start or --lu-end.");
+    Console.Error.WriteLine("--lu-population must be all, legislative or legislative-constitution and cannot be combined with --lu-name, "
+        + "--lu-start or --lu-end.");
     return 2;
 }
-var expected = populationRequested ? required : rangeOptions.Concat(required).ToArray();
+
+if (acquireOnly && options.ContainsKey("--out"))
+{
+    Console.Error.WriteLine("--acquire-only writes no mount, so it takes no --out: derive builds the mount from the inputs pointer.");
+    return 2;
+}
+
+var expected = (populationRequested ? required : rangeOptions.Concat(required))
+    .Where(name => !(acquireOnly && name == "--out")).ToArray();
 var missing = expected.Where(name => !options.ContainsKey(name)).ToArray();
 if (missing.Length != 0)
 {
@@ -217,6 +246,11 @@ try
     if (population == "legislative")
     {
         populationScope = LuxembourgPopulationScope.Legislative;
+        act = null;
+    }
+    else if (population == "legislative-constitution")
+    {
+        populationScope = LuxembourgPopulationScope.LegislativeWithConstitution;
         act = null;
     }
     else act = populationRequested
@@ -403,6 +437,8 @@ try
     if (europe.Resumption is { } europeResumption)
         Console.WriteLine($"europe resumed from journal {europeResumption.JournalSha256} through seq {europeResumption.LastSeq}: "
             + Lex.V3.Contracts.ContractJson.Serialize(europeResumption.Phases));
+    Console.WriteLine("europe catalogued at: " + ((europe.CatalogedAt ?? europe.Resumption?.CatalogedAt)?.ToString("O", System.Globalization.CultureInfo.InvariantCulture)
+        ?? "not stated (an undated catalog reused)"));
     if (europe.CheckpointRef is { } euCheckpoint)
     {
         var pointer = Path.Combine(custodyRoot, $"eu-acquisition-{euCheckpoint.Sha256}.json");
@@ -438,6 +474,8 @@ try
     Console.WriteLine(
         $"luxembourg: run complete, {luxembourg.Run!.CorpusRecordSet?.Set.Records.Count ?? 0} corpus record(s), "
         + $"vocabulary evidence {luxembourg.VocabularyEvidenceRef!.Sha256[..12]}; spent {budget.Spent} of {budget.Limit}");
+    Console.WriteLine("luxembourg catalogued at: " + ((luxembourg.CatalogedAt ?? luxembourg.Resumption?.CatalogedAt)?.ToString("O", System.Globalization.CultureInfo.InvariantCulture)
+        ?? "not stated"));
 
     var luRecords = luxembourg.Run!.CorpusRecordSet!.Set.Records;
     var luBodies = luRecords.Where(record => record.Body.Receipt is not null)
@@ -467,6 +505,14 @@ try
     var checkpointPath = Path.Combine(custodyRoot, "mount-inputs-" + checkpoint.Sha256 + ".json");
     await File.WriteAllTextAsync(checkpointPath, Lex.V3.Contracts.ContractJson.Serialize(checkpoint), token);
     Console.WriteLine($"offline inputs: {checkpointPath}; derive --custody {custodyRoot} --checkpoint {checkpointPath} --out <fresh-directory> --custody-encoding {custodyEncoding}");
+    if (acquireOnly)
+    {
+        // Acquired and retained: the journal, the catalogs and the inputs are in custody, and nothing more is done here.
+        Console.WriteLine($"acquire-only: no mount built in this process; wire spent {budget.Spent} of {budget.Limit}; "
+            + $"elapsed {DateTimeOffset.UtcNow - startedAt:c}");
+        return 0;
+    }
+
     // The build stages its two index files; disposing it removes whatever the writer did not move into the mount. A stopped
     // build's staging is removed first (the review of #986).
     StaleStagingSweep.Run();

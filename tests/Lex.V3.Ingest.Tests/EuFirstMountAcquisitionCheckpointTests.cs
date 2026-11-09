@@ -171,7 +171,7 @@ public sealed partial class EuFirstMountAcquisitionTests
         var legacyDigest = Sha256(File.ReadAllBytes(Path.Combine(CheckoutRoot(), EuRendererSources.RendererFiles[5])));
         var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore(
             failWriteDigest: (digest, ordinal) => failLegacySource && digest == legacyDigest && ordinal > 1,
-            failSchema: failRoot ? "lex-eu-first-mount-acquisition/1" : null);
+            failSchema: failRoot ? "lex-eu-first-mount-acquisition/3" : null);
         var handler = new CompositeHandler(EuAxiomWiringHarness.Scripts(root,
             static seedRoot => EuAcquisitionTestFixture.AxiomAbsenceScriptFor(seedRoot), expressionIri: expression),
             new Dictionary<string, string[]>(StringComparer.Ordinal) { [expression] = ["fmx4", "xhtml"] });
@@ -204,7 +204,7 @@ public sealed partial class EuFirstMountAcquisitionTests
 
     private static async Task<SourceArtifactRef> HoldAcquisitionRootAsync(ICustodyStore store, JsonNode root)
     {
-        var receipt = await store.CreateAsync(Encoding.UTF8.GetBytes(root.ToJsonString()), CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var receipt = await store.CreateAsync(Encoding.UTF8.GetBytes(CanonicalJson(root)), CustodyClass.NightlyFloor90d, CancellationToken.None);
         return new SourceArtifactRef($"urn:uuid:{Guid.NewGuid():D}", receipt.Reference.ContentSha256);
     }
 
