@@ -1,0 +1,68 @@
+{
+  "schema": "lex-v3-handoff-registry/1",
+  "version": 1,
+  "status": "not yet reviewed by a person",
+  "note": "Holds only the entries the specification of record or the repository already names (R20, R31, R42, D83). No organisation, cost, limit, language or contact detail is invented: what is not recorded is null with its reason. No adviser is named: an adviser entry, by theme, waits for a person to write and review it (R42).",
+  "entries": [
+    {
+      "id": "legilux",
+      "theme": "general",
+      "name": "Legilux",
+      "link": "https://legilux.public.lu/",
+      "role": "official_source",
+      "introduced_as": "official source",
+      "cost": null,
+      "limits": null,
+      "languages": null,
+      "not_recorded": "cost, limits and languages are not yet recorded",
+      "link_checked_on": null,
+      "review": "not yet reviewed by a person",
+      "basis": "R20: the Journal officiel du Grand-Duché de Luxembourg, the publisher whose texts Lex reproduces"
+    },
+    {
+      "id": "eur-lex",
+      "theme": "general",
+      "name": "EUR-Lex",
+      "link": "https://eur-lex.europa.eu/",
+      "role": "official_source",
+      "introduced_as": "official source",
+      "cost": null,
+      "limits": null,
+      "languages": null,
+      "not_recorded": "cost, limits and languages are not yet recorded",
+      "link_checked_on": null,
+      "review": "not yet reviewed by a person",
+      "basis": "R19 and D83: a link only; Lex sends nothing to eur-lex.europa.eu"
+    },
+    {
+      "id": "guichet-lu",
+      "theme": "general",
+      "name": "guichet.lu",
+      "link": "https://guichet.public.lu/",
+      "role": "information",
+      "introduced_as": "information",
+      "cost": null,
+      "limits": null,
+      "languages": null,
+      "not_recorded": "cost, limits and languages are not yet recorded",
+      "link_checked_on": null,
+      "review": "not yet reviewed by a person",
+      "basis": "R31: plain-language help comes from guichet.lu links"
+    },
+    {
+      "id": "cnpd",
+      "theme": "data_protection",
+      "name": "Commission nationale pour la protection des données (CNPD)",
+      "link": "https://cnpd.public.lu/",
+      "role": "complaint",
+      "introduced_as": "where to complain",
+      "cost": null,
+      "limits": null,
+      "languages": null,
+      "not_recorded": "cost, limits and languages are not yet recorded",
+      "link_checked_on": null,
+      "review": "not yet reviewed by a person",
+      "basis": "R42: complaint bodies such as the CNPD are introduced as \"where to complain\""
+    }
+  ]
+}

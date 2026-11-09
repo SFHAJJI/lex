@@ -11,6 +11,9 @@
     <Compile Include="../Lex.V3.TestSupport/LuxembourgProfiles.cs" Link="TestSupport/LuxembourgProfiles.cs" />
     <Compile Include="../Lex.V3.TestSupport/ProtectedTokenGoldSet.cs" Link="TestSupport/ProtectedTokenGoldSet.cs" />
     <Compile Include="../Lex.V3.TestSupport/ScopeLineQuestions.cs" Link="TestSupport/ScopeLineQuestions.cs" />
+    <!-- The assistant's deterministic test planner and the replay set an agent drafted (not D4 or D1; not a switch-on gate). -->
+    <Compile Include="../Lex.V3.TestSupport/AssistantRuleTestPlanner.cs" Link="TestSupport/AssistantRuleTestPlanner.cs" />
+    <Content Include="../Lex.V3.TestSupport/assistant-drafted-replay-set.json" Link="assistant-drafted-replay-set.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Fixtures/ArticleNumbers/*.json" CopyToOutputDirectory="PreserveNewest" />

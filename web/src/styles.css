@@ -537,7 +537,8 @@ blockquote.law {
   word-break: break-all;
 }
 
-.staleness-banner {
+.staleness-banner,
+.relation-notice {
   max-inline-size: 48rem;
   margin: 0.5rem auto 0;
   padding: 0.4rem clamp(1rem, 4vw, 1.25rem);
@@ -547,7 +548,8 @@ blockquote.law {
   color: #3d2a00;
 }
 
-.staleness-banner p {
+.staleness-banner p,
+.relation-notice p {
   margin: 0.35rem 0 0;
 }
 
@@ -636,7 +638,8 @@ blockquote.law {
     border-color: #2f3d33;
   }
 
-  .staleness-banner {
+  .staleness-banner,
+  .relation-notice {
     border-color: #e0b04a;
     background: #2b2310;
     color: #f4e6c4;
@@ -1995,7 +1998,8 @@ main > * {
   .site-header,
   .site-footer,
   .freshness-strip,
-  .staleness-banner {
+  .staleness-banner,
+  .relation-notice {
     border-color: #000000 !important;
     background: none !important;
     color: #000000 !important;

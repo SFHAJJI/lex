@@ -54,6 +54,9 @@ public sealed class CensusPartitionTests
             + "not a selectable vocabulary. Closed-template reopening and unknown-schema refusal are tested.",
         "Lex.V3.Ingest.Europe.EuEnumerationCheckpoint: one private schema identifier; "
             + "not a selectable vocabulary. Canonical reopening and unknown-schema refusal are tested.",
+        "Lex.V3.Ingest.Europe.EuFormexPublicationReader: one public rule sentence, how a Formex TITLE's words are read, "
+            + "which the EU answers quote; not a selectable vocabulary. The reading of titles with markup, notes and "
+            + "quotation marks, and of both Official Journal reference forms, is tested (EuFormexPublicationTests).",
         "Lex.V3.Ingest.Luxembourg.LuxembourgPartitionBoundary: one private Unicode scalar limit; "
             + "this is arithmetic, not a selectable vocabulary. Boundary and progress tests "
             + "cover scalar ordering, surrogate exclusion and the cursor byte limit.",
@@ -105,14 +108,14 @@ public sealed class CensusPartitionTests
     public void ThePartitionTotalsAreExactlyThese()
     {
         Assert.AreEqual(
-            286, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
+            291, ClosedSurfaceCensus.Candidates(CensusScope.SweptHere).Count, "candidates");
         Assert.AreEqual(
             107, ClosedSurfaceCensus.ClosedVocabularies(CensusScope.SweptHere).Count, "vocabularies");
         Assert.AreEqual(
             149, ClosedSurfaceCensus.GuardedConstruction(CensusScope.SweptHere).Count, "guarded types");
         Assert.AreEqual(
-            19, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
-        Assert.AreEqual(11, Declined.Length, "declined");
+            23, ClosedSurfaceCensus.VocabularyRegistries(CensusScope.SweptHere).Count, "registries");
+        Assert.AreEqual(12, Declined.Length, "declined");
     }
 
     private static string NameOf(string row) =>

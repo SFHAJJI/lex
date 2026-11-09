@@ -510,15 +510,38 @@ async function buildImage({ into, mountPath, records = null, epoch, card, exampl
     `-p:ContainerArchiveOutputPath=${sdkArchive}`,
     "-p:ContainerRepository=lex-v3-rehearsal", "-p:ContainerImageTag=rehearsal", "-t:PublishContainer", "-m:1", "-nodeReuse:false", "-v", "q"]);
   spawnSync("dotnet", ["build-server", "shutdown"], { encoding: "utf8" });
-  await rm(ARTIFACTS, { recursive: true, force: true });
-
-  log("making the image reproducible");
-  const { reproducibleImage, writeLayout } = await import("./image-reproducible.mjs");
-  const reproducible = reproducibleImage(readLayout(await readLargeFile(sdkArchive)), { epoch });
   const archive = join(into, "lex-v3-rehearsal.tar");
-  await writeFile(archive, writeLayout(reproducible, { mtime: epoch }));
-  await rm(sdkArchive, { force: true });
-  return { webRoot, archive, image: readOciImage(readLayout(await readLargeFile(archive))) };
+  const image = await finishImageBuild({ publishOutput: ARTIFACTS, sdkArchive, archive, epoch, log });
+  return { webRoot, archive, image };
+}
+
+/** The disk `finishImageBuild` works on; the tests give it their own steps to hold their order. */
+export const IMAGE_BUILD_DISK = Object.freeze({
+  remove: (path) => rm(path, { recursive: true, force: true }),
+  read: (path) => readLargeFile(path),
+  write: (path, bytes) => writeFile(path, bytes),
+  reproduce: async (sdkBytes, epoch) => {
+    const { reproducibleImage, writeLayout } = await import("./image-reproducible.mjs");
+    return writeLayout(reproducibleImage(readLayout(sdkBytes), { epoch }), { mtime: epoch });
+  },
+  image: (archiveBytes) => readOciImage(readLayout(archiveBytes)),
+});
+
+/**
+ * One build's steps after `dotnet publish`, in this order, so the build holds on disk only what its next step reads: the
+ * publish output (the artifacts directory, the API with the mount copied beside it, about 3 GB for the population) is
+ * removed first, the SDK's archive being written; the SDK's archive (about 2.7 GB) is read and made reproducible, the
+ * reproducible archive written, and the SDK's archive removed; the archive is then read back for the image and its digests,
+ * which the rehearsal records. When `buildImage` returns, a build's archive is all it has left on disk beside its live pages,
+ * so the reproducibility check's second build never runs beside the first one's publish output or SDK archive (the release
+ * kit's disk peak, 2026-10-28). Answers the image (`readOciImage`).
+ */
+export async function finishImageBuild({ publishOutput, sdkArchive, archive, epoch, log = () => {} }, disk = IMAGE_BUILD_DISK) {
+  await disk.remove(publishOutput);
+  log("making the image reproducible");
+  await disk.write(archive, await disk.reproduce(await disk.read(sdkArchive), epoch));
+  await disk.remove(sdkArchive);
+  return disk.image(await disk.read(archive));
 }
 
 /**
@@ -632,7 +655,19 @@ function publishTool(into, log) {
   log("publishing the measurement tool from this checkout (Lex.V3.Tool)");
   run("dotnet", ["publish", join(repository, "src", "Lex.V3.Tool", "Lex.V3.Tool.csproj"), "-c", "Release", "-o", into, "-m:1", "-nodeReuse:false", "-v", "q"]);
   spawnSync("dotnet", ["build-server", "shutdown"], { encoding: "utf8" });
+  assertPublishedTool(into);
   return join(into, "Lex.V3.Tool.dll");
+}
+
+/**
+ * A publish that exits 0 can still leave its dependencies out (2026-10-31: two rehearsals publishing the same project at once
+ * left a tool without Microsoft.Data.Sqlite, and the names measurement failed an hour later); the tool's own assembly and the
+ * SQLite provider it reads every index with must both be there before the tool runs.
+ */
+export function assertPublishedTool(into) {
+  for (const name of ["Lex.V3.Tool.dll", "Microsoft.Data.Sqlite.dll", "SQLitePCLRaw.core.dll", "SQLitePCLRaw.provider.e_sqlite3.dll", "SQLitePCLRaw.batteries_v2.dll"]) {
+    if (!existsSync(join(into, name))) throw new Error(`the published measurement tool is incomplete: ${name} is missing from ${into}`);
+  }
 }
 
 async function measureNames({ mountPath, into, tool = null, log }) {
@@ -646,6 +681,7 @@ async function measureNames({ mountPath, into, tool = null, log }) {
     const output = join(into, "tool");
     run("dotnet", ["publish", join(repository, "src", "Lex.V3.Tool", "Lex.V3.Tool.csproj"), "-c", "Release", "-o", output, "-m:1", "-nodeReuse:false", "-v", "q"]);
     spawnSync("dotnet", ["build-server", "shutdown"], { encoding: "utf8" });
+    assertPublishedTool(output);
     runner = join(output, "Lex.V3.Tool.dll");
   }
   log("measuring which works name private individuals (R92), read-only over the mount (Lex.V3.Tool names-records)");

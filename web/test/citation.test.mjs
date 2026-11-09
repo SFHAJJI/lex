@@ -273,7 +273,8 @@ test("an EU act is cited as EUR-Lex numbers it, at its wording's date when anoth
     `Permalink: ${CITATION_ORIGIN}${article.permalink}`,
     "CELEX: 32016R0679",
     "Wording: the original wording of 2016-04-27",
-    "Published in: the Official Journal reference is not held by this index.",
+    // The census EU bundle is answered over an index /7, which holds the GDPR package's own reference (Release 3's item 1).
+    "Published in: OJ L 119, 4.5.2016, p. 1",
     `Text digest (SHA-256): ${article.textSha256}`,
     "Consulted on Lex on 2026-09-18 (date in Luxembourg).",
     EU.result.value.authenticity,

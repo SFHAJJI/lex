@@ -13,7 +13,9 @@
 // - links to the site's served pages that a reader starts from: Changes, Trust and Coverage, Developers and Get help, the
 //   specification of record's list (§3, Shell and home), each by the name its own page gives it.
 //
-// No example is a literal: a build handed none (the web suite's) shows none. No assistant, chip or toggle either (R52).
+// No example is a literal: a build handed none (the web suite's) shows none. No chip or toggle either (R52), and no assistant
+// entry unless the server reports the assistant switched on (the coverage answer's capability flag, `live-home.mjs`): then,
+// and only then, one more link, to the assistant's page (R47).
 //
 // `facts`, when the server rendered the page from its coverage answer, are today and the coverage line it said; the
 // browser hydrates the same tree from them, so nothing is asked as the page loads. With none (the page as built), the
@@ -76,8 +78,11 @@ export function HomeExamples({ line, record = HOME_EXAMPLES }) {
   );
 }
 
-/** The site's served pages a reader starts from, by the names their own pages give them. */
-export function HomeLinks() {
+/**
+ * The site's served pages a reader starts from, by the names their own pages give them; the assistant's page among them only
+ * while the server reports it switched on (`assistant`).
+ */
+export function HomeLinks({ assistant = false }) {
   return (
     <nav aria-label={COPY.links} className="home-links" data-home-links="">
       <ul>
@@ -85,6 +90,7 @@ export function HomeLinks() {
         <li><a href={livePath('coverage.html')}>{liveChrome().coverage.title}</a></li>
         <li><a href={livePath(referencePage('developers').file)}>{liveChrome().developers.title}</a></li>
         <li><a href={livePath(referencePage('help').file)}>{liveChrome().help.title}</a></li>
+        {assistant ? <li><a href={livePath('assistant')} data-home-assistant="">{COPY.assistantLink}</a></li> : null}
       </ul>
     </nav>
   );
@@ -96,10 +102,11 @@ export function HomeLinks() {
  */
 export function LiveHome({ contract, fetchImpl, facts = null, examples = HOME_EXAMPLES }) {
   const [line, setLine] = useState(facts?.coverage ?? null);
+  const [assistant, setAssistant] = useState(facts?.assistant === true);
   // Today in Luxembourg: the server's, when it rendered the page from its answer, else this browser's clock once hydrated.
   const today = useLuxembourgToday(facts?.today ?? null);
   // The page as built asks for its coverage line once loaded; a page the server rendered carries it.
-  useEffect(() => (facts === null ? startHomeCoverage({ contract, fetchImpl, onLine: setLine }) : undefined), []);
+  useEffect(() => (facts === null ? startHomeCoverage({ contract, fetchImpl, onLine: setLine, onAssistant: setAssistant }) : undefined), []);
   return (
     <>
       <LiveSearch contract={contract} fetchImpl={fetchImpl} variant="home" today={facts?.today ?? null} />
@@ -109,7 +116,7 @@ export function LiveHome({ contract, fetchImpl, facts = null, examples = HOME_EX
       </section>
       <CoverageLine line={line} today={today} />
       <HomeExamples line={line} record={examples} />
-      <HomeLinks />
+      <HomeLinks assistant={assistant} />
     </>
   );
 }

@@ -223,10 +223,16 @@ internal sealed partial class V3CorpusMount : IDisposable
                 out var pinnedAnchor) && pinnedAnchor is null)
         {
             // A textless catalogue state's permalink (index 9's events name it) is refused for its text, naming it, as verify,
-            // as_of and evidence_bundle refuse it: never identifier_unknown.
+            // as_of and evidence_bundle refuse it: never identifier_unknown. So is a digest the work no longer has, at a
+            // coordinate whose states in its language hold no text (R64; the review of #1008).
             if (TextlessRowAt(workKey, applicabilityDate, requestedDigest, pinnedLanguage) is { } textless)
             {
                 return RefuseTextless(request, observedAt, textless, applicabilityDate, bound: null);
+            }
+
+            if (TextlessCoordinateAt(workKey, applicabilityDate, requestedDigest, pinnedLanguage) is { Length: > 0 } textlessHere)
+            {
+                return RefuseAtTextlessCoordinate(request, identifier, observedAt, textlessHere, applicabilityDate, requestedDigest);
             }
 
             var states = (_reader?.ResolveState(workKey, applicabilityDate) ?? [])
@@ -2438,7 +2444,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             edges = rows,
             target_note = CitationTargetNote,
             available_languages = availableLanguages,
-            not_held = CitationNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            not_held = WithStructuredRelations(CitationNotHeld, ReferencesStructuredRelationsTen).Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader.IndexRef.Sha256,
         });
@@ -2479,6 +2485,26 @@ internal sealed partial class V3CorpusMount : IDisposable
         "outbound edges first, in citation's order (by the citing article's publisher id, then its identity, then the order the references occur in it, for " +
         "each language in turn), then inbound edges in cited_by's order (by the citing state's publisher date, then its work key, language and expression, " +
         "then the citing article's publisher id and identity, then the order the references occur in it)";
+
+    /// <summary>On lex-v3-luxembourg-index/10, <c>relations</c>' row for the publisher's structured relation records.</summary>
+    internal const string RelationsStructuredRelationsTen =
+        "the publisher's relation records modifies, repeals, rectifies, modifiedTempBy and LegalResourceImpact are served under " +
+        "publisher_relations, apart from this index's edge table, whose one edge type is cites; its other relation records (based on, " +
+        "transposes, consolidates, is part of, is realized by) are not served";
+
+    /// <summary>On lex-v3-luxembourg-index/10, <c>citation</c>'s and <c>cited_by</c>'s row for the publisher's structured relation records.</summary>
+    internal const string ReferencesStructuredRelationsTen =
+        "the publisher's structured relation records are not among these edges, which are only the references written in the text; " +
+        "relations serves its modifies, repeals, rectifies, modifiedTempBy and LegalResourceImpact records";
+
+    /// <summary>
+    /// A fixed not-held list, with its <c>structured_relations</c> row's reason replaced by <paramref name="tenReason"/> on
+    /// lex-v3-luxembourg-index/10, which holds some of those records; on an index of schema 9, 8 or 6 the list as it is.
+    /// </summary>
+    private string[][] WithStructuredRelations(string[][] rows, string tenReason) =>
+        !RecordsPublisherRelations
+            ? rows
+            : rows.Select(row => string.Equals(row[0], "structured_relations", StringComparison.Ordinal) ? new[] { row[0], tenReason } : row).ToArray();
 
     internal static readonly string[][] RelationsNotHeld =
     [
@@ -2527,6 +2553,15 @@ internal sealed partial class V3CorpusMount : IDisposable
             if (TextlessRowAt(workKey, applicabilityDate, requestedDigest, language) is { } textless)
             {
                 return RefuseTextless(request, observedAt, textless, applicabilityDate, bound: null);
+            }
+
+            // A digest the work no longer has, at a coordinate whose states in its language hold no text, is refused for that
+            // text, naming the state there (R64; the review of #1008), unless a retained generation still holds the digest, which
+            // verifies it below as it always has.
+            if (TextlessCoordinateAt(workKey, applicabilityDate, requestedDigest, language) is { Length: > 0 } textlessHere &&
+                FromGeneration(workKey, applicabilityDate, language, requestedDigest) is null)
+            {
+                return RefuseAtTextlessCoordinate(request, identifier, observedAt, textlessHere, applicabilityDate, requestedDigest);
             }
 
             var pinnedStates = _reader.ResolveState(workKey, applicabilityDate);
@@ -2933,11 +2968,13 @@ internal sealed partial class V3CorpusMount : IDisposable
             var citingStates = _reader.ResolveStatesOfExpressions(
                     inboundEdges.Select(static edge => edge.ExpressionIri).Distinct(StringComparer.Ordinal).ToArray())
                 .ToDictionary(static state => state.ExpressionIri, StringComparer.Ordinal);
+            // A citing article whose expression no state holds is served nowhere (no text, label, permalink, search hit or
+            // dossier reaches a Luxembourg article but through a state, and its exact identifier resolves to nothing) and has
+            // no address to cite from: its edge is left out. The names measurement records such articles (unserved_articles),
+            // so the index's gap is on record rather than a refusal here.
             inbound.AddRange(inboundEdges
-                .Select(edge => (State: citingStates.TryGetValue(edge.ExpressionIri, out var state)
-                        ? state
-                        : throw new InvalidDataException("An article of the index belongs to no state."),
-                    Edge: edge))
+                .Where(edge => citingStates.ContainsKey(edge.ExpressionIri))
+                .Select(edge => (State: citingStates[edge.ExpressionIri], Edge: edge))
                 // R92: an article of a work the names record withholds is not quoted here (its label is its text), as cited_by.
                 .Where(entry => !CitingWithheld(entry.State))
                 .OrderBy(static entry => entry.State.ApplicabilityDate, StringComparer.Ordinal)
@@ -3024,7 +3061,8 @@ internal sealed partial class V3CorpusMount : IDisposable
 
         var page = edges.Skip(start).Take(limit).ToArray();
         var truncated = start + page.Length < edges.Count;
-        using var result = JsonSerializer.SerializeToDocument(new
+        // On index 10, the publisher's relation records of the work beside the references (WithPublisherRelations).
+        using var result = JsonSerializer.SerializeToDocument(WithPublisherRelations(new
         {
             scope = RelationsScope,
             requested_identifier = identifier,
@@ -3060,10 +3098,10 @@ internal sealed partial class V3CorpusMount : IDisposable
             edges = page.Select(static entry => entry.Row).ToArray(),
             target_note = CitationTargetNote,
             available_languages = availableLanguages,
-            not_held = RelationsNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            not_held = WithStructuredRelations(RelationsNotHeld, RelationsStructuredRelationsTen).Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader.IndexRef.Sha256,
-        });
+        }, workKey, direction));
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "relation_edge", result.RootElement));
@@ -3143,11 +3181,10 @@ internal sealed partial class V3CorpusMount : IDisposable
                 inbound.Select(static edge => edge.ExpressionIri).Distinct(StringComparer.Ordinal).ToArray())
             .ToDictionary(static state => state.ExpressionIri, StringComparer.Ordinal);
         var workKey = states[0].WorkKey;
+        // As above: a citing article of no state is served nowhere and is left out.
         var edges = inbound
-            .Select(edge => (State: citingStates.TryGetValue(edge.ExpressionIri, out var state)
-                    ? state
-                    : throw new InvalidDataException("An article of the index belongs to no state."),
-                Edge: edge))
+            .Where(edge => citingStates.ContainsKey(edge.ExpressionIri))
+            .Select(edge => (State: citingStates[edge.ExpressionIri], Edge: edge))
             // R92: an article of a work the names record withholds is not quoted here (its label is its text).
             .Where(entry => !CitingWithheld(entry.State))
             .OrderBy(static entry => entry.State.ApplicabilityDate, StringComparer.Ordinal)
@@ -3223,7 +3260,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             continue_after = truncated ? Cursor(page[^1]) : null,
             page_is = CitedByPageIs,
             edges = rows,
-            not_held = CitedByNotHeld.Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
+            not_held = WithStructuredRelations(CitedByNotHeld, ReferencesStructuredRelationsTen).Select(static row => new { item = row[0], reason = row[1] }).ToArray(),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader.IndexRef.Sha256,
         });
@@ -4624,7 +4661,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         }, folds, wantStrict ? hitsBeforeFold.Strict : null, wantRelaxed ? hitsBeforeFold.Relaxed : null));
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
-            new V3PlatformOperationResult(request, "quote", result.RootElement));
+            new V3PlatformOperationResult(request, "quote",
+                identifier is null ? WithEuropeTitleResolution(result.RootElement, query, language) : result.RootElement));
     }
 
     internal const string EuropeSearchScope =
@@ -5166,22 +5204,41 @@ internal sealed partial class V3CorpusMount : IDisposable
                 .Select(static row => new { item = row[0], reason = row[1] })
                 .ToArray(),
         }));
+        // The assistant's capability flag (V3CorpusMount.Assistant.cs): a member only while the assistant is on, so the answer
+        // is byte for byte what it was while it is off, and the pages show no entry to it then (R47, R52).
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
-            new V3PlatformOperationResult(request, "coverage_report", result.RootElement));
+            new V3PlatformOperationResult(request, "coverage_report", WithAssistantFlag(result.RootElement)));
     }
 
-    /// <summary>The typed presentation result every <c>ask</c> answers while the assistant is contained (Decision 91).</summary>
+    /// <summary>The typed presentation result every <c>ask</c> answers while the assistant is switched off (Decision 91; R30).</summary>
     internal const string AssistantUnavailable = "assistant_v3_unavailable";
 
     internal const string AskPresentationNote =
         "a typed presentation result of ask (Decisions 51 and 91), not a refusal code: the closed refusal registry stays at its twenty codes, " +
         "and this is neither an answer from held law nor a refusal";
 
-    internal const string AskContainmentReason =
-        "the assistant is contained: no model answers, retrieves, reranks or authors authoritative text, and the legacy assistant route stays disabled " +
-        "until the answer_dossier/1 (S4-A04) and advice-boundary (S4-A05) slices are independently reviewed and integrated; " +
-        "the deterministic operations below answer from held law";
+    /// <summary>
+    /// The card's one sentence of why (the driver's decision of 2026-10-28, STATUS-WEB.md): true before and after D91's
+    /// containment ends (R30), since ending it does not switch the assistant on. Its French is the template
+    /// <c>presentation.assistant_unavailable</c> (V3AnswerTemplates), reviewed with the assistant's templates.
+    /// </summary>
+    internal const string AskContainmentReason = "The assistant is switched off on Lex; search, reading and the other operations work.";
+
+    /// <summary>
+    /// The card's sentence while the assistant is on and could not answer one question (a planner that failed or timed out, a
+    /// plan refused, a gate failed, a cap reached): still <c>assistant_v3_unavailable</c> (R40), said truly. Never sent while
+    /// the assistant is off, so the recorded answers keep the sentence above. Its French is the panel's <c>failed</c>.
+    /// </summary>
+    internal const string AskFailedReason = "The assistant could not answer this question; search, reading and the other operations do not depend on it.";
+
+    /// <summary>
+    /// The card's question note while the assistant is on and could not answer one question (<see cref="AskFailedReason"/>):
+    /// what was done with the question, said truly. Never sent while the assistant is off.
+    /// </summary>
+    internal const string AskQuestionReadNote =
+        "the question was read: normalised, its obvious identifiers masked by code, and the masked text with opaque references sent to the " +
+        "configured processor to plan (R33); it is not stored or echoed; whether it could be answered depended on it";
 
     internal const string AskQuestionNote =
         "the question is checked to be a non-blank string and is not read, stored or echoed; nothing in this answer depends on it";
@@ -5199,7 +5256,8 @@ internal sealed partial class V3CorpusMount : IDisposable
     ];
 
     /// <summary>
-    /// <c>ask</c> while the assistant is contained (Decisions 51 and 91, S4-A05): every request answers
+    /// <c>ask</c> while the assistant is switched off (Decisions 51 and 91; R30; V3CorpusMount.Assistant.cs), which it is by
+    /// default and on every deployment of this code: every request answers
     /// the typed presentation result <c>assistant_v3_unavailable</c> as a <c>handoff_card</c> under the
     /// <c>point</c> verdict, never a refusal code and never an answer from held law. The question is
     /// checked by the request schema and not read, so the card is the same for every question: the
@@ -5218,13 +5276,22 @@ internal sealed partial class V3CorpusMount : IDisposable
             throw new InvalidOperationException("The mounted corpus ask operation only accepts ask/1.");
         }
 
-        _ = RequiredString(request.Parameters, "question");
+        var question = RequiredString(request.Parameters, "question");
         if (_reader is null)
         {
             using var unmounted = JsonSerializer.SerializeToDocument(new { required_corpus = "lu" });
             return V3PlatformOperationOutcome.Refused(
                 Context("refusal", observedAt, PublisherId.LuLegilux),
                 new V3PlatformOperationRefusal(request, "no_corpus_mounted", unmounted.RootElement));
+        }
+
+        // The assistant answers only while every condition of its switch holds (R30). While it is on and cannot answer one
+        // question, the card says so; while it is off, the switched-off card below, the same for every question.
+        if (_assistant.IsOn)
+        {
+            return AskAssistant(request, observedAt, question) ?? V3PlatformOperationOutcome.Success(
+                Context("success", observedAt),
+                AskContained(request, _reader.SearchableLanguages(), AskFailedReason, questionRead: true));
         }
 
         return V3PlatformOperationOutcome.Success(
@@ -5234,12 +5301,15 @@ internal sealed partial class V3CorpusMount : IDisposable
 
     /// <summary>
     /// The card <see cref="Ask"/> answers, given the languages the mount holds searchable text in.
-    /// It reads nothing of the question, which is why it can be built here without a mount and put to
-    /// every scope-line question in the contracts suite.
+    /// While the assistant is off it reads nothing of the question, which is why it can be built here without a mount and put
+    /// to every scope-line question in the contracts suite. While the assistant is on and could not answer one question
+    /// (<paramref name="questionRead"/>), the card says the question was read and what was done with it.
     /// </summary>
     internal static V3PlatformOperationResult AskContained(
         V3PlatformOperationRequest request,
-        IEnumerable<string> searchableLanguages)
+        IEnumerable<string> searchableLanguages,
+        string reason = AskContainmentReason,
+        bool questionRead = false)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(searchableLanguages);
@@ -5268,11 +5338,11 @@ internal sealed partial class V3CorpusMount : IDisposable
             containment = new
             {
                 decisions = new[] { "51", "91" },
-                reason = AskContainmentReason,
+                reason,
                 model_gloss = "disabled",
             },
-            question_read = false,
-            question_note = AskQuestionNote,
+            question_read = questionRead,
+            question_note = questionRead ? AskQuestionReadNote : AskQuestionNote,
             deterministic_actions = actions,
         });
         return new V3PlatformOperationResult(request, "handoff_card", result.RootElement, V3Verdicts.Point);
@@ -6297,8 +6367,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         var rows = scope.Select(state => WithCatalogueFacts(DossierStateRow(state, NextDateInLanguage(scope, state), notAdmitted), state)).ToArray();
         var asPublished = AsPublishedOf(states, scope);
 
-        // The act's force, as the publisher asserts it (R79), on index 9.
-        using var result = JsonSerializer.SerializeToDocument(WithDossierForce(WithCatalogueChain(new
+        // The act's force, as the publisher asserts it (R79), on index 9; its relation records and R72's notice on index 10.
+        using var result = JsonSerializer.SerializeToDocument(WithPublisherRelations(WithDossierForce(WithCatalogueChain(new
         {
             scope = DossierScope,
             requested_identifier = identifier,
@@ -6317,7 +6387,7 @@ internal sealed partial class V3CorpusMount : IDisposable
             not_held = NotHeldRows(RulesByInterval ? DossierNotHeldNine : DossierNotHeld, asPublished),
             corpus_sha256 = _corpus.ArtifactRef.Sha256,
             index_sha256 = _reader!.IndexRef.Sha256,
-        }, states[0].WorkKey, requestedLanguage), states));
+        }, states[0].WorkKey, requestedLanguage), states), states[0].WorkKey));
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt),
             new V3PlatformOperationResult(request, "work_record", result.RootElement));
@@ -6440,7 +6510,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt, PublisherId.EuEurLex),
-            new V3PlatformOperationResult(request, "work_record", WithEuropeForceDates(result.RootElement, dossierSeed)));
+            new V3PlatformOperationResult(request, "work_record", WithEuropePublication(WithEuropeForceDates(result.RootElement, dossierSeed),
+                listed.Select(static expression => expression.PublisherExpressionId))));
     }
 
     internal const string EuropeEvidenceBundleScope =
@@ -6797,7 +6868,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt, PublisherId.EuEurLex),
-            new V3PlatformOperationResult(request, "evidence_bundle", result.RootElement));
+            new V3PlatformOperationResult(request, "evidence_bundle", WithEuropePublication(result.RootElement,
+                selected.Select(static wording => wording.ExpressionId))));
     }
 
     internal const string DossierScope =

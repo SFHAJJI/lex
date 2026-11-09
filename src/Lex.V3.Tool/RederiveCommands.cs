@@ -25,7 +25,8 @@ internal static class RederiveCommands
         + "--policy <sha256> --derived-at <yyyy-MM-ddTHH:mm:ssZ> [--custody-encoding raw|brotli]\n"
         + "  --base        the acquisition's retained inputs /1 or /2 pointer (mount-inputs-*.json)\n"
         + "  --rules       a rule set this build implements: " + RuleSets + "\n"
-        + "  --policy      the rights admission policy digest the rule set names (lu-release-1: policy /1; lu-release-2: policy A)\n"
+        + "  --policy      the rights admission policy digest the rule set names (lu-release-1: policy /1; lu-release-2: policy A;\n"
+        + "                lu-release-3: policy A with the owner's rulings L1, L1b and L2, option (a))\n"
         + "  --derived-at  when the re-derivation is stated to run, a whole UTC second, not before the acquisition's build time";
 
     private const string SealUsage =
@@ -34,7 +35,8 @@ internal static class RederiveCommands
         + "  --inputs  the unsealed inputs /3 pointer a derive ran\n"
         + "  --record  the luxembourg_rederivation digest that derive printed";
 
-    private const string RuleSets = LuxembourgRederivation.Release1RuleSet + ", " + LuxembourgRederivation.Release2RuleSet;
+    private const string RuleSets =
+        LuxembourgRederivation.Release1RuleSet + ", " + LuxembourgRederivation.Release2RuleSet + ", " + LuxembourgRederivation.Release3RuleSet;
 
     internal static async Task<int> InputsAsync(string[] args)
     {

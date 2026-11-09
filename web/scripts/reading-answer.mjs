@@ -46,6 +46,7 @@ import { isCalendarDate } from './temporal.mjs';
 import { articlePermalink, europePermalink, europeWorkSegment, luxembourgPermalink } from './permalinks.mjs';
 import { readAnnexesNotServed } from './europe-annexes.mjs';
 import { readEuropeForceDates } from './europe-force-dates.mjs';
+import { readEuropeOfficialJournal, readEuropeTitles } from './europe-publication.mjs';
 import { readAsPublished } from './as-published.mjs';
 import { readVersionPages } from './reading-pages.mjs';
 import { readCatalogueFacts, readInterval } from './date-role.mjs';
@@ -837,6 +838,10 @@ export function readEuropeEvidenceBundle(answer) {
     consolidationsHeld,
     // The act's dates as the publisher records them, over an EU index /6; null over an older one (`europe-force-dates.mjs`).
     forceDates: readEuropeForceDates(answer, where),
+    // The wordings' titles and Official Journal references, over an EU index /7; null over an older one
+    // (`europe-publication.mjs`): the citation's evidence form says the reference where it is held.
+    titles: readEuropeTitles(answer, where),
+    officialJournal: readEuropeOfficialJournal(answer, where),
     wordings: Object.freeze(wordings),
     rightsRule: requireText(requireOwn(answer, 'rights_rule', where), 'rights_rule'),
     dateRule: requireText(requireOwn(answer, 'date_rule', where), 'date_rule'),

@@ -72,7 +72,18 @@ export function homeFacts(envelope, contract) {
   return Object.freeze({
     today: typeof observedAt === "string" ? dateInLuxembourg(observedAt) : null,
     coverage: coverageLineOf(outcome),
+    // The assistant's entry, only while the server reports it switched on: absent otherwise, so the facts, and the page
+    // rendered from them, are byte for byte what they are while it is off (R47, R52).
+    ...(assistantOn(outcome) ? { assistant: true } : {}),
   });
+}
+
+/**
+ * Whether a coverage view state says the assistant is switched on: the answer's capability flag (`assistant.state`, a member
+ * the server adds only while it is on). Anything else, an answer without it included, is off.
+ */
+export function assistantOn(outcome) {
+  return outcome?.state === "success" && outcome.answer?.assistant?.state === "on";
 }
 
 const isCount = (value) => Number.isInteger(value) && value >= 0;
@@ -87,6 +98,8 @@ export function readHomeFactsValue(value) {
   const { today, coverage } = value;
   if (!(today === null || isCalendarDate(today))) return null;
   if (coverage === null || typeof coverage !== "object" || !COVERAGE_LINE_STATES.includes(coverage.state)) return null;
+  if (!(value.assistant === undefined || value.assistant === true)) return null;
+  const assistant = value.assistant === true ? { assistant: true } : {};
   if (coverage.state === "counted") {
     if (![coverage.works, coverage.states, coverage.articles].every(isCount)) return null;
     if (!(coverage.builtOn === null || isCalendarDate(coverage.builtOn))) return null;
@@ -98,9 +111,10 @@ export function readHomeFactsValue(value) {
         state: "counted", works: coverage.works, states: coverage.states, articles: coverage.articles, builtOn: coverage.builtOn,
         indexSha256: coverage.indexSha256 ?? null,
       }),
+      ...assistant,
     });
   }
-  return Object.freeze({ today, coverage: Object.freeze({ state: coverage.state }) });
+  return Object.freeze({ today, coverage: Object.freeze({ state: coverage.state }), ...assistant });
 }
 
 /** The facts a home page carries, as its client entry reads them, or null when the page carries none. */
@@ -118,6 +132,13 @@ export function readHomeFacts(document) {
  * What a home page served as built does once loaded: asks `coverage` once and hands the coverage line to `onLine` when it
  * settles; returns the cancel the page calls when it unmounts.
  */
-export function startHomeCoverage({ contract, fetchImpl, onLine }) {
-  return startLiveCoverage({ contract, fetchImpl, onOutcome: (outcome) => onLine(coverageLineOf(outcome)) });
+export function startHomeCoverage({ contract, fetchImpl, onLine, onAssistant = () => {} }) {
+  return startLiveCoverage({
+    contract,
+    fetchImpl,
+    onOutcome: (outcome) => {
+      onLine(coverageLineOf(outcome));
+      if (assistantOn(outcome)) onAssistant(true);
+    },
+  });
 }

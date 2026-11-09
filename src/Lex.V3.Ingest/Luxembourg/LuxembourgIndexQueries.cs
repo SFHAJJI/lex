@@ -372,4 +372,52 @@ internal static class LuxembourgIndexQueries
         "CROSS JOIN states s INDEXED BY states_digest ON s.state_sha256=t.value " +
         "CROSS JOIN articles a ON a.article_identity_sha256=json_extract(s.article_identities_json,'$[0]') " +
         "CROSS JOIN members m ON m.object_ref_sha256=a.object_ref_sha256";
+
+    /// <summary>
+    /// Index 10's act-level relations whose subject or object is one of a list of IRIs (a work's own IRI and its states'), each
+    /// once: the list walked twice, each IRI looked up in the subject index and in the object index, so the cost is the list and
+    /// the rows it names, never the table. <c>INDEXED BY</c> makes a missing index a failure to prepare, not a silent scan.
+    /// </summary>
+    internal const string PublisherRelationsOf = """
+        SELECT r.edge_type, r.source_predicate, r.subject_iri, r.object_iri, r.acting_publication_date, r.acting_entry_into_force, r.evidence_sha256
+        FROM json_each($iris) t
+        CROSS JOIN publisher_relations r INDEXED BY publisher_relations_subject ON r.subject_iri = t.value
+        UNION
+        SELECT r.edge_type, r.source_predicate, r.subject_iri, r.object_iri, r.acting_publication_date, r.acting_entry_into_force, r.evidence_sha256
+        FROM json_each($iris) t
+        CROSS JOIN publisher_relations r INDEXED BY publisher_relations_object ON r.object_iri = t.value
+        ORDER BY 1, 3, 4
+        """;
+
+    /// <summary>
+    /// Index 10's impact records whose acting or amended act is one of a list of IRIs, each once, by the two part indexes, as
+    /// <see cref="PublisherRelationsOf"/> reads the relations.
+    /// </summary>
+    internal const string PublisherImpactsOf = """
+        SELECT i.impact_iri, i.from_legal_resource_iri, i.to_legal_resource_iri, i.to_expression_iri, i.impact_type_iri,
+               i.consolidated_by_iri, i.consolidated_by_expression_iri, i.ambiguous_parts_json, i.acting_publication_date,
+               i.acting_entry_into_force, i.evidence_sha256
+        FROM json_each($iris) t
+        CROSS JOIN publisher_impacts i INDEXED BY publisher_impacts_from ON i.from_legal_resource_iri = t.value
+        UNION
+        SELECT i.impact_iri, i.from_legal_resource_iri, i.to_legal_resource_iri, i.to_expression_iri, i.impact_type_iri,
+               i.consolidated_by_iri, i.consolidated_by_expression_iri, i.ambiguous_parts_json, i.acting_publication_date,
+               i.acting_entry_into_force, i.evidence_sha256
+        FROM json_each($iris) t
+        CROSS JOIN publisher_impacts i INDEXED BY publisher_impacts_to ON i.to_legal_resource_iri = t.value
+        ORDER BY 1
+        """;
+
+    /// <summary>
+    /// The publication and entry-into-force facts of every acting act index 10's relation rows name, verbatim, in the fact
+    /// table's order: each acting IRI once, then its facts by the fact table's primary key (subject, then predicate).
+    /// </summary>
+    internal const string ActingFacts = """
+        SELECT f.subject_iri, f.predicate, f.fact_kind, f.object_kind, f.object_value, f.datatype_iri, f.language_tag, f.evidence_sha256
+        FROM (SELECT CASE WHEN edge_type = 'modified_temporarily_by' THEN object_iri ELSE subject_iri END AS acting FROM publisher_relations
+              UNION
+              SELECT from_legal_resource_iri FROM publisher_impacts WHERE from_legal_resource_iri IS NOT NULL) a
+        CROSS JOIN work_facts f ON f.subject_iri = a.acting AND f.predicate IN ('publicationDate', 'dateEntryInForce')
+        ORDER BY f.subject_iri, f.predicate, f.object_kind, f.object_value, f.datatype_iri, f.language_tag, f.evidence_sha256
+        """;
 }

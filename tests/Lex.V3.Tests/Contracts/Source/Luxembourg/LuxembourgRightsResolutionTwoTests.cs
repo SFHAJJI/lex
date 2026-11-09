@@ -20,6 +20,15 @@ public sealed class LuxembourgRightsResolutionTwoTests
     internal const string PinnedPolicyASha256 = "b9687998dcde76930137a913f54b753d3f496a13da1c7d827d3f1573dcf3dc41";
     private const string Policy1Sha256 = "a477f4f2e6e0468bc9069da742f6f34f248ec831e01277a40552cb1e5bad2abb";
 
+    /// <summary>
+    /// <c>lex-lu-rights-admission-policy/A+L1+L1b+L2(a)</c> with the owner's words of 2026-10-27 on its ruling line: the entry
+    /// Release 3's rule set names, recomputed in Python from its text.
+    /// </summary>
+    internal const string PinnedReleaseThreePolicySha256 = "2b049e7650b3c5a1250ad60ac263ffb50d11398945fe5e92ac6049634bfc4b43";
+
+    /// <summary>The same entry's digest while its ruling line said the owner's words were not yet given (#999 to #1008).</summary>
+    private const string EntryBeforeTheYesSha256 = "e52372f9417545f37380abd742e551f1d2a9035a5b146fda42ea17c3b1a645dd";
+
     private const string Xml = "http://data.legilux.public.lu/eli/etat/leg/loi/2021/01/22/a45/consolide/20211217/fr/xml";
     private const string Pdf = "http://data.legilux.public.lu/eli/etat/leg/loi/2021/01/22/a45/consolide/20211217/fr/pdf";
     private const string ActXml = "http://data.legilux.public.lu/eli/etat/leg/loi/2021/01/22/a45/jo/fr/xml";
@@ -140,6 +149,41 @@ public sealed class LuxembourgRightsResolutionTwoTests
             },
             LuxembourgRightsAdmissionPolicies.AdmittingDispositions(all).ToArray());
         StringAssert.StartsWith(Encoding.UTF8.GetString(LuxembourgRightsAdmissionPolicies.CopyPolicyBytes(all)), "lex-lu-rights-admission-policy/A+L1+L1b+L2(a)\n");
+    }
+
+    /// <summary>
+    /// The owner's standing yes of 2026-10-27 to the driver's recommendation (L1, L1b and L2, each with option (a)) stands,
+    /// dated, on the ruling line of exactly that entry, once per ruling, and moved its digest (recomputed in Python from the
+    /// text); every other entry keeps its text, and its ruling line still says the owner's words are not given. The entry's
+    /// digest before the yes is no longer registered.
+    /// </summary>
+    [TestMethod]
+    public void TheOwnersStandingYesStandsOnTheEntryOfTheRecommendationAndNoOther()
+    {
+        const string Words = "the-owner's-words-2026-10-27:the-owner's-standing-yes-of-2026-10-27-to-the-driver's-recommendation," +
+            "L1-L1b-and-L2-each-with-option-(a),so-the-release-rule-set-names-this-entry";
+        var all = LuxembourgRightsAdmissionPolicies.PolicyFor(l1: true, l1b: true, l2: true, livePagesOnly: false);
+        Assert.AreEqual(PinnedReleaseThreePolicySha256, all);
+        var text = Encoding.UTF8.GetString(LuxembourgRightsAdmissionPolicies.CopyPolicyBytes(all));
+        Assert.AreEqual(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text))), all);
+        var ruling = text.Split('\n')[4];
+        StringAssert.StartsWith(ruling, "ruling=L1(a):");
+        CollectionAssert.AreEqual(new[] { "L1(a)", "L1b(a)", "L2(a)" }, ruling["ruling=".Length..].Split('|').Select(static part => part[..part.IndexOf(':')]).ToArray());
+        foreach (var part in ruling.Split('|'))
+        {
+            StringAssert.EndsWith(part, ";asked-of-the-owner-2026-10-27-(LU-DATA-DESIGN-2026-10-14-v2-§5),recommended-(a);" + Words);
+        }
+
+        Assert.IsFalse(text.Contains("not-yet-given", StringComparison.Ordinal));
+        StringAssert.Contains(text, "\nsingle-channel-evidence-window=(a)every-licence-page-of-the-acquisition,a-resumed-run's-replayed-pages-included\n");
+        Assert.IsFalse(LuxembourgRightsAdmissionPolicies.IsRegistered(EntryBeforeTheYesSha256), "the entry's text before the yes names no policy");
+
+        foreach (var policy in LuxembourgRightsAdmissionPolicies.RegisteredSha256s.Where(policy => policy != all))
+        {
+            var other = Encoding.UTF8.GetString(LuxembourgRightsAdmissionPolicies.CopyPolicyBytes(policy));
+            Assert.IsFalse(other.Contains("the-owner's-words-2026-10-27", StringComparison.Ordinal), other);
+            Assert.AreEqual(LuxembourgRightsAdmissionPolicies.AdmitsSingleChannel(policy), other.Contains("the-owner's-words-not-yet-given", StringComparison.Ordinal), other);
+        }
     }
 
     [TestMethod]

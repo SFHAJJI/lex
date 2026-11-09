@@ -64,6 +64,22 @@ const EN = Object.freeze({
       other: "{count} more acts",
     }),
     noTitlesHeld: "This index holds no work titles, so the phrase was matched against article text only.",
+    // The EU acts a search that names no work found by their titles (EU index /7, Release 3's item 1;
+    // `europe-publication.mjs`): each act once, by its title in the language that matched, linked to its dossier; their text
+    // is not searched here.
+    euTitleExact: "The phrase is the title of an EU act this site holds: {title}",
+    euTitlePhrase: "The phrase is in the title of an EU act this site holds: {title}",
+    euTitles: Object.freeze({
+      one: "The phrase is in the title of {count} EU act this site holds:",
+      other: "The phrase is in the titles of {count} EU acts this site holds:",
+    }),
+    euTitleAct: "{title} ({celex})",
+    euTitlesSearched: "The titles of the EU acts this site holds were matched too; the text of those acts was not searched.",
+    runEuTitles: "EU titles: the phrase is in no title of an EU act this site holds.",
+    runEuTitlesMatched: Object.freeze({
+      one: "EU titles: the phrase is in the title of the EU act shown above.",
+      other: "EU titles: the phrase is in the titles of the EU acts shown above.",
+    }),
     ambiguousHeading: "Works with several versions on {date}",
     ambiguousNote: "These works have more than one version that applies on that date, so none is chosen and none contributes a hit.",
     ambiguousWork: "{work}: {candidates}",
@@ -172,6 +188,13 @@ const EN = Object.freeze({
     // ignored (the French review of this slice, its point 4).
     titleMatching: "Titles are matched with capitals and accents ignored.",
     runTitlesNotRun: "Titles: not searched, since a work was named.",
+    // The title ladder's line when the EU acts' titles were matched too (EU index /7): the Luxembourg titles said as such, so
+    // the two lines never contradict each other (the French review of 2026-10-27, its point 2).
+    runLuxembourgTitles: "Luxembourg titles: no title of a Luxembourg act this site holds matches the phrase.",
+    runLuxembourgTitlesMatched: Object.freeze({
+      one: "Luxembourg titles: the phrase matches the title of the Luxembourg act shown above.",
+      other: "Luxembourg titles: the phrase matches the titles of the Luxembourg acts shown above.",
+    }),
     runText: "Text: no article searched contains the phrase, even with capitals and accents ignored.",
     runTextWords: "Text, every word in any order: no article searched contains them all.",
     exactOnly: "Only the phrase was matched in the text, with capitals and accents ignored, œ and æ read as oe and ae, the typographic apostrophes as the straight one, a no-break space as a space and a soft hyphen as nothing: every other character of it counts, hyphens and punctuation included, and nothing is stemmed or expanded. A looser search of the text stays off until its own check has passed.",
@@ -241,6 +264,50 @@ const EN = Object.freeze({
     // A state dated by its entry into force (S7a; R21), in the date column, and what that mark means, said once under the table.
     entryIntoForceDate: "no date stated (entry into force: {date})",
     entryIntoForceNote: "The mark “no date stated” means that the act's file states no exact applicability date; the date in brackets is the act's entry into force in the publisher's record, not an applicability date.",
+    // The publisher's relation records of the act (index 10; R29, R21), and R72's notice that an act published after the
+    // latest consolidated version in the publisher's catalogue amends it (named, never its effect; derived).
+    relationsHeading: "Relations in the publisher's records",
+    relationsIntro: "The publisher records which acts amend, repeal or rectify which. Each record names the acts, not what an act changes.",
+    relationsNotAcquired: "This site does not hold the publisher's relation records for this act, so none is listed here, and nothing here says that there is none.",
+    relationsNav: "Relations listed",
+    relationGroups: Object.freeze({
+      amended_by: "Acts that amend this act",
+      amends: "Acts this act amends",
+      repealed_by: "Acts that repeal this act",
+      repeals: "Acts this act repeals",
+      modified_temporarily_by: "Acts that modify this act for a time",
+      modifies_temporarily: "Acts this act modifies for a time",
+      rectified_by: "Acts that rectify this act",
+      rectifies: "Acts this act rectifies",
+      impact_received: "Changes made to this act, in the publisher's table of modifications",
+      impact_made: "Changes this act makes, in the publisher's table of modifications",
+    }),
+    relationTab: "{group} ({count})",
+    relationDerived: "Derived from the publisher's forward relation: the publisher records each of these relations on the other act, not on this one.",
+    relationImpact: "Read from the publisher's table of modifications, a record that names the act a change comes from and the act it is made to.",
+    relationPublished: "{act}, published on {published} (publisher)",
+    relationPublishedEntry: "{act}, published on {published}; entry into force: {entry} (publisher)",
+    relationUndated: "{act}; the publisher's record gives no publication date for it",
+    relationIntegrated: "The publisher records this change as integrated in the consolidated version applicable from {date}.",
+    relationIntegratedOther: "The publisher records this change as integrated in {version}.",
+    relationTitleWithheld: "its title is not shown here",
+    relationSelf: "this act itself",
+    relationsNone: "The publisher's records, as this site read them, name no act for: {groups}.",
+    relationsNotHeldFor: "This site does not hold all of the publisher's records for: {groups}.",
+    relationsNotSeen: "This site read the relation records the publisher keeps on codes, laws and grand-ducal regulations; a record kept on an act of another kind was not read, so an act of another kind that amends, repeals or rectifies this act, or that this act modifies for a time, is not listed.",
+    relationsNotSeenClasses: "This site read the relation records the publisher keeps on these classes of identifier only: {classes}. A record kept on an act of another class was not read, so an act of another class that amends, repeals or rectifies this act, or that this act modifies for a time, is not listed.",
+    amendedAfterHeading: "Amended, with no consolidated version Lex holds published since",
+    amendedAfterOne: "An act published on {date} ({act}) amends this act; no consolidated version Lex holds was published after it.",
+    amendedAfterMany: "These acts amend this act; no consolidated version Lex holds was published after them:",
+    amendedAfterAct: "{act}, published on {date} (publisher)",
+    amendedAfterLatest: "The latest consolidated version Lex holds, {version}, was published on {date}.",
+    amendedAfterLatestIntegrating: "The latest consolidated version Lex holds, {version}, was published on {date}; it is a version of another act, one the publisher records as integrating changes made to this act.",
+    amendedAfterNoConsolidation: "Lex holds no consolidated version of this act, or of another act the publisher records as integrating changes made to it.",
+    amendedAfterIntegrated: "Amending acts the publisher records as integrated in a consolidated version Lex holds are not named here: {count}.",
+    amendedAfterUndecided: "Amending acts for which the publisher's table of modifications names more than one consolidated version as integrating the change are not named here: {count}.",
+    amendedAfterNote: "This is derived from the publisher's forward relation: each act named records that it amends this act. It names the act, not what the act changes. An amending act other than a code, a law or a grand-ducal regulation is not seen.",
+    amendedAfterNoteUnscoped: "This is derived from the publisher's forward relation: each act named records that it amends this act. It names the act, not what the act changes, and an amending act whose record this site did not read is not seen.",
+    amendedAfterNoteClasses: "This is derived from the publisher's forward relation: each act named records that it amends this act. It names the act, not what the act changes. An amending act outside these classes of identifier is not seen: {classes}.",
   }),
   reading: Object.freeze({
     pinReplaced: "This link pins {pinned}, which is not the version this site serves for that date; the version it serves is shown below.",
@@ -270,11 +337,13 @@ const EN = Object.freeze({
     rights: "Text served under {rights}. Read on {date}.",
     rightsIn: "Text served under {rights}. Read on {date} in {language}.",
     // The L5 single-channel disclosure (LU-DATA-DESIGN v2 §1.2, §5): a text served on the publisher's catalogue alone, under
-    // one of the owner's rulings, says so beside the text with the date its licence page was observed. Drafts the owner revises.
+    // one of the owner's rulings, says so beside the text: what the file itself states, the one channel (a licence row of the
+    // publisher's catalogue), the page that holds the row and the date that page was read. Final under the owner's standing yes
+    // of 2026-10-27 to the driver's recommendation, which turned L1, L1b and L2 on for Release 3.
     disclosure: Object.freeze({
-      lu_rights_publisher_catalogue_only_file_silent: "This file does not state its own licence. It is served on the publisher's catalogue alone, which declares CC BY 4.0 for this file, as observed on {date}.",
-      lu_rights_publisher_catalogue_only_own_block_empty: "This file's own metadata names it but states no licence. It is served on the publisher's catalogue alone, which declares CC BY 4.0 for this file, as observed on {date}.",
-      lu_rights_publisher_catalogue_only_file_names_other_identity: "This file's licence statement names another publication, not this file. It is served on the publisher's catalogue alone, which declares CC BY 4.0 for this file, as observed on {date}.",
+      lu_rights_publisher_catalogue_only_file_silent: "This file's metadata states no licence. The text of this file is served on the basis of the publisher's catalogue alone: a licence row in that catalogue declares CC BY 4.0 for this file, on a page that this site read on {date}.",
+      lu_rights_publisher_catalogue_only_own_block_empty: "This file's own metadata names it but does not state its licence. The text of this file is served on the basis of the publisher's catalogue alone: a licence row in that catalogue declares CC BY 4.0 for this file, on a page that this site read on {date}.",
+      lu_rights_publisher_catalogue_only_file_names_other_identity: "This file's licence statement names another file, not this file. The text of this file is served on the basis of the publisher's catalogue alone: a licence row in that catalogue declares CC BY 4.0 for this file, on a page that this site read on {date}.",
     }),
     stateHeading: "{work}, {language}, the state applying from {from}",
     stateHeadingNext: "{work}, {language}, the state applying from {from} (the next state held applies from {next})",
@@ -714,6 +783,8 @@ const EN = Object.freeze({
       other: "{count} articles",
     }),
     links: "Elsewhere on this site",
+    // The assistant's page, linked only while the server reports the assistant switched on (the coverage answer's flag).
+    assistantLink: "Assistant",
     // The example searches (R47; `home-examples.mjs`): each a usual citation of an article this site holds, derived from the
     // mount at build and kept only when searching it opens that article's text; the citations themselves are data, said in
     // their text's language.
@@ -822,6 +893,9 @@ const EN = Object.freeze({
         heading: "People named in published acts",
         why: "Some published acts name people, for example a law granting nationality. Lex reproduces texts as the official journals publish them, the Journal officiel du Grand-Duché de Luxembourg and the Official Journal of the European Union, so that the law can be read at a date and checked against its official source.",
         searchEngines: "Search engines may index the page of an act only once a check has found that the act names no private person; the page of any other act asks them not to.",
+        // R92 (owner item O28; the owner's standing yes of 2026-10-27 to the driver's recommendation): the names record withholds
+        // such an act's text and titles, and the API answers text_withheld (reason names_private_individuals) with its official link.
+        withheld: "An act the check finds to name private persons is not reproduced: Lex shows neither its text nor its titles, and points to the publisher through the act's official link.",
       }),
       // The reader's right to complain to the supervisory authority (GDPR art. 77): the regulator, named with a link to its
       // site and no postal address, not a contact of Lex's (the driver's decision of 2026-10-19, STATUS-WEB.md).
@@ -1375,6 +1449,19 @@ const EN = Object.freeze({
       conflict: "The publisher records more than one entry into force for this act ({dates}): each is shown, and this site chooses none.",
       notWording: "None of the dates above is used to choose a wording: each wording below carries its own date.",
     }),
+    // An EU wording's titles and Official Journal reference, as the EU index /7 holds them (Release 3's item 1;
+    // `europe-publication.mjs`): the publisher's title, or the one the act's Formex package gives, in its own language; the
+    // publisher's short title; and the reference the act's Formex package states, which for a consolidated wording is the
+    // publication of the act it consolidates. Said only where the answer carries them; what is not held is said apart.
+    europePublication: Object.freeze({
+      title: "Title in {language}, as the publisher records it: {title}",
+      titleInPackage: "Title in {language}, as the act's Formex package gives it: {title}",
+      shortTitle: "Short title in {language}, as the publisher records it: {title}",
+      noTitle: "This site holds no title of the {language} wording.",
+      journal: "Official Journal reference of the {language} wording: {reference}",
+      journalConsolidated: "Official Journal reference of the act the {language} wording consolidates: {reference}",
+      noJournal: "This site holds no Official Journal reference of the {language} wording.",
+    }),
     // A Luxembourg act held only as first published (the plan's item 0.6, `as-published.mjs`): its label, what this site
     // holds of later versions, and the authenticity sentence of its case, with the act as published in {act}. The label
     // and the authenticity sentences are drafts pending the lawyer's read (the owner's item O4).
@@ -1445,6 +1532,17 @@ const EN = Object.freeze({
       suffixed: "{year}/{number}/{domain}",
       plain: "{year}/{number}",
       version: "{citation}, as at {date}",
+      // An Official Journal reference as EUR-Lex writes it (`europe-publication.mjs`): an issue with its date and first page,
+      // or, since October 2023, the act's own number and its date; a reference whose date the package does not state is
+      // said with its year.
+      journal: Object.freeze({
+        issue: "OJ {series} {number}, {date}, p. {page}",
+        issueNoPage: "OJ {series} {number}, {date}",
+        issueUndated: "OJ {series} {number} ({year}), p. {page}",
+        issueUndatedNoPage: "OJ {series} {number} ({year})",
+        act: "OJ {series}, {number}, {date}",
+        actUndated: "OJ {series}, {number}",
+      }),
       // The platform's authenticity statements for EU text (`V3CorpusMount.EuropeTextAuthenticity`), word for word, one for
       // each basis the act's own date chooses (the owner's decision of 2026-10-18, O4): the generator says the cited text's
       // language's only when the answer says exactly one of these.
@@ -1467,6 +1565,10 @@ const EN = Object.freeze({
       originalWording: "Wording: the original wording of {date}",
       consolidatedWording: "Wording: the consolidated wording of {date}",
       officialJournalNotHeld: "Published in: the Official Journal reference is not held by this index.",
+      // The reference the wording's Formex file states (EU index /7): the act's own, or for a consolidated wording that of the
+      // act it consolidates, which is not itself published in the Official Journal.
+      officialJournal: "Published in: {reference}",
+      officialJournalConsolidated: "The act consolidated was published in: {reference}",
       textSha256: "Text digest (SHA-256): {digest}",
       noText: "Text digest (SHA-256): none, the article is held without text.",
       consulted: "Consulted on Lex on {date} (date in Luxembourg).",

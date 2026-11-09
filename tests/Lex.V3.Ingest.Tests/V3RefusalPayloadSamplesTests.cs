@@ -75,10 +75,18 @@ public sealed class V3RefusalPayloadSamplesTests
         Assert.IsGreaterThan(0, producedCodes.Length, "A census with nothing produced is not a census.");
 
         // The API's own source is the second witness: a code it constructs that no scenario here
-        // produces has no sample, and that fails until a scenario exists.
+        // produces has no sample, and that fails until a scenario exists, or until the code is explained
+        // (ConstructedWithNoStableSample): each explained code must still be constructed, so the explanation
+        // cannot outlive its reason, and is still not produced, so it stays in the not-produced list.
         var constructed = CodesTheApiConstructs();
+        foreach (var (code, reason) in ConstructedWithNoStableSample)
+        {
+            CollectionAssert.Contains(constructed, code, $"{code} is explained as constructed, and the API no longer constructs it: {reason}");
+            CollectionAssert.Contains(notProduced, code, $"{code} is explained as having no stable sample, yet a scenario produced one: remove the explanation.");
+        }
+
         CollectionAssert.AreEqual(
-            constructed,
+            constructed.Except(ConstructedWithNoStableSample.Select(static entry => entry.Code), StringComparer.Ordinal).ToArray(),
             producedCodes,
             "The codes the API constructs and the codes the scenarios produced are not the same set: add a scenario for the code with no sample, or explain the one no scenario can reach.");
 
@@ -591,6 +599,20 @@ public sealed class V3RefusalPayloadSamplesTests
     }
 
     /// <summary>The refusal codes the API's source constructs, read from the source: a code built by a variable is not seen here.</summary>
+    /// <summary>
+    /// The codes the API constructs that no scenario here can hold a stable sample of, each with why. The assistant's
+    /// <c>advice_boundary</c> (V3CorpusMount.Assistant.cs) is constructed only while the assistant is switched on, which it is
+    /// not at launch (the schema's own comment says no operation produces it then), and its payload carries the whole
+    /// answer_dossier, whose trace pins the mounted snapshot's digest and each step's result digest: the fixture mints those
+    /// again on every run, so a sample of it would differ run to run. Its shape is held where it can be: the published payload
+    /// schema, and <c>V3AssistantMountTests</c>, which drives it over the fixture with the assistant on (refuse travels as
+    /// advice_boundary, its payload carrying the descriptive maximum, the handoff and the dossier).
+    /// </summary>
+    private static readonly (string Code, string Reason)[] ConstructedWithNoStableSample =
+    [
+        ("advice_boundary", "constructed only by the assistant while switched on; its payload's trace pins per-run digests"),
+    ];
+
     private static string[] CodesTheApiConstructs()
     {
         var api = Path.Combine(RepositoryRoot(), "src", "Lex.V3.Api");

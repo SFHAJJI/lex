@@ -71,58 +71,71 @@ public sealed class VocabularyRegistryCensusTests
                     + "DigestDomain, const Schema",
                 "Lex.V3.Ingest.Europe.EuObjectFactsBatchFactory: SetsOverObservedObjects=5, "
                     + "SetsOverPackRootsOnly=1",
+                "Lex.V3.Ingest.Europe.EuOfficialJournalNumberForms: All=2, const ActNumber, const SeriesNumber",
+                "Lex.V3.Ingest.Europe.EuOfficialJournalReferenceKinds: All=2, const ActPublication, "
+                    + "const ConsolidatedActPublication",
                 "Lex.V3.Ingest.Europe.EuropeForceDateRoles: InOrder=6, Named=4, const Application, "
                     + "const Deadline, const EndOfValidity, const EntryIntoForce, const NotPinned, const Signature",
                 "Lex.V3.Ingest.Europe.EuropeIndexBuilder: const AnnotatedPropertyIri, const AnnotatedSourceIri, "
                     + "const AnnotatedTargetIri, const CommentOnDateIri, static readonly Ddl, const DigestDdl, "
-                    + "const DigestSchema, const ForceDatesDdl, const LegacyDdl, const LegacySchema, const Schema, "
+                    + "const DigestSchema, const ForceDatesDdl, static readonly ForceDatesFullDdl, const ForceDatesSchema, "
+                    + "const LegacyDdl, const LegacySchema, const Schema, "
                     + "const SourceDdl, const SourceSchema, const StatesDdl, static readonly StatesFullDdl, "
-                    + "const StatesSchema, const TypeOfDateIri",
+                    + "const StatesSchema, const TitlesDdl, const TypeOfDateIri",
+                "Lex.V3.Ingest.Europe.EuropeTitleKinds: const ShortTitle, const Title",
+                "Lex.V3.Ingest.Europe.EuropeTitleSources: InOrder=3, const CellarExpressionTitle, "
+                    + "const CellarExpressionTitleShort, const FormexTitle",
                 "Lex.V3.Ingest.LexCorpus6Builder: Domain=13, const Schema",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgInFileRightsReader: const ReadingTwoProfileName, "
                     + "const ReadingTwoProfileText, static property ReadingTwoProfileSha256",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder: StatePredicates=8, "
-                    + "const ArticleDateBasic, const ArticleDateExtended, const ArticleDateNone, "
-                    + "const ArticleDateNotRead, const BoundaryDerived, const BoundaryHalfOpen, "
-                    + "const BoundaryInclusiveSuspected, const BoundaryInvalid, const BuiltAtFormat, "
-                    + "const ComplexWorkIri, const Ddl, const EventLogDdl, const EventLogSchema, "
+                "Lex.V3.Ingest.Luxembourg.LuxembourgIndexBuilder: EdgeTypeByPredicate=4, "
+                    + "ImpactParts=6, StatePredicates=8, const ArticleDateBasic, const "
+                    + "ArticleDateExtended, const ArticleDateNone, const ArticleDateNotRead, const "
+                    + "BoundaryDerived, const BoundaryHalfOpen, const BoundaryInclusiveSuspected, "
+                    + "const BoundaryInvalid, const BuiltAtFormat, const ComplexWorkIri, const "
+                    + "Ddl, const EdgeModifiedTemporarilyBy, const EdgeModifies, const "
+                    + "EdgeRectifies, const EdgeRepeals, const EventLogDdl, const EventLogSchema, "
                     + "const FrenchLanguage, const FrenchLanguageIri, const IntervalContiguous, "
-                    + "const IntervalDerived, const IntervalHole, const IntervalInclusiveSuspected, "
-                    + "const IntervalInvalid, const IntervalOverlap, const IntervalSameDate, "
-                    + "const KindAsPublished, const KindCode, const KindConsolidation, "
-                    + "const LegacyDdl6, const LegacyDdl8, const LegacyEventLogDdl6, "
-                    + "const LegacyEventLogDdl8, const LegacyEventLogSchema8, const LegacySchema6, "
-                    + "const LegacySchema8, const LegacyTablesDdl, const LegiluxEliRoot, "
-                    + "const RoleApplicability, const RoleApplicabilityInFile, "
-                    + "const RoleEntryIntoForce, const Schema, const SourceDerived, "
-                    + "const SourcePublisher, static readonly StateRuleDigest, "
-                    + "const StateRuleProfile, const TablesDdl, const TextHeld, "
-                    + "const TextNotAcquired, const TextNotAvailableDerivation, "
-                    + "const TextNotAvailableMisfiled, const TextNotAvailablePdf, "
-                    + "const TextWithheldRights, static property StateRuleProfileSha256",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgIndexQueries: const AnchorArticles, "
-                    + "const ArticleIds, const CatalogueStatesOfWork, const CitationsTo, const EventCount, "
-                    + "const EventLog, const EventsAfter, const EventsOfNameAfter, const HeldWorks, "
-                    + "const HeldWorksNine, const IntervalsOfWork, const MemberOutcomes, const Observations, "
-                    + "const ObservationsNine, const RevisingEventsAfter, const SearchTexts, const StateArticles, const StateArticlesNine, "
-                    + "const StateCitations, const StateColumnsNine, const StateDocumentOutcomes, "
-                    + "const StateSources, const StateTextSources, const StatesOfExpressions, const StatesOfExpressionsNine, "
-                    + "const SubjectFacts, const SubjectFactsUnder, const WorkEventsUpTo, const WorkRecords, "
-                    + "const WorkRecordsNine, const WorkTitles",
+                    + "const IntervalDerived, const IntervalHole, const "
+                    + "IntervalInclusiveSuspected, const IntervalInvalid, const IntervalOverlap, "
+                    + "const IntervalSameDate, const JoluxNamespace, const KindAsPublished, const "
+                    + "KindCode, const KindConsolidation, const LegacyDdl6, const LegacyDdl8, "
+                    + "const LegacyDdl9, const LegacyEventLogDdl6, const LegacyEventLogDdl8, const "
+                    + "LegacyEventLogSchema8, const LegacySchema6, const LegacySchema8, const "
+                    + "LegacySchema9, const LegacyTablesDdl, const LegiluxEliRoot, const "
+                    + "PublisherRelationsDdl, const RoleApplicability, const "
+                    + "RoleApplicabilityInFile, const RoleEntryIntoForce, const Schema, const "
+                    + "SourceDerived, const SourcePublisher, static readonly StateRuleDigest, "
+                    + "const StateRuleProfile, const TablesDdl, const TextHeld, const "
+                    + "TextNotAcquired, const TextNotAvailableDerivation, const "
+                    + "TextNotAvailableMisfiled, const TextNotAvailablePdf, const "
+                    + "TextWithheldRights, static property StateRuleProfileSha256",
+                "Lex.V3.Ingest.Luxembourg.LuxembourgIndexQueries: const ActingFacts, const "
+                    + "AnchorArticles, const ArticleIds, const CatalogueStatesOfWork, const "
+                    + "CitationsTo, const EventCount, const EventLog, const EventsAfter, const "
+                    + "EventsOfNameAfter, const HeldWorks, const HeldWorksNine, const "
+                    + "IntervalsOfWork, const MemberOutcomes, const Observations, const "
+                    + "ObservationsNine, const PublisherImpactsOf, const PublisherRelationsOf, "
+                    + "const RevisingEventsAfter, const SearchTexts, const StateArticles, const "
+                    + "StateArticlesNine, const StateCitations, const StateColumnsNine, const "
+                    + "StateDocumentOutcomes, const StateSources, const StateTextSources, const "
+                    + "StatesOfExpressions, const StatesOfExpressionsNine, const SubjectFacts, "
+                    + "const SubjectFactsUnder, const WorkEventsUpTo, const WorkRecords, const "
+                    + "WorkRecordsNine, const WorkTitles",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgPublisherPdfActScopeProducer: const "
                     + "AdministrativeMemorialPrefix, const ExpectedResourceHost, "
                     + "const LegislativeMemorialPrefix, const RuleProfile, "
                     + "static property RuleProfileSha256",
-                "Lex.V3.Ingest.Luxembourg.LuxembourgRederivation: ImplementedRuleSets=2, "
+                "Lex.V3.Ingest.Luxembourg.LuxembourgRederivation: ImplementedRuleSets=3, "
                     + "const InFileEvidenceTwoSchema, const NoPublisherSession, "
-                    + "const Release1RuleSet, const Release2RuleSet, const RightsAsAcquired, "
+                    + "const Release1RuleSet, const Release2RuleSet, const Release3RuleSet, const RightsAsAcquired, "
                     + "const RightsReResolved",
                 "Lex.V3.Ingest.Luxembourg.LuxembourgReferralDateComposition: const HasOpinion, "
                     + "const IriKind, const ReferralDate",
                 "Lex.V3.Ingest.Names.IndexingRecord: const FileName, const Schema",
                 "Lex.V3.Ingest.Names.NamesMeasurement: const EuropeIndexFile, const EuropeSchema, "
-                    + "const LuxembourgIndexFile, const LuxembourgSchema, const MeasurementFileName, "
-                    + "const MeasurementSchema",
+                    + "const EuropeTitlesSchema, const LuxembourgIndexFile, const LuxembourgSchema, const "
+                    + "LuxembourgSchemaTen, const MeasurementFileName, const MeasurementSchema",
                 "Lex.V3.Ingest.Names.NamesRecord: const EuropePublisher, const FileName, "
                     + "const LuxembourgPublisher, const Rule, const Schema",
                 "Lex.V3.Ingest.Names.PrivateIndividuals: Classes=11, NamingClasses=9, Particulars=5, "

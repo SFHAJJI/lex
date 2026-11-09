@@ -30,7 +30,7 @@ public sealed class V3ReleaseChecksTests
         await fixture.AddEuropeCollisionAsync();
         var serving = V3MountInventory.Read(fixture.Directory);
         Assert.AreEqual(fixture.CorpusSha256, serving.CorpusSha256);
-        Assert.AreEqual("lex-v3-luxembourg-index/9", serving.LuxembourgIndexSchema);
+        Assert.AreEqual("lex-v3-luxembourg-index/10", serving.LuxembourgIndexSchema);
         Assert.IsNotNull(serving.EuropeIndexSchema);
         Assert.IsTrue(serving.Versions.Values.Any(static version => version.Publisher == V3MountInventory.Luxembourg && version.HasText));
         Assert.IsTrue(serving.Versions.Values.Any(static version => version.Publisher == V3MountInventory.Europe && version.HasText));

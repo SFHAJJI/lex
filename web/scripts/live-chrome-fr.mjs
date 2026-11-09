@@ -418,6 +418,43 @@
 // typographic apostrophes, no-break spaces and soft hyphen" (1 form, changed in French only): "étant lues comme" written out
 // once more (G24), "une espace insécable comme une espace ordinaire", "un trait d’union conditionnel n’étant pas lu" (never
 // "comme rien", G13), and "chacun des autres caractères de l’expression" (G20).
+// EU titles and Official Journal references (Release 3's item 1, data/eu-titles-oj) were reviewed by an independent reviewer
+// under the same delegation in the addendum of 2026-10-27 "EU titles and Official Journal references" (24 forms, 21 approved
+// as drafted, 3 changed in French only): `common.europePublication.*` ("Intitulé court", never "titre abrégé", T6; "le
+// libellé en {language}"; "l’acte que le libellé en {language} consolide"), `citation.europe.journal.*` (EUR-Lex's French,
+// "JO L 119 du 4.5.2016, p. 1" and "JO L, 2024/1689, 12.7.2024", never "du" in the act-by-act form),
+// `citation.evidence.officialJournal` and `officialJournalConsolidated` ("l’acte que ce libellé consolide", never "l’acte
+// consolidé", G26), and the search's `euTitleExact`, `euTitlePhrase`, `euTitles`, `euTitleAct`, `euTitlesSearched` ("comparés
+// à l’expression", G24), `runEuTitles` and `runEuTitlesMatched` ("Intitulés de l’UE"). The reviewer's own forms for its points
+// 2 and 6, taken byte for byte: `search.runLuxembourgTitles` and `search.runLuxembourgTitlesMatched` ("Intitulés
+// luxembourgeois", said when the EU titles were matched too) and `common.europePublication.titleInPackage` ("le paquet
+// Formex de l’acte", as the reviewed headings say it).
+// The dossier's relation tabs and R72's notice (Release 3's item 2; R29, R72, R21): 37 forms, `dossier.relations*`,
+// `dossier.relationGroups.*`, `dossier.relation*` and `dossier.amendedAfter*`, reviewed by an independent reviewer (Claude, AI
+// reviewer, not the author) under the same delegation in the addendum of 2026-10-27 "the dossier's relation tabs and R72's
+// notice" (22 approved as drafted, 15 changed in French, the English of 3 changed: `relationsNotHeldFor` says the records are
+// not all held, `relationsNotSeenClasses` ends its list with a full stop, and the banner's heading is "Amended, with no
+// consolidated version published since" / "Modifié, sans version consolidée publiée depuis"): a relation is recorded "dans les
+// données" of an act, a record of the table of modifications is "un enregistrement", an act beside its date is "acte publié le",
+// "Déduit de la relation directe de l’éditeur" for R29's label, "après l’acte modificatif" (never "après lui"), "Ce bandeau nomme
+// l’acte" (G20), and a list joined by " ; " ends with a full stop before the next clause (G28, new: a list's end).
+// R72 after the review of #1009 (held versions, and the versions of acts the publisher records as integrating the changes): 8
+// forms, `dossier.amendedAfterHeading`, `…One`, `…Many`, `…Latest`, `…LatestIntegrating`, `…NoConsolidation`, `…Integrated` and
+// `…Undecided`, reviewed by an independent reviewer under the same delegation in the addendum of 2026-10-28 "R72 held versions
+// and integrating acts" (3 approved as drafted, 5 changed in French, the English of 4 changed): the specification's "this law"
+// is said "this act" / "cet acte", since the banner stands on every class (F12); "une version consolidée détenue par Lex" / "que
+// détient Lex"; "un autre acte dans lequel, selon l’éditeur, des modifications apportées à cet acte ont été intégrées" (never
+// "dont l’éditeur indique qu’il intègre", G20); the heading "Modifié, sans version consolidée détenue par Lex et publiée depuis"
+// (G29, new: two participial phrases on one noun take "et").
+// Release 3's rulings (writer/release-3-rulings; the owner's standing yes of 2026-10-27 to the driver's recommendation): the
+// three L5 single-channel disclosures (`reading.disclosure.*`), until then drafts the owner revised, and the privacy notice's
+// new `privacy.sections.named.withheld` (R92, O28), reviewed by an independent reviewer (Claude, AI reviewer, not the author)
+// under the same delegation in the addendum of 2026-10-28 "the L5 disclosure sentences made final, and the privacy notice's
+// sentence on people named in acts" (4 forms, each changed in both languages): the file's licence metadata, never the whole
+// file (F12); "sans indiquer sa licence" (a sibling block may state the PDF twin's); "un autre fichier", never "une autre
+// publication"; "Le texte de ce fichier est communiqué sur la seule base du catalogue de l’éditeur", never "Il" (Lex serves
+// the text, T8) nor "sur la seule foi" beside "Seuls font foi" (G26); "sur une page que ce site a lue le {date}", never "de
+// celui-ci" (G20); and "renvoie à l’éditeur", never "à son éditeur" after "Lex" (G20).
 //
 // This module is data only: the live pages' bundles carry it, so it imports nothing and reads nothing.
 
@@ -453,6 +490,19 @@ export const LIVE_CHROME_FR = Object.freeze({
       other: '{count} autres actes',
     }),
     noTitlesHeld: 'Cet index ne contient aucun intitulé d’acte ; l’expression a donc été recherchée dans le seul texte des articles.',
+    euTitleExact: 'L’expression est l’intitulé d’un acte de l’UE que ce site détient : {title}',
+    euTitlePhrase: 'L’expression figure dans l’intitulé d’un acte de l’UE que ce site détient : {title}',
+    euTitles: Object.freeze({
+      one: 'L’expression figure dans l’intitulé de {count} acte de l’UE que ce site détient :',
+      other: 'L’expression figure dans les intitulés de {count} actes de l’UE que ce site détient :',
+    }),
+    euTitleAct: '{title} ({celex})',
+    euTitlesSearched: 'Les intitulés des actes de l’UE que ce site détient ont aussi été comparés à l’expression ; le texte de ces actes n’a pas été interrogé.',
+    runEuTitles: 'Intitulés de l’UE : l’expression ne figure dans aucun intitulé d’un acte de l’UE que ce site détient.',
+    runEuTitlesMatched: Object.freeze({
+      one: 'Intitulés de l’UE : l’expression figure dans l’intitulé de l’acte de l’UE indiqué ci-dessus.',
+      other: 'Intitulés de l’UE : l’expression figure dans les intitulés des actes de l’UE indiqués ci-dessus.',
+    }),
     ambiguousHeading: 'Actes ayant plusieurs versions au {date}',
     ambiguousNote: 'Ces actes ont plus d’une version applicable à cette date ; aucune n’est donc retenue et aucune ne fournit de résultat.',
     ambiguousWork: '{work} : {candidates}',
@@ -534,6 +584,11 @@ export const LIVE_CHROME_FR = Object.freeze({
     }),
     titleMatching: 'Les intitulés sont comparés sans tenir compte des majuscules ni des accents.',
     runTitlesNotRun: 'Intitulés : non recherchés, un acte ayant été désigné.',
+    runLuxembourgTitles: 'Intitulés luxembourgeois : aucun intitulé d’un acte luxembourgeois que ce site détient ne correspond à l’expression.',
+    runLuxembourgTitlesMatched: Object.freeze({
+      one: 'Intitulés luxembourgeois : l’expression correspond à l’intitulé de l’acte luxembourgeois indiqué ci-dessus.',
+      other: 'Intitulés luxembourgeois : l’expression correspond aux intitulés des actes luxembourgeois indiqués ci-dessus.',
+    }),
     runText: 'Texte : aucun article interrogé ne contient l’expression, même sans tenir compte des majuscules ni des accents.',
     runTextWords: 'Texte, chacun des mots dans un ordre quelconque : aucun article interrogé ne les contient tous.',
     exactOnly: 'Seule l’expression a été recherchée dans le texte, sans tenir compte des majuscules ni des accents, œ et æ étant lus oe et ae, les apostrophes typographiques étant lues comme l’apostrophe droite, une espace insécable comme une espace ordinaire, et un trait d’union conditionnel n’étant pas lu : chacun des autres caractères de l’expression compte, traits d’union et ponctuation compris, et rien n’est réduit à son radical ni étendu. Une recherche moins stricte dans le texte reste désactivée tant que sa propre vérification n’est pas réussie.',
@@ -595,6 +650,48 @@ export const LIVE_CHROME_FR = Object.freeze({
     forceNote: 'Ce sont les déclarations de l’éditeur sur l’acte dans son ensemble, reprises telles qu’il les donne. Elles ne disent rien d’un article ou d’une version en particulier, et Lex ne dit pas si ni comment l’acte s’applique à la situation de quiconque.',
     entryIntoForceDate: 'aucune date indiquée (entrée en vigueur : {date})',
     entryIntoForceNote: 'La mention « aucune date indiquée » signifie que le fichier de l’acte n’indique aucune date d’applicabilité exacte ; la date entre parenthèses est celle de l’entrée en vigueur de l’acte dans les données de l’éditeur, et non une date d’applicabilité.',
+    relationsHeading: 'Les relations dans les données de l’éditeur',
+    relationsIntro: 'L’éditeur enregistre quels actes en modifient, en abrogent ou en rectifient d’autres. Chaque enregistrement nomme les actes, et non ce qu’un acte change.',
+    relationsNotAcquired: 'Ce site ne détient pas les données de relations de l’éditeur pour cet acte : aucune relation n’est donc listée ici, et rien ici ne dit qu’il n’en existe aucune.',
+    relationsNav: 'Relations listées',
+    relationGroups: Object.freeze({
+      amended_by: 'Actes qui modifient cet acte',
+      amends: 'Actes que cet acte modifie',
+      repealed_by: 'Actes qui abrogent cet acte',
+      repeals: 'Actes que cet acte abroge',
+      modified_temporarily_by: 'Actes qui modifient temporairement cet acte',
+      modifies_temporarily: 'Actes que cet acte modifie temporairement',
+      rectified_by: 'Actes qui rectifient cet acte',
+      rectifies: 'Actes que cet acte rectifie',
+      impact_received: 'Modifications apportées à cet acte, selon le tableau des modifications de l’éditeur',
+      impact_made: 'Modifications apportées par cet acte, selon le tableau des modifications de l’éditeur',
+    }),
+    relationTab: '{group} ({count})',
+    relationDerived: 'Déduit de la relation directe de l’éditeur : l’éditeur enregistre chacune de ces relations dans les données de l’autre acte, et non dans celles de cet acte.',
+    relationImpact: 'Lu dans le tableau des modifications de l’éditeur : chaque enregistrement y nomme, pour une modification, l’acte d’où elle vient et l’acte auquel elle est apportée.',
+    relationPublished: '{act}, acte publié le {published} (éditeur)',
+    relationPublishedEntry: '{act}, acte publié le {published} ; entrée en vigueur : {entry} (éditeur)',
+    relationUndated: '{act} ; les données de l’éditeur n’indiquent pas sa date de publication',
+    relationIntegrated: 'L’éditeur indique que cette modification a été intégrée dans la version consolidée applicable à partir du {date}.',
+    relationIntegratedOther: 'L’éditeur indique que cette modification a été intégrée dans {version}.',
+    relationTitleWithheld: 'son intitulé n’est pas affiché ici',
+    relationSelf: 'cet acte lui-même',
+    relationsNone: 'Les données de l’éditeur, telles que ce site les a lues, ne nomment aucun acte pour : {groups}.',
+    relationsNotHeldFor: 'Ce site ne détient pas toutes les données de l’éditeur pour : {groups}.',
+    relationsNotSeen: 'Ce site a lu les relations que l’éditeur enregistre dans les données des codes, des lois et des règlements grand-ducaux ; une relation enregistrée dans les données d’un acte d’un autre type n’a pas été lue : un acte d’un autre type qui modifie, abroge ou rectifie cet acte, ou que cet acte modifie temporairement, n’est donc pas listé.',
+    relationsNotSeenClasses: 'Ce site a lu les relations que l’éditeur enregistre dans les données des actes de ces seules catégories d’identifiants : {classes}. Une relation enregistrée dans les données d’un acte d’une autre catégorie n’a pas été lue : un acte d’une autre catégorie qui modifie, abroge ou rectifie cet acte, ou que cet acte modifie temporairement, n’est donc pas listé.',
+    amendedAfterHeading: 'Modifié, sans version consolidée détenue par Lex et publiée depuis',
+    amendedAfterOne: 'Un acte publié le {date} ({act}) modifie cet acte ; aucune version consolidée détenue par Lex n’a été publiée après l’acte modificatif.',
+    amendedAfterMany: 'Ces actes modifient cet acte ; aucune version consolidée détenue par Lex n’a été publiée après eux :',
+    amendedAfterAct: '{act}, acte publié le {date} (éditeur)',
+    amendedAfterLatest: 'La dernière version consolidée que détient Lex, {version}, a été publiée le {date}.',
+    amendedAfterLatestIntegrating: 'La dernière version consolidée que détient Lex, {version}, a été publiée le {date} ; c’est une version d’un autre acte dans lequel, selon l’éditeur, des modifications apportées à cet acte ont été intégrées.',
+    amendedAfterNoConsolidation: 'Lex ne détient aucune version consolidée de cet acte, ni d’un autre acte dans lequel, selon l’éditeur, des modifications apportées à cet acte ont été intégrées.',
+    amendedAfterIntegrated: 'Les actes modificatifs que l’éditeur indique comme intégrés dans une version consolidée détenue par Lex ne sont pas nommés ici : {count}.',
+    amendedAfterUndecided: 'Les actes modificatifs pour lesquels le tableau des modifications de l’éditeur nomme plus d’une version consolidée comme intégrant la modification ne sont pas nommés ici : {count}.',
+    amendedAfterNote: 'Ceci est déduit de la relation directe de l’éditeur : les données de chaque acte nommé indiquent qu’il modifie cet acte. Ce bandeau nomme l’acte, et non ce que l’acte change. Un acte modificatif qui n’est ni un code, ni une loi, ni un règlement grand-ducal n’est pas vu.',
+    amendedAfterNoteUnscoped: 'Ceci est déduit de la relation directe de l’éditeur : les données de chaque acte nommé indiquent qu’il modifie cet acte. Ce bandeau nomme l’acte, et non ce que l’acte change, et un acte modificatif dont ce site n’a pas lu les données n’est pas vu.',
+    amendedAfterNoteClasses: 'Ceci est déduit de la relation directe de l’éditeur : les données de chaque acte nommé indiquent qu’il modifie cet acte. Ce bandeau nomme l’acte, et non ce que l’acte change. Un acte modificatif hors de ces catégories d’identifiants n’est pas vu : {classes}.',
   }),
   reading: Object.freeze({
     pinReplaced: 'Ce lien épingle {pinned}, qui n’est pas la version que ce site communique pour cette date ; la version qu’il communique est affichée ci-dessous.',
@@ -619,9 +716,9 @@ export const LIVE_CHROME_FR = Object.freeze({
     rights: 'Texte communiqué sous {rights}. Lu au {date}.',
     rightsIn: 'Texte communiqué sous {rights}. Lu au {date} en {language}.',
     disclosure: Object.freeze({
-      lu_rights_publisher_catalogue_only_file_silent: 'Ce fichier n’indique pas lui-même sa licence. Il est communiqué sur la seule foi du catalogue de l’éditeur, qui déclare la licence CC BY 4.0 pour ce fichier, tel qu’observé le {date}.',
-      lu_rights_publisher_catalogue_only_own_block_empty: 'Les métadonnées propres de ce fichier le désignent sans indiquer de licence. Il est communiqué sur la seule foi du catalogue de l’éditeur, qui déclare la licence CC BY 4.0 pour ce fichier, tel qu’observé le {date}.',
-      lu_rights_publisher_catalogue_only_file_names_other_identity: 'La mention de licence de ce fichier désigne une autre publication, et non ce fichier. Il est communiqué sur la seule foi du catalogue de l’éditeur, qui déclare la licence CC BY 4.0 pour ce fichier, tel qu’observé le {date}.',
+      lu_rights_publisher_catalogue_only_file_silent: 'Les métadonnées de ce fichier n’indiquent aucune licence. Le texte de ce fichier est communiqué sur la seule base du catalogue de l’éditeur : une ligne de licence de ce catalogue déclare la licence CC BY 4.0 pour ce fichier, sur une page que ce site a lue le {date}.',
+      lu_rights_publisher_catalogue_only_own_block_empty: 'Les métadonnées propres de ce fichier le désignent sans indiquer sa licence. Le texte de ce fichier est communiqué sur la seule base du catalogue de l’éditeur : une ligne de licence de ce catalogue déclare la licence CC BY 4.0 pour ce fichier, sur une page que ce site a lue le {date}.',
+      lu_rights_publisher_catalogue_only_file_names_other_identity: 'La mention de licence de ce fichier désigne un autre fichier, et non ce fichier. Le texte de ce fichier est communiqué sur la seule base du catalogue de l’éditeur : une ligne de licence de ce catalogue déclare la licence CC BY 4.0 pour ce fichier, sur une page que ce site a lue le {date}.',
     }),
     stateHeading: '{work}, {language}, la version applicable à partir du {from}',
     stateHeadingNext: '{work}, {language}, la version applicable à partir du {from} (la version suivante détenue s’applique à partir du {next})',
@@ -1272,6 +1369,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       other: '{count} articles',
     }),
     links: 'Ailleurs sur ce site',
+    assistantLink: 'Assistant',
     examplesHeading: 'Exemples de recherche',
     examplesIntro: 'Chaque exemple lance la recherche d’un article que ce site détient, désigné par sa citation usuelle, et mène à son texte.',
   }),
@@ -1359,6 +1457,7 @@ export const LIVE_CHROME_FR = Object.freeze({
         heading: 'Personnes nommées dans les actes publiés',
         why: 'Certains actes publiés nomment des personnes, par exemple une loi conférant la nationalité. Lex reproduit les textes tels que les journaux officiels les publient, le Journal officiel du Grand-Duché de Luxembourg et le Journal officiel de l’Union européenne, afin que le droit puisse être lu à une date et vérifié auprès de sa source officielle.',
         searchEngines: 'Les moteurs de recherche ne sont autorisés à indexer la page d’un acte qu’une fois qu’une vérification a constaté que l’acte ne nomme aucune personne privée ; la page de tout autre acte leur demande de ne pas l’indexer.',
+        withheld: 'Un acte dont la vérification constate qu’il nomme des personnes privées n’est pas reproduit : Lex n’en montre ni le texte ni les intitulés et renvoie à l’éditeur, par le lien officiel de l’acte.',
       }),
       rights: Object.freeze({
         heading: 'Vos droits',
@@ -1883,6 +1982,15 @@ export const LIVE_CHROME_FR = Object.freeze({
       conflict: 'L’éditeur enregistre plus d’une date d’entrée en vigueur pour cet acte ({dates}) : chacune est indiquée, et ce site n’en choisit aucune.',
       notWording: 'Aucune des dates ci-dessus ne sert à choisir un libellé : chaque libellé ci-dessous porte sa propre date.',
     }),
+    europePublication: Object.freeze({
+      title: 'Intitulé en {language}, tel que l’éditeur l’enregistre : {title}',
+      titleInPackage: 'Intitulé en {language}, tel que le paquet Formex de l’acte le donne : {title}',
+      shortTitle: 'Intitulé court en {language}, tel que l’éditeur l’enregistre : {title}',
+      noTitle: 'Ce site ne détient aucun intitulé du libellé en {language}.',
+      journal: 'Référence au Journal officiel du libellé en {language} : {reference}',
+      journalConsolidated: 'Référence au Journal officiel de l’acte que le libellé en {language} consolide : {reference}',
+      noJournal: 'Ce site ne détient aucune référence au Journal officiel du libellé en {language}.',
+    }),
     asPublished: Object.freeze({
       label: 'tel que publié ; peut avoir été modifié depuis ; aucun texte consolidé détenu',
       laterNotHeld: 'Versions ultérieures : non détenues.',
@@ -1942,6 +2050,14 @@ export const LIVE_CHROME_FR = Object.freeze({
       suffixed: '{year}/{number}/{domain}',
       plain: '{year}/{number}',
       version: '{citation}, au {date}',
+      journal: Object.freeze({
+        issue: 'JO {series} {number} du {date}, p. {page}',
+        issueNoPage: 'JO {series} {number} du {date}',
+        issueUndated: 'JO {series} {number} ({year}), p. {page}',
+        issueUndatedNoPage: 'JO {series} {number} ({year})',
+        act: 'JO {series}, {number}, {date}',
+        actUndated: 'JO {series}, {number}',
+      }),
       authenticity: Object.freeze({
         electronic_edition: 'Seul le Journal officiel de l’Union européenne publié sous forme électronique fait foi et produit des effets juridiques (règlement (UE) n° 216/2013, article 1er, paragraphe 2) ; ce texte est une reproduction lue dans le paquet Formex de l’Office des publications, et non l’édition qui fait foi.',
         edition_by_publication_date: 'Pour un acte publié avant le 1er juillet 2013, l’édition imprimée du Journal officiel de l’Union européenne fait foi ; l’édition électronique fait foi depuis cette date (règlement (UE) n° 216/2013). Ce texte est une reproduction lue dans le paquet Formex de l’Office des publications, et non l’édition qui fait foi.',
@@ -1961,6 +2077,8 @@ export const LIVE_CHROME_FR = Object.freeze({
       originalWording: 'Libellé : le libellé original du {date}',
       consolidatedWording: 'Libellé : le libellé consolidé du {date}',
       officialJournalNotHeld: 'Publication : la référence au Journal officiel n’est pas détenue par cet index.',
+      officialJournal: 'Publication : {reference}',
+      officialJournalConsolidated: 'Publication de l’acte que ce libellé consolide : {reference}',
       textSha256: 'Empreinte du texte (SHA-256) : {digest}',
       noText: 'Empreinte du texte (SHA-256) : aucune, l’article est détenu sans texte.',
       consulted: 'Consulté sur Lex le {date} (date au Luxembourg).',

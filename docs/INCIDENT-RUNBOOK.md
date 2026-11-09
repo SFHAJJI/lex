@@ -9,7 +9,7 @@ The names used below:
 | What | Name |
 | --- | --- |
 | Resource group | `rg-lex-v3` (France Central) |
-| Container app | `ca-lex-v3`, one replica of 1 vCPU and 2 GiB per active revision, multiple-revision mode |
+| Container app | `ca-lex-v3`, one replica of 2 vCPUs and 4 GiB per active revision (since Release 2), multiple-revision mode |
 | A revision | `ca-lex-v3--<release version, lower case>`, for example `ca-lex-v3--v3-20261026t180319z-8958ec5fa63f` |
 | Environment | `cae-lex-v3` |
 | Site | `law.soufien.lu`, a CNAME to the app's default host, with a managed certificate |

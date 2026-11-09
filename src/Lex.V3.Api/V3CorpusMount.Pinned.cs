@@ -227,7 +227,9 @@ internal sealed partial class V3CorpusMount
     /// The Luxembourg state a hash-pinned permalink pins, as <c>verify</c> reads it (<see cref="Verify"/>), with every state of
     /// its work and the languages they are held in; or the refusal that stands in for it: <c>no_corpus_mounted</c>;
     /// <c>language_not_available</c> for a language asked beside it that is not the permalink's, or a permalink whose language
-    /// the coordinate does not hold; <c>identifier_unknown</c> for a coordinate holding no state; <c>ambiguous_identifier</c>
+    /// the coordinate does not hold; <c>text_withheld</c> or <c>text_not_available</c> naming the state for a textless state's
+    /// permalink, and for a digest its work no longer has at a coordinate that holds no text in its language (several such
+    /// states there: <c>ambiguous_identifier</c>); <c>identifier_unknown</c> for a coordinate holding no state; <c>ambiguous_identifier</c>
     /// for two states of its language there, neither the pinned one; and <c>pinned_digest_mismatch</c> naming the current state
     /// when the coordinate holds another in its language.
     /// </summary>
@@ -260,6 +262,13 @@ internal sealed partial class V3CorpusMount
         if (TextlessRowAt(workKey, date, digest, language) is { } textless)
         {
             return RefuseTextless(request, observedAt, textless, date, bound: null);
+        }
+
+        // So is a digest the work no longer has, at a coordinate whose states in its language hold no text (R64; the review of
+        // #1008): the state there is named for its text, never identifier_unknown and never a mismatch whose link opens no text.
+        if (TextlessCoordinateAt(workKey, date, digest, language) is { Length: > 0 } textlessHere)
+        {
+            return RefuseAtTextlessCoordinate(request, identifier, observedAt, textlessHere, date, digest);
         }
 
         var atCoordinate = _reader.ResolveState(workKey, date);

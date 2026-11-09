@@ -188,6 +188,8 @@ internal sealed partial class V3WebRoot
     /// <paramref name="mayRender"/> is asked once, only before a page would be rendered from the API's answer: null serves the
     /// page as built (the client's render budget or its in-flight places, <see cref="V3ClientLimiter"/>), and what it gives is
     /// held while the answer is asked and the page rendered, then disposed; with none, every page may be rendered.
+    /// <paramref name="assistantOn"/> says whether the assistant is switched on (V3AssistantRuntime): only then are its page,
+    /// <c>/{language}/assistant</c>, and its script served; otherwise both are paths this root does not hold (R47, R52).
     /// </summary>
     internal async Task<bool> TryServeAsync(
         HttpContext context,
@@ -195,13 +197,29 @@ internal sealed partial class V3WebRoot
         CancellationToken cancellationToken,
         Func<V3SitePage, CancellationToken, byte[]?>? answer = null,
         Func<string?>? today = null,
-        Func<IDisposable?>? mayRender = null)
+        Func<IDisposable?>? mayRender = null,
+        Func<bool>? assistantOn = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         var queryAt = rawTarget.IndexOf('?', StringComparison.Ordinal);
         var path = queryAt < 0 ? rawTarget : rawTarget[..queryAt];
         var response = context.Response;
         var method = context.Request.Method;
+
+        // The assistant's page and script exist only while it is switched on; while it is off, both answer as any path this
+        // root does not hold, so no route, button or link to it is served (R47, R52).
+        if (AssistantLanguage(path) is { } assistantLanguage)
+        {
+            if (assistantOn?.Invoke() != true)
+            {
+                return false;
+            }
+
+            if (AssistantPage(path))
+            {
+                return await TryServeAssistantPageAsync(response, method, assistantLanguage, path, answer, mayRender, cancellationToken).ConfigureAwait(false);
+            }
+        }
 
         // robots.txt in the switch's state, and the sitemap's index and parts only with the site indexed (R67); kept out, or a
         // part the sitemap has not, is an address this root does not hold.
@@ -325,6 +343,76 @@ internal sealed partial class V3WebRoot
         if (HttpMethods.IsGet(method))
         {
             await response.Body.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
+        }
+
+        return true;
+    }
+
+    /// <summary>The assistant's page under an interface language (<c>/fr/assistant</c>, <c>/en/assistant</c>).</summary>
+    internal const string AssistantPageName = "assistant";
+
+    /// <summary>The assistant page's script under an interface language, built beside the other pages' (build-live.mjs).</summary>
+    internal const string AssistantScriptName = "client-live-assistant.js";
+
+    /// <summary>The interface language of the assistant's page or script at <paramref name="path"/>, or null for any other path.</summary>
+    internal static string? AssistantLanguage(string path) =>
+        InterfaceLanguages.FirstOrDefault(language =>
+            string.Equals(path, $"/{language}/{AssistantPageName}", StringComparison.Ordinal) ||
+            string.Equals(path, $"/{language}/{AssistantScriptName}", StringComparison.Ordinal));
+
+    private static bool AssistantPage(string path) => path.EndsWith("/" + AssistantPageName, StringComparison.Ordinal);
+
+    /// <summary>
+    /// The assistant's page, rendered by the server from its coverage answer (for the freshness header every page carries,
+    /// R87), never indexed; false, touching nothing, when there is no renderer or no answer, so the path is then one this root
+    /// does not hold.
+    /// </summary>
+    private async Task<bool> TryServeAssistantPageAsync(
+        HttpResponse response,
+        string method,
+        string language,
+        string path,
+        Func<V3SitePage, CancellationToken, byte[]?>? answer,
+        Func<IDisposable?>? mayRender,
+        CancellationToken cancellationToken)
+    {
+        if (answer is null || _renderer is null)
+        {
+            return false;
+        }
+
+        string? html = null;
+        var place = mayRender?.Invoke();
+        try
+        {
+            if ((mayRender is null || place is not null) &&
+                answer(new V3SitePage(language, AssistantPageName, "coverage", new Dictionary<string, object>(StringComparer.Ordinal)), cancellationToken) is { } envelope)
+            {
+                html = await _renderer.RenderAsync(language, AssistantPageName, Encoding.UTF8.GetString(envelope), path, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            place?.Dispose();
+        }
+
+        if (html is null)
+        {
+            return false;
+        }
+
+        if (!WritePageHeaders(response, method))
+        {
+            return true;
+        }
+
+        var page = Encoding.UTF8.GetBytes(html);
+        response.StatusCode = StatusCodes.Status200OK;
+        response.ContentType = ContentTypes[".html"];
+        response.ContentLength = page.Length;
+        if (HttpMethods.IsGet(method))
+        {
+            await response.Body.WriteAsync(page, cancellationToken).ConfigureAwait(false);
         }
 
         return true;

@@ -56,7 +56,8 @@ public sealed class V3CorpusEuropeDossierMountTests
             Assert.IsFalse(body.GetProperty("consolidations_held").GetBoolean());
             StringAssert.Contains(body.GetProperty("date_semantics").GetString(), "never merged with a Luxembourg applicability date");
             CollectionAssert.AreEqual(
-                new[] { "titles", "later_wordings", "force_dates", "document_type", "corrigenda", "other_languages", "annexes" },
+                // An index /7 holds the GDPR package's own title and Official Journal reference, so neither is a not-held row.
+                new[] { "later_wordings", "force_dates", "document_type", "corrigenda", "other_languages", "annexes" },
                 body.GetProperty("not_held").EnumerateArray().Select(static row => row.GetProperty("item").GetString()).ToArray());
             Assert.IsFalse(ContainsProperty(body, "applicability_date"), "an EU record never carries a Luxembourg applicability date.");
 

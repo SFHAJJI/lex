@@ -38,6 +38,42 @@ public sealed class LuxembourgIndexCatalogueStatesTests
         private readonly List<LuxembourgIndexBuilder.CatalogueBody> _bodies = [];
         private readonly List<LuxembourgIndexBuilder.CatalogueRecord> _records = [];
         private readonly Dictionary<string, string> _bodyDigests = new(StringComparer.Ordinal);
+        private readonly List<LuxembourgIndexBuilder.ProjectionRelation> _relations = [];
+        private readonly List<LuxembourgIndexBuilder.ProjectionRelationFamily> _families = [];
+
+        /// <summary>The evidence digest every relation of the harness was read from, as one run's are (its one observation).</summary>
+        internal static string RelationEvidence { get; } = Digest("evidence:relations");
+
+        /// <summary>One relation the publisher asserts, by its JOLux local name, as the run's relation family delivers it.</summary>
+        internal Harness Relation(string subject, string predicate, string target)
+        {
+            _relations.Add(new(subject, LuxembourgIndexBuilder.JoluxNamespace + predicate, target, RelationEvidence));
+            return this;
+        }
+
+        /// <summary>
+        /// The acquisition state of the relation predicates index 10 projects (the four act-level ones and the six impact parts):
+        /// acquired in full by the three legislative families, or, with <paramref name="state"/>, not, with its reason.
+        /// </summary>
+        internal Harness RelationFamilies(string state = "acquired_complete")
+        {
+            foreach (var local in new[]
+                     {
+                         "modifies", "repeals", "rectifies", "modifiedTempBy", "impactFromLegalResource", "impactToLegalResource",
+                         "impactToExpression", "legalResourceImpactHasType", "impactConsolidatedBy", "impactConsolidatedByExpression",
+                     })
+            {
+                _families.Add(state == "acquired_complete"
+                    ? new(LuxembourgIndexBuilder.JoluxNamespace + local, state, ["legislative-code-g", "legislative-loi-g", "legislative-rgd-g"], null)
+                    : new(LuxembourgIndexBuilder.JoluxNamespace + local, state, [], "no relation-assertions family was designated for this run"));
+            }
+
+            return this;
+        }
+
+        /// <summary>Index 10's relation rows of the harness, by the builder's own projection over its relations, families and facts.</summary>
+        internal LuxembourgIndexBuilder.PublisherRelationRows PublisherRows =>
+            LuxembourgIndexBuilder.ProjectPublisherRelations(_relations, _families, Facts);
 
         internal static string Digest(string value) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
@@ -163,17 +199,37 @@ public sealed class LuxembourgIndexCatalogueStatesTests
         /// for the handler-level tests): its log names no source body, as a build names none for a member the corpus holds no
         /// body of, so the mount's check of the log against its corpus holds.
         /// </summary>
-        internal LuxembourgIndexBuildResult BuildFor(SourceArtifactRef corpusRef, string builtAt = BuiltAtText, string? derivedAt = DerivedAtText) =>
-            BuildFor(corpusRef, new Dictionary<string, string>(StringComparer.Ordinal), builtAt, derivedAt, null);
+        internal LuxembourgIndexBuildResult BuildFor(
+            SourceArtifactRef corpusRef, string builtAt = BuiltAtText, string? derivedAt = DerivedAtText, string? withoutHeldStatesOf = null) =>
+            BuildFor(corpusRef, new Dictionary<string, string>(StringComparer.Ordinal), builtAt, derivedAt, null, withoutHeldStatesOf);
 
+        /// <summary>
+        /// The index of the projected rows; with <paramref name="withoutHeldStatesOf"/>, that work's held rows and their articles
+        /// are left out and the chains completed again over what is left (<see cref="LuxembourgIndexBuilder.CompleteIntervals"/>),
+        /// so the index holds only textless states of that work: a shape the builder does not write (index 9 records the states
+        /// of works with a held state), for a reader's test of it.
+        /// </summary>
         private LuxembourgIndexBuildResult BuildFor(
-            SourceArtifactRef corpusRef, IReadOnlyDictionary<string, string> bodyDigests, string builtAt, string? derivedAt, LuxembourgIndexPredecessor? predecessor)
+            SourceArtifactRef corpusRef, IReadOnlyDictionary<string, string> bodyDigests, string builtAt, string? derivedAt, LuxembourgIndexPredecessor? predecessor,
+            string? withoutHeldStatesOf = null)
         {
             var (states, intervals) = Project(builtAt);
+            var articles = Articles;
+            if (withoutHeldStatesOf is not null)
+            {
+                var dropped = states.Where(row => row.WorkKey == withoutHeldStatesOf && row.Held).ToArray();
+                Assert.IsNotEmpty(dropped, $"{withoutHeldStatesOf} has a held row to leave out");
+                var expressions = dropped.Select(static row => row.ExpressionIri).ToHashSet(StringComparer.Ordinal);
+                articles = articles.Where(article => !expressions.Contains(article.ExpressionIri)).ToArray();
+                (states, intervals) = LuxembourgIndexBuilder.CompleteIntervals(states.Except(dropped));
+                Assert.IsTrue(states.Any(row => row.WorkKey == withoutHeldStatesOf), $"{withoutHeldStatesOf} keeps its textless rows");
+            }
+
             var built = LuxembourgIndexBuilder.WriteIndex(
                 corpusRef,
                 _members.OrderBy(static row => row.ObjectRefSha256, StringComparer.Ordinal).ToArray(),
-                Articles, states, intervals, [], Facts, bodyDigests, predecessor, builtAt, derivedAt, null, out var refusal, out var detail);
+                articles, states, intervals, [], Facts, bodyDigests, predecessor, builtAt, derivedAt, null, out var refusal, out var detail,
+                PublisherRows);
             Assert.IsNotNull(built, $"{refusal}: {detail}");
             return built;
         }

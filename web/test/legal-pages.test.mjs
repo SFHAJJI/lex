@@ -391,12 +391,34 @@ test("the legal notice promises a text at a date only for the texts and dates Le
     for (const [path, text] of entriesOf(LIVE_CHROME[language]).filter(([one]) => LEGAL_SECTIONS.test(one))) assert.doesNotMatch(text, unqualified, `${language} ${path}`);
   }
   assert.ok(said(app.renderLiveLegalPage("legalNotice")).includes(english), "the English page says it");
-  // The texts changed on 2026-10-26, and again on 2026-10-27 (the privacy notice's per-client limit, below), and every page
-  // says the last ("Last updated"), in words and in the markup.
-  assert.equal(LEGAL_TEXTS_UPDATED, "2026-10-27");
-  for (const page of LEGAL_PAGES) assert.ok(app.renderLiveLegalPage(page.key).includes(`<time dateTime="2026-10-27">27 October 2026</time>`), page.key);
+  // The texts changed on 2026-10-26, again on 2026-10-27 (the privacy notice's per-client limit, below) and on 2026-10-28 (its
+  // sentence on an act that names private persons, below), and every page says the last ("Last updated"), in words and in the
+  // markup.
+  assert.equal(LEGAL_TEXTS_UPDATED, "2026-10-28");
+  for (const page of LEGAL_PAGES) assert.ok(app.renderLiveLegalPage(page.key).includes(`<time dateTime="2026-10-28">28 October 2026</time>`), page.key);
   // The footer strip of a page that ships no script, as reviewed in the same addendum, byte for byte (shown on every legal
   // page and the maintenance page: `freshness.test.mjs`; the French page as built says both: the first test above).
   assert.equal(LIVE_CHROME.fr.freshness.noAnswer, "Cette page ne contient aucune réponse du serveur ; il n’y a donc rien à afficher ici. Sur une page qui en contient une, cette partie indique, d’après cette réponse, quand l’index a été construit, quand les textes de chaque éditeur ont été collectés pour la dernière fois, ainsi que le code qui a construit l’index et celui qui le sert.");
   assert.equal(LIVE_CHROME.en.freshness.noAnswer, "This page carries no answer from the server, so there is nothing to show here. On a page that has one, this part says, from that answer, when the index was built, when each publisher's texts were last collected and which code built and serves it.");
+});
+
+test("the privacy notice says that an act the check finds to name private persons is not reproduced and that Lex points to the publisher, in the review's words (R92, O28; the addendum of 2026-10-28)", async () => {
+  // Byte for byte as the review's addendum of 2026-10-28 gave them (a no-break space before the French colon).
+  const finals = {
+    en: "An act the check finds to name private persons is not reproduced: Lex shows neither its text nor its titles, and points to the publisher through the act's official link.",
+    fr: "Un acte dont la vérification constate qu’il nomme des personnes privées n’est pas reproduit : Lex n’en montre ni le texte ni les intitulés et renvoie à l’éditeur, par le lien officiel de l’acte.",
+  };
+  for (const language of ["en", "fr"]) {
+    const named = LIVE_CHROME[language].privacy.sections.named;
+    assert.equal(named.withheld, finals[language], `${language}: the sentence`);
+    // Said after the search engines' sentence, whose "a check" it takes up as "the check".
+    assert.deepEqual(Object.keys(named), ["heading", "why", "searchEngines", "withheld"], language);
+    assert.deepEqual(contactWordsIn(named.withheld), [], `${language}: no contact, request or objection route, and no publisher of Lex`);
+    assert.doesNotMatch(named.withheld, language === "en" ? /its publisher/ : /son éditeur/, `${language}: the act's publisher, never Lex's`);
+  }
+  // What it says is the names record's rule as the API applies it: the reason, and the official link the refusal gives.
+  const { NAMES_WITHHELD_REASON, NAMES_WITHHELD_SENTENCE } = await import("../scripts/live-refusals.mjs");
+  assert.equal(NAMES_WITHHELD_REASON, "names_private_individuals");
+  assert.match(NAMES_WITHHELD_SENTENCE, /neither its text nor its titles/);
+  assert.ok(said(app.renderLiveLegalPage("privacy")).includes(finals.en), "the English page says it");
 });

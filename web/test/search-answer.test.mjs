@@ -47,8 +47,10 @@ async function capturedRows(publisher, { references = false } = {}) {
 
 async function capturedAnswers() {
   const rows = await capturedRows("lu-legilux");
-  assert.equal(rows.length, 7, "the census holds the seven Luxembourg search answers this reader is written against");
-  const [both, paged, next, relaxed, none, strict, strictNone] = rows;
+  // The eighth, over a mount holding the EU index /7, lists the EU acts its phrase names by title (europe-publication.test.mjs).
+  assert.equal(rows.length, 8, "the census holds the eight Luxembourg search answers this reader is written against");
+  const [both, paged, next, relaxed, none, strict, strictNone, titled] = rows;
+  assert.ok(Object.hasOwn(titled, "europe_titles"), "the eighth lists EU acts by title");
   return { both, paged, next, relaxed, none, strict, strictNone };
 }
 

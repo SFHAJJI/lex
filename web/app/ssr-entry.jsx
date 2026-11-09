@@ -15,6 +15,7 @@ import { renderLiveComparePage } from './live-compare-page.jsx';
 import { renderLiveHomePage } from './live-home-page.jsx';
 import { LIVE_CONTRACT } from './live-coverage-page.jsx';
 import { renderLiveReferencePage } from './ReferencePages.jsx';
+import { renderLiveAssistantPage } from './live-assistant-page.jsx';
 import { homeFacts } from '../scripts/live-home.mjs';
 import { freshnessFacts } from '../scripts/freshness.mjs';
 
@@ -33,6 +34,9 @@ globalThis.lexSsr = Object.freeze({
     if (kind === 'home') return renderLiveHomePage({ facts: homeFacts(initial.envelope, LIVE_CONTRACT), freshness: freshnessFacts(initial.envelope) });
     // The Developers page, with its live examples from this server's own answer to browse (the plan's item 8.4).
     if (kind === 'developers') return renderLiveReferencePage('developers', { developers: DEVELOPERS, live: initial.envelope });
+    // The assistant's page, which the server asks for only while the assistant is switched on (V3WebRoot), from its coverage
+    // answer for the freshness header (R87).
+    if (kind === 'assistant') return renderLiveAssistantPage({ freshness: freshnessFacts(initial.envelope) });
     throw new Error(`there is no server-rendered ${kind} page`);
   },
 });

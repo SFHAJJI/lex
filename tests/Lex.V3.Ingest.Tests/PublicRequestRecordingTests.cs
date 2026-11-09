@@ -864,6 +864,14 @@ public sealed class PublicRequestRecordingTests
         }
     }
 
+    /// <summary>
+    /// The one network client the public process holds: the assistant's planner (the owner's order of 2026-10-28), which,
+    /// only when the assistant is switched on, sends the masked question and opaque references to the Azure OpenAI deployment
+    /// the environment names, and nothing of a request's headers, address or agent (R33). It is pinned to its one file, so a
+    /// network client anywhere else is still a finding.
+    /// </summary>
+    private const string PlannerFile = "AzureOpenAiAssistantPlanner.cs";
+
     [TestMethod]
     public void TheApiSourceNamesNoSourceOfClientIdentityAndNoPlaceToRecordIt()
     {
@@ -871,9 +879,14 @@ public sealed class PublicRequestRecordingTests
         Assert.IsGreaterThan(10, sources.Length, "The census found too few source files to be looking at the Api project.");
         foreach (var (file, code) in sources)
         {
-            var findings = Findings(code);
+            var findings = Findings(code).Where(finding => !(file == PlannerFile && finding == "a network client")).ToArray();
             Assert.IsEmpty(findings, $"{file} now contains {string.Join("; ", findings)}. Each is a way for a request's query text, address or agent to be read or to be put somewhere, and S4-A11 says none of them is recorded.");
         }
+
+        CollectionAssert.AreEqual(
+            new[] { PlannerFile },
+            sources.Where(static source => Findings(source.Code).Contains("a network client")).Select(static source => source.File).ToArray(),
+            "the assistant's planner is the one network client of the public process");
     }
 
     private static IReadOnlyList<string> WriteCapableOpens(string code) =>

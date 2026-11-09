@@ -104,8 +104,11 @@ internal sealed class V3ApiHandler
         if (binding is not null || string.Equals(rawTarget, McpRawTarget, StringComparison.Ordinal))
         {
             // An operation, over REST or MCP: counted against its client's limit (R109), and holding one of the client's
-            // in-flight places until it is answered.
-            using var admission = _limiter.AdmitApi(ClientOf(context));
+            // in-flight places until it is answered. The same keyed hash names the client to ask's own limit (R40), which
+            // counts only while the assistant is switched on.
+            var client = ClientOf(context);
+            using var admission = _limiter.AdmitApi(client);
+            using var askClient = V3AssistantRuntime.EnterClient(client?.Key);
             if (binding is null)
             {
                 await HandleMcpAsync(context, admission, cancellationToken).ConfigureAwait(false);
@@ -248,7 +251,7 @@ internal sealed class V3ApiHandler
         // below, the synthetic routes, or with no preview the unknown route. A readable address asks for today in Luxembourg
         // (R13), by this server's clock. A page rendered from the API's own answer is counted against its client's render
         // budget (R46, V3ClientLimiter), and over it is served as built; no other file is counted.
-        if (_webRoot is not null && await _webRoot.TryServeAsync(context, rawTarget, cancellationToken, AnswerFor(context), LuxembourgToday, () => AdmitRender(context)).ConfigureAwait(false))
+        if (_webRoot is not null && await _webRoot.TryServeAsync(context, rawTarget, cancellationToken, AnswerFor(context), LuxembourgToday, () => AdmitRender(context), () => _corpusMount?.Assistant.IsOn == true).ConfigureAwait(false))
         {
             return;
         }

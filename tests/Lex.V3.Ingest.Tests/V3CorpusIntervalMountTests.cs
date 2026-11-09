@@ -128,12 +128,16 @@ public sealed class V3CorpusIntervalMountTests
 
         public string Directory => _shared.Directory;
 
-        /// <summary>The fixture's index bound to the shared acquisition's corpus, beside it, opened as the server opens a mount.</summary>
-        public static async Task<IntervalMount> CreateAsync(Harness? harness = null)
+        /// <summary>
+        /// The fixture's index bound to the shared acquisition's corpus, beside it, opened as the server opens a mount; with
+        /// <paramref name="withoutHeldStatesOf"/>, that work's held rows and their articles are left out of the index, so every
+        /// state of it the index holds is textless (a shape the builder does not write today).
+        /// </summary>
+        public static async Task<IntervalMount> CreateAsync(Harness? harness = null, string? withoutHeldStatesOf = null)
         {
             var shared = await MountedFixture.CreateAsync();
             var corpusRef = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(shared.CorpusSha256), shared.CorpusSha256);
-            var built = (harness ?? IntervalFixture()).BuildFor(corpusRef);
+            var built = (harness ?? IntervalFixture()).BuildFor(corpusRef, withoutHeldStatesOf: withoutHeldStatesOf);
             await File.WriteAllBytesAsync(Path.Combine(shared.Directory, V3CorpusMount.IndexFileName), built.IndexBytes.ToArray());
             await File.WriteAllBytesAsync(Path.Combine(shared.Directory, V3CorpusMount.CapabilityManifestFileName), built.CapabilityManifestBytes.ToArray());
             var mount = V3CorpusMount.Served(await V3CorpusMount.OpenAsync(shared.Directory, CancellationToken.None), shared.Directory);

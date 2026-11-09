@@ -480,7 +480,8 @@ internal sealed partial class V3CorpusMount
         });
         return V3PlatformOperationOutcome.Success(
             Context("success", observedAt, PublisherId.EuEurLex),
-            new V3PlatformOperationResult(request, "quote", result.RootElement));
+            new V3PlatformOperationResult(request, "quote",
+                WithEuropePublication(result.RootElement, wordings.Select(static wording => wording.ExpressionId))));
     }
 
     /// <summary>

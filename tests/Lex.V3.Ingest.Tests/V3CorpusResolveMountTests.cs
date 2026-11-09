@@ -985,6 +985,11 @@ public sealed class V3CorpusResolveMountTests
     /// <summary>The force dates an EU index /6 holds, read as its logical-row hash reads them.</summary>
     private static EuropeIndexForceDate[] ReadEuropeForceDates(SqliteConnection connection) => EuropeIndexReader.ReadForceDateRows(connection);
 
+    /// <summary>The titles and Official Journal references an EU index /7 holds, read as its logical-row hash reads them.</summary>
+    private static EuropeIndexExpressionTitle[] ReadEuropeTitles(SqliteConnection connection) => EuropeIndexReader.ReadTitleRowsOf(connection);
+
+    private static EuropeIndexOfficialJournalReference[] ReadEuropeReferences(SqliteConnection connection) => EuropeIndexReader.ReadReferenceRowsOf(connection);
+
     private static DefaultHttpContext Request(string identifier)
     {
         return RequestBody(
@@ -1176,7 +1181,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection), ReadEuropeStates(connection), ReadEuropeForceDates(connection)));
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection), ReadEuropeStates(connection), ReadEuropeForceDates(connection), ReadEuropeTitles(connection), ReadEuropeReferences(connection)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1235,7 +1240,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection), ReadEuropeStates(connection), ReadEuropeForceDates(connection)));
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection), ReadEuropeStates(connection), ReadEuropeForceDates(connection), ReadEuropeTitles(connection), ReadEuropeReferences(connection)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 
@@ -1290,6 +1295,16 @@ public sealed class V3CorpusResolveMountTests
                     insert.Parameters.AddWithValue("$tokens", source.TokensJson);
                     Assert.AreEqual(1, insert.ExecuteNonQuery());
                 }
+
+                // The alternate expression is a served one: a state of the same work and date names it and its article (an
+                // expression no state names is served nowhere and resolves to nothing, #1016).
+                var own = ReadStates(connection).Single(row =>
+                    string.Equals(row.ExpressionIri, ExpressionIri, StringComparison.Ordinal) && string.Equals(row.Language, "fra", StringComparison.Ordinal));
+                LuxembourgIndexBuilderTests.RewriteStates(connection, ReadStates(connection).Append(own with
+                {
+                    ExpressionIri = alternateExpression,
+                    ArticleIdentitiesJson = System.Text.Json.JsonSerializer.Serialize(new[] { new string('f', 64) }),
+                }));
 
                 members = ReadMembers(connection);
                 articles = ReadArticles(connection);
@@ -1576,6 +1591,39 @@ public sealed class V3CorpusResolveMountTests
                 set.Parameters.AddWithValue("$id", publisherId);
                 Assert.AreEqual(1, set.ExecuteNonQuery());
             });
+
+        /// <summary>
+        /// Drops one expression's state rows and leaves its articles and references where the derive put them, as derive-r3
+        /// left two acts' (2026-10-31): the articles then belong to no state. The index is re-stamped and the manifest
+        /// re-measured, so the mount still verifies.
+        /// </summary>
+        public Task DropStateAsync(string expressionIri) =>
+            MutateArticlesAsync(connection =>
+            {
+                using var delete = connection.CreateCommand();
+                delete.CommandText = "DELETE FROM states WHERE expression_iri=$expression";
+                delete.Parameters.AddWithValue("$expression", expressionIri);
+                Assert.IsGreaterThan(0, delete.ExecuteNonQuery());
+            });
+
+        /// <summary>The article identities the index holds of one expression, whether or not a state references them.</summary>
+        public IReadOnlyList<string> ArticleIdentities(string expressionIri)
+        {
+            using var connection = LuxembourgIndexBuilder.Open(
+                Path.Combine(Directory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly);
+            return ReadArticles(connection)
+                .Where(article => string.Equals(article.ExpressionIri, expressionIri, StringComparison.Ordinal))
+                .Select(static article => article.ArticleIdentitySha256)
+                .ToArray();
+        }
+
+        /// <summary>How many articles the index holds of one expression, whether or not a state references them.</summary>
+        public long ArticleCount(string expressionIri)
+        {
+            using var connection = LuxembourgIndexBuilder.Open(
+                Path.Combine(Directory, V3CorpusMount.IndexFileName), SqliteOpenMode.ReadOnly);
+            return ReadArticles(connection).LongCount(article => string.Equals(article.ExpressionIri, expressionIri, StringComparison.Ordinal));
+        }
 
         /// <summary>The stored token stream of the article with this publisher id in one expression.</summary>
         public string ArticleTokensJson(string expressionIri, string publisherId)
@@ -2327,9 +2375,15 @@ public sealed class V3CorpusResolveMountTests
         public string CorpusSha256 { get; }
         public string IndexSha256 { get; private set; }
 
-        public static async Task<EuropeMountedFixture> CreateAsync(bool acquireFrenchExpression = false, bool withForceDates = false) =>
+        /// <summary>
+        /// The retained GDPR's mount; with <paramref name="withLuxembourgText"/>, its envelope's Luxembourg half is an AKN act held in
+        /// French, so <see cref="AddLuxembourgMountAsync"/> mounts a Luxembourg index a search that names no work answers over.
+        /// </summary>
+        public static async Task<EuropeMountedFixture> CreateAsync(bool acquireFrenchExpression = false, bool withForceDates = false, bool withTitles = false,
+            bool withLuxembourgText = false) =>
             await FromEnvelopeAsync(await EuropeIndexBuilderTests.RetainedGdprEnvelopeAsync(
-                acquireFrenchExpression: acquireFrenchExpression, withForceDates: withForceDates));
+                acquireFrenchExpression: acquireFrenchExpression, withForceDates: withForceDates, withTitles: withTitles,
+                withLuxembourgText: withLuxembourgText));
 
         /// <summary>
         /// The mount of one EU envelope: its corpus and EU index built and written where the API mounts them, named by its one
@@ -2430,7 +2484,7 @@ public sealed class V3CorpusResolveMountTests
                 using var stamp = connection.CreateCommand();
                 stamp.CommandText = "UPDATE stamp SET logical_rows_sha256=$logical WHERE stamp_id=1";
                 stamp.Parameters.AddWithValue(
-                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection), ReadEuropeStates(connection), ReadEuropeForceDates(connection)));
+                    "$logical", EuropeIndexBuilder.HashLogicalRows(members, lines, gaps, articles, CompleteSyntheticEuropeSourceRows(connection), CompleteSyntheticEuropeDigestRows(connection), ReadEuropeStates(connection), ReadEuropeForceDates(connection), ReadEuropeTitles(connection), ReadEuropeReferences(connection)));
                 Assert.AreEqual(1, stamp.ExecuteNonQuery());
             }
 

@@ -10,14 +10,15 @@ import { createHash, generateKeyPairSync } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:http";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 import { gzipSync } from "node:zlib";
 
 import { ROBOTS_KEPT_OUT } from "../scripts/search-engines.mjs";
-import { REHEARSAL_IDENTITY, V2_ROUTES, imageFailures, imageSignatureFailures, mountReport, readOciImage, readTar, rehearsalSignatureFailures, releaseSigner, servedPaths, signImage, signRehearsal, v2Failures, v2RouteFailures } from "../scripts/image-rehearsal.mjs";
+import { IMAGE_BUILD_DISK, REHEARSAL_IDENTITY, V2_ROUTES, finishImageBuild, imageFailures, imageSignatureFailures, mountReport, readOciImage, readTar, rehearsalSignatureFailures, releaseSigner, servedPaths, signImage, signRehearsal, v2Failures, v2RouteFailures } from "../scripts/image-rehearsal.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
@@ -305,4 +306,65 @@ test("the command takes the signing key and the signer together, and says nothin
   assert.equal(garbled.status, 2);
   assert.match(garbled.stderr, /the release signer cannot be used: the signing key is not a private key in PEM/);
   assert.ok(!`${garbled.stdout}${garbled.stderr}`.includes("SECRET"), "no output repeats the key");
+});
+
+test("a build's steps after its publish run in an order that leaves only its archive: the publish output first, the SDK's archive once the reproducible archive is written, then the archive read for its digests (the release kit's disk peak)", async () => {
+  const steps = [];
+  const disk = {
+    remove: async (path) => { steps.push(["remove", path]); },
+    read: async (path) => { steps.push(["read", path]); return Buffer.from(path === "first/sdk-image.tar" ? "sdk" : "reproducible"); },
+    write: async (path, bytes) => { steps.push(["write", path, bytes.toString("utf8")]); },
+    reproduce: async (bytes, epoch) => { steps.push(["reproduce", bytes.toString("utf8"), epoch]); return Buffer.from("reproducible"); },
+    image: (bytes) => { steps.push(["image", bytes.toString("utf8")]); return { manifestDigest: `sha256:${"d".repeat(64)}` }; },
+  };
+  const logged = [];
+  const image = await finishImageBuild(
+    { publishOutput: "artifacts/image-rehearsal", sdkArchive: "first/sdk-image.tar", archive: "first/lex-v3-rehearsal.tar", epoch: 1761609600, log: (line) => logged.push(line) },
+    disk);
+  assert.deepEqual(steps, [
+    ["remove", "artifacts/image-rehearsal"],
+    ["read", "first/sdk-image.tar"],
+    ["reproduce", "sdk", 1761609600],
+    ["write", "first/lex-v3-rehearsal.tar", "reproducible"],
+    ["remove", "first/sdk-image.tar"],
+    ["read", "first/lex-v3-rehearsal.tar"],
+    ["image", "reproducible"],
+  ]);
+  assert.equal(image.manifestDigest, `sha256:${"d".repeat(64)}`, "the image is the archive's, read after the SDK's archive is gone");
+  assert.deepEqual(logged, ["making the image reproducible"]);
+  // The disk the rehearsal runs on is the same five steps; only the image's own two are the SDK's and the reader's.
+  assert.deepEqual(Object.keys(IMAGE_BUILD_DISK).sort(), ["image", "read", "remove", "reproduce", "write"]);
+});
+
+test("on disk, a finished build holds its archive and neither its publish output nor the SDK's archive, so a second build never runs beside them", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lex-image-build-"));
+  try {
+    const publishOutput = join(root, "artifacts", "image-rehearsal");
+    await mkdir(join(publishOutput, "publish", "v3-corpus"), { recursive: true });
+    await writeFile(join(publishOutput, "publish", "v3-corpus", "luxembourg-index.sqlite3"), "the mount, copied beside the API");
+    const sdkArchive = join(root, "first", "sdk-image.tar");
+    const archive = join(root, "first", "lex-v3-rehearsal.tar");
+    await mkdir(dirname(sdkArchive), { recursive: true });
+    await writeFile(sdkArchive, "the SDK's archive");
+    const seen = {};
+    const image = await finishImageBuild({ publishOutput, sdkArchive, archive, epoch: 1 }, {
+      ...IMAGE_BUILD_DISK,
+      reproduce: async (bytes) => {
+        seen.reproduce = { publishOutput: existsSync(publishOutput), sdkArchive: existsSync(sdkArchive), read: bytes.toString("utf8") };
+        return Buffer.from("the reproducible archive");
+      },
+      image: (bytes) => {
+        seen.image = { publishOutput: existsSync(publishOutput), sdkArchive: existsSync(sdkArchive), archive: existsSync(archive), read: bytes.toString("utf8") };
+        return { manifestDigest: "sha256:fixture" };
+      },
+    });
+    assert.deepEqual(seen.reproduce, { publishOutput: false, sdkArchive: true, read: "the SDK's archive" }, "the publish output is gone before the SDK's archive is read");
+    assert.deepEqual(seen.image, { publishOutput: false, sdkArchive: false, archive: true, read: "the reproducible archive" },
+      "the SDK's archive is gone once the reproducible archive is written, before its digests are read");
+    assert.equal(image.manifestDigest, "sha256:fixture");
+    assert.equal((await readFile(archive)).toString("utf8"), "the reproducible archive");
+    assert.ok(!existsSync(publishOutput) && !existsSync(sdkArchive), "the build leaves its archive alone");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

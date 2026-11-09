@@ -386,7 +386,8 @@ public sealed class V3CorpusCitedByMountTests
                 "no legal effect of a reference is assessed or held: current_legal_effect_assessed is false",
                 "a text this index does not hold cannot be among the citing texts, so the count here is the references the held texts write and never a count of everything that cites this work",
                 "citing_works counts the distinct held works whose held texts write a reference to this work, grouped on the citing state's work key, so a work held as several states counts once and a work this index does not hold cannot be counted; a reference from a state of this work to itself is counted in edge_count and flagged by is_self_reference, and it is excluded from citing_works",
-                "the publisher's structured relation records (modifies, repeals, based on, transposes) are not held by this index, so these edges are only the references written in the text",
+                // On lex-v3-luxembourg-index/10 the publisher's relation records are held, and served by relations.
+                V3CorpusMount.ReferencesStructuredRelationsTen,
             },
             notHeld.Select(static row => row.GetProperty("reason").GetString()).ToArray());
     }

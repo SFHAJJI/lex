@@ -1,6 +1,238 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-28.
+Updated 2026-10-31.
+
+## derive-r3's two acts of no state: 52 articles and 151 references the derive kept after dropping their states; served nowhere, recorded by R92's measurement, left out of cited_by (sole driver, 2026-10-31)
+
+**What is served.** Release 3's mount (derive-r3, D3 at 6d71aeb6, rules `lu-release-3`) holds 237,090 Luxembourg articles, of
+which 52 belong to an expression no state references: 49 of `loi/2026/03/03/a115/jo/fr` and 3 of `rgd/2026/06/12/a299/jo/fr`,
+both admitted by the rulings (`sparql_cc_by_in_file_silent`, `akn_admit`) and both without any state row; 151 `cites` edges
+start from those articles. No text, label, permalink, search hit or dossier reaches a Luxembourg article but through a
+state (`LuxembourgIndexQueries`: the article identities of a state, or a relation's `from_ref` joined back to its state),
+so these articles are served nowhere. Three readers answered otherwise: the R92 measurement (`NamesMeasurement`) refused
+the whole index ("52 Luxembourg articles belong to no state's expression"), which stopped Release 3's build after its
+gates; `cited_by` / `relations` (`V3CorpusMount`) threw on an inbound edge whose citing expression has no state; and
+`resolve` (`ResolveExact`, which reads `articles` by expression, wid and identity) would have named the expression and
+listed its article identities (no text). Now the measurement counts them per expression in its tally (`unserved_articles`,
+`unserved_expressions`; schema `lex-v3-names-measurement/2`), the API skips the edge, and `ResolveExact` keeps only
+expressions a state references, so the identifier is `identifier_unknown`. The EU branch of the measurement keeps
+refusing an article of no state: the EU reader is not state-bound (`EuropeIndexBuilder.ResolveExact`,
+`ResolveExpressionArticles`, the search read the articles table directly), so there the old refusal is the guard. A test
+drops a citing state from a fixture's index and checks the measurement, `cited_by`, `relations` and `resolve`.
+
+**What is next.** Why the derive wrote the articles and references of a state it then dropped is the next data release's
+question (the two acts are 2026 acts whose only file is the published form; the state was refused after the article
+extraction, probably by the content-consistency rule of reading /2). The articles are not lost: the derive's custody holds
+the files, and the next derive either seats their states or writes no articles for them. Until then the measurement's
+record names them.
+
+**Driver decisions (reversible).** Recording and skipping, not refusing, on the Luxembourg side only: an unserved
+article cannot expose a name (R92 measures served text) and has no address to cite from; the index's gap is on the
+measurement's record rather than in a refusal that stops a release whose gates passed. The image rehearsal also verifies
+that the published measurement tool holds its SQLite provider and batteries before running it (attempt 4's failure).
+Review of #1016 (read-only): REPAIR, two findings, both taken: `resolve` could name an unserved expression (now
+`identifier_unknown`), and the EU branch keeps its refusal.
+
+**Updated:** 2026-10-31.
+
+## EU titles and Official Journal references: the EU index /7, its answers, pages and citation (sole driver, 2026-10-28)
+
+Release 3's item 1 (`data/eu-titles-oj`; the specification of record's search, the dossier, R65's evidence form, R21). No
+acquisition, no publisher traffic, no browser, no Azure.
+- **Where they were.** Run 16's family X delivered every expression's `cdm:expression_title` (some an `_short` too) and
+  nothing read it (`EuLanguageScopedExpressionDecode.cs:573`). Every admitted Formex package states its `TITLE` and an
+  Official Journal reference: an act's `DOCUMENT.REF`, dated by its document record's `PUBLICATION.REF`; a consolidation's
+  base-act `DOCUMENT.REF.CONS`, dated by its bibliography's `DATE`.
+- **The derive reads them, no acquisition added.**
+  - The query run projects the English and French titles from the checked family-X rows
+    (`EuQueryExecutionResult.ObservedExpressionTitles`). They stand outside the result digest and the Formex population's
+    input digest, so run 16's query checkpoint reopens with its stored bytes.
+  - The main-body producer reads each admitted main unit's title and reference beside its articles
+    (`EuFormexPublicationReader`, `EuFormexMainBodyLegalContentOutcome.Publication`), outside the outcome's identity: the
+    corpus and every article identity are unchanged.
+- **EU index /7** (`EuropeIndexTitles.cs`).
+  - `expression_titles`: per expression and language, the words, the raw form (the literal with its tag or datatype, or the
+    `TITLE` markup), the source (`cellar_expression_title`, `cellar_expression_title_short`, `formex_title`) and the batch or
+    package it was read from.
+  - `official_journal_references`: kind (`act_publication`, `consolidated_act_publication`), number form (`series_number`,
+    `act_number`), series, issue or act number, year, first page, publication date, the raw elements, the package entry and
+    digest.
+  - The reader reads every row again from its raw form at open and refuses one that disagrees. A literal's identity names
+    no per-acquisition batch. An index /6 or older is read with its own DDL and holds none.
+- **The answers over /7.**
+  - `dossier`, `as_of`, `evidence_bundle` and an EU `search` carry `titles` and `official_journal` for the expressions
+    they list. The not-held row `titles` goes where a title is held; a `titles` or `official_journal` row stays only where
+    one is not held.
+  - The authenticity rule no longer says no publication date is held; it still chooses by the act's own date.
+  - A search that names no work lists, under `europe_titles`, the EU acts whose titles hold the query (`TextFolding`),
+    each once, whole titles first; an act R92 withholds is not listed.
+  - Over an EU index /6 every answer is unchanged: derive-c and derive-r2 answer as today.
+- **The pages and the citation** (EN and reviewed FR: 24 forms, 21 approved, 3 changed in French; the reviewer's forms for
+  its points 2 and 6 taken byte for byte; addendum of 2026-10-27 appended to the review record).
+  - The EU dossier and reading say each wording's title, short title and reference, or that none is held.
+  - The search page lists the EU acts found by title, linked to their dossiers, says their text was not searched, and the
+    no-hit card names the Luxembourg and EU titles apart.
+  - The evidence form says "Published in: OJ L 119, 4.5.2016, p. 1" ("OJ L, 2024/1689, 12.7.2024"; for a consolidated
+    wording, the act it consolidates) and the publisher's title, where held.
+- **Measured read-only over run 16's custody** (`EuTitlesRun16Probe`, opt-in; the acquisition reopened with its query
+  checkpoint `37a649de…` held to its stored digest, the main-body producer and the build's projections run, 1,732 s,
+  2.5 GiB; the Python pre-check agreed on every title count and per-seed class):
+  - Titles: 1,382 English and French literals (1,327 titles, 55 short titles). All 1,327 English and French expressions are
+    titled; all 82 seeds in both languages; census works 640 in English and 687 in French of 1,170; consolidated works 558
+    and 605 of 1,088. 1,112 Formex titles, one per admitted main body with articles. 2,494 title rows.
+  - References: 1,112 admitted main bodies with articles, 1,112 referenced, every one dated and paged. Act publications 148
+    (130 by issue, 18 by act number); consolidations 964 (930 by issue, 34 by act number); series L 1,060, C 52.
+  - Per seed: 69 by issue, 9 by act number, 4 with none: 12012E and 12012M, whose packages the build refuses
+    (`PackageDoesNotIdentifyFormex`), and the two acts held only as HTML (32003L0088, 32004R0139). 12016E, 12016M,
+    32003L0087 and 32003R0001 are referenced through their consolidations only. The scope note's "67 classic" left the two
+    Charters out; their `GENERAL` units state a reference.
+- **Driver decisions (reversible).**
+  - Titles are held for English and French expressions only (Decision 89).
+  - The Charter's `GENERAL` unit is read like an act's main unit: it states a `DOCUMENT.REF`.
+  - A document record dates the reference only when its series and number agree with it.
+  - The citation says the reference in EUR-Lex's form ("OJ L 119, 4.5.2016, p. 1"), a citation's convention; the pages state
+    its date as they state every date (ISO: "OJ L 119, 2016-05-04, p. 1"), the one date rule of the interface.
+  - The dossier names its original wording's reference; a consolidated wording's is said where it is read.
+  - The reviewer's point 3 (an act R92 withholds is still held, so "no EU act this site holds" is narrower than said where
+    one is withheld) is left as the reviewed `runTitles` leaves it.
+- **Not done here.**
+  - A derive: Release 3's derive builds index /7 over run 16's custody.
+  - The EU titles ride on the Luxembourg search's answer. A search in a language the Luxembourg index holds no text in
+    (English, today) is refused `language_not_available` before any title is matched. The page's default search
+    language is French, so the default search lists them. Listing them in that refusal too is a follow-up.
+
+## Release 3's rulings: L1, L1b and L2 on with option (a); the privacy notice on named people; textless permalinks after #1008; the image build's order (sole driver, 2026-10-28)
+
+`writer/release-3-rulings`. Each decision is the owner's standing yes of 2026-10-27 to the driver's recommendation. No
+publisher traffic, no browser, no Azure, no derive; nothing was measured again.
+- **The rulings (LU-DATA-DESIGN v2 §5).** A new rule set, `lu-release-3`, names Release 2's five rules digest for digest
+  under `lex-lu-rights-admission-policy/A+L1+L1b+L2(a)`: every licence page of the acquisition counts, replayed ones
+  included. Its four switches (`Release3RulingL1`, `L1b`, `L2`, `Release3LivePagesOnly`) are true, true, true and false.
+  - `lu-release-2` keeps policy A (`b9687998…`), so Release 2's sealed inputs over derive-r2 still derive as they did. A rule
+    set names its policy, and no policy is substituted (`RequireImplemented`).
+  - The entry's ruling line carries, once per ruling, "the-owner's-words-2026-10-27:the-owner's-standing-yes-of-2026-10-27-
+    to-the-driver's-recommendation,L1-L1b-and-L2-each-with-option-(a),so-the-release-rule-set-names-this-entry". Its digest
+    moves from `e52372f9…` (no longer registered) to `2b049e76…`, recomputed in Python from the text. The 15 other entries
+    keep their texts and digests, and still say the owner's words are not given.
+  - D1 for Release 3: `rederive-inputs … --rules lu-release-3 --policy 2b049e7650b3c5a1250ad60ac263ffb50d11398945fe5e92ac6049634bfc4b43`,
+    then `derive`, `rederive-seal` and a second derive, as for Release 2. R1 now reads the licence-page index and binds each
+    single-channel admission to its page.
+  - What it adds, measured over run 15 under content /3 by #999's probe and not measured again: 1,043 (L2) + 2,196 (L1) + 31
+    (L1b) = 3,270 files over policy A; 6,697 bodies, 6,630 with text, 237,090 articles (+85,059).
+  - **The L5 sentences are final** (EN and FR, the reading screen and every export). Each says what the file's licence
+    metadata states, then: "The text of this file is served on the basis of the publisher's catalogue alone: a licence row in
+    that catalogue declares CC BY 4.0 for this file, on a page that this site read on {date}." Nothing else.
+- **The privacy notice (O28, R92).** The section on people named in acts adds one sentence after the search-engine one: "An
+  act the check finds to name private persons is not reproduced: Lex shows neither its text nor its titles, and points to the
+  publisher through the act's official link." The legal pages' date is 2026-10-28.
+- **French** (Decision 41): one independent reviewer (Claude, AI reviewer, not the author), the addendum of 2026-10-28 of
+  `C:\lex-v3\lanes\fr-review\review.md`. All 4 forms changed in both languages, and the finals were applied byte for byte.
+  - The file's licence metadata, never the whole file.
+  - "does not state its licence" (a sibling block may state the PDF twin's), and "another file", never "another publication".
+  - "The text of this file is served on the basis of", never "It is served on". In French, "sur la seule base", never "sur
+    la seule foi" beside "Seuls font foi".
+  - "a page that this site read", never "de celui-ci", and "the publisher", never "its publisher" after "Lex".
+- **#1008's open notes (R64).** On index 9 only (schema 8, 6 and the EU are untouched, so no recorded base answer moves):
+  - a work whose every state is textless answers its states' permalinks `text_withheld` or `text_not_available`, naming the
+    state. `TextlessRowAt` no longer needs a held state; a work with none is read for the question and not cached.
+  - a digest the work no longer has, at a coordinate whose states in that language hold no text, is refused for that text,
+    naming the state there with `requested_digest` and `requested_digest_rule`. Before, it was `identifier_unknown`. Two
+    such states are `ambiguous_identifier` naming both. Through `verify`, `resolve`, `as_of` and `evidence_bundle` alike;
+    a digest a retained generation holds still verifies there.
+  - a coordinate that holds text keeps `pinned_digest_mismatch` naming the current state.
+- **The image build's order** (`image-rehearsal.mjs`, `finishImageBuild`). The code already removed a build's publish
+  output (the artifacts directory) and its SDK archive before the next build (since 2e7a7153): the publish output once
+  the SDK has written its archive, the SDK archive once the reproducible archive is written, before the digests are read.
+  The step is now one exported function, and two tests pin that order, one on disk. Digests, the comparison and the
+  reports do not change.
+- **Driver decisions (reversible).** The switches are Release 3's and `lu-release-2` keeps policy A. Only the entry of the
+  recommendation carries the owner's words. Two textless states at a stale coordinate are an ambiguity, not one chosen.
+  A stale digest's refusal names the digest asked beside the state's own.
+- **Tests at 388a350e** (Windows, 2026-10-31; no browser, no publisher traffic, no Azure): `dotnet build Lex.V3.slnx -c Release`
+  0 warnings; `Lex.V3.Tests` 3,388 (3,382 passed, 6 skipped); the touched Ingest classes, every census and every
+  construction-surface class 202 (200 passed, 2 skipped); web `npm run build`, then `npm test` 1,493 (1,489 passed, 3
+  skipped, 1 failed for want of `awk` on this path, `image-run`, which passes with Git's `awk`); `eng/verify-v3-tree.ps1`
+  1,803 tracked paths.
+
+## Index /10: the publisher's relation records, typed, both directions, and R72's notice (Release 3's item 2; sole driver, 2026-10-28)
+
+The scope note's item 2 (`data/lu-relations`): run 15's set G was resolved and never projected. No publisher traffic, no
+browser, no Azure; custody read only.
+- **Index /10** (`lex-v3-luxembourg-index/10`) is index /9's tables unchanged and three more: `publisher_relations` (the
+  act-level `jolux:modifies`, `repeals`, `rectifies` and `modifiedTempBy`, each in the publisher's own direction, keyed by
+  type and both IRIs, with the evidence digest and the acting act's `publicationDate` and `dateEntryInForce`, each the one
+  date the facts state, else none), `publisher_impacts` (each `LegalResourceImpact`: from, to, expression, type, the
+  consolidation the publisher says integrated it; a part given twice is null and named in `ambiguous_parts_json`) and
+  `relation_families` (each predicate's acquisition state and the families that proved it). The projection
+  (`ProjectPublisherRelations`) reads the envelope's accepted resolved relations and family states, so the derive projects
+  what R0 replays; `cites` stays the text's references, and `basedOn`, `transposes`, `consolidates`, `basicAct` are not
+  projected. The reader holds every row's dates to the index's own facts, and reads index /9, /8 and /6 as before (/9 is
+  /10 less the three tables). Log /3 is unchanged, so an index /10 build carries an index /9 log forward.
+- **R0 stays byte-compatible.** No contract type changes (`src/Lex.V3.Contracts` is untouched); the query checkpoint's result
+  digest hashes the resolved relations, local inbound relations and family acquisitions as before.
+  `LuxembourgRelationWirePinTests` pins their exact JSON and `ContractJson.Sha256` on run 15's own rows and observation.
+- **API.** On index /10, `relations` adds `publisher_relations` (every edge from the work's side, with its view: amends,
+  amended by, repeals, repealed by, modified for a time by, modifies for a time, rectifies, rectified by, and the impact
+  records made and received; inbound and impact views `derived: true`, "derived from the publisher's forward relation";
+  the other act's identifier, title where the catalogue states one (R92 withholds a withheld act's), site address where this
+  site answers for it, the acting act's publication date and entry into force as separate values; the families' states and
+  what they do not see), served whole on every page and filtered by `direction`. The dossier carries the same and
+  `amended_after_consolidation` (R72, as the specification writes it; repaired after the review of #1009): `notice` when an
+  amending act was published after every consolidated version whose text Lex holds, of the act and of every act its received
+  impact records name as integrating its changes (a code, for the Code du travail's act), or none is held, naming each act and
+  its date, never its effect, with the sentence ("amends this act; no consolidated version Lex holds was published after it",
+  the latest held version, derived from the publisher's records); an amending act whose impact record names a held version as
+  integrating it is never later, and one naming more than one version is undecided and not named; else
+  `no_later_amending_act`, `undetermined` (a date it needs is not held, or the act it would name is undecided),
+  `no_amending_act_recorded` (said only of a family acquired in full) or `not_acquired`. The member says what it compared
+  (held versions, integrating work keys, acts integrated and undecided). Temporary modifications and self-references do not
+  raise it. On
+  index /10 the `structured_relations` row of `relations`, `citation` and `cited_by` says where the records are served; on
+  /9, /8 and /6 every answer is as before, no member added (the legacy base answers replay unchanged).
+- **Web.** The dossier's relation tabs (an in-page list of the kinds named, each a section; inverse views labelled derived;
+  dates by role; the kinds read in full that name no act; what the family does not see) and R72's banner above the
+  dossier, EN and FR. The independent French review (addendum "the dossier's relation tabs and R72's notice"): 37 forms, 22
+  approved, 15 changed in French, the English of 3 changed; finals applied byte for byte. The banner's note is chosen by the
+  `modifies` family alone, the Unscoped one when that family is not read in full (the driver's decision). After the review of
+  #1009 the independent French review of the 8 changed R72 forms (addendum "R72 held versions and integrating acts"): 3
+  approved, 5 changed in French, the English of 4 changed, applied byte for byte; the specification's "this law" is said "this
+  act" / "cet acte", since the banner stands on every class (a grand-ducal regulation is not a law); the heading is "Amended,
+  with no consolidated version Lex holds published since". A code's version is named by its coordinate, as another act's.
+- **Measured over run 15's custody** (`LuxembourgPublisherRelationsRun15Probe`, opt-in, read-only, 41 s, 374 MiB; no derive,
+  no network): set G 95,431 rows (code 0, loi 32,148, rgd 63,283; both passes equal), none excluded (every subject is in the
+  census of 260,236). Projected: modifies 15,078 (9,325 acting acts, 4,263 acted on, every one with its publication date),
+  repeals 7,879 (3,425 to 7,768), modifiedTempBy 20 (11 to 18), rectifies 1, impacts 343 (all with both acts, 129 naming the
+  integrating consolidation, none ambiguous). R72 over derive-r2's 2,810 served acts, with the repaired rule (held versions,
+  integrating acts): 380 amended (1,215 edges), 223 repealed; notice 281 (232 with no held consolidated version, 47 after the
+  latest held version of the act, 2 after the latest held version of an integrating act, the Code du travail's among them),
+  undetermined 0, no later amending act 99, none recorded 2,430; 2 acts have an integrating act and 4 amending acts are
+  integrated in a held version. The review's held-only measure of 281 is reproduced. Before the repair the same index gave 73
+  notices and 8 undetermined: the catalogue's textless consolidations (every consolidation of Release 2 is textless) hid the
+  notice on 208 acts, and their undated rows made 8 undetermined. derive-r1 is no longer on this PC.
+- **Driver decisions (reversible).** R72 follows the specification's sentence: publication dates, strictly later, against
+  every consolidation and code state whose text Lex holds, of the act and of the acts its received impact records name as
+  integrating its changes (the review of #1009, F1 and F2; the owner's standing yes); a held version or an amending act with
+  no publication date makes it `undetermined`, as does an impact record naming two integrating versions for an act it would
+  name; the specification's "this law" is said "this act" (the independent French review, blocking); only `jolux:modifies`
+  raises it; a recorded edge is
+  listed whatever its family's state, and an absence is said only of a family acquired in full; the work's act as published
+  (`{work}/jo`) is among its IRIs even when the catalogue dates no state of it; a multi-valued impact part is null and named.
+- **Tests** (Windows; merged with 7583e4d0; run again after the repair). `dotnet build Lex.V3.slnx -c Release`: 0 warnings,
+  0 errors. `Lex.V3.Tests` 3,388 (3,382 passed, 6 skipped), the wire pin among them. Ingest after the repair: the Luxembourg,
+  corpus-mount, first-mount, release-check, names, gates, journey, offline-mount, census, construction-surface,
+  PublicRequestRecording and sample classes 2,296 (2,259 passed, 37 skipped); the answer and envelope samples re-rendered
+  (R72's member says what it compared). `V3CorpusPublisherRelationsMountTests` holds each relation type, R72 on a law never
+  consolidated, on one whose held version precedes its amending act and whose later version is textless, on the Code du
+  travail's act (the code's held states compared, acts integrated and undecided counted, #1008's refusal of the textless code
+  state the impact names), on a grand-ducal regulation ("this act"), not firing, undetermined, not acquired, and /9 = /10
+  less its members; `LuxembourgPublisherRelationsDeriveTests` two derives byte-identical. The fixed-input index pin is
+  b2a99e3f…. Web: `npm run build`; `npm test` 1,496 (1,493 passed, 3 skipped; `image-run`'s awk test needs Git's `awk` on
+  PATH). `eng/verify-v3-tree.ps1`: 1,813 tracked paths. The probe over derive-r2: 1 passed, 21 s, 379 MiB.
+- **What the derive needs.** No acquisition: a D1 at the merged head writes index /10 from run 15's custody (the relations
+  are in R0's replay). The R72 counts above are what Release 3 would show over Release 2's population.
+- **Not in this slice.** R72 in the exports and the reading screen's banner; the EU relations (scope item 2's EU half);
+  Coverage's attribution rate (R29's per-period rate is about wording changes, not act-level edges); the review's point 4
+  (nested brackets around a withheld title in the one-act notice).
 
 ## The refresh runs made possible: dated catalogs, `build --acquire-only`, `compose-inputs`, the Constitution's scope (sole driver, 2026-10-28)
 

@@ -37,7 +37,8 @@ internal static class EuAxiomWiringHarness
         string? expressionIri = null,
         string? expressionLanguageAuthority = null,
         string? additionalExpressionIri = null,
-        string? additionalExpressionLanguageAuthority = null)
+        string? additionalExpressionLanguageAuthority = null,
+        IReadOnlyList<ExpressionTitle>? expressionTitles = null)
     {
         // ONE BUDGET FOR THE WHOLE RUN. The adapter refuses a census request
         // carrying a different instance, because two counters reading the same
@@ -48,7 +49,7 @@ internal static class EuAxiomWiringHarness
         var rootIri = SeedRoot(seedCelex);
         var scripts = Scripts(
             rootIri, axiomScript, locatedAmendmentScript, expressionIri, expressionLanguageAuthority,
-            additionalExpressionIri, additionalExpressionLanguageAuthority);
+            additionalExpressionIri, additionalExpressionLanguageAuthority, expressionTitles);
 
         var handler = new EuAcquisitionTestFixture.ClassifyingHandler(scripts, documentFetchResponse);
         var store = custodyStore ?? new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
@@ -76,6 +77,9 @@ internal static class EuAxiomWiringHarness
             CancellationToken.None);
     }
 
+    /// <summary>One title family X delivers for one Expression (EU index /7): its predicate, its literal and whether it is typed.</summary>
+    internal sealed record ExpressionTitle(string Expression, string Predicate, string Lexical, bool Typed = false);
+
     /// <summary>Appendix A's seed for <paramref name="seedCelex"/>, or the first seed when null.</summary>
     internal static (string Celex, string WorkRoot) Seed(string? seedCelex) => seedCelex is null
         ? EuAppendixASeedMap.SeedsInCelexOrder[0]
@@ -99,7 +103,8 @@ internal static class EuAxiomWiringHarness
         string? expressionIri = null,
         string? expressionLanguageAuthority = null,
         string? additionalExpressionIri = null,
-        string? additionalExpressionLanguageAuthority = null)
+        string? additionalExpressionLanguageAuthority = null,
+        IReadOnlyList<ExpressionTitle>? expressionTitles = null)
     {
         var pOutcomes = EuAcquisitionTestFixture.ObjectAuthorityPredicates
             .Select(predicate => (
@@ -126,6 +131,21 @@ internal static class EuAxiomWiringHarness
             xRows.Add(EuAcquisitionTestFixture.ExpressionLanguageRow(
                 rootIri, additionalExpressionIri, additionalExpressionLanguageAuthority));
         }
+
+        // An Expression's title rows sit between its work row and its language row, in the page's own cursor order
+        // (expression_belongs_to_work, expression_title, expression_title_short, expression_uses_language).
+        foreach (var expression in (expressionTitles ?? []).Select(static title => title.Expression).Distinct(StringComparer.Ordinal))
+        {
+            var work = xRows.FindIndex(row => row.Contains(EuAcquisitionTestFixture.ExpressionBelongsToWork, StringComparison.Ordinal) &&
+                row.Contains("\"object\":{\"type\":\"uri\",\"value\":" + System.Text.Json.JsonSerializer.Serialize(expression), StringComparison.Ordinal));
+            if (work < 0) throw new ArgumentException($"No family-X row names the expression {expression}.", nameof(expressionTitles));
+            xRows.InsertRange(work + 1, expressionTitles!
+                .Where(title => title.Expression == expression)
+                .OrderBy(static title => title.Predicate, StringComparer.Ordinal)
+                .ThenBy(static title => title.Lexical, StringComparer.Ordinal)
+                .Select(title => EuAcquisitionTestFixture.ExpressionTitleRow(rootIri, title.Expression, title.Predicate, title.Lexical, title.Typed)));
+        }
+
         var wRows = new[] { EuAcquisitionTestFixture.RootWatermarkRow(rootIri, WatermarkLexical) };
 
         var scripts = new Dictionary<string, EuAcquisitionTestFixture.FamilyScript>(StringComparer.Ordinal)

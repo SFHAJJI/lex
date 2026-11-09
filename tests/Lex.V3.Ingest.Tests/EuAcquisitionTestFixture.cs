@@ -448,6 +448,37 @@ internal static class EuAcquisitionTestFixture
         return Row(fields);
     }
 
+    internal const string ExpressionTitle = Cdm + "expression_title";
+    internal const string ExpressionTitleShort = Cdm + "expression_title_short";
+
+    /// <summary>
+    /// One family-X title row (EU index /7): a literal of <c>expression_title</c> or <c>expression_title_short</c> for one
+    /// Expression, in the shape EU run 16's custody holds them: the datatype column <c>xsd:string</c>, no language tag, the
+    /// value a plain literal (<paramref name="typed"/> false, as run 16 delivers a title) or one typed <c>xsd:string</c> (as
+    /// it delivers a short title).
+    /// </summary>
+    internal static string ExpressionTitleRow(string parentIri, string expressionIri, string predicateIri, string lexical, bool typed = false)
+    {
+        var fields = new List<(string Var, string Term)>
+        {
+            ("parent", Iri(parentIri)),
+            ("object", Iri(expressionIri)),
+            ("predicate", Iri(predicateIri)),
+            ("value", typed ? TypedLiteral(lexical, XsdStringIri) : PlainLiteral(lexical)),
+            ("value_kind", PlainLiteral("literal")),
+            ("datatype_iri", PlainLiteral(XsdStringIri)),
+            ("language_tag", PlainLiteral("")),
+            ("key_1", PlainLiteral(expressionIri)),
+            ("key_2", PlainLiteral(predicateIri)),
+            ("key_3", PlainLiteral("literal")),
+            ("key_4", PlainLiteral(lexical)),
+            ("key_5", PlainLiteral(XsdStringIri)),
+            ("key_6", PlainLiteral("")),
+            ("key_7", PlainLiteral(parentIri)),
+        };
+        return Row(fields);
+    }
+
     // Synthetic French package for language/binding tests; no claim of publisher acquisition.
     internal static byte[] SyntheticFrenchMainBodyPackage()
     {

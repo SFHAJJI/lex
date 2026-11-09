@@ -165,6 +165,37 @@ public sealed class ClosedVocabularyCensusTests
                     + "OverlappingPeriod, MalformedNotServed",
                 "Lex.V3.Contracts.LuScopeTerminalState: AcceptedMetadata, AcceptedCandidate, Point, "
                     + "NeverIngest, TypedQuarantine, MissingPublisherValue, NotApplicable",
+                "Lex.V3.Contracts.Platform.Assistant.V3AnswerLocale: Fr, En",
+                "Lex.V3.Contracts.Platform.Assistant.V3AnswerSlotKind: CalendarDate, WorkAddress, "
+                    + "Anchor, ContentHash, Uri, QuestionSpan, IdentifierText, LanguageCode, "
+                    + "RefusalCode, EntryName",
+                "Lex.V3.Contracts.Platform.Assistant.V3ApplicationFunction: ChoosesAmongOptions, "
+                    + "ConcludesOnSituation, PredictsDecisionMaker, ComputesFromFacts",
+                "Lex.V3.Contracts.Platform.Assistant.V3ArgumentSourceKind: Span, Reference, Result, "
+                    + "Choice, Today",
+                "Lex.V3.Contracts.Platform.Assistant.V3AskOutcomeReason: Answered, SwitchedOff, "
+                    + "QuestionRejected, LocaleUnavailable, PlannerFailed, PlanRefused, GateFailed, "
+                    + "CapReached",
+                "Lex.V3.Contracts.Platform.Assistant.V3AskPresentationResult: AssistantUnavailable, "
+                    + "LocalizationUnavailable",
+                "Lex.V3.Contracts.Platform.Assistant.V3AssistantPipeline+Finding: Quote, Held, "
+                    + "Clarify, NotHeld",
+                "Lex.V3.Contracts.Platform.Assistant.V3AssistantVerdict: Answer, "
+                    + "AnswerWithEnrichment, Point, Clarify, Refuse, Split",
+                "Lex.V3.Contracts.Platform.Assistant.V3DisclosureFlag: Derogation, Corrigendum, "
+                    + "PreApplication, ValidityConflict, TitleDistrust, Provisional, NoLegalEffect, "
+                    + "Authenticity",
+                "Lex.V3.Contracts.Platform.Assistant.V3FollowUpCondition: OnSingleWork, "
+                    + "OnSingleArticle",
+                "Lex.V3.Contracts.Platform.Assistant.V3HandoffRole: OfficialSource, Information, "
+                    + "Advice, Complaint, Mediation",
+                "Lex.V3.Contracts.Platform.Assistant.V3PlanRefusal: TooLarge, Malformed, "
+                    + "UnknownMember, OutsideClosedSet, OperationNotAllowed, UnboundArgument, "
+                    + "SourceNotAdmitted, SpanOutOfBounds, SpanTouchesMask, CapExceeded, "
+                    + "FollowUpChangesRequest",
+                "Lex.V3.Contracts.Platform.Assistant.V3QuestionLanguage: French, English, German, "
+                    + "Luxembourgish, Portuguese, Undetermined",
+                "Lex.V3.Contracts.Platform.Assistant.V3ResultPick: SoleWork, SoleArticle",
                 "Lex.V3.Contracts.Platform.V3EnvelopeProjectionKind: Rest, Mcp",
                 "Lex.V3.Contracts.Platform.V3FactKind: CalendarDate, WorkKey, AnchorId, ContentHash, "
                     + "PublisherName, SourceUri, IntervalSemantics, ReferenceLabel, TargetIri",
