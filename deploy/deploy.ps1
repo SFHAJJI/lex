@@ -125,6 +125,10 @@ param(
     [Parameter(ParameterSetName = 'Deploy')] [switch] $SkipBrowserProbe,
     [Parameter(ParameterSetName = 'Deploy')] [ValidateSet('kept-out', 'indexed', IgnoreCase = $false)] [string] $SearchEngines = 'kept-out',
     [Parameter(ParameterSetName = 'Deploy')] [switch] $Maintenance,
+    # The assistant (R30; the owner's order of 2026-10-28), or none: account (the Azure OpenAI account in this resource group,
+    # whose key Azure reads as it deploys), deployment, apiVersion, eurPerMillionInput, eurPerMillionOutput, and preview
+    # (exactly 'unreviewed'). It holds no secret. Not with -Maintenance.
+    [Parameter(ParameterSetName = 'Deploy')] [hashtable] $Assistant = @{},
 
     [Parameter(Mandatory, ParameterSetName = 'Remove')] [switch] $Remove,
     [Parameter(Mandatory, ParameterSetName = 'Remove')] [string] $Revision,
@@ -287,6 +291,23 @@ if ($LASTEXITCODE -ne 0) { throw "The release does not verify under the signing 
 $manifest = Get-Content (Join-Path $releasePath 'release-manifest.json') -Raw | ConvertFrom-Json
 $digest = $manifest.image.manifest_digest
 if ($digest -notmatch '^sha256:[0-9a-f]{64}$') { throw "The release manifest names no image digest." }
+# The assistant's settings, checked before anything is asked of Azure: the six named, each of its form, and none with
+# -Maintenance (that revision mounts nothing and never holds the key).
+$assistantSettings = [ordered]@{}
+if ($Assistant.Count -gt 0) {
+    if ($Maintenance) { throw "-Assistant is not for the maintenance revision. Nothing was deployed and nothing changed." }
+    $expected = @('account', 'deployment', 'apiVersion', 'eurPerMillionInput', 'eurPerMillionOutput', 'preview')
+    $given = @($Assistant.Keys | ForEach-Object { "$_" })
+    if ((Compare-Object $expected $given) -or $given.Count -ne $expected.Count) { throw "-Assistant names exactly $($expected -join ', '). Nothing was deployed and nothing changed." }
+    foreach ($name in $expected) { $assistantSettings[$name] = "$($Assistant[$name])" }
+    if ($assistantSettings.account -cnotmatch '^[a-z0-9][a-z0-9-]{1,62}$') { throw "-Assistant's account is not an Azure OpenAI account name. Nothing was deployed and nothing changed." }
+    if ($assistantSettings.deployment -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$') { throw "-Assistant's deployment is not a deployment name. Nothing was deployed and nothing changed." }
+    if ($assistantSettings.apiVersion -cnotmatch '^\d{4}-\d{2}-\d{2}(-preview)?$') { throw "-Assistant's apiVersion is not an API version. Nothing was deployed and nothing changed." }
+    foreach ($price in 'eurPerMillionInput', 'eurPerMillionOutput') {
+        if ($assistantSettings[$price] -cnotmatch '^\d{1,3}(\.\d{1,4})?$') { throw "-Assistant's $price is not a price in euros per million tokens. Nothing was deployed and nothing changed." }
+    }
+    if ($assistantSettings.preview -cne 'unreviewed') { throw "-Assistant's preview is exactly 'unreviewed' while the people's reviews are not done. Nothing was deployed and nothing changed." }
+}
 $image = "$Registry/$Repository@$digest"
 # Each deployment's revision is its own (the incident of 2026-10-27: the live release, deployed again to change only
 # LEX_V3_SEARCH_ENGINES, was given the live revision's own suffix; Azure refused it, "revision with suffix ... already
@@ -296,6 +317,8 @@ $revisionSettings = [ordered]@{
     image = $image; searchEngines = $SearchEngines; openToPublic = [bool]$Public; allowedSourceCidrs = @($AllowedCidr)
     template = Get-TextDigest ((Get-Content -Raw -LiteralPath (Join-Path $checkout 'deploy/main.bicep')) -replace "`r`n", "`n")
 }
+# The assistant's settings make the revision too (a switch-on is its own revision); a deployment without them is as before.
+if ($assistantSettings.Count -gt 0) { $revisionSettings['assistant'] = $assistantSettings }
 # The maintenance revision's settings say so, so its name is never the release's candidate's; a candidate's are as before.
 if ($Maintenance) { $revisionSettings['maintenance'] = $true }
 $suffix = Get-RevisionSuffix $manifest.version $AppName $revisionSettings
@@ -481,7 +504,7 @@ else {
 $values = [ordered]@{
     environmentId = $EnvironmentId; appName = $AppName; image = $image; registryServer = $Registry
     identityResourceId = $IdentityResourceId; revisionSuffix = $suffix; liveRevision = $LiveRevision
-    allowedSourceCidrs = @($AllowedCidr); openToPublic = [bool]$Public; searchEngines = $SearchEngines
+    allowedSourceCidrs = @($AllowedCidr); openToPublic = [bool]$Public; searchEngines = $SearchEngines; assistant = $assistantSettings
     customDomains = @($customDomains); maintenance = [bool]$Maintenance
 }
 $document = [ordered]@{
@@ -493,7 +516,7 @@ foreach ($name in $values.Keys) { $document.parameters[$name] = @{ value = $valu
 $parametersFile = Join-Path ([System.IO.Path]::GetTempPath()) "lex-v3-deploy-$([guid]::NewGuid().ToString('N')).parameters.json"
 $shown = ($values.Keys | ForEach-Object {
         $value = $values[$_]
-        $text = if ($_ -eq 'customDomains') { '[' + (($value | ForEach-Object { $_.name }) -join ',') + ']' } elseif ($value -is [array]) { '[' + ($value -join ',') + ']' } else { $value }
+        $text = if ($_ -eq 'customDomains') { '[' + (($value | ForEach-Object { $_.name }) -join ',') + ']' } elseif ($_ -eq 'assistant') { '{' + (($value.Keys | ForEach-Object { "$_=$($value[$_])" }) -join ',') + '}' } elseif ($value -is [array]) { '[' + ($value -join ',') + ']' } else { $value }
         "$_=$text"
     }) -join ' '
 try {

@@ -590,3 +590,27 @@ test("on the open site a deployment without -Public is refused before anything c
   assert.equal(deploy(["-SignerIdentity", "signer", "-AllowedCidr", "203.0.113.7/32", "-Apply"], { RULES: PRIVATE_RULES }).result, "RESULT:returned");
   assert.equal(deploy(["-SignerIdentity", "signer", "-Public", "-Apply"], { RULES: "[]" }).result, "RESULT:returned");
 });
+
+test("an -Assistant plan run hands the template the six settings and names a revision of its own; a malformed one, or one with -Maintenance, changes nothing", () => {
+  const settings = "account='oai-lex-v3'; deployment='gpt-4.1-mini'; apiVersion='2024-10-21'; eurPerMillionInput='0.40'; eurPerMillionOutput='1.60'; preview='unreviewed'";
+  const plain = deploy(["-AllowedCidr", "203.0.113.7/32"]);
+  const run = deploy(["-AllowedCidr", "203.0.113.7/32", "-Assistant", `@{${settings}}`]);
+  assert.equal(run.result, "RESULT:returned", run.out);
+  assert.match(run.out, / assistant=\{account=oai-lex-v3,deployment=gpt-4\.1-mini,apiVersion=2024-10-21,eurPerMillionInput=0\.40,eurPerMillionOutput=1\.60,preview=unreviewed\} /);
+  assert.match(plain.out, / assistant=\{\} /, "without it, the template is told none");
+  assert.notEqual(run.planned, plain.planned, "a switch-on is its own revision");
+  assert.deepEqual(writes(run), [], "a plan run changes nothing");
+  for (const [given, refusal] of [
+    [`@{${settings.replace("preview='unreviewed'", "preview='reviewed'")}}`, "-Assistant's preview is exactly 'unreviewed'"],
+    [`@{${settings.replace("; preview='unreviewed'", "")}}`, "-Assistant names exactly account, deployment, apiVersion, eurPerMillionInput, eurPerMillionOutput, preview."],
+    [`@{${settings.replace("eurPerMillionInput='0.40'", "eurPerMillionInput='cheap'")}}`, "-Assistant's eurPerMillionInput is not a price"],
+    [`@{${settings.replace("account='oai-lex-v3'", "account='../other'")}}`, "-Assistant's account is not an Azure OpenAI account name."],
+  ]) {
+    const refused = deploy(["-AllowedCidr", "203.0.113.7/32", "-Assistant", given]);
+    assert.ok(refused.result.startsWith(`RESULT:threw ${refusal}`), refused.result);
+    assert.deepEqual(writes(refused), []);
+  }
+  const maintenance = deploy(["-AllowedCidr", "203.0.113.7/32", "-Maintenance", "-Assistant", `@{${settings}}`]);
+  assert.ok(maintenance.result.startsWith("RESULT:threw -Assistant is not for the maintenance revision."), maintenance.result);
+});
+

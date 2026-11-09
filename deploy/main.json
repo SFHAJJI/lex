@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "12541439499334168413"
+      "templateHash": "9750681825233765119"
     }
   },
   "parameters": {
@@ -92,6 +92,13 @@
         "description": "The custom domains bound to the app, as Azure holds them (name, bindingType, certificateId): deploy.ps1 reads them back and passes them on every deployment, so a redeployment keeps the binding. Empty until law.soufien.lu is bound (deploy/bind-domain.ps1)."
       }
     },
+    "assistant": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "The assistant (R30; the owner's order of 2026-10-28), or empty for none (the switched-off card, as every deployment before it): account, the Azure OpenAI account in this resource group whose key Azure reads as it deploys; deployment, its model deployment; apiVersion; eurPerMillionInput and eurPerMillionOutput, the deployment's prices; preview, exactly `unreviewed` while the people's reviews are not done. Ignored by the maintenance revision."
+      }
+    },
     "maintenance": {
       "type": "bool",
       "defaultValue": false,
@@ -114,6 +121,26 @@
       }
     ],
     "firstDeployment": "[empty(parameters('liveRevision'))]",
+    "baseEnvironment": [
+      {
+        "name": "ASPNETCORE_HTTP_PORTS",
+        "value": "8080"
+      },
+      {
+        "name": "LEX_V3_TEMP_IS_PRIVATE",
+        "value": "1"
+      },
+      {
+        "name": "LEX_V3_SEARCH_ENGINES",
+        "value": "[parameters('searchEngines')]"
+      },
+      {
+        "name": "LEX_V3_MAINTENANCE",
+        "value": "[if(parameters('maintenance'), 'on', 'off')]"
+      }
+    ],
+    "assistantOn": "[and(not(empty(parameters('assistant'))), not(parameters('maintenance')))]",
+    "assistantAccountId": "[if(variables('assistantOn'), resourceId('Microsoft.CognitiveServices/accounts', parameters('assistant').account), '')]",
     "releaseProbes": [
       {
         "type": "Startup",
@@ -213,7 +240,8 @@
               "server": "[parameters('registryServer')]",
               "identity": "[parameters('identityResourceId')]"
             }
-          ]
+          ],
+          "secrets": "[if(variables('assistantOn'), createArray(createObject('name', 'assistant-key', 'value', listKeys(variables('assistantAccountId'), '2024-10-01').key1)), createArray())]"
         },
         "template": {
           "revisionSuffix": "[parameters('revisionSuffix')]",
@@ -225,24 +253,7 @@
                 "cpu": "[json('2.0')]",
                 "memory": "4Gi"
               },
-              "env": [
-                {
-                  "name": "ASPNETCORE_HTTP_PORTS",
-                  "value": "8080"
-                },
-                {
-                  "name": "LEX_V3_TEMP_IS_PRIVATE",
-                  "value": "1"
-                },
-                {
-                  "name": "LEX_V3_SEARCH_ENGINES",
-                  "value": "[parameters('searchEngines')]"
-                },
-                {
-                  "name": "LEX_V3_MAINTENANCE",
-                  "value": "[if(parameters('maintenance'), 'on', 'off')]"
-                }
-              ],
+              "env": "[concat(variables('baseEnvironment'), if(variables('assistantOn'), createArray(createObject('name', 'LEX_V3_ASSISTANT', 'value', 'on'), createObject('name', 'LEX_V3_ASSISTANT_PREVIEW', 'value', parameters('assistant').preview), createObject('name', 'LEX_ASSISTANT_ENDPOINT', 'value', reference(variables('assistantAccountId'), '2024-10-01').endpoint), createObject('name', 'LEX_ASSISTANT_DEPLOYMENT', 'value', parameters('assistant').deployment), createObject('name', 'LEX_ASSISTANT_API_VERSION', 'value', parameters('assistant').apiVersion), createObject('name', 'LEX_ASSISTANT_EUR_PER_MILLION_INPUT', 'value', parameters('assistant').eurPerMillionInput), createObject('name', 'LEX_ASSISTANT_EUR_PER_MILLION_OUTPUT', 'value', parameters('assistant').eurPerMillionOutput), createObject('name', 'LEX_ASSISTANT_KEY', 'secretRef', 'assistant-key')), createArray(createObject('name', 'LEX_V3_ASSISTANT', 'value', 'off'))))]",
               "probes": "[if(parameters('maintenance'), variables('maintenanceProbes'), variables('releaseProbes'))]",
               "volumeMounts": [
                 {

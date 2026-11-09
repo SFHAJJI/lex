@@ -4,6 +4,43 @@ Updated 2026-11-09. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The deployment can carry the assistant: `-Assistant`, its key read by Azure from its account, off by default; switching it on publicly is the owner's (sole driver, 2026-11-09)
+
+`ops/assistant-switch-on`. The assistant's design reads its key from a Container Apps secret, and the template held none
+by rule ("the template holds no secret"). Now:
+- **`deploy/main.bicep`**: an `assistant` object parameter, empty by default (the switched-off card, as every deployment
+  so far). When it is given and the revision is not the maintenance one, the template:
+  - declares one Container Apps secret, `assistant-key`, valued by `listKeys` over the named Azure OpenAI account in this
+    resource group as Azure Resource Manager deploys, so the key never passes through the deploying machine, a file or a
+    command line;
+  - sets the API's own variables: `LEX_V3_ASSISTANT=on`, the preview acknowledgement, the endpoint (read from the account),
+    the deployment, the API version, the two prices, and `LEX_ASSISTANT_KEY` from the secret.
+
+  Otherwise it holds no secret and sets `LEX_V3_ASSISTANT=off` alone. The four variables every revision holds moved into
+  a literal `baseEnvironment`, unchanged.
+- **`deploy/deploy.ps1 -Assistant @{...}`**: exactly six settings (account, deployment, apiVersion, eurPerMillionInput,
+  eurPerMillionOutput, preview `unreviewed`), each checked by form before Azure is asked anything, refused with
+  `-Maintenance`. They join the revision's settings digest, so a switch-on is its own revision. Without them, every
+  deployment is as before, the same suffix included.
+- **Tests** (`web/test/deploy-kit.test.mjs`, `deploy-run.test.mjs`):
+  - The "no secret" rule became "no secret but the assistant's key, only while configured", pinned exactly: one
+    `listKeys`, one `secretRef`, no secure parameter, no registry password.
+  - The assistant's variables are read from the API's own constants; the operator's off-switch is never set by a
+    deployment.
+  - A plan run with `-Assistant` names its own revision, and four malformed settings and `-Maintenance` each refuse with
+    nothing changed.
+  - Web 1,517 passed, 3 skipped.
+- **Not switched on**, and why: switching on publicly needs the privacy notice to name Microsoft's Azure OpenAI service as
+  the processor and to say that Microsoft may keep questions up to 30 days for abuse monitoring (modified abuse monitoring
+  was not applied for).
+  - That reverses the legal pages' rule that the privacy notice holds no processors part (`legal-pages.test.mjs`).
+  - It leaves R33's "no retention" unmet.
+  - `ASSISTANT_PRIVACY_DRAFT` says these public legal claims are the owner's.
+  - The Developers page's protocol sentences also say the assistant is off, and change with it.
+
+  These wait on the owner's yes. On it, the switch-on is one more deployment argument with the prices measured today
+  (0.40 and 1.60 EUR per million tokens), the texts made true and the live gates run over the refreshed mount.
+
 ## The planner fitted to the real model: the question's words with their positions, each argument's own sources, prompt /2 (sole driver, 2026-11-09)
 
 `web/assistant-planner-fit`. The first live gates over a real deployment answered 34 to 38 of 100 asks: the other questions

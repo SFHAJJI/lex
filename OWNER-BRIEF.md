@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-11-09 at 19:15 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-11-09 at 21:00 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -14,9 +14,9 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
   Its data was rebuilt and passed the checks, but its image build ran out of disk on 31 October.
 - A release is only promoted when both halves of its data are under 30 days old. The third release's EU half is not, so
   it cannot go live as it is: the EU and Luxembourg data have to be collected again first.
-- The assistant is built and switched off. Azure's AI service is now enabled on the subscription (it was turned on
-  for the guide demo), so after the release the driver can give Lex its own EU-only model and switch the assistant on
-  as a labelled preview, once its checks pass on the real model.
+- The assistant now works on a real model, Lex's own Azure OpenAI deployment kept in the EU data zone: of 100 test
+  questions it answered the 80 it should and declined the 20 it should (other languages, too long), quoting the law
+  exactly, in 2.5 seconds or less for 95 of them, at about 0.001 EUR each. It stays off: see what waits on you.
 
 ## The plan
 
@@ -33,5 +33,8 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 ## What waits on you
 
+- Your yes to switch the assistant on publicly, as a labelled preview. It means the privacy page names Microsoft as
+  the processor of typed questions, which Microsoft may keep up to 30 days to watch for abuse (your earlier rule was no
+  processor and no retention). Optional: ask Microsoft for modified abuse monitoring, which removes the 30 days.
 - Four DNS records for soufien.lu (the commands are in the brief of 31 October); the driver was refused that change.
 - Your choice, not done: a lawyer's read, an accessibility audit, user tests.
