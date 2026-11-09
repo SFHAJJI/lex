@@ -78,13 +78,44 @@ A data refresh and a release are four steps, each with its own evidence:
 1. **Acquisition** (publisher traffic): a run of `Lex.V3.Tool` against Legilux and the Publications Office, from this
    PC, under literal robots, request budgets and an automatic stop, never a request to eur-lex.europa.eu. It needs the
    owner's yes for each run until O10's standing authorisation exists. It writes custody (raw bytes before decoding,
-   observations, journals); STATUS-DATA.md records each run.
+   observations, journals); STATUS-DATA.md records each run. How a refresh run is launched (since the refresh-runs slice):
+   - **Folder**: a new `C:\lex-v3\<eu|lu>-population-<start yyyyMMdd>-<run>` (the runner refuses one that exists); a
+     resume writes a new folder too (`...-<run>b`) and names the interrupted one.
+   - **Runtime**: the merged head's CI artifact `v3-acquisition-runtime-<sha>` (kept three days), downloaded and held to its
+     file manifest and assembly source stamps, never a local build; the eight renderer files are frozen as the head's Git
+     blobs.
+   - **Arguments**: a fresh `build` (no `--resume-from` of a completed run, no `--eu-checkpoint` for an EU refresh), with
+     `--acquire-only`: the run stops once its inputs pointer (`mount-inputs-*.json`) is written and builds no mount, which
+     keeps an EU run under about 1 GB of memory. An EU refresh takes `--celex all` and one bounded Luxembourg companion
+     (`--lu-name constitution --lu-start http://data.legilux.public.lu/eli/etat/leg/constitution/ --lu-end
+     http://data.legilux.public.lu/eli/etat/leg/constitution0`); a Luxembourg refresh takes `--lu-population
+     legislative-constitution` (the code, Constitution, loi and rgd ranges) and `--eu-checkpoint` of the newest EU catalog,
+     whose custody objects are linked into its custody first (one request renews the EU rights notice).
+   - **Dating**: a run that was not resumed retains dated catalogs (EU `/3`, Luxembourg `/5` or `/6`), and the build report
+     of every mount derived from them states each half's completion (`completion`); that is the newest completed collection
+     every answer names (§5). A reuse and a derive carry the date, never move it forward; a resumed run states its own
+     windows (`resumption`).
+   - **Guard**: start at 1.2 GB of available memory and 8 GB of disk; stop after 2 minutes under 400 MB available, 1 minute
+     under 512 MB of commit headroom, or 2 minutes under 3.5 GB of disk, at once under 1 GB. A stop is an incomplete run:
+     resume it. A Luxembourg population's acquisition itself peaks near 13 GB (run 15), so it runs with nothing else heavy
+     on this PC; or, when the owner's yes for that run names an Azure egress address instead of this PC, as the
+     acquisition job of the operator's kit (the same build environment as the derivation), which applies the same guard,
+     streams its custody to storage as it goes and resumes from its own journal on a restart, the catalog and the report
+     then naming every window.
+   - **Custody to storage**: once the run ends with exit 0, its custody is streamed as one tar with its manifest (SHA-256,
+     bytes, files, content bytes) to the custody container under the run's folder name, under a create-and-write SAS of
+     at most 20 hours that never reaches a command line or a file, and never over an existing blob.
 2. **Derivation, on Azure** (R112): an Azure Container Apps job on a Flex workload profile (16 vCPU and 64 GiB; a
    derive peaks near 34 GiB) in a separate build environment in `rg-lex-v3`, made for the run and deleted after it, since an
    idle Flex profile is billed by the hour. The job reads custody through a read-only, container-scoped SAS and writes
    through a create-and-write one, both job secrets mounted as files and expiring within a day; it runs
    `Lex.V3.Tool rederive-inputs`, `derive` twice (A and B), compares every file, `rederive-seal`, runs the machine gates
-   and uploads the mount with its manifest. The kit that launches it (its scripts and the installer that brings a mount
+   and uploads the mount with its manifest. A refresh of one half first fetches both runs' custody tars, links the refreshed
+   run's objects into the other run's tree without overwriting any, and runs `Lex.V3.Tool compose-inputs --custody <tree>
+   --base <the other run's mount-inputs> --europe <the refreshed run's eu-acquisition-*.json>`: offline, under the same
+   guard as `derive`, it reopens each half on its own (the EU catalog against the base's seeds, the Luxembourg catalog
+   against its act or scope), refuses a mismatch or an undated EU catalog, and writes inputs /1 or /2 whose build time is
+   the later of the base's and the EU catalog's, which `rederive-inputs` and `derive` read as they are. The kit that launches it (its scripts and the installer that brings a mount
    back to the PC, verified file by file against the manifest) is the operator's, outside this public repository, because
    it handles storage keys. A derive takes about three hours on Linux. Since #994 the PDF layout reads no host font, so a
    derive on Windows writes the same files; the population is still derived on Azure for its memory (a derive peaks near

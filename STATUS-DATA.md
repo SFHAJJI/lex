@@ -1,6 +1,71 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-31.
+Updated 2026-11-09.
+
+## The refresh runs made possible: dated catalogs, `build --acquire-only`, `compose-inputs`, the Constitution's scope (sole driver, 2026-10-28; rebased 2026-11-09)
+
+`data/refresh-runs`. No publisher traffic, no browser, no Azure call: the slice makes EU run 17 and Luxembourg run 18
+possible and launches neither. Served now: EU 2026-10-05T03:50:08Z (stale from 11-04T03:50:09Z), Luxembourg
+2026-10-12T18:17:04Z (stale from 11-11T18:17:05Z).
+- **Every catalog dated.** A run that was not resumed retained `/1` catalogs, which hold no time, so a fresh run 17 would
+  have set the EU date to unstated, and promotion refuses an unstated channel. Now such a run retains
+  `lex-eu-first-mount-acquisition/3` (`/1`'s members and `cataloged_at`) and `lex-lu-first-mount-acquisition/5` or `/6`
+  (`/1` or `/2` wrapped with `cataloged_at`, as `/3` and `/4` wrap them with the resumption), the clock read where the
+  resumed path reads it. The readers take every schema, each held to its own canonical bytes; old `/1` and `/2` bytes and
+  inputs `/1` and `/2` do not move (a reuse of an undated `/1` renews it as the `/1` it was). The build report gains an
+  optional `completion` (`{europe|luxembourg}.catalogedAt`), written only when a catalog is dated, so every existing report
+  is the same bytes; `V3CorpusMount.Freshness.cs` reads it beside `resumption`, the later of the two, down to the second.
+  A derive reopens the catalogs, so it writes the acquiring build's `completion`; a reuse keeps the population's time, never
+  the renewal's (`Reuse.cs`: a dated original stays dated; one observed by the interrupted run keeps that run's time in the
+  new resumption).
+- **`build --acquire-only`**: a valueless flag, refused repeated, refused with `--out`, not in the journal's argument digest
+  (a run resumes with or without it); the tool exits 0 once the inputs pointer is written, with no in-process build. The
+  in-process build was the whole of an EU run's memory peak (run 16: 0.3 to 0.8 GB acquiring, 9.4 to 10.2 GB building).
+- **`compose-inputs --custody --base --europe`** (`V3OfflineMount.ComposeAsync`, `src/Lex.V3.Tool/ComposeInputsCommand.cs`):
+  under the offline guard, the EU catalog reopened against the base's seeds and the Luxembourg catalog against its act or
+  scope, each on its own and released before the next; a mismatch, an undated EU catalog or a re-derivation's base refuses
+  and nothing is held. The inputs keep the base's schema, Luxembourg half, seeds, scope, predecessor and referenced
+  generations; their build time is the later of the base's and the EU catalog's (rounded up to the second), so it bounds both
+  halves and a re-derivation cannot be stated to run before it; their identity comes from their bytes. `derive` and
+  `rederive-inputs` read them unchanged.
+- **The Constitution.** `--lu-population legislative-constitution`: four ordered, disjoint ranges under the declared-range
+  policy (`legislative-code`, `legislative-constitution` over `…/eli/etat/leg/constitution/` to `…/constitution0`,
+  `legislative-loi`, `legislative-rgd`); `legislative` is unchanged. Coverage's `luxembourg_classes_not_held` served the
+  Constitution's row as a static claim; it is now served only while the mounted index holds no subject and no state under
+  that ELI (read once per mount), so derive-r1 and derive-r2 still declare it and a mount of run 18 will not.
+- **Launch steps** (docs/OPERATING.md §4, step 1; the commands are the driver's, outside the repository):
+  - *Run 17 (EU, on this PC)*: folder `C:\lex-v3\eu-population-<start yyyyMMdd>-17`; runtime the merged head's CI artifact
+    `v3-acquisition-runtime-<sha>`; `build --celex all --lu-name constitution --lu-start
+    http://data.legilux.public.lu/eli/etat/leg/constitution/ --lu-end http://data.legilux.public.lu/eli/etat/leg/constitution0
+    --custody <root>\custody --custody-encoding brotli --checkout <root>\renderer-checkout --wire-ceiling 45000
+    --acquire-only`; the runner's guard (1.2 GB and 8 GB to start; 400 MB, 512 MB of commit, 3.5 GB to stop); about 18,500
+    Publications Office requests and 100 to 250 Legilux ones, 16 to 18 hours, under 1 GB. A Luxembourg refusal comes after
+    the EU catalog and its pointer are kept (exit 7 from the runner), and the EU half can still be composed. Then its custody
+    streamed to `custody/eu-population-<date>-17/` (`custody.tar` and its manifest, new blobs only).
+  - *Derive of run 17's EU with run 15's Luxembourg (the D kit's copy)*: both tars fetched and verified, run 17's object
+    lanes hard-linked into run 15's tree without overwriting, `compose-inputs --base <run 15's mount-inputs-b306a972…>
+    --europe <run 17's eu-acquisition-*.json>`, then `rederive-inputs --rules lu-release-2 --policy <policy A>`, derive A
+    and B, compare, seal, upload, gates.
+  - *Run 18 (Luxembourg, four ranges, acquire-only)*: `build --celex all --eu-checkpoint <run 17's eu-acquisition-*.json>
+    --lu-population legislative-constitution ... --acquire-only`, run 17's objects linked into its custody first (one EU
+    request renews the rights notice; about 25,000 Legilux requests and 34 hours). Its acquisition peaks near 13 GB as run
+    15's did (12.9 GB on 10-12, before its pointer), so it runs either on this PC with nothing else heavy, or as the kit's
+    Azure acquisition job, which streams its custody in segments to `custody/lu-population-<date>-18/` and resumes from its
+    own journal on a restart (the catalog's resumption then names every window).
+- **Driver decisions (reversible)**: the report stays `lex-v3-first-mount-report/2` (`completion` is optional, as
+  `resumption` is); a dated EU catalog is flat (`/1` plus one member, as `/2` is) and a dated Luxembourg one wraps (as `/3`
+  and `/4` do); a composition refuses an undated EU catalog (no build time can bound it); `--acquire-only` refuses `--out`;
+  the scope's range names reuse `legislative-*`; run 18 reuses run 17's catalog with `--eu-checkpoint` rather than composing.
+- **Owner items, recorded as covered (2026-11-09)**: the owner's standing yes of 2026-10-27 (take the recommended option,
+  do not ask) covers each run's publisher traffic (run 17: Publications Office about 18,500, Legilux 100 to 250; run 18:
+  Legilux about 25,000 and one EU rights request), run 18 on Azure (its traffic leaves from an Azure egress address, not
+  this PC; about 36 to 40 node-hours of the Flex profile, inside the 150 EUR ceiling) and the promotion once the gates pass.
+- **Since 10-28**: the branch sat unpushed; on 11-09 it was merged with `v3/integration` at #1016 and one test that named
+  the writer's private report-file constant now names the file. Served now: the EU half is stale since 11-04 (the site
+  warns), the Luxembourg half turns stale on 11-11T18:17Z. Order: run 17 on this PC, then run 18 on Azure from run 17's
+  catalog; while run 18 runs, run 17's EU half composed with run 15's Luxembourg half is derived and released if it can be
+  promoted before 11-11T18:17Z; run 18's derive then gives the release with both halves fresh and the Constitution.
+- **Tests**: see the pull request (counts at the head).
 
 ## derive-r3's two acts of no state: 52 articles and 151 references the derive kept after dropping their states; served nowhere, recorded by R92's measurement, left out of cited_by (sole driver, 2026-10-31)
 

@@ -77,6 +77,11 @@ public sealed record AcquisitionJournalContinuation(string JournalSha256, long L
 /// their last journaled lines recorded, at most their ceilings.
 /// </para>
 /// <para>
+/// <see cref="CatalogedAt"/> is when the half's collection completed. A resumed run that only renews an EU population the
+/// interrupted run catalogued with a dated catalog (<c>lex-eu-first-mount-acquisition/3</c>) keeps that catalog's time,
+/// since the renewal observes nothing of the population; for every other resumed half it is this run's own time.
+/// </para>
+/// <para>
 /// THE EARLIER RUNS ARE EVERY RUN OF THE CHAIN. A run interrupted while it was itself resuming re-journals the units it
 /// replayed under its own lines, so its journal alone would date them to its own window. Its resume record states the
 /// runs before it, and a resume of its journal folds them in: <see cref="PreviousRuns"/> counts them, the window starts

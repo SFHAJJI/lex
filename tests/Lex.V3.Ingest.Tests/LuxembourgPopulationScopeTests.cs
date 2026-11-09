@@ -78,14 +78,15 @@ public sealed partial class LuxembourgFirstMountAcquisitionTests
             LuxembourgPopulationScope.Legislative.Ranges);
         await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => LuxembourgFirstMountAcquisition.ReopenPopulationAsync(
             store, captured.CheckpointRef, wrongPolicy, CancellationToken.None));
-        var root = await VocabularyRootAsync(store, captured.CheckpointRef);
+        var root = DatedRecord(await VocabularyRootAsync(store, captured.CheckpointRef), "population");
         var missingDeclaration = await CopyVocabularyStoreAsync(store, omit: root["scope_definition"]!["sha256"]!.GetValue<string>());
         await Assert.ThrowsExactlyAsync<CustodyRequiredException>(() => LuxembourgFirstMountAcquisition.ReopenPopulationAsync(
             missingDeclaration, captured.CheckpointRef, LuxembourgPopulationScope.Legislative, CancellationToken.None));
         foreach (var changed in new[] { "scope_identity", "inventory", "null_parts", "null_query", "ranges", "manifest" })
         {
             var copy = await CopyVocabularyStoreAsync(store);
-            var tampered = await VocabularyRootAsync(copy, captured.CheckpointRef);
+            var catalog = await VocabularyRootAsync(copy, captured.CheckpointRef);
+            var tampered = DatedRecord(catalog, "population");
             switch (changed)
             {
                 case "scope_identity": tampered["scope_definition"]!["resource_id"] = "urn:uuid:00000000-0000-4000-8000-000000000088"; break;
@@ -95,7 +96,7 @@ public sealed partial class LuxembourgFirstMountAcquisitionTests
                 case "manifest": tampered["scope_manifest"]!["sha256"] = tampered["scope_definition"]!["sha256"]!.GetValue<string>(); break;
                 case "ranges": tampered["ranges"]![0]!["name"] = "relabelled"; break;
             }
-            var held = await copy.CreateAsync(Encoding.UTF8.GetBytes(tampered.ToJsonString()), CustodyClass.NightlyFloor90d, CancellationToken.None);
+            var held = await copy.CreateAsync(Encoding.UTF8.GetBytes(EuFirstMountAcquisitionTests.CanonicalJson(catalog)), CustodyClass.NightlyFloor90d, CancellationToken.None);
             await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => LuxembourgFirstMountAcquisition.ReopenPopulationAsync(copy,
                 new SourceArtifactRef(captured.CheckpointRef.ResourceId, held.Reference.ContentSha256),
                 LuxembourgPopulationScope.Legislative, CancellationToken.None));

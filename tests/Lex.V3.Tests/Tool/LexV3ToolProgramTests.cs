@@ -86,6 +86,7 @@ public sealed class LexV3ToolProgramTests
     [TestMethod]
     [DataRow("all")]
     [DataRow("legislative")]
+    [DataRow("legislative-constitution")]
     public void LuxembourgPopulationArgumentsAreAcceptedBeforeAnInvalidEuSeedRefuses(string population)
     {
         var run = Run("build", "--celex", "NOTASEED", "--lu-population", population, "--wire-ceiling", "5");
@@ -97,6 +98,8 @@ public sealed class LexV3ToolProgramTests
     [DataRow("other", false)]
     [DataRow("all", true)]
     [DataRow("legislative", true)]
+    [DataRow("legislative-constitution", true)]
+    [DataRow("constitution", false)]
     public void AnInvalidOrMixedPopulationSelectionIsRejectedBeforeTraffic(string population, bool mixed)
     {
         var arguments = new List<string> { "build", "--celex", "NOTASEED", "--lu-population", population, "--wire-ceiling", "5" };

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Lex.V3.Api;
@@ -248,6 +249,51 @@ public sealed class V3FreshnessMountTests
 
         // A report naming an EU index the mount does not hold describes another mount.
         Assert.ThrowsExactly<InvalidDataException>(() => V3CorpusMount.ReadBuildReport(report, corpus, luxembourg, null));
+    }
+
+    /// <summary>
+    /// A half whose catalog is dated (a run that was not resumed) is dated by the report's <c>completion</c>, which the mount
+    /// writer writes from the catalogs (<see cref="Lex.V3.Ingest.V3CorpusMountWriter.Completion"/>): read down to the second,
+    /// the later of two statements for one half, and nothing for a half neither states. A report written before catalogs were
+    /// dated carries no <c>completion</c>, and the writer writes none when no catalog is dated, so its bytes are unchanged.
+    /// </summary>
+    [TestMethod]
+    public void ADatedCatalogsCompletionDatesItsChannelAndTheLaterOfTwoStatementsCounts()
+    {
+        var corpus = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(new string('a', 64)), new string('a', 64));
+        var luxembourg = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(new string('b', 64)), new string('b', 64));
+        var europe = new SourceArtifactRef(LexCorpus6Builder.ResourceIdOf(new string('c', 64)), new string('c', 64));
+        Assert.IsNull(Lex.V3.Ingest.V3CorpusMountWriter.Completion(null, null), "no dated catalog: the report is what it was");
+
+        byte[] WithCompletion(object? completion, string? luxembourgResumedCatalogedAt = null)
+        {
+            var report = JsonSerializer.Deserialize<Dictionary<string, object?>>(Report(
+                corpus.Sha256, luxembourg.Sha256, europe.Sha256, luxembourgCatalogedAt: luxembourgResumedCatalogedAt))!;
+            report["completion"] = completion;
+            return JsonSerializer.SerializeToUtf8Bytes(report);
+        }
+
+        var europeAt = new DateTimeOffset(2026, 10, 30, 11, 59, 58, TimeSpan.Zero).AddTicks(9_876_543);
+        var dated = V3CorpusMount.ReadBuildReport(
+            WithCompletion(Lex.V3.Ingest.V3CorpusMountWriter.Completion(europeAt, null)), corpus, luxembourg, europe);
+        Assert.AreEqual(DateTimeOffset.Parse("2026-10-30T11:59:58Z", CultureInfo.InvariantCulture), dated.EuropeCompletedAt, "read down to the second");
+        Assert.IsNull(dated.LuxembourgCompletedAt, "a half neither statement dates is unstated");
+
+        var luxembourgAt = new DateTimeOffset(2026, 11, 1, 6, 0, 0, TimeSpan.FromHours(1));
+        var both = V3CorpusMount.ReadBuildReport(
+            WithCompletion(Lex.V3.Ingest.V3CorpusMountWriter.Completion(europeAt, luxembourgAt), "2026-10-12T18:17:04.765317+00:00"),
+            corpus, luxembourg, europe);
+        Assert.AreEqual(DateTimeOffset.Parse("2026-11-01T05:00:00Z", CultureInfo.InvariantCulture), both.LuxembourgCompletedAt,
+            "the later of the two statements for one half, in UTC");
+        var earlier = V3CorpusMount.ReadBuildReport(
+            WithCompletion(Lex.V3.Ingest.V3CorpusMountWriter.Completion(null, new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero)),
+                "2026-10-12T18:17:04.765317+00:00"),
+            corpus, luxembourg, europe);
+        Assert.AreEqual(DateTimeOffset.Parse("2026-10-12T18:17:04Z", CultureInfo.InvariantCulture), earlier.LuxembourgCompletedAt);
+        Assert.IsNull(earlier.EuropeCompletedAt);
+
+        Assert.ThrowsExactly<InvalidDataException>(() => V3CorpusMount.ReadBuildReport(
+            WithCompletion(new { europe = new { catalogedAt = "not a time" } }), corpus, luxembourg, europe));
     }
 
     /// <summary>

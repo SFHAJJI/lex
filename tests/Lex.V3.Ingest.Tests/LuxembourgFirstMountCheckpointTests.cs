@@ -34,7 +34,7 @@ public sealed partial class LuxembourgFirstMountAcquisitionTests
     public async Task CompleteLuReplayRequiresEveryOriginalPhase(string missing)
     {
         var capture = await CapturedVocabulary.Value;
-        var root = await VocabularyRootAsync(capture.Store, capture.Result.CheckpointRef!);
+        var root = DatedRecord(await VocabularyRootAsync(capture.Store, capture.Result.CheckpointRef!), "acquisition");
         var digest = missing == "root" ? capture.Result.CheckpointRef!.Sha256 : root[missing]!["sha256"]!.GetValue<string>();
         var copy = await CopyVocabularyStoreAsync(capture.Store, omit: digest);
         try
@@ -58,7 +58,8 @@ public sealed partial class LuxembourgFirstMountAcquisitionTests
     {
         var capture = await CapturedVocabulary.Value;
         var copy = await CopyVocabularyStoreAsync(capture.Store);
-        var root = await VocabularyRootAsync(copy, capture.Result.CheckpointRef!);
+        var catalog = await VocabularyRootAsync(copy, capture.Result.CheckpointRef!);
+        var root = DatedRecord(catalog, "acquisition");
         switch (changed)
         {
             case "schema": root[changed] = "lex-lu-first-mount-acquisition/99"; break;
@@ -67,7 +68,7 @@ public sealed partial class LuxembourgFirstMountAcquisitionTests
             case "inventory_sha256": case "content_sha256": root[changed] = new string('a', 64); break;
             default: root[changed]!["resource_id"] = "urn:uuid:00000000-0000-4000-8000-000000000088"; break;
         }
-        var held = await copy.CreateAsync(Encoding.UTF8.GetBytes(root.ToJsonString()), CustodyClass.NightlyFloor90d, CancellationToken.None);
+        var held = await copy.CreateAsync(Encoding.UTF8.GetBytes(EuFirstMountAcquisitionTests.CanonicalJson(catalog)), CustodyClass.NightlyFloor90d, CancellationToken.None);
         await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(() => LuxembourgFirstMountAcquisition.ReopenAsync(copy,
             new SourceArtifactRef(capture.Result.CheckpointRef!.ResourceId, held.Reference.ContentSha256), ActRange, CancellationToken.None));
     }

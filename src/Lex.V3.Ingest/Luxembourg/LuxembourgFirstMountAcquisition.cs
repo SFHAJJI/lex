@@ -222,25 +222,34 @@ public sealed class LuxembourgFirstMountAcquisitionResult
     /// </summary>
     public AcquisitionResumption? Resumption { get; private init; }
 
+    /// <summary>
+    /// When the run that observed this population retained its catalog, as the catalog of a run that was not resumed states it
+    /// (<c>lex-lu-first-mount-acquisition/5</c> and <c>/6</c>): the Luxembourg half's newest completed collection (R87). Null
+    /// for a catalog that states no time (<c>/1</c> and <c>/2</c>, written before catalogs were dated) and for a resumed one,
+    /// whose <see cref="Resumption"/> states its own.
+    /// </summary>
+    public DateTimeOffset? CatalogedAt { get; private init; }
+
     internal LuxembourgFirstMountAcquisitionResult WithVocabularyCheckpoint(SourceArtifactRef reference) =>
         new(Run, Profile, VocabularyEvidenceRef, AknInventory, AknLegalContent, Refusal, Detail)
         {
             VocabularyCheckpointRef = reference, CheckpointRef = CheckpointRef, PopulationScopeManifestRef = PopulationScopeManifestRef,
-            Resumption = Resumption, Rederivation = Rederivation, DerivedAt = DerivedAt,
+            Resumption = Resumption, CatalogedAt = CatalogedAt, Rederivation = Rederivation, DerivedAt = DerivedAt,
         };
 
-    internal LuxembourgFirstMountAcquisitionResult WithCheckpoint(SourceArtifactRef reference, AcquisitionResumption? resumption = null) =>
+    internal LuxembourgFirstMountAcquisitionResult WithCheckpoint(SourceArtifactRef reference, AcquisitionResumption? resumption = null,
+        DateTimeOffset? catalogedAt = null) =>
         new(Run, Profile, VocabularyEvidenceRef, AknInventory, AknLegalContent, Refusal, Detail)
         {
             VocabularyCheckpointRef = VocabularyCheckpointRef, CheckpointRef = reference, PopulationScopeManifestRef = PopulationScopeManifestRef,
-            Resumption = resumption ?? Resumption, Rederivation = Rederivation, DerivedAt = DerivedAt,
+            Resumption = resumption ?? Resumption, CatalogedAt = catalogedAt ?? CatalogedAt, Rederivation = Rederivation, DerivedAt = DerivedAt,
         };
 
     internal LuxembourgFirstMountAcquisitionResult WithPopulationScopeManifest(SourceArtifactRef reference) =>
         new(Run, Profile, VocabularyEvidenceRef, AknInventory, AknLegalContent, Refusal, Detail)
         {
             VocabularyCheckpointRef = VocabularyCheckpointRef, CheckpointRef = CheckpointRef, PopulationScopeManifestRef = reference,
-            Resumption = Resumption, Rederivation = Rederivation, DerivedAt = DerivedAt,
+            Resumption = Resumption, CatalogedAt = CatalogedAt, Rederivation = Rederivation, DerivedAt = DerivedAt,
         };
 
     /// <summary>
@@ -261,7 +270,7 @@ public sealed class LuxembourgFirstMountAcquisitionResult
         return new(Run, Profile, VocabularyEvidenceRef, AknInventory, AknLegalContent, Refusal, Detail)
         {
             VocabularyCheckpointRef = VocabularyCheckpointRef, CheckpointRef = CheckpointRef, PopulationScopeManifestRef = PopulationScopeManifestRef,
-            Resumption = Resumption, Rederivation = record, DerivedAt = derivedAt,
+            Resumption = Resumption, CatalogedAt = CatalogedAt, Rederivation = record, DerivedAt = derivedAt,
         };
     }
 
@@ -592,15 +601,17 @@ public sealed partial class LuxembourgFirstMountAcquisition
                 delivered = delivered.WithPopulationScopeManifest(new SourceArtifactRef(NewUrn(), CustodyDigest.Of(manifestBytes)));
             }
             // A resumed run's catalog says so: the record of the journal it resumed, the interrupted run's window and
-            // spend, and what each phase replayed and acquired live. It was not observed in one window.
+            // spend, and what each phase replayed and acquired live. It was not observed in one window. A run that was not
+            // resumed states when it retained its catalog (/5, /6), read at the same point.
             var resumption = _resume is null || progress is null ? null : _resume.Summarize(progress.Phases(
                     AcquisitionJournal.LuxembourgScopePhase, AcquisitionJournal.LuxembourgVocabularyPhase,
                     AcquisitionJournal.LuxembourgQueryFamilyPhase, AcquisitionJournal.LuxembourgCoverLeafPhase,
                     AcquisitionJournal.LuxembourgDocumentPhase, AcquisitionJournal.LuxembourgGazettePhase),
                 wireBudget.Spent, _timeProvider.GetUtcNow());
+            DateTimeOffset? catalogedAt = resumption is null ? _timeProvider.GetUtcNow() : null;
             var checkpoint = await RetainAcquisitionCheckpointAsync(scope, legacyAct is not null, scopeRef, rendererSources, delivered,
-                resumption, cancellationToken).ConfigureAwait(false);
-            return delivered.WithCheckpoint(checkpoint, resumption);
+                resumption, catalogedAt, cancellationToken).ConfigureAwait(false);
+            return delivered.WithCheckpoint(checkpoint, resumption, catalogedAt);
         }
         catch (Exception exception) when (exception is CustodyRequiredException or CustodyIntegrityException)
         {

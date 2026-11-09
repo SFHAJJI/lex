@@ -749,6 +749,39 @@ public sealed class V3CorpusCoverageMountTests
         Assert.AreEqual(JsonValueKind.Null, begins[1].GetProperty("date").ValueKind);
     }
 
+    /// <summary>
+    /// The Constitution is declared not held only while the mounted index holds nothing of it: a mount whose catalogue names a
+    /// subject under its ELI (a population that declared the Constitution's range) does not say it is not held, and every
+    /// other declared class is unchanged. Read from the mount, so a mount of run 15's population still declares it.
+    /// </summary>
+    [TestMethod]
+    public async Task TheConstitutionIsDeclaredNotHeldOnlyWhileTheMountedIndexHoldsNothingOfIt()
+    {
+        var declared = V3CorpusMount.LuxembourgClassesNotHeld.Select(static row => row.Class).ToArray();
+        CollectionAssert.Contains(declared, "Constitution");
+        var fixture = await MountedFixture.CreateAsync();
+        await using var cleanup = fixture;
+        static string[] Served(V3Envelope coverage) => coverage.Result!.Value.GetProperty("declared_scope")
+            .GetProperty("luxembourg_classes_not_held").EnumerateArray().Select(static row => row.GetProperty("class").GetString()!).ToArray();
+
+        using (var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount);
+            CollectionAssert.AreEqual(declared, Served(await CoverageAsync(mount)), "an index without the Constitution declares it not held");
+        }
+
+        await fixture.AddWorkFactAsync(V3CorpusMount.LuxembourgConstitutionEli + "1868/10/17/n1", "typeDocument", "resource_type", "iri",
+            "http://data.legilux.public.lu/resource/authority/resource-type/Constitution");
+        using (var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None))
+        {
+            Assert.IsNotNull(mount);
+            var served = Served(await CoverageAsync(mount));
+            CollectionAssert.AreEqual(declared.Where(static name => name != "Constitution").ToArray(), served,
+                "a mount that holds the Constitution's catalogue does not declare it not held, and nothing else moves");
+            CollectionAssert.AreEqual(served, Served(await CoverageAsync(mount)), "read once per mount, the same on every answer");
+        }
+    }
+
     private static async Task<V3Envelope> CoverageAsync(V3CorpusMount mount, string? language = null)
     {
         var parameters = new Dictionary<string, object>();
