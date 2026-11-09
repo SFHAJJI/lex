@@ -41,6 +41,50 @@ by rule ("the template holds no secret"). Now:
   These wait on the owner's yes. On it, the switch-on is one more deployment argument with the prices measured today
   (0.40 and 1.60 EUR per million tokens), the texts made true and the live gates run over the refreshed mount.
 
+## The planner fitted to the real model: the question's words with their positions, each argument's own sources, prompt /2 (sole driver, 2026-11-09)
+
+`web/assistant-planner-fit`. The first live gates over a real deployment answered 34 to 38 of 100 asks: the other questions
+fell back to the switched-off card, every one of them by Lex's validator refusing the model's plan, never by the call. A
+local diagnostic (not committed) printed each refusal: on every article lookup the model wrote evidence_bundle as a second
+step reading the search's result (R35 lets only a follow-up read a result: the prompt's operation list said "article (only
+from an earlier result)" and the schema offered a result to every argument), filled spare steps with any source (an
+identifier from a language choice, a date reference or a step's name), wrote spans past the question's end (71 units, a
+query ending at 73), and gave an injected question no step at all.
+- **The words** (`AzureOpenAiAssistantPlanner.WordsOf`): the request now carries `question_length` and `words`, each run of
+  the masked question between white space with its start and end in UTF-16 units, computed by code; a run holding the mask
+  character is left out. They are the masked question's own words, so nothing more leaves the server (R33). The prompt
+  says to take every span from them and never to count.
+- **The wire schema** (`V3AssistantPlanWire.Schema`): each argument offers only the sources the grammar admits for it
+  (query a span; language a choice; date a reference or today; date_from and date_to a reference; identifier a span or a
+  context chip, `c1` or `c2`, and in a follow-up also a result; article and anchor a result, in a follow-up only). A step
+  never offers a result, and evidence_bundle and article_history are follow-ups only. The grammar, the validator and the
+  mapping (`ToPlanJson`) are unchanged: the validator still judges every plan.
+- **The prompt** (`lex-v3-assistant-planner-prompt/2`): the rule that only a follow-up reads a result; at least one step in
+  every plan, a refused part included (the law it cites, else its own words, so Lex shows the law beside the refusal); a
+  reference is one of the given names, never a step's; a date inside the searched words is the act's name, never the date
+  to read on; one worked example over an act the drafted set does not hold (article 12 of the loi du 4 avril 2019). The
+  request also sets `temperature` 0.
+- **Measured** with `LEX_ASSISTANT_GATES_LIVE=1` over the test fixture, five runs per drafted case, 100 asks (the drafted
+  set: by an agent, not D4 or D1, not a switch-on gate). Before: 34 to 38 answered, 47 to 51 failed closed. After: 80
+  answered and 5 failed closed (the over-long case, which must); quote fidelity 1.0 over 24 quotations, 0 non-template
+  sentences, 80 of 80 traces replayed byte for byte, p95 2,519 ms, 0.0011 EUR an ask. Differences from the drafted
+  expectations are Lex's own verdicts: the several-articles case answers point (drafted clarify), the masked-address case
+  once point, the French injection twice refuse.
+- **The deployment** (driver, under the owner's order of 2026-10-28 and the standing yes of 2026-10-27): Azure OpenAI
+  `oai-lex-v3` in `rg-lex-v3`, Sweden Central, its own account (not the guide demo's `oai-lux-assistant`, whose
+  deployments are GlobalStandard); deployment `gpt-4.1-mini` 2025-04-14, `DataZoneStandard` (EU data zone), 250 requests
+  and 250,000 tokens a minute (50 throttled a 100-ask run). Microsoft.CognitiveServices was already registered on the
+  subscription. Retail prices (Sweden Central, EUR): 0.40 per million input tokens and 1.60 per million output, so the
+  switch-on sets `LEX_ASSISTANT_EUR_PER_MILLION_INPUT=0.40` and `_OUTPUT=1.60` rather than the 5 and 20 defaults. The key
+  stays in Azure and reaches the gates' process through its environment only.
+- **Still before switch-on** (the switch-on slice, after the refreshed release is promoted): state only the deployment's
+  retention case (modified abuse monitoring was not applied for, so Microsoft may keep prompts up to 30 days for abuse
+  monitoring, in the EU data zone); name the contracting Microsoft entity as the processor; the privacy page's caveat; the
+  Container Apps secret and the variables on `ca-lex-v3`; the preview acknowledgement.
+- **Tests**: `AzureOpenAiPlannerTests` checks the words, `question_length` and `temperature` in the request and the prompt's
+  version, and a new test pins each argument's sources, the chip-only identifier reference, and the step operations. Assistant
+  tests 44 of 44 (Lex.V3.Tests) and 21 passed, 1 skipped by design (Ingest: the live gates).
+
 ## The assistant, built to its contract and switched off: answer_dossier/1, the advice boundary, the gates (writer/assistant, 2026-10-28)
 
 D91's containment ends when this slice merges after review (R30): the answer_dossier/1 slice (S4-A04) and the

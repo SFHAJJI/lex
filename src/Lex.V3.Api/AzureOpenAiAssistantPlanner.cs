@@ -141,6 +141,13 @@ internal sealed class AzureOpenAiAssistantPlanner : IAssistantPlanner, IDisposab
         var user = new JsonObject
         {
             ["question"] = input.MaskedQuestion,
+            ["question_length"] = input.MaskedQuestion.Length,
+            ["words"] = new JsonArray(WordsOf(input.MaskedQuestion).Select(static word => (JsonNode)new JsonObject
+            {
+                ["w"] = word.Text,
+                ["start"] = word.Start,
+                ["end"] = word.End,
+            }).ToArray()),
             ["answer_locale"] = Lex.V3.Contracts.ContractWire.NameOf(input.AnswerLocale),
             ["references"] = new JsonArray(input.References.Select(static reference => (JsonNode)new JsonObject
             {
@@ -168,9 +175,46 @@ internal sealed class AzureOpenAiAssistantPlanner : IAssistantPlanner, IDisposab
                 },
             },
             ["max_completion_tokens"] = MaximumCompletionTokens,
+            ["temperature"] = 0,
         };
         return body.ToJsonString();
     }
+
+    /// <summary>
+    /// The question's words as code finds them, each a run of characters between white space with its start and end in
+    /// UTF-16 units, so the model takes every span from them rather than counting positions (a model counts them poorly, and
+    /// the validator refuses a span outside the question). A run holding a mask character is left out: the model never
+    /// refers to a masked run. Nothing is added to what leaves the server: these are the masked question's own words.
+    /// </summary>
+    internal static IReadOnlyList<(string Text, int Start, int End)> WordsOf(string question)
+    {
+        ArgumentNullException.ThrowIfNull(question);
+        var words = new List<(string Text, int Start, int End)>();
+        var at = 0;
+        while (at < question.Length)
+        {
+            while (at < question.Length && char.IsWhiteSpace(question[at]))
+            {
+                at++;
+            }
+
+            var start = at;
+            while (at < question.Length && !char.IsWhiteSpace(question[at]))
+            {
+                at++;
+            }
+
+            if (at > start && question.AsSpan(start, at - start).IndexOf(MaskCharacter) < 0)
+            {
+                words.Add((question[start..at], start, at));
+            }
+        }
+
+        return words;
+    }
+
+    /// <summary>The character the masking writes over an identifier (the prompt names it).</summary>
+    internal const char MaskCharacter = '•';
 
     public V3PlannerOutput Plan(V3PlannerInput input, CancellationToken cancellationToken)
     {
