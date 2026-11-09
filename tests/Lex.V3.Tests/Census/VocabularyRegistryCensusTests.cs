@@ -167,8 +167,8 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Contracts.Platform.Assistant.V3AssistantPlanValidator: ChoiceOnly=1, "
                     + "DateSources=2, FollowUpOperations=5, Grammar=9, IdentifierSources=3, "
                     + "RangeSources=1, ResultOnly=1, SpanOnly=1, AllowedOperations=9, const Schema",
-                "Lex.V3.Contracts.Platform.Assistant.V3AssistantPlanWire: ArgumentNames=8, "
-                    + "FollowUpOperations=5, const SchemaName",
+                "Lex.V3.Contracts.Platform.Assistant.V3AssistantPlanWire: FollowUpOperations=5, "
+                    + "StepOperations=7, const SchemaName",
                 "Lex.V3.Contracts.Platform.Assistant.V3HandoffRegistry: Bytes=2566, Entries=4, "
                     + "const Resource, const Schema, const SchemaResource, static property Sha256",
                 "Lex.V3.Contracts.Platform.V3ClaimTemplates: ByIdValue=4, All=4, "
