@@ -1,6 +1,22 @@
 # Lex V3 status: the data lane
 
-Updated 2026-10-31.
+Updated 2026-11-09.
+
+## CI's push runs green again: the custody release in CI is declared the opening release (sole driver, 2026-11-09)
+
+`ops/ci-rehearsal-opening`. Every push run of `v3-ci` on `v3/integration` has failed since 10-27 (#1002, R106), in
+`image-rehearsal` only: its second step signs a release from fixture custody with a key made in the job, and R106's option
+guard refused a release signed by the release signer that names no release serving now. Nothing serves in that job.
+Pull request runs skip the job (it runs on push and on branches named `*rehearsal*`), so every pull request was green
+while every push was red. Run 17's runner takes only a green CI run at its source head.
+- **`--opening-release`** (`web/scripts/image-rehearsal.mjs`): the declaration that no release serves before this one
+  (R106: "every release after the opening is compared with the one serving"). It is refused with `--serving-release` and
+  without a release signer, and recorded in the report as `opening`. Without it, the guard refuses as before, and its
+  message now names both ways.
+- **CI**: the custody step passes `--opening-release` and checks `.opening == true`. The real release path
+  (`release-private.ps1`, outside the repository) always names the release serving now and never passes it.
+- **Tests**: `web/test/release-checks.test.mjs` covers the guard's three new answers and the option's parsing. This
+  branch's name makes its own pull request run `image-rehearsal`.
 
 ## derive-r3's two acts of no state: 52 articles and 151 references the derive kept after dropping their states; served nowhere, recorded by R92's measurement, left out of cited_by (sole driver, 2026-10-31)
 

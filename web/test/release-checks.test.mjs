@@ -209,11 +209,16 @@ test("the release serving now is read back under its signer's key: its manifest'
   }
 });
 
-test("a release signed by the release signer names the release serving now; a rehearsal may leave it out; the options go together", () => {
+test("a release signed by the release signer names the release serving now or is declared the opening release; a rehearsal may leave it out; the options go together", () => {
   assert.deepEqual(releaseCheckOptionFailures({ signed: false, mountKind: "real" }), []);
   assert.deepEqual(releaseCheckOptionFailures({ signed: true, mountKind: "real", servingRelease: "r", servingMount: "m", explanations: "e" }), []);
   assert.deepEqual(releaseCheckOptionFailures({ signed: true, mountKind: "real" }),
-    ["a release signed by the release signer is compared with the release serving now (R106): name it with --serving-release <its directory> --serving-mount <its mount>"]);
+    ["a release signed by the release signer is compared with the release serving now (R106): name it with --serving-release <its directory> --serving-mount <its mount>, or declare it the opening release with --opening-release"]);
+  assert.deepEqual(releaseCheckOptionFailures({ signed: true, mountKind: "real", opening: true }), []);
+  assert.deepEqual(releaseCheckOptionFailures({ signed: true, mountKind: "real", servingRelease: "r", servingMount: "m", opening: true }),
+    ["--opening-release declares that no release serves before this one, so it names no --serving-release"]);
+  assert.deepEqual(releaseCheckOptionFailures({ signed: false, mountKind: "real", opening: true }),
+    ["--opening-release is said of a release the release signer signs; a rehearsal is compared with nothing unless it names a release"]);
   assert.deepEqual(releaseCheckOptionFailures({ signed: false, mountKind: "real", servingRelease: "r" }),
     ["--serving-release and --serving-mount go together: the release serving now and the mount it serves"]);
   assert.deepEqual(releaseCheckOptionFailures({ signed: false, mountKind: "real", explanations: "e" }),
@@ -221,5 +226,6 @@ test("a release signed by the release signer names the release serving now; a re
   assert.deepEqual(releaseCheckOptionFailures({ signed: false, mountKind: "fixture", servingRelease: "r", servingMount: "m" }),
     ["the journey's fixture mount is never compared with a release"]);
   assert.deepEqual(servingCommandOptions(["--mount", "m", "--serving-release", "C:/r", "--serving-mount", "C:/m", "--release-explanations", "x.json"]),
-    { servingRelease: "C:/r", servingMount: "C:/m", servingPublicKey: null, servingSigner: null, explanations: "x.json" });
+    { servingRelease: "C:/r", servingMount: "C:/m", servingPublicKey: null, servingSigner: null, explanations: "x.json", opening: false });
+  assert.equal(servingCommandOptions(["--custody", "c", "--opening-release"]).opening, true);
 });
