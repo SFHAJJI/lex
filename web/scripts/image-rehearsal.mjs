@@ -586,15 +586,18 @@ export const SERVING_PUBLIC_KEY = join(repository, "src", "Lex.V3.Api", "well-kn
 /**
  * Why the release path's checks cannot run as asked, as failures (empty when they can): the release serving now and its mount
  * go together; a release the release signer signs (`signed`) names them (R106: every release after the opening is compared
- * with the one serving); the explanations explain changes from the release serving now, so they need it; and the journey's
+ * with the one serving), unless it is declared the opening release (`opening`, `--opening-release`: no release serves before
+ * it, as for CI's throwaway release from fixture custody), which then names none; the explanations explain changes from the release serving now, so they need it; and the journey's
  * fixture mount is never compared with a release.
  */
-export function releaseCheckOptionFailures({ signed, mountKind, servingRelease = null, servingMount = null, explanations = null }) {
+export function releaseCheckOptionFailures({ signed, mountKind, servingRelease = null, servingMount = null, explanations = null, opening = false }) {
   const failures = [];
   if ((servingRelease === null) !== (servingMount === null)) failures.push("--serving-release and --serving-mount go together: the release serving now and the mount it serves");
-  if (signed && servingRelease === null && mountKind !== "fixture") {
-    failures.push("a release signed by the release signer is compared with the release serving now (R106): name it with --serving-release <its directory> --serving-mount <its mount>");
+  if (signed && servingRelease === null && mountKind !== "fixture" && !opening) {
+    failures.push("a release signed by the release signer is compared with the release serving now (R106): name it with --serving-release <its directory> --serving-mount <its mount>, or declare it the opening release with --opening-release");
   }
+  if (opening && servingRelease !== null) failures.push("--opening-release declares that no release serves before this one, so it names no --serving-release");
+  if (opening && !signed) failures.push("--opening-release is said of a release the release signer signs; a rehearsal is compared with nothing unless it names a release");
   if (explanations !== null && servingRelease === null) failures.push("--release-explanations explain changes from the release serving now, which --serving-release names");
   if (mountKind === "fixture" && servingRelease !== null) failures.push("the journey's fixture mount is never compared with a release");
   return failures;
@@ -606,8 +609,8 @@ export function releaseCheckOptionFailures({ signed, mountKind, servingRelease =
  * (which must name it). Throws with each refusing item named. Answers `{ serving, explanationsBytes, comparison, consolidation,
  * summary }`; on the fixture mount nothing runs.
  */
-async function releaseChecks({ mountPath, mountKind, signed, runner, servingRelease, servingMount, servingPublicKey, servingSigner, explanations, into, log }) {
-  const optionFailures = releaseCheckOptionFailures({ signed, mountKind, servingRelease, servingMount, explanations });
+async function releaseChecks({ mountPath, mountKind, signed, runner, servingRelease, servingMount, servingPublicKey, servingSigner, explanations, opening, into, log }) {
+  const optionFailures = releaseCheckOptionFailures({ signed, mountKind, servingRelease, servingMount, explanations, opening });
   if (optionFailures.length > 0) throw new Error(optionFailures.join("; "));
   if (mountKind === "fixture") return { serving: null, explanationsBytes: null, comparison: null, consolidation: null, summary: "not run: the journey's fixture mount" };
   const checks = await import("./release-checks.mjs");
@@ -937,7 +940,7 @@ export function probeFailures(report) {
 /** The rehearsal, end to end. Returns its report; throws on the first step that fails. */
 export async function rehearse({
   mount, keep = false, probe = true, browser, reproduce = true, platformCard = false, signer = null, tool = null,
-  servingRelease = null, servingMount = null, servingPublicKey = null, servingSigner = null, explanations = null, log = () => {},
+  servingRelease = null, servingMount = null, servingPublicKey = null, servingSigner = null, explanations = null, opening = false, log = () => {},
 }) {
   browserNamed(browser, "the rehearsal");
   const mountPath = resolve(mount);
@@ -945,10 +948,10 @@ export async function rehearse({
   const work = await mkdtemp(join(tmpdir(), "lex-image-rehearsal-"));
   const { sourceDate } = await import("./image-reproducible.mjs");
   const source = sourceDate();
-  const result = { mount: mountPath, mountKind, corpusSha256: report.corpus?.Sha256 ?? null, source };
+  const result = { mount: mountPath, mountKind, corpusSha256: report.corpus?.Sha256 ?? null, source, opening };
   let container = null;
   // Asked before the work directory is made: a release that cannot be checked as asked is not started.
-  const optionFailures = releaseCheckOptionFailures({ signed: signer !== null && !signer.rehearsal, mountKind, servingRelease, servingMount, explanations });
+  const optionFailures = releaseCheckOptionFailures({ signed: signer !== null && !signer.rehearsal, mountKind, servingRelease, servingMount, explanations, opening });
   if (optionFailures.length > 0) {
     await rm(work, { recursive: true, force: true });
     throw new Error(optionFailures.join("; "));
@@ -958,7 +961,7 @@ export async function rehearse({
     const runner = tool ?? publishTool(join(work, "tool"), log);
     // The release path's checks over the mount, before anything is built (R106, R86(2); `release-checks.mjs`).
     const checks = await releaseChecks({
-      mountPath, mountKind, signed: signer !== null && !signer.rehearsal, runner, servingRelease, servingMount, servingPublicKey, servingSigner, explanations,
+      mountPath, mountKind, signed: signer !== null && !signer.rehearsal, runner, servingRelease, servingMount, servingPublicKey, servingSigner, explanations, opening,
       into: join(work, "checks"), log,
     });
     result.releaseChecks = checks.summary;
@@ -1185,7 +1188,7 @@ export function commandOptions(argv) {
 /**
  * The release command's options for the release serving now and the release's explanations (`--serving-release`,
  * `--serving-mount`, `--serving-public-key`, `--serving-signer`, `--release-explanations`), as `rehearse` takes them; each
- * is null when not given.
+ * is null when not given; and `--opening-release` (`opening`), the declaration that no release serves before this one.
  */
 export function servingCommandOptions(argv) {
   const value = (name) => { const at = argv.indexOf(name); return at < 0 || at + 1 >= argv.length ? null : argv[at + 1]; };
@@ -1195,6 +1198,7 @@ export function servingCommandOptions(argv) {
     servingPublicKey: value("--serving-public-key"),
     servingSigner: value("--serving-signer"),
     explanations: value("--release-explanations"),
+    opening: argv.includes("--opening-release"),
   };
 }
 
@@ -1254,7 +1258,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       : null)
     : value("--mount") !== null ? rehearse({ mount: value("--mount"), ...options }) : null;
   if (run === null) {
-    console.error("usage: node scripts/image-rehearsal.mjs (--mount <v3-corpus directory or journey fixture mount> | --custody <custody directory> --checkpoint <mount-inputs.json> --tool <this commit's CI runtime artifact runtime/Lex.V3.Tool.dll> [--custody-encoding raw|brotli] [--allow-unbound-tool]) [--signing-key <PEM file, or - for standard input> --signer <identity>] [--serving-release <the serving release's directory> --serving-mount <its mount> [--serving-public-key <PEM>] [--serving-signer <identity>] [--release-explanations <file>]] [--keep] [--no-reproduce] [--no-probe | --no-browser] [--platform-card]");
+    console.error("usage: node scripts/image-rehearsal.mjs (--mount <v3-corpus directory or journey fixture mount> | --custody <custody directory> --checkpoint <mount-inputs.json> --tool <this commit's CI runtime artifact runtime/Lex.V3.Tool.dll> [--custody-encoding raw|brotli] [--allow-unbound-tool]) [--signing-key <PEM file, or - for standard input> --signer <identity>] [--serving-release <the serving release's directory> --serving-mount <its mount> [--serving-public-key <PEM>] [--serving-signer <identity>] [--release-explanations <file>] | --opening-release] [--keep] [--no-reproduce] [--no-probe | --no-browser] [--platform-card]");
     process.exit(2);
   }
   run.then(

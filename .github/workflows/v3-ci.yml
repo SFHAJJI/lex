@@ -691,6 +691,8 @@ jobs:
           set -euo pipefail
           # Signed by the release signer's path (--signing-key, --signer), with an ECDSA P-256 key made in this job and
           # piped in, never written: the identity says it is CI's, not the owner's. The release is removed with the work.
+          # Declared the opening release (R106: every release after the opening is compared with the one serving): no
+          # release serves in this job, and the real release path (release-private) always names the one serving.
           ci_signer="lex-v3 CI release signer (a key made for this job, not the owner's)"
           # The derive tool laid out as the CI runtime artifact is (runtime/ beside source-head.txt), so the release
           # command binds it to this checkout. The test step above built it; the stamp is written only once the dll's
@@ -701,7 +703,7 @@ jobs:
           mkdir -p "$tool/runtime"
           cp -a src/Lex.V3.Tool/bin/Release/net10.0/. "$tool/runtime/"
           printf '%s\n' "$CANDIDATE_SHA" > "$tool/source-head.txt"
-          openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 | node web/scripts/image-rehearsal.mjs --custody "$RUNNER_TEMP/release-custody/custody" --checkpoint "$RUNNER_TEMP/release-custody/mount-inputs.json" --tool "$tool/runtime/Lex.V3.Tool.dll" --no-probe --signing-key - --signer "$ci_signer" > "$RUNNER_TEMP/custody-rehearsal.json"
+          openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 | node web/scripts/image-rehearsal.mjs --custody "$RUNNER_TEMP/release-custody/custody" --checkpoint "$RUNNER_TEMP/release-custody/mount-inputs.json" --tool "$tool/runtime/Lex.V3.Tool.dll" --no-probe --signing-key - --signer "$ci_signer" --opening-release > "$RUNNER_TEMP/custody-rehearsal.json"
           jq -e --arg head "$CANDIDATE_SHA" --arg signer "$ci_signer" --slurpfile expected "$RUNNER_TEMP/release-custody/expected-mount.json" '
             .derivation.tool.bound == true
             and .derivation.tool.sourceHead == $head
@@ -716,6 +718,7 @@ jobs:
             and .signatureVerified == true
             and .card.over == "the machine gates over this mount"
             and .rehearsal == false and .signer == $signer
+            and .opening == true
             and (.release.version | startswith("v3-") and (startswith("v3-rehearsal-") | not))
             and (tostring | contains("PRIVATE KEY") | not)
             and ([.card.sets[] | select(.arm | startswith("EU as_of")) | select(.cases > 0 and all(.gates[]; endswith(": pass")))] | length) == 3
