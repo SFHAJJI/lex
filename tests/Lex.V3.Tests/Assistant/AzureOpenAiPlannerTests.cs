@@ -88,13 +88,14 @@ public sealed class AzureOpenAiPlannerTests
         using var sent = JsonDocument.Parse(body);
         var messages = sent.RootElement.GetProperty("messages");
         Assert.AreEqual(AzureOpenAiAssistantPlanner.Prompt, messages[0].GetProperty("content").GetString(), "the versioned prompt");
-        StringAssert.StartsWith(AzureOpenAiAssistantPlanner.Prompt, "lex-v3-assistant-planner-prompt/1");
+        StringAssert.StartsWith(AzureOpenAiAssistantPlanner.Prompt, "lex-v3-assistant-planner-prompt/2");
+        Assert.AreEqual(0, sent.RootElement.GetProperty("temperature").GetInt32(), "the steadiest plan the model writes");
         var format = sent.RootElement.GetProperty("response_format");
         Assert.AreEqual("json_schema", format.GetProperty("type").GetString());
         Assert.IsTrue(format.GetProperty("json_schema").GetProperty("strict").GetBoolean());
         using var user = JsonDocument.Parse(messages[1].GetProperty("content").GetString()!);
         CollectionAssert.AreEquivalent(
-            new[] { "question", "answer_locale", "references", "search_languages", "operations" },
+            new[] { "question", "question_length", "words", "answer_locale", "references", "search_languages", "operations" },
             user.RootElement.EnumerateObject().Select(static member => member.Name).ToArray(),
             "R33: only the question and opaque references, with the closed lists they are read against");
         var masked = user.RootElement.GetProperty("question").GetString()!;
@@ -104,6 +105,13 @@ public sealed class AzureOpenAiPlannerTests
         }
 
         StringAssert.Contains(masked, "que dit l'article 1er de la loi du 10 août 1991", "the law's words are sent");
+        Assert.AreEqual(masked.Length, user.RootElement.GetProperty("question_length").GetInt32());
+        foreach (var word in user.RootElement.GetProperty("words").EnumerateArray())
+        {
+            var (start, end) = (word.GetProperty("start").GetInt32(), word.GetProperty("end").GetInt32());
+            Assert.AreEqual(masked[start..end], word.GetProperty("w").GetString(), "each word is the question's own run at its own positions");
+            Assert.IsFalse(word.GetProperty("w").GetString()!.Contains('•'), "no masked run is offered as a word");
+        }
         Assert.AreEqual(question.Length, masked.Length);
         Assert.IsFalse(body.Contains("User-Agent", StringComparison.OrdinalIgnoreCase) || body.Contains("cookie", StringComparison.OrdinalIgnoreCase));
     }
@@ -184,6 +192,53 @@ public sealed class AzureOpenAiPlannerTests
             Assert.AreEqual(V3AskOutcomeReason.PlanRefused, presented.Reason, why);
             Assert.AreEqual(refusal, presented.PlanRefusal, why);
         }
+    }
+
+    [TestMethod]
+    public void TheWordsAreTheQuestionsRunsBetweenWhiteSpaceAtTheirUtf16PositionsWithoutMaskedRuns()
+    {
+        CollectionAssert.AreEqual(
+            new[] { ("Que", 0, 3), ("dit", 4, 7), ("l'article", 8, 17), ("1er", 18, 21), ("août", 23, 27), ("•••", -1, -1) }.Where(static word => word.Item2 >= 0).ToArray(),
+            AzureOpenAiAssistantPlanner.WordsOf("Que dit l'article 1er  août ••• ").ToArray(),
+            "two spaces, a trailing space and a masked run");
+        Assert.AreEqual(0, AzureOpenAiAssistantPlanner.WordsOf("   ").Count);
+        var astral = "art. 𝟙 x";
+        var words = AzureOpenAiAssistantPlanner.WordsOf(astral);
+        Assert.AreEqual((astral[5..7], 5, 7), words[1], "positions count UTF-16 units, a surrogate pair is two");
+    }
+
+    [TestMethod]
+    public void TheWireSchemaOffersEachArgumentOnlyTheGrammarsSourcesAndAStepNeverAResult()
+    {
+        var schema = V3AssistantPlanWire.Schema();
+        JsonArray ArgumentChoices(string list) => (JsonArray)schema["properties"]![list]!["items"]!["properties"]!["arguments"]!["items"]!["anyOf"]!;
+        Dictionary<string, string[]> SourcesByName(JsonArray choices) => choices
+            .SelectMany(static choice => ((JsonArray)choice!["properties"]!["name"]!["enum"]!).Select(name => (name!.GetValue<string>(), choice)))
+            .ToDictionary(
+                static pair => pair.Item1,
+                static pair => ((JsonArray)pair.choice!["properties"]!["source"]!["anyOf"]!)
+                    .Select(static source => string.Join("+", ((JsonObject)source!["properties"]!).Select(static property => property.Key))).ToArray());
+
+        var step = SourcesByName(ArgumentChoices("steps"));
+        var followUp = SourcesByName(ArgumentChoices("follow_ups"));
+        CollectionAssert.AreEquivalent(new[] { "query", "language", "date", "date_from", "date_to", "identifier" }, step.Keys.ToArray());
+        CollectionAssert.AreEquivalent(new[] { "query", "language", "date", "date_from", "date_to", "identifier", "article", "anchor" }, followUp.Keys.ToArray());
+        CollectionAssert.AreEquivalent(new[] { "span", "ref" }, step["identifier"]);
+        CollectionAssert.AreEquivalent(new[] { "span", "ref", "result+pick" }, followUp["identifier"]);
+        CollectionAssert.AreEquivalent(new[] { "result+pick" }, followUp["article"]);
+        CollectionAssert.AreEquivalent(new[] { "span" }, step["query"]);
+        CollectionAssert.AreEquivalent(new[] { "choice" }, step["language"]);
+        CollectionAssert.AreEquivalent(new[] { "ref", "today" }, step["date"]);
+        CollectionAssert.AreEquivalent(new[] { "ref" }, step["date_from"]);
+        Assert.IsFalse(step.Values.SelectMany(static sources => sources).Contains("result+pick"), "a step never reads a result (R35)");
+
+        var identifierChip = ArgumentChoices("steps").Single(static choice => ((JsonArray)choice!["properties"]!["name"]!["enum"]!).Any(static name => name!.GetValue<string>() == "identifier"));
+        var chip = ((JsonArray)identifierChip!["properties"]!["source"]!["anyOf"]!).Single(static source => ((JsonObject)source!["properties"]!).ContainsKey("ref"));
+        CollectionAssert.AreEqual(new[] { "c1", "c2" }, ((JsonArray)chip!["properties"]!["ref"]!["enum"]!).Select(static value => value!.GetValue<string>()).ToArray(),
+            "an identifier's reference is a context chip, never a date");
+        var stepOperations = ((JsonArray)schema["properties"]!["steps"]!["items"]!["properties"]!["operation_id"]!["enum"]!).Select(static value => value!.GetValue<string>()).ToArray();
+        CollectionAssert.AreEquivalent(V3AssistantPlanValidator.AllowedOperations.Except(["evidence_bundle", "article_history"]).ToArray(), stepOperations,
+            "the operations whose article or anchor comes only from a result are follow-ups");
     }
 
     [TestMethod]

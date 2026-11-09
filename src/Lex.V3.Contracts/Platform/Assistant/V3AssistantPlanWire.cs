@@ -18,10 +18,15 @@ public static class V3AssistantPlanWire
 {
     public const string SchemaName = "lex_v3_assistant_plan";
 
-    /// <summary>The argument names any operation of the grammar takes.</summary>
-    private static readonly string[] ArgumentNames = ["query", "language", "date", "identifier", "article", "anchor", "date_from", "date_to"];
-
     private static readonly string[] FollowUpOperations = ["dossier", "timeline", "as_of", "evidence_bundle", "article_history"];
+
+    /// <summary>
+    /// The operations a model may write as a step: the grammar's, but for evidence_bundle and article_history, whose article
+    /// or anchor comes only from a result and so only in a follow-up. Offered as steps, a model wrote them after a search as
+    /// a second step reading the search (refused, R35) beside the right follow-up; the grammar and the validator are unchanged.
+    /// </summary>
+    private static readonly string[] StepOperations = V3AssistantPlanValidator.AllowedOperations
+        .Where(static operation => operation is not ("evidence_bundle" or "article_history")).ToArray();
 
     /// <summary>The JSON schema the model's output is held to (strict: every property required, no other property).</summary>
     public static JsonObject Schema()
@@ -54,18 +59,37 @@ public static class V3AssistantPlanWire
         var steps = new[] { "s1", "s2", "s3", "s4" };
         var parts = new[] { "p1", "p2" };
         var verdicts = System.Enum.GetValues<V3AssistantVerdict>().Select(static verdict => ContractWire.NameOf(verdict));
-        var argument = Closed(
-            ("name", Enum(ArgumentNames)),
-            ("source", new JsonObject
+        // Each argument offers only the sources the grammar admits for it, and a step's never reads a result (R35: only a
+        // follow-up reads the step it follows; the article and the anchor come only from a result, so only follow-ups name
+        // them). Offered every source for every name, a model filled a spare step with any of them. The validator still judges.
+        JsonObject Span() => Closed(("span", Integers()));
+        JsonObject Reference() => Closed(("ref", new JsonObject { ["type"] = "string" }));
+
+        // An identifier's reference is a context chip (a work from the person's last answer; at most two, R35); a date or a
+        // range reference never names an act.
+        JsonObject Chip() => Closed(("ref", Enum(["c1", "c2"])));
+        JsonObject Result() => Closed(("result", Enum(steps)), ("pick", Enum(["sole_work", "sole_article"])));
+        JsonObject Choice() => Closed(("choice", Enum(V3AnswerTemplates.LanguageCodes)));
+        JsonObject Today() => Closed(("today", new JsonObject { ["type"] = "boolean" }));
+        JsonObject Argument(string[] names, params JsonObject[] sources) => Closed(
+            ("name", Enum(names)),
+            ("source", new JsonObject { ["anyOf"] = new JsonArray(sources.Select(static source => (JsonNode)source).ToArray()) }));
+
+        JsonObject Arguments(bool followUp)
+        {
+            var items = new JsonArray(
+                Argument(["query"], Span()),
+                Argument(["language"], Choice()),
+                Argument(["date"], Reference(), Today()),
+                Argument(["date_from", "date_to"], Reference()),
+                followUp ? Argument(["identifier"], Span(), Chip(), Result()) : Argument(["identifier"], Span(), Chip()));
+            if (followUp)
             {
-                ["anyOf"] = new JsonArray(
-                    Closed(("span", Integers())),
-                    Closed(("ref", new JsonObject { ["type"] = "string" })),
-                    Closed(("result", Enum(steps)), ("pick", Enum(["sole_work", "sole_article"]))),
-                    Closed(("choice", Enum(V3AnswerTemplates.LanguageCodes))),
-                    Closed(("today", new JsonObject { ["type"] = "boolean" }))),
-            }));
-        var arguments = new JsonObject { ["type"] = "array", ["items"] = argument };
+                items.Add(Argument(["article", "anchor"], Result()));
+            }
+
+            return new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["anyOf"] = items } };
+        }
 
         return Closed(
             ("schema", Enum([V3AssistantPlanValidator.Schema])),
@@ -80,8 +104,8 @@ public static class V3AssistantPlanWire
                 ["items"] = Closed(
                     ("step_id", Enum(steps)),
                     ("part_id", Enum(parts)),
-                    ("operation_id", Enum(V3AssistantPlanValidator.AllowedOperations)),
-                    ("arguments", arguments.DeepClone())),
+                    ("operation_id", Enum(StepOperations)),
+                    ("arguments", Arguments(followUp: false))),
             }),
             ("follow_ups", new JsonObject
             {
@@ -91,7 +115,7 @@ public static class V3AssistantPlanWire
                     ("after", Enum(steps)),
                     ("condition", Enum(["on_single_work", "on_single_article"])),
                     ("operation_id", Enum(FollowUpOperations)),
-                    ("arguments", arguments.DeepClone())),
+                    ("arguments", Arguments(followUp: true))),
             }));
     }
 
