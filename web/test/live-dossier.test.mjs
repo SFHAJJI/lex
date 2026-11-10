@@ -12,7 +12,7 @@ import { readFile } from "node:fs/promises";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { DossierAnswerView, FailureFrame, LiveDossier, RefusalCard, renderLiveDossierPage } from "../.react-build/app.mjs";
+import { DossierAnswerView, FailureFrame, LiveDossier, RefusalCard, VersionsOverTime, renderLiveDossierPage, versionStatus } from "../.react-build/app.mjs";
 import {
   LIVE_DOSSIER_IDLE,
   LIVE_DOSSIER_REFUSAL_SENTENCES,
@@ -22,6 +22,7 @@ import {
   loadLiveDossier,
 } from "../scripts/live-dossier.mjs";
 import { OUTSIDE_EU_POPULATION_SENTENCE, noCorpusMountedSentence } from "../scripts/live-refusals.mjs";
+import { luxembourgPermalink, permalinkHref } from "../scripts/permalinks.mjs";
 
 /** A refusal's card as the screen shows it: one about this service (R60) inside the failure panel, under its line; any other alone. */
 const asShown = (outcome, card) => renderToStaticMarkup(h(FailureFrame, { outcome }, h("lex-card"))).replace("<lex-card></lex-card>", card);
@@ -316,3 +317,39 @@ test("a missing index is named by the corpus the refusal says it needed, never a
   assert.equal(noCorpusMountedSentence({ required_corpus: "xx" }), "This build has no index mounted for this request's publisher.");
   assert.equal(noCorpusMountedSentence(undefined), "This build has no index mounted for this request's publisher.");
 });
+
+test("the act's versions are listed newest first, each with its status against today in words, a link to read it and one to compare it with the earlier version, and a form to read the act on a date", () => {
+  const state = (applicabilityDate, nextApplicabilityDate, sha) => ({
+    language: "fra", applicabilityDate, nextApplicabilityDate, stateSha256: sha.repeat(64),
+    permalink: luxembourgPermalink({ workKey: "loi-1991-08-10-n3", date: applicabilityDate, stateSha256: sha.repeat(64), language: "fra" }),
+  });
+  const view = {
+    workKey: "loi-1991-08-10-n3", availableLanguages: ["fra"],
+    states: [state("2001-01-01", "2010-06-01", "a"), state("2030-01-01", null, "c"), state("2010-06-01", "2030-01-01", "b")],
+  };
+  assert.equal(versionStatus(view.states[0], "2026-11-10"), "earlier");
+  assert.equal(versionStatus(view.states[2], "2026-11-10"), "inForceToday");
+  assert.equal(versionStatus(view.states[1], "2026-11-10"), "notYet");
+  assert.equal(versionStatus(view.states[2], null), null, "no today, no status");
+  // A version dated by its entry into force states no applicability date: no status against today (the review of #1023).
+  const enteredIntoForce = { ...view.states[2], dateRole: "entry_into_force" };
+  assert.equal(versionStatus(enteredIntoForce, "2026-11-10"), null);
+  const entryMarkup = renderToStaticMarkup(h(VersionsOverTime, { view: { ...view, states: [enteredIntoForce] }, today: "2026-11-10" }));
+  assert.doesNotMatch(entryMarkup, /In force on|data-version-status/);
+  assert.match(entryMarkup, /no date stated \(entry into force: 2010-06-01\)/);
+  const markup = renderToStaticMarkup(h(VersionsOverTime, { view, today: "2026-11-10" }));
+  const order = [...markup.matchAll(/data-version="([a-c])/g)].map((match) => match[1]);
+  assert.deepEqual(order, ["c", "b", "a"], "newest first");
+  assert.match(markup, /data-version-status="inForceToday"><strong>In force on 2026-11-10<\/strong>/, "in force, with today's explicit date");
+  assert.match(markup, /<strong>Earlier version<\/strong>/);
+  assert.match(markup, /<strong>Not yet in force<\/strong>/);
+  assert.match(markup, /From 2010-06-01, replaced on 2030-01-01/);
+  const read = permalinkHref(luxembourgPermalink({ workKey: "loi-1991-08-10-n3", date: "2010-06-01", stateSha256: "b".repeat(64), language: "fra" }), "en");
+  assert.ok(markup.includes(`<a href="${read}">Read this version</a>`), read);
+  assert.equal([...markup.matchAll(/Read this version/g)].length, 3, "every version can be read");
+  assert.match(markup, /<a href="\/en\/compare\.html\?work=%2Flu-legilux%2Floi-1991-08-10-n3&amp;from=2001-01-01&amp;to=2010-06-01&amp;language=fra">Compare with the earlier version<\/a>/);
+  assert.equal([...markup.matchAll(/Compare with the earlier version/g)].length, 2, "the oldest version has no earlier one");
+  assert.match(markup, /<form method="get" action="\/en\/lu-legilux\/loi-1991-08-10-n3\/fra" data-read-on-date=""><label>Read the act as it stood on a date <input type="date" name="date" required=""\/><\/label>/);
+  assert.equal(renderToStaticMarkup(h(VersionsOverTime, { view: { ...view, states: [] }, today: "2026-11-10" })), "", "no versions, no section");
+});
+

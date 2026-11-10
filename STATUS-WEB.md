@@ -4,6 +4,33 @@ Updated 2026-11-10. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## A law's time, made plain: "Versions over time" on the Luxembourg dossier (sole driver, 2026-11-10)
+
+`web/law-time-view`. **The owner's feedback** (in chat, 2026-11-10): reading a law's temporal data on the live site is not
+intuitive. The dossier gave its versions as an expert's table (language, applies from, next from, article counts, the raw
+permalink) and had no plain status against today and no link to read or compare a version. The spec's screens (Work dossier,
+Reading with the as-of control, Provision history, Compare; LAUNCH-CONTRACT) are unchanged; this is their entry point made
+plainer.
+- **The section `VersionsOverTime`**, above the table, which keeps every column. It lists:
+  - the act's versions newest first;
+  - each version's status in words against today in Luxembourg: "In force on {date}", "Earlier version" or "Not yet in
+    force" (R13's explicit date; no meaning by colour);
+  - its dates: "From {from}" or "From {from}, replaced on {until}"; a version dated by its entry into force keeps the
+    table's wording, "no date stated (entry into force: {date})";
+  - "Read this version" (the state's permalink);
+  - "Compare with the earlier version" in the same language (the compare page's own query, `compareQueryOf`).
+- **The form "Read the act as it stood on a date"**: a GET to the act's readable address with `?date=` (`currentAddress`),
+  which the server reads without a script. It is pinned in `request-addresses.test.mjs` as a law's address and a calendar
+  date, never words a reader typed (R109).
+- **Copy**: eleven keys in English and French (`dossier.versions*`, `readThisVersion`, `compareWithEarlier`, `readOnDate*`).
+- **Tests**: a new dossier test covers each status against a fixed today, newest first, the read and compare links (none
+  for the oldest), the form's action and that no states renders no section. Web 1,521 (1,518 passed, 3 skipped).
+- **Not yet**: the same section for EU acts (their compare page reads no CELEX address yet); the dossier's heading is still
+  the work key, with the titles below.
+- **Review of #1023**: CHANGES REQUESTED, one should-fix, taken: a version dated by its entry into force (`date-role.mjs`)
+  states no applicability date, so it gets no status against today, only the table's "no date stated (entry into force:
+  {date})"; a test covers it.
+
 ## The assistant switched on, as a labelled preview: the owner's yes, the privacy notice's section, the Developers page true in both states (sole driver, 2026-11-10)
 
 `web/assistant-on`. **The owner's yes** (in chat, 2026-11-10, 18:12 UTC): "Yes switch on the assistant". It covers:

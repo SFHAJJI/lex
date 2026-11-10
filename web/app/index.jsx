@@ -44,7 +44,7 @@ export { LIVE_SEARCH_ROOT, LiveSearchRoot, liveSearchTree, renderLiveSearchPage 
 export { CoverageLine, HomeExamples, HomeLinks, LiveHome } from './LiveHome.jsx';
 export { TodayHint, TodayLine, useLuxembourgToday } from './Today.jsx';
 export { LIVE_HOME_ROOT, liveHomeTree, renderLiveHomePage } from './live-home-page.jsx';
-export { DossierAnswerView, DossierTitles, DossierView, EuropeDossierView, LiveDossier } from './LiveDossier.jsx';
+export { DossierAnswerView, DossierTitles, DossierView, EuropeDossierView, LiveDossier, VersionsOverTime, versionStatus } from './LiveDossier.jsx';
 export { LIVE_DOSSIER_ROOT, liveDossierTree, renderLiveDossierPage } from './live-dossier-page.jsx';
 export { LiveReading, ReadingAnswerView, ReadingView, readingHolds } from './LiveReading.jsx';
 export { FailureFrame, OfficialSites, Permalink, TableRegion } from './LiveAnswer.jsx';

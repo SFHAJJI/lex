@@ -224,6 +224,18 @@ const EN = Object.freeze({
     }),
     articlesHeld: "Articles held",
     articlesNotAdmitted: "Articles not admitted",
+    // The act's time, made plain (the owner's feedback of 2026-11-10): each version against today, with its own links.
+    versionsHeading: "Versions over time",
+    versionsIntro: "Newest first. Each version is the text as it applied from its date, until the next version replaced it.",
+    versionInForceOn: "In force on {date}",
+    versionEarlier: "Earlier version",
+    versionNotYet: "Not yet in force",
+    versionFrom: "From {from}",
+    versionFromReplaced: "From {from}, replaced on {until}",
+    readThisVersion: "Read this version",
+    compareWithEarlier: "Compare with the earlier version",
+    readOnDateLabel: "Read the act as it stood on a date",
+    readOnDateButton: "Read",
     notHeldHeading: "What this dossier does not hold",
     euExpressions: Object.freeze({
       one: "{count} expression held, shown with its original wording.",

@@ -26,7 +26,7 @@ import { DOSSIER_LANGUAGES, LIVE_DOSSIER_IDLE, createDossierSession, dossierOutc
 import { AsPublished, EuropeAnnexes, EuropeForceDates, EuropePublication, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, TableRegion, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
-import { parseSitePath, permalinkHref } from '../scripts/permalinks.mjs';
+import { compareQueryOf, currentAddress, isSiteAddress, parseSitePath, permalinkHref } from '../scripts/permalinks.mjs';
 import { answerHandedWith } from '../scripts/v3-client.mjs';
 import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
 import { catalogueRecord, fillCard, versionNameKey } from '../scripts/refusal-card.mjs';
@@ -394,6 +394,74 @@ function AmendedAfterBanner({ amendedAfter, relations }) {
 }
 
 /**
+ * A version's status against today in Luxembourg (`today`, or null when the answer names none): in force today when it applies
+ * from a date on or before today and no later version applies yet; earlier when its successor applies; not yet in force when
+ * it applies from a later date. Said in words, never by colour alone. None for a version dated by its entry into force: its file
+ * states no applicability date, so no status against today is claimed (the review of #1023; `date-role.mjs`).
+ */
+export function versionStatus(state, today) {
+  if (today === null || today === undefined) return null;
+  if (datedByEntryIntoForce(state)) return null;
+  if (state.applicabilityDate > today) return 'notYet';
+  if (state.nextApplicabilityDate !== null && state.nextApplicabilityDate !== undefined && state.nextApplicabilityDate <= today) return 'earlier';
+  return 'inForceToday';
+}
+
+/**
+ * The act's versions as a reader looks for them (the owner's feedback of 2026-11-10): newest first, each with its status in
+ * words, its dates, a link to read it and one to compare it with the version before it in the same language, then a form to
+ * read the act on any date (its readable address with `?date=`, which the server reads without a script). The expert table
+ * below keeps every column.
+ */
+export function VersionsOverTime({ view, today = null }) {
+  if (view.states.length === 0) return null;
+  const byLanguage = new Map();
+  for (const state of view.states) byLanguage.set(state.language, [...(byLanguage.get(state.language) ?? []), state]);
+  const several = byLanguage.size > 1;
+  const rows = [...view.states].sort((a, b) => (a.applicabilityDate < b.applicabilityDate ? 1 : a.applicabilityDate > b.applicabilityDate ? -1 : 0));
+  const earlierOf = (state) => {
+    const same = (byLanguage.get(state.language) ?? []).filter((other) => other.applicabilityDate < state.applicabilityDate);
+    return same.reduce((best, other) => (best === null || other.applicabilityDate > best.applicabilityDate ? other : best), null);
+  };
+  const statusText = { inForceToday: fillText(COPY.versionInForceOn, { date: today ?? '' }), earlier: COPY.versionEarlier, notYet: COPY.versionNotYet };
+  const language = view.availableLanguages[0] ?? null;
+  const readable = language === null ? null : permalinkHref(currentAddress({ publisher: 'lu-legilux', work: view.workKey, language }), CHROME_LOCALE);
+  return (
+    <section data-versions-over-time="" aria-labelledby="versions-over-time">
+      <h3 id="versions-over-time">{COPY.versionsHeading}</h3>
+      <p>{COPY.versionsIntro}</p>
+      <ol>
+        {rows.map((state) => {
+          const status = versionStatus(state, today);
+          const earlier = earlierOf(state);
+          const compare = earlier === null ? null : compareQueryOf({ identifier: `/lu-legilux/${view.workKey}`, dateFrom: earlier.applicabilityDate, dateTo: state.applicabilityDate, language: state.language });
+          return (
+            <li key={state.stateSha256} data-version={state.stateSha256} data-version-status={status ?? undefined}>
+              {status === null ? null : <strong>{statusText[status]}</strong>}
+              {status === null ? null : ' \u00b7 '}
+              {datedByEntryIntoForce(state)
+                ? fillText(COPY.entryIntoForceDate, { date: state.applicabilityDate })
+                : state.nextApplicabilityDate === null || state.nextApplicabilityDate === undefined
+                  ? fillText(COPY.versionFrom, { from: state.applicabilityDate })
+                  : fillText(COPY.versionFromReplaced, { from: state.applicabilityDate, until: state.nextApplicabilityDate })}
+              {several ? ` (${state.language})` : null}
+              {isSiteAddress(state.permalink) ? <>{' \u00b7 '}<a href={permalinkHref(state.permalink, CHROME_LOCALE)}>{COPY.readThisVersion}</a></> : null}
+              {compare === null ? null : <>{' \u00b7 '}<a href={`/${CHROME_LOCALE}/compare.html${compare}`}>{COPY.compareWithEarlier}</a></>}
+            </li>
+          );
+        })}
+      </ol>
+      {readable === null ? null : (
+        <form method="get" action={readable} data-read-on-date="">
+          <label>{COPY.readOnDateLabel} <input type="date" name="date" required /></label>{' '}
+          <button type="submit">{COPY.readOnDateButton}</button>
+        </form>
+      )}
+    </section>
+  );
+}
+
+/**
  * One dossier view, laid out: the work, R72's banner when it is raised, its titles, its held states, today (`today`, the date
  * in Luxembourg the answer was given on, or null), its relations in the publisher's records and what it does not hold.
  */
@@ -408,6 +476,7 @@ export function DossierView({ view, today = null }) {
       <DossierTitles titles={view.titles} />
       <AsPublished asPublished={view.asPublished} />
       <ForceFacts force={view.force} />
+      <VersionsOverTime view={view} today={today} />
       <p data-history="" id="dossier-states">
         <StatesSpan view={view} />
       </p>
