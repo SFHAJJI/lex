@@ -174,6 +174,10 @@ test('the privacy notice says what the assistant sends, to which processor, and 
     assert.ok(section.processor.includes(processor) && section.processor.includes(entity), 'the processor, named');
     assert.match(section.processor, /30 (days|jours)/, 'what the processor may keep, and for how long');
     assert.doesNotMatch(section.processor, /modified abuse monitoring|surveillance des abus modifi/, 'only the retention case that holds');
+    // What goes with the question is said, as AzureOpenAiAssistantPlanner.RequestBody sends it (the review of #1022).
+    assert.match(section.processor, /language of the answer|langue de la réponse/);
+    assert.match(section.processor, /operations|opérations de Lex/);
+    assert.doesNotMatch(section.processor, /Nothing else is sent|Rien d’autre n’est envoyé/, 'nothing else about the reader, not nothing else at all');
   }
 });
 
