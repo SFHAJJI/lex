@@ -12,7 +12,7 @@ import { readFile } from "node:fs/promises";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { DossierAnswerView, FailureFrame, LiveDossier, RefusalCard, VersionsOverTime, renderLiveDossierPage, versionStatus } from "../.react-build/app.mjs";
+import { DossierAnswerView, DossierView, FailureFrame, LiveDossier, RefusalCard, VersionsOverTime, renderLiveDossierPage, versionStatus } from "../.react-build/app.mjs";
 import {
   LIVE_DOSSIER_IDLE,
   LIVE_DOSSIER_REFUSAL_SENTENCES,
@@ -351,5 +351,20 @@ test("the act's versions are listed newest first, each with its status against t
   assert.equal([...markup.matchAll(/Compare with the earlier version/g)].length, 2, "the oldest version has no earlier one");
   assert.match(markup, /<form method="get" action="\/en\/lu-legilux\/loi-1991-08-10-n3\/fra" data-read-on-date=""><label>Read the act as it stood on a date <input type="date" name="date" required=""\/><\/label>/);
   assert.equal(renderToStaticMarkup(h(VersionsOverTime, { view: { ...view, states: [] }, today: "2026-11-10" })), "", "no versions, no section");
+});
+
+test("the act's own title heads its page when the index holds one, marked in its language, with the work key below; with none, the key heads it", async () => {
+  const { fetchImpl } = answering(200, "application/json; charset=utf-8", envelopeOf(ANSWER));
+  const outcome = await loadLiveDossier({ contract, fetchImpl, request: REQUEST });
+  assert.equal(outcome.state, "success");
+  const served = outcome.view;
+  assert.equal(served.titles.length, 0, "the census work holds no title");
+  assert.match(renderToStaticMarkup(h(DossierView, { view: served })), /^<h2>loi-1991-08-10-n3<\/h2>/, "with no title, the key heads the page");
+  const titled = {
+    ...served,
+    titles: [{ language: "fra", expressionIri: served.states[0].expressionIri, titles: [{ title: "Loi du 10 août 1991 sur la profession d’avocat", evidenceSha256: "a".repeat(64) }], shortTitles: [] }],
+  };
+  const markup = renderToStaticMarkup(h(DossierView, { view: titled }));
+  assert.match(markup, /^<h2><span lang="fr">Loi du 10 août 1991 sur la profession d’avocat<\/span><\/h2><p data-work-key=""><code>loi-1991-08-10-n3<\/code><\/p>/);
 });
 

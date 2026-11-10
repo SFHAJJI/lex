@@ -25,8 +25,11 @@ plainer.
 - **Copy**: eleven keys in English and French (`dossier.versions*`, `readThisVersion`, `compareWithEarlier`, `readOnDate*`).
 - **Tests**: a new dossier test covers each status against a fixed today, newest first, the read and compare links (none
   for the oldest), the form's action and that no states renders no section. Web 1,521 (1,518 passed, 3 skipped).
-- **Not yet**: the same section for EU acts (their compare page reads no CELEX address yet); the dossier's heading is still
-  the work key, with the titles below.
+- **Not yet**: the same section for EU acts (their compare page reads no CELEX address yet).
+- **The heading** (`web/dossier-title`, the same feedback): the act's own title heads its Luxembourg dossier when the index
+  holds one, as statute text marked in its language, and the work key follows it in a line of its own. A work with no title
+  held keeps the key as its heading, as before, so the census and the journeys' fixture are unchanged. Web 1,522 (1,519
+  passed, 3 skipped).
 - **Review of #1023**: CHANGES REQUESTED, one should-fix, taken: a version dated by its entry into force (`date-role.mjs`)
   states no applicability date, so it gets no status against today, only the table's "no date stated (entry into force:
   {date})"; a test covers it.
