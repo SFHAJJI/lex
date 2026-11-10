@@ -67,6 +67,9 @@ const NUMBERS_ALLOWED = Object.freeze({
   "legalNotice.sections.sources.europe": ["2011", "833"],
   "terms.sections.texts.licences": ["4", "0", "4", "0", "2011", "833"],
   "accessibility.sections.status.text": ["2", "2"],
+  // The privacy notice's section on the assistant (the owner's yes of 2026-11-10): the processor's retention for abuse monitoring,
+  // a period in its terms, not a count.
+  "privacy.sections.assistant.processor": ["30"],
   // The single-channel disclosure (L5; LU-DATA-DESIGN v2 §1.2): the licence's version, CC BY 4.0.
   "reading.disclosure.lu_rights_publisher_catalogue_only_file_silent": ["4", "0"],
   "reading.disclosure.lu_rights_publisher_catalogue_only_own_block_empty": ["4", "0"],

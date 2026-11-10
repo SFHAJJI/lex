@@ -27,6 +27,41 @@ plainer.
   for the oldest), the form's action and that no states renders no section. Web 1,521 (1,518 passed, 3 skipped).
 - **Not yet**: the same section for EU acts (their compare page reads no CELEX address yet); the dossier's heading is still
   the work key, with the titles below.
+- **Review of #1023**: CHANGES REQUESTED, one should-fix, taken: a version dated by its entry into force (`date-role.mjs`)
+  states no applicability date, so it gets no status against today, only the table's "no date stated (entry into force:
+  {date})"; a test covers it.
+
+## The assistant switched on, as a labelled preview: the owner's yes, the privacy notice's section, the Developers page true in both states (sole driver, 2026-11-10)
+
+`web/assistant-on`. **The owner's yes** (in chat, 2026-11-10, 18:12 UTC): "Yes switch on the assistant". It covers:
+- the privacy notice naming Microsoft's Azure OpenAI service as the processor of typed questions;
+- the retention Microsoft's terms allow (up to 30 days for abuse monitoring; R33's "no retention" is not met, and modified
+  abuse monitoring is the owner's optional request to Microsoft);
+- this one exception to the legal pages' no-processors rule.
+
+What changes:
+- **Privacy notice** (`privacy.sections.assistant`, English and French): what is sent and after what masking, to Microsoft's
+  Azure OpenAI service provided in the EEA by Microsoft Ireland Operations Limited (EU data zone), as processor. Its one
+  purpose; nothing else sent; Lex keeps nothing; no training; up to 30 days for abuse monitoring; the rights set out below.
+  - It is on every privacy page, since it says what happens *when* the assistant is switched on.
+  - The section keeps the legal pages' rules: no contact words (the masking is said as "personal identifiers ... such as
+    bank account and identity numbers"); the regulator named once; the number allowlist names the 30 days as a period in
+    the processor's terms.
+  - The reviewed "holds nothing" sentence is unchanged and still true of Lex; the assistant section on the same page is its
+    caveat.
+  - The entity is named from Microsoft's EU transfer documents and Azure guidance; the owner's Azure invoice states the
+    contracting entity and is the check.
+- **The panel's processor sentence**: only the retention case that holds; "unless modified abuse monitoring applies" is gone.
+- **The Developers page**: the six protocol sentences that said the assistant is off (`ask`, `point`, `clarify`, `split`,
+  `answer_with_enrichment`, `assistant_v3_unavailable`), English and French, are now true in both states.
+- **`ASSISTANT_PRIVACY_DRAFT` removed**: its text is the live section. The guard that no bundle but the assistant page's
+  carries the panel's copy now looks for the panel's own sentences, since the notice names the service on every page.
+- **The switch itself** is the deployment's: `deploy.ps1 -Assistant @{account='oai-lex-v3'; deployment='gpt-4.1-mini';
+  apiVersion='2024-10-21'; eurPerMillionInput='0.40'; eurPerMillionOutput='1.60'; preview='unreviewed'}` (#1021), with
+  the next release.
+- **Tests**: web 1,520 (1,516 passed, 3 skipped; the one failure, the number allowlist, fixed and re-run: 6/6);
+  `assistant-panel` and `legal-pages` 19/19, with a test that the notice names the processor, the 30 days and only that
+  retention case in both languages. CI runs the whole solution.
 
 ## The deployment can carry the assistant: `-Assistant`, its key read by Azure from its account, off by default; switching it on publicly is the owner's (sole driver, 2026-11-09)
 
