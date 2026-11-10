@@ -103,6 +103,7 @@ const PINNED = Object.freeze({
   // R57: a comparison asked of an act named by this site's address is written into the compare page's own query, so it can be
   // shared and read without JavaScript: a law's address and two dates (`compareQueryOf`), never a word.
   "app/LiveCompare.jsx: the page's address: if (session.current.ask(request) && search !== null) replacePageAddress(window, { search });": "a law's address and two dates, in the query",
+  "app/LiveDossier.jsx: a form's own submit: <form method=\"get\" action={readable} data-read-on-date=\"\">": "a law's readable address, which the platform mints, and a calendar date from a date field, in the query",
 });
 
 test("every place the pages' code could send a request or change an address is pinned, with why it carries no word", () => {
