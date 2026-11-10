@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-11-09 at 21:00 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-11-10 at 18:40 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -14,27 +14,23 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
   Its data was rebuilt and passed the checks, but its image build ran out of disk on 31 October.
 - A release is only promoted when both halves of its data are under 30 days old. The third release's EU half is not, so
   it cannot go live as it is: the EU and Luxembourg data have to be collected again first.
-- The assistant now works on a real model, Lex's own Azure OpenAI deployment kept in the EU data zone: of 100 test
-  questions it answered the 80 it should and declined the 20 it should (other languages, too long), quoting the law
-  exactly, in 2.5 seconds or less for 95 of them, at about 0.001 EUR each. It stays off: see what waits on you.
+- The assistant works on a real model and, with your yes of today, goes live with the next release as a labelled
+  preview. The privacy page now names Microsoft as the processor of typed questions, kept up to 30 days for abuse checks.
+- How a law changes over time is shown as a table for experts; the driver is making it plainer (a clear "in force today",
+  read or compare any version, read the law on a date) for the final release.
 
 ## The plan
 
-- Run 17 started on this PC today at 18:54 UTC: the EU collection, about 18,500 requests to the Publications Office
-  over 16 to 18 hours, so it should end on 10 November around midday. The code it needed was merged just before.
-- Run 18 started on Azure today at 19:07 UTC: the full Luxembourg collection with the Constitution, about 25,000
-  requests to Legilux over about 34 hours, so it should end on 11 November in the early morning. It does not wait for
-  run 17: the two fresh halves are put together afterwards.
-- Then the third release's code over both fresh halves: rebuilt on Azure, built here, probed, promoted and backed up,
-  aiming to go live before the Luxembourg data turns stale on 11 November at 18:17 UTC.
-- Azure has cost 24.50 EUR so far this month (11.20 for this site). The two runs and the rebuild add about 40 EUR, so
-  the month should end near 110 EUR, under the 150 EUR ceiling.
-- Your standing yes of 27 October covers the publisher traffic, the Azure cost and the promotion; the driver records it.
+- The EU collection on this PC ends tonight. Its data with October's Luxembourg data then goes live, with the third
+  release and the assistant, around 07:00 UTC on 11 November (the backup release).
+- The full Luxembourg collection on Azure takes about 51 hours, not 34: it ends around 05:00 UTC on 12 November. From
+  18:17 UTC on 11 November until then, the pages warn that the Luxembourg data is over 30 days old.
+- The final release, with both halves fresh and the Constitution, goes live around midday on 12 November.
+- Azure has cost about 25 EUR this month; the runs, rebuilds and assistant add about 45 EUR, under the 150 EUR ceiling.
 
 ## What waits on you
 
-- Your yes to switch the assistant on publicly, as a labelled preview. It means the privacy page names Microsoft as
-  the processor of typed questions, which Microsoft may keep up to 30 days to watch for abuse (your earlier rule was no
-  processor and no retention). Optional: ask Microsoft for modified abuse monitoring, which removes the 30 days.
+- Optional: ask Microsoft for modified abuse monitoring, which removes the 30 days the privacy page now states.
+- Optional: allow the driver to delete the old third-release data folder (3.5 GB, also kept in Azure) if disk runs short.
 - Four DNS records for soufien.lu (the commands are in the brief of 31 October); the driver was refused that change.
 - Your choice, not done: a lawyer's read, an accessibility audit, user tests.

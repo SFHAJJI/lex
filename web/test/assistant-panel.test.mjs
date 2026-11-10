@@ -18,7 +18,6 @@ import {
   ASSISTANT_PANEL,
   ASSISTANT_PANEL_COPY,
   ASSISTANT_PANEL_MARKER,
-  ASSISTANT_PRIVACY_DRAFT,
   MAXIMUM_CONTEXT_CHIPS,
   PRESENTATION_RESULTS,
   VERDICTS,
@@ -105,7 +104,9 @@ test('no built page carries the panel or any assistant control', async () => {
           // The processor and preview sentences reach a visitor's browser only in the assistant page's own script, which the
           // server serves only while the assistant is on; no other bundle (the home page's included) carries the panel's copy.
           const js = await readFile(path, 'utf8');
-          for (const needle of [ASSISTANT_PANEL_MARKER, 'Azure OpenAI', ASSISTANT_PANEL_COPY.en.preview, ASSISTANT_PANEL_COPY.fr.preview]) {
+          // The panel's own processor sentences, not the service's name: the privacy notice names Azure OpenAI on every page's
+          // chrome since the switch-on (the owner's yes of 2026-11-10), and says so in its own words.
+          for (const needle of [ASSISTANT_PANEL_MARKER, ASSISTANT_PANEL_COPY.en.processor, ASSISTANT_PANEL_COPY.fr.processor, ASSISTANT_PANEL_COPY.en.preview, ASSISTANT_PANEL_COPY.fr.preview]) {
             assert.ok(!js.includes(needle), `${path} carries the assistant panel's copy (${needle.slice(0, 30)})`);
           }
         }
@@ -165,17 +166,21 @@ test('follow-ups carry at most two typed chips from the last trace and never an 
   assert.deepEqual(announcements(view, 'fr'), ['Réponse : D’après le texte officiel.', 'La réponse est complète.']);
 });
 
-test('the privacy draft is rendered by no page until the switch-on release', async () => {
-  assert.deepEqual(Object.keys(ASSISTANT_PRIVACY_DRAFT), ['en', 'fr']);
-  assert.ok(ASSISTANT_PRIVACY_DRAFT.en.body.includes('processor') && ASSISTANT_PRIVACY_DRAFT.fr.body.includes('sous-traitant'));
-  const legal = await readFile(join(web, 'scripts', 'legal-pages.mjs'), 'utf8');
-  assert.ok(!legal.includes('ASSISTANT_PRIVACY_DRAFT'), 'the privacy notice does not carry the draft while the assistant is off');
+test('the privacy notice says what the assistant sends, to which processor, and what that processor may keep, in both languages', async () => {
+  const { LIVE_CHROME } = await import('../scripts/live-chrome.mjs');
+  for (const [table, processor, entity] of [[LIVE_CHROME.en, 'processor', 'Microsoft Ireland Operations Limited'], [LIVE_CHROME.fr, 'sous-traitant', 'Microsoft Ireland Operations Limited']]) {
+    const section = table.privacy.sections.assistant;
+    assert.deepEqual(Object.keys(section), ['heading', 'processor']);
+    assert.ok(section.processor.includes(processor) && section.processor.includes(entity), 'the processor, named');
+    assert.match(section.processor, /30 (days|jours)/, 'what the processor may keep, and for how long');
+    assert.doesNotMatch(section.processor, /modified abuse monitoring|surveillance des abus modifi/, 'only the retention case that holds');
+  }
 });
 
 test('the panel holds French and English only, and its French keeps the no-break spaces', () => {
   assert.deepEqual(Object.keys(ASSISTANT_PANEL_COPY), ['en', 'fr']);
   assert.deepEqual(Object.keys(ASSISTANT_PANEL_COPY.fr), Object.keys(ASSISTANT_PANEL_COPY.en));
-  for (const [key, text] of [...Object.entries(ASSISTANT_PANEL_COPY.fr), ...Object.entries(ASSISTANT_PRIVACY_DRAFT.fr)]) {
+  for (const [key, text] of Object.entries(ASSISTANT_PANEL_COPY.fr)) {
     assert.doesNotMatch(text, / [:;?!»]|« /, `fr.${key}: a no-break space before : ; ? ! and inside guillemets`);
     assert.doesNotMatch(text, /'/, `fr.${key}: the French apostrophe is U+2019`);
   }
