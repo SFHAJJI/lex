@@ -396,10 +396,12 @@ function AmendedAfterBanner({ amendedAfter, relations }) {
 /**
  * A version's status against today in Luxembourg (`today`, or null when the answer names none): in force today when it applies
  * from a date on or before today and no later version applies yet; earlier when its successor applies; not yet in force when
- * it applies from a later date. Said in words, never by colour alone.
+ * it applies from a later date. Said in words, never by colour alone. None for a version dated by its entry into force: its file
+ * states no applicability date, so no status against today is claimed (the review of #1023; `date-role.mjs`).
  */
 export function versionStatus(state, today) {
   if (today === null || today === undefined) return null;
+  if (datedByEntryIntoForce(state)) return null;
   if (state.applicabilityDate > today) return 'notYet';
   if (state.nextApplicabilityDate !== null && state.nextApplicabilityDate !== undefined && state.nextApplicabilityDate <= today) return 'earlier';
   return 'inForceToday';

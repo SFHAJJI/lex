@@ -331,6 +331,12 @@ test("the act's versions are listed newest first, each with its status against t
   assert.equal(versionStatus(view.states[2], "2026-11-10"), "inForceToday");
   assert.equal(versionStatus(view.states[1], "2026-11-10"), "notYet");
   assert.equal(versionStatus(view.states[2], null), null, "no today, no status");
+  // A version dated by its entry into force states no applicability date: no status against today (the review of #1023).
+  const enteredIntoForce = { ...view.states[2], dateRole: "entry_into_force" };
+  assert.equal(versionStatus(enteredIntoForce, "2026-11-10"), null);
+  const entryMarkup = renderToStaticMarkup(h(VersionsOverTime, { view: { ...view, states: [enteredIntoForce] }, today: "2026-11-10" }));
+  assert.doesNotMatch(entryMarkup, /In force on|data-version-status/);
+  assert.match(entryMarkup, /no date stated \(entry into force: 2010-06-01\)/);
   const markup = renderToStaticMarkup(h(VersionsOverTime, { view, today: "2026-11-10" }));
   const order = [...markup.matchAll(/data-version="([a-c])/g)].map((match) => match[1]);
   assert.deepEqual(order, ["c", "b", "a"], "newest first");
