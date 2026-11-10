@@ -466,9 +466,19 @@ export function VersionsOverTime({ view, today = null }) {
  * in Luxembourg the answer was given on, or null), its relations in the publisher's records and what it does not hold.
  */
 export function DossierView({ view, today = null }) {
+  // The act's own title heads its page when the index holds one (the owner's feedback of 2026-11-10: a reader looks for the
+  // act's name, not its key); it is statute text, marked in its language. The work key follows it, as the key a citation uses.
+  const named = view.titles.find((group) => group.titles.length > 0) ?? null;
   return (
     <>
-      <h2>{view.workKey}</h2>
+      {named === null
+        ? <h2>{view.workKey}</h2>
+        : (
+          <>
+            <h2><span lang={quotationLanguageTag(named.language)}>{named.titles[0].title}</span></h2>
+            <p data-work-key=""><code>{view.workKey}</code></p>
+          </>
+        )}
       <AmendedAfterBanner amendedAfter={view.amendedAfter ?? null} relations={view.relations ?? null} />
       <p>
         <Say template={COPY.heldIn} values={{ iri: <code>{view.publisherWorkIri}</code>, languages: view.availableLanguages.join(', ') }} />
