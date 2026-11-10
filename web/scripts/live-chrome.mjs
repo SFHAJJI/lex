@@ -897,6 +897,12 @@ const EN = Object.freeze({
         // such an act's text and titles, and the API answers text_withheld (reason names_private_individuals) with its official link.
         withheld: "An act the check finds to name private persons is not reproduced: Lex shows neither its text nor its titles, and points to the publisher through the act's official link.",
       }),
+      // The assistant (R30, R33; the owner's yes of 2026-11-10 to switching it on as a labelled preview): its one processor and
+      // what that processor may keep; on every privacy page, since it says what happens when the assistant is switched on.
+      assistant: Object.freeze({
+        heading: "The assistant",
+        processor: "When the assistant is switched on, the question you type in it is sent to Microsoft's Azure OpenAI service, provided in the European Economic Area by Microsoft Ireland Operations Limited (EU data zone), which acts as a processor, after Lex's code removes the personal identifiers it recognises, such as bank account and identity numbers. This processing has one purpose: to plan which of Lex's operations answer the question; the model writes no sentence of the answer. With it go only the language of the answer, the dates and words Lex's code finds in the question, and the fixed lists of Lex's search languages and operations; nothing else about you is sent: not your IP address, your browser's user agent, any cookie or your earlier questions. Lex keeps neither the question nor the answer. Microsoft does not use prompts or answers to train models; for abuse monitoring, Microsoft may keep them for up to 30 days. Your rights under the GDPR are set out below.",
+      }),
       // The reader's right to complain to the supervisory authority (GDPR art. 77): the regulator, named with a link to its
       // site and no postal address, not a contact of Lex's (the driver's decision of 2026-10-19, STATUS-WEB.md).
       rights: Object.freeze({
@@ -1202,7 +1208,7 @@ const EN = Object.freeze({
         article_history: "One article of a Luxembourg act through the versions held: whether its wording changed from one to the next, and which versions do not carry it.",
         as_observed: "The version of a Luxembourg act applicable on a date as one build of the event log held it, with that build's time as an upper bound on when it was observed.",
         as_of: "The version of a Luxembourg act applicable on a date, with its articles; for an EU act, the wording that answers the date.",
-        ask: "The assistant, which is off: every question receives the presentation result that says so, naming the operations that answer from the law Lex holds. No model writes an answer.",
+        ask: "The assistant, a labelled preview while it is switched on: a model proposes only which of Lex's operations to run, Lex's code checks the plan and runs it, and every sentence shown is a reviewed template or the law's own words. While it is off, every question receives the presentation result that says so, naming the operations that answer from the law Lex holds. No model writes an answer.",
         browse: "The Luxembourg acts held, as one ordered and paged list, with their identifiers, languages, version dates and the publisher's document types.",
         changes_in_period: "The Luxembourg versions whose applicability begins in a period, for one act or across the index.",
         citation: "The references the publisher wrote in the text of a Luxembourg version's articles.",
@@ -1257,11 +1263,11 @@ const EN = Object.freeze({
       verdictText: "Its {verdict} is one of the registry's closed set:",
       verdicts: Object.freeze({
         answer: "The operation answered.",
-        answer_with_enrichment: "Reserved for the assistant, which is off; this server sends it for no answer.",
-        point: "The answer points elsewhere: what {ask} gives, since the assistant is off.",
-        clarify: "Reserved for the assistant, which is off; this server sends it for no answer.",
+        answer_with_enrichment: "Reserved; this server sends it for no answer.",
+        point: "The answer points elsewhere, as {ask} does while the assistant is off or when the law asked about is not one Lex holds.",
+        clarify: "The assistant asks for one missing detail before it answers; sent only while it is on.",
         refuse: "The operation refused, with a typed refusal.",
-        split: "Reserved for the assistant, which is off; this server sends it for no answer.",
+        split: "The assistant answers a question that asks two things in two parts; sent only while it is on.",
       }),
       registry: "{member} is {digest} for this release: the digest of the registry, which covers every operation, every schema's digest and every refusal code with the fields its payload must carry, so it changes whenever any of them changes. Each schema's identity ends in its version.",
     }),
@@ -1305,7 +1311,7 @@ const EN = Object.freeze({
       }),
       presentationHeading: "Two answers that are not refusals",
       presentation: Object.freeze({
-        assistant_v3_unavailable: "{code}: what {ask} answers to every question, since the assistant is off; it names the operations that answer from the law Lex holds.",
+        assistant_v3_unavailable: "{code}: what {ask} answers while the assistant is off or cannot answer a question; it names the operations that answer from the law Lex holds.",
         localization_unavailable: "{code}: the page a reader in German or Luxembourgish is shown, since only French and English are reviewed; it links the pages in both.",
       }),
       transportHeading: "Failures below the envelope",
