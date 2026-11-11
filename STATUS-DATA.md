@@ -2,6 +2,36 @@
 
 Updated 2026-11-11.
 
+## Release A stopped: the image build does not fit this PC's disk; run 18 resumed on its furthest journal (sole driver, 2026-11-11)
+
+`docs/release-a-stopped`. No code. Release A (#1025's explanations) passed its release checks (R106 pass, 0 unexplained;
+R86(2) pass), the machine gates over the mount (three times) and the assistant's live gates, but no image was built:
+- **07:03Z**: the published measurement tool lost `runtimeconfig.json`, `deps.json` and the SQLite provider in `%TEMP%`
+  seven minutes after `assertPublishedTool` passed. Windows Storage Sense is on and runs when the disk is low; it deletes
+  temp files by age, and a publish copies package files with their old timestamps. The 2026-10-31 "tool without
+  Microsoft.Data.Sqlite" was the same. The driver's `release-private.ps1` now gives the build its own TEMP and TMP.
+- **09:19Z, 11:31Z, 13:42Z**: no space left on the device in the image stage (the second build, then twice the first
+  build's "making the image reproducible"). The step holds the image in memory and writes the 3.8 GB archive at once;
+  free space fell by several times what it wrote. NTFS compression of the build's folders did not help: a large write
+  into a compressed folder first takes its full uncompressed size (measured: 1 GB written, 1.07 GB taken).
+- **18:17Z**: release A's Luxembourg half (run 15, catalogued 10-12T18:17:04Z) turns stale and promotion refuses it, so a
+  fourth attempt (2.5 h of build, 2 to 5 h of upload on this Wi-Fi) could not go live. Stopped (driver's decision).
+
+Run 18:
+- Execution 7 ended 08:41Z refused (a Legilux transport failure after 4 attempts in rgd-a; a robots pre-check refused for
+  rgd-g); 10 of 12 families were proven and rgd-a had reached leaf 17.
+- **The job resumed from the wrong journal.** It took the journal with the most lines, but a resumed run writes each
+  family it has proven as one line, so execution 7's journal (further on, 40 lines) lost to the 10 November one (66 lines),
+  and execution 8 would have fetched rgd-a leaves 9 to 17 again. Executions 5 to 7 likely did the same. The kit
+  (`C:\lex-v3\dryrun-azure-refresh`, outside the repository) now takes `RESUME_JOURNAL` (`launch.ps1 -ResumeJournal`).
+- Executions 9 to 11 were refused at EUR-Lex's legal notice (one GET per build, Decision 88) from the Azure address in
+  the morning; execution 12 passed it at 11:25Z and continues rgd-a. A refused run's `refused.json` is kept under a dated
+  name before each resume (storage keeps soft-deleted blobs 365 days).
+
+Next (driver's plan): the final release, run 18's Luxembourg half composed with run 17's EU catalog, derived on Azure,
+needs about 20 GB free on this PC to build, or a build off this PC. 12 GB is free. The owner is asked for the elevated
+steps (hibernation off, 6.3 GB; the shadow storage), the old third-release folder, or a build on Azure.
+
 ## Release A refused by R106 for one French CRR version run 17 was refused; a fifth typed reason, `acquisition_refused` (sole driver, 2026-11-11)
 
 `data/acquisition-refused`. Release A is run 17's EU half (catalogued 2026-11-10T21:56:56Z, 15,934 expressions, 1,333/1,333
