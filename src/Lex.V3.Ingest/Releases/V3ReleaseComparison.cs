@@ -167,7 +167,11 @@ public sealed record V3ReleaseComparison(
             return null;
         }
 
+        // An entry naming the item by its key; acquisition_refused names only a version or a version's text lost (LossListed).
         static bool ItemListed(V3ReleaseChangeExplanation entry, string publisher, string key) =>
+            entry.Reason != V3ReleaseExplanations.AcquisitionRefused && LossListed(entry, publisher, key);
+
+        static bool LossListed(V3ReleaseChangeExplanation entry, string publisher, string key) =>
             entry.Publisher == publisher && entry.Items.Contains(key, StringComparer.Ordinal);
 
         static Dictionary<string, string?> VersionFacts(V3ServedVersion? version) => version is null
@@ -218,13 +222,13 @@ public sealed record V3ReleaseComparison(
             {
                 tally.Versions[Lost]++;
                 Add(VersionLost, before, key, before.Address, VersionFacts(before), VersionFacts(null),
-                    ByEntry(entry => ItemListed(entry, before.Publisher, key)));
+                    ByEntry(entry => LossListed(entry, before.Publisher, key)));
             }
             else if (before.HasText && !after.HasText)
             {
                 tally.Versions[Changed]++;
                 Add(VersionTextLost, after, key, before.Address, VersionFacts(before), VersionFacts(after),
-                    ByEntry(entry => ItemListed(entry, after.Publisher, key) ||
+                    ByEntry(entry => LossListed(entry, after.Publisher, key) ||
                         (entry.Publisher == after.Publisher && entry.Dispositions.Count > 0 &&
                          after.TextStatus == "withheld_rights" && after.TextStatusReason is { } withheld &&
                          entry.Dispositions.Any(disposition => withheld == disposition ||
@@ -367,7 +371,7 @@ public sealed record V3ReleaseComparison(
                     ["annexes"] = after is null ? null : string.Join(",", after.Value.Dispositions),
                     ["lost"] = lost.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 };
-                var reason = ByEntry(entry => entry.Publisher == V3MountInventory.Europe && entry.Items.Contains(itemKey, StringComparer.Ordinal));
+                var reason = ByEntry(entry => ItemListed(entry, V3MountInventory.Europe, itemKey));
                 if (reason is { Item3: { } entryIndex })
                 {
                     used.Add(entryIndex);

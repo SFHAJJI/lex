@@ -139,9 +139,10 @@ A data refresh and a release are four steps, each with its own evidence:
      per publisher and class. A version lost, a version's text lost, a version whose permalink digest changed, an article
      whose text digest changed, an article lost from a version both serve, and an EU annex lost are each listed, and each
      needs a typed reason: the data's own (`publisher_body_changed`) or an entry of the release's explanations file
-     (`lex-v3-release-explanations/1`: `derivation_rule_changed`, `rights_withdrawn`, `withdrawn_by_publisher` or
-     `defect_corrected`, each scoped by items, by two rule profiles, or by rights dispositions, each scope checked against
-     both mounts). One change left unexplained refuses the release, naming each.
+     (`lex-v3-release-explanations/1`: `derivation_rule_changed`, `rights_withdrawn`, `withdrawn_by_publisher`,
+     `defect_corrected` or `acquisition_refused`, each scoped by items, by two rule profiles, or by rights dispositions,
+     each scope checked against both mounts; `acquisition_refused`, a document the refresh run's acquisition was refused,
+     explains only a version or a version's text lost). One change left unexplained refuses the release, naming each.
    - **R86(2).** Every admitted consolidation file (Luxembourg consolidations and code states, EU consolidated wordings)
      that yields no text is listed by identity and typed outcome. A typed textless outcome (misfiled, marker-only, no XML
      main body, no package held) or a PDF's text-layer profile is explained by the data; any other outcome refuses the

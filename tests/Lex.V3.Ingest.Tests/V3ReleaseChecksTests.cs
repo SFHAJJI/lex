@@ -171,6 +171,19 @@ public sealed class V3ReleaseChecksTests
         Assert.AreEqual(((string?)null, (int?)null), reasons["lu-legilux|e"]);
         CollectionAssert.AreEqual(new[] { 0, 3 }, explained.UnusedExplanations.Select(static entry => entry.Index).ToArray());
         Assert.AreEqual(2L, explained.Unexplained);
+
+        // acquisition_refused (release A, 2026-11-11) names a version lost (e) or a version's text lost (c), never a changed
+        // identity (a), even when it lists a's key.
+        var refused = V3ReleaseComparison.Compare(serving, candidate, Explanations(new JsonArray
+        {
+            Entry(V3ReleaseExplanations.AcquisitionRefused, V3MountInventory.Luxembourg,
+                items: [byKey["lu-legilux|a"].Key, byKey["lu-legilux|c"].Key, byKey["lu-legilux|e"].Key]),
+        }));
+        var refusedReasons = refused.Items.ToDictionary(static item => item.Key[..(item.Key.IndexOf("|2020", StringComparison.Ordinal))], static item => item.Reason);
+        Assert.AreEqual(V3ReleaseExplanations.AcquisitionRefused, refusedReasons["lu-legilux|e"]);
+        Assert.AreEqual(V3ReleaseExplanations.AcquisitionRefused, refusedReasons["lu-legilux|c"]);
+        Assert.IsNull(refusedReasons["lu-legilux|a"], "a changed identity is no acquisition gap");
+        Assert.AreEqual(2L, refused.Unexplained);
     }
 
     [TestMethod]

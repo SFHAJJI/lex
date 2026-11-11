@@ -1,6 +1,47 @@
 # Lex V3 status: the data lane
 
-Updated 2026-11-09.
+Updated 2026-11-11.
+
+## Release A refused by R106 for one French CRR version run 17 was refused; a fifth typed reason, `acquisition_refused` (sole driver, 2026-11-11)
+
+`data/acquisition-refused`. Release A is run 17's EU half (catalogued 2026-11-10T21:56:56Z, 15,934 expressions, 1,333/1,333
+enumerations) composed onto run 15's Luxembourg half (2026-10-12T18:17:04Z) and derived on Azure with `lu-release-3` at
+5b596ca0 (prefix `dA-20261110-5b596ca0`, mount tar 3,686,707,200 B, installed as `derive-rA`). Its release build stopped in
+the release path's checks against Release 2 (`v3-20261028T142935Z-7583e4d0032d`):
+- **R106: one version lost**, `/eu-eurlex/02013R0575-20210930/fra/2021-09-30` (727 articles; the English text of the same
+  version is kept). Not withdrawn: run 17's own discovery records still list the expression `8b511bae-...0008` with its
+  Formex manifestation `.0008.01`. Run 17c's document ladders checkpoint shows the one refusal among its 1,158 document
+  fetches, ordinal 736, this expression: `robots_bootstrap_refused` (the session's robots pre-check failed; the ladder
+  ends for that object, `EuQueryExecutionAdapter`). None of the four reasons is true of it.
+- **R86(2): two EU files textless** (`formex_main_body_package_rejected`): the same two consolidations as Release 2's
+  entries (their Formex main bodies' semantic identities `8bb05536...` and `4b72d6bc...` are unchanged), acquired again
+  under new object references. Explained as before.
+- Every other change is explained: 392 EU articles and 6 EU versions by the data (`publisher_body_changed`), 4 Luxembourg
+  versions by `derivation_rule_changed` (Release 3's entry).
+
+What changes:
+- **`acquisition_refused`** (`V3ReleaseExplanations`): the refresh run's acquisition was refused the publisher's document
+  for this version, so the candidate does not hold what the publisher still lists; it returns when a run acquires it.
+  Items scope only, and it explains only `version_lost` or `version_text_lost`, never a changed identity, text or annex
+  (`V3ReleaseComparison.LossListed`), so it cannot excuse a text that changed. `docs/OPERATING.md` names it.
+- **Release A's explanations** (`C:\lex-v3\driver-scripts\release-a\release-a-explanations.json`, published with the
+  release): Release 3's entries, the two textless files under their new references, and one `acquisition_refused` item for
+  the French version, citing the custody objects.
+- **Measured** with the tool from this branch over `derive-rA` against `derive-r2`: R106 pass, 403 listed, 0 unexplained,
+  no unused entry; R86(2) pass (EU 973 admitted, 969 with text; Luxembourg 1,884, 1,876). Tests: `V3ReleaseChecksTests`
+  8/8 with the new case (the reason covers a lost version and a lost text, not a changed identity, even when it lists it).
+  CI runs the whole solution.
+
+Driver's decisions (reversible):
+- Release A goes live with the French version listed as lost and explained, rather than waiting: it brings the EU half
+  fresh, Release 3's code, the assistant and the plainer law page before the Luxembourg half turns stale (11-11T18:17Z).
+- **The French text comes back in the final release**: run 17 is resumed once more (17d) after release A's build, so the
+  run's document fetches are made again (about 2,100 Publications Office requests, as 17c's; run 17's total then about
+  20,700 against the about 18,500 the owner's standing yes covered: recorded here, under the same standing yes). The final
+  derive composes run 18's Luxembourg half with run 17d's EU catalog.
+- **Defect for a later slice**: one failed robots pre-check ends that object's ladder for the whole run, with no retry, and
+  a resume replays the refusal. A retry of a refused pre-check, or a resume that fetches refused documents again, would
+  have kept this version.
 
 ## CI's push runs green again: the custody release in CI is declared the opening release (sole driver, 2026-11-09)
 
