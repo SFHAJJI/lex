@@ -240,17 +240,16 @@ internal static class ExactReferenceReader
     /// </summary>
     private static readonly (string[] Names, string Celex)[] EuropeShortNameList =
     [
-        (["GDPR", "RGPD", "General Data Protection Regulation", "Règlement général sur la protection des données"], "32016R0679"),
-        (["DORA", "Digital Operational Resilience Act"], "32022R2554"),
-        (["AI Act", "Artificial Intelligence Act", "Règlement sur l'intelligence artificielle"], "32024R1689"),
+        // Acronyms and short names only: an act's title, or a name its title holds ("General Data Protection Regulation",
+        // "Data Act", "Digital Services Act"), is found by the EU title search, which this list must not shadow.
+        (["GDPR", "RGPD"], "32016R0679"),
+        (["DORA"], "32022R2554"),
+        (["AI Act"], "32024R1689"),
         (["MiFID II", "MiFID 2"], "32014L0065"),
         (["MiFIR"], "32014R0600"),
         (["SFDR"], "32019R2088"),
         (["eIDAS"], "32014R0910"),
         (["NIS2", "NIS 2"], "32022L2555"),
-        (["Digital Services Act"], "32022R2065"),
-        (["Digital Markets Act"], "32022R1925"),
-        (["Data Act"], "32023R2854"),
         (["PSD2", "PSD 2"], "32015L2366"),
         (["MiCA"], "32023R1114"),
     ];
@@ -464,8 +463,10 @@ internal static class ExactReferenceReader
 
         // An article before a type and date or an EU act's name is not part of it ("la loi du 12 novembre 2011").
         var unarticled = LeadingArticle.Replace(value, string.Empty);
-        // An EU act by its usual short name ("RGPD", "the GDPR", "DORA", "AI Act"), read to its CELEX from a reviewed, closed list.
-        if (EuropeShortNames.TryGetValue(ArticleNumbers.Fold(unarticled), out var shortNamed))
+        // An EU act by its usual short name ("RGPD", "the GDPR", "DORA", "AI Act"), read to its CELEX from a reviewed, closed list,
+        // where a citation names it ("article 5 du RGPD"); a short name asked alone stays the EU title search's ("GDPR" lists the
+        // act its short title holds), so this reads only where a title may be read.
+        if (allowTitle && EuropeShortNames.TryGetValue(ArticleNumbers.Fold(unarticled), out var shortNamed))
         {
             return new ReferenceAct(ReferenceActForm.EuropeName, value, Celex: shortNamed, CelexCandidates: [shortNamed]);
         }

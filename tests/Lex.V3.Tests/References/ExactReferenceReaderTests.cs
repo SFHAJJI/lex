@@ -269,7 +269,6 @@ public sealed class ExactReferenceReaderTests
     [DataRow("Article 6 of the GDPR", "32016R0679", "6")]
     [DataRow("article 6 of DORA", "32022R2554", "6")]
     [DataRow("Article 50 of the AI Act", "32024R1689", "50")]
-    [DataRow("article 50 du règlement sur l'intelligence artificielle", "32024R1689", "50")]
     public void AnEuActsUsualShortNameReadsToItsCelex(string written, string celex, string article)
     {
         var reference = Read(written);
