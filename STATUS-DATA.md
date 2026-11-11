@@ -2,6 +2,29 @@
 
 Updated 2026-11-11.
 
+## Release A live, built on Azure; the release job (sole driver, 2026-11-11)
+
+`docs/release-a-live`. No code. After three image-stage failures on the driver's PC, the owner chose (2026-11-11) to build
+and push releases on Azure: the build job reads the release signing key and pushes to the registry.
+- **The release job** (the kit outside the repository, `C:\lex-v3\dryrun-azure-refresh`, `-Mode release`,
+  `job/release.sh`): Node 22.18.0 and oras 1.3.4 held to their published digests; both mounts streamed from storage and
+  held to their manifests; the serving release's signed files and the explanations from storage; `image-rehearsal.mjs`
+  as `release-private.ps1` runs it, with `--no-probe` (no WSL or container runtime there; `deploy.ps1` probes the
+  candidate at its own address before any traffic moves); the key from Key Vault on standard input from a secret file;
+  the release folder to `derive/<prefix>/release/<version>/`; the image pushed with a repository-scoped registry token
+  (`lex-v3-release-push`, created without passwords; each launch generates a two-day password).
+- **Release A**: `v3-20261111T144050Z-d8d38105f51d`, at d8d38105 over `dA-20261110-5b596ca0` (run 17c's EU half on run
+  15's Luxembourg half, `lu-release-3`). The job took 45 minutes on 14 vCPU (the PC's gates alone took 2 h 20).
+  R106 pass with release A's explanations (one `acquisition_refused` item, #1025); image reproduced; signed by
+  `lex-v3-release`. The folder downloaded in 41 s; `deploy-public.ps1 -Apply` (the assistant on): the registry copy found
+  every blob, the candidate probed over HTTP (data age and card allow promotion); two-address check PASS 18:06:44Z;
+  **traffic 100% at 18:07:20Z**, ten minutes before the October Luxembourg half turned stale. Release 2's revision
+  deactivated (rollback: activate it and move the traffic). R111 backup running.
+- **Live**: serving d8d38105; EU catalogued 2026-11-10T21:56:56Z; Luxembourg 2026-10-12T18:17:04Z, stale from 18:17Z and
+  warned until the final release; the assistant on as a labelled preview. Asked live: "Que dit l'article 1er du Code
+  civil ?" answers with its quotation; "What does article 5 of the GDPR say?" points to the official source (the acronym
+  is not resolved: to do); a request body that is not valid UTF-8 is answered 500 `internal_failure`, not 400 (to fix).
+
 ## Release A stopped: the image build does not fit this PC's disk; run 18 resumed on its furthest journal (sole driver, 2026-11-11)
 
 `docs/release-a-stopped`. No code. Release A (#1025's explanations) passed its release checks (R106 pass, 0 unexplained;
