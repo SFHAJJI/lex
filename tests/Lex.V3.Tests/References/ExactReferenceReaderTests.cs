@@ -260,6 +260,25 @@ public sealed class ExactReferenceReaderTests
         Assert.IsNull(reference.DateNotRead, written);
     }
 
+    /// <summary>
+    /// An EU act's usual short name reads to its CELEX from the reviewed list (2026-11-11: "article 5 du RGPD" was pointed to
+    /// the official source although the act is held), with or without an article before it.
+    /// </summary>
+    [TestMethod]
+    [DataRow("article 5 du RGPD", "32016R0679", "5")]
+    [DataRow("Article 6 of the GDPR", "32016R0679", "6")]
+    [DataRow("article 6 of DORA", "32022R2554", "6")]
+    [DataRow("Article 50 of the AI Act", "32024R1689", "50")]
+    [DataRow("article 50 du règlement sur l'intelligence artificielle", "32024R1689", "50")]
+    public void AnEuActsUsualShortNameReadsToItsCelex(string written, string celex, string article)
+    {
+        var reference = Read(written);
+        Assert.AreEqual("citation", reference.Kind, written);
+        Assert.AreEqual(nameof(ReferenceActForm.EuropeName), reference.Act.Form.ToString(), written);
+        Assert.AreEqual(celex, reference.Act.Celex, written);
+        Assert.AreEqual(article, reference.Article?.Key, written);
+    }
+
     [TestMethod]
     [DataRow("loi du 10 août 1991 art. 2 al. 3", "2", "al. 3")]
     [DataRow("article 2, alinéa 3, de la loi du 10 août 1991", "2", "alinéa 3")]

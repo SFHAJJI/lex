@@ -226,6 +226,49 @@ public sealed class V3CorpusEuropeTimeViewTests
         }
     }
 
+    /// <summary>
+    /// This site's address of an EU act, <c>/eu-eurlex/{celex}</c>, names the act as its CELEX does, as a path, under an
+    /// interface language and under this origin (2026-11-11: the assistant's follow-up passed the address search gives an act,
+    /// and dossier and evidence_bundle refused it identifier_unknown, so every EU article question ended in clarify); a
+    /// wording's coordinate is not an act's address.
+    /// </summary>
+    [TestMethod]
+    public async Task AnEuActsAddressNamesTheActAsItsCelexDoes()
+    {
+        var (root, directory) = await ConsolidatedMountAsync();
+        try
+        {
+            using var mount = await V3CorpusMount.OpenAsync(directory, CancellationToken.None);
+            Assert.IsNotNull(mount);
+            var byCelex = await EnvelopeAsync(mount, "/api/v3/dossier", "dossier", new { identifier = GdprSeed, language = "eng" });
+            Assert.IsNull(byCelex.Refusal, byCelex.Refusal?.Code);
+            var bundleByCelex = await EnvelopeAsync(mount, "/api/v3/evidence_bundle", "evidence_bundle", new { identifier = GdprSeed, date = "2025-03-01", language = "eng" });
+            Assert.IsNull(bundleByCelex.Refusal, bundleByCelex.Refusal?.Code);
+            foreach (var address in new[] { $"/eu-eurlex/{GdprSeed}", $"/fr/eu-eurlex/{GdprSeed}", $"https://law.soufien.lu/eu-eurlex/{GdprSeed}" })
+            {
+                Assert.AreEqual(GdprSeed, V3CorpusMount.EuropeActCelexOfAddress(address), address);
+                var dossier = await EnvelopeAsync(mount, "/api/v3/dossier", "dossier", new { identifier = address, language = "eng" });
+                Assert.IsNull(dossier.Refusal, $"{address}: {dossier.Refusal?.Code}");
+                Assert.AreEqual(
+                    byCelex.Result!.Value.GetProperty("expressions").GetRawText(),
+                    dossier.Result!.Value.GetProperty("expressions").GetRawText(), address);
+                var bundle = await EnvelopeAsync(mount, "/api/v3/evidence_bundle", "evidence_bundle", new { identifier = address, date = "2025-03-01", language = "eng" });
+                Assert.IsNull(bundle.Refusal, $"{address}: {bundle.Refusal?.Code}");
+                Assert.AreEqual(
+                    bundleByCelex.Result!.Value.GetProperty("wordings").GetRawText(),
+                    bundle.Result!.Value.GetProperty("wordings").GetRawText(), address);
+            }
+
+            Assert.IsNull(V3CorpusMount.EuropeActCelexOfAddress($"/eu-eurlex/{GdprSeed}/eng/2016-04-27"), "a wording's coordinate is not an act's address");
+            Assert.IsNull(V3CorpusMount.EuropeActCelexOfAddress(GdprSeed));
+            Assert.IsNull(V3CorpusMount.EuropeActCelexOfAddress($"/lu-legilux/{GdprSeed}"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [TestMethod]
     public async Task AWordingsPermalinkAnswersTheWordingItPinsWithTheLaterWordingsDateAndAnotherDigestIsRefusedWithTheCurrentLink()
     {

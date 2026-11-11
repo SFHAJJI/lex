@@ -174,10 +174,33 @@ internal sealed partial class V3CorpusMount
                 _europeSeedsByIdentifier = map;
             }
 
-            return _europeSeedsByIdentifier.TryGetValue(identifier, out var found)
+            // This site's address of an EU act (/eu-eurlex/{celex}) names the act its CELEX names, as /lu-legilux/{work} names its
+            // Luxembourg work (2026-11-11: the assistant's follow-up took the address search gives an act, and every EU article
+            // question ended in clarify because dossier and evidence_bundle knew only the CELEX).
+            return _europeSeedsByIdentifier.TryGetValue(EuropeActCelexOfAddress(identifier) ?? identifier, out var found)
                 ? found.ToArray()
                 : Array.Empty<string>();
         }
+    }
+
+    /// <summary>
+    /// The CELEX of this site's address of an EU act, <c>/eu-eurlex/{celex}</c> (<see cref="EuropeActAddress"/>), as a path,
+    /// under an interface language or under this origin; null for anything else, a wording's coordinate or permalink included.
+    /// </summary>
+    internal static string? EuropeActCelexOfAddress(string identifier)
+    {
+        var path = identifier.StartsWith(EuropeCoordinateOrigin + "/", StringComparison.Ordinal)
+            ? identifier[EuropeCoordinateOrigin.Length..]
+            : identifier;
+        path = WithoutInterfaceLanguage(path);
+        var prefix = "/" + EuropePermalinkPublisher + "/";
+        if (!path.StartsWith(prefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var segment = path[prefix.Length..];
+        return segment.Contains('/') ? null : EuropeCelexOfSegment(segment);
     }
 
     private IReadOnlyList<EuropeIndexState> EuropeStatesLocked() => _europeStates ??= _europeReader!.ReadAllStates();
