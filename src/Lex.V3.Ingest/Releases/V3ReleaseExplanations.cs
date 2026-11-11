@@ -64,8 +64,16 @@ public sealed record V3ReleaseExplanations(
     /// <summary>The serving release's text was wrong, and the candidate corrects it.</summary>
     public const string DefectCorrected = "defect_corrected";
 
+    /// <summary>
+    /// The refresh run's acquisition refused the publisher's document for this version (a typed refusal of that one request,
+    /// such as the robots pre-check of its session failing), so the candidate does not hold what the publisher still lists;
+    /// it returns when a run acquires it. It explains only a version lost or a version's text lost, never a text that changed
+    /// (release A, 2026-11-11: one French CRR consolidation of run 17).
+    /// </summary>
+    public const string AcquisitionRefused = "acquisition_refused";
+
     /// <summary>The reasons an entry may give, in a closed list.</summary>
-    public static IReadOnlyList<string> Reasons { get; } = [DerivationRuleChanged, RightsWithdrawn, WithdrawnByPublisher, DefectCorrected];
+    public static IReadOnlyList<string> Reasons { get; } = [DerivationRuleChanged, RightsWithdrawn, WithdrawnByPublisher, DefectCorrected, AcquisitionRefused];
 
     /// <summary>The Luxembourg rights dispositions by their wire names, the tokens a withheld version's reason starts with.</summary>
     private static readonly HashSet<string> LuxembourgRightsDispositions = typeof(LuxembourgRightsChannelDisposition)
