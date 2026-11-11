@@ -60,9 +60,9 @@ public sealed class VocabularyRegistryCensusTests
                 "Lex.V3.Api.ArticleNumbers: CitationWords=6, const TableResource, "
                     + "static property Rule",
                 "Lex.V3.Api.CitationDates: Months=32, const Shape",
-                "Lex.V3.Api.ExactReferenceReader: InstrumentWords=7, LuxembourgTypes=5, "
-                    + "const EuropeOrg, const EuropeType, const OfWords, const Preposition, "
-                    + "const SiteOrigin",
+                "Lex.V3.Api.ExactReferenceReader: EuropeShortNameList=10, EuropeShortNames=14, "
+                    + "InstrumentWords=7, LuxembourgTypes=5, const EuropeOrg, const EuropeType, "
+                    + "const OfWords, const Preposition, const SiteOrigin",
                 "Lex.V3.Api.SyntheticPreviewTrustConfiguration: const EnvironmentBinding, "
                     + "const IssuerId, const KeyId, const PublicKeySha256",
                 "Lex.V3.Api.V3HostHeaders: const MachineContentSecurityPolicy, const ReferrerPolicy, "

@@ -233,6 +233,31 @@ internal static class ExactReferenceReader
     private static readonly Regex EuropeNameShape = new(
         @"^" + EuropeType + @"\s*(?:\((?:UE|EU|CE|EC|CEE|EEC|Euratom)\)|(?:n°|no\.?|nr\.?)\s*[0-9]|[0-9]{1,4}\s*/\s*[0-9])", Options);
 
+    /// <summary>
+    /// The usual short names of EU acts in this product's EU population, each read to the one act it names (2026-11-11: "article
+    /// 5 du RGPD" and "article 6 of DORA" were pointed to the official source although both acts are held). A reviewed, closed
+    /// list of names that name a single act; each key is folded as a reference's text is (<see cref="ArticleNumbers.Fold"/>).
+    /// </summary>
+    private static readonly (string[] Names, string Celex)[] EuropeShortNameList =
+    [
+        // Acronyms and short names only: an act's title, or a name its title holds ("General Data Protection Regulation",
+        // "Data Act", "Digital Services Act"), is found by the EU title search, which this list must not shadow.
+        (["GDPR", "RGPD"], "32016R0679"),
+        (["DORA"], "32022R2554"),
+        (["AI Act"], "32024R1689"),
+        (["MiFID II", "MiFID 2"], "32014L0065"),
+        (["MiFIR"], "32014R0600"),
+        (["SFDR"], "32019R2088"),
+        (["eIDAS"], "32014R0910"),
+        (["NIS2", "NIS 2"], "32022L2555"),
+        (["PSD2", "PSD 2"], "32015L2366"),
+        (["MiCA"], "32023R1114"),
+    ];
+
+    internal static readonly IReadOnlyDictionary<string, string> EuropeShortNames = EuropeShortNameList
+        .SelectMany(static entry => entry.Names.Select(name => (Key: ArticleNumbers.Fold(name), entry.Celex)))
+        .ToDictionary(static pair => pair.Key, static pair => pair.Celex, StringComparer.Ordinal);
+
     // An article before an act's type or name ("la loi du …", "le règlement (UE) …", "l'arrêté grand-ducal du …").
     private static readonly Regex LeadingArticle = new(@"^(?:la|le|les|the)\s+|^l['’]\s*", Options);
 
@@ -438,6 +463,14 @@ internal static class ExactReferenceReader
 
         // An article before a type and date or an EU act's name is not part of it ("la loi du 12 novembre 2011").
         var unarticled = LeadingArticle.Replace(value, string.Empty);
+        // An EU act by its usual short name ("RGPD", "the GDPR", "DORA", "AI Act"), read to its CELEX from a reviewed, closed list,
+        // where a citation names it ("article 5 du RGPD"); a short name asked alone stays the EU title search's ("GDPR" lists the
+        // act its short title holds), so this reads only where a title may be read.
+        if (allowTitle && EuropeShortNames.TryGetValue(ArticleNumbers.Fold(unarticled), out var shortNamed))
+        {
+            return new ReferenceAct(ReferenceActForm.EuropeName, value, Celex: shortNamed, CelexCandidates: [shortNamed]);
+        }
+
         if (TypeAndDate.Match(unarticled) is { Success: true } typed && CitationDates.IsDateShaped(typed.Groups["date"].Value) &&
             LuxembourgTypes.TryGetValue(ArticleNumbers.Fold(typed.Groups["type"].Value), out var eliType))
         {

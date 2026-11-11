@@ -2,6 +2,36 @@
 
 Updated 2026-11-11.
 
+## EU acts by their site address and their usual short names; run 17d did not bring the French CRR text back (sole driver, 2026-11-11)
+
+`data/eu-act-address`. Found by asking the live assistant release A serves the questions a reader asks:
+- **Every EU article question ended in clarify.** The search finds "l'article 5 du règlement (UE) 2016/679" as
+  `/eu-eurlex/32016R0679`, article 005; the assistant's follow-up passes that address to `evidence_bundle`, and
+  `dossier`, `evidence_bundle`, `as_of` and `timeline` knew an EU act only by its CELEX (`32016R0679` answers,
+  `/eu-eurlex/32016R0679` was `identifier_unknown`), while `/lu-legilux/{work}` names a Luxembourg work everywhere.
+  `EuropeSeedsOf` now reads this site's address of an EU act (as a path, under an interface language or under this
+  origin) as its CELEX (`V3CorpusMount.EuropeActCelexOfAddress`); a wording's coordinate or permalink is not an act's
+  address and keeps its own grammar.
+- **Short names were not read.** "article 5 du RGPD", "article 6 of DORA" and "Article 50 of the AI Act" pointed to the
+  official source although the acts are held. `ExactReference` now reads a reviewed, closed list of acronyms and short
+  names to their CELEX (GDPR/RGPD, DORA, AI Act, MiFID II, MiFIR, SFDR, eIDAS, NIS2, PSD2, MiCA), each an act of the EU
+  population, as the EU-name form, **only where a citation names the act** (`allowTitle`): a short name asked alone, or a
+  name an act's title holds ("General Data Protection Regulation", "Data Act"), stays the EU title search's, as
+  `V3CorpusEuropeTitlesMountTests` pins (a first version with the long names shadowed it; caught by the lane run).
+- **Tests**: `V3CorpusEuropeTimeViewTests.AnEuActsAddressNamesTheActAsItsCelexDoes` (dossier and evidence_bundle by the
+  address, under `/fr/` and under the origin, answer exactly as by the CELEX; a wording's coordinate is not an act's
+  address); `ExactReferenceReaderTests.AnEuActsUsualShortNameReadsToItsCelex` (four phrasings); the census pins the registry
+  (`EuropeShortNameList=10, EuropeShortNames=14`). Runs: the image-conditions Lex.V3.Tests lane 3,396/0/6; Ingest EU time view, dossier, reference and identifier-shape classes 38/38; the
+  solution builds with 0 errors. CI runs the whole solution.
+
+**Run 17d: a driver's error.** Run 17 was resumed from 17b once more (15:43Z to 19:37Z, exit 0, 2,250 Publications Office
+requests, EU catalogued 2026-11-11T19:24:48Z, `eu-acquisition-eaa0246f...`, custody uploaded) to fetch the French CRR text
+again. It did not: the document ladders checkpoint holding the refusal (`eaf6e643...`) was written by run 17's first
+execution on 2026-11-09 and is journaled, so every resume replays it (17d's Formex outcome for `.0008` is the same
+`body_not_held`). I had assumed the ladders were not journaled. The final release therefore carries the same
+`acquisition_refused` item as release A; the French text returns once a refused pre-check is retried (the defect
+recorded on 11-11). 17d's catalog is the freshest EU half and is the one the final release composes.
+
 ## Release A live, built on Azure; the release job (sole driver, 2026-11-11)
 
 `docs/release-a-live`. No code. After three image-stage failures on the driver's PC, the owner chose (2026-11-11) to build
