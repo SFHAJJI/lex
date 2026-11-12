@@ -2,6 +2,30 @@
 
 Updated 2026-11-11.
 
+## R106 learns the ordinary course of a law: a later state closes the one before (sole driver, 2026-11-12)
+
+`data/publisher-stated-end`. The final release's first attempt (`lex-v3-release-81e5uon`, 20:13 UTC) was refused by its
+checks in 34 s, before anything was built, on three items; run locally over both mounts (`Lex.V3.Tool release-checks`,
+release A `dA-20261110-5b596ca0` against `dF-20261112-be3f22c9`, streamed with the kit's `blob.py extract`):
+- **version_identity_changed**, the loi du 7 août 2023 (a611) at 2026-01-01: the same bodies, articles (95), rule
+  profiles, publisher identity and publication date; the state digest moved because it pins the end the publisher states
+  (`LuxembourgIndexBuilder.CatalogueStates`, `PublisherEnd`), and run 18's catalogue lists the 2026-10-02 consolidation, which
+  closes the 2026-01-01 state (`applicable_to` 2026-10-02, source publisher; release A: open, derived). No typed reason
+  fitted honestly, so the data now gives its own: **`publisher_stated_end`** (`V3ReleaseComparison`), only when the serving
+  release had no stated end, the candidate states one, lists a later state of the same work from that date, and nothing
+  else the identity pins changed. `V3MountInventory` reads `applicable_to`, `applicable_to_source` and `publication_date`
+  when the index has them; each listed version's facts now carry `publisher_end`. Test:
+  `APublisherStatedEndExplainsOnlyAStateItsLaterStateCloses` (the case, and five near misses that stay refused).
+- **version_lost**, the loi du 8 avril 2011 (n2) at 2026-09-27: a catalogue state without expression in release A
+  (`not_acquired`), which run 18's catalogue no longer names; explained in the release's explanations as
+  `withdrawn_by_publisher`.
+- **R86(2)**, the loi du 17 juillet 2026 (a386) at 2026-08-03: the publisher re-issued the file (body 42efad65…, object
+  ref 81979352…) with the same unsupported content shape; release A's textless entry is renewed with the new object ref.
+
+With this branch's tool and those explanations, locally: `release-comparison.json` pass, 12 listed, 0 unexplained, 0
+unused; `consolidation-text.json` pass, 0 unexplained, 0 unused. Also seen: the Luxembourg Constitution is now held (39
+consolidated versions, 4,705 articles added).
+
 ## Run 18 complete; the final release's derive started (sole driver, 2026-11-12)
 
 `docs/run18-done`. Run 18 (`lu-population-20261109-18`, the fresh Luxembourg population on Azure, 14 executions of at

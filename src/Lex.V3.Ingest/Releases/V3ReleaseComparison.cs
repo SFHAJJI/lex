@@ -55,7 +55,8 @@ public sealed record V3ComparedMount(
 /// Served identities and text digests stay stable unless a typed reason explains the change: a version lost, a version whose
 /// text is lost, a version whose served identity (its permalink's digest) changed, an article whose text digest changed, an
 /// article lost from a version both serve, and an annex lost, are each listed, and each must be explained by the data (the
-/// publisher's own file changed: <see cref="PublisherBodyChanged"/>) or by an entry of the release's explanations file
+/// publisher's own file changed: <see cref="PublisherBodyChanged"/>; the publisher now states when a Luxembourg state stops
+/// applying: <see cref="PublisherStatedEnd"/>) or by an entry of the release's explanations file
 /// (<see cref="V3ReleaseExplanations"/>); any one left unexplained refuses the release. Additions, text a version gains, a
 /// textless version's changed reason, and a textless version the candidate lists under another coordinate of the same
 /// publisher identity (an EU census version whose wording is now read) are counted and never refuse.
@@ -74,6 +75,15 @@ public sealed record V3ReleaseComparison(
 
     /// <summary>The reason the data itself gives: the publisher body the item is read from is not the one the serving release read.</summary>
     public const string PublisherBodyChanged = "publisher_body_changed";
+
+    /// <summary>
+    /// The reason the data itself gives for a Luxembourg state's served identity: the publisher now states when the state stops
+    /// applying (an end the state digest pins), the candidate lists a later state of the same work from that date, and nothing
+    /// else the identity pins changed (the same publisher identity, publication date, kind, rule profiles and article count;
+    /// bodies are held equal before this reason is asked). The ordinary course of a law: a new consolidation closes the one
+    /// before it (2026-11-12, run 18: the loi du 7 aout 2023 (a611), its 2026-01-01 state closed by the 2026-10-02 one).
+    /// </summary>
+    public const string PublisherStatedEnd = "publisher_stated_end";
 
     /// <summary>A version the serving release lists that the candidate does not.</summary>
     public const string VersionLost = "version_lost";
@@ -98,7 +108,9 @@ public sealed record V3ReleaseComparison(
         "R106: the candidate's mount against the mount of the release serving now, per publisher and class. A served version, " +
         "a version's text, a version's served identity (its permalink's digest), an article's text digest, an article of a version " +
         "both serve with text, and an EU annex outcome stay as the serving release has them, unless a typed reason explains the " +
-        "change: the data's own (publisher_body_changed: the publisher body it is read from changed) or an entry of the release's " +
+        "change: the data's own (publisher_body_changed: the publisher body it is read from changed; publisher_stated_end: the " +
+        "publisher now states when a Luxembourg state stops applying, a later state of the work is listed from that date, and " +
+        "nothing else its identity pins changed) or an entry of the release's " +
         "explanations, each scope checked against both mounts. Any change left unexplained refuses the release. Additions are " +
         "counted and never refuse.";
 
@@ -185,7 +197,21 @@ public sealed record V3ReleaseComparison(
                 ["articles"] = version.Articles.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ["rule_profiles"] = string.Join(",", version.RuleProfiles),
                 ["bodies"] = string.Join(",", version.BodySha256s),
+                ["publisher_end"] = version.PublisherEnd,
             };
+
+        // The publisher now states when the state stops applying, with a later state of the work listed from that date, and
+        // nothing else the state digest pins changed (its key already pins work, date, expression and language).
+        bool PublisherEndStated(V3ServedVersion before, V3ServedVersion after) =>
+            after.Publisher == V3MountInventory.Luxembourg && before.PublisherEnd is null && after.PublisherEnd is { } end &&
+            string.CompareOrdinal(end, after.Key.Split('|')[2]) > 0 &&
+            string.Equals(before.Identity, after.Identity, StringComparison.Ordinal) &&
+            string.Equals(before.PublicationDate, after.PublicationDate, StringComparison.Ordinal) &&
+            string.Equals(before.Kind, after.Kind, StringComparison.Ordinal) &&
+            before.RuleProfiles.SequenceEqual(after.RuleProfiles, StringComparer.Ordinal) &&
+            before.Articles == after.Articles &&
+            candidate.Versions.Keys.Any(key => key.StartsWith(
+                string.Join('|', V3MountInventory.Luxembourg, after.Work, end) + "|", StringComparison.Ordinal));
 
         // Versions, by served identity.
         var candidateIdentities = candidate.Versions.Values.Select(static version => (version.Publisher, version.Identity)).ToHashSet();
@@ -245,6 +271,8 @@ public sealed record V3ReleaseComparison(
                 Add(VersionIdentityChanged, after, key, after.Address, VersionFacts(before), VersionFacts(after),
                     bodyChanged
                         ? (PublisherBodyChanged, "data", null)
+                        : PublisherEndStated(before, after)
+                        ? (PublisherStatedEnd, "data", null)
                         : ByEntry(entry => ItemListed(entry, after.Publisher, key) ||
                             (entry.Publisher == after.Publisher && entry.FromRuleProfileSha256 is { } from && entry.ToRuleProfileSha256 is { } to &&
                              before.RuleProfiles.Contains(from, StringComparer.Ordinal) && after.RuleProfiles.Contains(to, StringComparer.Ordinal) &&
