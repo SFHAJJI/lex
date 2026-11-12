@@ -519,7 +519,9 @@ public sealed class V3CorpusNamesMountTests
         foreach (var bytes in new[] { outcome.NamesRecordBytes, outcome.IndexingRecordBytes, outcome.MeasurementBytes })
         {
             var text = Encoding.UTF8.GetString(bytes);
-            foreach (var personal in new[] { "Exemple", "Testville", "1950", "Jean" })
+            // The birth date as the fixture writes it: the year alone is four hexadecimal digits, which a SHA-256 in these
+            // files holds by chance (CI, 2026-11-12: "1950" inside a digest failed this test once, no personal data in it).
+            foreach (var personal in new[] { "Exemple", "Testville", "janvier 1950", "Jean" })
             {
                 Assert.IsFalse(text.Contains(personal, StringComparison.Ordinal), personal);
             }
