@@ -2,6 +2,37 @@
 
 Updated 2026-11-11.
 
+## The final release is live; its backup's verification learned deleted objects' versions (sole driver, 2026-11-12)
+
+`deploy/backup-versions`. **Live since 22:05:42 UTC**: `v3-20261112T205332Z-8a5b5be569c2` (release job
+`lex-v3-release-5ylujbw`, 47 min on D16, checks pass after #1033: R106 12 listed, 0 unexplained; R86(2) 0 unexplained),
+revision `ca-lex-v3--v3-20261112t205332z-8a5b5be569c2-8a36f86f`, 100% of the traffic; serving commit 8a5b5be5, index
+be3f22c9; freshness Luxembourg 0 days, EU 1 day, none stale. Deploy (`deploy-public.ps1 -Apply`): the candidate healthy at
+its own address, the HTTP probes as the release holds, the data's age and the evaluation card allow promotion. Before the
+traffic moved: the assistant at the candidate's own address answered "Que dit l'article 5 du RGPD ?", "What does Article
+22 of the GDPR say?", "What does Article 50 of the AI Act say?" and "Que dit l'article 1er du Code civil ?" (answer, 2.0 to
+2.8 s, quotes 1 to 2); the two-address check passed (this PC limited, 182 x 429, while the job's address got 200). Release
+A's revision `…d8d38105f51d-e1f2228a` is deactivated, kept for rollback.
+
+**lex-eval** (`C:\lex-v3\lex-eval`, against the live release, registered): 14 of 15 verdicts (release A: 9 of 15),
+citations 0.889, 12 quotes all verified, no sentence outside the templates, same verdict on every replay, same plan
+0.750, p50 2.08 s, p95 2.48 s, every gate passed. The miss: "What does Article 6 of DORA say?" points to the official source
+(the English search finds no current text; the French question asks which version, `ambiguous_version`): a planner and
+language fallback to look at, not a data gap (DORA 32022R2554 is held in English and French).
+
+**The R111 backup** (`deploy/backup-release.ps1 -Apply`, custody prefixes `eu-population-20261109-17d/`,
+`lu-population-20261109-18/`) copied the 14 objects and wrote 427 custody pointers, then its verification refused: run 18's
+`refused.json` was written four times and renamed (its base blob deleted), so the listing names four earlier versions
+under one name; the verification indexed the listing by name, kept the last version and refused the first. It now indexes
+by name and version id. Test first (`web/test/backup-release.test.mjs`, a deleted object with two earlier versions: failed
+before, 7/7 after); the script parses; `eng/verify-v3-tree.ps1` passes. The copy itself is untouched; the backup is run
+again with the fixed script after merge.
+
+Insurance laws, checked in the final mount: the loi du 27 juillet 1997 sur le contrat d'assurance (`loi-1997-07-27-n6`), the
+loi du 7 décembre 2015 sur le secteur des assurances (`2015-12-07-n1`) and the motor liability law of 16 April 2003
+(`2003-04-16-n2`) are acquired, but `rights_withheld` with disposition `conflict` (`gaps: rights_conflict`), so they are
+not in the index; the site points to the official source. Serving them is a rights ruling (the owner's), not data work.
+
 ## R106 learns the ordinary course of a law: a later state closes the one before (sole driver, 2026-11-12)
 
 `data/publisher-stated-end`. The final release's first attempt (`lex-v3-release-81e5uon`, 20:13 UTC) was refused by its
