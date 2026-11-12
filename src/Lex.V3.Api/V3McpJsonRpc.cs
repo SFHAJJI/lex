@@ -111,6 +111,14 @@ internal static class V3McpJsonRpc
         ArgumentNullException.ThrowIfNull(utcNow);
         ArgumentNullException.ThrowIfNull(requestReference);
 
+        // JSON is UTF-8 (RFC 8259 §8.1); a document that is not does not parse, which §5 answers Parse error with id null.
+        // The reader does not check the bytes inside a string, so without this a Latin-1 "è" in a member name or an argument
+        // threw past the JsonException handler below and answered Internal error.
+        if (!System.Text.Unicode.Utf8.IsValid(requestUtf8))
+        {
+            return Error(NullId, -32700, "Parse error");
+        }
+
         JsonElement id;
         string? method;
         JsonElement parameters;

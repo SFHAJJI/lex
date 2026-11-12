@@ -635,6 +635,16 @@ internal sealed class V3PlatformHost
 
     private static JsonDocument ParseTransportJson(ReadOnlyMemory<byte> utf8)
     {
+        // JSON is UTF-8 (RFC 8259 §8.1). The reader does not check the bytes inside a string, and reading one that is not
+        // UTF-8 later throws past every JsonException handler: the caller's malformed request then answered HTTP 500 (live,
+        // 2026-11-11, a Latin-1 "è"). Checked here, before any token is read, it is the caller's malformed_json, a 400.
+        if (!System.Text.Unicode.Utf8.IsValid(utf8.Span))
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.MalformedJson,
+                "The operation request is not UTF-8.");
+        }
+
         try
         {
             ValidateJsonTokens(utf8.Span);

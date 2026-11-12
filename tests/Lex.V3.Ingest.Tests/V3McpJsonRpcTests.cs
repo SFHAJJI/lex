@@ -384,6 +384,21 @@ public sealed class V3McpJsonRpcTests
     }
 
     [TestMethod]
+    [DataRow("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"resolve\",\"arguments\":{\"identifier\":\"è\"}}}")]
+    [DataRow("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"resolve\",\"arguments\":{\"identifièr\":\"x\"}}}")]
+    public async Task ADocumentThatIsNotUtf8IsAParseError(string latin1)
+    {
+        // JSON is UTF-8 (RFC 8259 §8.1); a Latin-1 "è" (0xE8) is not, in a value or a member name: the document does not
+        // parse, so JSON-RPC 2.0 §5 answers Parse error with id null, never the Internal error a crash would give.
+        var bytes = await V3McpJsonRpc.HandleAsync(
+            System.Text.Encoding.Latin1.GetBytes(latin1), new V3PlatformHost(), null, static () => ObservedAt, "ref", CancellationToken.None);
+        Assert.IsNotNull(bytes);
+        using var response = JsonDocument.Parse(bytes);
+        Assert.AreEqual(-32700, response.RootElement.GetProperty("error").GetProperty("code").GetInt32());
+        Assert.AreEqual(JsonValueKind.Null, response.RootElement.GetProperty("id").ValueKind);
+    }
+
+    [TestMethod]
     public async Task MalformedJsonIsAParseError()
     {
         // A document that does not parse as JSON at all: an id (if any) cannot be read either, so

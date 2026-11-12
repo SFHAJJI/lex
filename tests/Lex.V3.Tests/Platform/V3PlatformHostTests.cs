@@ -352,6 +352,8 @@ public sealed class V3PlatformHostTests
 
     [TestMethod]
     [DataRow("malformed", "malformed_json", StatusCodes.Status400BadRequest)]
+    [DataRow("utf8_value", "malformed_json", StatusCodes.Status400BadRequest)]
+    [DataRow("utf8_name", "malformed_json", StatusCodes.Status400BadRequest)]
     [DataRow("duplicate", "duplicate_json_member", StatusCodes.Status400BadRequest)]
     [DataRow("trailing", "trailing_json_content", StatusCodes.Status400BadRequest)]
     [DataRow("too_large", "request_too_large", StatusCodes.Status413PayloadTooLarge)]
@@ -367,6 +369,10 @@ public sealed class V3PlatformHostTests
         var body = scenario switch
         {
             "malformed" => "{",
+            // JSON is UTF-8 (RFC 8259 §8.1): a byte that is not, here a Latin-1 "è" (0xE8, written in its place below), in a
+            // value or in a member name, is malformed JSON, the caller's failure and not the server's (live, 2026-11-11: HTTP 500).
+            "utf8_value" => "{\"operation_id\":\"resolve\",\"parameters\":{\"identifier\":\"eli/è\"}}",
+            "utf8_name" => "{\"operation_id\":\"resolve\",\"parameters\":{\"identifièr\":\"eli/example\"}}",
             "duplicate" => "{\"operation_id\":\"resolve\",\"operation_id\":\"resolve\",\"parameters\":{}}",
             "trailing" => "{\"operation_id\":\"resolve\",\"parameters\":{}}{}",
             "too_large" => OversizedRequest(),
@@ -376,7 +382,7 @@ public sealed class V3PlatformHostTests
             "operation" => "{\"operation_id\":\"unknown\",\"parameters\":{}}",
             _ => throw new ArgumentOutOfRangeException(nameof(scenario)),
         };
-        var context = RouteContext(Encoding.UTF8.GetBytes(body));
+        var context = RouteContext(scenario.StartsWith("utf8", StringComparison.Ordinal) ? Encoding.Latin1.GetBytes(body) : Encoding.UTF8.GetBytes(body));
         var calls = 0;
 
         await V3ResolveRestRoute.HandleSuccessAsync(
