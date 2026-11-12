@@ -14,7 +14,9 @@ namespace Lex.V3.Ingest.Releases;
 /// the index lists without text. <see cref="IdentitySha256"/> is what a permalink pins: the Luxembourg state digest, or for
 /// the EU a digest over the wording's article identities (the API's wording digest is a function of the same coordinate and
 /// those identities, so the two change together). <see cref="Identity"/> is the publisher's identity of the version (the
-/// Luxembourg state IRI, the EU Cellar work IRI).
+/// Luxembourg state IRI, the EU Cellar work IRI). <see cref="PublisherEnd"/> is the end of applicability the publisher states
+/// for a Luxembourg state (the state digest pins it), and <see cref="PublicationDate"/> its publication date; both null for
+/// the EU and for an index that does not record them.
 /// </summary>
 public sealed record V3ServedVersion(
     string Publisher,
@@ -29,7 +31,9 @@ public sealed record V3ServedVersion(
     string? TextStatusReason,
     IReadOnlyList<string> RuleProfiles,
     IReadOnlyList<string> BodySha256s,
-    long Articles)
+    long Articles,
+    string? PublisherEnd = null,
+    string? PublicationDate = null)
 {
     /// <summary>Whether the version is served with text.</summary>
     public bool HasText => string.Equals(TextStatus, V3MountInventory.Held, StringComparison.Ordinal);
@@ -299,12 +303,15 @@ public sealed record V3MountInventory(
             }
         }
 
-        var hasStatus = Columns(connection, "states").Contains("text_status");
+        var stateColumns = Columns(connection, "states");
+        var hasStatus = stateColumns.Contains("text_status");
+        var hasEnd = stateColumns.Contains("applicable_to") && stateColumns.Contains("applicable_to_source") && stateColumns.Contains("publication_date");
         using (var command = connection.CreateCommand())
         {
             command.CommandText =
                 "SELECT work_key, applicability_date, expression_iri, language, state_sha256, publisher_legal_resource_iri, rule_profiles_json, article_identities_json" +
-                (hasStatus ? ", text_status, text_status_reason" : "") +
+                (hasStatus ? ", text_status, text_status_reason" : ", NULL, NULL") +
+                (hasEnd ? ", applicable_to, applicable_to_source, publication_date" : "") +
                 " FROM states ORDER BY work_key, applicability_date, expression_iri, language";
             using var reader = command.ExecuteReader();
             while (reader.Read())
@@ -320,6 +327,12 @@ public sealed record V3MountInventory(
                 var identities = JsonSerializer.Deserialize<string[]>(reader.GetString(7)) ?? [];
                 var status = hasStatus ? reader.GetString(8) : identities.Length > 0 ? Held : NoText;
                 var reason = hasStatus && !reader.IsDBNull(9) ? reader.GetString(9) : null;
+                // The end the publisher states (applicable_to whose source is the publisher), which the state digest pins; an end
+                // derived from the next state's start is not pinned and is not read.
+                var publisherEnd = hasEnd && !reader.IsDBNull(10) && !reader.IsDBNull(11) && reader.GetString(11) == "publisher"
+                    ? reader.GetString(10)
+                    : null;
+                var publicationDate = hasEnd && !reader.IsDBNull(12) ? reader.GetString(12) : null;
                 var key = string.Join('|', Luxembourg, workKey, date, expression, language);
                 var stateBodies = new SortedSet<string>(StringComparer.Ordinal);
                 foreach (var identity in identities)
@@ -351,7 +364,7 @@ public sealed record V3MountInventory(
                 versions.Add(key, new V3ServedVersion(
                     Luxembourg, key, workKey, legalResource, V3TextYield.FamilyOf(legalResource),
                     LuxembourgIndexBuilder.StateKindOf(legalResource) ?? V3TextYield.UnrecognisedFamily, address, stateSha256,
-                    status, reason, profiles, stateBodies.ToArray(), identities.Length));
+                    status, reason, profiles, stateBodies.ToArray(), identities.Length, publisherEnd, publicationDate));
             }
         }
 

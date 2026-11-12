@@ -468,6 +468,41 @@ public sealed class V3ReleaseChecksTests
 
     // ----- helpers -----
 
+    [TestMethod]
+    public void APublisherStatedEndExplainsOnlyAStateItsLaterStateCloses()
+    {
+        // Run 18 (2026-11-12): the loi du 7 aout 2023 (a611) at 2026-01-01, open in the serving release, now closed by the
+        // publisher's 2026-10-02 consolidation. Its text, bodies and rules are the same; only the end the digest pins is new.
+        var open = Version("h", "2026-01-01", "s1", bodies: ["b1"]) with { PublicationDate = "2026-01-02" };
+        var closed = Version("h", "2026-01-01", "t1", bodies: ["b1"]) with { PublisherEnd = "2026-10-02", PublicationDate = "2026-01-02" };
+        var later = Version("h", "2026-10-02", "t2", bodies: ["b2"]) with { PublicationDate = "2026-10-26" };
+
+        var explained = V3ReleaseComparison.Compare(Inventory(open), Inventory(closed, later), null);
+        var item = explained.Items.Single();
+        Assert.AreEqual(V3ReleaseComparison.VersionIdentityChanged, item.Change);
+        Assert.AreEqual((V3ReleaseComparison.PublisherStatedEnd, "data"), (item.Reason, item.ReasonSource));
+        Assert.IsFalse(explained.Refuses);
+
+        // Each near miss stays a change the release must explain itself.
+        foreach (var (label, candidate) in new (string, V3MountInventory)[]
+        {
+            ("no later state listed from the end", Inventory(closed)),
+            ("a later state from another date", Inventory(closed, Version("h", "2026-09-01", "t3", bodies: ["b2"]))),
+            ("the publication date changed", Inventory(closed with { PublicationDate = "2026-01-05" }, later)),
+            ("the rule profiles changed", Inventory(closed with { RuleProfiles = [ProfileAfter] }, later)),
+            ("an article fewer", Inventory(closed with { Articles = 0 }, later)),
+        })
+        {
+            var refused = V3ReleaseComparison.Compare(Inventory(open), candidate, null);
+            Assert.IsTrue(refused.Refuses, label);
+            Assert.IsNull(refused.Items.Single(static change => change.Change == V3ReleaseComparison.VersionIdentityChanged).Reason, label);
+        }
+
+        // An end the serving release already had, now moved, is not this reason either.
+        var moved = V3ReleaseComparison.Compare(Inventory(open with { PublisherEnd = "2026-06-01" }), Inventory(closed, later), null);
+        Assert.IsTrue(moved.Refuses, "a stated end that moved");
+    }
+
     private static V3ServedVersion Version(
         string work, string date, string sha, string status = V3MountInventory.Held, string? reason = null,
         string[]? profiles = null, string[]? bodies = null, long articles = 1) =>
