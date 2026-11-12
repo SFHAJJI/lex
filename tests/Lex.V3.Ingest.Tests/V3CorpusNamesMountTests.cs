@@ -519,10 +519,13 @@ public sealed class V3CorpusNamesMountTests
         foreach (var bytes in new[] { outcome.NamesRecordBytes, outcome.IndexingRecordBytes, outcome.MeasurementBytes })
         {
             var text = Encoding.UTF8.GetString(bytes);
-            foreach (var personal in new[] { "Exemple", "Testville", "1950", "Jean" })
+            foreach (var personal in new[] { "Exemple", "Testville", "Jean" })
             {
                 Assert.IsFalse(text.Contains(personal, StringComparison.Ordinal), personal);
             }
+            // The birth year, however written, but not as four hex digits inside a SHA-256 these files hold (CI, 2026-11-12:
+            // "1950" inside a digest failed this test once, with no personal data in it).
+            Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(text, "(?<![0-9a-fA-F])1950(?![0-9a-fA-F])"), "1950");
         }
     }
 }

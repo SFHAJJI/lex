@@ -2,6 +2,15 @@
 
 Updated 2026-11-11.
 
+## A flaky privacy test made exact (sole driver, 2026-11-12)
+
+`data/names-test-flake`. `V3CorpusNamesMountTests.AssertNoPersonalData` failed once in CI (#1029's first run) on
+"1950": the invented person's birth year, which is four hexadecimal digits and occurs by chance inside the SHA-256
+digests the names record, indexing record and measurement hold. No personal data was in the files; the re-run passed.
+The check still refuses the year in any form ("1950 à", `"birth_year":1950`), but not as four hex digits inside a
+longer hex run, which is how a digest holds it (review round: the first fix, "janvier 1950", would have let a bare year
+through). "Exemple", "Testville" and "Jean" are unchanged. The class passes locally (7/7).
+
 ## EU acts by their site address and their usual short names; run 17d did not bring the French CRR text back (sole driver, 2026-11-11)
 
 `data/eu-act-address`. Found by asking the live assistant release A serves the questions a reader asks:
