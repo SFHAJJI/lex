@@ -180,3 +180,21 @@ test("the custody pointers name every custody object under the prefixes, and the
   assert.equal(run.results[1], "returned", run.raw);
   assert.equal(run.results[2], "threw The custody object run15/bb.br is not the one the pointers name (size 20, Content-MD5 bWQ1LWI=, version 2026-10-12T00:00:01.0000000Z).");
 });
+
+test("a deleted custody object's earlier versions are each named and each verified by its version", () => {
+  // The final release's backup (2026-11-12): run 18's refused.json was written four times and then renamed, so the listing
+  // names four earlier versions under one name. Each is a pointer of its own, and the verification finds each again by its
+  // version id; keyed by name alone it found only the last and refused the first.
+  const custody = (md5) => [
+    ["run18/aa.br", 10, "bWQ1LWE=", "2026-11-12T00:00:00.0000000Z"],
+    ["run18/refused.json", 217, "cmVmMQ==", "2026-11-11T08:41:56.6176762Z"],
+    ["run18/refused.json", 149, md5, "2026-11-11T09:22:37.8496993Z"],
+  ].map((row) => row.join("\t")).join("\n");
+  const run = backup([
+    { parameters: ["-Apply", "-CustodyPrefix", "run18/"], env: { CUSTODY: custody("cmVmMg==") } },
+    { parameters: ["-Verify"], env: { CUSTODY: custody("Y2hhbmdlZA==") } },
+  ]);
+  assert.equal(run.results[0], "returned", run.raw);
+  assert.match(run.outs[0], /verified: 5 objects of .* by SHA-256, and 3 custody pointers/);
+  assert.equal(run.results[1], "threw The custody object run18/refused.json is not the one the pointers name (size 149, Content-MD5 cmVmMg==, version 2026-11-11T09:22:37.8496993Z).");
+});

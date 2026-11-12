@@ -1,6 +1,6 @@
 # Lex V3 status
 
-Updated 2026-10-26 by the driver. This file holds the heads, the owner's open items and the pointers to the two
+Updated 2026-11-12 by the driver (heads). This file holds the heads, the owner's open items and the pointers to the two
 lane files (the standing order of 2026-10-01 13:50 UTC: STATUS.md was edited by nearly every pull request and was
 the most frequent conflict). Each lane writes its progress in its own file, in the pull request that makes it:
 
@@ -13,14 +13,13 @@ A feature pull request edits its lane file, not this one; this file changes for 
 
 ## Heads
 
-- `v3/integration`: `8958ec5f` (2026-10-26, #987 merged: the data big bang, the reader's interval rules over index /9,
-  the catalogue's chain, dates by role, EU force dates, and D1's first fix; #989, the web big bang, and #990, the legal
-  pages without a person, merged earlier the same day). Served: the release `v3-20261026T180319Z-8958ec5fa63f` over
-  derive-c, on the private copy at law.soufien.lu since 2026-10-26 21:00 UTC (STATUS-WEB.md). The opening
-  (`deploy.ps1 -Open`) waits on the owner's own command: the driver's safety classifier refuses it. The required checks are strict: `dotnet` (the whole solution, about 14 min on the runner),
-  `web`, `canon-windows`, `journeys` and, since 2026-10-15, `image-conditions` (the API's tests inside the release's
-  base image). `journeys` walks J1 to J8 and the site's own addresses in Chrome over four fixture mounts (the fixture,
-  licence-blocked, two-state and EU annex control mounts), by pointer and by keyboard on the pages the API serves.
+- `v3/integration`: `8a5b5be5` (2026-11-12, #1033 merged: R106's `publisher_stated_end`; the backup's verification by
+  version follows in `deploy/backup-versions`). Served at law.soufien.lu since 2026-11-12 22:05:42 UTC, publicly: the
+  final release `v3-20261112T205332Z-8a5b5be569c2` (serving commit 8a5b5be5, index builder be3f22c9), over run 18's
+  Luxembourg population (completed 2026-11-12 15:28 UTC) and run 17d's EU catalogue, built and signed on Azure; the
+  assistant on as a labelled preview; Luxembourg data 0 days old and EU 1 day at promotion. Release A
+  (`v3-20261111T144050Z-d8d38105f51d`) is kept, deactivated, for rollback. Detail in STATUS-DATA.md. The required checks:
+  `dotnet` (the whole solution), `web`, `canon-windows`, `journeys` and `image-conditions`.
 - Driver: Claude Opus 5.5, the sole driver since 2026-10-02. The owner's order: no Codex, no other Claude session,
   full authorisation, and the owner is never asked. Each pull request is reviewed by an independent Claude subagent
   (STATUS-WEB.md, driver decisions). The data lane's file (`STATUS-DATA.md`) is kept by this driver too.

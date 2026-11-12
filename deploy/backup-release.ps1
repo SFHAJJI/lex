@@ -221,13 +221,15 @@ try {
         try {
             $prefixes = @($document.RootElement.GetProperty('prefixes').EnumerateArray() | ForEach-Object { $_.GetString() })
             $now = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::Ordinal)
-            foreach ($entry in Get-CustodyListing $prefixes) { $now[$entry.name] = $entry }
+            # By name and version id: a deleted object's earlier versions share its name (2026-11-12, run 18's refused.json, four
+            # versions), and each is a pointer of its own.
+            foreach ($entry in Get-CustodyListing $prefixes) { $now["$($entry.name)`n$($entry.version)"] = $entry }
             foreach ($pointer in $document.RootElement.GetProperty('objects').EnumerateArray()) {
                 $name = $pointer.GetProperty('name').GetString()
                 $size = $pointer.GetProperty('size').GetInt64()
                 $md5 = $pointer.GetProperty('content_md5').GetString()
                 $versionId = $pointer.GetProperty('version_id').GetString()
-                $entry = if ($now.ContainsKey($name)) { $now[$name] } else { $null }
+                $entry = if ($now.ContainsKey("$name`n$versionId")) { $now["$name`n$versionId"] } else { $null }
                 if ($null -eq $entry -or $entry.size -ne $size -or $entry.md5 -cne $md5 -or $entry.version -cne $versionId) {
                     throw "The custody object $name is not the one the pointers name (size $size, Content-MD5 $md5, version $versionId)."
                 }
