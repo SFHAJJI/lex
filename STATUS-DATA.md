@@ -2,6 +2,15 @@
 
 Updated 2026-11-11.
 
+## A request that is not UTF-8 is the caller's 400, not the server's 500 (sole driver, 2026-11-12)
+
+`api/invalid-utf8`. Live on 2026-11-11, a request whose JSON carried a Latin-1 "è" (byte 0xE8) answered HTTP 500
+`internal_failure`: the JSON reader does not check the bytes inside a string, and reading one later threw an
+`InvalidOperationException` past every `JsonException` handler. JSON is UTF-8 (RFC 8259 §8.1), so such a body is now
+refused before any token is read: REST answers `malformed_json` (400) and MCP answers JSON-RPC Parse error (-32700,
+id null), as for any document that does not parse. Tests first, failing before the fix: two rows (a value, a member
+name) in `EveryCallerProtocolFailureUsesItsClosedTransportCode` and `ADocumentThatIsNotUtf8IsAParseError` (two rows).
+
 ## A flaky privacy test made exact (sole driver, 2026-11-12)
 
 `data/names-test-flake`. `V3CorpusNamesMountTests.AssertNoPersonalData` failed once in CI (#1029's first run) on
