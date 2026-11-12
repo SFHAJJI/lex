@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-11-12 at 22:45 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-11-12 at 23:15 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -13,7 +13,7 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
   text. Measured by the Python evaluation tool: 14 of 15 right (60% before), every quotation verified, about 2 seconds.
 - Before it went live, the release was checked against the previous one; the check found three changes the publisher
   made, and each is now explained in the release's record. The previous release is kept, switched off, for rollback.
-- The backup copy is made; its last check stopped on a bookkeeping detail, fixed tonight, and is run again tomorrow.
+- The backup copy is made and verified file by file (after a fix to the backup's own check, tested and merged).
 
 ## Known limits (honest, and fine to say in the interview)
 
@@ -22,12 +22,13 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
   unclear. The site points to the official source. Changing this is a legal decision, yours; recommended: not before
   Tuesday.
 - DORA questions: in French the assistant asks which version you mean; in English it points to the official source.
+- A question that carries an e-mail address and a GDPR article gets a wrong plan; with a Luxembourg article it works.
 - One French text of an EU banking rule stays missing, as before; the release record says so.
 
 ## For the Foyer interview on 17 November
 
 - Start with C:\lex-v3\foyer-interview-2026-11-17\AI-LIFECYCLE-AND-CHALLENGES.md. Say "mock" for a practice interview.
-- Tomorrow: a tested demo script on the live site, with what to say at each step.
+- The demo: C:\lex-v3\foyer-interview-2026-11-17\DEMO-SCRIPT.md, seven steps tested on the live site tonight.
 
 ## What waits on you
 
