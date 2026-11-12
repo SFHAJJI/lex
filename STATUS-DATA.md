@@ -2,6 +2,19 @@
 
 Updated 2026-11-11.
 
+## The final release's backup verified; an assistant gap found while testing the demo (sole driver, 2026-11-12)
+
+`docs/brief-backup-done`. The R111 backup, run again with #1034's script: "verified: 14 objects of
+v3-20261112T205332Z-8a5b5be569c2 in stlexv3soufien/releases by SHA-256, and 427 custody pointers"; the 14 objects kept as
+first copied, the pointers byte for byte the same (sha256 afef08f0…). The local scratch mounts are removed.
+
+Found by asking the live assistant the demo's questions (23:00 UTC): "My email is jean.dupont@example.com. What does
+Article 6 of the GDPR say?" ends in `point`: the planner passed "of the GDPR" to `resolve` (`identifier_unknown`) instead of
+searching, while "What does Article 9 of the GDPR say?" and the masked Luxembourg question of lex-eval answer. With "Que
+dit l'article 1er de la Constitution ?" the search finds the words in more than one act (`clarify.which_act`), and the
+English Constitution question finds no English text (`point.no_hit`). To look at with DORA's language fallback (above);
+none blocks the release.
+
 ## The final release is live; its backup's verification learned deleted objects' versions (sole driver, 2026-11-12)
 
 `deploy/backup-versions`. **Live since 22:05:42 UTC**: `v3-20261112T205332Z-8a5b5be569c2` (release job
