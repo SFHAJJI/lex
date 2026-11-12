@@ -2,6 +2,22 @@
 
 Updated 2026-11-11.
 
+## Run 18 complete; the final release's derive started (sole driver, 2026-11-12)
+
+`docs/run18-done`. Run 18 (`lu-population-20261109-18`, the fresh Luxembourg population on Azure, 14 executions of at
+most 12 hours, each resumed from the run's journal segments in storage) completed at 15:28 UTC: execution 14
+(`lex-v3-acquire-18-jv1rzxa`, exit 0, "luxembourg: run complete") walked the official gazette to ordinal 260,764 and
+wrote `done.json`: custody 338,333 files (8.0 GB, `custody.tar` 5ec54c54…), one inputs pointer
+`mount-inputs-0367e539…`. Record measurements: 260,767 records; held 11,316 (run 15, October: 11,205); point
+224,550; typed quarantine 24,900; pending `acquisition_refused` 1 (run 15: the same single record, so release A,
+built on run 15, does not hold it either and R106 sees no loss).
+
+The final release's derive started at 15:34 UTC (`lex-v3-refresh-z66g2t6`, prefix `dF-20261112-be3f22c9`, integration
+head be3f22c9 with #1028, #1030 and #1031): run 18's Luxembourg half, run 17d's EU catalog (`eu-acquisition-eaa0246f…`),
+rules `lu-release-3`, policy 2b049e76…, D16 (14 vCPU, 56 GiB). Next: the release job on Azure against release A
+(`v3-20261111T144050Z-d8d38105f51d`, its mount `dA-20261110-5b596ca0`) with explanations that keep release A's three
+textless entries and name no change yet (the comparison decides), then deploy, the two-address check and the backup.
+
 ## A request that is not UTF-8 is the caller's 400, not the server's 500 (sole driver, 2026-11-12)
 
 `api/invalid-utf8`. Live on 2026-11-11, a request whose JSON carried a Latin-1 "è" (byte 0xE8) answered HTTP 500
