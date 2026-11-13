@@ -59,6 +59,78 @@ public sealed class AzureOpenAiPlannerLiveTests
         Assert.IsEmpty(failures, string.Join(Environment.NewLine, failures));
     }
 
+    /// <summary>
+    /// 2026-11-13: a concept question was searched by its last noun phrase alone, and the same question with a date was planned as
+    /// as_of, which quotes nothing. A concept question's query keeps the concept, and its dated form is the same plan, a search
+    /// with the date, never as_of. Questions of several subjects, none of them the prompt's example.
+    /// </summary>
+    [TestMethod]
+    public void AConceptQuestionKeepsItsConceptAndItsDatedFormIsTheSamePlanWithTheDate()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable(LiveVariable), "1", StringComparison.Ordinal))
+        {
+            Assert.Inconclusive($"{LiveVariable} is not 1: this test calls a model, and runs only when asked to.");
+        }
+
+        using var planner = AzureOpenAiAssistantPlanner.FromEnvironment(Environment.GetEnvironmentVariable)
+            ?? throw new AssertInconclusiveException("The deployment's variables are not set (LEX_ASSISTANT_ENDPOINT, _DEPLOYMENT, _API_VERSION, _KEY).");
+        var failures = new List<string>();
+        foreach (var (question, concept) in new[]
+                 {
+                     ("Quel est le délai de prescription des actions dérivant d'un contrat d'assurance ?", "délai de prescription"),
+                     ("Quelles sont les conséquences d'une omission intentionnelle dans la déclaration du risque ?", "omission intentionnelle"),
+                     ("Que prévoit la loi sur la subrogation de l'assureur ?", "subrogation"),
+                     ("Quelle est la durée du préavis de licenciement d'un salarié ?", "préavis de licenciement"),
+                 })
+        {
+            foreach (var dated in new[] { false, true })
+            {
+                var asked = dated ? question.Replace(" ?", " au 1er janvier 2020 ?", StringComparison.Ordinal) : question;
+                var (query, hasDate, operations) = SearchStep(planner, asked);
+                if (query is null || !query.Contains(concept, StringComparison.Ordinal) || operations.Contains("as_of"))
+                {
+                    failures.Add($"{asked} -> search {query ?? "none"}; operations {string.Join(",", operations)}");
+                }
+                else if (dated && !hasDate)
+                {
+                    failures.Add($"{asked} -> the search reads no date");
+                }
+            }
+        }
+
+        Assert.IsEmpty(failures, string.Join(Environment.NewLine, failures));
+    }
+
+    /// <summary>The plan's first search step's query words, whether it binds a date that is not today, and every operation named.</summary>
+    private static (string? Query, bool HasDate, string[] Operations) SearchStep(AzureOpenAiAssistantPlanner planner, string question)
+    {
+        string[] languages = ["deu", "eng", "fra"];
+        var intake = V3AssistantParsers.Intake(question) ?? throw new AssertFailedException($"{question} is no question");
+        var dates = V3AssistantParsers.DatesIn(intake.Text);
+        var context = new V3PlanContext(intake, dates, V3AssistantParsers.RangesIn(intake.Text, dates), [], languages);
+        var output = planner.Plan(new V3PlannerInput(intake.Masked, V3AnswerLocale.Fr, context.References(), languages), CancellationToken.None);
+        using var plan = JsonDocument.Parse(output.PlanJson);
+        var operations = plan.RootElement.GetProperty("steps").EnumerateArray()
+            .Concat(plan.RootElement.TryGetProperty("follow_ups", out var followUps) ? followUps.EnumerateArray() : Enumerable.Empty<JsonElement>())
+            .Select(static step => step.GetProperty("operation_id").GetString()!).ToArray();
+        foreach (var step in plan.RootElement.GetProperty("steps").EnumerateArray())
+        {
+            if (step.GetProperty("operation_id").GetString() != "search")
+            {
+                continue;
+            }
+
+            var arguments = step.GetProperty("arguments");
+            var query = arguments.TryGetProperty("query", out var q) && q.TryGetProperty("span", out var span)
+                ? intake.Masked[span[0].GetInt32()..span[1].GetInt32()]
+                : null;
+            var hasDate = arguments.TryGetProperty("date", out var date) && !date.TryGetProperty("today", out _);
+            return (query, hasDate, operations);
+        }
+
+        return (null, false, operations);
+    }
+
     /// <summary>The words of the plan's first search step's query span, or null when the plan has no search with a span.</summary>
     private static string? SearchQuery(AzureOpenAiAssistantPlanner planner, string question)
     {

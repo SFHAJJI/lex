@@ -4345,6 +4345,12 @@ internal sealed partial class V3CorpusMount : IDisposable
 
         var requestedDate = Optional("date");
         var identifier = Optional("identifier");
+        // An EU act named by its usual short name in the reviewed list the citation reader uses ("RGPD", "AI Act"): its CELEX.
+        if (identifier is not null && ExactReferenceReader.EuropeShortNamed(identifier) is { } shortNamed)
+        {
+            identifier = shortNamed;
+        }
+
         var mode = Optional("mode");
         var after = Optional("after");
         var limit = SearchMaxHits;
