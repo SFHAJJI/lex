@@ -170,13 +170,21 @@ export function EuropeTitleMatches({ europeTitles }) {
     const [only] = europeTitles.acts;
     return (
       <p data-europe-titles="one_act" data-match-reason={only.matchReason}>
-        <Say template={only.matchReason === 'whole_title' ? COPY.euTitleExact : COPY.euTitlePhrase} values={{ title: act(only) }} />
+        <Say
+          template={only.matchReason === 'short_name' ? COPY.euTitleShortName : only.matchReason === 'whole_title' ? COPY.euTitleExact : COPY.euTitlePhrase}
+          values={{ title: act(only) }}
+        />
       </p>
     );
   }
   return (
     <div data-europe-titles="several_acts" data-acts={europeTitles.acts.length}>
-      <p><Say template={countedEntry(COPY.euTitles, europeTitles.acts.length)} values={{ count: europeTitles.acts.length }} /></p>
+      <p>
+        <Say
+          template={countedEntry(europeTitles.acts.some((entry) => entry.matchReason === 'short_name') ? COPY.euTitlesFound : COPY.euTitles, europeTitles.acts.length)}
+          values={{ count: europeTitles.acts.length }}
+        />
+      </p>
       <ul>{europeTitles.acts.map((entry) => <li key={entry.seedCelex} data-match-reason={entry.matchReason}>{act(entry)}</li>)}</ul>
     </div>
   );

@@ -492,6 +492,11 @@ export const LIVE_CHROME_FR = Object.freeze({
     noTitlesHeld: 'Cet index ne contient aucun intitulé d’acte ; l’expression a donc été recherchée dans le seul texte des articles.',
     euTitleExact: 'L’expression est l’intitulé d’un acte de l’UE que ce site détient : {title}',
     euTitlePhrase: 'L’expression figure dans l’intitulé d’un acte de l’UE que ce site détient : {title}',
+    euTitleShortName: 'L’expression est le nom usuel d’un acte de l’UE que ce site détient : {title}',
+    euTitlesFound: Object.freeze({
+      one: '{count} acte de l’UE que ce site détient correspond à l’expression, par son intitulé ou son nom usuel :',
+      other: '{count} actes de l’UE que ce site détient correspondent à l’expression, par leurs intitulés ou leurs noms usuels :',
+    }),
     euTitles: Object.freeze({
       one: 'L’expression figure dans l’intitulé de {count} acte de l’UE que ce site détient :',
       other: 'L’expression figure dans les intitulés de {count} actes de l’UE que ce site détient :',

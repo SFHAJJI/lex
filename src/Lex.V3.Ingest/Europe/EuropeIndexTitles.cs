@@ -372,6 +372,20 @@ public sealed partial class EuropeIndexReader
     }
 
     /// <summary>
+    /// The titles the index holds of one work's expressions, in source order (<see cref="EuropeTitleSources.InOrder"/>), then
+    /// identity. Throws on an index that holds no title table.
+    /// </summary>
+    public IReadOnlyList<EuropeIndexExpressionTitle> ReadWorkTitles(string publisherWorkIri)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publisherWorkIri);
+        if (!HasTitles) throw new InvalidOperationException("This historical EU index has no title table.");
+        return Array.AsReadOnly(_titles.Where(row => string.Equals(row.PublisherWorkIri, publisherWorkIri, StringComparison.Ordinal))
+            .OrderBy(static row => EuropeTitleSources.InOrder.ToList().IndexOf(row.Source))
+            .ThenBy(static row => row.TitleIdentitySha256, StringComparer.Ordinal)
+            .ToArray());
+    }
+
+    /// <summary>
     /// The Official Journal references the index holds of the given expressions, in expression order, then kind, then identity.
     /// Throws on an index that holds no reference table.
     /// </summary>

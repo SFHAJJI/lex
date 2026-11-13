@@ -69,6 +69,12 @@ const EN = Object.freeze({
     // is not searched here.
     euTitleExact: "The phrase is the title of an EU act this site holds: {title}",
     euTitlePhrase: "The phrase is in the title of an EU act this site holds: {title}",
+    // An act listed by its usual short name ("AI Act", "RGPD"), from the reviewed list the citation reader uses.
+    euTitleShortName: "The phrase is the usual short name of an EU act this site holds: {title}",
+    euTitlesFound: Object.freeze({
+      one: "{count} EU act this site holds matches the phrase, by its title or usual short name:",
+      other: "{count} EU acts this site holds match the phrase, by their titles or usual short names:",
+    }),
     euTitles: Object.freeze({
       one: "The phrase is in the title of {count} EU act this site holds:",
       other: "The phrase is in the titles of {count} EU acts this site holds:",
