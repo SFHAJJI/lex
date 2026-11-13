@@ -535,6 +535,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       other: 'Le même texte figure dans {count} autres libellés interrogés par ce site.',
     }),
     notHeldHeading: 'Ce que cette recherche ne couvre pas',
+    matchingSummary: 'Comment les mots ont été comparés',
     placeholder: 'Rechercher par intitulé, numéro, ELI ou CELEX, ou par des mots du texte',
     dated: 'Seuls des actes luxembourgeois ont été interrogés. Pour chacun, la version dont les dates de l’éditeur couvrent le {date} a été interrogée ; un acte sans une telle version, ou pour lequel ce site ne détient pas le texte de cette version, ne l’a pas été. Un acte détenu uniquement tel que publié est interrogé tel que publié, et peut avoir été modifié depuis.',
     undated: 'Seuls des actes luxembourgeois ont été interrogés, sans date : toutes les versions que ce site détient ont été interrogées, et chaque résultat indique la date de sa version.',
@@ -639,6 +640,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     readOnDateLabel: 'Lire l’acte tel qu’il était à une date',
     readOnDateButton: 'Lire',
     notHeldHeading: 'Ce que ce dossier ne contient pas',
+    detailsSummary: 'Détails : ce que cette fiche ne contient pas, et comment ses dates se lisent',
     euExpressions: Object.freeze({
       one: '{count} expression détenue, présentée avec son libellé original.',
       other: '{count} expressions détenues, chacune présentée avec son libellé original.',
@@ -1359,6 +1361,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       other: '{channel} : la dernière collecte complète s’est achevée le {date}, {count} jours entiers avant la réponse donnée par le serveur le {today} ; le décalage entre publication et collecte n’est pas encore mesuré.',
     }),
     collectedUnstated: '{channel} : la date à laquelle sa dernière collecte complète s’est achevée n’est pas consignée avec cet index ; le décalage entre publication et collecte n’est pas encore mesuré.',
+    commitsSummary: 'Versions des données et du code',
     indexCommit: 'Révision du code ayant construit l’index',
     serviceCommit: 'Révision du code du service en fonctionnement',
     commitUnstated: 'non consignée',

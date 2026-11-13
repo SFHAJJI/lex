@@ -1836,7 +1836,7 @@ export function fixtureMountExpectations(journeyMount) {
     ["coverage", { step: coverage, state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }],
     ["home", { step: home, state: "success", texts: homeTexts }],
     ["search", { step: search, state: "success", texts: [...searchTexts, "Only Luxembourg acts were searched, with no date: every version this site holds was searched"] }],
-    ["dossier", { step: dossier, state: "success", texts: [journeyMount.work_key, "1 state, from 2024-02-01 to 2024-02-01.", "What this dossier does not hold", AS_PUBLISHED_SAID] }],
+    ["dossier", { step: dossier, state: "success", texts: [journeyMount.work_key, "1 state, from 2024-02-01 to 2024-02-01.", "Details: what this record does not hold, and how its dates are read", AS_PUBLISHED_SAID] }],
     ["reading", { step: reading, state: "success", texts: ["the state applying from 2024-02-01", "49 articles quoted", "Art. 15.", "Text served under agreed_same_run_cc_by", AS_PUBLISHED_SAID, NOT_ADVICE_SAID] }],
     ["history", { step: history, state: "success", texts: [`${HISTORY_ANCHOR} in loi-1991-08-10-n3`, "Carried by 1 held state, from 2024-02-01", "first held wording"] }],
     ["compare", { step: compare, state: "success", texts: [`loi-1991-08-10-n3: ${READING_DATE} against ${READING_DATE}.`, `Both dates select the one text held, the act as published, applicable from ${READING_DATE} (publisher); later versions are not held.`, AS_PUBLISHED_SAID] }],

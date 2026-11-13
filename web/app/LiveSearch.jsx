@@ -523,8 +523,12 @@ function NoHitCard({ view, today = null }) {
     <section className="no-hit-card" data-no-hit-card="">
       <p data-no-hit="">
         {/* With no work named, a search is of Luxembourg law alone, and says so. */}
-        <Say template={view.identifier === null ? COPY.noHitLuxembourg : COPY.noHit} values={{ query: view.query }} /> {inEnglish(asSentence(view.matching))}
+        <Say template={view.identifier === null ? COPY.noHitLuxembourg : COPY.noHit} values={{ query: view.query }} />
       </p>
+      <details className="no-hit-matching" data-no-hit-matching="">
+        <summary>{COPY.matchingSummary}</summary>
+        <p>{inEnglish(asSentence(view.matching))}</p>
+      </details>
       <h2>{COPY.searchesRun}</h2>
       <ul data-searches-run="">
         <li data-search-run="reference">{reference}</li>

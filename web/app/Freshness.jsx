@@ -68,10 +68,13 @@ export function FreshnessStrip({ facts = null, answers = true }) {
           ))}
         </ul>
       )}
-      <dl className="freshness-commits">
-        <Commit label={copy.indexCommit} commit={facts.indexCommit} unstated={copy.commitUnstated} />
-        <Commit label={copy.serviceCommit} commit={facts.serviceCommit} unstated={copy.commitUnstated} />
-      </dl>
+      <details className="freshness-commits-details" data-freshness-commits="">
+        <summary>{copy.commitsSummary}</summary>
+        <dl className="freshness-commits">
+          <Commit label={copy.indexCommit} commit={facts.indexCommit} unstated={copy.commitUnstated} />
+          <Commit label={copy.serviceCommit} commit={facts.serviceCommit} unstated={copy.commitUnstated} />
+        </dl>
+      </details>
       <p data-guide-note=""><GuideLink section="freshness" /></p>
     </section>
   );
