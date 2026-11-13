@@ -86,6 +86,11 @@ const EN = Object.freeze({
       one: "EU titles: the phrase is in the title of the EU act shown above.",
       other: "EU titles: the phrase is in the titles of the EU acts shown above.",
     }),
+    // When an act above is listed by its usual short name, the line says so rather than that the phrase is in a title.
+    runEuTitlesNamed: Object.freeze({
+      one: "EU titles and usual short names: the phrase names the EU act shown above.",
+      other: "EU titles and usual short names: the phrase names the EU acts shown above, by title or usual short name.",
+    }),
     ambiguousHeading: "Works with several versions on {date}",
     ambiguousNote: "These works have more than one version that applies on that date, so none is chosen and none contributes a hit.",
     ambiguousWork: "{work}: {candidates}",

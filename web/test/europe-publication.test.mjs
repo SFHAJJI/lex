@@ -207,6 +207,8 @@ test("a search that names no work lists the EU acts its phrase names by title, l
   assert.match(namedMarkup, /data-match-reason="short_name"/);
   assert.match(namedMarkup, /usual short name of an EU act this site holds/);
   assert.doesNotMatch(namedMarkup, /is in the title of an EU act/);
+  assert.match(namedMarkup, /the phrase names the EU act shown above/);
+  assert.doesNotMatch(namedMarkup, /the phrase is in the title of the EU act shown above/);
 });
 
 test("each title and reference entry says what it is without a date word, in English and in French", () => {
@@ -214,7 +216,7 @@ test("each title and reference entry says what it is without a date word, in Eng
     const entries = entriesOf(table).filter(([path]) => path.startsWith("common.europePublication.") || path.startsWith("citation.europe.journal.")
       || path.startsWith("search.euTitle") || path.startsWith("search.runEuTitles") || path === "search.euTitlesSearched"
       || path === "citation.evidence.officialJournal" || path === "citation.evidence.officialJournalConsolidated");
-    assert.equal(entries.length, 7 + 6 + 9 + 3 + 2, `${language}: the entries`);
+    assert.equal(entries.length, 7 + 6 + 9 + 5 + 2, `${language}: the entries`);
     for (const [path, text] of entries) assertTimeVocabulary(text, `${language} ${path}`);
   }
   assert.equal(LIVE_CHROME.fr.citation.evidence.officialJournal, `Publication${NB}: {reference}`);

@@ -531,7 +531,9 @@ function NoHitCard({ view, today = null }) {
         <li data-search-run="titles">{titles}{titlesFolded ? <>{' '}<span data-title-matching="">{COPY.titleMatching}</span></> : null}</li>
         {europeTitles === null ? null : (
           <li data-search-run="eu-titles">
-            {europeTitles.acts.length === 0 ? COPY.runEuTitles : countedEntry(COPY.runEuTitlesMatched, europeTitles.acts.length)}
+            {europeTitles.acts.length === 0 ? COPY.runEuTitles : countedEntry(
+              europeTitles.acts.some((entry) => entry.matchReason === 'short_name') ? COPY.runEuTitlesNamed : COPY.runEuTitlesMatched,
+              europeTitles.acts.length)}
             {' '}<span data-title-matching="">{COPY.titleMatching}</span>
           </li>
         )}
