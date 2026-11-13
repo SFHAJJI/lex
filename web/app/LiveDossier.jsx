@@ -522,16 +522,19 @@ export function DossierView({ view, today = null }) {
       {view.states.some(datedByEntryIntoForce) ? <p data-entry-into-force-note="">{COPY.entryIntoForceNote}</p> : null}
       <CatalogueChain chain={view.chain} />
       <PublisherRelations relations={view.relations ?? null} workKey={view.workKey} />
-      <p lang={ENGLISH_LANG}>{asSentence(view.articlesNotAdmittedNote)}</p>
-      <h3>{COPY.notHeldHeading}</h3>
-      <ul data-not-held={view.notHeld.length}>
-        {view.notHeld.map((row) => (
-          <li key={row.item}>
-            <Say template={COMMON.notHeldRow} values={{ item: <strong>{row.item}</strong>, reason: inEnglish(row.reason) }} />
-          </li>
-        ))}
-      </ul>
-      <p lang={ENGLISH_LANG}>{asSentence(view.scope)}</p>
+      <details className="dossier-details" data-dossier-details="">
+        <summary>{COPY.detailsSummary}</summary>
+        <p lang={ENGLISH_LANG}>{asSentence(view.articlesNotAdmittedNote)}</p>
+        <h3>{COPY.notHeldHeading}</h3>
+        <ul data-not-held={view.notHeld.length}>
+          {view.notHeld.map((row) => (
+            <li key={row.item}>
+              <Say template={COMMON.notHeldRow} values={{ item: <strong>{row.item}</strong>, reason: inEnglish(row.reason) }} />
+            </li>
+          ))}
+        </ul>
+        <p lang={ENGLISH_LANG}>{asSentence(view.scope)}</p>
+      </details>
     </>
   );
 }
@@ -583,16 +586,19 @@ export function EuropeDossierView({ view, today = null }) {
         <EuropeAnnexes key={expression.expressionIri} rows={expression.annexesNotServed} language={expression.language} />
       ))}
       <EuropeForceDates forceDates={view.forceDates ?? null} />
-      <p data-date-semantics="" lang={ENGLISH_LANG}>{asSentence(view.dateSemantics)}</p>
-      <h3>{COPY.notHeldHeading}</h3>
-      <ul data-not-held={view.notHeld.length}>
-        {view.notHeld.map((row) => (
-          <li key={row.item}>
-            <Say template={COMMON.notHeldRow} values={{ item: <strong>{row.item}</strong>, reason: inEnglish(row.reason) }} />
-          </li>
-        ))}
-      </ul>
-      <p lang={ENGLISH_LANG}>{asSentence(view.scope)}</p>
+      <details className="dossier-details" data-dossier-details="">
+        <summary>{COPY.detailsSummary}</summary>
+        <p data-date-semantics="" lang={ENGLISH_LANG}>{asSentence(view.dateSemantics)}</p>
+        <h3>{COPY.notHeldHeading}</h3>
+        <ul data-not-held={view.notHeld.length}>
+          {view.notHeld.map((row) => (
+            <li key={row.item}>
+              <Say template={COMMON.notHeldRow} values={{ item: <strong>{row.item}</strong>, reason: inEnglish(row.reason) }} />
+            </li>
+          ))}
+        </ul>
+        <p lang={ENGLISH_LANG}>{asSentence(view.scope)}</p>
+      </details>
     </>
   );
 }

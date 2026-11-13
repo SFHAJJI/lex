@@ -117,6 +117,8 @@ const EN = Object.freeze({
       other: "The same text is in {count} other wordings this site searched.",
     }),
     notHeldHeading: "What this search does not cover",
+    // How the words were compared, one action away from the plain no-hit sentence (R28).
+    matchingSummary: "How the words were compared",
     // The one box's placeholder, word for word the specification of record's (R52).
     placeholder: "Search by title, number, ELI or CELEX, or words from the text",
     // What a Luxembourg search was asked at (R13: the date is printed), said of what this site holds (R21, R22, R76): the
@@ -248,6 +250,8 @@ const EN = Object.freeze({
     readOnDateLabel: "Read the act as it stood on a date",
     readOnDateButton: "Read",
     notHeldHeading: "What this dossier does not hold",
+    // What the dossier does not hold, its scope and how its dates are read, one action away (R51, R28).
+    detailsSummary: "Details: what this record does not hold, and how its dates are read",
     euExpressions: Object.freeze({
       one: "{count} expression held, shown with its original wording.",
       other: "{count} expressions held, each shown with its original wording.",
@@ -772,6 +776,8 @@ const EN = Object.freeze({
       other: "{channel}: last complete collection ended on {date}, {count} full days before the server answered on {today}; lag not yet measured.",
     }),
     collectedUnstated: "{channel}: when its last complete collection ended is not recorded with this index; lag not yet measured.",
+    // The commits that built and serve the page, one action away (R51: commits in the detailed view).
+    commitsSummary: "Versions of the data and the code",
     indexCommit: "Index built from",
     serviceCommit: "Service running",
     commitUnstated: "(not recorded)",

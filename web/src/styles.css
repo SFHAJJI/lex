@@ -1943,8 +1943,24 @@ main > * {
 }
 
 .info-control::before {
-  content: "\24D8\00a0";
-  content: "\24D8\00a0" / "";
+  content: "i";
+  content: "i" / "";
+  display: inline-grid;
+  place-items: center;
+  inline-size: 1.15em;
+  block-size: 1.15em;
+  margin-inline-end: 0.35em;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 0.8em;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.no-hit-matching summary,
+.dossier-details summary,
+.freshness-commits-details summary {
+  cursor: pointer;
 }
 
 /* The print view of Reading (R62's fifth item, "a clean print view of Reading", pack 33 section 7 rule 9; UX spec section 3:
