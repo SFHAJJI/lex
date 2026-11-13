@@ -174,8 +174,9 @@ export function LiveHome({ contract, fetchImpl, facts = null, examples = HOME_EX
   return (
     <>
       {assistant ? <HomeAsk /> : null}
-      <section className="home-search" aria-labelledby="home-search-heading" data-home-search="">
-        <h2 id="home-search-heading">{COPY.searchHeading}</h2>
+      <section className="home-search" aria-labelledby={assistant ? 'home-search-heading' : undefined} data-home-search="">
+        {/* Its heading only beside the question box; alone, the box and the sentence under it stay on a phone's first screen (R47). */}
+        {assistant ? <h2 id="home-search-heading">{COPY.searchHeading}</h2> : null}
         <LiveSearch contract={contract} fetchImpl={fetchImpl} variant="home" today={facts?.today ?? null} />
       </section>
       <HomeTrust assistant={assistant} />

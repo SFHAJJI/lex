@@ -1373,7 +1373,6 @@ export const LIVE_CHROME_FR = Object.freeze({
     eyebrow: 'Droit luxembourgeois et de l’UE',
     headingAsk: 'Posez votre question. Lisez le texte officiel.',
     heading: 'Le droit luxembourgeois et de l’UE à la date de votre choix',
-    lede: 'Cherchez un texte, lisez-le tel qu’il se présentait à la date de votre choix et voyez ce qui a changé. Lex ne montre que le texte publié, daté et relié à sa source officielle, et dit clairement quand il ne le détient pas.',
     ledeAsk: 'Posez une question ou cherchez un texte. Lex ne répond qu’avec le texte publié de la loi, daté et relié à sa source officielle, et dit clairement quand il ne peut pas répondre.',
     askHeading: 'Posez une question',
     askLabel: 'Votre question sur le droit luxembourgeois ou de l’UE',

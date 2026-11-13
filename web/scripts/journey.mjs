@@ -1828,7 +1828,8 @@ export function fixtureMountExpectations(journeyMount) {
     ...searchTexts,
     "Only Luxembourg acts were searched. For each, the version whose publisher dates cover",
     "An act held only as published is searched as published, and may have been amended since.",
-    "A search by words covers Luxembourg law. An ELI, a CELEX number, a Mémorial reference, a permalink, or the citation of an article of an act, with or without a date, opens that act, Luxembourg or EU, when this site holds it. To search within an EU act, name it by its CELEX number on the search page.",
+    // What the search covers, one action away under its summary (2026-11-13); the summary is what a reader sees first.
+    "What the search covers",
     "This site holds 1 act of Luxembourg law, in 1 version with 49 articles, as of the index built on",
   ];
   return [

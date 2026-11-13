@@ -42,7 +42,7 @@ export function renderLiveHomePage({ facts = null, freshness = null } = {}) {
       <p className="eyebrow">{copy.eyebrow}</p>
       {/* With the assistant on, the page invites a question; while it is off, it says what the search does (R52). */}
       <h1>{facts?.assistant === true ? copy.headingAsk : copy.heading}</h1>
-      <p className="home-lede">{facts?.assistant === true ? copy.ledeAsk : copy.lede}</p>
+      {facts?.assistant === true ? <p className="home-lede">{copy.ledeAsk}</p> : null}
       <div id={LIVE_HOME_ROOT}>{liveHomeTree(facts)}</div>
       {facts === null ? null : <script type="application/json" id={HOME_FACTS_ID} dangerouslySetInnerHTML={{ __html: jsonInScript(facts) }} />}
       <script src={livePath('client-live-home.js')} defer />

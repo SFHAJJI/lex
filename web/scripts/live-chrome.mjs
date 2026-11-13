@@ -788,9 +788,8 @@ const EN = Object.freeze({
     title: "Luxembourg and EU law at a date you choose",
     eyebrow: "Luxembourg and EU law",
     headingAsk: "Ask the law. Read the official text.",
-    // The heading and opening while the assistant is off (R52: nothing unserved is said); with it on, `headingAsk` and `ledeAsk`.
+    // The heading while the assistant is off, as before (R47, R52); with it on, `headingAsk` and `ledeAsk` above the question box.
     heading: "Luxembourg and EU law at a date you choose",
-    lede: "Search a law, read it as it stood on the date you choose, and see what changed. Lex shows only the published text, dated and linked to its official source, and says plainly when it does not hold one.",
     // The home page's opening (2026-11-13, the owner's choice of an assistant-first home): what Lex does, in one sentence.
     ledeAsk: "Ask a question or search a law. Lex answers only with the published text of the law, dated and linked to its official source, and says plainly when it cannot answer.",
     // The question box, shown only while the server reports the assistant switched on (R52): it opens the assistant's page
