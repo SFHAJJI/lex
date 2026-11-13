@@ -2,6 +2,14 @@
 
 Updated 2026-11-11.
 
+## lex-eval on GitHub, private (sole driver, 2026-11-13)
+
+`docs/lex-eval-published`. On the owner's yes (2026-11-13), `C:\lex-v3\lex-eval` (commit 00a1b9ca, 15 tracked files: the
+harness, 15 cases, two fixtures, tests, CI) is pushed to the private repository SFHAJJI/lex-eval. Before the push: `git grep`
+for keys, tokens, SAS strings and personal e-mail found nothing; the only address is the fake case's `example.com`;
+`mlflow.db` and `mlruns/` stay local (ignored). Its CI run 43377005816 passed (`ci success 00a1b9ca`). Public visibility
+is the owner's decision.
+
 ## The final release's backup verified; an assistant gap found while testing the demo (sole driver, 2026-11-12)
 
 `docs/brief-backup-done`. The R111 backup, run again with #1034's script: "verified: 14 objects of
