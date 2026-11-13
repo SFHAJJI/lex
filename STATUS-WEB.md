@@ -4,6 +4,32 @@ Updated 2026-11-13. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Release 5 is live: the assistant-first front, on the owner's yes (sole driver, 2026-11-13)
+
+`docs/release-5-live`. **Live since 21:10:59 UTC**: `v3-20261113T194409Z-17e2ab50263e`, revision
+`ca-lex-v3--v3-20261113t194409z-17e2ab50263e-9e0d92b6`, 100% of the traffic; serving commit 17e2ab50, over Release 4's
+mount `d4-20261113-bfb83983` (no data change: release comparison pass, listed 0; textless pass, unexplained 0).
+
+- **Attempts.** The first release job (`lex-v3-release-…`, 18:08) failed in 3 s: the kit's `release.sh` keyed a fetched
+  mount by its prefix, so a release over the serving release's own mount skipped the serving copy ("The mount directory
+  /local/serving-mount does not exist"); the kit now keys it by role too (driver's kit, outside the repository). The second
+  (`v3-20261113T180745Z-09a01fe38a80`) was refused by the deploy probe and deactivated, no traffic moved (#1042). The third
+  (`lex-v3-release-23zlo4i`, 19:44 to 20:37) passed.
+- **Deploy** (`deploy-public.ps1 -Apply`): healthy at its own address, the HTTP probes as the release holds, the data's
+  age and the card allow promotion. At the candidate's own address: "Que dit l'article 1er de la loi du 27 juillet 1997
+  sur le contrat d'assurance ?" now answers (quote 1; Release 4: `clarify`), as do the 2015 insurance law, GDPR 5 and 22,
+  AI Act 50 and Code civil 1er; the insurer question is refused; the search lists "AI Act" and "RGPD" by `short_name`;
+  `/fr/`, `/fr/how-it-works.html`, `/fr/quality.html`, `/en/quality.html` 200. Screenshots of 15 pages at desktop and
+  phone widths, on GitHub's runner (`ops/screens`, run 43505281776), shown to the owner, who said to put it live. Two-
+  address check PASS (this PC 185 x 429 while the job's address got 200). Release 4's revision is deactivated, kept.
+- **Backup (R111)**: "verified: 14 objects of v3-20261113T194409Z-17e2ab50263e in stlexv3soufien/releases by SHA-256, and
+  427 custody pointers" (the first verification refused for disk, 3.18 GB free; the final release's local image tar was
+  removed after its own verified backup, IMAGE-TAR-REMOVED.txt).
+- **lex-eval** on the live release: 15 of 16 (0.938), every gate passed, 13 quotes all verified, same verdict on every
+  replay, p50 1.88 s, p95 2.30 s; registered. The one miss: DORA article 6 in English (point).
+- **Next** (Sunday's update): line breaks in a Luxembourg quote whose text holds no space between its parts (the 1997
+  law's definitions), thousands separators in the counts, example searches that matter, the 94% run on the Quality page.
+
 ## The home page's heading stays the page as built; the deploy probe refused the first candidate of Release 5 (sole driver, 2026-11-13)
 
 `web/home-heading-in-root`. Release 5 (`v3-20261113T180745Z-09a01fe38a80`, #1040 and #1041) was deployed as a zero-traffic
