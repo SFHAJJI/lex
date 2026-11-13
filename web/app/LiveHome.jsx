@@ -173,6 +173,7 @@ export function LiveHome({ contract, fetchImpl, facts = null, examples = HOME_EX
   useEffect(() => (facts === null ? startHomeCoverage({ contract, fetchImpl, onLine: setLine, onAssistant: setAssistant }) : undefined), []);
   return (
     <>
+      {assistant ? <p className="home-lede">{COPY.ledeAsk}</p> : null}
       {assistant ? <HomeAsk /> : null}
       <section className="home-search" aria-labelledby={assistant ? 'home-search-heading' : undefined} data-home-search="">
         {/* Its heading only beside the question box; alone, the box and the sentence under it stay on a phone's first screen (R47). */}

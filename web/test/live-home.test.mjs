@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { homePageParts, withoutFreshness } from "../scripts/deploy-probe.mjs";
 import { createElement as h } from "react";
 import { renderToStaticMarkup, renderToString } from "react-dom/server";
 
@@ -323,6 +324,17 @@ test("the assistant's entry exists only while the server reports the assistant o
   const { assistant, ...without } = on;
   assert.equal(assistant, true);
   assert.equal(renderLiveHomePage({ facts: without }).includes("/en/assistant"), false);
+});
+
+test("outside its root and its facts, the home page rendered with the assistant on is the page as built, as the deploy probe holds it", () => {
+  const on = homeFacts(coverageAt("2026-10-15T10:00:00.0000000Z", (value) => ({ ...value, assistant: { state: "on", operation_id: "ask", page: "assistant", preview: true } })), LIVE_CONTRACT);
+  const outside = (html) => {
+    const parts = homePageParts(html);
+    const strip = (text) => withoutFreshness(text.replace(/<meta name="robots"[^>]*\/>/g, ""));
+    return [strip(parts.before), withoutFreshness(parts.after)];
+  };
+  assert.deepEqual(outside(renderLiveHomePage({ facts: on })), outside(renderLiveHomePage()));
+  assert.deepEqual(outside(rendered(COVERAGE)), outside(renderLiveHomePage()));
 });
 
 test("with the assistant on, the home page opens with its question box and example questions, each a link that asks it, and says how Lex works (2026-11-13)", () => {

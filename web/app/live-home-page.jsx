@@ -40,9 +40,9 @@ export function renderLiveHomePage({ facts = null, freshness = null } = {}) {
       freshness={freshness}
     >
       <p className="eyebrow">{copy.eyebrow}</p>
-      {/* With the assistant on, the page invites a question; while it is off, it says what the search does (R52). */}
-      <h1>{facts?.assistant === true ? copy.headingAsk : copy.heading}</h1>
-      {facts?.assistant === true ? <p className="home-lede">{copy.ledeAsk}</p> : null}
+      {/* Outside the root, the page is the page as built whatever the answer says (the deploy probe holds it byte for byte,
+          `homePageFailures`): what depends on the assistant's switch is said inside the root (`LiveHome.jsx`). */}
+      <h1>{copy.heading}</h1>
       <div id={LIVE_HOME_ROOT}>{liveHomeTree(facts)}</div>
       {facts === null ? null : <script type="application/json" id={HOME_FACTS_ID} dangerouslySetInnerHTML={{ __html: jsonInScript(facts) }} />}
       <script src={livePath('client-live-home.js')} defer />
