@@ -4,6 +4,18 @@ Updated 2026-11-13. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Plain first: the matching rule, a dossier's scope and what it does not hold, and the footer's commits one action away (sole driver, 2026-11-13)
+
+`web/plain-first`, after `web/front-assistant-first`. R51 and R28 ask for a plain sentence first and hashes, commits,
+rules and machine names in the detailed view; the screenshots of the live site showed them inline. Now one action away,
+each under its own summary (`details`, which works without scripts), every word unchanged: the no-hit card's matching rule
+("How the words were compared"), a Luxembourg or EU dossier's note on articles not admitted, its date semantics, what it
+does not hold and its scope ("Details: what this record does not hold, and how its dates are read"), and the footer's two
+commits ("Versions of the data and the code"). The info control's circled i (U+24D8) is a character the site's fonts do not
+hold, an empty box on a system without one; the stylesheet now draws it. The dossier journey expects the summary.
+
+Evidence: web `npm run build`, `npm test` 1,527 tests, 0 fail; the journeys run in CI.
+
 ## The front, assistant-first: the home page asks, How Lex works, the assistant's results, readable answers; the planner keeps an act's title words (sole driver, 2026-11-13)
 
 `web/front-assistant-first`. **The owner's choice** (2026-11-13, asked with options: "Rebuild the front", not "start Lex
