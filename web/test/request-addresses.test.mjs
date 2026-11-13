@@ -99,6 +99,9 @@ const PINNED = Object.freeze({
   "app/page-address.mjs: the history: if (after !== before) window.history.replaceState(window.history.state, '', after);": "the page's own path, a fragment or a date",
   "app/page-address.mjs: the page's address: export function replacePageAddress(window, { search = window.location.search, hash = window.location.hash } = {}) {": "its definition: the path is the page's own",
   "app/LiveSearch.jsx: the page's address: if (fragment !== null) replacePageAddress(window, { hash: fragment });": "the search, after #",
+  // The home page's question box (2026-11-13) opens the assistant's page with the question after "#" (`ask-fragment.mjs`):
+  // the browser never sends a fragment, and the page sends the question to `ask` in a request's body alone.
+  "app/LiveHome.jsx: a navigation: if (asked.length > 0) window.location.assign(assistantHref(asked));": "the assistant's page, the question after #",
   "app/LiveReading.jsx: the page's address: replacePageAddress(window, { search: withDateQuery(window.location.search, pin.request.date) });": "the date read at, in the query",
   // R57: a comparison asked of an act named by this site's address is written into the compare page's own query, so it can be
   // shared and read without JavaScript: a law's address and two dates (`compareQueryOf`), never a word.

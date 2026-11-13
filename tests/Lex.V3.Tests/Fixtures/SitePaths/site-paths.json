@@ -951,6 +951,22 @@
       "file": "en/cookies.html"
     },
     {
+      "path": "/fr/how-it-works.html",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null,
+      "file": "fr/how-it-works.html"
+    },
+    {
+      "path": "/fr/quality.html",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null,
+      "file": "fr/quality.html"
+    },
+    {
       "path": "/fr/help.html",
       "page": null,
       "redirect": null,
@@ -980,6 +996,22 @@
         }
       },
       "file": "fr/developers.html"
+    },
+    {
+      "path": "/en/how-it-works.html",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null,
+      "file": "en/how-it-works.html"
+    },
+    {
+      "path": "/en/quality.html",
+      "page": null,
+      "redirect": null,
+      "moved": null,
+      "render": null,
+      "file": "en/quality.html"
     },
     {
       "path": "/en/help.html",

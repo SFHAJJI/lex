@@ -2039,3 +2039,330 @@ main > * {
     word-break: break-all;
   }
 }
+
+/* The assistant-first home page, How Lex works and the assistant's measured results (2026-11-13, the owner's choice for an
+   assistant-first site that says how it is built). The colours are the site's own: the ink, the green of the submit button
+   and the eyebrow, the muted line of the coverage sentence; each has its dark counterpart below. */
+.home-lede,
+.page-lede {
+  max-inline-size: 42rem;
+  margin: 0;
+  font-size: clamp(1.05rem, 2.2vw, 1.2rem);
+  line-height: 1.55;
+}
+
+.home-ask,
+.home-search,
+.home-trust {
+  display: grid;
+  gap: 0.6rem;
+  max-inline-size: 42rem;
+}
+
+.home-ask {
+  padding: 1.25rem;
+  border: 2px solid #1f4d33;
+  border-radius: 10px;
+  background: #fbfaf5;
+}
+
+.home-ask h2,
+.home-search h2,
+.home-trust h2 {
+  margin: 0;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.35rem;
+}
+
+.home-ask-form {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.home-ask-form textarea {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-block-size: 3.5rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid #5d6f62;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 1rem;
+}
+
+.home-ask-form button {
+  justify-self: start;
+}
+
+.home-ask p {
+  margin: 0;
+}
+
+.home-ask-examples {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-ask-examples a {
+  display: inline-block;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid #9fb3a5;
+  border-radius: 999px;
+  text-decoration: none;
+  line-height: 1.4;
+}
+
+.home-ask-examples a:hover,
+.home-ask-examples a:focus-visible {
+  border-color: #1f4d33;
+  text-decoration: underline;
+}
+
+.home-ask-note {
+  color: #44554a;
+  font-size: 0.9rem;
+}
+
+.home-trust ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.9rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-trust li {
+  display: grid;
+  gap: 0.25rem;
+  padding-block-start: 0.6rem;
+  border-block-start: 3px solid #3f5d4a;
+  line-height: 1.5;
+}
+
+.home-trust-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+  margin: 0;
+}
+
+.search-scope summary {
+  cursor: pointer;
+  color: #44554a;
+}
+
+.flow {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.flow figcaption {
+  color: #44554a;
+  font-size: 0.95rem;
+}
+
+.flow ol {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: flow;
+}
+
+.flow li {
+  display: grid;
+  align-content: start;
+  gap: 0.3rem;
+  padding: 0.8rem;
+  border: 1px solid #9fb3a5;
+  border-radius: 8px;
+  background: #fbfaf5;
+  line-height: 1.45;
+  counter-increment: flow;
+}
+
+.flow li strong::before {
+  content: counter(flow) ". ";
+  color: #3f5d4a;
+}
+
+.quality-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+}
+
+.quality-tile {
+  display: grid;
+  align-content: start;
+  gap: 0.3rem;
+  padding: 0.9rem;
+  border: 1px solid #9fb3a5;
+  border-radius: 8px;
+  background: #fbfaf5;
+}
+
+.quality-tile strong {
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.8rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.quality-tile span {
+  color: #44554a;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.quality-bars {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quality-bars li {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.quality-bar-label {
+  font-variant-numeric: tabular-nums;
+}
+
+.quality-bar {
+  display: block;
+  inline-size: 100%;
+  block-size: 0.9rem;
+}
+
+.quality-bar-track {
+  fill: #e3e8df;
+}
+
+.quality-bar-fill {
+  fill: #1f4d33;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.quality-table {
+  border-collapse: collapse;
+  inline-size: 100%;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.quality-table th,
+.quality-table td {
+  padding: 0.45rem 0.6rem;
+  border-block-end: 1px solid #c9d2c6;
+  text-align: start;
+  vertical-align: top;
+  line-height: 1.45;
+}
+
+.quality-table thead th {
+  color: #44554a;
+  font-size: 0.85rem;
+}
+
+.assistant-quote p {
+  margin: 0 0 0.6rem;
+  line-height: 1.6;
+}
+
+.assistant-quote p:last-child {
+  margin-block-end: 0;
+}
+
+.assistant-quote-heading {
+  margin: 0.75rem 0 0.25rem;
+  font-weight: 600;
+}
+
+.assistant-checks,
+.assistant-other-languages {
+  margin-block: 0.5rem;
+}
+
+.assistant-checks summary,
+.assistant-other-languages summary {
+  cursor: pointer;
+  color: #44554a;
+}
+
+.assistant-checks p {
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .home-ask {
+    border-color: #7fd3a3;
+    background: #18201b;
+  }
+
+  .home-ask-form textarea {
+    border-color: #7f9184;
+    background: #18201b;
+    color: inherit;
+  }
+
+  .home-ask-examples a {
+    border-color: #5d6f62;
+  }
+
+  .home-ask-examples a:hover,
+  .home-ask-examples a:focus-visible {
+    border-color: #7fd3a3;
+  }
+
+  .home-ask-note,
+  .search-scope summary,
+  .flow figcaption,
+  .quality-tile span,
+  .quality-table thead th,
+  .assistant-checks summary,
+  .assistant-other-languages summary {
+    color: #b9c7bc;
+  }
+
+  .home-trust li {
+    border-block-start-color: #a5c9b0;
+  }
+
+  .flow li,
+  .quality-tile {
+    border-color: #5d6f62;
+    background: #18201b;
+  }
+
+  .flow li strong::before {
+    color: #a5c9b0;
+  }
+
+  .quality-bar-track {
+    fill: #2a352d;
+  }
+
+  .quality-bar-fill {
+    fill: #7fd3a3;
+  }
+
+  .quality-table th,
+  .quality-table td {
+    border-block-end-color: #3a463d;
+  }
+}

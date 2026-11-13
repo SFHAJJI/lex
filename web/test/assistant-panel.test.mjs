@@ -214,3 +214,59 @@ test("the panel reads an ask envelope: an answer, a refuse as advice_boundary, a
   assert.equal(askOutcome({ result: { object_type: 'handoff_card', value: { presentation_result: 'localization_unavailable', sentences: { fr: 'FR', en: 'EN' } } } }, 'fr').sentence, 'FR');
   assert.equal(askOutcome(null, 'en').dossier, null);
 });
+
+test('a question in the page address is read once, trimmed, and only from "#q=" (2026-11-13: the home page opens the assistant with it)', async () => {
+  const { askFragment, readAskFragment, ASK_FRAGMENT_MAX } = ASSISTANT_PANEL_IO;
+  for (const question of ["Que dit l'article 5 du RGPD ?", 'What does Article 50 of the AI Act say?', 'a & b = c #1 ?']) {
+    assert.equal(readAskFragment(askFragment(question)), question, question);
+    assert.ok(!askFragment(question).slice(1).includes('#'), 'one fragment');
+  }
+  assert.equal(readAskFragment('#q=%20%20RGPD%20'), 'RGPD');
+  for (const none of ['', '#', '#q=', '#q=%20', '?q=RGPD', 'q=RGPD', '#work=x', `#q=${'a'.repeat(ASK_FRAGMENT_MAX + 1)}`, null, undefined]) {
+    assert.equal(readAskFragment(none), null, String(none));
+  }
+  // The home page reaches it through its own module, which carries none of the panel's copy.
+  const fragment = await readFile(join(web, 'scripts', 'ask-fragment.mjs'), 'utf8');
+  assert.doesNotMatch(fragment, /import /, 'the fragment module imports nothing');
+});
+
+test("a quotation is set in the paragraphs its own numbering shows, and no word is added, dropped or changed", () => {
+  const { quoteParagraphs } = ASSISTANT_PANEL_IO;
+  const article = 'Article 50 Transparency obligations for providers 1. Providers shall ensure that AI systems are designed. 2. Deployers shall inform: (a) the persons concerned; (b) the authority. 3. Paragraph 1 shall not apply.';
+  assert.deepEqual(quoteParagraphs(article), [
+    'Article 50 Transparency obligations for providers',
+    '1. Providers shall ensure that AI systems are designed.',
+    '2. Deployers shall inform:',
+    '(a) the persons concerned;',
+    '(b) the authority.',
+    '3. Paragraph 1 shall not apply.',
+  ]);
+  const luxembourg = 'Art. 1er. (1) Le contrat est formé. (2) Il comprend: a) la police; b) les conditions. Voir les points (a) et (b) et l\'article 5(1).';
+  assert.deepEqual(quoteParagraphs(luxembourg), ['Art. 1er.', '(1) Le contrat est formé.', '(2) Il comprend:', 'a) la police;', "b) les conditions. Voir les points (a) et (b) et l'article 5(1)."]);
+  for (const text of [article, luxembourg, 'One sentence with no numbering at all.', 'Mentions 2. Something mid-sentence without a stop']) {
+    assert.equal(quoteParagraphs(text).join(' '), text.replace(/\s+/g, ' ').trim(), 'the words, in order, every one');
+  }
+  assert.deepEqual(quoteParagraphs(''), []);
+});
+
+test("an answer's quotations come in the interface's language first, the other language and every check one action away, with every block drawn", async () => {
+  const { quoteGroups, groupsForLocale } = ASSISTANT_PANEL_IO;
+  const claim = (template_id, text) => ({ kind: 'claim', template_id, text, locale: 'en', facts: [] });
+  const quote = (language, text) => ({ kind: 'quote', language, text, article_text_sha256: 'a'.repeat(64) });
+  const group = (language) => [
+    claim('law.quote_heading', `/eu-eurlex/32024R1689, article 050 (${language})`),
+    quote(language, `Article 50 ${language} 1. First. 2. Second.`),
+    claim('law.interval_eu_open', 'Consolidated wording state from 27 July 2026.'),
+    claim('law.content_hash', `Content hash: ${'b'.repeat(64)}`),
+    claim('law.official_source', 'Official source: https://publications.europa.eu/resource/cellar/x'),
+    claim('law.permalink', '/eu-eurlex/32024R1689/2026-07-27--c/eng'),
+  ];
+  const blocks = [claim('law.lead', 'Lead.'), ...group('eng'), ...group('fra')];
+  const { lead, groups } = quoteGroups(blocks);
+  assert.equal(lead.length, 1);
+  assert.deepEqual(groups.map((one) => one.language), ['eng', 'fra']);
+  assert.equal(lead.length + groups.reduce((sum, one) => sum + one.blocks.length, 0), blocks.length, 'every block, once');
+  assert.deepEqual(groupsForLocale(groups, 'fr').shown.map((one) => one.language), ['fra']);
+  assert.deepEqual(groupsForLocale(groups, 'en').other.map((one) => one.language), ['fra']);
+  assert.deepEqual(groupsForLocale(groups.slice(1), 'en').shown.map((one) => one.language), ['fra'], 'none in the language: every group shown');
+});

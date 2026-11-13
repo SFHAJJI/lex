@@ -32,6 +32,7 @@ import {
 } from '../scripts/developers.mjs';
 import { longDate } from '../scripts/live-search.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG } from '../scripts/live-chrome.mjs';
+import { QUALITY_RUNS, QUALITY_SOURCE, QUALITY_TYPES, latestRun, percent } from '../scripts/assistant-quality.mjs';
 
 /** A link to another page of the site, in this bundle's language, with the words given. */
 const pageLink = (file, text) => <a href={livePath(file)}>{text}</a>;
@@ -119,6 +120,132 @@ export function guideValues() {
     evidence: copy.reading.citeEvidence,
     skip: copy.site.skip,
   };
+}
+
+/** A number as this page's language writes it: 1.92 is "1.92" in English, "1,92" in French. */
+const decimal = (value) => value.toLocaleString(CHROME_LOCALE === 'fr' ? 'fr-FR' : 'en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+
+/** The assistant's results page's parts, in its order. */
+export const QUALITY_PARTS = Object.freeze(['chart', 'runs', 'types', 'method']);
+
+/** How Lex works: its five steps from the publishers to an answer, drawn as a flow, then its parts. */
+export function HowItWorksBody() {
+  const copy = liveChrome();
+  const page = copy.howItWorks;
+  return (
+    <>
+      <p className="eyebrow">{page.eyebrow}</p>
+      <h1>{page.heading}</h1>
+      <p>{page.intro}</p>
+      <figure className="flow" data-flow={Object.keys(page.flow).length}>
+        <figcaption>{page.flowLabel}</figcaption>
+        <ol>
+          {Object.values(page.flow).map((step) => (
+            <li key={step.title}>
+              <strong>{step.title}</strong>
+              <span>{step.text}</span>
+            </li>
+          ))}
+        </ol>
+      </figure>
+      <Sections
+        pageKey="howItWorks"
+        sections={page.sections}
+        values={{
+          qualityPage: pageLink(referencePage('quality').file, copy.quality.title),
+          coveragePage: pageLink('coverage.html', copy.coverage.title),
+        }}
+      />
+    </>
+  );
+}
+
+/**
+ * The assistant's measured results (`assistant-quality.mjs`): the latest run's four figures, the share answered as expected
+ * run by run as bars drawn to one scale (0 to 100%), every run in a table, the latest by kind of question, and how it is
+ * measured. Every figure is a recorded run's.
+ */
+export function QualityBody() {
+  const page = liveChrome().quality;
+  const latest = latestRun();
+  // Each of a tile's two texts is filled with the values it names, out of the tile's.
+  const named = (template, values) => Object.fromEntries([...template.matchAll(/\{([A-Za-z]+)\}/g)].map(([, name]) => [name, values[name]]));
+  const tile = (key, values) => (
+    <div className="quality-tile" data-quality-tile={key}>
+      <strong>{fillText(page.tiles[key].value, named(page.tiles[key].value, values))}</strong>
+      <span>{fillText(page.tiles[key].label, named(page.tiles[key].label, values))}</span>
+    </div>
+  );
+  return (
+    <>
+      <p className="eyebrow">{page.eyebrow}</p>
+      <h1>{page.heading}</h1>
+      <p>{page.intro}</p>
+      <div className="quality-tiles">
+        {tile('right', { percent: percent(latest.right, latest.cases), right: latest.right, cases: latest.cases })}
+        {tile('verified', { verified: latest.verified, quotes: latest.quotes })}
+        {tile('same', { same: latest.sameVerdict, cases: latest.cases })}
+        {tile('speed', { typical: decimal(latest.p50), most: decimal(latest.p95) })}
+      </div>
+      <section className="reference-section" aria-labelledby="quality-chart" data-reference-section="chart">
+        <h2 id="quality-chart">{page.chartHeading}</h2>
+        <ul className="quality-bars" data-quality-bars={QUALITY_RUNS.length}>
+          {QUALITY_RUNS.map((run) => {
+            const share = percent(run.right, run.cases);
+            return (
+              <li key={run.date}>
+                <span className="quality-bar-label">{fillText(page.chartLabel, { date: longDate(run.date), percent: share, right: run.right, cases: run.cases })}</span>
+                <svg className="quality-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                  <rect className="quality-bar-track" x="0" y="0" width="100" height="6" />
+                  <rect className="quality-bar-fill" x="0" y="0" width={share} height="6" />
+                </svg>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+      <section className="reference-section" aria-labelledby="quality-runs" data-reference-section="runs">
+        <h2 id="quality-runs">{page.runsHeading}</h2>
+        <div className="table-scroll">
+          <table className="quality-table">
+            <thead>
+              <tr>{['date', 'right', 'verified', 'same', 'time', 'found'].map((column) => <th key={column} scope="col">{page.columns[column]}</th>)}</tr>
+            </thead>
+            <tbody>
+              {QUALITY_RUNS.map((run) => (
+                <tr key={run.date}>
+                  <th scope="row">{longDate(run.date)}</th>
+                  <td>{fillText(page.typeRow, { right: run.right, cases: run.cases })}</td>
+                  <td>{fillText(page.typeRow, { right: run.verified, cases: run.quotes })}</td>
+                  <td>{fillText(page.typeRow, { right: run.sameVerdict, cases: run.cases })}</td>
+                  <td>{fillText(page.tiles.speed.value, { typical: decimal(run.p50) })}</td>
+                  <td>{page.findings[run.finding]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section className="reference-section" aria-labelledby="quality-types" data-reference-section="types">
+        <h2 id="quality-types">{page.typesHeading}</h2>
+        <table className="quality-table">
+          <tbody>
+            {QUALITY_TYPES.map((type) => (
+              <tr key={type.key} data-quality-type={type.key}>
+                <th scope="row">{page.types[type.key]}</th>
+                <td>{fillText(page.typeRow, { right: type.right, cases: type.cases })}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+      <section className="reference-section" aria-labelledby="quality-method" data-reference-section="method">
+        <h2 id="quality-method">{page.methodHeading}</h2>
+        <ul>{Object.entries(page.method).map(([key, text]) => <li key={key}>{text}</li>)}</ul>
+        <p><Say template={page.source} values={{ source: <a href={QUALITY_SOURCE} rel="external">{new URL(QUALITY_SOURCE).host + new URL(QUALITY_SOURCE).pathname}</a> }} /></p>
+      </section>
+    </>
+  );
 }
 
 /** Get help's content. */
@@ -555,7 +682,7 @@ export function renderLiveReferencePage(pageKey, { developers = null, live = nul
   const page = referencePage(pageKey);
   if (page === undefined) throw new Error(`${JSON.stringify(pageKey)} is none of the reference pages: ${REFERENCE_PAGES.map((one) => one.key).join(', ')}`);
   if (live !== null && pageKey !== 'developers') throw new Error(`only the Developers page is rendered from an answer, not ${pageKey}`);
-  const body = { help: <HelpBody />, guide: <GuideBody />, developers: <DevelopersBody model={developers} live={live} /> }[pageKey];
+  const body = { howItWorks: <HowItWorksBody />, quality: <QualityBody />, help: <HelpBody />, guide: <GuideBody />, developers: <DevelopersBody model={developers} live={live} /> }[pageKey];
   return renderDocument(
     <Document
       state={page.state}
@@ -571,6 +698,8 @@ export function renderLiveReferencePage(pageKey, { developers = null, live = nul
   );
 }
 
+export const renderLiveHowItWorksPage = () => renderLiveReferencePage('howItWorks');
+export const renderLiveQualityPage = () => renderLiveReferencePage('quality');
 export const renderLiveHelpPage = () => renderLiveReferencePage('help');
 export const renderLiveGuidePage = () => renderLiveReferencePage('guide');
 export const renderLiveDevelopersPage = ({ developers, live = null } = {}) => renderLiveReferencePage('developers', { developers, live });

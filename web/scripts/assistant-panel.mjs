@@ -53,6 +53,8 @@ export const ASSISTANT_PANEL_COPY = Object.freeze({
     answerHeading: 'Answer',
     quoteLabel: 'Published text',
     detailsSummary: 'Details for checking: hashes and the trace',
+    checksSummary: 'Source and checks',
+    otherLanguages: 'The same text in the other language',
     announceVerdict: 'Answer: {label}.',
     announceComplete: 'The answer is complete.',
     failed: 'The assistant could not answer this question; search, reading and the other operations do not depend on it.',
@@ -74,12 +76,87 @@ export const ASSISTANT_PANEL_COPY = Object.freeze({
     answerHeading: 'Réponse',
     quoteLabel: 'Texte publié',
     detailsSummary: 'Éléments de vérification : empreintes et trace',
+    checksSummary: 'Source et vérification',
+    otherLanguages: 'Le même texte dans l’autre langue',
     announceVerdict: 'Réponse : {label}.',
     announceComplete: 'La réponse est complète.',
     failed: 'L’assistant n’a pas pu répondre à cette question ; la recherche, la lecture et les autres opérations ne dépendent pas de l’assistant.',
     rateLimited: 'Beaucoup de questions ont été posées depuis cette connexion en peu de temps ; reposez la vôtre dans une minute.',
   }),
 });
+
+export { ASK_FRAGMENT_MAX, askFragment, readAskFragment } from './ask-fragment.mjs';
+
+/** The held language a quotation is shown first in, per interface language; the others are one action away. */
+const QUOTE_LANGUAGE = Object.freeze({ en: 'eng', fr: 'fra' });
+
+/** The claims of a quotation that are for checking it (its digest, its permalink, its official source): one action away. */
+export const QUOTE_CHECK_TEMPLATES = Object.freeze(['law.content_hash', 'law.permalink', 'law.official_source']);
+
+/**
+ * A part's blocks cut into what comes before the first quotation's heading (`lead`) and one group per quotation, each from its
+ * `law.quote_heading` claim up to the next, with the held language of the quotation it holds (or null). Nothing is dropped or
+ * reordered: the groups, in order, hold every block after the lead.
+ */
+export function quoteGroups(blocks) {
+  const lead = [];
+  const groups = [];
+  for (const block of blocks) {
+    if (block.kind === 'claim' && block.template_id === 'law.quote_heading') {
+      groups.push({ blocks: [block], language: null });
+    } else if (groups.length === 0) {
+      lead.push(block);
+    } else {
+      const group = groups.at(-1);
+      group.blocks.push(block);
+      if (block.kind === 'quote' && group.language === null) group.language = block.language;
+    }
+  }
+  return { lead, groups };
+}
+
+/**
+ * The quotation groups shown first in `locale` (those in its held language, or every group when none is), and the others,
+ * which the panel puts one action away. The order within each list is the answer's.
+ */
+export function groupsForLocale(groups, locale) {
+  const language = QUOTE_LANGUAGE[locale];
+  const first = groups.filter((group) => group.language === language);
+  if (first.length === 0) return { shown: groups, other: [] };
+  return { shown: first, other: groups.filter((group) => group.language !== language) };
+}
+
+// A paragraph or point marker at a line's start: "1.", "(1)", "(a)", "a)", each followed by its text.
+const MARKER = /\s+(?=(\d{1,3}\.\s+\p{Lu}|\(\d{1,3}\)\s|\([a-z]\)\s|[a-z]\)\s))/gu;
+
+/**
+ * A quotation's text in the paragraphs its own numbering shows, for reading only: cut before a numbered paragraph ("1.",
+ * "(1)") that follows the end of a sentence, a colon or a semicolon, or that opens the article's first paragraph, and before
+ * a lettered point ("(a)", "a)") that follows a colon or a semicolon. The paragraphs, joined by one space each, are the text
+ * with the white space at each cut made one space: no word is added, dropped or changed.
+ */
+export function quoteParagraphs(text) {
+  if (typeof text !== 'string' || text.length === 0) return [];
+  const cuts = [];
+  for (const match of text.matchAll(MARKER)) {
+    const before = text.slice(0, match.index).trimEnd();
+    const last = before.at(-1) ?? '';
+    const marker = match[1];
+    const numbered = /^(\d{1,3}\.|\(\d{1,3}\))/u.test(marker);
+    const opensFirst = cuts.length === 0 && /^(1\.|\(1\))/u.test(marker);
+    if ((numbered && (/[.:;]/u.test(last) || opensFirst)) || (!numbered && /[:;]/u.test(last))) {
+      cuts.push([match.index, match.index + match[0].length]);
+    }
+  }
+  const paragraphs = [];
+  let from = 0;
+  for (const [start, end] of cuts) {
+    paragraphs.push(text.slice(from, start));
+    from = end;
+  }
+  paragraphs.push(text.slice(from));
+  return paragraphs.map((paragraph) => paragraph.trim()).filter((paragraph) => paragraph.length > 0);
+}
 
 /** The panel's copy in a locale it holds, or a thrown error: it never falls back to another language (R43). */
 export function panelCopy(locale) {
