@@ -233,6 +233,44 @@ internal sealed partial class V3CorpusMount
     /// <summary>One part of an extract: a run of the text, and whether it is a whole match.</summary>
     internal sealed record SearchExtractPart(string Text, bool Matched);
 
+    /// <summary>
+    /// The best hit of a ranked answer (<see cref="SearchBestHitRule"/>): its decision, the first hit when it is clearly ahead, and
+    /// the first three hits as candidates. Each entry is a hit's lane, work, publisher article id and rank, in the answer's order.
+    /// </summary>
+    internal static object BestHit(IReadOnlyList<(string Lane, string Work, string Article, SearchRank Rank)> ranked)
+    {
+        object Hit((string Lane, string Work, string Article, SearchRank Rank) entry) =>
+            new { lane = entry.Lane, work_key = entry.Work, publisher_id = entry.Article };
+        // One hit per publisher article: the same article in several states is one candidate.
+        var distinct = ranked.DistinctBy(static entry => (entry.Work, entry.Article)).ToArray();
+        if (distinct.Length == 0)
+        {
+            return new { decision = "none", rule = SearchBestHitRule, hit = (object?)null, candidates = Array.Empty<object>() };
+        }
+
+        var top = distinct[0];
+        var next = distinct.Length > 1 ? distinct[1] : ((string Lane, string Work, string Article, SearchRank Rank)?)null;
+        bool ahead;
+        if (top.Lane == "strict")
+        {
+            ahead = next is null || next.Value.Lane != "strict" || (top.Rank.PhraseInHeading && !next.Value.Rank.PhraseInHeading);
+        }
+        else
+        {
+            ahead = top.Rank.Heading > 0 && (next is null
+                || top.Rank.Heading > next.Value.Rank.Heading
+                || (top.Rank.Heading.Equals(next.Value.Rank.Heading) && top.Rank.Text >= 1.25 * next.Value.Rank.Text));
+        }
+
+        return new
+        {
+            decision = ahead ? "clearly_ahead" : "close",
+            rule = SearchBestHitRule,
+            hit = ahead ? Hit(top) : null,
+            candidates = distinct.Take(3).Select(Hit).ToArray(),
+        };
+    }
+
     /// <summary>An extract (<see cref="SearchExtractRule"/>): its run's character and byte offsets in the text, and its parts.</summary>
     internal sealed record SearchExtract(int Start, int End, int ByteStart, int ByteEnd, IReadOnlyList<SearchExtractPart> Parts);
 
@@ -378,7 +416,13 @@ internal sealed partial class V3CorpusMount
     /// <summary>The extract a hit of this page carries, as the answer serves it, from its article's searchable text.</summary>
     private static object ExtractMember(string text, string lane, string query, IReadOnlyList<string> terms)
     {
-        var extract = ExtractOf(text, lane == "strict" ? [query] : terms)
+        // The relaxed lane matched a word or its plural or singular (SearchWords.Rule); the strict lane's phrase may span a glued
+        // heading ("Article 44Délai"), which the text holds only as its words: then its words are marked.
+        var words = terms.Where(static term => term.Length > 0).SelectMany(SearchWords.FormsOf).Distinct(StringComparer.Ordinal).ToArray();
+        var extract = (lane == "strict" ? ExtractOf(text, [query]) : null)
+            ?? ExtractOf(text, words)
+            // A protected term ("1er" is matched as "1 er", its glued words set apart) is then marked by its words.
+            ?? ExtractOf(text, terms.SelectMany(SearchWords.WordsOf).Distinct(StringComparer.Ordinal).ToArray())
             // The lane matched these bytes, so a text that holds none of its needles is a damaged index, never an extract.
             ?? throw new InvalidDataException("A search hit's searchable text does not hold what its lane matched.");
         var bytes = Encoding.UTF8.GetBytes(text);

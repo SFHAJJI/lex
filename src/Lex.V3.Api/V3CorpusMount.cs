@@ -4225,8 +4225,9 @@ internal sealed partial class V3CorpusMount : IDisposable
     public const int SearchMaxHits = 200;
 
     internal const string SearchRanking =
-        "none; strict lane before relaxed lane, then work key, publisher date, state digest, publisher article id (in the reading's order) and article identity, so one state's hits are together. " +
-        "This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits";
+        "strict lane before relaxed lane; within a lane, by the rarity of the query's words the article's heading holds, then of those " +
+        "its text holds (a strict hit by whether its heading holds the phrase), ties in the reading's order (work key, publisher date, " +
+        "state digest, publisher article id, article identity): " + SearchWords.Rule;
 
     /// <summary>The ceiling on the characters of a <c>search</c> query; the request document says the same.</summary>
     public const int SearchMaxQueryCharacters = 512;
@@ -4239,16 +4240,23 @@ internal sealed partial class V3CorpusMount : IDisposable
     public const int SearchMaxTerms = 32;
 
     internal const string SearchMatching =
-        "substring of the article's searchable text, which is its text and reference tokens as the index holds them " +
-        "(modification markers and note references are not searched); " + TextFolding.Rule + "; nothing is stemmed or expanded";
+        "whole words of the article's searchable text, which is its text and reference tokens as the index holds them " +
+        "(modification markers and note references are not searched), its glued words set apart; " + TextFolding.Rule;
 
     internal const string SearchLanes =
-        "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in " +
-        "any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer " +
-        "is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane's whole " +
-        "set. A lane not asked for is null in the population, not zero";
+        "strict: the query, folded, is in the folded text starting and ending on word bounds; relaxed (ranked words): the article's " +
+        "text holds every query word (stopwords dropped, terms) as a whole word or its plural or singular, so the relaxed set contains " +
+        "the strict set. With no mode the answer is the " +
+        "strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane's whole set. A " +
+        "lane not asked for is null in the population, not zero";
 
-    internal const string SearchPageIs = "the first hits in the stated order, not the best hits";
+    internal const string SearchPageIs = "the best hits first, in the stated ranking";
+
+    internal const string SearchBestHitRule =
+        "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds " +
+        "the phrase when the next one's does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than " +
+        "the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is " +
+        "not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)";
 
     /// <summary>
     /// The owner's rights ruling (decided by the sole driver under the owner's delegation of 2026-10-02, on the question PR #842
@@ -4477,10 +4485,38 @@ internal sealed partial class V3CorpusMount : IDisposable
         var wantStrict = mode is null || string.Equals(mode, "strict", StringComparison.Ordinal);
         var wantRelaxed = mode is null || string.Equals(mode, "relaxed", StringComparison.Ordinal);
         var relaxedIsStrict = terms.Length == 1 && string.Equals(terms[0], query, StringComparison.Ordinal);
-        var strictFound = wantStrict ? _reader.SearchStateArticles(language, [query], workKey) : null;
-        var relaxedFound = wantRelaxed && (mode is not null || !relaxedIsStrict)
-            ? _reader.SearchStateArticles(language, terms, workKey)
+        // The query's words, stopwords dropped (SearchWords.Rule): what the relaxed lane matches, ranks and marks.
+        var words = SearchWords.Terms(query);
+        var strictRanked = wantStrict ? _reader.RankStateArticles(language, query, [], workKey) : null;
+        var relaxedRanked = wantRelaxed && (mode is not null || !relaxedIsStrict)
+            ? _reader.RankStateArticles(language, null, words, workKey)
             : null;
+        var strictFound = strictRanked?.Select(static entry => entry.Hit).ToArray();
+        var relaxedFound = relaxedRanked?.Select(static entry => entry.Hit).ToArray();
+        var ranks = new Dictionary<(string Lane, string State, string Article), SearchRank>();
+        foreach (var (hit, rank) in strictRanked ?? [])
+        {
+            ranks[("strict", hit.StateSha256, hit.ArticleIdentitySha256)] = rank;
+        }
+
+        foreach (var (hit, rank) in relaxedRanked ?? [])
+        {
+            ranks[("relaxed", hit.StateSha256, hit.ArticleIdentitySha256)] = rank;
+        }
+
+        SearchRank RankOf(string lane, LuxembourgIndexSearchHit hit) =>
+            ranks.TryGetValue((lane, hit.StateSha256, hit.ArticleIdentitySha256), out var rank) ? rank : default;
+        // Within a lane, best first (SearchRanking), the reading's order among equals.
+        LuxembourgIndexSearchHit[] Ranked(string lane, IReadOnlyList<LuxembourgIndexSearchHit> hits)
+        {
+            var ordered = InSearchOrder(hits);
+            var position = ordered.Select(static (hit, index) => (hit, index)).ToDictionary(static pair => (pair.hit.StateSha256, pair.hit.ArticleIdentitySha256), static pair => pair.index);
+            return ordered.OrderBy(hit => hit, Comparer<LuxembourgIndexSearchHit>.Create((left, right) =>
+            {
+                var compared = SearchRank.Compare(RankOf(lane, left), RankOf(lane, right));
+                return compared != 0 ? compared : position[(left.StateSha256, left.ArticleIdentitySha256)].CompareTo(position[(right.StateSha256, right.ArticleIdentitySha256)]);
+            })).ToArray();
+        }
         // The index either holds searchable text for the language or it does not; the lane scanned first says.
         var measured = wantStrict ? strictFound is not null : relaxedFound is not null;
         IReadOnlyList<LuxembourgIndexSearchHit> strict = wantStrict ? strictFound ?? [] : [];
@@ -4535,9 +4571,9 @@ internal sealed partial class V3CorpusMount : IDisposable
             relaxed = relaxed.Where(Applies).ToArray();
         }
 
-        // Within each lane, the hits of one version in the reading's order of the publisher's article ids (SearchRanking).
-        strict = InSearchOrder(strict);
-        relaxed = InSearchOrder(relaxed);
+        // Within each lane, best first (SearchRanking), the reading's order among equals.
+        strict = Ranked("strict", strict);
+        relaxed = Ranked("relaxed", relaxed);
 
         // Index 9 without a date: one hit per work, publisher article id and wording, under the latest state holding that
         // wording, the others named under it (design §3.2; S7a), so a code's unchanged article is not one hit per version.
@@ -4547,8 +4583,8 @@ internal sealed partial class V3CorpusMount : IDisposable
         if (folds)
         {
             var wordings = _reader.ResolveArticleWordings(strict.Concat(relaxed).Select(static hit => hit.ArticleIdentitySha256).ToArray());
-            strict = FoldByWording(strict, wordings, sameWording);
-            relaxed = FoldByWording(relaxed, wordings, sameWording);
+            strict = Ranked("strict", FoldByWording(strict, wordings, sameWording));
+            relaxed = Ranked("relaxed", FoldByWording(relaxed, wordings, sameWording));
         }
 
         // Relaxed never outranks strict: every strict hit, then every relaxed hit.
@@ -4603,7 +4639,7 @@ internal sealed partial class V3CorpusMount : IDisposable
                     texts.TryGetValue(entry.Hit.ArticleIdentitySha256, out var text)
                         ? text
                         : throw new InvalidDataException("A search hit names an article whose text the index does not hold."),
-                    entry.Lane, query, terms),
+                    entry.Lane, query, words.ToArray()),
             }, state, folds ? sameWording.GetValueOrDefault(entry.Hit.ArticleIdentitySha256) ?? [] : null);
         }).ToArray();
 
@@ -4621,6 +4657,8 @@ internal sealed partial class V3CorpusMount : IDisposable
             rights_rule = SearchRightsRule,
             hit_unit = SearchHitUnit,
             lanes = SearchLanes,
+            // Whether the first hit is clearly ahead of the others (SearchBestHitRule): what the assistant may quote alone.
+            best_hit = BestHit(all.Select(entry => (entry.Lane, entry.Hit.WorkKey, entry.Hit.PublisherId, RankOf(entry.Lane, entry.Hit))).ToArray()),
             searchable_text_held_for_language = measured,
             // The way out when the language asked for holds no searchable text: the languages that do,
             // as the capability manifest measured them.
@@ -4637,6 +4675,8 @@ internal sealed partial class V3CorpusMount : IDisposable
                 candidates = titles is not null && titles.Candidates.Count > 1 ? titles.Candidates.Select(Card).ToArray() : null,
             },
             terms,
+            // The query's words the relaxed lane matches, ranks and marks (SearchWords.Rule).
+            words,
             population = new
             {
                 // The population is the scope asked for, over every hit and not the page.
@@ -4686,11 +4726,12 @@ internal sealed partial class V3CorpusMount : IDisposable
         "answered; a search across EU works is not served";
 
     internal const string EuropeSearchRanking =
-        "none; strict lane before relaxed lane, then the wording's date, its expression, the publisher's article id and article identity. " +
-        "This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits";
+        "strict lane before relaxed lane; within a lane, by the rarity of the query's words the article's heading (as its text opens " +
+        "with it) holds, then of those its text holds (a strict hit by whether its heading holds the phrase), ties in the stated order (the " +
+        "wording's date, its expression, the publisher's article id and article identity): " + SearchWords.Rule;
 
     internal const string EuropeSearchMatching =
-        "substring of the article's searchable text as the EU index holds it; " + TextFolding.Rule + "; nothing is stemmed or expanded";
+        "whole words of the article's searchable text as the EU index holds it, its glued words set apart; " + TextFolding.Rule;
 
     internal const string EuropeSearchHitUnit =
         "a hit is one article of one wording of the act, dated by that wording's role (wording_date and kind: an original wording by the " +

@@ -11,14 +11,14 @@ using static Lex.V3.Ingest.Tests.V3CorpusResolveMountTests;
 namespace Lex.V3.Ingest.Tests;
 
 /// <summary>
-/// The retrieval set over a mount, judged by the search's own stated matching (<c>SearchMatching</c>: a substring of an
-/// article's searchable text once both are folded by <c>TextFolding</c>, capitals and accents ignored) computed from the
-/// mount's index: a word held by a few
+/// The retrieval set over a mount, judged by the search's own stated matching (<c>SearchMatching</c>: a whole word of an
+/// article's searchable text, its glued words set apart, once both are folded by <c>TextFolding</c>, capitals and accents
+/// ignored; <see cref="SearchWords.Rule"/>) computed from the mount's index: a word held by a few
 /// articles is judged to find exactly those (work and publisher article id), which all must rank within the first ten;
 /// a string held nowhere must find nothing, as must a word scoped to a work that does not hold it; and an article
 /// permalink must be accepted under its own work and anchor, and one naming an anchor its state lacks refused. The
 /// judgments are the corpus's own truth about its text, so 1.0 is the path's exactness, not a quality claim.
-/// An EU index gives its own cases the same way (<c>EuropeSearchMatching</c> is the same folded substring): a word
+/// An EU index gives its own cases the same way (<c>EuropeSearchMatching</c> is the same whole-word matching): a word
 /// held by a few provisions of one work in one language, searched with that work as its scope (EU search is served in
 /// one work) and, where the index holds the act's census, at its original wording's date, which selects that wording alone
 /// (an undated search reads every consolidated version too), and strings that work holds nowhere. And, since EU <c>verify</c> is served over the EU permalink grammar (#850),
@@ -255,8 +255,8 @@ public sealed partial class V3MountedGatesTests
     }
 
     /// <summary>
-    /// The provisions of one EU work in one language whose searchable text holds a string once both are folded (TextFolding),
-    /// by the EU search's own order.
+    /// The provisions of one EU work in one language whose searchable text holds a string as whole words once both are folded
+    /// (TextFolding) and their glued words set apart (SearchWords), by the EU search's own order.
     /// </summary>
     private static List<string> EuropeHolding(SqliteConnection connection, string celex, string language, string text)
     {
@@ -266,13 +266,13 @@ public sealed partial class V3MountedGatesTests
             "ORDER BY publisher_identifier, article_identity_sha256";
         command.Parameters.AddWithValue("$celex", celex);
         command.Parameters.AddWithValue("$language", language);
-        var needle = TextFolding.Fold(text);
+        var needle = SearchedForm(text);
         using var reader = command.ExecuteReader();
         var found = new List<string>();
         while (reader.Read())
         {
             var provision = reader.GetString(0);
-            if (TextFolding.Folded(reader.GetString(1)).Contains(needle) && !found.Contains(provision, StringComparer.Ordinal))
+            if (SearchWords.HoldsBounded(SearchedForm(reader.GetString(1)), needle) && !found.Contains(provision, StringComparer.Ordinal))
             {
                 found.Add(provision);
             }
@@ -285,8 +285,11 @@ public sealed partial class V3MountedGatesTests
     /// The (work, article) pairs of one language whose searchable text holds a string, by the search's own order, and
     /// the hits the search would count (one per article per state).
     /// </summary>
-    /// <summary>One article of a held state, in the search's order, with its folded searchable text.</summary>
-    private sealed record HeldArticle(string Work, string Anchor, string Folded);
+    /// <summary>One article of a held state, in the search's order, with its searchable text as the search matches it.</summary>
+    private sealed record HeldArticle(string Work, string Anchor, byte[] Folded);
+
+    /// <summary>A text as the search matches it (SearchWords.Rule): its glued words set apart, folded (TextFolding), in UTF-8.</summary>
+    private static byte[] SearchedForm(string text) => System.Text.Encoding.UTF8.GetBytes(TextFolding.Fold(SearchWords.Segment(text)));
 
     /// <summary>Every article of a held state in one language, in the search's order, its text folded once (TextFolding).</summary>
     private static List<HeldArticle> HeldArticles(SqliteConnection connection, string language)
@@ -300,25 +303,26 @@ public sealed partial class V3MountedGatesTests
         var held = new List<HeldArticle>();
         while (reader.Read())
         {
-            held.Add(new HeldArticle(reader.GetString(0), reader.GetString(1), TextFolding.Fold(reader.GetString(2))));
+            held.Add(new HeldArticle(reader.GetString(0), reader.GetString(1), SearchedForm(reader.GetString(2))));
         }
 
         return held;
     }
 
     /// <summary>
-    /// The (work, article) pairs of one language whose searchable text holds a string once both are folded, by the search's
-    /// own order, and the hits the search would count (one per article per state).
+    /// The (work, article) pairs of one language whose searchable text holds a string as whole words once both are folded and
+    /// their glued words set apart, by the search's own order, and the hits the search would count (one per article per state).
     /// </summary>
     private static List<(string Work, string Anchor)> Holding(IReadOnlyList<HeldArticle> articles, string text, string? workKey, out int hits)
     {
-        var needle = TextFolding.Fold(text);
+        var folded = TextFolding.Fold(text);
+        var needle = SearchedForm(text);
         var found = new List<(string Work, string Anchor)>();
         hits = 0;
         foreach (var article in articles)
         {
             if ((workKey is not null && !string.Equals(article.Work, workKey, StringComparison.Ordinal)) ||
-                !TextFolding.CanMatch(needle) || !article.Folded.Contains(needle, StringComparison.Ordinal))
+                !TextFolding.CanMatch(folded) || !SearchWords.HoldsBounded(article.Folded, needle))
             {
                 continue;
             }

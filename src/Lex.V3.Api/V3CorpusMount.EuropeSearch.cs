@@ -261,24 +261,71 @@ internal sealed partial class V3CorpusMount
         var wantStrict = mode is null || string.Equals(mode, "strict", StringComparison.Ordinal);
         var wantRelaxed = mode is null || string.Equals(mode, "relaxed", StringComparison.Ordinal);
         var relaxedIsStrict = terms.Length == 1 && string.Equals(terms[0], query, StringComparison.Ordinal);
-        var strictNeedle = TextFolding.Fold(query);
-        var relaxedNeedles = terms.Select(TextFolding.Fold).Where(TextFolding.HoldsSomething).Distinct(StringComparer.Ordinal).ToArray();
+        // As Luxembourg's (SearchWords.Rule): the text's glued words set apart and folded; the strict lane is the phrase on word
+        // bounds, the relaxed lane the query's words (stopwords dropped) as whole words, ranked by its heading, then its text.
+        var strictNeedle = Encoding.UTF8.GetBytes(TextFolding.Fold(SearchWords.Segment(query)));
+        var words = SearchWords.Terms(query);
+        var forms = words.Select(SearchWords.Forms).ToArray();
+        // An article's heading as its text opens with it (SearchWords.HeadingOf): the EU index's heading field holds its number.
+        var headings = texts.ToDictionary(static pair => pair.Key,
+            static pair => Encoding.UTF8.GetBytes(TextFolding.Fold(SearchWords.Segment(SearchWords.HeadingOf(pair.Value)))), StringComparer.Ordinal);
         var strictKeys = new HashSet<string>(StringComparer.Ordinal);
         var relaxedKeys = new HashSet<string>(StringComparer.Ordinal);
+        var europeRanks = new Dictionary<(string Lane, string Key), SearchRank>();
+        var held = new Dictionary<string, (long Text, long Heading)>(StringComparer.Ordinal);
+        var holding = new int[forms.Length];
         foreach (var (key, text) in texts)
         {
-            var folded = TextFolding.Fold(text);
-            if (wantStrict && TextFolding.CanMatch(strictNeedle) && folded.Contains(strictNeedle, StringComparison.Ordinal))
+            var folded = Encoding.UTF8.GetBytes(TextFolding.Fold(SearchWords.Segment(text)));
+            var heading = headings.GetValueOrDefault(key) ?? [];
+            if (wantStrict && strictNeedle.Length > 0 && SearchWords.HoldsBounded(folded, strictNeedle))
             {
                 strictKeys.Add(key);
+                var inHeading = SearchWords.HoldsBounded(heading, strictNeedle);
+                europeRanks[("strict", key)] = new SearchRank(inHeading ? 1 : 0, 1, inHeading);
             }
 
-            if (wantRelaxed && relaxedNeedles.Length > 0 &&
-                relaxedNeedles.All(needle => TextFolding.CanMatch(needle) && folded.Contains(needle, StringComparison.Ordinal)))
+            long inText = 0;
+            long inHeadingMask = 0;
+            for (var word = 0; word < forms.Length && word < 63; word++)
+            {
+                if (SearchWords.HoldsWord(folded, forms[word]))
+                {
+                    inText |= 1L << word;
+                    holding[word]++;
+                    if (SearchWords.HoldsWord(heading, forms[word]))
+                    {
+                        inHeadingMask |= 1L << word;
+                    }
+                }
+            }
+
+            held[key] = (inText, inHeadingMask);
+        }
+
+        var rarity = holding.Select(count => SearchWords.Rarity(held.Count, count)).ToArray();
+        var every = SearchWords.EveryWord(Math.Min(forms.Length, 63));
+        double Sum(long mask) => Enumerable.Range(0, rarity.Length).Where(word => (mask & (1L << word)) != 0).Sum(word => rarity[word]);
+        foreach (var (key, (inText, inHeadingMask)) in held)
+        {
+            if (wantRelaxed && forms.Length > 0 && inText == every)
             {
                 relaxedKeys.Add(key);
+                europeRanks[("relaxed", key)] = new SearchRank(Sum(inHeadingMask), Sum(inText), false);
             }
         }
+
+        // Within a lane, best first, the stated order among equals (EuropeSearchRanking).
+        IReadOnlyList<EuropeSearchHit> RankedEurope(IReadOnlyList<EuropeSearchHit> hits) =>
+            hits.Select(static (hit, index) => (hit, index))
+                .OrderBy(static pair => pair, Comparer<(EuropeSearchHit hit, int index)>.Create((left, right) =>
+                {
+                    var compared = SearchRank.Compare(
+                        europeRanks.GetValueOrDefault((left.hit.Lane, left.hit.TextKey)), europeRanks.GetValueOrDefault((right.hit.Lane, right.hit.TextKey)));
+                    return compared != 0 ? compared : left.index.CompareTo(right.index);
+                }))
+                .Select(static pair => pair.hit)
+                .ToArray();
 
         // The lanes, as Luxembourg's: with no mode the relaxed lane adds only what strict did not serve, and nothing when the
         // query is its only term.
@@ -305,6 +352,8 @@ internal sealed partial class V3CorpusMount
             relaxed = FoldEuropeHits(relaxed, sameWording);
         }
 
+        strict = RankedEurope(strict);
+        relaxed = RankedEurope(relaxed);
         var all = strict.Concat(relaxed).ToArray();
         static string Cursor(EuropeSearchHit hit) => $"{hit.Lane}.{hit.Article.ArticleIdentitySha256}";
         var start = 0;
@@ -343,7 +392,7 @@ internal sealed partial class V3CorpusMount
         var hits = page.Select(hit =>
         {
             var text = texts[hit.TextKey];
-            var extract = ExtractMember(text, hit.Lane, query, terms);
+            var extract = ExtractMember(text, hit.Lane, query, words.ToArray());
             if (hit.Article.TextSha256 is { } recorded &&
                 !string.Equals(recorded, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text))), StringComparison.Ordinal))
             {
@@ -396,6 +445,8 @@ internal sealed partial class V3CorpusMount
             scope = census is null ? EuropeSearchOriginalScope : EuropeSearchScope,
             ranking = EuropeSearchRanking,
             matching = EuropeSearchMatching,
+            // Whether the first hit is clearly ahead of the others (SearchBestHitRule): what the assistant may quote alone.
+            best_hit = BestHit(all.Select(hit => (hit.Lane, hit.Wording.Celex ?? string.Empty, hit.Article.PublisherIdentifier, europeRanks.GetValueOrDefault((hit.Lane, hit.TextKey)))).ToArray()),
             rights_rule = EuropeSearchRightsRule,
             hit_unit = census is null ? EuropeSearchOriginalHitUnit : EuropeSearchHitUnit,
             lanes = SearchLanes,
@@ -424,6 +475,8 @@ internal sealed partial class V3CorpusMount
                 candidates = (object?)null,
             },
             terms,
+            // The query's words the relaxed lane matches, ranks and marks (SearchWords.Rule).
+            words,
             population = new
             {
                 scope = new { identifier, language, date = requestedDate, mode },

@@ -1,3 +1,5 @@
+using Lex.V3.Contracts.Index;
+
 namespace Lex.V3.Ingest.Luxembourg;
 
 /// <summary>
@@ -151,6 +153,105 @@ internal sealed class LuxembourgSearchTexts
         }
 
         return found;
+    }
+
+    /// <summary>
+    /// The articles, of the named work's states when one is named, that the query matches, each with its rank
+    /// (<see cref="SearchWords.Rule"/>), ranked best first and in the search's order among equals. With <paramref name="phrase"/>,
+    /// the strict lane: the whole folded phrase on word bounds, ranked by whether the heading holds it. Otherwise the word lane:
+    /// an article whose text holds every query word as a whole word (or its plural or singular), ranked by the rarity of the
+    /// words its heading holds, then of those its text holds. Each distinct text is read once.
+    /// </summary>
+    public IReadOnlyList<(LuxembourgIndexSearchHit Hit, SearchRank Rank)> Rank(string? phrase, IReadOnlyList<string> terms, string? workKey)
+    {
+        ArgumentNullException.ThrowIfNull(terms);
+        var (from, to) = workKey is null ? (0, _articles.Length) : RangeOf(workKey);
+        var ranks = new Dictionary<int, SearchRank>();
+        if (phrase is not null)
+        {
+            var needles = FoldedSearchTexts.NeedlesOf([phrase]);
+            if (needles is null)
+            {
+                return [];
+            }
+
+            for (var index = from; index < to; index++)
+            {
+                var text = _textOf[index];
+                if (!ranks.ContainsKey(text) && _texts.Holds(text, needles))
+                {
+                    var inHeading = SearchWords.HoldsBounded(_texts.HeadingOf(text), needles[0]);
+                    ranks[text] = new SearchRank(inHeading ? 1 : 0, 1, inHeading);
+                }
+            }
+        }
+        else
+        {
+            var forms = terms.Where(static term => term.Length > 0).Select(SearchWords.Forms).ToArray();
+            if (forms.Length == 0)
+            {
+                return [];
+            }
+
+            // Which words each distinct text holds, in its text and in its heading, then each word's rarity over the texts read.
+            var held = new Dictionary<int, (long Text, long Heading)>();
+            var holding = new int[forms.Length];
+            for (var index = from; index < to; index++)
+            {
+                var text = _textOf[index];
+                if (held.ContainsKey(text))
+                {
+                    continue;
+                }
+
+                long inText = 0;
+                long inHeading = 0;
+                var body = _texts.TextOf(text);
+                var heading = _texts.HeadingOf(text);
+                for (var word = 0; word < forms.Length && word < 63; word++)
+                {
+                    if (SearchWords.HoldsWord(body, forms[word]))
+                    {
+                        inText |= 1L << word;
+                        holding[word]++;
+                        if (!heading.IsEmpty && SearchWords.HoldsWord(heading, forms[word]))
+                        {
+                            inHeading |= 1L << word;
+                        }
+                    }
+                }
+
+                held[text] = (inText, inHeading);
+            }
+
+            var population = held.Count;
+            var rarity = holding.Select(count => SearchWords.Rarity(population, count)).ToArray();
+            var every = SearchWords.EveryWord(Math.Min(forms.Length, 63));
+            double Sum(long mask) => Enumerable.Range(0, rarity.Length).Where(word => (mask & (1L << word)) != 0).Sum(word => rarity[word]);
+            foreach (var (text, (inText, inHeading)) in held)
+            {
+                if (inText == every)
+                {
+                    ranks[text] = new SearchRank(Sum(inHeading), Sum(inText), false);
+                }
+            }
+        }
+
+        var found = new List<(LuxembourgIndexSearchHit Hit, SearchRank Rank, int Order)>();
+        for (var index = from; index < to; index++)
+        {
+            if (ranks.TryGetValue(_textOf[index], out var rank))
+            {
+                found.Add((_articles[index], rank, index));
+            }
+        }
+
+        found.Sort(static (left, right) =>
+        {
+            var compared = SearchRank.Compare(left.Rank, right.Rank);
+            return compared != 0 ? compared : left.Order.CompareTo(right.Order);
+        });
+        return found.Select(static entry => (entry.Hit, entry.Rank)).ToArray();
     }
 
     /// <summary>The run of one work's articles, which the search's order keeps together.</summary>
