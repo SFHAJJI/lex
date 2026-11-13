@@ -4,6 +4,18 @@ Updated 2026-11-13. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The home page's heading stays the page as built; the deploy probe refused the first candidate of Release 5 (sole driver, 2026-11-13)
+
+`web/home-heading-in-root`. Release 5 (`v3-20261113T180745Z-09a01fe38a80`, #1040 and #1041) was deployed as a zero-traffic
+candidate and its probe refused it: "GET /fr/ answered a page that is not the release image's own home page ...: outside
+its root and its facts it is not the built page, byte for byte". #1040 put the heading and an opening line outside the
+home page's root and made them follow the assistant's switch, so the page rendered from the coverage answer (assistant on)
+differed from the page as built. The kit deactivated the candidate; no traffic moved. Now the heading is the page as
+built's whatever the answer says, and the opening line ("Ask a question or search a law ...") is said inside the root,
+above the question box; `headingAsk` is gone. Test first: a web test holds the page rendered with the assistant on to the
+page as built outside its root and facts, as `homePageFailures` does (robots element and freshness set aside); it failed on
+the code of #1040 and passes now. Evidence: web `npm test` (below in the PR).
+
 ## Plain first: the matching rule, a dossier's scope and what it does not hold, and the footer's commits one action away (sole driver, 2026-11-13)
 
 `web/plain-first`, after `web/front-assistant-first`. R51 and R28 ask for a plain sentence first and hashes, commits,
