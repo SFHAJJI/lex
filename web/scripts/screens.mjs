@@ -8,36 +8,27 @@ import { join } from "node:path";
 import { Session, findBrowser, launchBrowser } from "./browser-evidence.mjs";
 
 const [origin = "https://law.soufien.lu", out = "screens"] = process.argv.slice(2);
+console.log(`origin ${origin}`);
 const q = (text, lang) => `#q=${encodeURIComponent(text)}&lang=${lang}`;
+const ask = (text) => `#q=${encodeURIComponent(text)}`;
 const PAGES = [
-  ["en-home", "/en/"],
   ["fr-home", "/fr/"],
+  ["en-home", "/en/"],
+  ["fr-how-it-works", "/fr/how-it-works.html"],
+  ["en-how-it-works", "/en/how-it-works.html"],
+  ["fr-quality", "/fr/quality.html"],
+  ["en-quality", "/en/quality.html"],
   ["en-search-ai-act", `/en/search.html${q("AI Act", "eng")}`],
-  ["en-search-artificial-intelligence", `/en/search.html${q("artificial intelligence", "eng")}`],
-  ["fr-search-contrat-assurance", `/fr/search.html${q("contrat d'assurance", "fra")}`],
-  ["fr-search-1997-insurance-article", `/fr/search.html${q("article 1er de la loi du 27 juillet 1997 sur le contrat d'assurance", "fra")}`],
-  ["en-dossier-ai-act", "/en/eu-eurlex/32024R1689"],
-  ["en-dossier-gdpr", "/en/eu-eurlex/32016R0679"],
+  ["fr-search-rgpd", `/fr/search.html${q("RGPD", "fra")}`],
+  ["fr-search-insurance-article", `/fr/search.html${q("article 1er de la loi du 27 juillet 1997 sur le contrat d'assurance", "fra")}`],
   ["fr-dossier-insurance-1997", "/fr/lu-legilux/loi-1997-07-27-n10"],
-  ["en-dossier-civil-code", "/en/lu-legilux/code-civil"],
-  ["en-assistant", "/en/assistant"],
-  ["en-coverage", "/en/coverage.html"],
-  ["en-help", "/en/help.html"],
-  ["en-how-to-read", "/en/how-to-read.html"],
-  ["en-developers", "/en/developers.html"],
-  ["en-privacy", "/en/privacy.html"],
-  ["en-history", "/en/history.html"],
-  ["en-compare", "/en/compare.html"],
-  ["en-radar", "/en/radar.html"],
-  ["en-dossier-page", "/en/dossier.html"],
-  ["en-export", "/en/export.html"],
+  ["en-dossier-ai-act", "/en/eu-eurlex/32024R1689"],
+  ["fr-assistant-insurance-1997", `/fr/assistant${ask("Que dit l'article 1er de la loi du 27 juillet 1997 sur le contrat d'assurance ?")}`],
+  ["fr-assistant-rgpd-5", `/fr/assistant${ask("Que dit l'article 5 du RGPD ?")}`],
+  ["en-assistant-ai-act-50", `/en/assistant${ask("What does Article 50 of the AI Act say?")}`],
+  ["en-assistant-insurer", `/en/assistant${ask("Can my insurer refuse to pay my claim?")}`],
 ];
-const QUESTIONS = [
-  ["en-assistant-ai-act-50", "/en/assistant", "What does Article 50 of the AI Act say?"],
-  ["fr-assistant-rgpd-5", "/fr/assistant", "Que dit l'article 5 du RGPD ?"],
-  ["fr-assistant-insurance-1997", "/fr/assistant", "Que dit l'article 1er de la loi du 27 juillet 1997 sur le contrat d'assurance ?"],
-  ["en-assistant-advice", "/en/assistant", "Can I be fired for refusing overtime?"],
-];
+const QUESTIONS = [];
 const WIDTHS = [["desktop", 1280, 800, false], ["phone", 390, 844, true]];
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -64,10 +55,14 @@ try {
   };
   const open = async (path, width, height, mobile) => {
     await session.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile }, sessionId);
+    const blank = session.waitFor("Page.loadEventFired", sessionId, 60000);
+    await session.send("Page.navigate", { url: "about:blank" }, sessionId);
+    await blank;
     const loaded = session.waitFor("Page.loadEventFired", sessionId, 60000);
     await session.send("Page.navigate", { url: origin + path }, sessionId);
     await loaded;
-    await settle(6000);
+    // An assistant page asks its question once loaded: give the answer time to arrive.
+    await settle(path.includes("/assistant#") ? 15000 : 6000);
   };
   for (const [label, width, height, mobile] of WIDTHS) {
     for (const [name, path] of PAGES) {

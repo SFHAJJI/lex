@@ -25,7 +25,9 @@ jobs:
         with:
           node-version: 22
       - name: Screenshots of the live site
-        run: node web/scripts/screens.mjs https://law.soufien.lu "$RUNNER_TEMP/screens"
+        # The address to photograph: the one line of .github/screens-origin (a candidate revision's own address before
+        # promotion), or the public site.
+        run: node web/scripts/screens.mjs "$(cat .github/screens-origin 2>/dev/null || echo https://law.soufien.lu)" "$RUNNER_TEMP/screens"
       - name: Upload the screenshots
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
