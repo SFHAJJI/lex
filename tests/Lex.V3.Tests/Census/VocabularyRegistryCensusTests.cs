@@ -287,14 +287,17 @@ public sealed class VocabularyRegistryCensusTests
                     + "FileName, const ResourceId",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRelationVocabulary: Authorities=2, "
                     + "Predicates=18",
-                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsAdmissionPolicies: Admissible=6, "
-                    + "Entries=16, Rulings=3, RegisteredSha256s=16, const OwnersWords, const Policy1Name, "
+                "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsAdmissionPolicies: Admissible=7, "
+                    + "Entries=32, Rulings=4, RegisteredSha256s=32, const AskedL4a, const AskedOctober, const OwnersWords, "
+                    + "const OwnersWordsL4a, const Policy1Name, "
                     + "const Policy1Text, const PolicyAName, const PolicyAText, "
                     + "const SingleChannelAdmission, const WindowEveryPage, const WindowLivePages, "
                     + "const WordsNotYetGiven, static property Policy1Sha256, static property PolicyASha256",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannels: const "
-                    + "ResolutionTwoProfileName, const ResolutionTwoProfileText, "
-                    + "static property ResolutionTwoProfileSha256",
+                    + "ResolutionRulesNineToFifteen, const ResolutionRulesOneToSeven, "
+                    + "const ResolutionThreeProfileName, const ResolutionThreeProfileText, "
+                    + "const ResolutionTwoProfileName, const ResolutionTwoProfileText, const ResolutionTwoRuleEight, "
+                    + "static property ResolutionThreeProfileSha256, static property ResolutionTwoProfileSha256",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgScopeResolver: AccTypes=1, "
                     + "AdmittedNonShelfTypes=23, MetadataSupportClasses=10, NeverFormats=3, "
                     + "NeverTypes=2, OrdinaryCandidateTypes=17, PointFormats=3, "

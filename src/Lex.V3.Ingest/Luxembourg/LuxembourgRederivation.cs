@@ -135,12 +135,22 @@ public static class LuxembourgRederivation
     /// </summary>
     public const string Release3RuleSet = "lu-release-3";
 
+    /// <summary>
+    /// Release 4's rule set: Release 3's rules with resolution /3 in place of resolution /2, under the policy of Release 3's
+    /// rulings and the owner's ruling L4a (2026-11-13), option (a). Resolution /3 is /2 but for its rule 8a: a file the
+    /// catalogue declares exactly CC BY 4.0 whose every disagreement is about another identity the catalogue knows (typically
+    /// a consolidation carrying its original act's licenceSCL blocks) is a single-channel disposition, not a conflict.
+    /// Release 3's sealed inputs name <see cref="Release3RuleSet"/>, which keeps resolution /2 and its policy, so its derive
+    /// still runs as it did.
+    /// </summary>
+    public const string Release4RuleSet = "lu-release-4";
+
     /// <summary>The value of the record's <c>rights_resolution</c> under Release 1: the acquisition's own, re-read by nothing.</summary>
     private const string RightsAsAcquired = "as_acquired";
 
     /// <summary>
-    /// The value of the record's <c>rights_resolution</c> under Release 2 and Release 3: every held body re-read by reading /2
-    /// and re-resolved by resolution /2, the acquisition's admissions kept where /2 agrees with them.
+    /// The value of the record's <c>rights_resolution</c> under Release 2, 3 and 4: every held body re-read by reading /2
+    /// and re-resolved (by resolution /2, or /3 under Release 4), the acquisition's admissions kept where it agrees with them.
     /// </summary>
     private const string RightsReResolved = "re_resolved_reading_2_keeping_agreed_admissions";
 
@@ -155,11 +165,15 @@ public static class LuxembourgRederivation
 
     /// <summary>The rule sets this build implements, sorted ordinally.</summary>
     public static IReadOnlyList<string> ImplementedRuleSets { get; } =
-        Array.AsReadOnly(new[] { Release1RuleSet, Release2RuleSet, Release3RuleSet });
+        Array.AsReadOnly(new[] { Release1RuleSet, Release2RuleSet, Release3RuleSet, Release4RuleSet });
 
-    /// <summary>Whether <paramref name="ruleSet"/> re-reads and re-resolves the rights of every held body (Release 2 and 3).</summary>
+    /// <summary>Whether <paramref name="ruleSet"/> re-reads and re-resolves the rights of every held body (Release 2, 3 and 4).</summary>
     private static bool RederivesRights(string? ruleSet) =>
-        string.Equals(ruleSet, Release2RuleSet, StringComparison.Ordinal) || string.Equals(ruleSet, Release3RuleSet, StringComparison.Ordinal);
+        string.Equals(ruleSet, Release2RuleSet, StringComparison.Ordinal) || string.Equals(ruleSet, Release3RuleSet, StringComparison.Ordinal) ||
+        string.Equals(ruleSet, Release4RuleSet, StringComparison.Ordinal);
+
+    /// <summary>Whether <paramref name="ruleSet"/> re-resolves under resolution /3 (Release 4) rather than /2.</summary>
+    private static bool ResolvesThree(string? ruleSet) => string.Equals(ruleSet, Release4RuleSet, StringComparison.Ordinal);
 
     /// <summary>
     /// The rules this build runs for <paramref name="ruleSet"/>; a set it does not implement throws. Release 2 names the rights
@@ -176,6 +190,15 @@ public static class LuxembourgRederivation
             new LuxembourgRederivationRule(
                 FirstLine(LuxembourgRightsChannels.CopyResolutionTwoProfileBytes()),
                 LuxembourgRightsChannels.ResolutionTwoProfileSha256),
+        }.Concat(ProfileRules()).ToArray()),
+        Release4RuleSet => Array.AsReadOnly(new[]
+        {
+            new LuxembourgRederivationRule(
+                FirstLine(LuxembourgInFileRightsReader.CopyReadingTwoProfileBytes()),
+                LuxembourgInFileRightsReader.ReadingTwoProfileSha256),
+            new LuxembourgRederivationRule(
+                FirstLine(LuxembourgRightsChannels.CopyResolutionThreeProfileBytes()),
+                LuxembourgRightsChannels.ResolutionThreeProfileSha256),
         }.Concat(ProfileRules()).ToArray()),
         _ => throw new ArgumentException(
             $"Rule set '{ruleSet}' is not one this build implements ({string.Join(", ", ImplementedRuleSets)}).",
@@ -215,6 +238,12 @@ public static class LuxembourgRederivation
     /// <summary>Option (b) of the rulings above: only licence pages the acquisition observed live. Option (a) when false.</summary>
     private const bool Release3LivePagesOnly = false;
 
+    // ---- The owner's ruling Release 4 adds (asked 2026-11-13). ----
+    // Release 4 keeps Release 3's three rulings and option (a), and adds L4a: the owner's yes of 2026-11-13 ("fix it now").
+
+    /// <summary>L4a: files whose only disagreement is about another identity, on the SPARQL declaration alone (resolution /3).</summary>
+    private const bool Release4RulingL4a = true;
+
     /// <summary>
     /// The admission policy <paramref name="ruleSet"/> names: Release 1 changes no rights, so its policy is /1; Release 2
     /// names policy A, which adds <c>agreed_cc_by_rederived</c>; Release 3 names policy A with the owner's rulings its
@@ -226,6 +255,8 @@ public static class LuxembourgRederivation
         Release2RuleSet => LuxembourgRightsAdmissionPolicies.PolicyASha256,
         Release3RuleSet => LuxembourgRightsAdmissionPolicies.PolicyFor(
             Release3RulingL1, Release3RulingL1b, Release3RulingL2, Release3LivePagesOnly),
+        Release4RuleSet => LuxembourgRightsAdmissionPolicies.PolicyFor(
+            Release3RulingL1, Release3RulingL1b, Release3RulingL2, Release3LivePagesOnly, Release4RulingL4a),
         _ => throw new ArgumentException(
             $"Rule set '{ruleSet}' is not one this build implements ({string.Join(", ", ImplementedRuleSets)}).",
             nameof(ruleSet)),
@@ -395,7 +426,7 @@ public static class LuxembourgRederivation
         if (RederivesRights(request.RuleSet))
         {
             (var rebound, rights) = await RederiveRightsAsync(custodyStore, run.TypedAssertions, population, acquiredDispositions,
-                    request.AdmissionPolicySha256, resumption?.ResumedAt, cancellationToken)
+                    request.AdmissionPolicySha256, resumption?.ResumedAt, ResolvesThree(request.RuleSet), cancellationToken)
                 .ConfigureAwait(false);
 
             // 6. A run of R0's own carrying the re-bound population: the run is re-made here, at R1's one door onto it, by
@@ -535,8 +566,12 @@ public static class LuxembourgRederivation
         BodyCount[] acquiredDispositions,
         string admissionPolicySha256,
         DateTimeOffset? resumedAt,
+        bool resolutionThree,
         CancellationToken cancellationToken)
     {
+        var resolutionRuleSha256 = resolutionThree
+            ? LuxembourgRightsChannels.ResolutionThreeProfileSha256
+            : LuxembourgRightsChannels.ResolutionTwoProfileSha256;
         // 1. Every held body under reading /2, by its digest.
         var readings = new List<(LuxembourgHeldBodyDerivationInput Input, LuxembourgInFileRightsReadingTwo Reading)>(population.Inputs.Count);
         foreach (var input in population.Inputs.OrderBy(static input => input.ObjectOrdinal))
@@ -562,7 +597,7 @@ public static class LuxembourgRederivation
         var index = new EvidenceIndexDocument(
             InFileEvidenceTwoSchema,
             LuxembourgInFileRightsReader.ReadingTwoProfileSha256,
-            LuxembourgRightsChannels.ResolutionTwoProfileSha256,
+            resolutionRuleSha256,
             population.Inputs.Select(static input => input.RightsResolution!.InFileObservations.EnumerationRef)
                 .Distinct().OrderBy(static reference => reference.Sha256, StringComparer.Ordinal).ToArray(),
             readings.Select(static entry => new EvidenceReading(
@@ -601,9 +636,13 @@ public static class LuxembourgRederivation
         var resolved = readings.Select(entry =>
         {
             var r0 = entry.Input.RightsResolution!;
-            return (entry.Input, R0: r0, Two: LuxembourgRightsChannels.ResolveTwo(
-                entry.Input.SelectedWemiCandidate.ManifestationIri, r0.BoundRunIdentity, r0.SparqlObservations,
-                r0.BoundRunIdentity, indexRef, entry.Reading, catalogue));
+            return (entry.Input, R0: r0, Two: resolutionThree
+                ? LuxembourgRightsChannels.ResolveThree(
+                    entry.Input.SelectedWemiCandidate.ManifestationIri, r0.BoundRunIdentity, r0.SparqlObservations,
+                    r0.BoundRunIdentity, indexRef, entry.Reading, catalogue)
+                : LuxembourgRightsChannels.ResolveTwo(
+                    entry.Input.SelectedWemiCandidate.ManifestationIri, r0.BoundRunIdentity, r0.SparqlObservations,
+                    r0.BoundRunIdentity, indexRef, entry.Reading, catalogue));
         }).ToArray();
         readings.Clear();
 
@@ -670,7 +709,7 @@ public static class LuxembourgRederivation
             static entry => entry.R0.Disposition == LuxembourgRightsChannelDisposition.AgreedSameRunCcBy ? entry.R0 : entry.Two);
         var rights = new RightsPart(
             LuxembourgInFileRightsReader.ReadingTwoProfileSha256,
-            LuxembourgRightsChannels.ResolutionTwoProfileSha256,
+            resolutionRuleSha256,
             indexRef.Sha256,
             catalogue.Count,
             acquiredDispositions,

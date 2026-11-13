@@ -125,7 +125,8 @@ test("a single-channel bundle reads only with its disclosure, which the view car
   assert.deepEqual(view.disclosures.map((d) => [d.code, d.observedOn, d.observedLive]),
     [["lu_rights_publisher_catalogue_only_file_silent", "2026-10-11", true]]);
   assert.deepEqual(DISCLOSED_RIGHTS_DISPOSITIONS.slice().sort(), [
-    "sparql_cc_by_in_file_names_other_identity", "sparql_cc_by_in_file_own_block_empty", "sparql_cc_by_in_file_silent"]);
+    "sparql_cc_by_in_file_names_other_identity", "sparql_cc_by_in_file_other_identity_licensed_otherwise",
+    "sparql_cc_by_in_file_own_block_empty", "sparql_cc_by_in_file_silent"]);
   const undisclosed = disclosed(await capturedAnswer());
   for (const source of undisclosed.states[0].sources) delete source.rights_disclosure;
   assert.throws(() => readEvidenceBundle(undisclosed), /without its rights_disclosure/);

@@ -50,6 +50,14 @@ public sealed class LuxembourgRightsReleaseTwoTests
             DerivedAt,
             expected);
 
+    /// <summary>Release 4's request: Release 3's rules with resolution /3, under the policy with the owner's ruling L4a (2026-11-13).</summary>
+    internal static LuxembourgRederivationRequest Release4(string? expected = null) =>
+        new(LuxembourgRederivation.Release4RuleSet,
+            LuxembourgRederivation.RulesOf(LuxembourgRederivation.Release4RuleSet),
+            LuxembourgRederivation.AdmissionPolicyOf(LuxembourgRederivation.Release4RuleSet),
+            DerivedAt,
+            expected);
+
     /// <summary>
     /// The finding's shape (run 15's <c>loi/2021/01/22/a45/consolide/20211217</c>): one FRBRthis of the XML manifestation and
     /// two blocks, the XML file's and its PDF twin's, both CC BY. Reading /1 refuses the file for its second block, so the
@@ -445,6 +453,94 @@ public sealed class LuxembourgRightsReleaseTwoTests
         CollectionAssert.AreEqual(
             LuxembourgRederivation.RulesOf(LuxembourgRederivation.Release2RuleSet).Select(static rule => rule.Sha256).ToArray(),
             captured.RootElement.GetProperty("rules").EnumerateArray().Select(static rule => rule.GetProperty("sha256").GetString()).ToArray());
+    }
+
+    /// <summary>
+    /// Release 4 (<c>lu-release-4</c>; the owner's yes of 2026-11-13 to L4a, "fix it now"): a consolidation whose only block
+    /// names its original act's file, licenceSCL in the file and in the catalogue (the shape the driver measured on the 1997
+    /// insurance contract law, the 2015 and 2003 insurance laws and the 1915 company law), is a conflict and withheld under
+    /// Release 3, and served under Release 4 on its retained licence page with its disclosure; so is an own block of CC BY
+    /// beside a PDF twin the file and the catalogue mark licenceSCL. What L4a does not reach stays withheld, and the derive's
+    /// door holds each rule set to its own policy.
+    /// </summary>
+    [TestMethod]
+    public async Task ReleaseFourServesAFileWhoseOnlyDisagreementIsAboutAnotherIdentityWithItsDisclosure()
+    {
+        var policy = LuxembourgRederivation.AdmissionPolicyOf(LuxembourgRederivation.Release4RuleSet);
+        Assert.AreEqual(LuxembourgRightsAdmissionPolicies.PolicyFor(l1: true, l1b: true, l2: true, livePagesOnly: false, l4a: true), policy);
+        Assert.AreEqual(LuxembourgRederivationTests.Release3PolicySha256, LuxembourgRederivation.AdmissionPolicyOf(LuxembourgRederivation.Release3RuleSet),
+            "Release 3's policy is unchanged");
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "lex-lu-in-file-rights-reading/2", "lex-lu-rights-resolution/3", "lex-v3-luxembourg-akn-article-inventory-profile/4",
+                "lex-v3-luxembourg-akn-legal-content-profile/3", "lex-v3-luxembourg-expression-state/2",
+            },
+            LuxembourgRederivation.RulesOf(LuxembourgRederivation.Release4RuleSet).Select(static rule => rule.Profile).ToArray());
+
+        var original = Body(Block(ActXml, Scl));
+        (string, string)[] originalScl = [(ActXml, Scl)];
+        var underThree = await DeriveAsync(original, originalScl, request: Release3());
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.Conflict, underThree.Rederived.Disposition);
+        Assert.AreEqual(LexCorpus6OutcomeKind.RightsWithheld, underThree.Member.Outcome, "Release 3 withholds it");
+
+        var underFour = await DeriveAsync(original, originalScl, request: Release4());
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.SparqlCcByInFileOtherIdentityLicensedOtherwise, underFour.Rederived.Disposition);
+        Assert.AreEqual(LuxembourgRightsChannels.ResolutionThreeProfileSha256, underFour.Rederived.ResolutionRuleSha256());
+        Assert.AreEqual(LexCorpus6OutcomeKind.Acquired, underFour.Member.Outcome, "Release 4 serves it");
+        var page = underFour.Rederived.LicencePage();
+        Assert.IsNotNull(page, "bound to its licence page");
+        var disclosure = underFour.Member.LuxembourgRights!.RightsDisclosure;
+        Assert.IsNotNull(disclosure);
+        Assert.AreEqual("lu_rights_publisher_catalogue_only_other_identity_licensed_otherwise", disclosure.Code);
+        Assert.AreEqual(page.PageRef, disclosure.LicencePage);
+        CollectionAssert.Contains(underFour.Member.LuxembourgRights.EvidenceRefs.ToArray(), page.PageRef, "the admission cites its page");
+        Assert.AreEqual(LuxembourgRightsChannels.ResolutionThreeProfileSha256, underFour.Member.LuxembourgRights.ResolutionRule);
+        CollectionAssert.AreEqual(Array.Empty<string>(), underFour.Member.Gaps.ToArray());
+        Assert.AreEqual(policy, underFour.Policy, "the corpus names Release 4's policy");
+        using (var record = JsonDocument.Parse(underFour.Record.CanonicalBytes))
+        {
+            var rules = record.RootElement.GetProperty("rules");
+            Assert.AreEqual("lu-release-4", rules.GetProperty("rule_set").GetString());
+            Assert.AreEqual(policy, rules.GetProperty("admission_policy_sha256").GetString());
+            var rights = record.RootElement.GetProperty("rights");
+            Assert.AreEqual(LuxembourgRightsChannels.ResolutionThreeProfileSha256, rights.GetProperty("resolution_profile_sha256").GetString());
+            Assert.AreEqual(1, rights.GetProperty("single_channel_admitted").GetInt32());
+        }
+
+        var sibling = await DeriveAsync(Body(Block(Xml, CcBy), Block(Pdf, Scl)), [(Pdf, Scl)], request: Release4());
+        Assert.AreEqual(LuxembourgRightsChannelDisposition.SparqlCcByInFileOtherIdentityLicensedOtherwise, sibling.Rederived.Disposition);
+        Assert.AreEqual(LexCorpus6OutcomeKind.Acquired, sibling.Member.Outcome);
+        Assert.AreEqual(2L, sibling.Articles, "its text is indexed");
+        Assert.AreEqual("held", sibling.TextStatus);
+
+        // Not reached by L4a: the held file's own block saying licenceSCL; a licenceSCL sibling the catalogue does not know; an
+        // original act the catalogue does not know.
+        foreach (var (what, body, catalogue) in new (string, byte[], (string, string)[])[]
+                 {
+                     ("the own block says licenceSCL", Body(Block(Xml, Scl)), []),
+                     ("a licenceSCL sibling the catalogue does not know", Body(Block(Xml, CcBy), Block(Pdf, Scl)), []),
+                     ("an original act the catalogue does not know", Body(Block(ActXml, Scl)), []),
+                 })
+        {
+            var withheld = await DeriveAsync(body, catalogue, request: Release4());
+            Assert.AreEqual(LuxembourgRightsChannelDisposition.Conflict, withheld.Rederived.Disposition, what);
+            Assert.AreEqual(LexCorpus6OutcomeKind.RightsWithheld, withheld.Member.Outcome, what);
+        }
+
+        // The derive's door substitutes no policy: Release 4 under Release 3's policy, or Release 3 under Release 4's, refuses.
+        var store = new EuAcquisitionTestFixture.EuInMemoryCustodyStore();
+        var (_, verified) = await V3FirstMountBuildTests.AcquireAsync(store, V3FirstMountBuildTests.CheckoutRoot(), Body());
+        foreach (var request in new[]
+                 {
+                     Release4() with { AdmissionPolicySha256 = LuxembourgRederivationTests.Release3PolicySha256 },
+                     Release3() with { AdmissionPolicySha256 = policy },
+                 })
+        {
+            var refused = await Assert.ThrowsExactlyAsync<CustodyIntegrityException>(
+                () => LuxembourgRederivation.ApplyAsync(store, verified, request, CancellationToken.None));
+            StringAssert.Contains(refused.Message, "no policy is substituted", request.RuleSet);
+        }
     }
 
     /// <summary>

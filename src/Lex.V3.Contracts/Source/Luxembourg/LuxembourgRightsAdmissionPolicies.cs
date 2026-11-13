@@ -31,6 +31,15 @@ namespace Lex.V3.Contracts.Source.Luxembourg;
 /// have no entry: a PDF yields no text at launch, and a conflict is never admissible.
 /// </para>
 /// <para>
+/// L4a (asked of the owner on 2026-11-13, after the driver measured it over the final release) is the one part of rule 8's
+/// conflicts that is not about the fetched file: resolution /3 names it
+/// <c>sparql_cc_by_in_file_other_identity_licensed_otherwise</c>, a single-channel disposition (the catalogue declares the
+/// file exactly CC BY 4.0 and every disagreement is about another identity, typically the original act a consolidation
+/// carries the blocks of). It is a fourth switch, listed after L2 in an entry's name; an entry without it keeps its text and
+/// digest. The owner's yes of 2026-11-13 stands on exactly the entry with L1, L1b, L2 and L4a, option (a)
+/// (<see cref="OwnersWordsL4a"/>), which Release 4's rule set names.
+/// </para>
+/// <para>
 /// The type refuses to compose an admitting set naming anything but <c>agreed_same_run_cc_by</c>,
 /// <c>agreed_cc_by_rederived</c> and the four single-channel dispositions; a single-channel disposition needs an entry that
 /// names its admission, its evidence window and a ruling. A digest this registry does not hold names no policy, and every
@@ -83,16 +92,39 @@ public static class LuxembourgRightsAdmissionPolicies
     /// <summary>The ruling line's last part on every entry the owner's words were not given for.</summary>
     private const string WordsNotYetGiven = "the-owner's-words-not-yet-given,so-no-release-rule-set-names-this-entry";
 
-    /// <summary>The owner's three rulings over policy A, in the order an entry's name lists them.</summary>
-    private static readonly (string Name, LuxembourgRightsChannelDisposition Admits, string Question)[] Rulings =
+    /// <summary>
+    /// The owner's words on L4a, dated: asked "Fix it before Tuesday? I recommend yes", with the measurement (334 works hidden
+    /// only by blocks about other identities, the insurance and company laws among them), the owner answered "fix it now".
+    /// They stand on L4a's ruling line in exactly the entry with L1, L1b, L2 and L4a, option (a).
+    /// </summary>
+    private const string OwnersWordsL4a =
+        "the-owner's-words-2026-11-13:fix-it-now,the-owner's-yes-to-the-driver's-recommendation-to-serve-these-files,option-(a)," +
+        "so-the-release-rule-set-names-this-entry";
+
+    /// <summary>When and where the October rulings were asked, as their ruling lines state it.</summary>
+    private const string AskedOctober = "asked-of-the-owner-2026-10-27-(LU-DATA-DESIGN-2026-10-14-v2-§5),recommended-(a)";
+
+    /// <summary>When and where L4a was asked, as its ruling line states it.</summary>
+    private const string AskedL4a = "asked-of-the-owner-2026-11-13-(the-driver's-measurement-over-the-final-release),recommended-(a)";
+
+    /// <summary>The owner's four rulings over policy A, in the order an entry's name lists them.</summary>
+    private static readonly (string Name, LuxembourgRightsChannelDisposition Admits, string Question, string Asked)[] Rulings =
     [
         ("L1", LuxembourgRightsChannelDisposition.SparqlCcByInFileSilent,
-            "serve-xml-files-that-state-no-licence-at-all-(an-empty-template-or-a-stale-block-without-one)-on-the-same-declaration-with-the-disclosure"),
+            "serve-xml-files-that-state-no-licence-at-all-(an-empty-template-or-a-stale-block-without-one)-on-the-same-declaration-with-the-disclosure",
+            AskedOctober),
         ("L1b", LuxembourgRightsChannelDisposition.SparqlCcByInFileOwnBlockEmpty,
-            "serve-xml-files-whose-own-block-names-the-fetched-file-but-states-no-licence-on-the-same-declaration-with-the-disclosure"),
+            "serve-xml-files-whose-own-block-names-the-fetched-file-but-states-no-licence-on-the-same-declaration-with-the-disclosure",
+            AskedOctober),
         ("L2", LuxembourgRightsChannelDisposition.SparqlCcByInFileNamesOtherIdentity,
             "serve-xml-files-whose-only-licence-statement-sits-in-a-block-naming-another-identity,every-identity-it-names-itself-cc-by-in-the-same-" +
-            "catalogue,on-the-publisher's-per-file-sparql-declaration-of-exactly-cc-by-4.0-alone-with-a-visible-single-channel-disclosure"),
+            "catalogue,on-the-publisher's-per-file-sparql-declaration-of-exactly-cc-by-4.0-alone-with-a-visible-single-channel-disclosure",
+            AskedOctober),
+        ("L4a", LuxembourgRightsChannelDisposition.SparqlCcByInFileOtherIdentityLicensedOtherwise,
+            "serve-xml-files-the-publisher's-per-file-sparql-declaration-states-exactly-cc-by-4.0,whose-only-disagreeing-licence-statements-are-about-" +
+            "other-identities-the-catalogue-knows-(the-original-act's-files-a-consolidation-carries),nothing-in-the-file-saying-otherwise-about-the-file-" +
+            "itself,with-a-visible-single-channel-disclosure",
+            AskedL4a),
     ];
 
     /// <summary>The dispositions any policy may admit: the two two-channel agreements and the four single-channel ones.</summary>
@@ -104,6 +136,7 @@ public static class LuxembourgRightsAdmissionPolicies
         LuxembourgRightsChannelDisposition.SparqlCcByInFileSilent,
         LuxembourgRightsChannelDisposition.SparqlCcByInFileOwnBlockEmpty,
         LuxembourgRightsChannelDisposition.SparqlCcByInFileNotApplicable,
+        LuxembourgRightsChannelDisposition.SparqlCcByInFileOtherIdentityLicensedOtherwise,
     ];
 
     private static readonly Dictionary<string, Entry> Entries = BuildEntries();
@@ -131,12 +164,12 @@ public static class LuxembourgRightsAdmissionPolicies
     public static bool IsRegistered(string? sha256) => sha256 is not null && Entries.ContainsKey(sha256);
 
     /// <summary>
-    /// The registered policy over policy A with the owner's rulings <paramref name="l1"/>, <paramref name="l1b"/> and
-    /// <paramref name="l2"/> switched on, single-channel evidence limited to live-observed pages when
-    /// <paramref name="livePagesOnly"/> (option b): policy A itself when none is on.
+    /// The registered policy over policy A with the owner's rulings <paramref name="l1"/>, <paramref name="l1b"/>,
+    /// <paramref name="l2"/> and <paramref name="l4a"/> switched on, single-channel evidence limited to live-observed pages
+    /// when <paramref name="livePagesOnly"/> (option b): policy A itself when none is on.
     /// </summary>
-    public static string PolicyFor(bool l1, bool l1b, bool l2, bool livePagesOnly) =>
-        !l1 && !l1b && !l2 ? PolicyASha256 : Digest(SwitchedText(l1, l1b, l2, livePagesOnly));
+    public static string PolicyFor(bool l1, bool l1b, bool l2, bool livePagesOnly, bool l4a = false) =>
+        !l1 && !l1b && !l2 && !l4a ? PolicyASha256 : Digest(SwitchedText(l1, l1b, l2, l4a, livePagesOnly));
 
     /// <summary>
     /// The dispositions the registered policy <paramref name="sha256"/> admits, in the enum's order; null names policy /1,
@@ -232,10 +265,15 @@ public static class LuxembourgRightsAdmissionPolicies
     /// words, dated, on the one entry they were given for (all three rulings with option (a): <see cref="OwnersWords"/>), and
     /// on every other entry that they are not yet given.
     /// </summary>
-    private static string SwitchedText(bool l1, bool l1b, bool l2, bool livePagesOnly)
+    private static string SwitchedText(bool l1, bool l1b, bool l2, bool l4a, bool livePagesOnly)
     {
-        var on = Rulings.Where(ruling => ruling.Name switch { "L1" => l1, "L1b" => l1b, _ => l2 }).ToArray();
-        var words = l1 && l1b && l2 && !livePagesOnly ? OwnersWords : WordsNotYetGiven;
+        var on = Rulings.Where(ruling => IsOn(ruling.Name, l1, l1b, l2, l4a)).ToArray();
+
+        // The October words stand on L1, L1b and L2 in an entry of all three with option (a), with or without L4a; L4a's own
+        // words stand only in the entry of all four with option (a). Every other ruling line says the words are not given.
+        string WordsOf(string ruling) => ruling == "L4a"
+            ? l1 && l1b && l2 && l4a && !livePagesOnly ? OwnersWordsL4a : WordsNotYetGiven
+            : l1 && l1b && l2 && !livePagesOnly ? OwnersWords : WordsNotYetGiven;
         var admits = new[] { LuxembourgRightsChannelDisposition.AgreedSameRunCcBy, LuxembourgRightsChannelDisposition.AgreedCcByRederived }
             .Concat(on.Select(static ruling => ruling.Admits))
             .Select(static disposition => ContractWire.NameOf(disposition))
@@ -245,9 +283,16 @@ public static class LuxembourgRightsAdmissionPolicies
             SingleChannelAdmission +
             (livePagesOnly ? WindowLivePages : WindowEveryPage) +
             "ruling=" + string.Join("|", on.Select(ruling =>
-                $"{ruling.Name}({(livePagesOnly ? "b" : "a")}):{ruling.Question};asked-of-the-owner-2026-10-27-(LU-DATA-DESIGN-2026-10-14-v2-§5),recommended-(a);" +
-                words)) + "\n";
+                $"{ruling.Name}({(livePagesOnly ? "b" : "a")}):{ruling.Question};{ruling.Asked};" + WordsOf(ruling.Name))) + "\n";
     }
+
+    private static bool IsOn(string ruling, bool l1, bool l1b, bool l2, bool l4a) => ruling switch
+    {
+        "L1" => l1,
+        "L1b" => l1b,
+        "L2" => l2,
+        _ => l4a,
+    };
 
     private static Dictionary<string, Entry> BuildEntries()
     {
@@ -259,14 +304,14 @@ public static class LuxembourgRightsAdmissionPolicies
                 LuxembourgRightsChannelDisposition.AgreedSameRunCcBy,
                 LuxembourgRightsChannelDisposition.AgreedCcByRederived), false),
         };
-        foreach (var mask in Enumerable.Range(1, 7))
+        foreach (var mask in Enumerable.Range(1, 15))
         {
             foreach (var live in new[] { false, true })
             {
-                bool l1 = (mask & 1) != 0, l1b = (mask & 2) != 0, l2 = (mask & 4) != 0;
-                var text = SwitchedText(l1, l1b, l2, live);
+                bool l1 = (mask & 1) != 0, l1b = (mask & 2) != 0, l2 = (mask & 4) != 0, l4a = (mask & 8) != 0;
+                var text = SwitchedText(l1, l1b, l2, l4a, live);
                 var admits = new[] { LuxembourgRightsChannelDisposition.AgreedSameRunCcBy, LuxembourgRightsChannelDisposition.AgreedCcByRederived }
-                    .Concat(Rulings.Where(ruling => ruling.Name switch { "L1" => l1, "L1b" => l1b, _ => l2 }).Select(static ruling => ruling.Admits))
+                    .Concat(Rulings.Where(ruling => IsOn(ruling.Name, l1, l1b, l2, l4a)).Select(static ruling => ruling.Admits))
                     .ToArray();
                 entries.Add(Digest(text), new(text, Compose(text, admits), live));
             }

@@ -683,7 +683,7 @@ public sealed class ClosedVocabularyCensusTests
                     + "TypedQuarantineInFileReadingRejected, AgreedCcByRederived, "
                     + "SparqlCcByInFileNamesOtherIdentity, SparqlCcByInFileSilent, "
                     + "SparqlCcByInFileOwnBlockEmpty, SparqlCcByInFileNotApplicable, "
-                    + "TypedQuarantineInFileIdentityUnknown",
+                    + "TypedQuarantineInFileIdentityUnknown, SparqlCcByInFileOtherIdentityLicensedOtherwise",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgSelectorCardinality: Missing, Single, "
                     + "Multiple",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgTypedRoleKind: NotApplicable, "

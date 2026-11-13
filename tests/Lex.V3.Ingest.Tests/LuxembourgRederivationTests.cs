@@ -50,6 +50,9 @@ public sealed class LuxembourgRederivationTests
     /// </summary>
     internal const string Release3PolicySha256 = "2b049e7650b3c5a1250ad60ac263ffb50d11398945fe5e92ac6049634bfc4b43";
 
+    /// <summary>Release 4's policy, <c>A+L1+L1b+L2+L4a(a)</c>, recomputed in Python from its text.</summary>
+    internal const string Release4PolicySha256 = "58522ac66458f5a7f39f3b410351896990a482f7e0a261f0eb6decc49e862ae9";
+
     private static readonly DateTimeOffset DerivedAt = new(2026, 10, 17, 6, 0, 0, TimeSpan.Zero);
 
     /// <summary>
@@ -102,9 +105,13 @@ public sealed class LuxembourgRederivationTests
         Assert.AreEqual(Content1RuleSha256, LuxembourgAknLegalContentProfileProducer.RuleProfileSha256);
 
         CollectionAssert.AreEqual(
-            new[] { LuxembourgRederivation.Release1RuleSet, LuxembourgRederivation.Release2RuleSet, LuxembourgRederivation.Release3RuleSet },
+            new[]
+            {
+                LuxembourgRederivation.Release1RuleSet, LuxembourgRederivation.Release2RuleSet, LuxembourgRederivation.Release3RuleSet,
+                LuxembourgRederivation.Release4RuleSet,
+            },
             LuxembourgRederivation.ImplementedRuleSets.ToArray());
-        CollectionAssert.AreEqual(new[] { "lu-release-1", "lu-release-2", "lu-release-3" }, LuxembourgRederivation.ImplementedRuleSets.ToArray());
+        CollectionAssert.AreEqual(new[] { "lu-release-1", "lu-release-2", "lu-release-3", "lu-release-4" }, LuxembourgRederivation.ImplementedRuleSets.ToArray());
         CollectionAssert.AreEqual(
             new[]
             {
@@ -147,6 +154,15 @@ public sealed class LuxembourgRederivationTests
             LuxembourgRightsAdmissionPolicies.PolicyFor(l1: true, l1b: true, l2: true, livePagesOnly: false),
             LuxembourgRederivation.AdmissionPolicyOf(LuxembourgRederivation.Release3RuleSet));
         Assert.AreEqual(Release3PolicySha256, LuxembourgRederivation.AdmissionPolicyOf(LuxembourgRederivation.Release3RuleSet));
+
+        // Release 4: Release 3's five rules but resolution /3 in place of /2, under the policy with the owner's ruling L4a
+        // (2026-11-13): one rule and the policy are what moved.
+        var three = LuxembourgRederivation.RulesOf(LuxembourgRederivation.Release3RuleSet).ToArray();
+        var four = LuxembourgRederivation.RulesOf(LuxembourgRederivation.Release4RuleSet).ToArray();
+        Assert.HasCount(5, four);
+        Assert.AreEqual(new LuxembourgRederivationRule("lex-lu-rights-resolution/3", LuxembourgRightsChannels.ResolutionThreeProfileSha256), four[1]);
+        CollectionAssert.AreEqual(three.Where((_, index) => index != 1).ToArray(), four.Where((_, index) => index != 1).ToArray());
+        Assert.AreEqual(Release4PolicySha256, LuxembourgRederivation.AdmissionPolicyOf(LuxembourgRederivation.Release4RuleSet));
         Assert.IsTrue(LuxembourgRightsAdmissionPolicies.IsRegistered(Policy1Sha256));
         Assert.IsFalse(LuxembourgRightsAdmissionPolicies.IsRegistered(new string('a', 64)));
         Assert.IsFalse(LuxembourgRightsAdmissionPolicies.IsRegistered(null));
