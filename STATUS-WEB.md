@@ -4,6 +4,25 @@ Updated 2026-11-13. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The polish after Release 5: quotations broken where the held text runs on, grouped counts, codes as example searches, the evening's run (sole driver, 2026-11-13)
+
+`web/sunday-polish`. From the screenshots of Release 5's candidate:
+- **A quotation whose held text runs its parts together with no space** (the 1997 insurance law's article 1er: "on
+  entend par:Contrat d'assurance: …l'assuré.Est considéré …") breaks there too (`quoteParagraphs`): after a lowercase
+  letter and its stop, colon or semicolon, before a capital that opens a word, taking no character; an acronym's stops
+  ("S.A.R.L.") are no break. Test: the held shape; no character but white space dropped, none added.
+- **Counts from a thousand are grouped** on the home page's coverage line ("268,712"; French "268 712" with a narrow
+  no-break space): the number is the answer's, its writing the language's (tests updated to read grouped counts).
+- **Example searches**: the codes the indexing record admits are tried first (`HOME_EXAMPLE_FEATURED`: Code civil, Code
+  de la consommation, Code du travail), then the record's order, which had put laws of 1798, 1817 and 1843 on the home
+  page. Each still lands on served text or is not shown (rule 4); an act is still cited by type and date or code name
+  alone (R92), which is why the insurance law (one of several laws of 27 July 1997) cannot be one.
+- **The Quality page** gains the run of 21:14 UTC on Release 5 (15 of 16, 13 of 13 quotations, p50 1.88 s, p95 2.30 s;
+  Luxembourg articles 4 of 4); each run shows its time (two on 13 November); the afternoon's finding says "Fixed the same
+  day".
+
+Evidence: web `npm run build`, `npm test` 1,528 tests, 0 fail.
+
 ## The home page's heading stays the page as built; the deploy probe refused the first candidate of Release 5 (sole driver, 2026-11-13)
 
 `web/home-heading-in-root`. Release 5 (`v3-20261113T180745Z-09a01fe38a80`, #1040 and #1041) was deployed as a zero-traffic

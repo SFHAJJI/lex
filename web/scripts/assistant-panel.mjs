@@ -126,14 +126,18 @@ export function groupsForLocale(groups, locale) {
   return { shown: first, other: groups.filter((group) => group.language !== language) };
 }
 
+// A sentence or definition run into the next with no space: a lowercase letter and its stop, colon or semicolon, then a capital
+// and a lowercase letter.
+const GLUED = /(?<=\p{Ll}[.:;])(?=\p{Lu}\p{Ll})/gu;
+
 // A paragraph or point marker at a line's start: "1.", "(1)", "(a)", "a)", each followed by its text.
 const MARKER = /\s+(?=(\d{1,3}\.\s+\p{Lu}|\(\d{1,3}\)\s|\([a-z]\)\s|[a-z]\)\s))/gu;
 
 /**
  * A quotation's text in the paragraphs its own numbering shows, for reading only: cut before a numbered paragraph ("1.",
  * "(1)") that follows the end of a sentence, a colon or a semicolon, or that opens the article's first paragraph, and before
- * a lettered point ("(a)", "a)") that follows a colon or a semicolon. The paragraphs, joined by one space each, are the text
- * with the white space at each cut made one space: no word is added, dropped or changed.
+ * a lettered point ("(a)", "a)") that follows a colon or a semicolon; and where the text runs a sentence into the next with no
+ * space at all. Nothing but white space is dropped at a cut, and no character is added or changed.
  */
 export function quoteParagraphs(text) {
   if (typeof text !== 'string' || text.length === 0) return [];
@@ -148,6 +152,11 @@ export function quoteParagraphs(text) {
       cuts.push([match.index, match.index + match[0].length]);
     }
   }
+  // Where the held text runs a sentence or a definition into the next with no space at all (a Luxembourg article's
+  // definitions, "on entend par:Contrat d’assurance: … l’assuré.Est considéré …"), a cut that takes no character: after a
+  // lowercase letter and its stop, colon or semicolon, before a capital that opens a word, so an acronym ("S.A.R.L.") stays.
+  for (const match of text.matchAll(GLUED)) cuts.push([match.index, match.index]);
+  cuts.sort((one, other) => one[0] - other[0]);
   const paragraphs = [];
   let from = 0;
   for (const [start, end] of cuts) {

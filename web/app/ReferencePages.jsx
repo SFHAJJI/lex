@@ -193,8 +193,8 @@ export function QualityBody() {
           {QUALITY_RUNS.map((run) => {
             const share = percent(run.right, run.cases);
             return (
-              <li key={run.date}>
-                <span className="quality-bar-label">{fillText(page.chartLabel, { date: longDate(run.date), percent: share, right: run.right, cases: run.cases })}</span>
+              <li key={`${run.date} ${run.time}`}>
+                <span className="quality-bar-label">{fillText(page.chartLabel, { date: longDate(run.date), time: run.time, percent: share, right: run.right, cases: run.cases })}</span>
                 <svg className="quality-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true" focusable="false">
                   <rect className="quality-bar-track" x="0" y="0" width="100" height="6" />
                   <rect className="quality-bar-fill" x="0" y="0" width={share} height="6" />
@@ -213,8 +213,8 @@ export function QualityBody() {
             </thead>
             <tbody>
               {QUALITY_RUNS.map((run) => (
-                <tr key={run.date}>
-                  <th scope="row">{longDate(run.date)}</th>
+                <tr key={`${run.date} ${run.time}`}>
+                  <th scope="row">{longDate(run.date)}, {run.time}</th>
                   <td>{fillText(page.typeRow, { right: run.right, cases: run.cases })}</td>
                   <td>{fillText(page.typeRow, { right: run.verified, cases: run.quotes })}</td>
                   <td>{fillText(page.typeRow, { right: run.sameVerdict, cases: run.cases })}</td>

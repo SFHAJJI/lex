@@ -194,7 +194,9 @@ test("the home page's coverage line says the counts the coverage answer serves, 
     const html = renderLiveHomePage({ facts });
     const line = /data-coverage-line="counted"[^>]*>([^<]+)</.exec(html)?.[1];
     assert.ok(line !== undefined, "the line");
-    assert.deepEqual(line.match(/\d+(?:-\d+)*/g), [String(works), String(states), String(articles), facts.coverage.builtOn, ...(later ? ["2026-12-01"] : [])], line);
+    // From a thousand, a count is written grouped ("7,919"): the number is the answer's, its writing the language's.
+    const said = (count) => (count >= 1000 ? count.toLocaleString("en-GB") : String(count));
+    assert.deepEqual(line.match(/\d{1,3}(?:,\d{3})+|\d+(?:-\d+)*/g), [said(works), said(states), said(articles), facts.coverage.builtOn, ...(later ? ["2026-12-01"] : [])], line);
   }
 });
 

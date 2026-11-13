@@ -25,7 +25,7 @@ import { useEffect, useState } from 'react';
 
 import { LiveSearch } from './LiveSearch.jsx';
 import { UNMOUNTED_SENTENCE, startHomeCoverage } from '../scripts/live-home.mjs';
-import { CHROME_LOCALE, fillCounted, fillText, liveChrome, livePath, refusalSentence } from '../scripts/live-chrome.mjs';
+import { CHROME_LOCALE, countedEntry, fillText, liveChrome, livePath, refusalSentence } from '../scripts/live-chrome.mjs';
 import { referencePage } from '../scripts/reference-pages.mjs';
 import { indexOlderThanToday } from '../scripts/live-search.mjs';
 import { useLuxembourgToday } from './Today.jsx';
@@ -42,10 +42,14 @@ const COPY = liveChrome().home;
 export function CoverageLine({ line, today = null }) {
   if (line === null || line.state === 'unavailable') return null;
   if (line.state === 'unmounted') return <p className="coverage-line" data-coverage-line="unmounted">{refusalSentence(UNMOUNTED_SENTENCE)}</p>;
+  // From a thousand, a count is written with its language's group separator ("268,712"; in French "268 712", a narrow
+  // no-break space): the number is the answer's, only its writing is the language's.
+  const grouped = (count) => (count >= 1000 ? count.toLocaleString(CHROME_LOCALE === 'fr' ? 'fr-FR' : 'en-GB') : String(count));
+  const said = (entry, count) => fillText(countedEntry(entry, count), { count: grouped(count) });
   const counts = {
-    acts: fillCounted(COPY.acts, line.works),
-    versions: fillCounted(COPY.versions, line.states),
-    articles: fillCounted(COPY.articles, line.articles),
+    acts: said(COPY.acts, line.works),
+    versions: said(COPY.versions, line.states),
+    articles: said(COPY.articles, line.articles),
   };
   const older = indexOlderThanToday(line.builtOn, today);
   return (

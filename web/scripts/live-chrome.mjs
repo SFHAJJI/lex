@@ -1298,10 +1298,10 @@ const EN = Object.freeze({
       speed: Object.freeze({ value: "{typical} s", label: "typical answer time; 95% of answers within {most} s" }),
     }),
     chartHeading: "Test questions answered as expected, update by update",
-    chartLabel: "{date}: {percent}% ({right} of {cases})",
+    chartLabel: "{date}, {time} UTC: {percent}% ({right} of {cases})",
     runsHeading: "Every run",
     columns: Object.freeze({
-      date: "Run",
+      date: "Run (UTC)",
       right: "Answered as expected",
       verified: "Quotations verified",
       same: "Same answer twice",
@@ -1311,7 +1311,8 @@ const EN = Object.freeze({
     findings: Object.freeze({
       eu: "Every EU question failed: the assistant did not read short names such as RGPD and passed an EU act's address where its number was needed. Fixed the next day.",
       dora: "One miss: DORA, asked in English, is pointed to its official source instead of being answered.",
-      insurance: "Two misses: the same DORA question, and the 1997 insurance contract law, asked by its date and title, which the assistant looked up by its date alone. A fix follows.",
+      insurance: "Two misses: the same DORA question, and the 1997 insurance contract law, asked by its date and title, which the assistant looked up by its date alone. Fixed the same day.",
+      insuranceFixed: "One miss: the same DORA question. The insurance contract law is answered with its article.",
     }),
     typesHeading: "The latest run, by kind of question",
     types: Object.freeze({

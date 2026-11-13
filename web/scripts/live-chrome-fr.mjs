@@ -1829,10 +1829,10 @@ export const LIVE_CHROME_FR = Object.freeze({
       speed: Object.freeze({ value: '{typical} s', label: 'temps de réponse habituel ; 95 % des réponses en moins de {most} s' }),
     }),
     chartHeading: 'Questions de test ayant reçu la réponse attendue, mise à jour par mise à jour',
-    chartLabel: '{date} : {percent} % ({right} sur {cases})',
+    chartLabel: '{date}, {time} UTC : {percent} % ({right} sur {cases})',
     runsHeading: 'Toutes les exécutions',
     columns: Object.freeze({
-      date: 'Exécution',
+      date: 'Exécution (UTC)',
       right: 'Réponse attendue',
       verified: 'Citations vérifiées',
       same: 'Même réponse deux fois',
@@ -1842,7 +1842,8 @@ export const LIVE_CHROME_FR = Object.freeze({
     findings: Object.freeze({
       eu: 'Toutes les questions sur le droit de l’UE ont échoué : l’assistant ne lisait pas les noms usuels comme RGPD et transmettait l’adresse d’un acte de l’UE là où son numéro était attendu. Corrigé le lendemain.',
       dora: 'Un échec : DORA, interrogé en anglais, renvoie à sa source officielle au lieu d’être cité.',
-      insurance: 'Deux échecs : la même question sur DORA, et la loi de 1997 sur le contrat d’assurance, demandée par sa date et son intitulé, que l’assistant a cherchée par sa seule date. Une correction suit.',
+      insurance: 'Deux échecs : la même question sur DORA, et la loi de 1997 sur le contrat d’assurance, demandée par sa date et son intitulé, que l’assistant a cherchée par sa seule date. Corrigé le jour même.',
+      insuranceFixed: 'Un échec : la même question sur DORA. La loi sur le contrat d’assurance reçoit son article.',
     }),
     typesHeading: 'La dernière exécution, par type de question',
     types: Object.freeze({

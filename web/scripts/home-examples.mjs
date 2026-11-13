@@ -7,7 +7,8 @@
 // 1. The mount is the one `coverage` counts. Its Luxembourg index's digest is the examples' own: a page shows them only
 //    over that index (`examplesShown`), so a build's examples never stand over another mount, or over none.
 // 2. Only the acts the release's indexing record admits (R92's measurement of which acts name no private individual, the
-//    record the search-engine switch opens pages by: `search-engines.mjs`), Luxembourg acts, in the record's order, at most
+//    record the search-engine switch opens pages by: `search-engines.mjs`), Luxembourg acts, the featured codes the record
+//    admits first (`HOME_EXAMPLE_FEATURED`: a reader's first acts, not the record's oldest), then in the record's order, at most
 //    HOME_EXAMPLE_CANDIDATES of them; with no record, none (a driver decision of the review of writer/screens-gaps: an act
 //    whose text may name a person is never featured). Each is read as of the derivation's day (`evidence_bundle`, R13).
 // 3. In each, the first article quoted with its text whose usual citation the site's generator composes (`citationForms`,
@@ -41,6 +42,13 @@ export const HOME_EXAMPLES_SCHEMA = "lex-v3-home-examples/1";
 
 /** How many acts the derivation reads, in the indexing record's order, before it stops: each costs a reading and a search. */
 export const HOME_EXAMPLE_CANDIDATES = 24;
+
+/**
+ * The acts tried first, when the indexing record admits them (2026-11-13: the record's order put laws of 1798, 1817 and 1843
+ * on the home page): codes, cited by their name alone, which a reader recognises. Each still lands on served text or is
+ * not shown (rule 4).
+ */
+export const HOME_EXAMPLE_FEATURED = Object.freeze(["/lu-legilux/code-civil", "/lu-legilux/code-consommation", "/lu-legilux/code-travail"]);
 
 /** How many examples the home page shows at most. */
 export const HOME_EXAMPLES_AT_MOST = 3;
@@ -89,7 +97,8 @@ export async function deriveHomeExamples({ ask, contract, today, admitted, candi
   }
   const examples = [];
   if (admitted === null) log("the release carries no indexing record: no act may be featured, so no example searches");
-  const works = (admitted ?? []).filter((address) => typeof address === "string" && address.startsWith("/lu-legilux/"));
+  const listed = (admitted ?? []).filter((address) => typeof address === "string" && address.startsWith("/lu-legilux/"));
+  const works = [...HOME_EXAMPLE_FEATURED.filter((address) => listed.includes(address)), ...listed.filter((address) => !HOME_EXAMPLE_FEATURED.includes(address))];
   for (const identifier of works.slice(0, candidates)) {
     if (examples.length >= atMost) break;
     const reading = await ask("evidence_bundle", { identifier, date: today });

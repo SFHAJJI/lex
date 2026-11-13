@@ -247,6 +247,18 @@ test("a quotation is set in the paragraphs its own numbering shows, and no word 
     assert.equal(quoteParagraphs(text).join(' '), text.replace(/\s+/g, ' ').trim(), 'the words, in order, every one');
   }
   assert.deepEqual(quoteParagraphs(''), []);
+  // A text that runs its definitions together with no space (the 1997 insurance law's article 1er as held): a line break
+  // there too, taking no character; an acronym's stops are no break.
+  const glued = "Article 1erDéfinitionsAu sens de la présente loi, on entend par:Contrat d'assurance: un contrat.Est considéré comme tel un contrat de la S.A.R.L. Lux.Assuré: la personne.";
+  assert.deepEqual(quoteParagraphs(glued), [
+    "Article 1erDéfinitionsAu sens de la présente loi, on entend par:",
+    "Contrat d'assurance: un contrat.",
+    "Est considéré comme tel un contrat de la S.A.R.L. Lux.",
+    "Assuré: la personne.",
+  ]);
+  for (const text of [article, luxembourg, glued]) {
+    assert.equal(quoteParagraphs(text).join('').replace(/\s+/g, ''), text.replace(/\s+/g, ''), 'no character but white space dropped, none added');
+  }
 });
 
 test("an answer's quotations come in the interface's language first, the other language and every check one action away, with every block drawn", async () => {
