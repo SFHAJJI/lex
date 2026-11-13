@@ -2,6 +2,40 @@
 
 Updated 2026-11-11.
 
+## Release 4's rights rule: a file the catalogue clears is no longer withheld for a block about another file (sole driver, 2026-11-13)
+
+`data/rights-other-identity`. **The finding.** Measured over the live release's corpus (`dF-20261112-be3f22c9`, streamed
+read-only) and run 15's local custody (no publisher traffic for the count): 4,054 Luxembourg files are `rights_withheld` as
+`conflict`. 3,223 of them are the publisher disagreeing with itself about the held file (its own block says licenceSCL while
+the catalogue says CC BY 4.0), and stay withheld. **784 files** (334 works, 325 of them with no text served at all: 175 lois,
+158 RGD, 1 constitution) are withheld only because a block names *another* identity, almost always the original act whose
+blocks a consolidation carries (licenceSCL in the file, or in the catalogue), while the catalogue declares exactly CC BY 4.0
+for the held file itself. Among them: the loi du 27 juillet 1997 sur le contrat d'assurance (`loi/1997/07/27/n10`, every
+consolidation), the loi du 7 décembre 2015 sur le secteur des assurances, the 2003 motor liability law and the loi du 10 août
+1915 sur les sociétés commerciales. 47 files newer than run 15 were not classified. (Correction: earlier notes, here at the
+"Insurance laws" paragraph, named `loi-1997-07-27-n6`, which is the Constitutional Court law; the insurance contract law is
+`n10`.)
+
+**The owner's ruling L4a** (asked 2026-11-13 with the measurement; the owner: "fix it now"). Recorded dated on the ruling line.
+- **Resolution /3** (`lex-lu-rights-resolution/3`, `5e4ac80c…`): /2 with rule 8 split. 8a,
+  `sparql_cc_by_in_file_other_identity_licensed_otherwise`: the SPARQL value is exactly CC BY 4.0; no own block (unbound) or
+  an own block of exactly CC BY 4.0; every block naming the held file states only CC BY 4.0; every other declared licence
+  sits in a block naming another identity; at least one other identity is named and the catalogue knows every one. 8b:
+  everything else /2 calls a conflict stays one. /2 is unchanged (`05ed311f…`, pinned).
+- The new disposition is single-channel: admitted only on its retained licence page, with the disclosure
+  `lu_rights_publisher_catalogue_only_other_identity_licensed_otherwise` (EN and FR, the L5 sentence's second half unchanged).
+- **Policy** `lex-lu-rights-admission-policy/A+L1+L1b+L2+L4a(a)` (`58522ac6…`): the October words on L1, L1b and L2, the
+  owner's words of 2026-11-13 on L4a. Release 3's entry keeps its text and digest (`2b049e76…`); 32 entries in all. Both
+  new digests recomputed in Python from the literals, which also reproduce /2's and Release 3's pinned digests.
+- **Rule set `lu-release-4`**: reading /2, resolution /3, then Release 1's three, under that policy. `lu-release-3` keeps
+  resolution /2 and its policy, so its sealed inputs derive as before.
+- The evidence bundle's rights rule gains one sentence when the policy admits L4a; the corpus accepts resolution /3 and
+  refuses rule 8a's disposition under any other rule.
+
+Tests: the resolution (8a cases incl. the 1997 and 2003 shapes, and eight near-misses that stay conflicts under /3), the
+policy registry and the owner's words, Release 4 through the derive's own door (served with its page and disclosure; withheld
+under Release 3; the door substitutes no policy), the census pins, and the web's disclosure sentences.
+
 ## lex-eval on GitHub, private (sole driver, 2026-11-13)
 
 `docs/lex-eval-published`. On the owner's yes (2026-11-13), `C:\lex-v3\lex-eval` (commit 00a1b9ca, 15 tracked files: the

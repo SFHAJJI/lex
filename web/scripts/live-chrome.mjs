@@ -356,6 +356,7 @@ const EN = Object.freeze({
       lu_rights_publisher_catalogue_only_file_silent: "This file's metadata states no licence. The text of this file is served on the basis of the publisher's catalogue alone: a licence row in that catalogue declares CC BY 4.0 for this file, on a page that this site read on {date}.",
       lu_rights_publisher_catalogue_only_own_block_empty: "This file's own metadata names it but does not state its licence. The text of this file is served on the basis of the publisher's catalogue alone: a licence row in that catalogue declares CC BY 4.0 for this file, on a page that this site read on {date}.",
       lu_rights_publisher_catalogue_only_file_names_other_identity: "This file's licence statement names another file, not this file. The text of this file is served on the basis of the publisher's catalogue alone: a licence row in that catalogue declares CC BY 4.0 for this file, on a page that this site read on {date}.",
+      lu_rights_publisher_catalogue_only_other_identity_licensed_otherwise: "This file's metadata also describes other files of the act, such as its original publication, for which the publisher states another licence. The text of this file is served on the basis of the publisher's catalogue alone: a licence row in that catalogue declares CC BY 4.0 for this file, on a page that this site read on {date}.",
     }),
     stateHeading: "{work}, {language}, the state applying from {from}",
     stateHeadingNext: "{work}, {language}, the state applying from {from} (the next state held applies from {next})",

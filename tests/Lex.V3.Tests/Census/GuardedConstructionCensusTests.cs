@@ -1798,6 +1798,8 @@ public sealed class GuardedConstructionCensusTests
                     + "method internal instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelResolution::AsReso"
                     + "lutionTwo, "
+                    + "method private static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannels::ResolveTwoOrThree, "
                     + "method public instance "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelResolution::<Clone"
                     + ">$, "
@@ -1806,6 +1808,8 @@ public sealed class GuardedConstructionCensusTests
                     + "cencePage, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannels::Resolve, "
+                    + "method public static "
+                    + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannels::ResolveThree, "
                     + "method public static "
                     + "Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannels::ResolveTwo",
                 "Lex.V3.Contracts.Source.Luxembourg.LuxembourgTranspositionIdentityDiscoveryPlan: "

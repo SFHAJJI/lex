@@ -356,7 +356,8 @@ public sealed record LexCorpus6LuxembourgRights(
 {
     /// <summary>
     /// The SHA-256 of the resolution rule a re-derivation re-bound these rights under (resolution /2,
-    /// <see cref="LuxembourgRightsChannels.ResolutionTwoProfileSha256"/>); null, and absent on the wire, for rights as the
+    /// <see cref="LuxembourgRightsChannels.ResolutionTwoProfileSha256"/>, or resolution /3,
+    /// <see cref="LuxembourgRightsChannels.ResolutionThreeProfileSha256"/>); null, and absent on the wire, for rights as the
     /// acquisition resolved them, whose block and binding are what they always were.
     /// </summary>
     public string? ResolutionRule { get; init; }
@@ -389,10 +390,19 @@ public sealed record LexCorpus6LuxembourgRights(
         ArgumentNullException.ThrowIfNull(BoundRunIdentity);
         ArgumentNullException.ThrowIfNull(memberRunIdentity);
         if (ResolutionRule is not null &&
-            !string.Equals(ResolutionRule, LuxembourgRightsChannels.ResolutionTwoProfileSha256, StringComparison.Ordinal))
+            !string.Equals(ResolutionRule, LuxembourgRightsChannels.ResolutionTwoProfileSha256, StringComparison.Ordinal) &&
+            !string.Equals(ResolutionRule, LuxembourgRightsChannels.ResolutionThreeProfileSha256, StringComparison.Ordinal))
         {
             throw new ArgumentException(
                 "The Luxembourg rights name a resolution rule this build does not implement.", nameof(ResolutionRule));
+        }
+
+        // Only resolution /3 makes rule 8a's disposition.
+        if (Disposition == LuxembourgRightsChannelDisposition.SparqlCcByInFileOtherIdentityLicensedOtherwise &&
+            !string.Equals(ResolutionRule, LuxembourgRightsChannels.ResolutionThreeProfileSha256, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "sparql_cc_by_in_file_other_identity_licensed_otherwise is made only by resolution /3.", nameof(Disposition));
         }
 
         // Binding /1 is the member's own. Binding /2 also covers the corpus header's admission policy and re-derivation record,
@@ -514,14 +524,15 @@ public sealed record LexCorpus6LuxembourgRights(
             or LuxembourgRightsChannelDisposition.Multiple
             || IsResolutionTwoOnly(disposition);
 
-    /// <summary>The six dispositions only resolution /2 makes.</summary>
+    /// <summary>The seven dispositions only a re-derivation's resolution makes: /2's six, and /3's rule 8a.</summary>
     internal static bool IsResolutionTwoOnly(LuxembourgRightsChannelDisposition disposition) =>
         disposition is LuxembourgRightsChannelDisposition.AgreedCcByRederived
             or LuxembourgRightsChannelDisposition.SparqlCcByInFileNamesOtherIdentity
             or LuxembourgRightsChannelDisposition.SparqlCcByInFileSilent
             or LuxembourgRightsChannelDisposition.SparqlCcByInFileOwnBlockEmpty
             or LuxembourgRightsChannelDisposition.SparqlCcByInFileNotApplicable
-            or LuxembourgRightsChannelDisposition.TypedQuarantineInFileIdentityUnknown;
+            or LuxembourgRightsChannelDisposition.TypedQuarantineInFileIdentityUnknown
+            or LuxembourgRightsChannelDisposition.SparqlCcByInFileOtherIdentityLicensedOtherwise;
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

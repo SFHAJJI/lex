@@ -126,12 +126,14 @@ export const ADMITTING_RIGHTS_DISPOSITIONS = Object.freeze([ADMITTING_RIGHTS_DIS
 const ADMITTING_SAID = ADMITTING_RIGHTS_DISPOSITIONS.join(' or ');
 
 /**
- * The single-channel dispositions a corpus serves only under one of the owner's rulings (L1, L1b, L2): the file does not
- * state its own licence, and the text rests on the publisher's catalogue declaration alone. A source of one is read only
+ * The single-channel dispositions a corpus serves only under one of the owner's rulings (L1, L1b, L2, L4a): the file does not
+ * state its own licence, or states another only for other files, and the text rests on the publisher's catalogue declaration
+ * alone. A source of one is read only
  * with its `rights_disclosure` (the licence page it rests on and when it was observed), which the page shows beside the text.
  */
 export const DISCLOSED_RIGHTS_DISPOSITIONS = Object.freeze([
   'sparql_cc_by_in_file_names_other_identity',
+  'sparql_cc_by_in_file_other_identity_licensed_otherwise',
   'sparql_cc_by_in_file_own_block_empty',
   'sparql_cc_by_in_file_silent',
 ]);
@@ -139,6 +141,7 @@ export const DISCLOSED_RIGHTS_DISPOSITIONS = Object.freeze([
 /** The disclosure codes, one per single-channel disposition, as the API sends them. */
 const DISCLOSURE_CODES = Object.freeze({
   sparql_cc_by_in_file_names_other_identity: 'lu_rights_publisher_catalogue_only_file_names_other_identity',
+  sparql_cc_by_in_file_other_identity_licensed_otherwise: 'lu_rights_publisher_catalogue_only_other_identity_licensed_otherwise',
   sparql_cc_by_in_file_own_block_empty: 'lu_rights_publisher_catalogue_only_own_block_empty',
   sparql_cc_by_in_file_silent: 'lu_rights_publisher_catalogue_only_file_silent',
 });

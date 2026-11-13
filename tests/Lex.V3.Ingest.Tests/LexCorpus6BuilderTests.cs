@@ -545,6 +545,8 @@ public sealed class LexCorpus6BuilderTests
             Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.SparqlCcByInFileOwnBlockEmpty,
             Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.SparqlCcByInFileNotApplicable,
             Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.TypedQuarantineInFileIdentityUnknown,
+            // Resolution /3's rule 8a (the owner's ruling L4a).
+            Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition.SparqlCcByInFileOtherIdentityLicensedOtherwise,
         }.ToHashSet();
         foreach (var disposition in Enum.GetValues<Lex.V3.Contracts.Source.Luxembourg.LuxembourgRightsChannelDisposition>())
         {

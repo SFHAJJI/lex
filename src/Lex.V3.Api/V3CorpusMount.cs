@@ -1194,7 +1194,15 @@ internal sealed partial class V3CorpusMount : IDisposable
     private string LuxembourgBundleRightsRule => (RulesByInterval
         ? (PolicyAdmitsRederived ? EvidenceBundleRightsRuleNineA : EvidenceBundleRightsRuleNine)
         : (PolicyAdmitsRederived ? EvidenceBundleRightsRuleA : EvidenceBundleRightsRule))
-        + (LuxembourgRightsAdmissionPolicies.AdmitsSingleChannel(_corpus.LuxembourgRightsAdmissionPolicy) ? EvidenceBundleSingleChannelRule : "");
+        + (LuxembourgRightsAdmissionPolicies.AdmitsSingleChannel(_corpus.LuxembourgRightsAdmissionPolicy) ? EvidenceBundleSingleChannelRule : "")
+        + (LuxembourgRightsAdmissionPolicies.Admits(_corpus.LuxembourgRightsAdmissionPolicy,
+            LuxembourgRightsChannelDisposition.SparqlCcByInFileOtherIdentityLicensedOtherwise) ? EvidenceBundleOtherIdentityRule : "");
+
+    /// <summary>The sentence a corpus under the owner's ruling L4a (resolution /3's rule 8a) adds after the single-channel one.</summary>
+    internal const string EvidenceBundleOtherIdentityRule =
+        "; under the owner's ruling L4a, a file whose licence statements disagree only about other files (the original act's, " +
+        "which a consolidation carries) while the publisher's SPARQL declaration states exactly CC BY 4.0 for that file " +
+        "(sparql_cc_by_in_file_other_identity_licensed_otherwise, resolution /3) is served the same way, with the same disclosure";
 
     /// <summary>The sentence a corpus under one of the owner's rulings adds to its rights rule.</summary>
     internal const string EvidenceBundleSingleChannelRule =
