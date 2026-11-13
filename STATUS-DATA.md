@@ -2,6 +2,45 @@
 
 Updated 2026-11-11.
 
+## Release 4 is live: 283 more Luxembourg works with text, the insurance laws among them (sole driver, 2026-11-13)
+
+`docs/release-4-live`. **Live since 15:18:32 UTC**: `v3-20261113T094422Z-c0191d7abdfb`, revision
+`ca-lex-v3--v3-20261113t094422z-c0191d7abdfb-29a188d9`, 100% of the traffic; serving commit c0191d7a (#1037), the same
+inputs as the final release (run 18's Luxembourg half, run 17d's EU catalogue) under `lu-release-4` (resolution /3, policy
+58522ac6…, the owner's ruling L4a).
+
+- **Derive** `d4-20261113-bfb83983` (`lex-v3-refresh-cg926nq`, D16): derive-a 5,059 s, derive-b 5,041 s, compare "digests 0,
+  bytes 0" (records af2d197e…), gates exit 0 in 2,556 s, done 14:00:25Z; mount 3,850,311,680 bytes (sha256 b4b8b878…).
+- **Measured against the final release's mount** (both streamed locally, `r4_measure`): 685 Luxembourg files move from
+  `conflict` / `rights_withheld` to `sparql_cc_by_in_file_other_identity_licensed_otherwise` / `acquired`, every one
+  `accepted_selected` with no gap; `conflict` 4,054 -> 3,369; no other disposition moves. Works with text 5,342 -> 5,625
+  (+283: 145 lois, 138 RGD), none lost. The loi du 27 juillet 1997 sur le contrat d'assurance: all 10 files, current
+  state (from 2025-11-25) 147 articles; the loi du 7 décembre 2015 sur le secteur des assurances: both files, current 451;
+  the loi du 16 avril 2003 (motor liability): 6 of 7 (its latest state stays a conflict); the loi du 10 août 1915 sur les
+  sociétés commerciales: 6 of 9, current 584 articles (numbered from 100-1).
+- **Checks, locally first** (`Lex.V3.Tool release-checks` over both mounts): the first run refused on three items, each
+  then explained in `release-4-explanations.json`: two consolidations of the loi du 21 juillet 1976 (n2), newly admitted
+  and in a content shape the reader does not read (R86(2) textless, `akn_unsupported_content_shape+pdf_not_applicable`),
+  and the Constitution of 1868 as published, whose reason moves from `withheld_rights` to `not_available_misfiled` (no
+  text before or after; `derivation_rule_changed`, by item). Second run: `consolidation-text.json` pass (LU admitted 2,610,
+  with text 2,600, listed 10, unexplained 0), `release-comparison.json` pass (listed 1, unexplained 0; LU versions added
+  992, changed 15 by gaining text, lost 0; articles added 26,214, changed 0, lost 0; EU unchanged).
+- **Release** `lex-v3-release-dwju7yn` (prefix `r4-20261113T1403-c0191d7a`, D16) succeeded at 15:00; image manifest
+  sha256:7db7b7cb…. **Deploy** (`deploy-public.ps1 -Apply`): candidate healthy, the HTTP probes as the release holds, the
+  data's age and the evaluation card allow promotion. At the candidate's own address: "Que dit l'article 5 du RGPD ?",
+  GDPR article 22, AI Act article 50 and Code civil article 1er answer (2.0 to 2.5 s, quotes 1 to 2); the advice question
+  is refused. Two-address check PASS (this PC 181 x 429 while the job's address got 200). The final release's revision
+  `…8a5b5be569c2-8a36f86f` is deactivated, kept for rollback.
+- **Backup (R111)**: `deploy/backup-release.ps1 -Apply` copied the 14 objects; its pointers step first refused because the two custody prefixes were passed through `pwsh -File` as one quoted string ("No custody object is listed"), then, called in-process with an array, wrote 427 custody pointers; `-Verify`: "verified: 14 objects of v3-20261113T094422Z-c0191d7abdfb in stlexv3soufien/releases by SHA-256, and 427 custody pointers".
+- **lex-eval** against the live release: 14 of 16 verdicts (0.875; the final release's set of 15 with `point-insurance-1997` now `lu-insurance-1997` expecting an answer, and `point-cssf-circular` added), every gate passed, 12 quotes all verified, same verdict on every replay, same plan 0.615, p50 2.00 s, p95 2.98 s; registered. The misses: `eu-dora-art6` (point, as before) and `lu-insurance-1997` (clarify, the planner finding below).
+
+**Found, for the next release.** (1) The assistant plans "Que dit l'article 1er de la loi du 27 juillet 1997 sur le contrat
+d'assurance ?" as a search for "l'article 1er de la loi du 27 juillet 1997" only (the prompt's one example cites a law by
+its date), which several acts share, so it ends in `clarify`; the search with the title words opens `loi-1997-07-27-n10`
+art. 1er. A prompt line on title words is the fix. (2) A citation naming an act that is not held, with its title words
+(the 2015 Andorra convention law), answers `ambiguous_identifier` instead of saying the act is not held. (3) Local disk:
+release A's image tar removed after its backup (IMAGE-TAR-REMOVED.txt), the local mounts removed after the checks.
+
 ## Release 4's rights rule: a file the catalogue clears is no longer withheld for a block about another file (sole driver, 2026-11-13)
 
 `data/rights-other-identity`. **The finding.** Measured over the live release's corpus (`dF-20261112-be3f22c9`, streamed

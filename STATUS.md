@@ -1,6 +1,6 @@
 # Lex V3 status
 
-Updated 2026-11-12 by the driver (heads). This file holds the heads, the owner's open items and the pointers to the two
+Updated 2026-11-13 by the driver (heads). This file holds the heads, the owner's open items and the pointers to the two
 lane files (the standing order of 2026-10-01 13:50 UTC: STATUS.md was edited by nearly every pull request and was
 the most frequent conflict). Each lane writes its progress in its own file, in the pull request that makes it:
 
@@ -13,13 +13,14 @@ A feature pull request edits its lane file, not this one; this file changes for 
 
 ## Heads
 
-- `v3/integration`: `8a5b5be5` (2026-11-12, #1033 merged: R106's `publisher_stated_end`; the backup's verification by
-  version follows in `deploy/backup-versions`). Served at law.soufien.lu since 2026-11-12 22:05:42 UTC, publicly: the
-  final release `v3-20261112T205332Z-8a5b5be569c2` (serving commit 8a5b5be5, index builder be3f22c9), over run 18's
-  Luxembourg population (completed 2026-11-12 15:28 UTC) and run 17d's EU catalogue, built and signed on Azure; the
-  assistant on as a labelled preview; Luxembourg data 0 days old and EU 1 day at promotion. Release A
-  (`v3-20261111T144050Z-d8d38105f51d`) is kept, deactivated, for rollback. Detail in STATUS-DATA.md. The required checks:
-  `dotnet` (the whole solution), `web`, `canon-windows`, `journeys` and `image-conditions`.
+- `v3/integration`: `e849aa24` (2026-11-13, #1038 merged: "AI Act" and "RGPD" in the search bar, live with the next
+  release). Served at law.soufien.lu since 2026-11-13 15:18:32 UTC, publicly: Release 4
+  `v3-20261113T094422Z-c0191d7abdfb` (serving commit c0191d7a, #1037: the rights rule `lu-release-4` on the owner's ruling
+  L4a), over the final release's inputs (run 18's Luxembourg population, run 17d's EU catalogue), built and signed on
+  Azure: 283 more Luxembourg works with text, the 1997, 2015 and 2003 insurance laws and the 1915 company law among them;
+  the assistant on as a labelled preview. The final release (`v3-20261112T205332Z-8a5b5be569c2`) is kept, deactivated,
+  for rollback. Detail in STATUS-DATA.md. The required checks: `dotnet` (the whole solution), `web`, `canon-windows`,
+  `journeys` and `image-conditions`.
 - Driver: Claude Opus 5.5, the sole driver since 2026-10-02. The owner's order: no Codex, no other Claude session,
   full authorisation, and the owner is never asked. Each pull request is reviewed by an independent Claude subagent
   (STATUS-WEB.md, driver decisions). The data lane's file (`STATUS-DATA.md`) is kept by this driver too.
