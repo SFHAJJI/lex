@@ -430,6 +430,11 @@ public static class V3AssistantPipeline
                     return WorkAddress(Text(opens, "publisher") ?? "lu-legilux", opened);
                 }
 
+                if (Member(result, "best_hit") is { } best)
+                {
+                    return BestHitOf(result, best) is { } chosen ? WorkAddress(chosen.Publisher, chosen.Work) : null;
+                }
+
                 var works = HitWorks(result);
                 return works.Length == 1 ? WorkAddress(works[0].Publisher, works[0].Work) : null;
             case "resolve":
@@ -456,6 +461,11 @@ public static class V3AssistantPipeline
             return Text(opens, "article_id");
         }
 
+        if (Member(result, "best_hit") is { } best)
+        {
+            return BestHitOf(result, best)?.Article;
+        }
+
         if (HitWorks(result).Length != 1)
         {
             return null;
@@ -464,6 +474,30 @@ public static class V3AssistantPipeline
         var articles = Items(result, "hits").Select(hit => Text(hit, "publisher_id")).Where(static id => id is not null).Distinct(StringComparer.Ordinal).ToArray();
         return articles.Length == 1 ? articles[0] : null;
     }
+
+    /// <summary>
+    /// A ranked search's best hit when its decision says it is clearly ahead of the others (the search's best_hit rule: a lone
+    /// weak hit, or a first hit not ahead, is no answer), as its publisher, work and publisher article id; else null.
+    /// </summary>
+    internal static (string Publisher, string Work, string Article)? BestHitOf(JsonElement result, JsonElement best)
+    {
+        if (Text(best, "decision") != "clearly_ahead" || Member(best, "hit") is not { } hit)
+        {
+            return null;
+        }
+
+        var work = Text(hit, "work_key") ?? Text(hit, "celex");
+        var article = Text(hit, "publisher_id");
+        return work is null || article is null ? null : (Text(hit, "publisher") ?? Text(result, "publisher") ?? "lu-legilux", work, article);
+    }
+
+    /// <summary>A ranked search's candidates (its best_hit's first three), as publisher, work and publisher article id.</summary>
+    private static (string Publisher, string Work, string Article)[] CandidatesOf(JsonElement result, JsonElement best) =>
+        Items(best, "candidates")
+            .Select(hit => (Publisher: Text(hit, "publisher") ?? Text(result, "publisher") ?? "lu-legilux", Work: Text(hit, "work_key") ?? Text(hit, "celex"), Article: Text(hit, "publisher_id")))
+            .Where(static candidate => candidate.Work is not null && candidate.Article is not null)
+            .Select(static candidate => (candidate.Publisher, candidate.Work!, candidate.Article!))
+            .ToArray();
 
     private static IEnumerable<V3Quote> QuotesOf(string stepId, V3StepOutcome outcome, string article, Func<string> nextId)
     {
@@ -544,6 +578,13 @@ public static class V3AssistantPipeline
         if (outcome.Refused)
         {
             return ClarifyCodes.Contains(outcome.RefusalCode!) ? Finding.Clarify : Finding.NotHeld;
+        }
+
+        if (outcome.OperationId == "as_of")
+        {
+            // The act as it stood on a date, with no article quoted, says nothing of what the law says: it needs one detail
+            // (2026-11-13: a question with a date was "answered" with no quotation).
+            return Finding.Clarify;
         }
 
         if (outcome.OperationId == "search")
@@ -797,6 +838,36 @@ public static class V3AssistantPipeline
                 if (hits.Length == 0)
                 {
                     yield return Claim(V3AnswerTemplates.PointNoHit, locale, Fact("query", V3AnswerSlotKind.QuestionSpan, item.Bound["query"].Value));
+                    yield break;
+                }
+
+                if (Member(result, "best_hit") is { } best && CandidatesOf(result, best) is { Length: > 0 } candidates)
+                {
+                    // The first three of the ranking, each to read on the date asked (else its hit's), best first.
+                    var candidateWorks = candidates.Select(static candidate => (candidate.Publisher, candidate.Work)).Distinct().ToArray();
+                    if (candidateWorks.Length == 1)
+                    {
+                        yield return Claim(V3AnswerTemplates.ClarifyWhichArticle, locale, Fact("work", V3AnswerSlotKind.WorkAddress, WorkAddress(candidateWorks[0].Publisher, candidateWorks[0].Work)));
+                    }
+                    else
+                    {
+                        yield return Claim(V3AnswerTemplates.ClarifyWhichAct, locale);
+                    }
+
+                    foreach (var (candidatePublisher, candidateWork, candidateArticle) in candidates)
+                    {
+                        var address = WorkAddress(candidatePublisher, candidateWork);
+                        var hitDate = hits.Where(hit => (Text(hit, "work_key") ?? Text(hit, "celex")) == candidateWork && Text(hit, "publisher_id") == candidateArticle)
+                            .Select(hit => Text(hit, "applicability_date") ?? Text(hit, "wording_date")).FirstOrDefault(static value => value is not null);
+                        if ((date ?? hitDate) is not { } readAt)
+                        {
+                            continue;
+                        }
+
+                        yield return Action("evidence_bundle", new() { ["identifier"] = address, ["date"] = readAt, ["article"] = candidateArticle }, V3AnswerTemplates.ActionReadArticle, locale,
+                            Fact("anchor", V3AnswerSlotKind.Anchor, candidateArticle), Fact("work", V3AnswerSlotKind.WorkAddress, address), Date("date", readAt));
+                    }
+
                     yield break;
                 }
 
