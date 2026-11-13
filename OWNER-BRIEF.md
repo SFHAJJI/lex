@@ -1,6 +1,6 @@
 # Lex V3: the owner's brief
 
-Updated 2026-11-12 at 23:15 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-11-13 at 06:13 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
@@ -28,11 +28,12 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 ## For the Foyer interview on 17 November
 
 - Start with C:\lex-v3\foyer-interview-2026-11-17\AI-LIFECYCLE-AND-CHALLENGES.md. Say "mock" for a practice interview.
-- The demo: C:\lex-v3\foyer-interview-2026-11-17\DEMO-SCRIPT.md, seven steps tested on the live site tonight.
+- The demo: C:\lex-v3\foyer-interview-2026-11-17\DEMO-SCRIPT.md, seven steps tested on the live site on 12 November.
+- The Python evaluation tool is on your GitHub, private, at github.com/SFHAJJI/lex-eval; its tests pass there.
+  Making it public is your call.
 
 ## What waits on you
 
-- To publish the Python evaluation tool on your GitHub (private first): your yes, or create the repository yourself.
 - Reply to Foyer's e-mail to confirm the interview, if not done.
 - Optional: ask Microsoft for modified abuse monitoring, which removes the 30 days the privacy page states.
 - Four DNS records for soufien.lu (the commands are in the brief of 31 October).
