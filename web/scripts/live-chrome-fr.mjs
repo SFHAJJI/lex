@@ -492,6 +492,11 @@ export const LIVE_CHROME_FR = Object.freeze({
     noTitlesHeld: 'Cet index ne contient aucun intitulé d’acte ; l’expression a donc été recherchée dans le seul texte des articles.',
     euTitleExact: 'L’expression est l’intitulé d’un acte de l’UE que ce site détient : {title}',
     euTitlePhrase: 'L’expression figure dans l’intitulé d’un acte de l’UE que ce site détient : {title}',
+    euTitleShortName: 'L’expression est le nom usuel d’un acte de l’UE que ce site détient : {title}',
+    euTitlesFound: Object.freeze({
+      one: '{count} acte de l’UE que ce site détient correspond à l’expression, par son intitulé ou son nom usuel :',
+      other: '{count} actes de l’UE que ce site détient correspondent à l’expression, par leurs intitulés ou leurs noms usuels :',
+    }),
     euTitles: Object.freeze({
       one: 'L’expression figure dans l’intitulé de {count} acte de l’UE que ce site détient :',
       other: 'L’expression figure dans les intitulés de {count} actes de l’UE que ce site détient :',
@@ -502,6 +507,10 @@ export const LIVE_CHROME_FR = Object.freeze({
     runEuTitlesMatched: Object.freeze({
       one: 'Intitulés de l’UE : l’expression figure dans l’intitulé de l’acte de l’UE indiqué ci-dessus.',
       other: 'Intitulés de l’UE : l’expression figure dans les intitulés des actes de l’UE indiqués ci-dessus.',
+    }),
+    runEuTitlesNamed: Object.freeze({
+      one: 'Intitulés et noms usuels de l’UE : l’expression désigne l’acte de l’UE indiqué ci-dessus.',
+      other: 'Intitulés et noms usuels de l’UE : l’expression désigne les actes de l’UE indiqués ci-dessus, par leur intitulé ou leur nom usuel.',
     }),
     ambiguousHeading: 'Actes ayant plusieurs versions au {date}',
     ambiguousNote: 'Ces actes ont plus d’une version applicable à cette date ; aucune n’est donc retenue et aucune ne fournit de résultat.',

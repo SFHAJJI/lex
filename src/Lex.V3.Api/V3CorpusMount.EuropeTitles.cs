@@ -44,7 +44,10 @@ internal sealed partial class V3CorpusMount
     internal const string EuropeTitleSearchRule =
         "with no work named, the query is also matched against the titles of the EU acts the mounted EU index holds: every title of every " +
         "English and French expression of each act's census works, in either language; each act a title matches is listed once, by its " +
-        "CELEX, with the title that matched, its language, kind and source, whole titles first and then in CELEX order; an act is listed " +
+        "CELEX, with the title that matched, its language, kind and source; when the whole query is an act's usual short name in the " +
+        "reviewed list the citation reader uses (\"AI Act\", \"RGPD\", \"DORA\"), a leading article set aside, that act is also listed " +
+        "(short_name), with its original act's title in the language searched when one is held; short names first, then whole titles, " +
+        "then in CELEX order; an act is listed " +
         "and not opened, and none of its text is searched here (name the act to search its text); an act withheld under R92 is not listed";
 
     private const string EuropeAuthenticityRuleOpening =
@@ -60,7 +63,8 @@ internal sealed partial class V3CorpusMount
 
     internal const string EuropeTitleMatching =
         "a title matches when the query, folded, is found in the title's words, folded alike (whole_title when the two are the same, " +
-        "phrase_in_title otherwise); " + TextFolding.Rule;
+        "phrase_in_title otherwise; short_name when the act is listed by its usual short name and no title of it holds the query); " +
+        TextFolding.Rule;
 
     /// <summary>
     /// An EU answer with the titles and Official Journal references of <paramref name="expressions"/> (the expressions it lists):
@@ -198,7 +202,8 @@ internal sealed partial class V3CorpusMount
         }
 
         var matches = _europeReader.SearchTitles(query);
-        if (matches.Count == 0)
+        var shortNamed = ExactReferenceReader.EuropeShortNamed(query);
+        if (matches.Count == 0 && shortNamed is null)
         {
             return EuropeTitleResolutionOf([]);
         }
@@ -215,7 +220,7 @@ internal sealed partial class V3CorpusMount
                 StringComparer.Ordinal);
         var rootOfSeed = states.GroupBy(static state => state.SeedCelex, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.First().RootWorkIri, StringComparer.Ordinal);
-        var acts = new List<(string Seed, string? Root, EuropeIndexTitleMatch Match)>();
+        var acts = new List<(string Seed, string? Root, EuropeIndexTitleMatch Match, bool ShortName)>();
         foreach (var group in matches
                      .SelectMany(match => (seedsOfWork.TryGetValue(match.Title.PublisherWorkIri, out var seeds) ? seeds : [])
                          .Select(seed => (Seed: seed, Match: match)))
@@ -235,16 +240,29 @@ internal sealed partial class V3CorpusMount
                 .ThenBy(static match => EuropeTitleSources.InOrder.ToList().IndexOf(match.Title.Source))
                 .ThenBy(static match => match.Title.TitleIdentitySha256, StringComparer.Ordinal)
                 .First();
-            acts.Add((group.Key, root, best));
+            acts.Add((group.Key, root, best, false));
+        }
+
+        // An act named by its usual short name that no title holds ("AI Act": the regulation's titles say "artificial
+        // intelligence"): listed by its original act's title, in the language searched when one is held. Held and not withheld only.
+        if (shortNamed is not null && acts.All(act => !string.Equals(act.Seed, shortNamed, StringComparison.Ordinal)) &&
+            rootOfSeed.TryGetValue(shortNamed, out var shortRoot) && WithheldEurope(shortNamed) is null &&
+            _europeReader.ReadWorkTitles(shortRoot)
+                .OrderByDescending(title => string.Equals(title.Language, language, StringComparison.Ordinal))
+                .ThenByDescending(static title => string.Equals(title.TitleKind, EuropeTitleKinds.Title, StringComparison.Ordinal))
+                .FirstOrDefault() is { } shortTitle)
+        {
+            acts.Add((shortNamed, shortRoot, new EuropeIndexTitleMatch(shortTitle, WholeTitle: false), true));
         }
 
         return EuropeTitleResolutionOf(acts);
     }
 
-    /// <summary>The <c>europe_titles</c> member for the acts found: whole titles first, then in CELEX order.</summary>
-    private static object EuropeTitleResolutionOf(IReadOnlyList<(string Seed, string? Root, EuropeIndexTitleMatch Match)> acts)
+    /// <summary>The <c>europe_titles</c> member for the acts found: short names first, then whole titles, then in CELEX order.</summary>
+    private static object EuropeTitleResolutionOf(IReadOnlyList<(string Seed, string? Root, EuropeIndexTitleMatch Match, bool ShortName)> acts)
     {
-        var listed = acts.OrderByDescending(static act => act.Match.WholeTitle)
+        var listed = acts.OrderByDescending(static act => act.ShortName)
+            .ThenByDescending(static act => act.Match.WholeTitle)
             .ThenBy(static act => act.Seed, StringComparer.Ordinal)
             .Select(static act => new
             {
@@ -254,7 +272,7 @@ internal sealed partial class V3CorpusMount
                 matched_title_language = act.Match.Title.Language,
                 title_kind = act.Match.Title.TitleKind,
                 title_source = act.Match.Title.Source,
-                match_reason = act.Match.WholeTitle ? "whole_title" : "phrase_in_title",
+                match_reason = act.ShortName ? "short_name" : act.Match.WholeTitle ? "whole_title" : "phrase_in_title",
                 dossier = new { identifier = act.Seed },
             })
             .ToArray();

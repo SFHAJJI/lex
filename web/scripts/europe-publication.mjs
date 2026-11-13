@@ -226,7 +226,7 @@ export function readEuropeTitleResolution(answer, where) {
     const at = `${label}.acts[${index}]`;
     const seedCelex = read.text(row, 'seed_celex', at);
     const matchReason = read.text(row, 'match_reason', at);
-    if (!['whole_title', 'phrase_in_title'].includes(matchReason)) throw new Error(`${at} matched by ${matchReason}`);
+    if (!['short_name', 'whole_title', 'phrase_in_title'].includes(matchReason)) throw new Error(`${at} matched by ${matchReason}`);
     const titleSource = read.text(row, 'title_source', at);
     if (!Object.hasOwn(EUROPE_TITLE_SOURCES, titleSource)) throw new Error(`${at} matched a title from ${titleSource}`);
     const dossier = read.own(row, 'dossier', at);

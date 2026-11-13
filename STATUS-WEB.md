@@ -1,8 +1,28 @@
 # Lex V3 status: the web lane
 
-Updated 2026-11-10. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-11-13. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## "AI Act" and "RGPD" typed in the search bar now list the act (sole driver, 2026-11-13)
+
+`api/search-short-names`. **Found by the owner** on the live site: searching "AI Act" listed nothing. The EU title search
+(Release 3's item 1) matches the query inside the acts' own titles, and no title of Regulation (EU) 2024/1689 holds "AI
+Act" (its titles say "artificial intelligence"); the same for "RGPD". Measured on the live API: "GDPR" and "DORA" were
+listed (their Cellar short titles hold them), "AI Act", "RGPD" were not; "artificial intelligence" was. The assistant
+already read these names through the reviewed short-name list of #1028 (`ExactReferenceReader.EuropeShortNameList`), which
+the search bar did not use.
+
+- The search's `europe_titles` also lists the act a query names when the whole query, a leading article set aside, is a
+  short name of that list (`short_name`), held and not withheld under R92, by its original act's title in the language
+  searched when one is held. A title that holds the query keeps its own reason ("GDPR" stays `phrase_in_title`); a short
+  name inside a longer query lists nothing. Short names first, then whole titles, then CELEX order. The rule and matching
+  texts say so (`answer-samples.json` re-rendered: those two texts only).
+- The search page says it as a short name, in English and French ("The phrase is the usual short name of an EU act this
+  site holds: …"), and the several-acts heading says "by title or usual short name" when one is listed so.
+- Tests: `ASearchForAnActsUsualShortNameListsItWhenNoTitleHoldsTheName` ("RGPD", "le RGPD", " rgpd ", "the RGPD" list
+  the GDPR by `short_name`; "GDPR" stays a title match; "AI Act" over a fixture without the act and a longer query list
+  no short name); the web reader accepts the reason and the page renders it (`europe-publication.test.mjs`).
 
 ## A law's time, made plain: "Versions over time" on the Luxembourg dossier (sole driver, 2026-11-10)
 

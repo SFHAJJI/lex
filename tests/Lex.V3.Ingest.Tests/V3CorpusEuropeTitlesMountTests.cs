@@ -139,6 +139,51 @@ public sealed class V3CorpusEuropeTitlesMountTests
     }
 
     [TestMethod]
+    public async Task ASearchForAnActsUsualShortNameListsItWhenNoTitleHoldsTheName()
+    {
+        // 2026-11-13: "AI Act" and "RGPD" typed in the search bar listed nothing, since no title of either act holds the name;
+        // the reviewed short-name list the citation reader uses ("article 5 du RGPD") now lists the act it names.
+        var fixture = await V3CorpusResolveMountTests.EuropeMountedFixture.CreateAsync(withTitles: true, withLuxembourgText: true);
+        await using var cleanup = fixture;
+        await fixture.AddLuxembourgMountAsync();
+        using var mount = await V3CorpusMount.OpenAsync(fixture.Directory, CancellationToken.None);
+        Assert.IsNotNull(mount);
+
+        foreach (var query in new[] { "RGPD", "le RGPD", "  rgpd ", "the RGPD" })
+        {
+            var envelope = await EnvelopeAsync(mount, "/api/v3/search", "search", new { query, language = "fra" });
+            Assert.AreEqual(V3Verdicts.Answer, envelope.Verdict, $"{query}: {envelope.Refusal?.Code}");
+            var europe = envelope.Result!.Value.GetProperty("europe_titles");
+            Assert.AreEqual("one_act", europe.GetProperty("outcome").GetString(), query);
+            var act = europe.GetProperty("acts").EnumerateArray().Single();
+            Assert.AreEqual(Celex, act.GetProperty("seed_celex").GetString(), query);
+            Assert.AreEqual(Celex, act.GetProperty("dossier").GetProperty("identifier").GetString(), query);
+            Assert.AreEqual("short_name", act.GetProperty("match_reason").GetString(), query);
+            Assert.AreEqual("title", act.GetProperty("title_kind").GetString(), $"{query}: the act's title, not its short title");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(act.GetProperty("matched_title").GetString()), query);
+            Assert.IsFalse(string.IsNullOrWhiteSpace(act.GetProperty("original_work_id").GetString()), $"{query}: listed by its original act");
+            StringAssert.Contains(europe.GetProperty("matching").GetString(), "short_name");
+        }
+
+        // A short name some title holds stays that title's match ("GDPR" is in the act's short title).
+        var gdpr = await EnvelopeAsync(mount, "/api/v3/search", "search", new { query = "GDPR", language = "fra" });
+        Assert.AreEqual("phrase_in_title",
+            gdpr.Result!.Value.GetProperty("europe_titles").GetProperty("acts").EnumerateArray().Single().GetProperty("match_reason").GetString());
+
+        // A short name of an act this index does not hold, or a short name inside a longer query, lists nothing.
+        foreach (var query in new[] { "AI Act", "RGPD article 5 consent" })
+        {
+            var envelope = await EnvelopeAsync(mount, "/api/v3/search", "search", new { query, language = "fra" });
+            if (envelope.Verdict != V3Verdicts.Answer || !envelope.Result!.Value.TryGetProperty("europe_titles", out var europe))
+            {
+                continue;
+            }
+
+            Assert.AreEqual(0, europe.GetProperty("acts").EnumerateArray().Count(act => act.GetProperty("match_reason").GetString() == "short_name"), query);
+        }
+    }
+
+    [TestMethod]
     public async Task AnActWithheldUnderR92IsNotListedByAnyOfItsTitles()
     {
         var fixture = await V3CorpusResolveMountTests.EuropeMountedFixture.CreateAsync(withTitles: true, withLuxembourgText: true);

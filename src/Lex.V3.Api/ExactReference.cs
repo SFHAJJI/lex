@@ -258,6 +258,13 @@ internal static class ExactReferenceReader
         .SelectMany(static entry => entry.Names.Select(name => (Key: ArticleNumbers.Fold(name), entry.Celex)))
         .ToDictionary(static pair => pair.Key, static pair => pair.Celex, StringComparer.Ordinal);
 
+    /// <summary>
+    /// The CELEX of the EU act <paramref name="text"/> names by its usual short name in <see cref="EuropeShortNameList"/> ("AI
+    /// Act", "the GDPR", "le RGPD"), a leading article set aside and folded as a reference's text is; null for any other text.
+    /// </summary>
+    internal static string? EuropeShortNamed(string text) =>
+        EuropeShortNames.TryGetValue(ArticleNumbers.Fold(LeadingArticle.Replace(text.Trim(), string.Empty)), out var celex) ? celex : null;
+
     // An article before an act's type or name ("la loi du …", "le règlement (UE) …", "l'arrêté grand-ducal du …").
     private static readonly Regex LeadingArticle = new(@"^(?:la|le|les|the)\s+|^l['’]\s*", Options);
 

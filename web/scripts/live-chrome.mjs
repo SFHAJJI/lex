@@ -69,6 +69,12 @@ const EN = Object.freeze({
     // is not searched here.
     euTitleExact: "The phrase is the title of an EU act this site holds: {title}",
     euTitlePhrase: "The phrase is in the title of an EU act this site holds: {title}",
+    // An act listed by its usual short name ("AI Act", "RGPD"), from the reviewed list the citation reader uses.
+    euTitleShortName: "The phrase is the usual short name of an EU act this site holds: {title}",
+    euTitlesFound: Object.freeze({
+      one: "{count} EU act this site holds matches the phrase, by its title or usual short name:",
+      other: "{count} EU acts this site holds match the phrase, by their titles or usual short names:",
+    }),
     euTitles: Object.freeze({
       one: "The phrase is in the title of {count} EU act this site holds:",
       other: "The phrase is in the titles of {count} EU acts this site holds:",
@@ -79,6 +85,11 @@ const EN = Object.freeze({
     runEuTitlesMatched: Object.freeze({
       one: "EU titles: the phrase is in the title of the EU act shown above.",
       other: "EU titles: the phrase is in the titles of the EU acts shown above.",
+    }),
+    // When an act above is listed by its usual short name, the line says so rather than that the phrase is in a title.
+    runEuTitlesNamed: Object.freeze({
+      one: "EU titles and usual short names: the phrase names the EU act shown above.",
+      other: "EU titles and usual short names: the phrase names the EU acts shown above, by title or usual short name.",
     }),
     ambiguousHeading: "Works with several versions on {date}",
     ambiguousNote: "These works have more than one version that applies on that date, so none is chosen and none contributes a hit.",
