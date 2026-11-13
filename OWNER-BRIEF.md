@@ -10,7 +10,8 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
   opens with "Ask a question" and four example questions, the insurance contract law first; two new pages, "How Lex
   works" and the assistant's test results ("Quality"); answers set in paragraphs, your language first.
 - The same day, 283 more Luxembourg laws and regulations got their text, the insurance laws among them.
-- The assistant's test on the live site: 15 of 16 right (94%), every quotation checked, about 2 seconds.
+- The assistant's test on the live site: 15 of 16 right (94%), every quotation checked, about 2 seconds. The site's
+  "Quality" page still shows the afternoon's 14 of 16 until Sunday's update adds this run.
 - The previous version is kept, switched off, for rollback; the backup copy is made and verified file by file.
 - Before going live, the safety check refused one of today's versions (a page differed from the built one). It was
   fixed and tested; visitors never saw it.

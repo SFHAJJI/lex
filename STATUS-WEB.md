@@ -26,7 +26,8 @@ mount `d4-20261113-bfb83983` (no data change: release comparison pass, listed 0;
   427 custody pointers" (the first verification refused for disk, 3.18 GB free; the final release's local image tar was
   removed after its own verified backup, IMAGE-TAR-REMOVED.txt).
 - **lex-eval** on the live release: 15 of 16 (0.938), every gate passed, 13 quotes all verified, same verdict on every
-  replay, p50 1.88 s, p95 2.30 s; registered. The one miss: DORA article 6 in English (point).
+  replay, p50 1.88 s, p95 2.30 s; registered. The one miss: DORA article 6 in English (point). The Quality page served
+  now shows the run of 15:24 UTC on Release 4 (14 of 16); this run is added to it by the next release (`web/sunday-polish`).
 - **Next** (Sunday's update): line breaks in a Luxembourg quote whose text holds no space between its parts (the 1997
   law's definitions), thousands separators in the counts, example searches that matter, the 94% run on the Quality page.
 
