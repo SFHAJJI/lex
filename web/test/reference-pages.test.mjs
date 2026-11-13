@@ -133,7 +133,7 @@ test("the three reference pages are built under each interface language, with th
         assert.equal((html.match(/aria-current="page"/g) ?? []).length, 1, `${label}: no menu entry is current but itself`);
         assert.ok(html.includes(`<p>${escaped(copy.freshness.noAnswer)}</p>`), `${label}: its strip carries no answer`);
         // Each part under its heading, in the table's order.
-        const parts = page.key === "developers" ? [...app.DEVELOPERS_PARTS] : Object.keys(entry.sections);
+        const parts = page.key === "developers" ? [...app.DEVELOPERS_PARTS] : page.key === "quality" ? [...app.QUALITY_PARTS] : Object.keys(entry.sections);
         assert.deepEqual([...mainOf(html).matchAll(/data-reference-section="([a-z]+)"/gi)].map((match) => match[1]), page.key === "guide" ? [...parts, "glossary"] : parts, `${label}: its parts`);
         // No page of the site gives a contact: no e-mail address, no mail or telephone link, no postcode, in any bytes.
         assert.deepEqual(shownOnPage(html), [], `${label}: shows none of what the owner's decision keeps off the site`);

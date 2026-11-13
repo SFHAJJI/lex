@@ -30,6 +30,8 @@ import {
   renderLiveDevelopersPage,
   renderLiveGuidePage,
   renderLiveHelpPage,
+  renderLiveHowItWorksPage,
+  renderLiveQualityPage,
 } from "../.react-build/app.mjs";
 import { readDevelopersContracts } from "../scripts/developers-contracts.mjs";
 import { LIVE_CHROME, REFUSAL_TRANSLATIONS, countedEntry, entriesOf, fillCounted, fillParts, fillText, liveChrome } from "../scripts/live-chrome.mjs";
@@ -58,7 +60,10 @@ const PAGES = {
   terms: renderLiveTermsPage,
   accessibility: renderLiveAccessibilityPage,
   cookies: renderLiveCookiesPage,
-  // The three reference pages every footer links (Get help, How to read Lex, Developers: `reference-pages.mjs`).
+  // The reference pages every footer links (How Lex works, the assistant's results, Get help, How to read Lex, Developers:
+  // `reference-pages.mjs`).
+  howItWorks: renderLiveHowItWorksPage,
+  quality: renderLiveQualityPage,
   help: renderLiveHelpPage,
   guide: renderLiveGuidePage,
   developers: () => renderLiveDevelopersPage({ developers: DEVELOPERS }),
@@ -66,7 +71,7 @@ const PAGES = {
 const DEVELOPERS = await readDevelopersContracts();
 
 /** The legal pages and the reference pages, which ask nothing and carry no form. */
-const LEGAL = new Set(["legalNotice", "privacy", "terms", "accessibility", "cookies", "help", "guide", "developers"]);
+const LEGAL = new Set(["legalNotice", "privacy", "terms", "accessibility", "cookies", "howItWorks", "quality", "help", "guide", "developers"]);
 
 // React escapes an apostrophe in text; the table holds the text itself.
 const escaped = (text) => text.replaceAll("&", "&amp;").replaceAll("'", "&#x27;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");

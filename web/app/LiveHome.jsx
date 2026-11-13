@@ -31,6 +31,7 @@ import { indexOlderThanToday } from '../scripts/live-search.mjs';
 import { useLuxembourgToday } from './Today.jsx';
 import { HOME_EXAMPLES, exampleHref, examplesShown } from '../scripts/home-examples.mjs';
 import { citationLang } from '../scripts/citation.mjs';
+import { askFragment } from '../scripts/ask-fragment.mjs';
 
 const COPY = liveChrome().home;
 
@@ -78,6 +79,69 @@ export function HomeExamples({ line, record = HOME_EXAMPLES }) {
   );
 }
 
+/** The assistant's page with `question` asked: its address's fragment, with no-break spaces made plain ones. */
+const assistantHref = (question) => `${livePath('assistant')}${askFragment(question.replace(/[  ]/gu, ' '))}`;
+
+/**
+ * The question box (2026-11-13, the owner's choice of an assistant-first home page), shown only while the server reports the
+ * assistant switched on (R52): it opens the assistant's page with the question asked, and lists example questions, each asked
+ * on the live site before it was listed, each a link that asks it.
+ */
+export function HomeAsk({ questions = Object.values(COPY.askExamples) }) {
+  const [question, setQuestion] = useState('');
+  return (
+    <section className="home-ask" aria-labelledby="home-ask-heading" data-home-ask="">
+      <h2 id="home-ask-heading">{COPY.askHeading}</h2>
+      <form
+        className="home-ask-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const asked = question.trim();
+          if (asked.length > 0) window.location.assign(assistantHref(asked));
+        }}
+      >
+        <label htmlFor="home-ask-question">{COPY.askLabel}</label>
+        <textarea id="home-ask-question" name="question" rows={2} maxLength={1000} value={question} onChange={(event) => setQuestion(event.target.value)} />
+        <button type="submit">{COPY.askSubmit}</button>
+      </form>
+      <p>{COPY.askTry}</p>
+      <ul className="home-ask-examples">
+        {questions.map((example) => (
+          <li key={example}>
+            <a href={assistantHref(example)} data-home-ask-example="">{example}</a>
+          </li>
+        ))}
+      </ul>
+      <p className="home-ask-note">{COPY.askNote}</p>
+    </section>
+  );
+}
+
+/**
+ * Why a reader can rely on Lex, in short points, with the page that says how it works; the point on the assistant's tests and
+ * the page of its results only while the server reports the assistant switched on (R52: nothing unserved is shown).
+ */
+export function HomeTrust({ assistant = false }) {
+  const points = Object.entries(COPY.trust).filter(([key]) => assistant || key !== 'tested').map(([, point]) => point);
+  return (
+    <section className="home-trust" aria-labelledby="home-trust-heading" data-home-trust="">
+      <h2 id="home-trust-heading">{COPY.trustHeading}</h2>
+      <ul>
+        {points.map((point) => (
+          <li key={point.title}>
+            <strong>{point.title}</strong>
+            <span>{point.text}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="home-trust-links">
+        <a href={livePath(referencePage('howItWorks').file)}>{COPY.howItWorksLink}</a>
+        {assistant ? <a href={livePath(referencePage('quality').file)}>{COPY.qualityLink}</a> : null}
+      </p>
+    </section>
+  );
+}
+
 /**
  * The site's served pages a reader starts from, by the names their own pages give them; the assistant's page among them only
  * while the server reports it switched on (`assistant`).
@@ -109,7 +173,12 @@ export function LiveHome({ contract, fetchImpl, facts = null, examples = HOME_EX
   useEffect(() => (facts === null ? startHomeCoverage({ contract, fetchImpl, onLine: setLine, onAssistant: setAssistant }) : undefined), []);
   return (
     <>
-      <LiveSearch contract={contract} fetchImpl={fetchImpl} variant="home" today={facts?.today ?? null} />
+      {assistant ? <HomeAsk /> : null}
+      <section className="home-search" aria-labelledby="home-search-heading" data-home-search="">
+        <h2 id="home-search-heading">{COPY.searchHeading}</h2>
+        <LiveSearch contract={contract} fetchImpl={fetchImpl} variant="home" today={facts?.today ?? null} />
+      </section>
+      <HomeTrust assistant={assistant} />
       <section className="home-about" data-home-about="">
         <h2>{COPY.aboutHeading}</h2>
         <p>{COPY.intro}</p>

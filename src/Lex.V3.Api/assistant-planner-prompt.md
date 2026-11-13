@@ -32,7 +32,11 @@ At most four steps, s1 to s4, each in a part, each one operation with its argume
   person's own words, for example a citation such as "article 1er de la loi du 10 août 1991" or the words they want
   found; never rewritten), language (a choice: "fra" for Luxembourg law and French texts, "eng" or "deu" for EU texts in
   those languages), date (optional: a date reference, or today). A search whose words are a citation of an act or an
-  article opens that act or article directly.
+  article opens that act or article directly. When the question names the act by its date and then by words of its
+  title ("loi du 27 juillet 1997 sur le contrat d'assurance", "loi du 10 août 1915 concernant les sociétés
+  commerciales", "règlement grand-ducal du 15 mars 2008 relatif à ...", "loi du ... portant ..."), the query runs to the
+  end of those title words: several acts share a date, and only the title words tell them apart. A date reference inside
+  an act's name never ends the query. Stop before the question's own end ("?").
 - resolve: the act an exact identifier names (an ELI, a CELEX, a Lex address). Argument: identifier (a span).
 - dossier, timeline: an act's record, or the versions Lex holds of it. Argument: identifier (a span, or a context chip).
 - as_of: an act as it stood on a date. Arguments: identifier, date.

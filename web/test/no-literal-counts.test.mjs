@@ -77,6 +77,19 @@ const NUMBERS_ALLOWED = Object.freeze({
   "reading.disclosure.lu_rights_publisher_catalogue_only_other_identity_licensed_otherwise": ["4", "0"],
   // R77's record of an act the catalogue licenses CC BY 4.0 and Lex has not acquired: the licence's version.
   "refusalCard.catalogue.reasons.catalogue_cc_by_not_acquired": ["4", "0"],
+  // The home page's example questions (2026-11-13), each a citation of the article it asks about: the 1997 insurance contract
+  // law's article 1er, the GDPR's article 5, the AI Act's article 50.
+  "home.askExamples.first": ["1", "27", "1997"],
+  "home.askExamples.second": ["5"],
+  "home.askExamples.third": ["50"],
+  // How Lex works: the model's name, and the digest's algorithm, as the citation generator names it.
+  "howItWorks.sections.question.list.plan": ["4", "1"],
+  "howItWorks.sections.trust.list.verified": ["256"],
+  // The assistant's results page: the 95th percentile of answer times, the run's accuracy floor (a gate's threshold, not a
+  // count), and the year of the law a run found missed.
+  "quality.tiles.speed.label": ["95"],
+  "quality.method.gates": ["80"],
+  "quality.findings.insurance": ["1997"],
 });
 
 const TABLES = Object.freeze([
@@ -134,7 +147,7 @@ test("no live page, as built or rendered from the census answers, says a pack fi
     maintenance: renderLiveMaintenancePage(),
     ...Object.fromEntries(["legalNotice", "privacy", "terms", "accessibility", "cookies"].map((key) => [key, renderLiveLegalPage(key)])),
     // The three reference pages, the Developers page generated from the contracts, whose counts it says as served fields.
-    ...Object.fromEntries(["help", "guide"].map((key) => [key, renderLiveReferencePage(key)])),
+    ...Object.fromEntries(["howItWorks", "quality", "help", "guide"].map((key) => [key, renderLiveReferencePage(key)])),
     developers: renderLiveReferencePage("developers", { developers }),
   };
   for (const [name, html] of Object.entries(pages)) {

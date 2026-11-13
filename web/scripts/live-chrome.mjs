@@ -786,8 +786,36 @@ const EN = Object.freeze({
   // site's served pages. A count is said with its noun by the language's plural rule.
   home: Object.freeze({
     title: "Luxembourg and EU law at a date you choose",
-    eyebrow: "Search the law",
+    eyebrow: "Luxembourg and EU law",
+    headingAsk: "Ask the law. Read the official text.",
+    // The heading and opening while the assistant is off (R52: nothing unserved is said); with it on, `headingAsk` and `ledeAsk`.
     heading: "Luxembourg and EU law at a date you choose",
+    lede: "Search a law, read it as it stood on the date you choose, and see what changed. Lex shows only the published text, dated and linked to its official source, and says plainly when it does not hold one.",
+    // The home page's opening (2026-11-13, the owner's choice of an assistant-first home): what Lex does, in one sentence.
+    ledeAsk: "Ask a question or search a law. Lex answers only with the published text of the law, dated and linked to its official source, and says plainly when it cannot answer.",
+    // The question box, shown only while the server reports the assistant switched on (R52): it opens the assistant's page
+    // with the question asked (`ask-fragment.mjs`). Each example question was asked on the live site before it was listed.
+    askHeading: "Ask a question",
+    askLabel: "Your question about Luxembourg or EU law",
+    askSubmit: "Ask",
+    askTry: "Or try one of these:",
+    askExamples: Object.freeze({
+      first: "Que dit l'article 1er de la loi du 27 juillet 1997 sur le contrat d'assurance ?",
+      second: "What does Article 5 of the GDPR say?",
+      third: "What does Article 50 of the AI Act say?",
+      fourth: "Can my insurer refuse to pay my claim?",
+    }),
+    askNote: "The last one is a question about a personal situation: the assistant declines it and says where to get help.",
+    searchHeading: "Search a law",
+    searchScopeSummary: "What the search covers",
+    trustHeading: "Why you can rely on it",
+    trust: Object.freeze({
+      official: Object.freeze({ title: "Only the official text", text: "Every answer quotes the law word for word, as Legilux or the EU Publications Office published it, with its official link. The AI chooses where to look; it never writes the answer." }),
+      dated: Object.freeze({ title: "Every version, dated", text: "Read a law as it stood on the date you choose, and see which articles changed between two dates." }),
+      tested: Object.freeze({ title: "Tested on every update", text: "Each update is checked automatically before it goes live, and the assistant's test results are published." }),
+    }),
+    howItWorksLink: "How Lex works",
+    qualityLink: "The assistant's test results",
     intro: "Search the texts this site holds, open a law as it stood on the date you choose, and export with citations anyone can check against the official source. For a Luxembourg act of which the site holds more than one version, see whether each article's wording changed from one version to the next, and which articles differ between the versions of two dates. Where the site does not hold a text or a date, it says so.",
     aboutHeading: "What Lex is and is not",
     coverage: "This site holds {acts} of Luxembourg law, in {versions} with {articles}, as of the index built on {date}.",
@@ -1191,6 +1219,116 @@ const EN = Object.freeze({
         serviceCommit: "The revision of Lex's code that served the answer.",
       }),
     }),
+  }),
+  // How Lex works (2026-11-13, the owner's choice: the site says what it is and how it is built, for any reader): the steps
+  // from the publishers to an answer, then what happens to a question, why the text can be trusted, how an update goes
+  // live, how the assistant is measured, and the limits.
+  howItWorks: Object.freeze({
+    title: "How Lex works",
+    eyebrow: "How it works",
+    heading: "How Lex works",
+    intro: "Lex is a public library of Luxembourg and EU law with an assistant on top. It is built so that its AI cannot invent the law: the AI only chooses where to look, and every answer is the published text itself, checked.",
+    flowLabel: "From the official publishers to your answer, in five steps",
+    flow: Object.freeze({
+      collect: Object.freeze({ title: "Collect", text: "The texts, their dates and their licences, from Legilux and the EU Publications Office." }),
+      build: Object.freeze({ title: "Build and check", text: "The data is built twice and the two must be identical; every licence is respected." }),
+      publish: Object.freeze({ title: "Publish", text: "Each update is compared with the version online, tested, then switched over." }),
+      answer: Object.freeze({ title: "Answer", text: "The AI plans the lookup; Lex's code finds the text and quotes it." }),
+      measure: Object.freeze({ title: "Measure", text: "The assistant is tested after every update, and the results are published." }),
+    }),
+    sections: Object.freeze({
+      question: Object.freeze({
+        heading: "What happens when you ask a question",
+        list: Object.freeze({
+          mask: "Lex's code first removes e-mail addresses, phone numbers, account numbers and identity numbers from your question.",
+          plan: "An AI model (GPT-4.1 mini, run by Microsoft in its EU data zone) proposes a plan: which law to look up and which search to run. It writes no sentence of the answer.",
+          check: "Lex's code checks the plan against a strict list of allowed operations, then runs it on the texts Lex holds.",
+          answer: "The answer is made of fixed sentences and the law's own words, with the date of the version quoted, its official link and the fingerprint of the text.",
+          limits: "A question about a personal situation is declined, with where to get help. A law Lex does not hold is said to be not held, with its official source.",
+        }),
+      }),
+      trust: Object.freeze({
+        heading: "Why the text can be trusted",
+        list: Object.freeze({
+          official: "Every text comes word for word from the official publishers: Legilux for Luxembourg, the Publications Office for the EU.",
+          dated: "Every version carries the publisher's own dates, so a law can be read as it stood on a given day.",
+          licences: "A text is shown only under the licence its publisher states for it. When the publisher's statements disagree, the text is withheld and the page says why.",
+          verified: "Every quotation carries the SHA-256 fingerprint of the article it comes from, which anyone can check with the site's verify operation.",
+        }),
+      }),
+      updates: Object.freeze({
+        heading: "How an update goes live",
+        build: "The texts are collected, then the site's data is built from them twice. The two builds must be identical, byte for byte.",
+        compare: "The new version is compared, law by law and article by article, with the version online. If any text would disappear without a written reason, the update is refused.",
+        switch: "It then runs next to the version online, is tested at its own address, and only then receives the visitors. The previous version stays ready to come back in one step, and a copy of each version is stored and checked file by file.",
+      }),
+      measured: Object.freeze({
+        heading: "How the assistant is measured",
+        text: "After every update, a test suite written in Python asks the live assistant a fixed set of questions, checks every quotation against the official text, and records each run in MLflow with the exact version it measured. The results are on {qualityPage}.",
+      }),
+      elsewhere: Object.freeze({
+        heading: "The same design elsewhere",
+        text: "The design fits any assistant that must answer from a reference text, such as the general conditions of an insurance policy: the model plans the lookup, code retrieves the exact clauses, the answer quotes them, and every doubtful case goes to a person.",
+      }),
+      limits: Object.freeze({
+        heading: "What Lex does not do, and its limits",
+        list: Object.freeze({
+          advice: "It gives no legal advice and does not apply the law to anyone's situation.",
+          coverage: "It holds the text of about one in four of the Luxembourg versions the publisher lists. The others are licensed only in other formats, or withheld by the publisher's own licence notes; {coveragePage} gives the figures.",
+          preview: "The assistant is a preview: its sentences have not yet been reviewed by a lawyer, and its test set is small.",
+          languages: "The site is in French and English.",
+        }),
+      }),
+    }),
+  }),
+  // The assistant's measured results (2026-11-13; `assistant-quality.mjs`): every figure is a lex-eval run's, none estimated.
+  quality: Object.freeze({
+    title: "Assistant quality",
+    eyebrow: "Quality",
+    heading: "How well the assistant answers",
+    intro: "After every update, an automatic test suite asks the live assistant the same questions and checks each answer. These are its results, update by update.",
+    tiles: Object.freeze({
+      right: Object.freeze({ value: "{percent}%", label: "of the test questions answered as expected in the latest run ({right} of {cases})" }),
+      verified: Object.freeze({ value: "{verified} of {quotes}", label: "quotations checked against the official text, latest run" }),
+      same: Object.freeze({ value: "{same} of {cases}", label: "questions given the same answer when asked twice" }),
+      speed: Object.freeze({ value: "{typical} s", label: "typical answer time; 95% of answers within {most} s" }),
+    }),
+    chartHeading: "Test questions answered as expected, update by update",
+    chartLabel: "{date}: {percent}% ({right} of {cases})",
+    runsHeading: "Every run",
+    columns: Object.freeze({
+      date: "Run",
+      right: "Answered as expected",
+      verified: "Quotations verified",
+      same: "Same answer twice",
+      time: "Typical time",
+      found: "What the run found",
+    }),
+    findings: Object.freeze({
+      eu: "Every EU question failed: the assistant did not read short names such as RGPD and passed an EU act's address where its number was needed. Fixed the next day.",
+      dora: "One miss: DORA, asked in English, is pointed to its official source instead of being answered.",
+      insurance: "Two misses: the same DORA question, and the 1997 insurance contract law, asked by its date and title, which the assistant looked up by its date alone. A fix follows.",
+    }),
+    typesHeading: "The latest run, by kind of question",
+    types: Object.freeze({
+      luArticle: "Luxembourg article",
+      euArticle: "EU article (GDPR, DORA, AI Act)",
+      privacy: "Question with personal data, masked",
+      clarify: "Ambiguous question: asks one question back",
+      notHeld: "Text not held: points to the official source",
+      refuseAdvice: "Personal legal advice: declined",
+      language: "Language not served",
+    }),
+    typeRow: "{right} of {cases}",
+    methodHeading: "How it is measured",
+    method: Object.freeze({
+      expected: "Each question has an expected kind of answer: the text, one question back, the official source, or a refusal.",
+      quotes: "Each quotation's fingerprint is checked with the site's own verify operation.",
+      twice: "Each question is asked twice, to see that the answer does not change.",
+      registry: "Each run is recorded in MLflow with the exact version it measured, and that version is marked as the reference only when every check passes.",
+      gates: "A run fails when a quotation does not verify, a sentence falls outside the fixed set, a request fails, or fewer than 80% of the questions are answered as expected.",
+    }),
+    source: "The test suite, its questions and its code: {source}.",
   }),
   developers: Object.freeze({
     title: "Developers",

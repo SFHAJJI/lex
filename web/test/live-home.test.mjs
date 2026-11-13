@@ -285,7 +285,8 @@ test("with no work named, the no-hit sentence says the search was of Luxembourg 
 });
 
 test("under the home page's box and the 404 page's, a line says a search by words covers Luxembourg law, an exact reference opens its act, Luxembourg or EU, and the search page searches within an EU act (review of #971; plan 4.2)", () => {
-  const line = (html) => /<p class="search-scope" data-search-scope="">([\s\S]*?)<\/p>/.exec(mainOf(html).replaceAll("<!-- -->", ""))?.[1] ?? null;
+  // One action away under its summary (2026-11-13: the home page says one plain thing first, R51).
+  const line = (html) => /<details class="search-scope" data-search-scope=""><summary>[^<]*<\/summary><p>([\s\S]*?)<\/p><\/details>/.exec(mainOf(html).replaceAll("<!-- -->", ""))?.[1] ?? null;
   for (const html of [rendered(COVERAGE), renderLiveHomePage(), renderLiveNotFoundPage()]) {
     assert.equal(line(html), 'A search by words covers Luxembourg law. An ELI, a CELEX number, a Mémorial reference, a permalink, or the citation of an article of an act, with or without a date, opens that act, Luxembourg or EU, when this site holds it. To search within an EU act, name it by its CELEX number on the <a href="/en/search.html">search page</a>.');
     const main = mainOf(html);
@@ -322,4 +323,26 @@ test("the assistant's entry exists only while the server reports the assistant o
   const { assistant, ...without } = on;
   assert.equal(assistant, true);
   assert.equal(renderLiveHomePage({ facts: without }).includes("/en/assistant"), false);
+});
+
+test("with the assistant on, the home page opens with its question box and example questions, each a link that asks it, and says how Lex works (2026-11-13)", () => {
+  const on = homeFacts(coverageAt("2026-10-15T10:00:00.0000000Z", (value) => ({ ...value, assistant: { state: "on", operation_id: "ask", page: "assistant", preview: true } })), LIVE_CONTRACT);
+  const main = mainOf(renderLiveHomePage({ facts: on }));
+  assert.ok(main.includes('data-home-ask=""'), "the question box");
+  assert.equal(main.search(/<(input|select|textarea|button)\b/), main.indexOf('<textarea id="home-ask-question"'), "its field is the first control");
+  assert.ok(main.indexOf('data-home-ask=""') < main.indexOf('data-home-search=""'), "then the search");
+  const examples = [...main.matchAll(/<a href="([^"]+)" data-home-ask-example="">([^<]+)<\/a>/g)].map(([, href, text]) => [href, text]);
+  assert.deepEqual(examples.map(([, text]) => text), Object.values(EN.home.askExamples).map(escaped), "every example question, in the table's order");
+  for (const [href, text] of examples) {
+    assert.ok(href.startsWith("/en/assistant#q="), `${text} opens the assistant's page with the question in its fragment`);
+    const unescaped = href.replaceAll("&#x27;", "'").replaceAll("&amp;", "&");
+    assert.equal(decodeURIComponent(unescaped.slice("/en/assistant#q=".length)), Object.values(EN.home.askExamples).find((question) => escaped(question) === text).replace(/[  ]/g, " "));
+  }
+  assert.ok(main.includes('href="/en/how-it-works.html"') && main.includes('href="/en/quality.html"'), "how Lex works, and the assistant's results");
+  // Off, none of it: no box, no example question, no results page (R52), and How Lex works still linked.
+  for (const html of [rendered(COVERAGE), renderLiveHomePage()]) {
+    const off = mainOf(html);
+    assert.doesNotMatch(off, /data-home-ask|\/en\/quality\.html/);
+    assert.ok(off.includes('href="/en/how-it-works.html"'));
+  }
 });

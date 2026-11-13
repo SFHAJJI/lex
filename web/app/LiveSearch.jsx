@@ -955,9 +955,10 @@ export function LiveSearch({ contract, fetchImpl, variant = 'search', today = nu
       </form>
       <p className="not-advice" data-not-advice="">{liveChrome().site.notAdvice}</p>
       {home ? (
-        <p className="search-scope" data-search-scope="">
-          <Say template={COPY.searchScope} values={{ link: <a href={livePath('search.html')}>{COPY.searchPage}</a> }} />
-        </p>
+        <details className="search-scope" data-search-scope="">
+          <summary>{liveChrome().home.searchScopeSummary}</summary>
+          <p><Say template={COPY.searchScope} values={{ link: <a href={livePath('search.html')}>{COPY.searchPage}</a> }} /></p>
+        </details>
       ) : null}
       <LiveAnswer>
         <SearchAnswerView outcome={outcome} onNextPage={(after) => session.current.next(after)} onRetry={() => session.current.retry()} />

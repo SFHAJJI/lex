@@ -4,6 +4,48 @@ Updated 2026-11-13. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The front, assistant-first: the home page asks, How Lex works, the assistant's results, readable answers; the planner keeps an act's title words (sole driver, 2026-11-13)
+
+`web/front-assistant-first`. **The owner's choice** (2026-11-13, asked with options: "Rebuild the front", not "start Lex
+from scratch"): keep the engine and rebuild what a visitor sees, on the site itself, for the Foyer interview; screenshots
+to the owner before anything goes live. The driver's look at the live pages (screenshots taken on GitHub's runner, no
+browser on this PC) found R51 and R28 unmet (hashes, rules and field names always visible), the assistant reachable only by
+a link at the foot of the home page, and its answers one block of text in two languages.
+
+- **Home page** (`LiveHome.jsx`, `live-home-page.jsx`): while the server reports the assistant on, a question box first,
+  with four example questions (the 1997 insurance contract law's article 1er, GDPR article 5, AI Act article 50, and an
+  insurer question the assistant declines), each asked on the live site before it was listed; each opens the assistant's
+  page with the question after "#" (`ask-fragment.mjs`, which the browser never sends; the page asks it once). Then the
+  search under its heading, three short points on why the text can be relied on, and links to How Lex works and the
+  results. While the assistant is off, none of it shows (R52): the heading and opening say what the search does, as
+  before. The search's scope note is one action away (`details`). **Driver decision, on the owner's choice**: with the
+  assistant on, the first control of the home page is the question box, not R47's search box; off, R47 holds unchanged.
+- **How Lex works** (`how-it-works.html`, EN/FR): the five steps from the publishers to an answer, what happens to a
+  question (masking, the model plans, code checks and runs, fixed sentences and verbatim text, refusals), why the text can
+  be trusted, how an update goes live, how the assistant is measured, the same design elsewhere (an insurer's policy
+  conditions), and the limits. A public statement: **the owner reads it before it goes live.**
+- **The assistant's results** (`quality.html`, EN/FR; `assistant-quality.mjs`): the latest run's share right, quotations
+  verified, same answer twice and answer time; the share right per run as bars drawn to one scale (SVG: the CSP admits no
+  inline style); every run with what it found; the latest by kind of question; how it is measured. Every figure is a
+  recorded lex-eval run's (MLflow store), none estimated; the cost of an answer, which no run recorded, is not shown.
+- **Answers** (`AssistantPanel.jsx`, `assistant-panel.mjs`): a quotation is set in the paragraphs its own numbering
+  shows (`quoteParagraphs`: no word added, dropped or changed; the test rejoins them); the quotation in the interface's
+  language first, the other held language one action away; its digest, permalink and official source one action away
+  (R51). Every block of the answer is still drawn; the plan stays first (R45(c)).
+- **The planner** (`assistant-planner-prompt.md`): asked "Que dit l'article 1er de la loi du 27 juillet 1997 sur le
+  contrat d'assurance ?", the live assistant searched "l'article 1er de la loi du 27 juillet 1997", which several acts
+  share, and asked which act. The prompt now says a query runs to the end of an act's title words ("sur ...",
+  "concernant ...", "relatif à ...", "portant ..."); a date reference inside an act's name never ends it.
+  `AzureOpenAiPlannerLiveTests` (runs only with `LEX_ASSISTANT_PLANNER_LIVE=1` and the deployment's variables; never CI)
+  sends the input the site sends: with the new prompt it passed three runs of six questions; with the old one it failed
+  on the 1997 law (typographic apostrophe) and the 1915 company law.
+- Pages and tests: the two pages join the reference pages (footer, `site-paths.json`: 20 file rows), the numbers allowlist
+  names their figures, the request-address pin names the home page's one navigation.
+
+Evidence (Windows; no browser; the live test above called the model, nothing else left this PC):
+`dotnet build Lex.V3.slnx -c Release` 0 warnings; `Lex.V3.Tests` `~V3WebRoot` 30/30, `~Assistant|~Census` 75/75;
+`Lex.V3.Ingest.Tests` `~Assistant|~AnswerSamples` 12/12; web `npm run build`, `npm test` 1,527 tests, 0 fail.
+
 ## "AI Act" and "RGPD" typed in the search bar now list the act (sole driver, 2026-11-13)
 
 `api/search-short-names`. **Found by the owner** on the live site: searching "AI Act" listed nothing. The EU title search
