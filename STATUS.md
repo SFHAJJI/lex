@@ -13,14 +13,13 @@ A feature pull request edits its lane file, not this one; this file changes for 
 
 ## Heads
 
-- `v3/integration`: `e849aa24` (2026-11-13, #1038 merged: "AI Act" and "RGPD" in the search bar, live with the next
-  release). Served at law.soufien.lu since 2026-11-13 15:18:32 UTC, publicly: Release 4
-  `v3-20261113T094422Z-c0191d7abdfb` (serving commit c0191d7a, #1037: the rights rule `lu-release-4` on the owner's ruling
-  L4a), over the final release's inputs (run 18's Luxembourg population, run 17d's EU catalogue), built and signed on
-  Azure: 283 more Luxembourg works with text, the 1997, 2015 and 2003 insurance laws and the 1915 company law among them;
-  the assistant on as a labelled preview. The final release (`v3-20261112T205332Z-8a5b5be569c2`) is kept, deactivated,
-  for rollback. Detail in STATUS-DATA.md. The required checks: `dotnet` (the whole solution), `web`, `canon-windows`,
-  `journeys` and `image-conditions`.
+- `v3/integration`: `17e2ab50` (2026-11-13, #1042 merged). Served at law.soufien.lu since 2026-11-13 21:10:59 UTC,
+  publicly: Release 5 `v3-20261113T194409Z-17e2ab50263e` (serving commit 17e2ab50: the assistant-first front #1040, plain
+  first #1041, the home heading #1042; the planner keeps an act's title words), over Release 4's data (derive
+  `d4-20261113-bfb83983`, rule set `lu-release-4`), built and signed on Azure, promoted on the owner's yes after the
+  candidate's screenshots. Release 4 (`v3-20261113T094422Z-c0191d7abdfb`) is kept, deactivated, for rollback. Detail in
+  STATUS-WEB.md. The required checks: `dotnet` (the whole solution), `web`, `canon-windows`, `journeys` and
+  `image-conditions`.
 - Driver: Claude Opus 5.5, the sole driver since 2026-10-02. The owner's order: no Codex, no other Claude session,
   full authorisation, and the owner is never asked. Each pull request is reviewed by an independent Claude subagent
   (STATUS-WEB.md, driver decisions). The data lane's file (`STATUS-DATA.md`) is kept by this driver too.
