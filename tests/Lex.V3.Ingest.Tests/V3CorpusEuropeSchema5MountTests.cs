@@ -44,7 +44,7 @@ public sealed class V3CorpusEuropeSchema5MountTests
     // alone and the search row by both slices' (#1004's not-held reason, R77's exact-reference rule); no other row moved; then
     // 222a3cf6 (EU search over the act's time view, folded, with extracts, the audit's gap 5): its one search row alone; then
     // 2c43bde3 (the review of #1005: the apostrophes, no-break spaces and soft hyphen folded): that row's matching sentence alone.
-    private const string RecordedAtCommit = "2b0cdfe5";
+    private const string RecordedAtCommit = "bc4cbac5";
 
     private static byte[] Fixture(string name) =>
         File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "EuSchema5Mount", name));
