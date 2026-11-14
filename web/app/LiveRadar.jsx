@@ -14,7 +14,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
-import { LIVE_RADAR_IDLE, RADAR_LANGUAGES, createRadarSession } from '../scripts/live-radar.mjs';
+import { LIVE_RADAR_IDLE, RADAR_LANGUAGES, createRadarSession, lastTwelveMonths } from '../scripts/live-radar.mjs';
 import { ENGLISH_LANG, fillCounted, liveChrome } from '../scripts/live-chrome.mjs';
 import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
 import { FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, refusalCardCopyFor } from './LiveAnswer.jsx';
@@ -175,6 +175,19 @@ export function LiveRadar({ contract, fetchImpl }) {
   const today = useLuxembourgToday(todayAt(outcome.context?.freshness?.observed_at));
 
   useEffect(() => () => session.current.cancel(), []);
+
+  // The page opens on the last twelve months' changes (the owner's order of 2026-11-13, section C): once this browser knows
+  // today in Luxembourg, the window is filled and asked, once; the server renders the empty form, so hydration changes nothing.
+  const opened = useRef(false);
+  useEffect(() => {
+    if (opened.current || today === null) return;
+    const opening = lastTwelveMonths(today);
+    if (opening === null) return;
+    opened.current = true;
+    setDateFrom(opening.dateFrom);
+    setDateTo(opening.dateTo);
+    session.current.ask({ dateFrom: opening.dateFrom, dateTo: opening.dateTo, identifier: '', language: '' });
+  }, [today]);
 
   return (
     <div>
