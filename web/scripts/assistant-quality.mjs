@@ -54,17 +54,25 @@ export const QUALITY_TYPES = Object.freeze([
 export const QUALITY_OUTCOMES = Object.freeze(['rightArticle', 'wrongArticle', 'notFound', 'wronglyRefused', 'rightBehaviour', 'wrongBehaviour']);
 
 export const QUALITY_SET_RUNS = Object.freeze([
-  // `live`: the release measured was the one serving the site; else a candidate the gate refused (it never served).
+  // `state`: `before` (the release serving before this work), `refused` (a candidate the gate refused: it never served) or
+  // `live` (the release serving now); `release` is the date of the release measured.
   Object.freeze({
-    date: '2026-11-14', release: '2026-11-13', commit: '17e2ab50', live: true, p50: 1.51, p95: 2.01, costEur: 0.0011,
+    date: '2026-11-14', release: '2026-11-13', commit: '17e2ab50', state: 'before', p50: 1.51, p95: 2.01, costEur: 0.0011,
     dev: Object.freeze({ cases: 56, rightArticle: 13, wrongArticle: 3, notFound: 23, wronglyRefused: 8, rightBehaviour: 9, wrongBehaviour: 0 }),
     heldout: Object.freeze({ cases: 15, rightArticle: 0, wrongArticle: 0, notFound: 9, wronglyRefused: 6, rightBehaviour: 0, wrongBehaviour: 0 }),
   }),
   // Release 6's candidate (sections A to C), at its own address: the gate refused it for one wrong article on the insurance
   // questions, and no traffic moved.
   Object.freeze({
-    date: '2026-11-14', release: '2026-11-14', commit: 'b34dff94', live: false, p50: 1.53, p95: 2.48, costEur: 0.0011,
+    date: '2026-11-14', release: '2026-11-14', commit: 'b34dff94', state: 'refused', p50: 1.53, p95: 2.48, costEur: 0.0011,
     dev: Object.freeze({ cases: 56, rightArticle: 17, wrongArticle: 1, notFound: 24, wronglyRefused: 5, rightBehaviour: 9, wrongBehaviour: 0 }),
+    heldout: Object.freeze({ cases: 15, rightArticle: 0, wrongArticle: 0, notFound: 9, wronglyRefused: 6, rightBehaviour: 0, wrongBehaviour: 0 }),
+  }),
+  // Release 7 (the fix, the law page rendered by the server, this page's first version): every gate passed at its own
+  // address, then it took the traffic; the held-out questions were asked of it live.
+  Object.freeze({
+    date: '2026-11-14', release: '2026-11-14', commit: 'e13e65ad', state: 'live', p50: 1.63, p95: 5.73, costEur: 0.0011,
+    dev: Object.freeze({ cases: 56, rightArticle: 17, wrongArticle: 0, notFound: 25, wronglyRefused: 5, rightBehaviour: 9, wrongBehaviour: 0 }),
     heldout: Object.freeze({ cases: 15, rightArticle: 0, wrongArticle: 0, notFound: 9, wronglyRefused: 6, rightBehaviour: 0, wrongBehaviour: 0 }),
   }),
 ]);

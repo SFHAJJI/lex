@@ -270,9 +270,10 @@ function QualityOutcomes({ page }) {
       <span>{fillText(page.setTiles[key].label, named(page.setTiles[key].label, values))}</span>
     </div>
   );
+  const stateKey = { before: 'Before', refused: 'Refused', live: 'Live' };
   const columns = QUALITY_SET_RUNS.flatMap((run) => [
-    { key: `${run.date}-${run.commit}-dev`, head: fillText(page.outcomeColumns[run.live ? 'dev' : 'devRefused'], { date: longDate(run.date) }), counts: run.dev },
-    { key: `${run.date}-${run.commit}-heldout`, head: fillText(page.outcomeColumns[run.live ? 'heldout' : 'heldoutRefused'], { date: longDate(run.date) }), counts: run.heldout },
+    { key: `${run.date}-${run.commit}-dev`, head: fillText(page.outcomeColumns[`dev${stateKey[run.state]}`], { date: longDate(run.release) }), counts: run.dev },
+    { key: `${run.date}-${run.commit}-heldout`, head: fillText(page.outcomeColumns[`heldout${stateKey[run.state]}`], { date: longDate(run.release) }), counts: run.heldout },
   ]);
   return (
     <section className="reference-section" aria-labelledby="quality-outcomes" data-reference-section="outcomes">
@@ -301,7 +302,7 @@ function QualityOutcomes({ page }) {
           </tbody>
         </table>
       </div>
-      {QUALITY_SET_RUNS.some((run) => !run.live) ? <p data-quality-gate="">{page.gateNote}</p> : null}
+      {QUALITY_SET_RUNS.some((run) => run.state === 'refused') ? <p data-quality-gate="">{page.gateNote}</p> : null}
     </section>
   );
 }
