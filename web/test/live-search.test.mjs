@@ -165,7 +165,7 @@ test("a served search answer is the results by act, read by the search reader", 
   assert.ok(shown.includes(`“assemblée générale” in French: ${value.hits.length} passages with the phrase, in 1 act.`));
   const { searched } = value;
   assert.ok(shown.includes(`Searched: ${searched.works} act of Luxembourg law in French, in ${searched.states} version with ${searched.articles_with_searchable_text} articles of searchable text, as of the index built on ${builtOnOf(searched.index_built_at)}.`), shown);
-  assert.ok(shown.includes("The first hits in the stated order, not the best hits."), "the page says there is no ranker, where the hits are");
+  assert.ok(shown.includes("The best hits first, in the stated ranking."), "the page says how its hits are ranked, where the hits are");
   assert.ok(shown.includes("This index holds no work titles"), "the work resolution the answer gives is shown");
   assert.doesNotMatch(markup, /data-no-hit-card/, "a search with passages shows no no-hit card");
   assert.doesNotMatch(markup, /Next page/, "a whole page offers no next page");

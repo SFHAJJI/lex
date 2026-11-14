@@ -1797,7 +1797,7 @@ export const KEPT_SEARCH_STEP = Object.freeze({
 
 /** The runs of the site's own addresses on the fixture mount (the plan's item 3.5): a search kept in the address. */
 export function addressExpectations() {
-  const searchTexts = [SEARCH_FOUND_SAID, SEARCH_SEARCHED_SAID, SEARCH_VERSION_SAID, "art_15", "The first hits in the stated order, not the best hits."];
+  const searchTexts = [SEARCH_FOUND_SAID, SEARCH_SEARCHED_SAID, SEARCH_VERSION_SAID, "art_15", "The best hits first, in the stated ranking."];
   return [["a search kept in the address", { step: KEPT_SEARCH_STEP, state: "success", texts: searchTexts }]];
 }
 
@@ -1807,7 +1807,7 @@ export function addressExpectations() {
  * the failure panel; and the search with no mount, its failure panel's retry pressed once.
  */
 export function failurePageExpectations() {
-  const searchTexts = [SEARCH_FOUND_SAID, SEARCH_SEARCHED_SAID, SEARCH_VERSION_SAID, "art_15", "The first hits in the stated order, not the best hits."];
+  const searchTexts = [SEARCH_FOUND_SAID, SEARCH_SEARCHED_SAID, SEARCH_VERSION_SAID, "art_15", "The best hits first, in the stated ranking."];
   return [
     ["not found, with the fixture mount", { step: NOT_FOUND_STEP, state: "success", texts: [NOT_FOUND_SAID, ...searchTexts] }, true],
     ["not found, with no mount", { step: NOT_FOUND_STEP, state: "refusal", refusalCode: "no_corpus_mounted", texts: [NOT_FOUND_SAID, FAILURE_LINE] }, false],
@@ -1821,7 +1821,7 @@ export function failurePageExpectations() {
  */
 export function fixtureMountExpectations(journeyMount) {
   const { coverage, home, search, dossier, reading, history, compare, radar, export: exporting, address, permalink, stale, current } = JOURNEY_STEPS;
-  const searchTexts = [SEARCH_FOUND_SAID, SEARCH_SEARCHED_SAID, SEARCH_VERSION_SAID, "art_15", "The first hits in the stated order, not the best hits.", NOT_ADVICE_SAID];
+  const searchTexts = [SEARCH_FOUND_SAID, SEARCH_SEARCHED_SAID, SEARCH_VERSION_SAID, "art_15", "The best hits first, in the stated ranking.", NOT_ADVICE_SAID];
   // The home page's search is dated today, which the fixture's one state (2024-02-01) applies on; its coverage line counts the
   // fixture's one work, one state and 49 articles.
   const homeTexts = [

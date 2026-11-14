@@ -26,6 +26,7 @@ import {
   readRefusalRecognition,
   readSearch,
   readSearchAnswer,
+  wordNeedles,
 } from "../scripts/search-answer.mjs";
 import { foldText } from "../scripts/text-folding.mjs";
 
@@ -301,9 +302,12 @@ test("the four captured EU answers read: the act's one wording, pinned, both lan
   assert.equal(view.wording.nextDate, null, "no later wording is held");
   assert.match(view.wording.permalink, /^\/eu-eurlex\/32016R0679\/\d{4}-\d{2}-\d{2}--[0-9a-f]{64}\/eng$/);
   assert.equal(view.wording.permalink, `/eu-eurlex/32016R0679/${view.wording.wordingDate}--${view.wording.wordingSha256}/eng`);
-  assert.deepEqual(view.wordings.map((wording) => [wording.kind, wording.permalink, wording.hits]), [["original_wording", view.wording.permalink, 3]]);
-  assert.deepEqual(view.hits.map((hit) => hit.lane), ["strict", "strict", "relaxed"]);
-  assert.deepEqual(view.hits.map((hit) => hit.heading), ["Article 26", "Article 36", "Article 47"]);
+  // "joint controllers": the two articles with the phrase, then the five holding both words as whole words (controller, its
+  // singular, too), the one whose heading holds joint first (Article 62, "Joint operations of supervisory authorities").
+  assert.deepEqual(view.wordings.map((wording) => [wording.kind, wording.permalink, wording.hits]), [["original_wording", view.wording.permalink, 7]]);
+  assert.deepEqual(view.hits.map((hit) => hit.lane), ["strict", "strict", "relaxed", "relaxed", "relaxed", "relaxed", "relaxed"]);
+  assert.deepEqual(view.hits.map((hit) => hit.heading), ["Article 26", "Article 36", "Article 62", "Article 4", "Article 30", "Article 47", "Article 60"]);
+  assert.deepEqual(view.words, ["joint", "controllers"]);
   for (const hit of view.hits) {
     assert.equal(hit.permalink, `${view.wording.permalink}/${hit.publisherId}`, "each hit's permalink is its wording's with its provision as a last segment");
     assert.equal(hit.wordingDate, view.wording.wordingDate);
@@ -311,7 +315,7 @@ test("the four captured EU answers read: the act's one wording, pinned, both lan
     assert.equal(hit.coordinate, `${hit.publisherExpressionIri}#lex-provision=${hit.publisherId}`);
     assert.deepEqual(hit.sameWording, [], "one wording holds no other's text");
     const marked = hit.extract.parts.filter((part) => part.matched).map((part) => foldText(part.text));
-    assert.ok(marked.length > 0 && marked.every((text) => hit.lane === "strict" ? text === foldText(view.query) : view.terms.some((term) => text.includes(foldText(term)))),
+    assert.ok(marked.length > 0 && marked.every((text) => hit.lane === "strict" ? text === foldText(view.query) : wordNeedles(view.words).some((needle) => text.includes(needle))),
       `${hit.publisherId}'s extract marks what its lane matched`);
   }
   assert.equal(view.workResolution.outcome, "not_run_identifier_given", "an EU search names its work");
@@ -414,7 +418,7 @@ test("each rule an EU answer states about itself is refused when broken, with th
     ["a hit resolving to another provision", both, (a) => { a.hits[0].resolve.identifier = a.hits[0].resolve.identifier.replace(/=.*$/, "=999"); }, /not to the provision it names/],
     ["one article twice", both, (a) => { a.hits[1] = structuredClone(a.hits[0]); }, /twice/],
     ["relaxed before strict", both, (a) => { a.hits.reverse(); }, /relaxed never outranks strict/],
-    ["a population that does not add up", both, (a) => { a.population.strict_hits = 1; }, /counts 2 hits and the untruncated first page holds 3/],
+    ["a population that does not add up", both, (a) => { a.population.strict_hits = 1; }, /counts 6 hits and the untruncated first page holds 7/],
     ["fewer works with hits than the page's", both, (a) => { a.population.works_with_hits = 0; }, /counts 0 works with hits/],
     ["a cursor that is not the last hit", paged, (a) => { a.continue_after = a.continue_after.replace("strict.", "relaxed."); }, /not the last hit/],
     ["a Luxembourg-shaped cursor", next, (a) => { a.requested_after = `strict.${"a".repeat(64)}.${"b".repeat(64)}`; }, /is not a cursor \(lane\.article\)/],
@@ -423,7 +427,7 @@ test("each rule an EU answer states about itself is refused when broken, with th
     ["an ambiguous work", both, (a) => { a.ambiguous_works = [{ work_key: "x", reason: "ambiguous_version", candidates: [] }]; }, /lists no ambiguous work/],
     ["a work resolved from the query", both, (a) => { a.work_resolution.outcome = "no_title_match"; }, /exactly when no identifier is given/],
     ["wordings searched miscounted", both, (a) => { a.searched.wordings = 2; }, /searched counts 2 wordings, and the answer lists 1/],
-    ["fewer articles searched than hits", both, (a) => { a.searched.articles_with_searchable_text = 0; }, /fewer than the 3 hits found/],
+    ["fewer articles searched than hits", both, (a) => { a.searched.articles_with_searchable_text = 0; }, /fewer than the 7 hits found/],
     ["an extract marking no match of the query", both, (a) => { a.hits[0].extract.parts.find((part) => !part.matched).matched = true; }, /no strict match of the query|two unmarked|marks/],
     ["no acknowledgement", both, (a) => { delete a.acknowledgement; }, /does not carry acknowledgement/],
     ["no authenticity statement", both, (a) => { delete a.authenticity; }, /does not carry authenticity/],

@@ -245,10 +245,12 @@ function requirePartText(value, where) {
 /**
  * A hit's extract (the platform's `extract_rule`): parts that make up exactly its byte range of the article's text, at
  * least one of them marked, no two unmarked parts side by side, and every marked part a whole match, found with capitals
- * and accents ignored and marked on the text's own characters: a run holding the query for a strict hit, a run holding a
- * term for a relaxed one, each held by the fold (`foldText`).
+ * and accents ignored and marked on the text's own characters: a run holding the query for a strict hit, a run holding one
+ * of the query's words for a relaxed one (the answer's `words`, each as itself or its plural or singular from four letters,
+ * or a protected token's own words), each held by the fold (`foldText`). A strict phrase the text holds only across a glued
+ * heading ("Article 44Délai") is marked by its words too (the platform's SearchWords rule).
  */
-function readExtract(value, where, lane, { query, terms }) {
+function readExtract(value, where, lane, { query, terms, words }) {
   const at = `${where} extract`;
   const textSha256 = requireDigest(requireOwn(value, 'text_sha256', at), `${at}.text_sha256`);
   const textByteLength = requireCount(requireOwn(value, 'text_byte_length', at), `${at}.text_byte_length`);
@@ -269,9 +271,10 @@ function readExtract(value, where, lane, { query, terms }) {
   if (bytes !== byteEnd - byteStart) {
     throw new Error(`${at}'s parts are ${bytes} bytes, and its range is ${byteEnd - byteStart}`);
   }
+  const needles = wordNeedles(words ?? terms);
   for (const part of parts.filter((candidate) => candidate.matched)) {
     const folded = foldText(part.text);
-    const whole = lane === 'strict' ? folded.includes(foldText(query)) : terms.some((term) => folded.includes(foldText(term)));
+    const whole = (lane === 'strict' && folded.includes(foldText(query))) || needles.some((needle) => folded.includes(needle));
     if (!whole) throw new Error(`${at} marks ${JSON.stringify(part.text)}, which is no ${lane} match of the query`);
   }
   return Object.freeze({
@@ -422,6 +425,20 @@ function readSearched(value, { language, date, population, total }) {
   return searched;
 }
 
+/**
+ * The needles a relaxed extract may mark, folded: each word, its plural or singular (a trailing s or x, from four letters, as
+ * the platform's SearchWords.Forms), and the words of a protected token ("1 er", "121-6").
+ */
+export function wordNeedles(words) {
+  const needles = new Set();
+  for (const word of words.map((value) => foldText(value)).filter((value) => value.length > 0)) {
+    needles.add(word);
+    if (word.length >= 4 && /^\p{L}+$/u.test(word)) needles.add(/[sx]$/u.test(word) ? word.slice(0, -1) : `${word}s`);
+    for (const part of word.split(/[^\p{L}\p{N}]+/u).filter((value) => value.length > 0)) needles.add(part);
+  }
+  return [...needles];
+}
+
 /** The request an answer echoes, as both publishers' answers echo it: the mode, the cursor, the query and its terms. */
 function readRequest(answer, where, cursor, cursorShape) {
   const mode = requireTextOrNull(requireOwn(answer, 'requested_mode', where), 'requested_mode');
@@ -438,7 +455,11 @@ function readRequest(answer, where, cursor, cursorShape) {
   if (terms.length === 0) {
     throw new Error('terms names at least one term of the query');
   }
-  return { mode, after, query, terms: Object.freeze(terms) };
+  // The words the relaxed lane matched (the platform's SearchWords rule), on answers that carry them.
+  const words = Object.hasOwn(answer, 'words')
+    ? requireList(answer.words, 'words').map((word, index) => requireText(word, `words[${index}]`))
+    : null;
+  return { mode, after, query, terms: Object.freeze(terms), words: words === null ? null : Object.freeze(words) };
 }
 
 /** Each article once on a page, by the key that names it there. */
@@ -549,7 +570,7 @@ export function readSearch(answer) {
   if (publisher !== 'lu-legilux') {
     throw new Error(`this search answer is ${JSON.stringify(publisher)}'s; this reader reads the Luxembourg (lu-legilux) search answer only`);
   }
-  const { mode, after, query, terms } = readRequest(answer, where, CURSOR, 'lane.state.article');
+  const { mode, after, query, terms, words } = readRequest(answer, where, CURSOR, 'lane.state.article');
   const requestedDate = requireOwn(answer, 'requested_date', where);
   if (requestedDate !== null) requireDate(requestedDate, 'requested_date');
   const identifier = requireTextOrNull(requireOwn(answer, 'requested_identifier', where), 'requested_identifier');
@@ -566,13 +587,14 @@ export function readSearch(answer) {
     after,
     cursorOf: (last) => `${last.lane}.${last.stateSha256}.${last.articleIdentitySha256}`,
   });
-  const hits = read.map((hit, index) => withExtract(hit, values[index], index, { query, terms }));
+  const hits = read.map((hit, index) => withExtract(hit, values[index], index, { query, terms, words }));
   const language = requireText(requireOwn(answer, 'requested_language', where), 'requested_language');
 
   return Object.freeze({
     publisher,
     query,
     terms,
+    words,
     language,
     mode,
     after,
@@ -816,7 +838,7 @@ export function readEuropeSearch(answer) {
   if (publisher !== 'eu-eurlex') {
     throw new Error(`this search answer is ${JSON.stringify(publisher)}'s; this reader reads the EU (eu-eurlex) search answer only`);
   }
-  const { mode, after, query, terms } = readRequest(answer, where, EUROPE_CURSOR, 'lane.article');
+  const { mode, after, query, terms, words } = readRequest(answer, where, EUROPE_CURSOR, 'lane.article');
   const requestedDate = requireOwn(answer, 'requested_date', where);
   if (requestedDate !== null) requireDate(requestedDate, 'requested_date');
   const identifier = requireText(requireOwn(answer, 'requested_identifier', where), 'requested_identifier');
@@ -840,7 +862,7 @@ export function readEuropeSearch(answer) {
     after,
     cursorOf: (last) => `${last.lane}.${last.articleIdentitySha256}`,
   });
-  const hits = read.map((hit, index) => withExtract(hit, values[index], index, { query, terms }));
+  const hits = read.map((hit, index) => withExtract(hit, values[index], index, { query, terms, words }));
   const hitWorks = new Set(read.map((hit) => hit.publisherWorkIri)).size;
   if (population.worksWithHits < hitWorks) {
     throw new Error(`the population counts ${population.worksWithHits} works with hits, and the page's hits are in ${hitWorks}`);
@@ -861,6 +883,7 @@ export function readEuropeSearch(answer) {
     publisher,
     query,
     terms,
+    words,
     language,
     mode,
     after,
