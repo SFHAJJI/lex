@@ -25,6 +25,10 @@ its own keeps its form.
   2006-12-25 to 2025-11-25; a claim of 2019-03-03 chooses the version of 2018-11-01; the page opens on 2021-01-01 against
   2025-11-25. The live `diff` of those two (asked 2026-11-14): 1 added (art_62-11), 0 changed, 0 removed, 146 unchanged.
 - **Copy**: 19 dossier keys and 2 compare keys, English and French in the same order, the French with its no-break spaces.
+- **Review of #1046** (Codex): CHANGES REQUESTED. One should-fix, reproduced and taken: the status was the latest version's,
+  so an act whose latest version applies after today read "Pas encore en vigueur" while an earlier version applied. Now it
+  is the version that applies today's: "En vigueur" when one does, "Pas encore en vigueur" only before the first, none
+  otherwise. The other finding was CI still running at review time.
 
 ## Search ranks by words, headings first, and the assistant quotes a hit alone only when it is clearly ahead (sole driver, 2026-11-14)
 

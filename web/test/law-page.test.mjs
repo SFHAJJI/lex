@@ -72,7 +72,11 @@ test("the 1997 law has ten versions from 2006-12-25 to 2025-11-25, and a claim o
   assert.equal(versionOn(versions, "2000-01-01"), -1, "no version held before the first");
   assert.equal(versionOn(versions, "03/03/2019"), -1, "a date is a calendar date");
   assert.equal(lawStatus(view, "2026-11-14"), "in_force");
-  assert.equal(lawStatus(view, "2025-01-01"), "not_yet", "the latest version applies after that day");
+  // The review of #1046: on 2025-01-01 the version of 2021-01-01 applies, though the latest applies only from 2025-11-25.
+  assert.equal(lawStatus(view, "2025-01-01"), "in_force", "an earlier version applies that day");
+  assert.equal(lawStatus(view, "2006-01-01"), "not_yet", "before its first version");
+  const ended = { ...view, states: view.states.map((state, index) => (index === 9 ? { ...state, nextApplicabilityDate: "2026-01-01" } : state)) };
+  assert.equal(lawStatus(ended, "2026-11-14"), null, "no version applies today and one applied before: no status claimed");
   assert.equal(lawStatus(view, null), null, "no today, no status");
 });
 

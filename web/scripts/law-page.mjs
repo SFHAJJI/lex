@@ -44,15 +44,18 @@ export function actTitle(view) {
 }
 
 /**
- * The act's status today (`today`, the date in Luxembourg the answer was given on): `in_force` when its latest version applies
- * on or before today, `not_yet` when it applies after; null when no today is named or the latest version is dated by its
- * entry into force (no applicability date stated: no status is claimed, as on the dossier's versions).
+ * The act's status today (`today`, the date in Luxembourg the answer was given on), from the version that applies today, never
+ * from the latest alone (the review of #1046: a later version dated after today does not make the act "not yet in force"
+ * while an earlier one applies): `in_force` when a held version applies today, `not_yet` when its first version applies after
+ * today; null otherwise (no version applies today and one applied before, so its end is not this page's to name), when no
+ * today is named, or when a version is dated by its entry into force (no applicability date stated: no status is claimed, as
+ * on the dossier's versions).
  */
 export function lawStatus(view, today) {
-  const latest = versionsOf(view).at(-1) ?? null;
-  if (latest === null || today === null || today === undefined || datedByEntryIntoForce(latest)) return null;
-  if (latest.applicabilityDate > today) return 'not_yet';
-  return latest.nextApplicabilityDate === null || latest.nextApplicabilityDate > today ? 'in_force' : null;
+  const versions = versionsOf(view);
+  if (versions.length === 0 || today === null || today === undefined || versions.some(datedByEntryIntoForce)) return null;
+  if (versionOn(versions, today) >= 0) return 'in_force';
+  return versions[0].applicabilityDate > today ? 'not_yet' : null;
 }
 
 /** The index of the version that applies on `date` (from on or before it, the next from after it), or -1. */
