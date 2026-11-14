@@ -25,6 +25,8 @@ updates this file, not STATUS.md.
 - **Modifications** opens on the last twelve months to today in Luxembourg and asks them once loaded.
 - **Not done**: the "what is sent to the server" sentence inside each page's introduction stays there (only the assistant's
   moved); the journeys check the new menu on GitHub's runner.
+- **Review of #1047** (Codex): CHANGES REQUESTED, one finding: no CI had run (the PR was opened against `web/law-page`, and
+  retargeting it to `v3/integration` does not start CI); pushed again so CI runs on the PR.
 
 ## The law page: an act's own page with its versions in time, compared at a click (sole driver, 2026-11-14)
 
