@@ -123,14 +123,15 @@ export function searchCount(envelope) {
 }
 
 /**
- * Whether a quotation verifies (as lex-eval scores it): the site's `verify` operation, asked for its article's permalink,
- * finds the published text's digest, and it is the digest the answer carried.
+ * Whether a quotation verifies: the site's `verify` operation, asked for its article's permalink, finds the published text's
+ * digest, and that digest is the one the answer carried; both digests must be there (the review of #1055: a digest missing
+ * on either side is no match).
  */
 export function quoteVerifies(quote, envelope) {
   const value = envelope?.result?.value;
   if (value?.verdict !== 'digest_matches') return false;
   const served = value.article_text_sha256;
-  return typeof quote?.article_text_sha256 !== 'string' || typeof served !== 'string' || served === quote.article_text_sha256;
+  return typeof quote?.article_text_sha256 === 'string' && typeof served === 'string' && served === quote.article_text_sha256;
 }
 
 /** The steps an answer ran, in its trace's order, each `{ operation, parameters }`: what the plan made Lex do. */

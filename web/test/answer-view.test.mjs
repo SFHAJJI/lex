@@ -59,6 +59,9 @@ test('the work boxes read the trace, the search asked again and the quotation\'s
   assert.equal(quoteVerifies(quote, { result: { value: { verdict: 'digest_matches', article_text_sha256: 'a'.repeat(64) } } }), true);
   assert.equal(quoteVerifies(quote, { result: { value: { verdict: 'digest_matches', article_text_sha256: 'b'.repeat(64) } } }), false);
   assert.equal(quoteVerifies(quote, { result: { value: { verdict: 'not_held' } } }), false);
+  // A digest missing on either side is no match (the review of #1055).
+  assert.equal(quoteVerifies(quote, { result: { value: { verdict: 'digest_matches' } } }), false, 'no digest served');
+  assert.equal(quoteVerifies({}, { result: { value: { verdict: 'digest_matches', article_text_sha256: 'a'.repeat(64) } } }), false, 'no digest carried');
   assert.equal(dateFor('2025-11-25', 'fr'), '25/11/2025');
   assert.equal(dateFor('2025-11-25', 'en'), '2025-11-25');
 });
