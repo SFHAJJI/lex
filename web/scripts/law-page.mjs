@@ -154,3 +154,52 @@ export function articleHeadingOf(text) {
 export function yearOf(date) {
   return typeof date === 'string' && /^\d{4}-/.test(date) ? date.slice(0, 4) : null;
 }
+
+// A paragraph or point marker at a line's start: "1.", "(1)", "(a)", "a)", each followed by its text.
+const MARKER = /\s+(?=(\d{1,3}\.\s+\p{Lu}|\(\d{1,3}\)\s|\([a-z]\)\s|[a-z]\)\s))/gu;
+
+// The places the publisher's files run two parts together with no space at all (the Luxembourg consolidations; from #1044,
+// widened to the numbered paragraphs of the 1997 insurance law's art. 44):
+// - a sentence or definition into the next: a lowercase letter and its stop, colon or semicolon, then a capital and a
+//   lowercase letter ("trois ans.Le délai", "on entend par:Contrat");
+// - a numbered paragraph glued to the word or stop before it: "prescription1.Le", "d'assurance.2.Sous", "excepté.3.L'action";
+// - an article's heading glued to its number ("Article 44Délai", "Art. 74.Garanties"); and its text glued to the heading
+//   ("Garanties accessoiresMême"), cut once, where the heading ends as the search reads it (`articleHeadingOf`).
+const GLUED = /(?<=\p{Ll}[.:;])(?=\p{Lu}\p{Ll})|(?<=[\p{Ll}.])(?=\d{1,3}\.\p{Lu})|(?<=^\s*Art[\p{L}.]*\s*\d[\d-]*(?:er|bis|ter)?\.?)(?=\p{Lu}\p{Ll})/gu;
+
+/**
+ * A quotation's text in the paragraphs its own numbering shows, for reading only: cut before a numbered paragraph ("1.",
+ * "(1)") that follows the end of a sentence, a colon or a semicolon, or that opens the article's first paragraph, and before
+ * a lettered point ("(a)", "a)") that follows a colon or a semicolon; and where the publisher's text runs two parts together
+ * with no space at all (`GLUED`). Nothing but white space is dropped at a cut, and no character is added or changed.
+ */
+export function quoteParagraphs(text) {
+  if (typeof text !== 'string' || text.length === 0) return [];
+  const cuts = [];
+  for (const match of text.matchAll(MARKER)) {
+    const before = text.slice(0, match.index).trimEnd();
+    const last = before.at(-1) ?? '';
+    const marker = match[1];
+    const numbered = /^(\d{1,3}\.|\(\d{1,3}\))/u.test(marker);
+    const opensFirst = cuts.length === 0 && /^(1\.|\(1\))/u.test(marker);
+    if ((numbered && (/[.:;]/u.test(last) || opensFirst)) || (!numbered && /[:;]/u.test(last))) {
+      cuts.push([match.index, match.index + match[0].length]);
+    }
+  }
+  // A cut that takes no character, where the held text has no space to cut at.
+  for (const match of text.matchAll(GLUED)) cuts.push([match.index, match.index]);
+  const heading = articleHeadingOf(text);
+  if (heading !== '') {
+    const end = text.indexOf(heading) + heading.length;
+    if (/^\p{Lu}/u.test(text.slice(end, end + 1))) cuts.push([end, end]);
+  }
+  cuts.sort((one, other) => one[0] - other[0]);
+  const paragraphs = [];
+  let from = 0;
+  for (const [start, end] of cuts) {
+    paragraphs.push(text.slice(from, start));
+    from = end;
+  }
+  paragraphs.push(text.slice(from));
+  return paragraphs.map((paragraph) => paragraph.trim()).filter((paragraph) => paragraph.length > 0);
+}

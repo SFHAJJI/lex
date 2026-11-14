@@ -36,7 +36,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RefusalCard } from './RefusalCard.jsx';
 import { COMPARE_LANGUAGES, LIVE_COMPARE_IDLE, compareOutcome, createCompareSession } from '../scripts/live-compare.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
-import { articleNumberOf, yearOf } from '../scripts/law-page.mjs';
+import { articleNumberOf, quoteParagraphs, yearOf } from '../scripts/law-page.mjs';
 import { AsPublished, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import { todayAt } from '../scripts/initial-answer.mjs';
 import { TodayHint, useLuxembourgToday } from './Today.jsx';
@@ -90,12 +90,29 @@ function Side({ label, side }) {
  * (`COPY.deletedStart` … `COPY.insertedEnd`, hidden from sight), so nothing is said by colour or decoration alone. The
  * quotation is marked in the text's language, the words around each change in the page's.
  */
-function Wording({ wording, language }) {
+function Wording({ wording, language, paragraphs = false }) {
   if (wording === null) return null;
   if (wording.notServed !== undefined) {
     return <p data-wording-not-served={wording.notServed.join(' ')}>{COPY.wordingNotServed[wording.notServed.length === 2 ? 'both' : wording.notServed[0]]}</p>;
   }
   const said = (text) => <span className="visually-hidden" lang={CHROME_LOCALE}>{text}</span>;
+  // On the law page an article added or removed whole is read in its own paragraphs (`quoteParagraphs`, as the answer card
+  // reads a quotation: only white space is dropped at a cut), each paragraph inserted or deleted, said once at each end.
+  const whole = paragraphs && wording.complete && wording.parts.length === 1 && wording.parts[0].kind !== 'same' ? wording.parts[0] : null;
+  if (whole !== null) {
+    const Mark = whole.kind === 'del' ? 'del' : 'ins';
+    const [start, end] = whole.kind === 'del' ? [COPY.deletedStart, COPY.deletedEnd] : [COPY.insertedStart, COPY.insertedEnd];
+    const pieces = quoteParagraphs(whole.text);
+    return (
+      <div className="wording-diff wording-paragraphs" lang={quotationLanguageTag(language)} data-wording="words">
+        {pieces.map((piece, index) => (
+          <p key={index}>
+            <Mark>{index === 0 ? said(`${start} `) : null}{piece}{index === pieces.length - 1 ? said(end) : null}</Mark>
+          </p>
+        ))}
+      </div>
+    );
+  }
   return (
     <>
       <p className="wording-diff" lang={quotationLanguageTag(language)} data-wording={wording.complete ? 'words' : 'whole'}>
@@ -125,7 +142,7 @@ function Row({ row, language, change = null, elsewhere = false, law = null }) {
       {law === null
         ? <Say template={COPY.row} values={{ article: <strong>{row.publisherId}</strong>, status: COPY.status[row.status], from: digest(row.from), to: digest(row.to) }} />
         : <Say template={COPY.rowPlain} values={{ article: <strong>{fillText(DOSSIER.articleLabel, { number: articleNumberOf(row.publisherId) })}</strong>, status: COPY.status[row.status] }} />}
-      <Wording wording={row.wording} language={language} />
+      <Wording wording={row.wording} language={language} paragraphs={law !== null} />
       {law === null ? null : law.actions(row, language)}
       {elsewhere ? <p data-wording-elsewhere="">{COPY.wordingOtherPage}</p> : null}
       {change === null ? null : (
