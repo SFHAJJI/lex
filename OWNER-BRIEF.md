@@ -1,27 +1,27 @@
 # Lex V3: the owner's brief
 
-Updated 2026-11-14 at 15:45 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-11-14 at 19:10 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 ## Where V3 stands
 
-- Release 10 is live since about 13:10 UTC, on your yes. Its quality gate stopped it once: the model planned one test
-  question differently (it fetched the whole law instead of the article). The rerun passed every check: 17 right
-  articles of 56, 0 wrong, every quotation verified. Your 7 checks pass on the live site.
-- Release 7 is switched off and kept for rollback. Release 10's backup copy is made and checked file by file.
-- Release 11, the final release of your order of this evening, waits at its own address with no traffic: your 7 checks
-  pass there, the quality gate passes (17 right, 0 wrong), the two-address check passes. Its screenshots, French and
-  English, are with you. Nothing goes live without your yes; then the freeze.
+- Release 12 is live since about 18:50 UTC: the final look and the last wording. Your 7 checks pass on the live site.
+  Its quality gate passed with nothing wrong: 17 right articles of 56, 0 wrong, every quotation verified.
+- The code is frozen until the interview, unless something breaks.
+- Releases 10 and 11 are switched off and kept for rollback. Every release's backup copy is made and checked.
+- Release 11 went live on your override of the gate: one insurance question ("Quand la garantie… prend-elle effet ?")
+  got article 57 instead of 37 in one run. The model sometimes asks for detail on it, sometimes searches a few words and
+  quotes article 57. Release 12's run asked for detail. Fixing it means changing search: after the interview.
 
 ## Known limits (honest, and fine to say in the interview)
 
+- The question above can still get article 57, depending on the model's plan. Do not use it in the demo.
 - Questions phrased "l'assuré doit-il…" or "l'assureur peut-il…" are declined as personal advice, on purpose.
 - The 15 unseen test questions: 0 right, 0 wrong. Six are declined by that advice rule; eight use everyday words that
   are not the law's words, so the word search finds no single article and Lex says so; one got no plan from the model.
 - English questions about a Luxembourg law held in French find nothing: the search does not translate.
-- "Not found" offers a word search, not "the three closest acts": no operation finds those without a new search rule.
-- Evidence shows the cost per question, not the month's spend: the server keeps that in memory and does not publish it.
+- "Not found" offers a word search, not "the three closest acts".
 
 ## For the Foyer interview on 17 November
 
@@ -30,6 +30,5 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 ## What waits on you
 
-- Your yes on Release 11's screenshots; then it goes live and the code is frozen until the interview.
 - A decision: should a general question phrased "l'assuré doit-il…" be answered? Relaxing the advice rule is yours.
 - Read the Decisions page: it speaks in your name. Tell me any line to change.

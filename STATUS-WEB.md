@@ -4,6 +4,27 @@ Updated 2026-11-14. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Release 12 is live; the code is frozen until the interview (sole driver, 2026-11-14)
+
+`docs/release-12-live`.
+- **Release 11** went live on the owner's yes with the gate overridden by the owner for one failure: the promotion gate
+  (`runs61114-r11-promote`) found one wrong article, `ins-cover-start-fr` ("Quand la garantie d'un contrat d'assurance
+  prend-elle effet ?") quoted art. 57 where the test set expects art. 37. The model planned a search on "garantie d'un
+  contrat d'assurance" and the word search put art. 57 clearly ahead; three earlier runs of the same question asked for
+  detail instead. Release 11 changes no server code, and the live Release 10 quoted art. 57 for it 2 of 2 times. The owner
+  chose "Promote 11, then wording": traffic moved on that yes (`release-11\promote-r11-override.log`); acceptance 7 of 7 live.
+  Fixing it is a search change (the clearly-ahead rule on the relaxed lane), left for after the freeze.
+- **Release 12** (`v3-20261114T171014Z-b635bdb8c495`, #1058 at integration's head b635bdb8, revision
+  `ca-lex-v3--v3-20261114t171014z-b635bdb8c495-7aa6fea0`): acceptance 7 of 7 at its own address; every evaluation gate
+  passed (`runs61114-r12-candidate-dev`: 17 right, 0 wrong, 25 not found, 5 refused as advice, 9 right behaviours;
+  quotations 1.000; p50 1.56 s, p95 1.89 s; `ins-cover-start-fr` asked for detail this time); two-address PASS; screenshots
+  on the runner (`ops/screens-r12`). The owner's condition (promote only if that failure is the only one) held with no
+  failure; traffic moved; acceptance 7 of 7 on the live site.
+- Releases 10 and 11 are switched off, kept for rollback; the backups of Releases 10, 11 and 12 are verified, 14 objects
+  each by SHA-256. To free disk on the owner's yes, the local copies of Release 2's and Release 3's serving mounts
+  (`lu-population-20261011-15\derive-r2`, `derive-r3`, held in storage, checked by size and MD5) and the local image files
+  of Releases 5, 7, 10 and 11 (verified in storage, held in the registry) were removed, each with a note beside it.
+
 ## The last wording: one notice line, a named article said, Evidence's figures from one source (sole driver, 2026-11-14)
 
 `web/last-wording`, the owner's last order of 2026-11-14 (wording only, no logic, no gate):
