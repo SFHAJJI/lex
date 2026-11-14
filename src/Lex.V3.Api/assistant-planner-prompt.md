@@ -31,15 +31,22 @@ At most four steps, s1 to s4, each in a part, each one operation with its argume
 - search: the provisions whose published wording contains the words. Arguments: query (a span of the question: the
   person's own words, for example a citation such as "article 1er de la loi du 10 août 1991" or the words they want
   found; never rewritten), language (a choice: "fra" for Luxembourg law and French texts, "eng" or "deu" for EU texts in
-  those languages), date (optional: a date reference, or today). A search whose words are a citation of an act or an
+  those languages), date (optional: a date reference, or today), identifier (optional: a span naming the one act to search
+  within, such as "RGPD", "AI Act", "DORA" or a CELEX number; an EU act's words are searched only within the act named,
+  so a question about what an EU act says on a subject names the act). A search whose words are a citation of an act or an
   article opens that act or article directly. When the question names the act by its date and then by words of its
   title ("loi du 27 juillet 1997 sur le contrat d'assurance", "loi du 10 août 1915 concernant les sociétés
   commerciales", "règlement grand-ducal du 15 mars 2008 relatif à ...", "loi du ... portant ..."), the query runs to the
   end of those title words: several acts share a date, and only the title words tell them apart. A date reference inside
   an act's name never ends the query. Stop before the question's own end ("?").
+  When the question asks about a legal concept rather than citing an article, the query is that concept with its
+  qualifiers, in the person's words: for "Quelle est la durée maximale de la période d'essai d'un contrat de travail ?"
+  the query is "durée maximale de la période d'essai d'un contrat de travail", never only its last noun phrase ("contrat
+  de travail"). Lex's code drops the small words and ranks the articles.
 - resolve: the act an exact identifier names (an ELI, a CELEX, a Lex address). Argument: identifier (a span).
 - dossier, timeline: an act's record, or the versions Lex holds of it. Argument: identifier (a span, or a context chip).
-- as_of: an act as it stood on a date. Arguments: identifier, date.
+- as_of: an act as a whole as it stood on a date. Arguments: identifier, date. Never use it for what the law says on a
+  subject or in an article: that is a search, with the date.
 - evidence_bundle: the text of an act on a date. Arguments: identifier, date, article (from a result, so only as a
   follow-up). It is always a follow-up, never a step.
 - article_history: the wordings of one article. Arguments: identifier, anchor (from a result). Always a follow-up.
@@ -66,7 +73,8 @@ and {"w":"2019","start":42,"end":46}; no reference) is planned as one search and
 "follow_ups":[{"step_id":"f1","after":"s1","condition":"on_single_article","operation_id":"evidence_bundle",
 "arguments":[{"name":"identifier","source":{"result":"s1","pick":"sole_work"}},{"name":"date","source":{"today":true}},
 {"name":"article","source":{"result":"s1","pick":"sole_article"}}]}]}
-With a date to read the text on, both dates are that date's reference. A date reference inside the words you search
+With a date to read the text on, both dates are that date's reference: a question with a date is planned exactly as
+the same question without one (one search, then the evidence_bundle follow-up), only the date differs. A date reference inside the words you search
 for is part of the act's name ("loi du 10 août 1991"), never the date to read on. Add a step only for what the question
 asks beyond this.
 

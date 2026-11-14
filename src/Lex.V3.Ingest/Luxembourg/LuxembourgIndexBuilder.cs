@@ -4061,6 +4061,24 @@ public sealed partial class LuxembourgIndexReader : IDisposable
     }
 
     /// <summary>
+    /// The articles of held states, in one language, that a query matches, each with its rank, best first
+    /// (<see cref="SearchWords.Rule"/>; <see cref="LuxembourgSearchTexts.Rank"/>): with a phrase, the strict lane, else the word
+    /// lane over <paramref name="terms"/>. Null when the capability manifest measured no searchable text in that language.
+    /// </summary>
+    public IReadOnlyList<(LuxembourgIndexSearchHit Hit, SearchRank Rank)>? RankStateArticles(
+        string language, string? phrase, IReadOnlyList<string> terms, string? workKey)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(language);
+        ArgumentNullException.ThrowIfNull(terms);
+        if (!SearchableLanguages().Contains(language, StringComparer.Ordinal))
+        {
+            return null;
+        }
+
+        return SearchTextsOf(language).Rank(phrase, terms, workKey);
+    }
+
+    /// <summary>
     /// How many works have a state dated at or before the date, in the language when one is given; with
     /// <paramref name="catalogue"/> on index 9, a catalogue state, as <see cref="ResolveWorkKeysWithStateOnOrBefore"/> reads them.
     /// </summary>

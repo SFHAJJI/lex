@@ -84,6 +84,25 @@ public sealed class AssistantPipelineTests
                 hits = new[] { Hit(Work, "art_15"), Hit(Work, "art_16") },
             }),
             "no_hit" => Outcome("search", parametersJson, "quote", new { publisher = "lu-legilux", reference = new { outcome = "no_reference" }, lanes_run = true, hits = Array.Empty<object>() }),
+            // A ranked search (2026-11-13): five hits of two works, best first, and its best hit's decision.
+            "ranked_ahead" or "ranked_close" => Outcome("search", parametersJson, "quote", new
+            {
+                publisher = "lu-legilux",
+                reference = new { outcome = "no_reference" },
+                lanes_run = true,
+                best_hit = new
+                {
+                    decision = SearchKind == "ranked_ahead" ? "clearly_ahead" : "close",
+                    hit = SearchKind == "ranked_ahead" ? new { lane = "relaxed", work_key = Work, publisher_id = "art_1er" } : null,
+                    candidates = new[]
+                    {
+                        new { lane = "relaxed", work_key = Work, publisher_id = "art_1er" },
+                        new { lane = "relaxed", work_key = "code-travail", publisher_id = "art_l-121-1" },
+                        new { lane = "relaxed", work_key = Work, publisher_id = "art_70" },
+                    },
+                },
+                hits = new[] { Hit(Work, "art_1er"), Hit("code-travail", "art_l-121-1"), Hit(Work, "art_70"), Hit(Work, "art_45"), Hit("code-travail", "art_l-010-1") },
+            }),
             "no_version" => Refusal("search", parametersJson, "no_version_for_date", new { requested_identifier = $"/lu-legilux/{Work}", requested_date = "2020-01-01", history_begins = "2024-02-01", nearest_earlier = (string?)null, nearest_later = "2024-02-01" }),
             _ => throw new InvalidOperationException(SearchKind),
         };
@@ -252,6 +271,46 @@ public sealed class AssistantPipelineTests
         Assert.AreEqual(V3AnswerTemplates.RefusalNoVersionForDate, refusal.Claim.TemplateId);
         var nearest = past.Blocks.OfType<V3ActionBlock>().Single();
         Assert.AreEqual("2024-02-01", nearest.Parameters["date"], "the nearest state is offered as an action, never run");
+    }
+
+    [TestMethod]
+    public void ARankedSearchIsQuotedOnlyWhenItsBestHitIsClearlyAheadAndElseOffersItsFirstThree()
+    {
+        // 2026-11-13: a search that matched one article by a loose phrase was quoted as "the" answer. A ranked search names its
+        // one article only when its best hit is clearly ahead; several hits are no longer read as no answer.
+        const string question = "Que dit l'article 1er de la loi du 10 août 1991 ?";
+        var ahead = new Executor { SearchKind = "ranked_ahead" };
+        var answered = Answered(question, ahead);
+        Assert.AreEqual(V3AssistantVerdict.Answer, answered.Verdict);
+        Assert.AreEqual(Text, answered.Quotes.Single().Text);
+        StringAssert.Contains(ahead.Calls[1].Parameters, "\"article\":\"art_1er\"");
+
+        var close = new Executor { SearchKind = "ranked_close" };
+        var asked = Answered(question, close);
+        Assert.AreEqual(V3AssistantVerdict.Clarify, asked.Verdict, "a first hit not clearly ahead is no answer: one question back");
+        Assert.AreEqual(0, asked.Quotes.Count(), "nothing is quoted");
+        Assert.AreEqual(1, close.Calls.Count, "no follow-up reads an article");
+        var offered = asked.Parts[0].Blocks.OfType<V3ActionBlock>().ToArray();
+        CollectionAssert.AreEqual(new[] { "art_1er", "art_l-121-1", "art_70" }, offered.Select(static action => action.Parameters["article"]).ToArray(),
+            "the ranking's first three, best first, and no other hit");
+        Assert.AreEqual(V3AnswerTemplates.ClarifyWhichAct, ((V3ClaimBlock)asked.Parts[0].Blocks.First(static block => block is V3ClaimBlock)).Claim.TemplateId,
+            "candidates of two acts: which act and article");
+    }
+
+    [TestMethod]
+    public void TheActOnADateWithNoArticleQuotedIsNoAnswer()
+    {
+        // 2026-11-13: the same question with a date was planned as as_of and "answered" with no quotation.
+        const string question = "Que dit la loi du 10 août 1991 au 1er janvier 2020 ?";
+        var start = question.IndexOf("loi du", StringComparison.Ordinal);
+        var plan = "{\"schema\":\"lex-v3-assistant-plan/1\",\"parts\":[{\"part_id\":\"p1\",\"span\":[0," + question.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+            "],\"proposed_verdict\":\"answer\"}],\"steps\":[{\"step_id\":\"s1\",\"part_id\":\"p1\",\"operation_id\":\"as_of\",\"arguments\":{\"identifier\":{\"span\":[" +
+            start.ToString(System.Globalization.CultureInfo.InvariantCulture) + "," + (start + "loi du 10 août 1991".Length).ToString(System.Globalization.CultureInfo.InvariantCulture) +
+            "]},\"date\":{\"today\":true}}}],\"follow_ups\":[]}";
+        var dossier = Answered(question, planner: new FixedPlanner(plan));
+        Assert.AreEqual(0, dossier.Quotes.Count());
+        Assert.AreNotEqual(V3AssistantVerdict.Answer, dossier.Verdict, "an answer about what the law says carries the law's words");
+        Assert.AreEqual(V3AssistantVerdict.Clarify, dossier.Verdict);
     }
 
     [TestMethod]

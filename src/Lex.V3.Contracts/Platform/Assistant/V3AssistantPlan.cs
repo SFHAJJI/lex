@@ -329,7 +329,9 @@ public static class V3AssistantPlanValidator
     private static readonly Dictionary<string, (string[] Required, Dictionary<string, V3ArgumentSourceKind[]> Admitted)> Grammar = new(StringComparer.Ordinal)
     {
         ["resolve"] = (["identifier"], new(StringComparer.Ordinal) { ["identifier"] = [V3ArgumentSourceKind.Span, V3ArgumentSourceKind.Reference] }),
-        ["search"] = (["query", "language"], new(StringComparer.Ordinal) { ["query"] = SpanOnly, ["language"] = ChoiceOnly, ["date"] = DateSources }),
+        // A search may name the act it searches within (2026-11-13: an EU act's words are searched within one act only), by a
+        // span of the question ("RGPD", a CELEX) or a context chip.
+        ["search"] = (["query", "language"], new(StringComparer.Ordinal) { ["query"] = SpanOnly, ["language"] = ChoiceOnly, ["date"] = DateSources, ["identifier"] = IdentifierSources }),
         ["dossier"] = (["identifier"], new(StringComparer.Ordinal) { ["identifier"] = IdentifierSources }),
         ["timeline"] = (["identifier"], new(StringComparer.Ordinal) { ["identifier"] = IdentifierSources }),
         ["as_of"] = (["identifier", "date"], new(StringComparer.Ordinal) { ["identifier"] = IdentifierSources, ["date"] = DateSources }),

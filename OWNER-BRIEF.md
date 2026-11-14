@@ -1,10 +1,14 @@
 # Lex V3: the owner's brief
 
-Updated 2026-11-13 at 21:40 UTC by the driver. The driver updates this file in the first pull request of each
+Updated 2026-11-14 at 00:30 UTC by the driver. The driver updates this file in the first pull request of each
 day and whenever a run starts, ends or stops. At most 40 lines, plain words, no hashes. The detail stays in
 STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 
 ## Where V3 stands
+
+- Working now on your order of 13 November, section A first: the search matches whole words and puts the article whose
+  heading fits first (art. 44 for the insurance prescription question), and the assistant quotes one article only when it
+  is clearly ahead, else offers the three best. Tests pass; it goes live through the usual checks, then the law page.
 
 - law.soufien.lu serves the new front since 13 November 21:10 UTC, on your yes after the screenshots: the home page
   opens with "Ask a question" and four example questions, the insurance contract law first; two new pages, "How Lex
@@ -13,8 +17,6 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 - The assistant's test on the live site: 15 of 16 right (94%), every quotation checked, about 2 seconds. The site's
   "Quality" page still shows the afternoon's 14 of 16 until Sunday's update adds this run.
 - The previous version is kept, switched off, for rollback; the backup copy is made and verified file by file.
-- Before going live, the safety check refused one of today's versions (a page differed from the built one). It was
-  fixed and tested; visitors never saw it.
 
 ## Known limits (honest, and fine to say in the interview)
 

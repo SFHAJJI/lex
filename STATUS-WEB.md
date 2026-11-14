@@ -1,8 +1,45 @@
 # Lex V3 status: the web lane
 
-Updated 2026-11-13. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-11-14. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## Search ranks by words, headings first, and the assistant quotes a hit alone only when it is clearly ahead (sole driver, 2026-11-14)
+
+`api/search-words-ranked`, section A of the owner's order of 2026-11-13 ("correctness of the assistant"). Observed live on
+13 November: the insurance prescription question answered with art. 70 of the 1997 insurance-contract law, labelled
+complete; its dated form through MCP `ask` answered with an `as_of` and no quotation; the search "délai de prescription
+contrat d'assurance" listed four Code du travail articles before art. 44, because "de" matched inside "décide" and
+"demandeur", and said its ranking was "none".
+
+- **Search (both publishers).** Whole words, never part of a word; French, German and English stopwords and "article"
+  dropped; a word also matches its plural or singular (a trailing s or x, from four letters); a token holding a digit
+  ("121-6", "1er") is kept whole (R90). The publisher's glued text ("Article 44Délai de prescription1.Le") is set apart in
+  memory when the index is read: the corpus and the index files are unchanged. An article's heading is read from its text
+  (a short run after its number, opening with a capital, up to where its text is glued on; none when "(1)" or a sentence
+  comes first). Relaxed is every query word as a whole word. Within a lane, hits are ranked by the rarity of the query's
+  words in the heading, then in the text; ties keep the reading's order. The answer says so (`ranking`, `matching`,
+  `lanes`, `page_is`), lists the matched `words`, and adds `best_hit`: `clearly_ahead`, `close` with the first three
+  candidates, or `none`.
+- **Assistant.** A search's hit is quoted alone only when `best_hit` is `clearly_ahead`; otherwise the answer asks which
+  article or act and offers the first three, each to read on the date asked. An `as_of` with no article quoted is
+  `clarify`, never `answer`. The planner keeps the legal concept in the query, plans a dated question exactly as the
+  undated one, and may name one act on a search step ("RGPD", "AI Act", "DORA"), read by the reviewed short names.
+- **Checked against the live index** before the release: of the 59 articles holding "délai de prescription", only
+  art. 44 of `loi-1997-07-27-n10` has it as its heading.
+- **Tests and gates, none weakened.** The retrieval gate now judges by the stated whole-word rule, threshold still 1.0.
+  Tests that pinned the old sentences ("none;", "substring", "not the best hits") pin the new ones. Fixture counts that
+  moved are pinned exactly to the new rule's result (the GDPR fixture's art. 90 holds shall, apply, 25 and 2018; "joint
+  controllers" finds 2 strict and 5 relaxed hits, the one whose heading holds "joint" first). The drafted case "Que dit
+  la loi sur « assemblée générale » ?" still clarifies: a first version read "Art. 15.(1)L'Assemblée générale annuelle…"
+  as a heading and answered, which showed the heading rule had to refuse running text. The EU schema-5 and schema-8 base
+  answers were recorded again on Linux (WSL Ubuntu 24.04, invariant globalization, TZ=UTC) at 2b0cdfe5: only the search
+  rows changed (EU row 11, schema-8 rows 13 and 14), every other row byte-identical; the answer and envelope samples were
+  rendered again.
+- **Review of #1045** (Codex): CHANGES REQUESTED, one should-fix, reproduced and taken: a search tracked each word in one
+  bit of a 64-bit mask and required only the first 63, so punctuation splitting one term into 64 words let an article
+  match without the 64th. Now a query of more than 63 words is `request_schema_invalid`, and both matchers refuse more
+  instead of cutting; a test sends a 64-word term. CI on the reviewed commit: every job passed on Linux (dotnet 13 min).
 
 ## Release 5 is live: the assistant-first front, on the owner's yes (sole driver, 2026-11-13)
 

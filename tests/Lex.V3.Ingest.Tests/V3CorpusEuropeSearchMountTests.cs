@@ -26,6 +26,8 @@ public sealed class V3CorpusEuropeSearchMountTests
 
     private static string RawTarget => V3RestRouteBinding.Search.RawTarget;
 
+    private static string LaneAndArticle(JsonElement hit) => hit.GetProperty("lane").GetString() + " " + hit.GetProperty("publisher_id").GetString();
+
     [TestMethod]
     public async Task AnEuWorkIsSearchedInItsHeldWordingByCelexWorkOrExpressionWithEuContext()
     {
@@ -53,7 +55,9 @@ public sealed class V3CorpusEuropeSearchMountTests
             StringAssert.Contains(body.GetProperty("date_semantics").GetString(), "never merged with a Luxembourg applicability date");
             Assert.AreEqual("not_run_identifier_given", body.GetProperty("work_resolution").GetProperty("outcome").GetString());
             var hits = body.GetProperty("hits").EnumerateArray().ToArray();
-            Assert.HasCount(1, hits, identifier);
+            // The phrase's article, then the one whose text holds every word of it, stopwords dropped (shall, apply, 25, 2018:
+            // art. 90(2), "by 25 May 2018").
+            CollectionAssert.AreEqual(new[] { "strict 099", "relaxed 090" }, hits.Select(LaneAndArticle).ToArray(), identifier);
             var hit = hits[0];
             Assert.AreEqual("strict", hit.GetProperty("lane").GetString());
             Assert.AreEqual(Celex, hit.GetProperty("celex").GetString());
@@ -153,7 +157,7 @@ public sealed class V3CorpusEuropeSearchMountTests
             var value = dated.Result!.Value;
             Assert.AreEqual(date, value.GetProperty("requested_date").GetString());
             Assert.AreEqual("2016-04-27", value.GetProperty("pinned_wording").GetProperty("wording_date").GetString(), date);
-            Assert.AreEqual(1, value.GetProperty("hits").GetArrayLength(), date);
+            CollectionAssert.AreEqual(new[] { "strict 099", "relaxed 090" }, value.GetProperty("hits").EnumerateArray().Select(LaneAndArticle).ToArray(), date);
             Assert.AreEqual(JsonValueKind.Null, value.GetProperty("fold").ValueKind, "a dated search reads one wording and folds nothing");
         }
 

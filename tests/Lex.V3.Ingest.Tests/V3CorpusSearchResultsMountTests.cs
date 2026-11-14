@@ -68,11 +68,12 @@ public sealed class V3CorpusSearchResultsMountTests
         var strict = hits.Where(static hit => hit.GetProperty("lane").GetString() == "strict").ToArray();
         Assert.AreEqual(12, strict.Length, body.GetRawText());
 
-        // A version's hits in the reading's order of the publisher's article ids, which the ranking sentence says.
+        // A version's hits, ranked equal (no heading holds the phrase), in the reading's order of the publisher's article ids,
+        // which the ranking sentence says.
         CollectionAssert.AreEqual(carrying, strict.Select(static hit => hit.GetProperty("publisher_id").GetString()).ToArray());
         CollectionAssert.AreNotEqual(
             carrying.Order(StringComparer.Ordinal).ToArray(), carrying, "the test's ids would not tell the reading's order from the ordinal one");
-        StringAssert.Contains(body.GetProperty("ranking").GetString(), "publisher article id (in the reading's order)");
+        StringAssert.Contains(body.GetProperty("ranking").GetString(), "ties in the reading's order (work key, publisher date, state digest, publisher article id, article identity)");
 
         // Each extract is a run of the bytes the lane matched, at the byte offsets it names in the text whose digest it names.
         foreach (var hit in hits)
@@ -381,7 +382,7 @@ public sealed class V3CorpusSearchResultsMountTests
         var onTwinDate = hits.Where(hit => hit.GetProperty("applicability_date").GetString() == twinDate)
             .Select(static hit => hit.GetProperty("state_sha256").GetString()).Distinct().ToArray();
         CollectionAssert.AreEquivalent(new[] { later.StateSha256, twin.StateSha256 }, onTwinDate);
-        StringAssert.Contains(body.GetProperty("ranking").GetString(), "state digest, publisher article id (in the reading's order) and article identity");
+        StringAssert.Contains(body.GetProperty("ranking").GetString(), "ties in the reading's order (work key, publisher date, state digest, publisher article id, article identity)");
 
         // Each act once, each named by its own title.
         var acts = body.GetProperty("acts").EnumerateArray().ToDictionary(

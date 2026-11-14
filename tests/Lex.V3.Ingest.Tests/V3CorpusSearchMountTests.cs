@@ -90,27 +90,27 @@ public sealed class V3CorpusSearchMountTests
         Assert.AreEqual(1, hits.Count(hit => hit.GetProperty("publisher_id").GetString() == both), "Served once, never again as relaxed.");
 
         // What the answer says about itself, held against wording written here and not against the
-        // constants that produce it: an order and not a rank, folded, what a hit is, what a lane is.
+        // constants that produce it: a rank by the heading's words then the text's (2026-11-13: it was an order and not a
+        // rank, and "de" matched inside "décide"), whole words, folded, what a hit is, what a lane is.
         var ranking = body.GetProperty("ranking").GetString();
-        StringAssert.StartsWith(ranking, "none;");
-        StringAssert.Contains(ranking, "strict lane before relaxed lane");
-        StringAssert.Contains(ranking, "work key, publisher date, state digest, publisher article id (in the reading's order) and article identity");
-        StringAssert.Contains(ranking, "no BM25 ranker");
-        StringAssert.Contains(ranking, "not the best hits");
+        StringAssert.StartsWith(ranking, "strict lane before relaxed lane; within a lane, by the rarity of the query's words the article's heading holds, then of those its text holds");
+        StringAssert.Contains(ranking, "ties in the reading's order (work key, publisher date, state digest, publisher article id, article identity)");
+        StringAssert.Contains(ranking, "French, German and English stopwords and the word article are dropped");
+        StringAssert.Contains(ranking, "a word matches a whole word of the article's text, or its plural or singular (a trailing s or x, from four letters), never a part of a word");
+        StringAssert.Contains(ranking, "a whitespace-separated token holding a digit (a number, a date, an article number such as 121-6 or 1er) is kept whole, never dropped");
         var matching = body.GetProperty("matching").GetString();
-        StringAssert.StartsWith(matching, "substring of the article's searchable text");
+        StringAssert.StartsWith(matching, "whole words of the article's searchable text");
         StringAssert.Contains(matching, "text and reference tokens");
         StringAssert.Contains(matching, "modification markers and note references are not searched");
         StringAssert.Contains(matching, "canonical decomposition (Unicode NFD) without its combining marks and in lower case");
         StringAssert.Contains(matching, "the ligatures \u0153 and \u00E6, of either case, are written oe and ae");
         StringAssert.Contains(matching, "so capitals, accents, these apostrophes and these spaces never decide a match and every other character does");
-        StringAssert.Contains(matching, "nothing is stemmed or expanded");
         StringAssert.Contains(body.GetProperty("hit_unit").GetString(), "one article of one held state, not a provision");
         var lanes = body.GetProperty("lanes").GetString();
         StringAssert.Contains(lanes, "the relaxed set contains the strict set");
         StringAssert.Contains(lanes, "each article once");
         StringAssert.Contains(lanes, "null in the population, not zero");
-        Assert.AreEqual("the first hits in the stated order, not the best hits", body.GetProperty("page_is").GetString());
+        Assert.AreEqual("the best hits first, in the stated ranking", body.GetProperty("page_is").GetString());
         CollectionAssert.AreEqual(new[] { "strict", "relaxed" }, Strings(body.GetProperty("modes_held")));
         CollectionAssert.AreEqual(new[] { "bm25", "semantic" }, Strings(body.GetProperty("modes_not_held")));
         Assert.IsFalse(body.GetRawText().Contains("\"score\"", StringComparison.Ordinal), "No score is served.");
@@ -848,6 +848,9 @@ public sealed class V3CorpusSearchMountTests
     // A parameter that implies ranking is not a declared one: it is rejected, never ignored.
     [DataRow("{\"operation_id\":\"search\",\"parameters\":{\"query\":\"bail\",\"language\":\"fra\",\"sort\":\"relevance\"}}")]
     [DataRow("{\"operation_id\":\"search\",\"parameters\":{\"query\":\"bail\",\"language\":\"fra\",\"rank\":\"bm25\"}}")]
+    // One term that punctuation splits into 64 words (none a stopword), one more than a search matches (SearchWords.MaxWords; the
+    // review of #1045).
+    [DataRow("{\"operation_id\":\"search\",\"parameters\":{\"query\":\"ka,kb,kc,kd,ke,kf,kg,kh,ki,kj,kk,kl,km,kn,ko,kp,kq,kr,ks,kt,ku,kv,kw,kx,ky,kz,wa,wb,wc,wd,we,wf,wg,wh,wi,wj,wk,wl,wm,wn,wo,wp,wq,wr,ws,wt,wu,wv,ww,wx,wy,wz,xa,xb,xc,xd,xe,xf,xg,xh,xi,xj,xk,xl\",\"language\":\"fra\"}}")]
     public async Task UnusableSearchRequestsAreBelowEnvelopeSchemaRejections(string body)
     {
         var fixture = await MountedFixture.CreateAsync();

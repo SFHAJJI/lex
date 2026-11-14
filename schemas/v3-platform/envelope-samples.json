@@ -1448,6 +1448,28 @@
             ],
             "acts_rule": "acts names each act of this page once, in the order its hits first appear: its work key, its dossier, the publisher\u0027s title of it this index holds (in the language searched when one is held, else French, else another; a title before a short title), or null when none is held, the as-published label when every state this index holds of it is the act as first published, and its hits in the whole result, not the page",
             "ambiguous_works": [],
+            "best_hit": {
+              "candidates": [
+                {
+                  "lane": "strict",
+                  "publisher_id": "art_15",
+                  "work_key": "loi-1991-08-10-n3"
+                },
+                {
+                  "lane": "strict",
+                  "publisher_id": "art_16",
+                  "work_key": "loi-1991-08-10-n3"
+                },
+                {
+                  "lane": "strict",
+                  "publisher_id": "art_21",
+                  "work_key": "loi-1991-08-10-n3"
+                }
+              ],
+              "decision": "close",
+              "hit": null,
+              "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+            },
             "continue_after": null,
             "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query for a strict hit, a term or overlapping terms for a relaxed hit, each found as the lane finds it, with capitals and accents ignored, and marked on the text\u0027s own characters (a letter with the combining marks after it, a ligature whole); a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
@@ -1673,19 +1695,19 @@
                     },
                     {
                       "matched": true,
-                      "text": "assembl\u00E9e"
+                      "text": "assembl\u00E9es"
                     },
                     {
                       "matched": false,
-                      "text": "s "
+                      "text": " "
                     },
                     {
                       "matched": true,
-                      "text": "g\u00E9n\u00E9rale"
+                      "text": "g\u00E9n\u00E9rales"
                     },
                     {
                       "matched": false,
-                      "text": "s. Il peut rev\u00EAtir la robe au cours des c\u00E9r\u00E9monies de l\u2019Ordre auquel il participe. Il prend la place que lui assigne son anciennet\u00E9 d\u2019inscription au tableau. Il a droit d\u2019acc\u00E8s \u00E0 la"
+                      "text": ". Il peut rev\u00EAtir la robe au cours des c\u00E9r\u00E9monies de l\u2019Ordre auquel il participe. Il prend la place que lui assigne son anciennet\u00E9 d\u2019inscription au tableau. Il a droit d\u2019acc\u00E8s \u00E0 la"
                     }
                   ],
                   "text_byte_length": 1365,
@@ -1708,10 +1730,10 @@
               }
             ],
             "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+            "lanes": "strict: the query, folded, is in the folded text starting and ending on word bounds; relaxed (ranked words): the article\u0027s text holds every query word (stopwords dropped, terms) as a whole word or its plural or singular, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
             "lanes_run": true,
             "limit": 200,
-            "matching": "substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; the apostrophes \u2019, \u2018 and \u02BC are written \u0027 and the no-break spaces U\u002B00A0, U\u002B202F and U\u002B2007 an ordinary space; a soft hyphen (U\u002B00AD) is dropped; every other character, punctuation, hyphens and the other spaces included, is kept as it is, so capitals, accents, these apostrophes and these spaces never decide a match and every other character does; nothing is stemmed or expanded",
+            "matching": "whole words of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched), its glued words set apart; the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; the apostrophes \u2019, \u2018 and \u02BC are written \u0027 and the no-break spaces U\u002B00A0, U\u002B202F and U\u002B2007 an ordinary space; a soft hyphen (U\u002B00AD) is dropped; every other character, punctuation, hyphens and the other spaces included, is kept as it is, so capitals, accents, these apostrophes and these spaces never decide a match and every other character does",
             "modes_held": [
               "strict",
               "relaxed"
@@ -1720,7 +1742,7 @@
               "bm25",
               "semantic"
             ],
-            "page_is": "the first hits in the stated order, not the best hits",
+            "page_is": "the best hits first, in the stated ranking",
             "population": {
               "distinct_publisher_articles": 5,
               "relaxed_hits": 1,
@@ -1734,7 +1756,7 @@
               "works_with_hits": 1
             },
             "publisher": "lu-legilux",
-            "ranking": "none; strict lane before relaxed lane, then work key, publisher date, state digest, publisher article id (in the reading\u0027s order) and article identity, so one state\u0027s hits are together. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+            "ranking": "strict lane before relaxed lane; within a lane, by the rarity of the query\u0027s words the article\u0027s heading holds, then of those its text holds (a strict hit by whether its heading holds the phrase), ties in the reading\u0027s order (work key, publisher date, state digest, publisher article id, article identity): words are the query\u0027s letters and digits between any other characters, folded as the text is, except that a whitespace-separated token holding a digit (a number, a date, an article number such as 121-6 or 1er) is kept whole, never dropped; French, German and English stopwords and the word article are dropped; a word matches a whole word of the article\u0027s text, or its plural or singular (a trailing s or x, from four letters), never a part of a word; the text\u0027s glued words are set apart first (a lower-case letter before a capital, a letter beside a digit, a stop, colon or semicolon before a letter); an article\u0027s heading is the short run after its number that opens with a capital and ends where its text is glued on (none when a sentence or a paragraph\u0027s number comes first); articles are ranked by the rarity of the query\u0027s words in their heading, then in their text (rarity: the inverse of how many searched articles hold the word), ties in the reading\u0027s order",
             "reference": {
               "kind": null,
               "opens": null,
@@ -1773,6 +1795,10 @@
               "g\u00E9n\u00E9rale"
             ],
             "truncated": false,
+            "words": [
+              "assemblee",
+              "generale"
+            ],
             "work_resolution": {
               "candidates": null,
               "outcome": "no_titles_held",
@@ -1897,6 +1923,28 @@
             ],
             "acts_rule": "acts names each act of this page once, in the order its hits first appear: its work key, its dossier, the publisher\u0027s title of it this index holds (in the language searched when one is held, else French, else another; a title before a short title), or null when none is held, the as-published label when every state this index holds of it is the act as first published, and its hits in the whole result, not the page",
             "ambiguous_works": [],
+            "best_hit": {
+              "candidates": [
+                {
+                  "lane": "strict",
+                  "publisher_id": "art_15",
+                  "work_key": "loi-1991-08-10-n3"
+                },
+                {
+                  "lane": "strict",
+                  "publisher_id": "art_16",
+                  "work_key": "loi-1991-08-10-n3"
+                },
+                {
+                  "lane": "strict",
+                  "publisher_id": "art_21",
+                  "work_key": "loi-1991-08-10-n3"
+                }
+              ],
+              "decision": "close",
+              "hit": null,
+              "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+            },
             "continue_after": null,
             "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query for a strict hit, a term or overlapping terms for a relaxed hit, each found as the lane finds it, with capitals and accents ignored, and marked on the text\u0027s own characters (a letter with the combining marks after it, a ligature whole); a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
@@ -2109,10 +2157,10 @@
               }
             ],
             "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+            "lanes": "strict: the query, folded, is in the folded text starting and ending on word bounds; relaxed (ranked words): the article\u0027s text holds every query word (stopwords dropped, terms) as a whole word or its plural or singular, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
             "lanes_run": true,
             "limit": 200,
-            "matching": "substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; the apostrophes \u2019, \u2018 and \u02BC are written \u0027 and the no-break spaces U\u002B00A0, U\u002B202F and U\u002B2007 an ordinary space; a soft hyphen (U\u002B00AD) is dropped; every other character, punctuation, hyphens and the other spaces included, is kept as it is, so capitals, accents, these apostrophes and these spaces never decide a match and every other character does; nothing is stemmed or expanded",
+            "matching": "whole words of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched), its glued words set apart; the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; the apostrophes \u2019, \u2018 and \u02BC are written \u0027 and the no-break spaces U\u002B00A0, U\u002B202F and U\u002B2007 an ordinary space; a soft hyphen (U\u002B00AD) is dropped; every other character, punctuation, hyphens and the other spaces included, is kept as it is, so capitals, accents, these apostrophes and these spaces never decide a match and every other character does",
             "modes_held": [
               "strict",
               "relaxed"
@@ -2121,7 +2169,7 @@
               "bm25",
               "semantic"
             ],
-            "page_is": "the first hits in the stated order, not the best hits",
+            "page_is": "the best hits first, in the stated ranking",
             "population": {
               "distinct_publisher_articles": 4,
               "relaxed_hits": null,
@@ -2135,7 +2183,7 @@
               "works_with_hits": 1
             },
             "publisher": "lu-legilux",
-            "ranking": "none; strict lane before relaxed lane, then work key, publisher date, state digest, publisher article id (in the reading\u0027s order) and article identity, so one state\u0027s hits are together. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+            "ranking": "strict lane before relaxed lane; within a lane, by the rarity of the query\u0027s words the article\u0027s heading holds, then of those its text holds (a strict hit by whether its heading holds the phrase), ties in the reading\u0027s order (work key, publisher date, state digest, publisher article id, article identity): words are the query\u0027s letters and digits between any other characters, folded as the text is, except that a whitespace-separated token holding a digit (a number, a date, an article number such as 121-6 or 1er) is kept whole, never dropped; French, German and English stopwords and the word article are dropped; a word matches a whole word of the article\u0027s text, or its plural or singular (a trailing s or x, from four letters), never a part of a word; the text\u0027s glued words are set apart first (a lower-case letter before a capital, a letter beside a digit, a stop, colon or semicolon before a letter); an article\u0027s heading is the short run after its number that opens with a capital and ends where its text is glued on (none when a sentence or a paragraph\u0027s number comes first); articles are ranked by the rarity of the query\u0027s words in their heading, then in their text (rarity: the inverse of how many searched articles hold the word), ties in the reading\u0027s order",
             "reference": {
               "kind": null,
               "opens": null,
@@ -2174,6 +2222,10 @@
               "g\u00E9n\u00E9rale"
             ],
             "truncated": false,
+            "words": [
+              "assemblee",
+              "generale"
+            ],
             "work_resolution": {
               "candidates": null,
               "outcome": "no_titles_held",
@@ -2239,6 +2291,12 @@
             "acts": [],
             "acts_rule": "acts names each act of this page once, in the order its hits first appear: its work key, its dossier, the publisher\u0027s title of it this index holds (in the language searched when one is held, else French, else another; a title before a short title), or null when none is held, the as-published label when every state this index holds of it is the act as first published, and its hits in the whole result, not the page",
             "ambiguous_works": [],
+            "best_hit": {
+              "candidates": [],
+              "decision": "none",
+              "hit": null,
+              "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+            },
             "continue_after": null,
             "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query for a strict hit, a term or overlapping terms for a relaxed hit, each found as the lane finds it, with capitals and accents ignored, and marked on the text\u0027s own characters (a letter with the combining marks after it, a ligature whole); a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
@@ -2250,10 +2308,10 @@
             "hit_unit": "a hit is one article of one held state, not a provision: a provision whose wording never changed is a hit in every state that holds it",
             "hits": [],
             "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+            "lanes": "strict: the query, folded, is in the folded text starting and ending on word bounds; relaxed (ranked words): the article\u0027s text holds every query word (stopwords dropped, terms) as a whole word or its plural or singular, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
             "lanes_run": true,
             "limit": 200,
-            "matching": "substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; the apostrophes \u2019, \u2018 and \u02BC are written \u0027 and the no-break spaces U\u002B00A0, U\u002B202F and U\u002B2007 an ordinary space; a soft hyphen (U\u002B00AD) is dropped; every other character, punctuation, hyphens and the other spaces included, is kept as it is, so capitals, accents, these apostrophes and these spaces never decide a match and every other character does; nothing is stemmed or expanded",
+            "matching": "whole words of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched), its glued words set apart; the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; the apostrophes \u2019, \u2018 and \u02BC are written \u0027 and the no-break spaces U\u002B00A0, U\u002B202F and U\u002B2007 an ordinary space; a soft hyphen (U\u002B00AD) is dropped; every other character, punctuation, hyphens and the other spaces included, is kept as it is, so capitals, accents, these apostrophes and these spaces never decide a match and every other character does",
             "modes_held": [
               "strict",
               "relaxed"
@@ -2262,7 +2320,7 @@
               "bm25",
               "semantic"
             ],
-            "page_is": "the first hits in the stated order, not the best hits",
+            "page_is": "the best hits first, in the stated ranking",
             "population": {
               "distinct_publisher_articles": 0,
               "relaxed_hits": null,
@@ -2276,7 +2334,7 @@
               "works_with_hits": 0
             },
             "publisher": "lu-legilux",
-            "ranking": "none; strict lane before relaxed lane, then work key, publisher date, state digest, publisher article id (in the reading\u0027s order) and article identity, so one state\u0027s hits are together. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+            "ranking": "strict lane before relaxed lane; within a lane, by the rarity of the query\u0027s words the article\u0027s heading holds, then of those its text holds (a strict hit by whether its heading holds the phrase), ties in the reading\u0027s order (work key, publisher date, state digest, publisher article id, article identity): words are the query\u0027s letters and digits between any other characters, folded as the text is, except that a whitespace-separated token holding a digit (a number, a date, an article number such as 121-6 or 1er) is kept whole, never dropped; French, German and English stopwords and the word article are dropped; a word matches a whole word of the article\u0027s text, or its plural or singular (a trailing s or x, from four letters), never a part of a word; the text\u0027s glued words are set apart first (a lower-case letter before a capital, a letter beside a digit, a stop, colon or semicolon before a letter); an article\u0027s heading is the short run after its number that opens with a capital and ends where its text is glued on (none when a sentence or a paragraph\u0027s number comes first); articles are ranked by the rarity of the query\u0027s words in their heading, then in their text (rarity: the inverse of how many searched articles hold the word), ties in the reading\u0027s order",
             "reference": {
               "kind": null,
               "opens": null,
@@ -2314,6 +2372,9 @@
               "z\u00E9phyr"
             ],
             "truncated": false,
+            "words": [
+              "zephyr"
+            ],
             "work_resolution": {
               "candidates": null,
               "outcome": "no_titles_held",
@@ -2390,6 +2451,28 @@
             ],
             "acts_rule": "acts names each act of this page once, in the order its hits first appear: its work key, its dossier, the publisher\u0027s title of it this index holds (in the language searched when one is held, else French, else another; a title before a short title), or null when none is held, the as-published label when every state this index holds of it is the act as first published, and its hits in the whole result, not the page",
             "ambiguous_works": [],
+            "best_hit": {
+              "candidates": [
+                {
+                  "lane": "strict",
+                  "publisher_id": "art_15",
+                  "work_key": "loi-1991-08-10-n3"
+                },
+                {
+                  "lane": "strict",
+                  "publisher_id": "art_16",
+                  "work_key": "loi-1991-08-10-n3"
+                },
+                {
+                  "lane": "strict",
+                  "publisher_id": "art_21",
+                  "work_key": "loi-1991-08-10-n3"
+                }
+              ],
+              "decision": "close",
+              "hit": null,
+              "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+            },
             "continue_after": null,
             "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query for a strict hit, a term or overlapping terms for a relaxed hit, each found as the lane finds it, with capitals and accents ignored, and marked on the text\u0027s own characters (a letter with the combining marks after it, a ligature whole); a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
@@ -2602,10 +2685,10 @@
               }
             ],
             "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+            "lanes": "strict: the query, folded, is in the folded text starting and ending on word bounds; relaxed (ranked words): the article\u0027s text holds every query word (stopwords dropped, terms) as a whole word or its plural or singular, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
             "lanes_run": true,
             "limit": 200,
-            "matching": "substring of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched); the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; the apostrophes \u2019, \u2018 and \u02BC are written \u0027 and the no-break spaces U\u002B00A0, U\u002B202F and U\u002B2007 an ordinary space; a soft hyphen (U\u002B00AD) is dropped; every other character, punctuation, hyphens and the other spaces included, is kept as it is, so capitals, accents, these apostrophes and these spaces never decide a match and every other character does; nothing is stemmed or expanded",
+            "matching": "whole words of the article\u0027s searchable text, which is its text and reference tokens as the index holds them (modification markers and note references are not searched), its glued words set apart; the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; the apostrophes \u2019, \u2018 and \u02BC are written \u0027 and the no-break spaces U\u002B00A0, U\u002B202F and U\u002B2007 an ordinary space; a soft hyphen (U\u002B00AD) is dropped; every other character, punctuation, hyphens and the other spaces included, is kept as it is, so capitals, accents, these apostrophes and these spaces never decide a match and every other character does",
             "modes_held": [
               "strict",
               "relaxed"
@@ -2614,7 +2697,7 @@
               "bm25",
               "semantic"
             ],
-            "page_is": "the first hits in the stated order, not the best hits",
+            "page_is": "the best hits first, in the stated ranking",
             "population": {
               "distinct_publisher_articles": 4,
               "relaxed_hits": null,
@@ -2628,7 +2711,7 @@
               "works_with_hits": 1
             },
             "publisher": "lu-legilux",
-            "ranking": "none; strict lane before relaxed lane, then work key, publisher date, state digest, publisher article id (in the reading\u0027s order) and article identity, so one state\u0027s hits are together. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+            "ranking": "strict lane before relaxed lane; within a lane, by the rarity of the query\u0027s words the article\u0027s heading holds, then of those its text holds (a strict hit by whether its heading holds the phrase), ties in the reading\u0027s order (work key, publisher date, state digest, publisher article id, article identity): words are the query\u0027s letters and digits between any other characters, folded as the text is, except that a whitespace-separated token holding a digit (a number, a date, an article number such as 121-6 or 1er) is kept whole, never dropped; French, German and English stopwords and the word article are dropped; a word matches a whole word of the article\u0027s text, or its plural or singular (a trailing s or x, from four letters), never a part of a word; the text\u0027s glued words are set apart first (a lower-case letter before a capital, a letter beside a digit, a stop, colon or semicolon before a letter); an article\u0027s heading is the short run after its number that opens with a capital and ends where its text is glued on (none when a sentence or a paragraph\u0027s number comes first); articles are ranked by the rarity of the query\u0027s words in their heading, then in their text (rarity: the inverse of how many searched articles hold the word), ties in the reading\u0027s order",
             "reference": {
               "kind": null,
               "opens": null,
@@ -2667,6 +2750,10 @@
               "GENERALE"
             ],
             "truncated": false,
+            "words": [
+              "assemblee",
+              "generale"
+            ],
             "work_resolution": {
               "candidates": null,
               "outcome": "no_titles_held",
@@ -2737,13 +2824,39 @@
             ],
             "authenticity_basis": "electronic_edition",
             "authenticity_rule": "the sentence is chosen by the act\u0027s own date, and not by the publication date an Official Journal reference under official_journal gives: authenticity_act_dates lists, once each and in order, the dates this index holds of the act the text belongs to (for a consolidated version, the act it consolidates): the date the publisher\u0027s Formex package gives the act\u0027s original wording, when that text is held, and the publisher\u0027s work_date_document of the act\u0027s own work, when the EU census of the act is held; a consolidated text outside a held census lists none, its own date being a consolidation\u0027s; the basis is electronic_edition when a date is listed and the earliest is on or after 2013-07-01, since an act is published on or after the date it bears, so in an Official Journal whose electronic edition alone is authentic (Regulation (EU) No 216/2013, which applies from 1 July 2013), and edition_by_publication_date otherwise, whose sentence states which edition is authentic on either side of 1 July 2013 and not on which side the act was published, so it also holds for an act dated before that day and published on or after it (one adopted in June 2013 may have been published in July); Lex\u0027s reproduction is never the authentic edition",
+            "best_hit": {
+              "candidates": [
+                {
+                  "lane": "strict",
+                  "publisher_id": "026",
+                  "work_key": "32016R0679"
+                },
+                {
+                  "lane": "strict",
+                  "publisher_id": "036",
+                  "work_key": "32016R0679"
+                },
+                {
+                  "lane": "relaxed",
+                  "publisher_id": "062",
+                  "work_key": "32016R0679"
+                }
+              ],
+              "decision": "clearly_ahead",
+              "hit": {
+                "lane": "strict",
+                "publisher_id": "026",
+                "work_key": "32016R0679"
+              },
+              "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+            },
             "consolidations_held": false,
             "continue_after": null,
             "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "date_semantics": "an EU wording date is the date of a wording of the act: for the original wording, the date the publisher\u0027s Formex package gives the act; for a consolidated version, the publisher\u0027s consolidation date (cdm:act_consolidated_date) of that version; it is not an entry-into-force, application or publication date, and an EU date is never merged with a Luxembourg applicability date",
             "extract_rule": "extract is a run of the article\u0027s searchable text, the bytes the lane matched and evidence_bundle quotes, word for word: around the first match, at most 80 characters before it and 200 after it, cut at a breaking space and never at a no-break space (U\u002B00A0, U\u002B202F, U\u002B2007, which hold a date\u0027s day to its month or a number to its unit; a word that alone passes a bound is cut at the bound); parts are that run in order, and a part is matched when it is a whole match: the query for a strict hit, a term or overlapping terms for a relaxed hit, each found as the lane finds it, with capitals and accents ignored, and marked on the text\u0027s own characters (a letter with the combining marks after it, a ligature whole); a match the run cuts is not marked; byte_start and byte_end are the run\u0027s UTF-8 byte offsets in the text whose SHA-256 is text_sha256, and nothing is folded, normalised or elided inside the run",
             "fold": {
-              "relaxed_hits_before_fold": 1,
+              "relaxed_hits_before_fold": 5,
               "rule": "with no date, one hit per publisher article id and text: the hit of the latest wording that holds that text (by wording date), each other wording that holds it named under the hit\u0027s same_wording, so an article a consolidation did not change is one hit and not one per wording; strict_hits and relaxed_hits count the hits served, and fold counts the hits before they were folded; with a date, one wording is searched and nothing is folded",
               "strict_hits_before_fold": 2
             },
@@ -2840,6 +2953,169 @@
                 "wording_date": "2016-04-27"
               },
               {
+                "article_identity_sha256": "35166b8665bdee75e1aa0102bbf8c282d67ef5b15853a2861373593ba3d13390",
+                "celex": "32016R0679",
+                "extract": {
+                  "byte_end": 215,
+                  "byte_start": 0,
+                  "parts": [
+                    {
+                      "matched": false,
+                      "text": "Article 62 "
+                    },
+                    {
+                      "matched": true,
+                      "text": "Joint"
+                    },
+                    {
+                      "matched": false,
+                      "text": " operations of supervisory authorities 1. The supervisory authorities shall, where appropriate, conduct "
+                    },
+                    {
+                      "matched": true,
+                      "text": "joint"
+                    },
+                    {
+                      "matched": false,
+                      "text": " operations including "
+                    },
+                    {
+                      "matched": true,
+                      "text": "joint"
+                    },
+                    {
+                      "matched": false,
+                      "text": " investigations and "
+                    },
+                    {
+                      "matched": true,
+                      "text": "joint"
+                    },
+                    {
+                      "matched": false,
+                      "text": " enforcement measures in which members"
+                    }
+                  ],
+                  "text_byte_length": 3296,
+                  "text_sha256": "a7e13759cdc584a1a661e610ade7a94036c98364174dcdc166902b4489762c00"
+                },
+                "heading": "Article 62",
+                "kind": "original_wording",
+                "lane": "relaxed",
+                "language": "eng",
+                "match_reasons": [
+                  "all_terms"
+                ],
+                "next_date": null,
+                "permalink": "/eu-eurlex/32016R0679/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f/eng/062",
+                "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
+                "publisher_id": "062",
+                "publisher_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+                "resolve": {
+                  "identifier": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001#lex-provision=062"
+                },
+                "same_wording": [],
+                "wording_date": "2016-04-27"
+              },
+              {
+                "article_identity_sha256": "07d80e6d64e05851914bcfc544f5e1930c3a894e8506c066055373a09667f486",
+                "celex": "32016R0679",
+                "extract": {
+                  "byte_end": 2319,
+                  "byte_start": 2042,
+                  "parts": [
+                    {
+                      "matched": false,
+                      "text": "decentralised or dispersed on a functional or geographical basis; (7) \u2018"
+                    },
+                    {
+                      "matched": true,
+                      "text": "controller"
+                    },
+                    {
+                      "matched": false,
+                      "text": "\u2019 means the natural or legal person, public authority, agency or other body which, alone or "
+                    },
+                    {
+                      "matched": true,
+                      "text": "joint"
+                    },
+                    {
+                      "matched": false,
+                      "text": "ly with others, determines the purposes and means of the processing of personal data; where the"
+                    }
+                  ],
+                  "text_byte_length": 8753,
+                  "text_sha256": "8022c520046cfdc9767efd7c734689dbe9fa2162e40d01fd0678f9d89017412f"
+                },
+                "heading": "Article 4",
+                "kind": "original_wording",
+                "lane": "relaxed",
+                "language": "eng",
+                "match_reasons": [
+                  "all_terms"
+                ],
+                "next_date": null,
+                "permalink": "/eu-eurlex/32016R0679/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f/eng/004",
+                "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
+                "publisher_id": "004",
+                "publisher_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+                "resolve": {
+                  "identifier": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001#lex-provision=004"
+                },
+                "same_wording": [],
+                "wording_date": "2016-04-27"
+              },
+              {
+                "article_identity_sha256": "aa6fe7c9a7b2efbc32e4b85e61e6098dbb986fc772e4544d85529294e23e7001",
+                "celex": "32016R0679",
+                "extract": {
+                  "byte_end": 261,
+                  "byte_start": 0,
+                  "parts": [
+                    {
+                      "matched": false,
+                      "text": "Article 30 Records of processing activities 1. Each "
+                    },
+                    {
+                      "matched": true,
+                      "text": "controller"
+                    },
+                    {
+                      "matched": false,
+                      "text": " and, where applicable, the "
+                    },
+                    {
+                      "matched": true,
+                      "text": "controller"
+                    },
+                    {
+                      "matched": false,
+                      "text": "\u0027s representative, shall maintain a record of processing activities under its responsibility. That record shall contain all of the following information: (a) the"
+                    }
+                  ],
+                  "text_byte_length": 2925,
+                  "text_sha256": "dd263a3991e30282c38733b7c3c2105766870d426d58bcf0a49ffeda96a002e4"
+                },
+                "heading": "Article 30",
+                "kind": "original_wording",
+                "lane": "relaxed",
+                "language": "eng",
+                "match_reasons": [
+                  "all_terms"
+                ],
+                "next_date": null,
+                "permalink": "/eu-eurlex/32016R0679/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f/eng/030",
+                "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
+                "publisher_id": "030",
+                "publisher_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+                "resolve": {
+                  "identifier": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001#lex-provision=030"
+                },
+                "same_wording": [],
+                "wording_date": "2016-04-27"
+              },
+              {
                 "article_identity_sha256": "276c0867194f7e772fdc1eeb837b539f789c0ad66ffc2e9ae963d7d19a107c26",
                 "celex": "32016R0679",
                 "extract": {
@@ -2879,13 +3155,62 @@
                 },
                 "same_wording": [],
                 "wording_date": "2016-04-27"
+              },
+              {
+                "article_identity_sha256": "ac9f83385fc06506ec120775faaabef24e90c6fee0b2cf3fc7615e65da65b386",
+                "celex": "32016R0679",
+                "extract": {
+                  "byte_end": 776,
+                  "byte_start": 495,
+                  "parts": [
+                    {
+                      "matched": false,
+                      "text": "concerned to provide mutual assistance pursuant to Article 61 and may conduct "
+                    },
+                    {
+                      "matched": true,
+                      "text": "joint"
+                    },
+                    {
+                      "matched": false,
+                      "text": " operations pursuant to Article 62, in particular for carrying out investigations or for monitoring the implementation of a measure concerning a "
+                    },
+                    {
+                      "matched": true,
+                      "text": "controller"
+                    },
+                    {
+                      "matched": false,
+                      "text": " or processor established in another Member"
+                    }
+                  ],
+                  "text_byte_length": 4633,
+                  "text_sha256": "24b7e6c1814fdca40856d6b583b3014e014b557a6bb438f0cbc3bb2c5ec678e2"
+                },
+                "heading": "Article 60",
+                "kind": "original_wording",
+                "lane": "relaxed",
+                "language": "eng",
+                "match_reasons": [
+                  "all_terms"
+                ],
+                "next_date": null,
+                "permalink": "/eu-eurlex/32016R0679/2016-04-27--ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f/eng/060",
+                "publisher_expression_id": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001",
+                "publisher_id": "060",
+                "publisher_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
+                "resolve": {
+                  "identifier": "http://publications.europa.eu/resource/cellar/5f2552c2-11bd-11e6-ba9a-01aa75ed71a1.0001#lex-provision=060"
+                },
+                "same_wording": [],
+                "wording_date": "2016-04-27"
               }
             ],
             "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+            "lanes": "strict: the query, folded, is in the folded text starting and ending on word bounds; relaxed (ranked words): the article\u0027s text holds every query word (stopwords dropped, terms) as a whole word or its plural or singular, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
             "lanes_run": true,
             "limit": 200,
-            "matching": "substring of the article\u0027s searchable text as the EU index holds it; the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; the apostrophes \u2019, \u2018 and \u02BC are written \u0027 and the no-break spaces U\u002B00A0, U\u002B202F and U\u002B2007 an ordinary space; a soft hyphen (U\u002B00AD) is dropped; every other character, punctuation, hyphens and the other spaces included, is kept as it is, so capitals, accents, these apostrophes and these spaces never decide a match and every other character does; nothing is stemmed or expanded",
+            "matching": "whole words of the article\u0027s searchable text as the EU index holds it, its glued words set apart; the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; the apostrophes \u2019, \u2018 and \u02BC are written \u0027 and the no-break spaces U\u002B00A0, U\u002B202F and U\u002B2007 an ordinary space; a soft hyphen (U\u002B00AD) is dropped; every other character, punctuation, hyphens and the other spaces included, is kept as it is, so capitals, accents, these apostrophes and these spaces never decide a match and every other character does",
             "modes_held": [
               "strict",
               "relaxed"
@@ -2931,7 +3256,7 @@
               "rule": "each reference is read from the bibliographic markup of the expression\u0027s admitted Formex package and nothing else: kind act_publication is the act\u0027s own publication in the Official Journal (the main unit\u0027s DOCUMENT.REF, with the publication date of the issue its document record names when that record agrees with the reference); kind consolidated_act_publication is the publication of the act a consolidated version consolidates (the base act\u0027s DOCUMENT.REF.CONS, with the date its bibliography gives it), since a consolidated text is not itself published in the Official Journal; number_form series_number gives the series, the issue number and the first page as served (the Official Journal before October 2023), act_number the series and the act\u0027s own number (the Official Journal published act by act since October 2023); a field the package does not state is null; no citation is composed here; expressions_without_reference lists the expressions listed here of which no reference is held"
             },
             "original_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
-            "page_is": "the first hits in the stated order, not the best hits",
+            "page_is": "the best hits first, in the stated ranking",
             "pinned_wording": {
               "digest_rule": "the SHA-256, under the domain lex-v3-eu-wording/1, of the seed act\u0027s CELEX (the act a consolidated version consolidates; for the original wording, its work\u0027s own CELEX, which is the same), the publisher\u0027s work and expression IRIs of the wording, the language, the wording date (the original\u0027s Formex date or the publisher\u0027s consolidation date) and every article identity of the expression in the publisher\u0027s article order, each field written as a 4-byte big-endian length and its UTF-8 bytes; each article identity is itself the SHA-256 of that article\u0027s text and tokens, so the digest pins the whole held wording, computed here from the EU index, which stores no wording digest",
               "kind": "original_wording",
@@ -2941,8 +3266,8 @@
               "wording_sha256": "ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f"
             },
             "population": {
-              "distinct_publisher_articles": 3,
-              "relaxed_hits": 1,
+              "distinct_publisher_articles": 7,
+              "relaxed_hits": 5,
               "scope": {
                 "date": null,
                 "identifier": "32016R0679",
@@ -2953,7 +3278,7 @@
               "works_with_hits": 1
             },
             "publisher": "eu-eurlex",
-            "ranking": "none; strict lane before relaxed lane, then the wording\u0027s date, its expression, the publisher\u0027s article id and article identity. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+            "ranking": "strict lane before relaxed lane; within a lane, by the rarity of the query\u0027s words the article\u0027s heading (as its text opens with it) holds, then of those its text holds (a strict hit by whether its heading holds the phrase), ties in the stated order (the wording\u0027s date, its expression, the publisher\u0027s article id and article identity): words are the query\u0027s letters and digits between any other characters, folded as the text is, except that a whitespace-separated token holding a digit (a number, a date, an article number such as 121-6 or 1er) is kept whole, never dropped; French, German and English stopwords and the word article are dropped; a word matches a whole word of the article\u0027s text, or its plural or singular (a trailing s or x, from four letters), never a part of a word; the text\u0027s glued words are set apart first (a lower-case letter before a capital, a letter beside a digit, a stop, colon or semicolon before a letter); an article\u0027s heading is the short run after its number that opens with a capital and ends where its text is glued on (none when a sentence or a paragraph\u0027s number comes first); articles are ranked by the rarity of the query\u0027s words in their heading, then in their text (rarity: the inverse of how many searched articles hold the word), ties in the reading\u0027s order",
             "reference": {
               "kind": null,
               "opens": null,
@@ -3034,7 +3359,7 @@
             "wordings": [
               {
                 "celex": "32016R0679",
-                "hits": 3,
+                "hits": 7,
                 "kind": "original_wording",
                 "language": "eng",
                 "next_date": null,
@@ -3045,6 +3370,10 @@
                 "wording_date": "2016-04-27",
                 "wording_sha256": "ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f"
               }
+            ],
+            "words": [
+              "joint",
+              "controllers"
             ],
             "work_resolution": {
               "candidates": null,
@@ -3176,6 +3505,27 @@
             ],
             "authenticity_basis": "electronic_edition",
             "authenticity_rule": "the sentence is chosen by the act\u0027s own date, and not by the publication date an Official Journal reference under official_journal gives: authenticity_act_dates lists, once each and in order, the dates this index holds of the act the text belongs to (for a consolidated version, the act it consolidates): the date the publisher\u0027s Formex package gives the act\u0027s original wording, when that text is held, and the publisher\u0027s work_date_document of the act\u0027s own work, when the EU census of the act is held; a consolidated text outside a held census lists none, its own date being a consolidation\u0027s; the basis is electronic_edition when a date is listed and the earliest is on or after 2013-07-01, since an act is published on or after the date it bears, so in an Official Journal whose electronic edition alone is authentic (Regulation (EU) No 216/2013, which applies from 1 July 2013), and edition_by_publication_date otherwise, whose sentence states which edition is authentic on either side of 1 July 2013 and not on which side the act was published, so it also holds for an act dated before that day and published on or after it (one adopted in June 2013 may have been published in July); Lex\u0027s reproduction is never the authentic edition",
+            "best_hit": {
+              "candidates": [
+                {
+                  "lane": "strict",
+                  "publisher_id": "026",
+                  "work_key": "32016R0679"
+                },
+                {
+                  "lane": "strict",
+                  "publisher_id": "036",
+                  "work_key": "32016R0679"
+                }
+              ],
+              "decision": "clearly_ahead",
+              "hit": {
+                "lane": "strict",
+                "publisher_id": "026",
+                "work_key": "32016R0679"
+              },
+              "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+            },
             "consolidations_held": false,
             "continue_after": null,
             "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -3280,10 +3630,10 @@
               }
             ],
             "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+            "lanes": "strict: the query, folded, is in the folded text starting and ending on word bounds; relaxed (ranked words): the article\u0027s text holds every query word (stopwords dropped, terms) as a whole word or its plural or singular, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
             "lanes_run": true,
             "limit": 200,
-            "matching": "substring of the article\u0027s searchable text as the EU index holds it; the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; the apostrophes \u2019, \u2018 and \u02BC are written \u0027 and the no-break spaces U\u002B00A0, U\u002B202F and U\u002B2007 an ordinary space; a soft hyphen (U\u002B00AD) is dropped; every other character, punctuation, hyphens and the other spaces included, is kept as it is, so capitals, accents, these apostrophes and these spaces never decide a match and every other character does; nothing is stemmed or expanded",
+            "matching": "whole words of the article\u0027s searchable text as the EU index holds it, its glued words set apart; the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; the apostrophes \u2019, \u2018 and \u02BC are written \u0027 and the no-break spaces U\u002B00A0, U\u002B202F and U\u002B2007 an ordinary space; a soft hyphen (U\u002B00AD) is dropped; every other character, punctuation, hyphens and the other spaces included, is kept as it is, so capitals, accents, these apostrophes and these spaces never decide a match and every other character does",
             "modes_held": [
               "strict",
               "relaxed"
@@ -3329,7 +3679,7 @@
               "rule": "each reference is read from the bibliographic markup of the expression\u0027s admitted Formex package and nothing else: kind act_publication is the act\u0027s own publication in the Official Journal (the main unit\u0027s DOCUMENT.REF, with the publication date of the issue its document record names when that record agrees with the reference); kind consolidated_act_publication is the publication of the act a consolidated version consolidates (the base act\u0027s DOCUMENT.REF.CONS, with the date its bibliography gives it), since a consolidated text is not itself published in the Official Journal; number_form series_number gives the series, the issue number and the first page as served (the Official Journal before October 2023), act_number the series and the act\u0027s own number (the Official Journal published act by act since October 2023); a field the package does not state is null; no citation is composed here; expressions_without_reference lists the expressions listed here of which no reference is held"
             },
             "original_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
-            "page_is": "the first hits in the stated order, not the best hits",
+            "page_is": "the best hits first, in the stated ranking",
             "pinned_wording": {
               "digest_rule": "the SHA-256, under the domain lex-v3-eu-wording/1, of the seed act\u0027s CELEX (the act a consolidated version consolidates; for the original wording, its work\u0027s own CELEX, which is the same), the publisher\u0027s work and expression IRIs of the wording, the language, the wording date (the original\u0027s Formex date or the publisher\u0027s consolidation date) and every article identity of the expression in the publisher\u0027s article order, each field written as a 4-byte big-endian length and its UTF-8 bytes; each article identity is itself the SHA-256 of that article\u0027s text and tokens, so the digest pins the whole held wording, computed here from the EU index, which stores no wording digest",
               "kind": "original_wording",
@@ -3351,7 +3701,7 @@
               "works_with_hits": 1
             },
             "publisher": "eu-eurlex",
-            "ranking": "none; strict lane before relaxed lane, then the wording\u0027s date, its expression, the publisher\u0027s article id and article identity. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+            "ranking": "strict lane before relaxed lane; within a lane, by the rarity of the query\u0027s words the article\u0027s heading (as its text opens with it) holds, then of those its text holds (a strict hit by whether its heading holds the phrase), ties in the stated order (the wording\u0027s date, its expression, the publisher\u0027s article id and article identity): words are the query\u0027s letters and digits between any other characters, folded as the text is, except that a whitespace-separated token holding a digit (a number, a date, an article number such as 121-6 or 1er) is kept whole, never dropped; French, German and English stopwords and the word article are dropped; a word matches a whole word of the article\u0027s text, or its plural or singular (a trailing s or x, from four letters), never a part of a word; the text\u0027s glued words are set apart first (a lower-case letter before a capital, a letter beside a digit, a stop, colon or semicolon before a letter); an article\u0027s heading is the short run after its number that opens with a capital and ends where its text is glued on (none when a sentence or a paragraph\u0027s number comes first); articles are ranked by the rarity of the query\u0027s words in their heading, then in their text (rarity: the inverse of how many searched articles hold the word), ties in the reading\u0027s order",
             "reference": {
               "kind": null,
               "opens": null,
@@ -3444,6 +3794,10 @@
                 "wording_sha256": "ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f"
               }
             ],
+            "words": [
+              "joint",
+              "controllers"
+            ],
             "work_resolution": {
               "candidates": null,
               "outcome": "not_run_identifier_given",
@@ -3514,6 +3868,12 @@
             ],
             "authenticity_basis": "electronic_edition",
             "authenticity_rule": "the sentence is chosen by the act\u0027s own date, and not by the publication date an Official Journal reference under official_journal gives: authenticity_act_dates lists, once each and in order, the dates this index holds of the act the text belongs to (for a consolidated version, the act it consolidates): the date the publisher\u0027s Formex package gives the act\u0027s original wording, when that text is held, and the publisher\u0027s work_date_document of the act\u0027s own work, when the EU census of the act is held; a consolidated text outside a held census lists none, its own date being a consolidation\u0027s; the basis is electronic_edition when a date is listed and the earliest is on or after 2013-07-01, since an act is published on or after the date it bears, so in an Official Journal whose electronic edition alone is authentic (Regulation (EU) No 216/2013, which applies from 1 July 2013), and edition_by_publication_date otherwise, whose sentence states which edition is authentic on either side of 1 July 2013 and not on which side the act was published, so it also holds for an act dated before that day and published on or after it (one adopted in June 2013 may have been published in July); Lex\u0027s reproduction is never the authentic edition",
+            "best_hit": {
+              "candidates": [],
+              "decision": "none",
+              "hit": null,
+              "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+            },
             "consolidations_held": false,
             "continue_after": null,
             "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -3527,10 +3887,10 @@
             "hit_unit": "a hit is one article of one wording of the act, dated by that wording\u0027s role (wording_date and kind: an original wording by the act\u0027s Formex date, a consolidated version by the publisher\u0027s consolidation date, holding until next_date); with no date, an article\u0027s text is one hit, under the latest wording that holds it (fold)",
             "hits": [],
             "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+            "lanes": "strict: the query, folded, is in the folded text starting and ending on word bounds; relaxed (ranked words): the article\u0027s text holds every query word (stopwords dropped, terms) as a whole word or its plural or singular, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
             "lanes_run": true,
             "limit": 200,
-            "matching": "substring of the article\u0027s searchable text as the EU index holds it; the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; the apostrophes \u2019, \u2018 and \u02BC are written \u0027 and the no-break spaces U\u002B00A0, U\u002B202F and U\u002B2007 an ordinary space; a soft hyphen (U\u002B00AD) is dropped; every other character, punctuation, hyphens and the other spaces included, is kept as it is, so capitals, accents, these apostrophes and these spaces never decide a match and every other character does; nothing is stemmed or expanded",
+            "matching": "whole words of the article\u0027s searchable text as the EU index holds it, its glued words set apart; the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; the apostrophes \u2019, \u2018 and \u02BC are written \u0027 and the no-break spaces U\u002B00A0, U\u002B202F and U\u002B2007 an ordinary space; a soft hyphen (U\u002B00AD) is dropped; every other character, punctuation, hyphens and the other spaces included, is kept as it is, so capitals, accents, these apostrophes and these spaces never decide a match and every other character does",
             "modes_held": [
               "strict",
               "relaxed"
@@ -3576,7 +3936,7 @@
               "rule": "each reference is read from the bibliographic markup of the expression\u0027s admitted Formex package and nothing else: kind act_publication is the act\u0027s own publication in the Official Journal (the main unit\u0027s DOCUMENT.REF, with the publication date of the issue its document record names when that record agrees with the reference); kind consolidated_act_publication is the publication of the act a consolidated version consolidates (the base act\u0027s DOCUMENT.REF.CONS, with the date its bibliography gives it), since a consolidated text is not itself published in the Official Journal; number_form series_number gives the series, the issue number and the first page as served (the Official Journal before October 2023), act_number the series and the act\u0027s own number (the Official Journal published act by act since October 2023); a field the package does not state is null; no citation is composed here; expressions_without_reference lists the expressions listed here of which no reference is held"
             },
             "original_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
-            "page_is": "the first hits in the stated order, not the best hits",
+            "page_is": "the best hits first, in the stated ranking",
             "pinned_wording": {
               "digest_rule": "the SHA-256, under the domain lex-v3-eu-wording/1, of the seed act\u0027s CELEX (the act a consolidated version consolidates; for the original wording, its work\u0027s own CELEX, which is the same), the publisher\u0027s work and expression IRIs of the wording, the language, the wording date (the original\u0027s Formex date or the publisher\u0027s consolidation date) and every article identity of the expression in the publisher\u0027s article order, each field written as a 4-byte big-endian length and its UTF-8 bytes; each article identity is itself the SHA-256 of that article\u0027s text and tokens, so the digest pins the whole held wording, computed here from the EU index, which stores no wording digest",
               "kind": "original_wording",
@@ -3598,7 +3958,7 @@
               "works_with_hits": 0
             },
             "publisher": "eu-eurlex",
-            "ranking": "none; strict lane before relaxed lane, then the wording\u0027s date, its expression, the publisher\u0027s article id and article identity. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+            "ranking": "strict lane before relaxed lane; within a lane, by the rarity of the query\u0027s words the article\u0027s heading (as its text opens with it) holds, then of those its text holds (a strict hit by whether its heading holds the phrase), ties in the stated order (the wording\u0027s date, its expression, the publisher\u0027s article id and article identity): words are the query\u0027s letters and digits between any other characters, folded as the text is, except that a whitespace-separated token holding a digit (a number, a date, an article number such as 121-6 or 1er) is kept whole, never dropped; French, German and English stopwords and the word article are dropped; a word matches a whole word of the article\u0027s text, or its plural or singular (a trailing s or x, from four letters), never a part of a word; the text\u0027s glued words are set apart first (a lower-case letter before a capital, a letter beside a digit, a stop, colon or semicolon before a letter); an article\u0027s heading is the short run after its number that opens with a capital and ends where its text is glued on (none when a sentence or a paragraph\u0027s number comes first); articles are ranked by the rarity of the query\u0027s words in their heading, then in their text (rarity: the inverse of how many searched articles hold the word), ties in the reading\u0027s order",
             "reference": {
               "kind": null,
               "opens": null,
@@ -3689,6 +4049,9 @@
                 "wording_date": "2016-04-27",
                 "wording_sha256": "ff42858ce2bc578d29219e1551cc1dc1cf3e558e354fc0d7ed39a8f932c7720f"
               }
+            ],
+            "words": [
+              "zephyr"
             ],
             "work_resolution": {
               "candidates": null,
@@ -11139,6 +11502,27 @@
             ],
             "authenticity_basis": "edition_by_publication_date",
             "authenticity_rule": "the sentence is chosen by the act\u0027s own date, and not by the publication date an Official Journal reference under official_journal gives: authenticity_act_dates lists, once each and in order, the dates this index holds of the act the text belongs to (for a consolidated version, the act it consolidates): the date the publisher\u0027s Formex package gives the act\u0027s original wording, when that text is held, and the publisher\u0027s work_date_document of the act\u0027s own work, when the EU census of the act is held; a consolidated text outside a held census lists none, its own date being a consolidation\u0027s; the basis is electronic_edition when a date is listed and the earliest is on or after 2013-07-01, since an act is published on or after the date it bears, so in an Official Journal whose electronic edition alone is authentic (Regulation (EU) No 216/2013, which applies from 1 July 2013), and edition_by_publication_date otherwise, whose sentence states which edition is authentic on either side of 1 July 2013 and not on which side the act was published, so it also holds for an act dated before that day and published on or after it (one adopted in June 2013 may have been published in July); Lex\u0027s reproduction is never the authentic edition",
+            "best_hit": {
+              "candidates": [
+                {
+                  "lane": "strict",
+                  "publisher_id": "026",
+                  "work_key": "02016R0679-20240101"
+                },
+                {
+                  "lane": "strict",
+                  "publisher_id": "036",
+                  "work_key": "02016R0679-20240101"
+                }
+              ],
+              "decision": "clearly_ahead",
+              "hit": {
+                "lane": "strict",
+                "publisher_id": "026",
+                "work_key": "02016R0679-20240101"
+              },
+              "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+            },
             "consolidations_held": true,
             "continue_after": null,
             "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -11261,10 +11645,10 @@
               }
             ],
             "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+            "lanes": "strict: the query, folded, is in the folded text starting and ending on word bounds; relaxed (ranked words): the article\u0027s text holds every query word (stopwords dropped, terms) as a whole word or its plural or singular, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
             "lanes_run": true,
             "limit": 200,
-            "matching": "substring of the article\u0027s searchable text as the EU index holds it; the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; the apostrophes \u2019, \u2018 and \u02BC are written \u0027 and the no-break spaces U\u002B00A0, U\u002B202F and U\u002B2007 an ordinary space; a soft hyphen (U\u002B00AD) is dropped; every other character, punctuation, hyphens and the other spaces included, is kept as it is, so capitals, accents, these apostrophes and these spaces never decide a match and every other character does; nothing is stemmed or expanded",
+            "matching": "whole words of the article\u0027s searchable text as the EU index holds it, its glued words set apart; the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; the apostrophes \u2019, \u2018 and \u02BC are written \u0027 and the no-break spaces U\u002B00A0, U\u002B202F and U\u002B2007 an ordinary space; a soft hyphen (U\u002B00AD) is dropped; every other character, punctuation, hyphens and the other spaces included, is kept as it is, so capitals, accents, these apostrophes and these spaces never decide a match and every other character does",
             "modes_held": [
               "strict",
               "relaxed"
@@ -11326,7 +11710,7 @@
               "rule": "each reference is read from the bibliographic markup of the expression\u0027s admitted Formex package and nothing else: kind act_publication is the act\u0027s own publication in the Official Journal (the main unit\u0027s DOCUMENT.REF, with the publication date of the issue its document record names when that record agrees with the reference); kind consolidated_act_publication is the publication of the act a consolidated version consolidates (the base act\u0027s DOCUMENT.REF.CONS, with the date its bibliography gives it), since a consolidated text is not itself published in the Official Journal; number_form series_number gives the series, the issue number and the first page as served (the Official Journal before October 2023), act_number the series and the act\u0027s own number (the Official Journal published act by act since October 2023); a field the package does not state is null; no citation is composed here; expressions_without_reference lists the expressions listed here of which no reference is held"
             },
             "original_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
-            "page_is": "the first hits in the stated order, not the best hits",
+            "page_is": "the best hits first, in the stated ranking",
             "pinned_wording": null,
             "population": {
               "distinct_publisher_articles": 2,
@@ -11341,7 +11725,7 @@
               "works_with_hits": 1
             },
             "publisher": "eu-eurlex",
-            "ranking": "none; strict lane before relaxed lane, then the wording\u0027s date, its expression, the publisher\u0027s article id and article identity. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+            "ranking": "strict lane before relaxed lane; within a lane, by the rarity of the query\u0027s words the article\u0027s heading (as its text opens with it) holds, then of those its text holds (a strict hit by whether its heading holds the phrase), ties in the stated order (the wording\u0027s date, its expression, the publisher\u0027s article id and article identity): words are the query\u0027s letters and digits between any other characters, folded as the text is, except that a whitespace-separated token holding a digit (a number, a date, an article number such as 121-6 or 1er) is kept whole, never dropped; French, German and English stopwords and the word article are dropped; a word matches a whole word of the article\u0027s text, or its plural or singular (a trailing s or x, from four letters), never a part of a word; the text\u0027s glued words are set apart first (a lower-case letter before a capital, a letter beside a digit, a stop, colon or semicolon before a letter); an article\u0027s heading is the short run after its number that opens with a capital and ends where its text is glued on (none when a sentence or a paragraph\u0027s number comes first); articles are ranked by the rarity of the query\u0027s words in their heading, then in their text (rarity: the inverse of how many searched articles hold the word), ties in the reading\u0027s order",
             "reference": {
               "kind": null,
               "opens": null,
@@ -11439,6 +11823,10 @@
                 "wording_sha256": "3d271c4a3b207804078fed62e8e103eeb2821d0c928a1c3355824c10ac05c250"
               }
             ],
+            "words": [
+              "joint",
+              "controllers"
+            ],
             "work_resolution": {
               "candidates": null,
               "outcome": "not_run_identifier_given",
@@ -11517,6 +11905,27 @@
             ],
             "authenticity_basis": "edition_by_publication_date",
             "authenticity_rule": "the sentence is chosen by the act\u0027s own date, and not by the publication date an Official Journal reference under official_journal gives: authenticity_act_dates lists, once each and in order, the dates this index holds of the act the text belongs to (for a consolidated version, the act it consolidates): the date the publisher\u0027s Formex package gives the act\u0027s original wording, when that text is held, and the publisher\u0027s work_date_document of the act\u0027s own work, when the EU census of the act is held; a consolidated text outside a held census lists none, its own date being a consolidation\u0027s; the basis is electronic_edition when a date is listed and the earliest is on or after 2013-07-01, since an act is published on or after the date it bears, so in an Official Journal whose electronic edition alone is authentic (Regulation (EU) No 216/2013, which applies from 1 July 2013), and edition_by_publication_date otherwise, whose sentence states which edition is authentic on either side of 1 July 2013 and not on which side the act was published, so it also holds for an act dated before that day and published on or after it (one adopted in June 2013 may have been published in July); Lex\u0027s reproduction is never the authentic edition",
+            "best_hit": {
+              "candidates": [
+                {
+                  "lane": "strict",
+                  "publisher_id": "026",
+                  "work_key": "32016R0679"
+                },
+                {
+                  "lane": "strict",
+                  "publisher_id": "036",
+                  "work_key": "32016R0679"
+                }
+              ],
+              "decision": "clearly_ahead",
+              "hit": {
+                "lane": "strict",
+                "publisher_id": "026",
+                "work_key": "32016R0679"
+              },
+              "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+            },
             "consolidations_held": true,
             "continue_after": null,
             "corpus_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -11617,10 +12026,10 @@
               }
             ],
             "index_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            "lanes": "strict: the query, folded, is a substring of the folded text; relaxed: every distinct whitespace-separated term, folded, is, in any order (a term that folds to nothing sets no condition), so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
+            "lanes": "strict: the query, folded, is in the folded text starting and ending on word bounds; relaxed (ranked words): the article\u0027s text holds every query word (stopwords dropped, terms) as a whole word or its plural or singular, so the relaxed set contains the strict set. With no mode the answer is the strict hits and then only the relaxed hits strict did not serve, each article once; with a mode it is that lane\u0027s whole set. A lane not asked for is null in the population, not zero",
             "lanes_run": true,
             "limit": 200,
-            "matching": "substring of the article\u0027s searchable text as the EU index holds it; the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; the apostrophes \u2019, \u2018 and \u02BC are written \u0027 and the no-break spaces U\u002B00A0, U\u002B202F and U\u002B2007 an ordinary space; a soft hyphen (U\u002B00AD) is dropped; every other character, punctuation, hyphens and the other spaces included, is kept as it is, so capitals, accents, these apostrophes and these spaces never decide a match and every other character does; nothing is stemmed or expanded",
+            "matching": "whole words of the article\u0027s searchable text as the EU index holds it, its glued words set apart; the query and each article\u0027s searchable text are folded alike before they are matched: each letter or digit to its canonical decomposition (Unicode NFD) without its combining marks and in lower case (the invariant case map), by Lex\u0027s own table, the same with or without the operating system\u0027s language library; a combining mark on its own is dropped; the ligatures \u0153 and \u00E6, of either case, are written oe and ae; the apostrophes \u2019, \u2018 and \u02BC are written \u0027 and the no-break spaces U\u002B00A0, U\u002B202F and U\u002B2007 an ordinary space; a soft hyphen (U\u002B00AD) is dropped; every other character, punctuation, hyphens and the other spaces included, is kept as it is, so capitals, accents, these apostrophes and these spaces never decide a match and every other character does",
             "modes_held": [
               "strict",
               "relaxed"
@@ -11666,7 +12075,7 @@
               "rule": "each reference is read from the bibliographic markup of the expression\u0027s admitted Formex package and nothing else: kind act_publication is the act\u0027s own publication in the Official Journal (the main unit\u0027s DOCUMENT.REF, with the publication date of the issue its document record names when that record agrees with the reference); kind consolidated_act_publication is the publication of the act a consolidated version consolidates (the base act\u0027s DOCUMENT.REF.CONS, with the date its bibliography gives it), since a consolidated text is not itself published in the Official Journal; number_form series_number gives the series, the issue number and the first page as served (the Official Journal before October 2023), act_number the series and the act\u0027s own number (the Official Journal published act by act since October 2023); a field the package does not state is null; no citation is composed here; expressions_without_reference lists the expressions listed here of which no reference is held"
             },
             "original_work_id": "http://publications.europa.eu/resource/cellar/3e485e15-11bd-11e6-ba9a-01aa75ed71a1",
-            "page_is": "the first hits in the stated order, not the best hits",
+            "page_is": "the best hits first, in the stated ranking",
             "pinned_wording": {
               "digest_rule": "the SHA-256, under the domain lex-v3-eu-wording/1, of the seed act\u0027s CELEX (the act a consolidated version consolidates; for the original wording, its work\u0027s own CELEX, which is the same), the publisher\u0027s work and expression IRIs of the wording, the language, the wording date (the original\u0027s Formex date or the publisher\u0027s consolidation date) and every article identity of the expression in the publisher\u0027s article order, each field written as a 4-byte big-endian length and its UTF-8 bytes; each article identity is itself the SHA-256 of that article\u0027s text and tokens, so the digest pins the whole held wording, computed here from the EU index, which stores no wording digest",
               "kind": "original_wording",
@@ -11688,7 +12097,7 @@
               "works_with_hits": 1
             },
             "publisher": "eu-eurlex",
-            "ranking": "none; strict lane before relaxed lane, then the wording\u0027s date, its expression, the publisher\u0027s article id and article identity. This index holds no BM25 ranker, so a page is the first hits in this order and not the best hits",
+            "ranking": "strict lane before relaxed lane; within a lane, by the rarity of the query\u0027s words the article\u0027s heading (as its text opens with it) holds, then of those its text holds (a strict hit by whether its heading holds the phrase), ties in the stated order (the wording\u0027s date, its expression, the publisher\u0027s article id and article identity): words are the query\u0027s letters and digits between any other characters, folded as the text is, except that a whitespace-separated token holding a digit (a number, a date, an article number such as 121-6 or 1er) is kept whole, never dropped; French, German and English stopwords and the word article are dropped; a word matches a whole word of the article\u0027s text, or its plural or singular (a trailing s or x, from four letters), never a part of a word; the text\u0027s glued words are set apart first (a lower-case letter before a capital, a letter beside a digit, a stop, colon or semicolon before a letter); an article\u0027s heading is the short run after its number that opens with a capital and ends where its text is glued on (none when a sentence or a paragraph\u0027s number comes first); articles are ranked by the rarity of the query\u0027s words in their heading, then in their text (rarity: the inverse of how many searched articles hold the word), ties in the reading\u0027s order",
             "reference": {
               "kind": null,
               "opens": null,
@@ -11763,6 +12172,10 @@
                 "wording_date": "2013-06-26",
                 "wording_sha256": "529c8cd54fed26d3c644f551e9d986515e2a4270fb3bdf5c6e377c75345ebcb0"
               }
+            ],
+            "words": [
+              "joint",
+              "controllers"
             ],
             "work_resolution": {
               "candidates": null,
