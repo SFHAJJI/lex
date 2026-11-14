@@ -35,7 +35,8 @@ import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { COMPARE_LANGUAGES, LIVE_COMPARE_IDLE, compareOutcome, createCompareSession } from '../scripts/live-compare.mjs';
-import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, liveChrome } from '../scripts/live-chrome.mjs';
+import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
+import { articleNumberOf, yearOf } from '../scripts/law-page.mjs';
 import { AsPublished, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import { todayAt } from '../scripts/initial-answer.mjs';
 import { TodayHint, useLuxembourgToday } from './Today.jsx';
@@ -47,6 +48,7 @@ import { answerHandedWith } from '../scripts/v3-client.mjs';
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
 const COPY = liveChrome().compare;
+const DOSSIER = liveChrome().dossier;
 const COMMON_LIST_SEPARATOR = liveChrome().common.listSeparator;
 
 const IDLE = Object.freeze({ state: 'idle', sentence: LIVE_COMPARE_IDLE });
@@ -113,13 +115,18 @@ function changeId(language, index) {
   return `change-${language}-${index + 1}`;
 }
 
-function Row({ row, language, change = null, elsewhere = false }) {
+function Row({ row, language, change = null, elsewhere = false, law = null }) {
   // The whole digest, never a prefix: a prefix is not the digest a reader can check (review of #783).
   const digest = (entries) => (entries.length === 0 ? COPY.noWording : <code>{entries.map((entry) => entry.wordingSha256).join(', ')}</code>);
   return (
-    <li id={change === null ? undefined : changeId(language, change.index)} data-status={row.status}>
-      <Say template={COPY.row} values={{ article: <strong>{row.publisherId}</strong>, status: COPY.status[row.status], from: digest(row.from), to: digest(row.to) }} />
+    <li id={change === null ? undefined : changeId(language, change.index)} data-status={row.status} data-article={law === null ? undefined : row.publisherId}>
+      {/* On the law page an article is named as a reader names it, with its status in words; the digests stay on the
+          compare page, where the comparison is checked. */}
+      {law === null
+        ? <Say template={COPY.row} values={{ article: <strong>{row.publisherId}</strong>, status: COPY.status[row.status], from: digest(row.from), to: digest(row.to) }} />
+        : <Say template={COPY.rowPlain} values={{ article: <strong>{fillText(DOSSIER.articleLabel, { number: articleNumberOf(row.publisherId) })}</strong>, status: COPY.status[row.status] }} />}
       <Wording wording={row.wording} language={language} />
+      {law === null ? null : law.actions(row, language)}
       {elsewhere ? <p data-wording-elsewhere="">{COPY.wordingOtherPage}</p> : null}
       {change === null ? null : (
         // The previous and next change (R57), as links any reader can follow, the keyboard's included.
@@ -236,7 +243,7 @@ function sameStateTemplate(comparison) {
   return comparison.onlyTextHeld ? COPY.sameTextHeld : COPY.sameTextHeldOfSeveral;
 }
 
-function Comparison({ comparison, between, hrefOf, onPage }) {
+function Comparison({ comparison, between, hrefOf, onPage, law = null }) {
   const moved = comparison.articles?.filter((row) => row.status !== 'unchanged') ?? [];
   // A change whose wording is on another page of the comparison (the review of #1003, F4) says so.
   const paged = comparison.textPage !== null && comparison.textPage.pages > 1;
@@ -273,15 +280,19 @@ function Comparison({ comparison, between, hrefOf, onPage }) {
           {moved.length > 0 ? (
             <ol data-moved={moved.length}>
               {moved.map((row, index) => (
-                <Row key={row.publisherId} row={row} language={comparison.language} change={{ index, count: moved.length }} elsewhere={paged && row.wording === null} />
+                <Row key={row.publisherId} row={row} language={comparison.language} change={{ index, count: moved.length }} elsewhere={paged && row.wording === null} law={law} />
               ))}
             </ol>
           ) : null}
           {kept.length > 0 ? (
             <details>
-              <summary><Say template={countedEntry(COPY.kept, kept.length)} values={{ count: kept.length }} /></summary>
+              <summary>
+                {law === null || yearOf(comparison.from.applicabilityDate) === null
+                  ? <Say template={countedEntry(COPY.kept, kept.length)} values={{ count: kept.length }} />
+                  : <Say template={countedEntry(COPY.keptSince, kept.length)} values={{ count: kept.length, year: yearOf(comparison.from.applicabilityDate) }} />}
+              </summary>
               <ol data-kept={kept.length}>
-                {kept.map((row) => <Row key={row.publisherId} row={row} language={comparison.language} />)}
+                {kept.map((row) => <Row key={row.publisherId} row={row} language={comparison.language} law={law} />)}
               </ol>
             </details>
           ) : null}
@@ -292,7 +303,7 @@ function Comparison({ comparison, between, hrefOf, onPage }) {
 }
 
 /** One comparison view, laid out: each compared language, the languages not compared, the rule. */
-export function CompareView({ view, onPage = null }) {
+export function CompareView({ view, onPage = null, law = null }) {
   // The address of another page of this comparison's wording, or null when its work is no address of this site of an act.
   const hrefOf = (page) => compareQueryOf({ identifier: view.identifier, dateFrom: view.dateFrom, dateTo: view.dateTo, language: view.language ?? '', page });
   return (
@@ -307,7 +318,7 @@ export function CompareView({ view, onPage = null }) {
       {/* An act held only as published says so here as on its reading and its dossier (the review of #964). */}
       <AsPublished asPublished={view.asPublished} />
       {view.comparisons.map((comparison) => (
-        <Comparison key={comparison.language} comparison={comparison} between={view.laterVersionsBetween} hrefOf={hrefOf} onPage={onPage} />
+        <Comparison key={comparison.language} comparison={comparison} between={view.laterVersionsBetween} hrefOf={hrefOf} onPage={onPage} law={law} />
       ))}
       {view.languagesNotCompared.length > 0 ? (
         <ul data-not-compared={view.languagesNotCompared.length}>
@@ -326,11 +337,11 @@ export function CompareView({ view, onPage = null }) {
 }
 
 /** One view state, laid out: the comparison, the refusal card, or the sentence a state carries. */
-export function CompareAnswerView({ outcome, onRetry, onPage = null }) {
+export function CompareAnswerView({ outcome, onRetry, onPage = null, law = null }) {
   if (outcome.state === 'success') {
     return (
       <section data-answer-state="success">
-        <CompareView view={outcome.view} onPage={onPage} />
+        <CompareView view={outcome.view} onPage={onPage} law={law} />
       </section>
     );
   }

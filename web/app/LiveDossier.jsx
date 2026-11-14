@@ -34,6 +34,7 @@ import { todayAt } from '../scripts/initial-answer.mjs';
 import { TodayLine } from './Today.jsx';
 import { Breadcrumbs } from './Breadcrumbs.jsx';
 import { dossierCrumbs } from '../scripts/breadcrumbs.mjs';
+import { LawHeader, LawTimeline } from './LawPage.jsx';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -465,21 +466,26 @@ export function VersionsOverTime({ view, today = null }) {
  * One dossier view, laid out: the work, R72's banner when it is raised, its titles, its held states, today (`today`, the date
  * in Luxembourg the answer was given on, or null), its relations in the publisher's records and what it does not hold.
  */
-export function DossierView({ view, today = null }) {
+export function DossierView({ view, today = null, law = null }) {
   // The act's own title heads its page when the index holds one (the owner's feedback of 2026-11-10: a reader looks for the
   // act's name, not its key); it is statute text, marked in its language. The work key follows it, as the key a citation uses.
+  // At the act's own address (`law`, the owner's order of 2026-11-13, section B) the page is the law page: the act's title
+  // without the publisher's version prefix, its status and counts, then its versions in time and their comparison.
   const named = view.titles.find((group) => group.titles.length > 0) ?? null;
   return (
     <>
-      {named === null
-        ? <h2>{view.workKey}</h2>
-        : (
-          <>
-            <h2><span lang={quotationLanguageTag(named.language)}>{named.titles[0].title}</span></h2>
-            <p data-work-key=""><code>{view.workKey}</code></p>
-          </>
-        )}
+      {law !== null
+        ? <LawHeader view={view} today={today} />
+        : named === null
+          ? <h2>{view.workKey}</h2>
+          : (
+            <>
+              <h2><span lang={quotationLanguageTag(named.language)}>{named.titles[0].title}</span></h2>
+              <p data-work-key=""><code>{view.workKey}</code></p>
+            </>
+          )}
       <AmendedAfterBanner amendedAfter={view.amendedAfter ?? null} relations={view.relations ?? null} />
+      {law === null ? null : <LawTimeline view={view} today={today} contract={law.contract} fetchImpl={law.fetchImpl} />}
       <p>
         <Say template={COPY.heldIn} values={{ iri: <code>{view.publisherWorkIri}</code>, languages: view.availableLanguages.join(', ') }} />
       </p>
@@ -604,13 +610,13 @@ export function EuropeDossierView({ view, today = null }) {
 }
 
 /** One view state, laid out: the dossier, the refusal card, or the sentence a state carries. */
-export function DossierAnswerView({ outcome, onRetry }) {
+export function DossierAnswerView({ outcome, onRetry, law = null }) {
   if (outcome.state === 'success') {
     return (
       <section data-answer-state="success">
         {outcome.view.publisher === 'eu-eurlex'
           ? <EuropeDossierView view={outcome.view} today={todayAt(outcome.context?.freshness?.observed_at)} />
-          : <DossierView view={outcome.view} today={todayAt(outcome.context?.freshness?.observed_at)} />}
+          : <DossierView view={outcome.view} today={todayAt(outcome.context?.freshness?.observed_at)} law={law} />}
       </section>
     );
   }
@@ -681,11 +687,14 @@ export function LiveDossier({ contract, fetchImpl, initial = null }) {
     if (work !== null) session.current.ask({ identifier: work, language: '' });
   };
 
+  // At a law's own address the page is the law page (the owner's order of 2026-11-13, section B): nothing to type, the act is
+  // the address's. The form stays on the dossier page, which has no act of its own.
+  const atLaw = initial !== null && workOf(initial.path) !== null;
   return (
     <div>
       {/* Where the act shown stands (R48): its publisher, and the act, which is this page; none until one is shown. */}
       <Breadcrumbs crumbs={outcome.state === 'success' ? dossierCrumbs(outcome.view) : []} />
-      <form
+      {atLaw ? null : <form
         role="search"
         onSubmit={(event) => {
           event.preventDefault();
@@ -714,9 +723,11 @@ export function LiveDossier({ contract, fetchImpl, initial = null }) {
           </select>
         </label>{' '}
         <button type="submit">{FORM.submit.dossier}</button>
-      </form>
+      </form>}
+      {/* A law's address whose answer is no dossier still names the act it asked, since no form shows it. */}
+      {atLaw && outcome.state !== 'success' ? <p data-work-key=""><code>{workOf(initial.path)}</code></p> : null}
       <LiveAnswer>
-        <DossierAnswerView outcome={outcome} onRetry={retry} />
+        <DossierAnswerView outcome={outcome} onRetry={retry} law={atLaw ? { contract, fetchImpl } : null} />
       </LiveAnswer>
     </div>
   );

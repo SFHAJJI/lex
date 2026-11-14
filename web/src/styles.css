@@ -2382,3 +2382,86 @@ main > * {
     border-block-end-color: #3a463d;
   }
 }
+
+/* The law page (the owner's order of 2026-11-13, section B): the act's status and counts under its title, and its versions
+   as points on a line, oldest first. A version chosen is a filled point with its date in bold, and the button says it is
+   pressed (aria-pressed), so the choice is never said by colour alone; colours are the text's own, in both schemes. */
+.law-header h2 {
+  margin-block-end: 0.25rem;
+}
+
+.law-facts {
+  margin-block: 0 0.5rem;
+}
+
+.law-status {
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 0.05em 0.6em;
+}
+
+.timeline-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0;
+  list-style: none;
+  margin: 0.75rem 0;
+  padding: 0;
+}
+
+.timeline-dots li {
+  display: flex;
+}
+
+.timeline-dot {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  min-inline-size: 5.5rem;
+  padding: 0.3rem 0.2rem;
+  border: 0;
+  border-block-start: 2px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.timeline-dot .dot {
+  display: block;
+  inline-size: 0.9rem;
+  block-size: 0.9rem;
+  margin-block-start: -0.8rem;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.timeline-dot[aria-pressed="true"] .dot {
+  background: currentColor;
+}
+
+.timeline-dot[aria-pressed="true"] .dot-date {
+  font-weight: 700;
+}
+
+.timeline-dot:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.claim-date {
+  margin-block: 0.5rem;
+}
+
+.article-actions button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
