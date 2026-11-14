@@ -128,13 +128,14 @@ test('the panel draws the plan first, two polite announcements and no alert, and
   assert.ok(markup.indexOf('assistant-preview') > markup.indexOf('assistant-notice') && markup.indexOf('assistant-preview') < markup.indexOf('assistant-processor'),
     'the preview line sits with the notice, above the processor sentence');
   assert.ok(markup.includes(ASSISTANT_PANEL_COPY.fr.preview) && markup.includes(ASSISTANT_PANEL_COPY.fr.processor));
-  // The answer card (the owner's order of 2026-11-13, section C, over R45(c)'s plan-first order): the verdict in a word first,
-  // then the quotation's card, then how Lex found it (the validated plan and the trace) one action away, then the notices in
-  // one line under the answer, and what the assistant sends at the foot of the page.
-  assert.ok(markup.indexOf('assistant-verdict') < markup.indexOf('assistant-quote'), 'the verdict first');
-  assert.ok(markup.includes('<strong>Trouvé</strong>'), 'in a word');
+  // The answer (the owner's order of 2026-11-14, evening, over R45(c)'s plan-first order): the answer's label as its heading,
+  // for a screen reader; then the quotation; then the work, closed, which holds the validated plan and the trace one action
+  // further; then the notices in one line under the answer, and what the assistant sends at the foot of the page.
+  assert.match(markup, /<h3 id="assistant-answer-heading" class="visually-hidden">Réponse\u00a0: D’après le texte officiel<\/h3>/, 'the label, as the heading');
+  assert.ok(markup.indexOf('assistant-answer-heading') < markup.indexOf('assistant-quote'), 'the label first');
   assert.ok(markup.indexOf('assistant-quote') < markup.indexOf('assistant-how'), 'the quotation before how it was found');
-  assert.match(markup, /<details class="assistant-how"><summary>Comment Lex a trouvé<\/summary><ol class="assistant-plan">/, 'the validated plan, one action away');
+  assert.ok(markup.indexOf('data-answer-work') < markup.indexOf('assistant-how'), 'how it was found, inside the work');
+  assert.match(markup, /<details class="assistant-how"><summary>Plan brut<\/summary><ol class="assistant-plan">/, 'the validated plan, one action away');
   assert.ok(markup.indexOf('assistant-how') < markup.indexOf('assistant-disclaimer'), 'the notices under the answer');
   assert.equal((markup.match(/class="assistant-disclaimer"/g) ?? []).length, 1, 'in one line');
   assert.ok(markup.lastIndexOf('assistant-processor') > markup.indexOf('assistant-disclaimer'), 'what is sent, at the foot');

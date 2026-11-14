@@ -50,37 +50,74 @@ function answer() {
   };
 }
 
-test('the card says the verdict in a word, the article and its heading, the act, the quotation, its version and three ways on', async () => {
+test('the answer says the sentence that answers, one line that cites it, three ways on, and the full article one action away', async () => {
   const { AssistantPanel } = await import(pathToFileURL(await bundle('app/AssistantPanel.jsx', 'answer-card-test.mjs')).href);
-  const titles = { [WORK]: { title: 'Loi du 27 juillet 1997 sur le contrat d’assurance.', language: 'fra' } };
-  const markup = renderToStaticMarkup(h(AssistantPanel, { locale: 'fr', dossier: answer(), phase: 'complete', titles }));
+  const titles = { [WORK]: { title: 'Loi du 27 juillet 1997 sur le contrat d’assurance.', language: 'fra', versions: 10, since: '2006' } };
+  const question = "Quel est le délai de prescription des actions dérivant d'un contrat d'assurance ?";
+  const markup = renderToStaticMarkup(h(AssistantPanel, { locale: 'fr', dossier: answer(), phase: 'complete', titles, question }));
   const at = (needle) => {
     const index = markup.indexOf(needle);
-    assert.ok(index >= 0, `the card holds ${needle}`);
+    assert.ok(index >= 0, `the answer holds ${needle}`);
     return index;
   };
   const order = [
-    at('<strong>Trouvé</strong>'),
-    at('Article 44 : Délai de prescription'),
+    at('data-answer-sentence'),
+    at('<mark>trois ans</mark>'),
+    at('Article 44'),
+    at('Délai de prescription</span>'),
     at('Loi du 27 juillet 1997 sur le contrat d’assurance.'),
+    at('Article complet'),
+    at('10 versions depuis 2006'),
+    at('Source officielle'),
     at('<blockquote class="assistant-quote"'),
     at('Version applicable depuis le 25/11/2025'),
-    at('Voir à une autre date'),
-    at('Ce qui a changé'),
-    at('Source officielle'),
     at('Applicable à partir du 25 novembre 2025'),
+    at('Voir le travail'),
   ];
   assert.deepEqual(order, [...order].sort((a, b) => a - b), 'in the owner\'s order');
-  assert.ok(markup.includes(`href="/fr${WORK}#article-art_44"`), 'another date: the law page at the article\'s history');
-  assert.ok(markup.includes(`href="/fr${WORK}#changes-art_44"`), 'what changed: the law page at the article\'s comparison');
+  // The sentence is the quotation's own characters, cut at its paragraph and its stop: nothing added, dropped or changed.
+  const sentence = markup.slice(markup.indexOf('data-answer-sentence'), markup.indexOf('</p>', markup.indexOf('data-answer-sentence'))).replace(/<[^>]+>/g, '').replace(/^[^>]*>/, '');
+  assert.equal(sentence, 'Le délai de prescription de toute action dérivant du contrat d’assurance est de trois ans.');
+  assert.ok(answer().parts[0].blocks[1].text.includes(sentence), 'a span of the quotation');
+  assert.ok(markup.includes(`href="/fr${WORK}#article-art_44"`), 'the versions: the law page at the article');
   assert.ok(markup.includes(`href="${ELI}" rel="external"`), 'the official source');
-  // The heading claim names the act by its address: one action away, never in the card's face.
-  const face = markup.slice(0, markup.indexOf('assistant-checks'));
+  assert.ok(/<div class="answer-article" id="[^"]+" hidden=""/.test(markup), 'the full article is one action away');
+  // No verdict word and no status line on the screen: the label is the answer's heading, for a screen reader.
+  assert.ok(!markup.includes('<strong>Trouvé</strong>'), 'no verdict word');
+  assert.ok(markup.includes('class="visually-hidden">Réponse\u00a0: D’après le texte officiel</h3>'), 'the label, as the answer\'s heading');
+  // The heading claim names the act by its address: one action away, never in the answer's face.
+  const face = markup.slice(0, markup.indexOf('class="answer-article"'));
   assert.ok(!face.includes(`>${WORK}`), 'no address where a title exists');
   assert.ok(markup.includes(`${WORK}, article 44`), 'every block of the answer is still drawn');
-  // With no title asked yet, the card names no act rather than an address.
-  const untitled = renderToStaticMarkup(h(AssistantPanel, { locale: 'fr', dossier: answer(), phase: 'complete' }));
+  // With no title asked yet, the answer names no act rather than an address, and says the versions without counting them.
+  const untitled = renderToStaticMarkup(h(AssistantPanel, { locale: 'fr', dossier: answer(), phase: 'complete', question }));
   assert.ok(!untitled.includes('class="assistant-act"'), 'no act line without a title');
+  assert.ok(untitled.includes('Les versions de l’acte'), 'the versions, uncounted');
+  // In English, a French quotation says it is the original French text.
+  const english = renderToStaticMarkup(h(AssistantPanel, { locale: 'en', dossier: { ...answer(), answer_locale: 'en' }, phase: 'complete', question }));
+  assert.ok(english.includes('The quote is the original French text.'));
+});
+
+test('the work, closed: four boxes, the model said once, the time, the cost and the raw plan', async () => {
+  const { AssistantPanel } = await import(pathToFileURL(await bundle('app/AssistantPanel.jsx', 'answer-card-test.mjs')).href);
+  const dossier = answer();
+  dossier.trace.steps = [
+    { step_id: 's1', operation_id: 'search', fired: true, parameters: { language: 'fra', limit: 10, query: 'délai de prescription' } },
+    { step_id: 'f1', operation_id: 'evidence_bundle', fired: true, parameters: { article: 'art_44', date: '2026-11-14', identifier: WORK } },
+  ];
+  const work = { seconds: 1.62, search: { matched: 3, more: false }, verified: { checked: 1, ok: 1 } };
+  const markup = renderToStaticMarkup(h(AssistantPanel, { locale: 'fr', dossier, phase: 'complete', work }));
+  assert.ok(/<details class="answer-work" data-answer-work="">/.test(markup), 'closed by default');
+  assert.deepEqual([...markup.matchAll(/data-work="([a-z]+)"/g)].map((match) => match[1]), ['document', 'question', 'retrieval', 'answer']);
+  assert.equal((markup.match(/le seul appel au modèle/g) ?? []).length, 1, 'the model, once, on the question');
+  assert.equal((markup.match(/code, sans modèle/g) ?? []).length, 3);
+  assert.ok(markup.includes('La version applicable depuis le 25/11/2025, telle que publiée'));
+  assert.ok(markup.includes('Au 14/11/2026 : chercher « délai de prescription » dans le texte en français, puis lire l’article 44'));
+  assert.ok(markup.includes('Articles trouvés : 3 ; gardés : 1'));
+  assert.ok(markup.includes('Citations conformes à l’empreinte du texte publié : 1 sur 1'));
+  assert.ok(markup.includes('Temps : 1,6 s'));
+  assert.ok(/Coût : environ 0,\d{3} € par question/.test(markup));
+  assert.ok(markup.includes('Plan brut') && markup.includes('assistant-trace'), 'the raw plan');
 });
 
 test('the verdict word, the act a quotation is from and the law page at one article', () => {
