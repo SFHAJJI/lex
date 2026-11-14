@@ -2806,6 +2806,12 @@ main:has([data-law-header]) {
   letter-spacing: -0.01em;
 }
 
+/* A screen's own width under the header: the base rule's poster padding (up to 6rem a side) narrowed the content to two
+   thirds of its measure; each page keeps its own maximum width. */
+:root .site-header ~ main {
+  padding-inline: clamp(1rem, 4vw, 2.5rem);
+}
+
 /* No eyebrow line over a heading, on any page. */
 :root .eyebrow {
   display: none;
@@ -2878,18 +2884,19 @@ main:has([data-law-header]) {
   flex-direction: column;
   justify-content: center;
   min-block-size: calc(100vh - 4.2rem);
-  max-inline-size: 56rem;
+  max-inline-size: 62rem;
   padding-block: 2rem;
 }
 
 :root main:has([data-home-ask]) > h1 {
   margin: 0 0 1.25rem;
-  font-size: clamp(1.6rem, 3.1vw, 2.4rem);
+  font-size: clamp(1.5rem, 2.4vw, 2.1rem);
 }
 
 :root .home-ask {
   display: grid;
   gap: 0.9rem;
+  max-inline-size: none;
   border: 0;
   padding: 0;
   background: none;
@@ -2984,16 +2991,13 @@ main:has([data-law-header]) {
   max-inline-size: none;
 }
 
-:root .assistant-form textarea {
+:root .site-header ~ main form.assistant-form input#assistant-question {
   flex: 1 1 auto;
-  min-block-size: 0;
-  block-size: 2.9rem;
-  padding: 0.7rem 0.9rem;
+  min-inline-size: 0;
+  padding: 0.75rem 0.9rem;
   border: 1px solid #9aa59c;
   border-radius: 8px;
   font-size: 1rem;
-  line-height: 1.4;
-  resize: none;
 }
 
 :root .site-header ~ main form.assistant-form button[type="submit"] {

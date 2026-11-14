@@ -25,7 +25,7 @@ import { useEffect, useState } from 'react';
 
 import { LiveSearch } from './LiveSearch.jsx';
 import { UNMOUNTED_SENTENCE, startHomeCoverage } from '../scripts/live-home.mjs';
-import { CHROME_LOCALE, fillCounted, fillText, liveChrome, livePath, refusalSentence } from '../scripts/live-chrome.mjs';
+import { CHROME_LOCALE, countedEntry, fillCounted, fillText, liveChrome, livePath, refusalSentence } from '../scripts/live-chrome.mjs';
 import { referencePage } from '../scripts/reference-pages.mjs';
 import { indexOlderThanToday } from '../scripts/live-search.mjs';
 import { useLuxembourgToday } from './Today.jsx';
@@ -52,9 +52,10 @@ export function CoverageLine({ line, today = null, short = false }) {
   // Beside the question box (the owner's order of 2026-11-14, evening): one grey line, the acts and articles held and the
   // index's date, every figure the coverage answer's.
   if (short && line.builtOn !== null) {
+    const written = (entry, count) => fillText(countedEntry(entry, count), { count: count.toLocaleString(CHROME_LOCALE === 'fr' ? 'fr-FR' : 'en-GB') });
     return (
       <p className="coverage-line coverage-short" data-coverage-line="counted" data-built-on={line.builtOn}>
-        {fillText(COPY.coverageShort, { acts: counts.acts, articles: counts.articles, date: line.builtOn })}
+        {fillText(COPY.coverageShort, { acts: written(COPY.acts, line.works), articles: written(COPY.articles, line.articles), date: line.builtOn })}
       </p>
     );
   }

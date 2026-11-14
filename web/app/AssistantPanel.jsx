@@ -311,7 +311,7 @@ export function AssistantPanel({ locale, dossier = null, phase = 'idle', chips =
         }}
       >
         <label htmlFor="assistant-question" className="visually-hidden">{copy.inputLabel}</label>
-        <textarea id="assistant-question" name="question" ref={field} maxLength={1000} rows={1} />
+        <input id="assistant-question" name="question" type="text" ref={field} maxLength={1000} autoComplete="off" />
         {chips.length > 0 ? (
           <ul className="assistant-chips" aria-label={copy.contextLabel}>
             {chips.map((chip) => (

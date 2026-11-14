@@ -129,6 +129,9 @@ const decimal = (value) => value.toLocaleString(CHROME_LOCALE === 'fr' ? 'fr-FR'
 /** A count as this page's language writes it: 1 234 in French, 1,234 in English. */
 const count = (value) => value.toLocaleString(CHROME_LOCALE === 'fr' ? 'fr-FR' : 'en-GB');
 
+/** A number of seconds as this page's language writes it, to one decimal: 1.52 is "1,5" in French. */
+const decimal1 = (value) => value.toLocaleString(CHROME_LOCALE === 'fr' ? 'fr-FR' : 'en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
 /** A cost as this page's language writes it, to three decimals: 0.001 is "0,001" in French. */
 const decimal3 = (value) => value.toLocaleString(CHROME_LOCALE === 'fr' ? 'fr-FR' : 'en-GB', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
@@ -153,8 +156,8 @@ export function measured() {
     heldoutDate: heldout.date,
     devDate: dev.date,
     cost: decimal3(dev.costEur),
-    typical: decimal(dev.p50),
-    slow: decimal(dev.p95),
+    typical: decimal1(dev.p50),
+    slow: decimal1(dev.p95),
     model: dev.modelDeployment,
     acts: count(COVERAGE_RECORD.works),
     versions: count(COVERAGE_RECORD.states),

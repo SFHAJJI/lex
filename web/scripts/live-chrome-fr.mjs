@@ -1861,7 +1861,6 @@ export const LIVE_CHROME_FR = Object.freeze({
         title: 'Ne publier que ce que la licence permet.',
         gain: 'un droit clair de montrer chaque texte.',
         cost: '{withheld} fichiers sur {files} retenus faute de licence applicable.',
-        note: 'Problème ouvert : la règle retient aussi des lois dont seule une note renvoie à un autre fichier.',
       }),
       agent: Object.freeze({
         title: 'Un agent d’IA écrit le code ; le propriétaire décide de l’argent, des engagements juridiques et de la mise en ligne.',
