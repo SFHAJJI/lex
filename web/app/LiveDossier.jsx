@@ -466,6 +466,21 @@ export function VersionsOverTime({ view, today = null }) {
  * One dossier view, laid out: the work, R72's banner when it is raised, its titles, its held states, today (`today`, the date
  * in Luxembourg the answer was given on, or null), its relations in the publisher's records and what it does not hold.
  */
+/**
+ * The act's full record (its titles, every version's dates and links, its catalogue chain and relations, what it does not
+ * hold): on the law page one disclosure away, under the act's header and its versions in time (the owner's order of
+ * 2026-11-13, section B: a page for a reader, not a table for experts); on the dossier page, as it is.
+ */
+function LawRecord({ law, children }) {
+  if (law === null) return <>{children}</>;
+  return (
+    <details className="law-record" data-law-record="">
+      <summary>{COPY.lawRecord}</summary>
+      {children}
+    </details>
+  );
+}
+
 export function DossierView({ view, today = null, law = null }) {
   // The act's own title heads its page when the index holds one (the owner's feedback of 2026-11-10: a reader looks for the
   // act's name, not its key); it is statute text, marked in its language. The work key follows it, as the key a citation uses.
@@ -486,6 +501,10 @@ export function DossierView({ view, today = null, law = null }) {
           )}
       <AmendedAfterBanner amendedAfter={view.amendedAfter ?? null} relations={view.relations ?? null} />
       {law === null ? null : <LawTimeline view={view} today={today} contract={law.contract} fetchImpl={law.fetchImpl} />}
+      {/* The span of the versions held, said in one line, stays in sight on the law page; the rest of the record folds. */}
+      {law === null ? null : <p data-history="" id="dossier-states"><StatesSpan view={view} /></p>}
+      {law === null ? null : <TodayLine today={today} />}
+      <LawRecord law={law}>
       <p>
         <Say template={COPY.heldIn} values={{ iri: <code>{view.publisherWorkIri}</code>, languages: view.availableLanguages.join(', ') }} />
       </p>
@@ -493,10 +512,14 @@ export function DossierView({ view, today = null, law = null }) {
       <AsPublished asPublished={view.asPublished} />
       <ForceFacts force={view.force} />
       <VersionsOverTime view={view} today={today} />
-      <p data-history="" id="dossier-states">
-        <StatesSpan view={view} />
-      </p>
-      <TodayLine today={today} />
+      {law !== null ? null : (
+        <>
+          <p data-history="" id="dossier-states">
+            <StatesSpan view={view} />
+          </p>
+          <TodayLine today={today} />
+        </>
+      )}
       <TableRegion labelledBy="dossier-states">
       <table>
         <thead>
@@ -541,6 +564,7 @@ export function DossierView({ view, today = null, law = null }) {
         </ul>
         <p lang={ENGLISH_LANG}>{asSentence(view.scope)}</p>
       </details>
+      </LawRecord>
     </>
   );
 }

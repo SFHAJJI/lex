@@ -2572,3 +2572,13 @@ main > * {
   font: inherit;
   cursor: pointer;
 }
+
+/* The law page's full record, one disclosure under the act's versions in time (the owner's order of 2026-11-13, section B). */
+.law-record {
+  margin-block: 1.5rem;
+}
+
+.law-record > summary {
+  cursor: pointer;
+  font-weight: 600;
+}

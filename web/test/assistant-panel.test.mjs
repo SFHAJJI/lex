@@ -278,3 +278,23 @@ test("an answer's quotations come in the interface's language first, the other l
   assert.deepEqual(groupsForLocale(groups, 'en').other.map((one) => one.language), ['fra']);
   assert.deepEqual(groupsForLocale(groups.slice(1), 'en').shown.map((one) => one.language), ['fra'], 'none in the language: every group shown');
 });
+
+test('a quotation whose publisher ran its parts together is set in its paragraphs, no character added, changed or dropped', async () => {
+  const { quoteParagraphs } = await import('../scripts/assistant-panel.mjs');
+  const cases = [
+    ['Article 44Délai de prescription1.Le délai est de trois ans.Le délai court.2.Sous réserve.3.L’action récursoire.',
+      ['Article 44', 'Délai de prescription', '1.Le délai est de trois ans.', 'Le délai court.', '2.Sous réserve.', '3.L’action récursoire.']],
+    ['Art. 74.Garanties accessoiresMême lorsque le sinistre se produit. Il couvre McDonald et LuxTrust.',
+      ['Art. 74.', 'Garanties accessoires', 'Même lorsque le sinistre se produit. Il couvre McDonald et LuxTrust.']],
+    ['Article 1erDéfinitionsAu sens de la présente loi, on entend par:Contrat d’assurance: un contrat.',
+      ['Article 1er', 'Définitions', 'Au sens de la présente loi, on entend par:', 'Contrat d’assurance: un contrat.']],
+    ['S.A.R.L. capital', ['S.A.R.L. capital']],
+    ['loi du 27 juillet 1997.Le preneur', ['loi du 27 juillet 1997.Le preneur']],
+    ['l’article 89 se prescrit', ['l’article 89 se prescrit']],
+  ];
+  for (const [text, expected] of cases) {
+    const paragraphs = quoteParagraphs(text);
+    assert.deepEqual(paragraphs, expected, text);
+    assert.equal(paragraphs.join('').replace(/\s/g, ''), text.replace(/\s/g, ''), `${text}: the same characters`);
+  }
+});

@@ -4,6 +4,23 @@ Updated 2026-11-14. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The demo's polish: the quotation in paragraphs, the buttons after the badge, the law page focused, Release 7 on the Quality page (sole driver, 2026-11-14)
+
+`web/demo-polish`, from Release 7's screenshots (GitHub's runner, `ops/screens`, 57 pictures at 1280, 1024 and 390 px; the
+menu holds one line at 1024 px).
+- **The quotation in paragraphs**: art. 44 arrived as one block ("Article 44Délai de prescription1.Le délai … trois
+  ans.Le délai court … 2.Sous …"). `quoteParagraphs` cuts, taking no character, where the publisher runs a sentence into
+  the next, a numbered paragraph into the word before it, or a heading into its number, and once where the heading ends as
+  the search reads it, so a name like McDonald stays whole. From #1044's first rule, widened; #1044 is superseded.
+- **The answer card**: the three buttons right after the version badge, the quotation's other claims under them.
+- **The law page**: the act's full record (titles, every version's table, catalogue chain, relations, what it does not
+  hold) one disclosure away under the header and the versions in time; the page at an article was 14,700 px tall. The span
+  of the versions held ("10 versions, from … to …") stays in sight: CI's journey at a law's address failed when it folded.
+- **The Quality page**: Release 7's run (live: 17 right articles, 0 wrong, held-out 0 of 15); each run labelled before,
+  refused by the gate, or live.
+- Evidence: web `npm test` 1,541 tests, 1,538 passed, 3 skipped; new tests for each glued case (the same characters, none
+  added) and for the buttons' place and the folded record.
+
 ## Release 7 is live: sections A to D, through the evaluation gate (sole driver, 2026-11-14)
 
 `docs/demo-docs`. **Live since about 05:30 UTC**: `v3-20261114T035405Z-e13e65adb087`, revision
