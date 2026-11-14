@@ -16,7 +16,7 @@ jobs:
   screens:
     name: screens
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -24,6 +24,18 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
+      # The driver's preview of 2026-11-14: with .github/screens-preview present (its one line, the API origin), this
+      # branch's own pages are built here and served against that API, and those are photographed.
+      - name: Build and serve this branch's pages (preview only)
+        if: hashFiles('.github/screens-preview') != ''
+        working-directory: web
+        run: |
+          npm ci
+          node scripts/build-live.mjs
+          nohup node scripts/preview-server.mjs 8080 "$(cat ../.github/screens-preview)" > "$RUNNER_TEMP/preview.log" 2>&1 &
+          for i in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:8080/fr/ && break; sleep 2; done
+          curl -sf -o /dev/null http://127.0.0.1:8080/fr/ && echo "preview up"
+          echo "http://127.0.0.1:8080" > ../.github/screens-origin
       - name: Screenshots of the live site
         # The address to photograph: the one line of .github/screens-origin (a candidate revision's own address before
         # promotion), or the public site.
