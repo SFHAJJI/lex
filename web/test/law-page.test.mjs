@@ -107,6 +107,7 @@ test("one click reads a version, a second compares the two, and the page opens o
 test("on the law page an article is named as a reader names it, unchanged ones since the earlier year, each with its actions", () => {
   assert.equal(articleNumberOf("art_62-11"), "62-11");
   assert.equal(articleNumberOf("annexe_1"), "annexe_1");
+  assert.equal(articleNumberOf("005"), "5", "an EU act's article number, as a citation writes it");
   assert.equal(yearOf("2021-01-01"), "2021");
   const row = answers.sampled.filter((sample) => sample.operation === "diff")[1];
   const envelope = structuredClone(census.envelopes.find((candidate) => candidate.operation === "diff" && candidate.scenario.startsWith("the state on one date against the state on the same date")).envelope);

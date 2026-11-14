@@ -3032,6 +3032,7 @@ main:has([data-law-header]) {
 .answer-links {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
   gap: 0.4rem 1.4rem;
   margin: 0 0 0.6rem;
 }
@@ -3135,6 +3136,20 @@ main:has([data-law-header]) {
 :root .assistant-processor {
   color: #6b746e;
   font-size: 0.8rem;
+}
+
+/* Inserted text in the one accent, a pale green, as the answer's marked words; deleted text struck through on grey. */
+@media (prefers-color-scheme: light) {
+  :root .wording-diff ins {
+    background: #d8eddf;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  :root .wording-diff del {
+    background: #eceeec;
+    color: #3d4741;
+  }
 }
 
 /* ---- The law page: the comparison in one sentence, no tiles. ---- */
