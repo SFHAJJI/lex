@@ -52,8 +52,10 @@ test('the work boxes read the trace, the search asked again and the quotation\'s
   assert.deepEqual(searchStepOf(trace), { query: 'délai de prescription', language: 'fra', limit: 10 });
   assert.equal(searchStepOf({ steps: [] }), null);
   assert.deepEqual(stepsRun(trace).map((step) => step.operation), ['search', 'evidence_bundle'], 'a step that did not fire is not said');
-  assert.deepEqual(searchCount({ result: { value: { hits: [1, 2, 3], truncated: false } } }), { matched: 3, more: false });
-  assert.deepEqual(searchCount({ result: { value: { hits: new Array(10).fill(0), truncated: true } } }), { matched: 10, more: true });
+  assert.deepEqual(searchCount({ result: { value: { hits: [1, 2, 3], truncated: false } } }), { matched: 3, more: false, named: false });
+  assert.deepEqual(searchCount({ result: { value: { hits: new Array(10).fill(0), truncated: true } } }), { matched: 10, more: true, named: false });
+  // Words that name an article ("article 5 of the GDPR") open it by its reference: no word search, no hit counted.
+  assert.deepEqual(searchCount({ result: { value: { hits: [], truncated: false, reference: { outcome: 'opens' } } } }), { matched: 0, more: false, named: true });
   assert.equal(searchCount(null), null);
   const quote = { article_text_sha256: 'a'.repeat(64) };
   assert.equal(quoteVerifies(quote, { result: { value: { verdict: 'digest_matches', article_text_sha256: 'a'.repeat(64) } } }), true);
@@ -80,7 +82,12 @@ test('Decisions and Evidence print the recorded runs\' and the coverage answer\'
   }
   assert.equal((evidence.match(/<tr data-outcome=/g) ?? []).length, dev.cases, 'every question, one by one');
   assert.ok(evidence.includes(`Model: ${dev.modelDeployment}`));
-  assert.ok(evidence.includes(`Held: ${COVERAGE_RECORD.works.toLocaleString('en-GB')} acts`));
+  // Held and missing from one source: together, what the catalogues list (the owner's question of 2026-11-14).
+  const held = COVERAGE_RECORD.versionsWithText;
+  const missing = COVERAGE_RECORD.versionsCatalogued - held;
+  assert.ok(evidence.includes(`Held: the text of ${held.toLocaleString('en-GB')} versions of ${COVERAGE_RECORD.worksWithText.toLocaleString('en-GB')} acts`));
+  assert.ok(evidence.includes(`Missing: the text of ${missing.toLocaleString('en-GB')} more of the ${COVERAGE_RECORD.versionsCatalogued.toLocaleString('en-GB')} versions`));
+  assert.equal(held + missing, COVERAGE_RECORD.versionsCatalogued);
   assert.equal((evidence.match(/class="flow-accent"/g) ?? []).length, 2, 'the model and the owner, each in the accent colour');
   assert.ok(!/@example\.com/.test(evidence), 'no e-mail address on the page');
 });

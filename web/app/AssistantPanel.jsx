@@ -228,7 +228,9 @@ function TheWork({ view, copy, locale, work, children = null }) {
   const retrieval = searchStepOf(view.trace) !== null
     ? search === null
       ? copy.retrievalPending
-      : fill(search.more ? copy.retrievalMore : copy.retrievalLine, { matched: search.matched, kept })
+      : search.named
+        ? fill(copy.retrievalNamed, { kept })
+        : fill(search.more ? copy.retrievalMore : copy.retrievalLine, { matched: search.matched, kept })
     : stepsRun(view.trace).length === 0
       ? copy.retrievalNone
       : fill(copy.retrievalDirect, { kept });
@@ -374,9 +376,14 @@ export function AssistantPanel({ locale, dossier = null, phase = 'idle', chips =
       )}
       {/* R44's notice and the preview line under the answer, the question box first (the owner's order of 2026-11-14); what
           the assistant sends and to whom at the foot of the assistant's page (the owner's order of 2026-11-13, section C). */}
-      <p className="assistant-notice">{copy.notice}</p>
-      {preview ? <p className="assistant-preview">{copy.preview}</p> : null}
-      <p className="assistant-processor">{copy.processor}</p>
+      {/* One line under the answer, the notices folded behind it (the owner's order of 2026-11-14, last release): R44's
+          notice, the preview line and what the assistant sends and to whom, each word for word. */}
+      <details className="assistant-notices" data-assistant-notices="">
+        <summary>{copy.noticeLine}</summary>
+        <p className="assistant-notice">{copy.notice}</p>
+        {preview ? <p className="assistant-preview">{copy.preview}</p> : null}
+        <p className="assistant-processor">{copy.processor}</p>
+      </details>
     </section>
   );
 }

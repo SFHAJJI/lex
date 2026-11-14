@@ -115,11 +115,15 @@ export function searchStepOf(trace) {
   return step === undefined ? null : step.parameters;
 }
 
-/** What a search answer found: its hits counted, and whether it stopped at its limit (more matched than it lists). */
+/**
+ * What a search answer found: its hits counted, whether it stopped at its limit (more matched than it lists), and whether
+ * the words named an article the search opened by its reference, with no word search (`named`: "article 5 of the GDPR").
+ */
 export function searchCount(envelope) {
   const value = envelope?.result?.value;
   if (!Array.isArray(value?.hits)) return null;
-  return Object.freeze({ matched: value.hits.length, more: value.truncated === true });
+  const named = value.hits.length === 0 && value.reference?.outcome === 'opens';
+  return Object.freeze({ matched: value.hits.length, more: value.truncated === true, named });
 }
 
 /**

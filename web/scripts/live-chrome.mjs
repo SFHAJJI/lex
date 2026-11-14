@@ -1398,8 +1398,9 @@ const EN = Object.freeze({
       live: "Live, monitored",
     }),
     coverageHeading: "What Lex holds",
-    held: "Held: {acts} acts, {versions} versions, {articles} articles (index of {builtOn}).",
-    missing: "Missing: the text of {withoutText} of the {catalogued} versions the catalogues list.",
+    // Held and missing from one source, the text yield (Luxembourg and EU), so the two add up to what the catalogues list.
+    held: "Held: the text of {withText} versions of {worksWithText} acts, Luxembourg and EU (index of {builtOn}).",
+    missing: "Missing: the text of {withoutText} more of the {catalogued} versions the catalogues list.",
     costHeading: "Cost and speed",
     perQuestion: "Per question: about {cost} €, {typical} s typically, {slow} s for the slowest.",
   }),
