@@ -165,6 +165,7 @@ export function measured() {
     catalogued: count(COVERAGE_RECORD.versionsCatalogued),
     withText: count(COVERAGE_RECORD.versionsWithText),
     withoutText: count(COVERAGE_RECORD.versionsCatalogued - COVERAGE_RECORD.versionsWithText),
+    worksWithText: count(COVERAGE_RECORD.worksWithText),
     share: Math.floor((100 * COVERAGE_RECORD.versionsWithText) / COVERAGE_RECORD.versionsCatalogued + 0.5),
     files: count(COVERAGE_RECORD.files),
     withheld: count(COVERAGE_RECORD.filesWithheld),

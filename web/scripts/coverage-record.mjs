@@ -10,6 +10,7 @@ export const COVERAGE_RECORD = Object.freeze({
   "articles": 268712,
   "versionsCatalogued": 28798,
   "versionsWithText": 7715,
+  "worksWithText": 6001,
   "files": 12453,
   "filesWithheld": 3865
 });
