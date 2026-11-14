@@ -4,6 +4,24 @@ Updated 2026-11-14. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Release 11's candidate: the final look, every check passed, waiting on the owner's yes (sole driver, 2026-11-14)
+
+`docs/release-11-candidate`. Release 11 (`v3-20261114T141503Z-8f64b9c50ab3`, #1055 and #1056 at integration's head
+e920855a, whose tree is the built commit 8f64b9c5; Release 4's derive, the same data) is deployed at zero traffic as
+`ca-lex-v3--v3-20261114t141503z-8f64b9c50ab3-a584e307`. A first build on #1055's head was stopped twice: once launched with
+a mistyped commit (stopped within a minute), once to build #1056's head instead of two builds at a time.
+- The owner's acceptance checks at its own address: 7 of 7 (B4 reads the date field's new label).
+- The evaluation gate (`-NoPromote`): every gate passed; 17 right articles, 0 wrong, 25 not found, 5 refused as advice,
+  9 right behaviours; quotations verified 1.000; p50 1.51 s, p95 3.61 s; about 0.001 EUR a question.
+- The two-address check: PASS (this PC limited, another address answered).
+- Screenshots at 1366 by 768 and on a phone, French and English, every screen of the owner's order (GitHub's runner,
+  `ops/screens-r11`, saved under `C:\lex-v3\screens-20261114-r11`), sent to the owner for the yes. Before them, three
+  previews of the branch built on the runner and served against the live API (`ops/screens-preview`) found what #1055's
+  later commits fixed: the home row wrapping, the question box in lines, counts without separators, an EU article's heading
+  taken for its sentence, "Article 005", the notices said twice, the inserted text in yellow.
+- Release 10 (live): its backup verified, 14 objects by SHA-256, once the PC had disk for it.
+- Not promoted: the promotion waits on the owner's yes to the screenshots.
+
 ## The final look: one idea per screen, Decisions and Evidence, every figure measured (sole driver, 2026-11-14)
 
 `web/final-release`, the owner's order of 2026-11-14, evening ("visual and editorial only"; no change to retrieval, the
