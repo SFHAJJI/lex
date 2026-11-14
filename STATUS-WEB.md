@@ -4,6 +4,22 @@ Updated 2026-11-14. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The last wording: one notice line, a named article said, Evidence's figures from one source (sole driver, 2026-11-14)
+
+`web/last-wording`, the owner's last order of 2026-11-14 (wording only, no logic, no gate):
+- **Under the answer** one line, "Phase d'essai, non examinée par un avocat. Pas un conseil juridique." / "Preview, not
+  reviewed by a lawyer. Not legal advice.", the notices folded behind it (R44's notice, the preview line, what is sent and
+  to whom, each word for word); the answer's own notices stay in the work, the preview said once.
+- **"Show the work"**: a question that names its article ("What does article 5 of the GDPR say?") is resolved by the
+  search as a reference that opens the article, with no word search (`reference.outcome: "opens"`, no hits); the box said
+  "Articles matched: 0; kept: 2" and now says the question names its article, no search, read by its number.
+- **Evidence's coverage**: "held" printed the index's totals (7,379 versions, Luxembourg only) while "missing" used the
+  text yield (Luxembourg and EU: 28,798 listed, 7,715 with text). Both are right for their scope; the page mixed them. Both
+  lines now come from the text yield, each publisher's own figures: held 7,715 versions of 6,001 acts, missing 21,083 more
+  of 28,798. The home page's line keeps the index's totals and says "of Luxembourg law".
+- Tests: the web suite 1545, 1542 pass, 0 fail; new checks for the named article, the folded notices and held plus
+  missing equal to what the catalogues list.
+
 ## Release 11's candidate: the final look, every check passed, waiting on the owner's yes (sole driver, 2026-11-14)
 
 `docs/release-11-candidate`. Release 11 (`v3-20261114T141503Z-8f64b9c50ab3`, #1055 and #1056 at integration's head
