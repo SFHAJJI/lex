@@ -81,6 +81,7 @@ import { OFFICIAL_SEARCH_PAGES } from '../scripts/live-failure.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillCounted, fillText, liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { articlePermalink, europeWorkSegment, permalinkHref } from '../scripts/permalinks.mjs';
 import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
+import { actTitleOf } from '../scripts/law-page.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -104,7 +105,8 @@ function laneCount(count) {
  */
 function TitleOf({ card }) {
   // The resolver searches every language's titles, so the search's language is not the title's (review of #797).
-  const title = <span lang={quotationLanguageTag(card.matchedTitleLanguage)}>{card.matchedTitle}</span>;
+  // The act's title, never the publisher's "Version consolidée applicable au …" prefix, which names a version (`law-page.mjs`).
+  const title = <span lang={quotationLanguageTag(card.matchedTitleLanguage)}>{actTitleOf(card.matchedTitle)}</span>;
   return typeof card.workKey !== 'string'
     ? <Say template={COPY.candidateNotHeld} values={{ act: title }} />
     : <a href={permalinkHref(`/lu-legilux/${card.workKey}`, CHROME_LOCALE)}>{title}</a>;
@@ -372,7 +374,7 @@ function ActGroups({ view }) {
           <h2 className="act-title">
             {act.title === null
               ? <Say template={COPY.untitled} values={{ work: <a href={permalinkHref(act.dossier, CHROME_LOCALE)}>{act.workKey}</a> }} />
-              : <a href={permalinkHref(act.dossier, CHROME_LOCALE)}><span lang={quotationLanguageTag(act.titleLanguage)}>{act.title}</span></a>}
+              : <a href={permalinkHref(act.dossier, CHROME_LOCALE)}><span lang={quotationLanguageTag(act.titleLanguage)}>{actTitleOf(act.title)}</span></a>}
           </h2>
           <p className="act-facts">
             {act.asPublished ? <span data-as-published-label="">{`${asPublishedLabel.charAt(0).toUpperCase()}${asPublishedLabel.slice(1)}.`} </span> : null}
