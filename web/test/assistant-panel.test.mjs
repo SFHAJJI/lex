@@ -124,8 +124,16 @@ test('the panel draws the plan first, two polite announcements and no alert, and
   assert.ok(markup.indexOf('assistant-preview') > markup.indexOf('assistant-notice') && markup.indexOf('assistant-preview') < markup.indexOf('assistant-question'),
     'the preview line sits with the notice, above the field');
   assert.ok(markup.includes(ASSISTANT_PANEL_COPY.fr.preview) && markup.includes(ASSISTANT_PANEL_COPY.fr.processor));
-  assert.ok(markup.indexOf('assistant-plan') < markup.indexOf('assistant-label'), 'R45(c): the validated plan is shown first');
-  assert.ok(markup.indexOf('assistant-plan') < markup.indexOf('assistant-quote'));
+  // The answer card (the owner's order of 2026-11-13, section C, over R45(c)'s plan-first order): the verdict in a word first,
+  // then the quotation's card, then how Lex found it (the validated plan and the trace) one action away, then the notices in
+  // one line under the answer, and what the assistant sends at the foot of the page.
+  assert.ok(markup.indexOf('assistant-verdict') < markup.indexOf('assistant-quote'), 'the verdict first');
+  assert.ok(markup.includes('<strong>Trouvé</strong>'), 'in a word');
+  assert.ok(markup.indexOf('assistant-quote') < markup.indexOf('assistant-how'), 'the quotation before how it was found');
+  assert.match(markup, /<details class="assistant-how"><summary>Comment Lex a trouvé<\/summary><ol class="assistant-plan">/, 'the validated plan, one action away');
+  assert.ok(markup.indexOf('assistant-how') < markup.indexOf('assistant-disclaimer'), 'the notices under the answer');
+  assert.equal((markup.match(/class="assistant-disclaimer"/g) ?? []).length, 1, 'in one line');
+  assert.ok(markup.lastIndexOf('assistant-processor') > markup.indexOf('assistant-disclaimer'), 'what is sent, at the foot');
   assert.match(markup, /role="status" aria-live="polite" aria-atomic="true">Réponse : D’après le texte officiel\.</, 'one announcement at the verdict');
   assert.doesNotMatch(markup, /role="alert"|aria-live="assertive"/, 'an answer is never announced as an alert');
   assert.match(markup, /<blockquote class="assistant-quote" lang="fr" data-text-sha256="b{64}">/, 'a quotation carries its held language');
