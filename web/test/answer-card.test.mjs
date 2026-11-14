@@ -42,6 +42,7 @@ function answer() {
           offset: 0, length: 120, article_text_sha256: 'b'.repeat(64),
           article_permalink: `${STATE}/art_44`, state_permalink: STATE, official_source: ELI,
         },
+        claim('law.interval', 'Applicable à partir du 25 novembre 2025 (éditeur).'),
       ],
     }],
     gates: { quotes: 1, disclosures: 0, non_template_strings: 0, disclosure_complete: true },
@@ -67,6 +68,7 @@ test('the card says the verdict in a word, the article and its heading, the act,
     at('Voir à une autre date'),
     at('Ce qui a changé'),
     at('Source officielle'),
+    at('Applicable à partir du 25 novembre 2025'),
   ];
   assert.deepEqual(order, [...order].sort((a, b) => a - b), 'in the owner\'s order');
   assert.ok(markup.includes(`href="/fr${WORK}#article-art_44"`), 'another date: the law page at the article\'s history');

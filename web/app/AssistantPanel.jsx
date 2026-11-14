@@ -99,12 +99,13 @@ function QuoteGroup({ group, copy, locale, titles = {} }) {
         {title === null ? null : <p className="assistant-act" lang={tagOf(title.language)}>{title.title}</p>}
         <Text block={quote} />
         {typeof quote.from === 'string' ? <p className="assistant-version-badge">{fill(copy.versionBadge, { date: quote.from })}</p> : null}
-        {rest.map((block, at) => <Block block={block} key={at} />)}
         <p className="assistant-actions">
           {where === null ? null : <a className="assistant-action" href={lawPageHref(where, quote.anchor, 'article', locale)} data-action="other-date">{copy.otherDate}</a>}
           {where === null ? null : <a className="assistant-action" href={lawPageHref(where, quote.anchor, 'changes', locale)} data-action="what-changed">{copy.whatChanged}</a>}
           {typeof quote.official_source === 'string' ? <a className="assistant-action" href={quote.official_source} rel="external" data-action="official-source">{copy.officialSource}</a> : null}
         </p>
+        {/* The quotation's other claims (its version's dates, what the copy is), under the three ways on (the owner's order). */}
+        {rest.map((block, at) => <Block block={block} key={at} />)}
         <details className="assistant-checks">
           <summary>{copy.checksSummary}</summary>
           {heading === null ? null : <p className="assistant-quote-heading" data-template={heading.template_id}>{heading.text}</p>}
