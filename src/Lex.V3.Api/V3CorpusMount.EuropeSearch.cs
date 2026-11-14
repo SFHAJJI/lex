@@ -266,6 +266,12 @@ internal sealed partial class V3CorpusMount
         var strictNeedle = Encoding.UTF8.GetBytes(TextFolding.Fold(SearchWords.Segment(query)));
         var words = SearchWords.Terms(query);
         var forms = words.Select(SearchWords.Forms).ToArray();
+        // Every word must be matched, one bit each: the request is refused before this when it holds more (SearchWords.MaxWords).
+        if (forms.Length > SearchWords.MaxWords)
+        {
+            throw new ArgumentException($"A search matches at most {SearchWords.MaxWords} words.", nameof(query));
+        }
+
         // An article's heading as its text opens with it (SearchWords.HeadingOf): the EU index's heading field holds its number.
         var headings = texts.ToDictionary(static pair => pair.Key,
             static pair => Encoding.UTF8.GetBytes(TextFolding.Fold(SearchWords.Segment(SearchWords.HeadingOf(pair.Value)))), StringComparer.Ordinal);
@@ -287,7 +293,7 @@ internal sealed partial class V3CorpusMount
 
             long inText = 0;
             long inHeadingMask = 0;
-            for (var word = 0; word < forms.Length && word < 63; word++)
+            for (var word = 0; word < forms.Length; word++)
             {
                 if (SearchWords.HoldsWord(folded, forms[word]))
                 {
@@ -304,7 +310,7 @@ internal sealed partial class V3CorpusMount
         }
 
         var rarity = holding.Select(count => SearchWords.Rarity(held.Count, count)).ToArray();
-        var every = SearchWords.EveryWord(Math.Min(forms.Length, 63));
+        var every = SearchWords.EveryWord(forms.Length);
         double Sum(long mask) => Enumerable.Range(0, rarity.Length).Where(word => (mask & (1L << word)) != 0).Sum(word => rarity[word]);
         foreach (var (key, (inText, inHeadingMask)) in held)
         {

@@ -193,6 +193,12 @@ internal sealed class LuxembourgSearchTexts
                 return [];
             }
 
+            // Every word must be matched, one bit each: more than a mask holds is refused, never cut (the review of #1045).
+            if (forms.Length > SearchWords.MaxWords)
+            {
+                throw new ArgumentException($"A search matches at most {SearchWords.MaxWords} words.", nameof(terms));
+            }
+
             // Which words each distinct text holds, in its text and in its heading, then each word's rarity over the texts read.
             var held = new Dictionary<int, (long Text, long Heading)>();
             var holding = new int[forms.Length];
@@ -208,7 +214,7 @@ internal sealed class LuxembourgSearchTexts
                 long inHeading = 0;
                 var body = _texts.TextOf(text);
                 var heading = _texts.HeadingOf(text);
-                for (var word = 0; word < forms.Length && word < 63; word++)
+                for (var word = 0; word < forms.Length; word++)
                 {
                     if (SearchWords.HoldsWord(body, forms[word]))
                     {
@@ -226,7 +232,7 @@ internal sealed class LuxembourgSearchTexts
 
             var population = held.Count;
             var rarity = holding.Select(count => SearchWords.Rarity(population, count)).ToArray();
-            var every = SearchWords.EveryWord(Math.Min(forms.Length, 63));
+            var every = SearchWords.EveryWord(forms.Length);
             double Sum(long mask) => Enumerable.Range(0, rarity.Length).Where(word => (mask & (1L << word)) != 0).Sum(word => rarity[word]);
             foreach (var (text, (inText, inHeading)) in held)
             {

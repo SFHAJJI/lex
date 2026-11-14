@@ -4343,6 +4343,15 @@ internal sealed partial class V3CorpusMount : IDisposable
                 "The operation request's 'query' has more distinct terms than the ceiling.");
         }
 
+        // Punctuation can split one term into many words, each of which the search must match (SearchWords.MaxWords; the
+        // review of #1045): a query of more is refused, never searched for some of its words.
+        if (SearchWords.Terms(query).Count > SearchWords.MaxWords)
+        {
+            throw new V3TransportFailureException(
+                V3TransportFailureKind.RequestSchemaInvalid,
+                "The operation request's 'query' has more distinct words than the ceiling.");
+        }
+
         var requestedDate = Optional("date");
         var identifier = Optional("identifier");
         // An EU act named by its usual short name in the reviewed list the citation reader uses ("RGPD", "AI Act"): its CELEX.

@@ -26,6 +26,12 @@ public static class SearchWords
         "paragraph's number comes first); articles are ranked by the rarity of the query's words in their heading, then in " +
         "their text (rarity: the inverse of how many searched articles hold the word), ties in the reading's order";
 
+    /// <summary>
+    /// The most words a query may hold once its punctuation has split its terms (the review of #1045): a search tracks each
+    /// word of a query in one bit of a 64-bit mask, and every word must be matched, so a longer query is refused, never cut.
+    /// </summary>
+    public const int MaxWords = 63;
+
     /// <summary>The words a query drops: articles, prepositions, conjunctions, pronouns and auxiliaries, and "article".</summary>
     public static readonly IReadOnlySet<string> Stopwords = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -295,7 +301,7 @@ public static class SearchWords
         (value >= (byte)'a' && value <= (byte)'z') || (value >= (byte)'A' && value <= (byte)'Z') || (value >= (byte)'0' && value <= (byte)'9') || value >= 0x80;
 
     /// <summary>The mask of a query's first <paramref name="count"/> words: an article of the word lane holds every one.</summary>
-    public static long EveryWord(int count) => count >= 63 ? long.MaxValue : (1L << count) - 1;
+    public static long EveryWord(int count) => count >= MaxWords ? long.MaxValue : (1L << count) - 1;
 
     /// <summary>A word's rarity among <paramref name="population"/> articles of which <paramref name="holding"/> hold it.</summary>
     public static double Rarity(int population, int holding) => Math.Log((population + 1.0) / (holding + 1.0)) + 1.0;

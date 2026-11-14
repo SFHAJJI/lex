@@ -848,6 +848,9 @@ public sealed class V3CorpusSearchMountTests
     // A parameter that implies ranking is not a declared one: it is rejected, never ignored.
     [DataRow("{\"operation_id\":\"search\",\"parameters\":{\"query\":\"bail\",\"language\":\"fra\",\"sort\":\"relevance\"}}")]
     [DataRow("{\"operation_id\":\"search\",\"parameters\":{\"query\":\"bail\",\"language\":\"fra\",\"rank\":\"bm25\"}}")]
+    // One term that punctuation splits into 64 words (none a stopword), one more than a search matches (SearchWords.MaxWords; the
+    // review of #1045).
+    [DataRow("{\"operation_id\":\"search\",\"parameters\":{\"query\":\"ka,kb,kc,kd,ke,kf,kg,kh,ki,kj,kk,kl,km,kn,ko,kp,kq,kr,ks,kt,ku,kv,kw,kx,ky,kz,wa,wb,wc,wd,we,wf,wg,wh,wi,wj,wk,wl,wm,wn,wo,wp,wq,wr,ws,wt,wu,wv,ww,wx,wy,wz,xa,xb,xc,xd,xe,xf,xg,xh,xi,xj,xk,xl\",\"language\":\"fra\"}}")]
     public async Task UnusableSearchRequestsAreBelowEnvelopeSchemaRejections(string body)
     {
         var fixture = await MountedFixture.CreateAsync();

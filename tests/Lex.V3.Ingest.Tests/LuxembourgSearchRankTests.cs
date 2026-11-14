@@ -49,6 +49,16 @@ public sealed class LuxembourgSearchRankTests
     }
 
     [TestMethod]
+    public void AQueryOfMoreWordsThanASearchMatchesIsRefusedNeverCut()
+    {
+        // The review of #1045: a 64th word would have been left out of the check, so an article could match without it.
+        var words = Enumerable.Range(0, SearchWords.MaxWords + 1).Select(static index => "w" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+        Assert.ThrowsExactly<ArgumentException>(() => Texts().Rank(null, words, null));
+        Assert.AreEqual(long.MaxValue, SearchWords.EveryWord(SearchWords.MaxWords), "63 words: every bit of the mask");
+        Assert.AreEqual(3L, SearchWords.EveryWord(2));
+    }
+
+    [TestMethod]
     public void AQuestionsWordsRankTheSameArticleFirst()
     {
         Assert.AreEqual("art_44", Ranked("délai de prescription des actions dérivant d'un contrat d'assurance")[0]);
