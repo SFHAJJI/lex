@@ -1345,7 +1345,6 @@ const EN = Object.freeze({
         title: "Publish only what the licence allows.",
         gain: "a clear right to show each text.",
         cost: "{withheld} of {files} files held back for want of an applicable licence.",
-        note: "Open problem: the rule also holds back laws whose only link to another file is a note.",
       }),
       agent: Object.freeze({
         title: "An AI agent writes the code. The owner decides money, legal claims and going live.",
