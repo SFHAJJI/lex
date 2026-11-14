@@ -19,6 +19,7 @@ const LAW = "/lu-legilux/loi-1997-07-27-n10";
 const FR_FOUND = ask("Quel est le délai de prescription des actions dérivant d'un contrat d'assurance ?");
 const FR_NONE = ask("Que se passe-t-il en cas d'erreur sur l'âge de l'assuré dans une assurance sur la vie ?");
 const EN_FOUND = ask("What does article 5 of the GDPR say?");
+const DATED = ask("Quel était le délai de prescription des actions dérivant d'un contrat d'assurance au 1er janvier 2020 ?");
 const EN_NONE = ask("What does the GDPR say about the right to data portability?");
 const OPEN_WORK = "document.querySelector('[data-answer-work]') && (document.querySelector('[data-answer-work]').open = true, document.querySelector('[data-answer-work]').scrollIntoView({ block: 'start' }))";
 const SHOTS = [];
@@ -29,6 +30,8 @@ for (const [lang, found, none] of [["fr", FR_FOUND, FR_NONE], ["en", EN_FOUND, E
     [`${lang}-3-answer-work-open--1366x768`, `/${lang}/assistant${found}`, 1366, 768, false, false, OPEN_WORK],
     [`${lang}-4-not-found--1366x768`, `/${lang}/assistant${none}`, 1366, 768, false, false, null],
     [`${lang}-5-law-page--1366x768`, `/${lang}${LAW}`, 1366, 768, false, false, null],
+    [`${lang}-5b-law-page-at-2020-01-01--1366x768`, `/${lang}${LAW}#on-2020-01-01`, 1366, 768, false, false, null],
+    [`${lang}-2b-answer-dated--1366x768`, `/${lang}/assistant${DATED}`, 1366, 768, false, false, null],
     [`${lang}-6-decisions--1366x768`, `/${lang}/decisions.html`, 1366, 768, false, false, null],
     [`${lang}-7-evidence--1366x768`, `/${lang}/evidence.html`, 1366, 768, false, false, null],
     [`${lang}-8-home--phone`, `/${lang}/`, 390, 844, true, false, null],
