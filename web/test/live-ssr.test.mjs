@@ -324,6 +324,7 @@ test("the build writes a server renderer per language, which renders the page in
       // The full record (titles, every version's table, relations) one disclosure away, under the header and the versions.
       const record = lawPage.indexOf("data-law-record");
       assert.ok(record > lawPage.indexOf("data-law-timeline") && lawPage.indexOf("<table", record) > record, `${language}: the full record is folded under the versions`);
+      assert.ok(lawPage.indexOf('id="dossier-states"') < record && lawPage.indexOf('id="dossier-states"') > 0, `${language}: the span of the versions stays in sight`);
       assert.ok(lawPage.includes("data-law-header") && lawPage.includes("data-law-timeline"), `${language}: an act's page is the law page, rendered by the server`);
       assert.ok(!/<input[^>]*type="text"/.test(lawPage), `${language}: nothing to type at a law's address`);
       const html = context.lexSsr.render("reading", JSON.stringify(READING), `/${language}${STATE.permalink}`);

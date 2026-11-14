@@ -501,6 +501,9 @@ export function DossierView({ view, today = null, law = null }) {
           )}
       <AmendedAfterBanner amendedAfter={view.amendedAfter ?? null} relations={view.relations ?? null} />
       {law === null ? null : <LawTimeline view={view} today={today} contract={law.contract} fetchImpl={law.fetchImpl} />}
+      {/* The span of the versions held, said in one line, stays in sight on the law page; the rest of the record folds. */}
+      {law === null ? null : <p data-history="" id="dossier-states"><StatesSpan view={view} /></p>}
+      {law === null ? null : <TodayLine today={today} />}
       <LawRecord law={law}>
       <p>
         <Say template={COPY.heldIn} values={{ iri: <code>{view.publisherWorkIri}</code>, languages: view.availableLanguages.join(', ') }} />
@@ -509,10 +512,14 @@ export function DossierView({ view, today = null, law = null }) {
       <AsPublished asPublished={view.asPublished} />
       <ForceFacts force={view.force} />
       <VersionsOverTime view={view} today={today} />
-      <p data-history="" id="dossier-states">
-        <StatesSpan view={view} />
-      </p>
-      <TodayLine today={today} />
+      {law !== null ? null : (
+        <>
+          <p data-history="" id="dossier-states">
+            <StatesSpan view={view} />
+          </p>
+          <TodayLine today={today} />
+        </>
+      )}
       <TableRegion labelledBy="dossier-states">
       <table>
         <thead>

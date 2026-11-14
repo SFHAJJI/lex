@@ -14,7 +14,8 @@ menu holds one line at 1024 px).
   the search reads it, so a name like McDonald stays whole. From #1044's first rule, widened; #1044 is superseded.
 - **The answer card**: the three buttons right after the version badge, the quotation's other claims under them.
 - **The law page**: the act's full record (titles, every version's table, catalogue chain, relations, what it does not
-  hold) one disclosure away under the header and the versions in time; the page at an article was 14,700 px tall.
+  hold) one disclosure away under the header and the versions in time; the page at an article was 14,700 px tall. The span
+  of the versions held ("10 versions, from … to …") stays in sight: CI's journey at a law's address failed when it folded.
 - **The Quality page**: Release 7's run (live: 17 right articles, 0 wrong, held-out 0 of 15); each run labelled before,
   refused by the gate, or live.
 - Evidence: web `npm test` 1,541 tests, 1,538 passed, 3 skipped; new tests for each glued case (the same characters, none
