@@ -69,6 +69,9 @@ main {
   gap: 1rem;
   max-inline-size: 48rem;
   padding: clamp(2rem, 8vw, 6rem);
+  /* A short top margin, so a page's first screen at 1366 by 768 holds its content, not empty space (the owner's order of
+     2026-11-14). */
+  padding-block-start: clamp(1.5rem, 3vw, 2.5rem);
 }
 
 .eyebrow {
@@ -2122,6 +2125,19 @@ main > * {
   gap: 0.5rem;
 }
 
+/* The assistant's question box, set as the home page's (the owner's order of 2026-11-14: it was the browser's own, in a
+   fixed-width font). */
+.assistant-form {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+}
+
+.assistant-form label {
+  font-weight: 600;
+}
+
+.assistant-form textarea,
 .home-ask-form textarea {
   box-sizing: border-box;
   inline-size: 100%;
@@ -2357,7 +2373,8 @@ main > * {
     background: #18201b;
   }
 
-  .home-ask-form textarea {
+  .home-ask-form textarea,
+  .assistant-form textarea {
     border-color: #7f9184;
     background: #18201b;
     color: inherit;

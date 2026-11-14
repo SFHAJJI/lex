@@ -21,7 +21,9 @@ untouched).
   hidden words for screen readers ("[inséré : …]") are also clipped the older way (`clip`), for browsers that ignore
   `clip-path`.
 - **The assistant page**: R44's notice and the preview line move under the answer, the question box first (the owner's
-  order overrides R44's place, not its words; the notice is still on the page once).
+  order overrides R44's place, not its words; the notice is still on the page once). The question box is set as the home
+  page's (it was the browser's own, in a fixed-width font).
+- **Every page's top margin** is shorter at desktop widths (2.5rem at most, from 6rem), so a first screen holds content.
 - **French dates**: every date a sentence of the copy tables fills is written day first on a French page (`displayDate` in
   `fillParts`), and so are the dossier's and the history's tables, the relations' dates and the answer's version badge.
   English pages keep 2025-11-25.
