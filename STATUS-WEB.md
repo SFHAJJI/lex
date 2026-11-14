@@ -36,6 +36,10 @@ contrat d'assurance" listed four Code du travail articles before art. 44, becaus
   answers were recorded again on Linux (WSL Ubuntu 24.04, invariant globalization, TZ=UTC) at 2b0cdfe5: only the search
   rows changed (EU row 11, schema-8 rows 13 and 14), every other row byte-identical; the answer and envelope samples were
   rendered again.
+- **Review of #1045** (Codex): CHANGES REQUESTED, one should-fix, reproduced and taken: a search tracked each word in one
+  bit of a 64-bit mask and required only the first 63, so punctuation splitting one term into 64 words let an article
+  match without the 64th. Now a query of more than 63 words is `request_schema_invalid`, and both matchers refuse more
+  instead of cutting; a test sends a 64-word term. CI on the reviewed commit: every job passed on Linux (dotnet 13 min).
 
 ## Release 5 is live: the assistant-first front, on the owner's yes (sole driver, 2026-11-13)
 
