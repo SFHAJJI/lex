@@ -40,7 +40,9 @@ const EN = Object.freeze({
     // Only the phrase is matched (the plan's item 4.5, R90): the relaxed lane is off until its check passes, so the page no
     // longer says it finds "every word of it"; capitals and accents are ignored (the plan's item 4.4), so it no longer says
     // "exactly as typed".
-    intro: "Finds the acts whose title matches the phrase and, in the text this server holds and may search, the articles that contain it, with capitals and accents ignored: text its rights withhold is not searched. The phrase goes to this server in the body of the request, never in the request's address; this page keeps the search only in its own address, in the part after “#”, which the browser never sends, so a link to that address shares the search.",
+    intro: "Finds the acts whose title matches the phrase and, in the text this server holds and may search, the articles that contain it, with capitals and accents ignored: text its rights withhold is not searched.",
+    // What this page sends to the server, said in the footer (the owner's order of 2026-11-13, section C).
+    sent: "The phrase goes to this server in the body of the request, never in the request's address; this page keeps the search only in its own address, in the part after “#”, which the browser never sends, so a link to that address shares the search.",
     idle: "Type a phrase to search the article text this server holds and may search.",
     population: Object.freeze({
       one: "“{query}” in {language}: {strict} with the phrase, {relaxed} with every word, in {works} work.",
@@ -221,7 +223,9 @@ const EN = Object.freeze({
     title: "Dossier",
     eyebrow: "Dossier",
     heading: "A work's dossier",
-    intro: "What this server holds for one work: a Luxembourg work's titles and publisher-dated states, or an EU work's expressions and the original wording of each, and what the dossier does not hold. The identifier goes to this server in the request and nowhere else, and this page keeps nothing.",
+    intro: "What this server holds for one work: a Luxembourg work's titles and publisher-dated states, or an EU work's expressions and the original wording of each, and what the dossier does not hold.",
+    // What this page sends to the server, said in the footer (the owner's order of 2026-11-13, section C).
+    sent: "The identifier goes to this server in the request and nowhere else, and this page keeps nothing.",
     idle: "Type a work identifier to read what this server holds for it.",
     noTitle: "This index holds no title for this work.",
     shortTitle: "{title} (short title)",
@@ -380,7 +384,9 @@ const EN = Object.freeze({
     title: "Reading",
     eyebrow: "Reading",
     heading: "The text on a date",
-    intro: "The text of one Luxembourg work as it stood on one date, or of one EU work in the wording that answers that date (its original wording or a later consolidated one), article by article, as the publisher wrote it, with what a quotation of it needs. The identifier and the date go to this server in the request and nowhere else, and this page keeps nothing.",
+    intro: "The text of one Luxembourg work as it stood on one date, or of one EU work in the wording that answers that date (its original wording or a later consolidated one), article by article, as the publisher wrote it, with what a quotation of it needs.",
+    // What this page sends to the server, said in the footer (the owner's order of 2026-11-13, section C).
+    sent: "The identifier and the date go to this server in the request and nowhere else, and this page keeps nothing.",
     idle: "Type a work identifier and a date to read its text on that date.",
     rights: "Text served under {rights}. Read on {date}.",
     rightsIn: "Text served under {rights}. Read on {date} in {language}.",
@@ -482,7 +488,9 @@ const EN = Object.freeze({
     title: "Provision history",
     eyebrow: "Provision history",
     heading: "One article through its states",
-    intro: "Which held states of one Luxembourg work carry the publisher's article id, whether its wording changed from one state to the next, and which held states do not carry it. The identifier and the article id go to this server in the request and nowhere else, and this page keeps nothing.",
+    intro: "Which held states of one Luxembourg work carry the publisher's article id, whether its wording changed from one state to the next, and which held states do not carry it.",
+    // What this page sends to the server, said in the footer (the owner's order of 2026-11-13, section C).
+    sent: "The identifier and the article id go to this server in the request and nowhere else, and this page keeps nothing.",
     idle: "Type a work identifier and the publisher's article id to trace it through the held states.",
     anchorHeading: "{anchor} in {work}",
     carried: Object.freeze({
@@ -542,7 +550,9 @@ const EN = Object.freeze({
     eyebrow: "Compare",
     heading: "Two states, article by article",
     // R57 (the audit of 2026-10-27, gap 2): the wording that changed is shown, and a comparison has an address of its own.
-    intro: "The states of one Luxembourg work applicable on two dates, compared by the publisher's article ids and wording, with nothing said about legal effect; the wording that changed is shown, the text deleted struck through and the text inserted underlined. The identifier and the dates go to this server in the request; when the act is named by its address on this site, they are also written into this page's address, so that the comparison can be shared and read without JavaScript; this page keeps nothing.",
+    intro: "The states of one Luxembourg work applicable on two dates, compared by the publisher's article ids and wording, with nothing said about legal effect; the wording that changed is shown, the text deleted struck through and the text inserted underlined.",
+    // What this page sends to the server, said in the footer (the owner's order of 2026-11-13, section C).
+    sent: "The identifier and the dates go to this server in the request; when the act is named by its address on this site, they are also written into this page's address, so that the comparison can be shared and read without JavaScript; this page keeps nothing.",
     idle: "Type a work identifier and two dates to compare the states applicable on them.",
     summary: "{work}: {from} against {to}.",
     summaryIn: "{work}: {from} against {to} in {language}.",
@@ -615,7 +625,9 @@ const EN = Object.freeze({
     title: "Radar",
     eyebrow: "Radar",
     heading: "The change radar",
-    intro: "The publisher-dated states of Luxembourg works that this server holds in a window of dates, each with the state it replaced and whether its wording changed. The dates and any identifier go to this server in the request and nowhere else, and this page keeps nothing.",
+    intro: "The publisher-dated states of Luxembourg works that this server holds in a window of dates, each with the state it replaced and whether its wording changed.",
+    // What this page sends to the server, said in the footer (the owner's order of 2026-11-13, section C).
+    sent: "The dates and any identifier go to this server in the request and nowhere else, and this page keeps nothing.",
     idle: "Type two dates to list the publisher-dated states in that window.",
     summary: "{from} to {to}: {states} of {works}, of {held} held.",
     states: Object.freeze({
@@ -653,7 +665,9 @@ const EN = Object.freeze({
     title: "Export composer",
     eyebrow: "Export composer",
     heading: "Take articles away, with their citations",
-    intro: "Read one Luxembourg work on one date, or one EU work in the wording that answers that date, pin the articles you need, and save them as JSON, CSV or PDF. Each exported article carries its citation, its text digest and its official source, with the rights it was served under or, for EU text, the acknowledgement it was served with and the authenticity statement; every export carries the watermark and says what it excludes, with the reason. The identifier and the date go to this server in the request and nowhere else; the file is made in this page, and this page keeps nothing.",
+    intro: "Read one Luxembourg work on one date, or one EU work in the wording that answers that date, pin the articles you need, and save them as JSON, CSV or PDF. Each exported article carries its citation, its text digest and its official source, with the rights it was served under or, for EU text, the acknowledgement it was served with and the authenticity statement; every export carries the watermark and says what it excludes, with the reason.",
+    // What this page sends to the server, said in the footer (the owner's order of 2026-11-13, section C).
+    sent: "The identifier and the date go to this server in the request and nowhere else; the file is made in this page, and this page keeps nothing.",
     idle: "Type a work identifier and a date, then pin the articles to take away.",
     readOn: "Read on {date}. Pin the articles to export.",
     readOnIn: "Read on {date} in {language}. Pin the articles to export.",
@@ -1363,6 +1377,37 @@ const EN = Object.freeze({
       language: "Language not served",
     }),
     typeRow: "{right} of {cases}",
+    // The expected-article set (the owner's order of 2026-11-13, section D): results by kind, the held-out score, the cost.
+    outcomesHeading: "Right article, wrong article: the latest runs",
+    outcomesIntro: "{dev} test questions, each with the act and article its answer must quote, and {heldout} held-out questions, written before any run and never used to tune the assistant.",
+    setTiles: Object.freeze({
+      wrongArticle: Object.freeze({ value: "{wrong}", label: "answers quoting a wrong article, test questions, latest run (the target is none)" }),
+      heldout: Object.freeze({ value: "{right} of {cases}", label: "held-out questions answered with the right article, latest run" }),
+      cost: Object.freeze({ value: "{cost} €", label: "estimated model cost of a question (from the sizes of the prompt and the plan)" }),
+    }),
+    outcomeColumns: Object.freeze({
+      kind: "Result",
+      dev: "Test questions: the live release, {date}",
+      heldout: "Held-out questions: the live release, {date}",
+      devRefused: "Test questions: the next release, refused by the gate, {date}",
+      heldoutRefused: "Held-out questions: the next release, refused by the gate, {date}",
+    }),
+    gateNote: "A release that quotes a wrong article on the insurance questions, or fails a question the live one answers, does not go live: the next release above was refused for one wrong article, and the fix follows.",
+    outcomes: Object.freeze({
+      rightArticle: "The right article, quoted",
+      wrongArticle: "A wrong article, quoted",
+      notFound: "Not found: it says so, or asks which article",
+      wronglyRefused: "Refused as advice, though it asks what the law says",
+      rightBehaviour: "Rightly refused, asked back or pointed to the source",
+      wrongBehaviour: "Any other wrong behaviour",
+    }),
+    setRow: "{count} of {cases}",
+    knownHeading: "Known failures",
+    known: Object.freeze({
+      adviceCues: "A question about the general rule phrased \"must the insured...?\" or \"can the insurer...?\" is declined as personal advice: the boundary is kept strict on purpose, and the same question asked as \"what is the time limit for...?\" is answered.",
+      englishOnFrench: "A question in English about a Luxembourg law held only in French finds nothing by its words: the search does not translate.",
+      euConcepts: "Some EU questions asked by concept rather than by article number are not found, or are answered with the official source only.",
+    }),
     methodHeading: "How it is measured",
     method: Object.freeze({
       expected: "Each question has an expected kind of answer: the text, one question back, the official source, or a refusal.",

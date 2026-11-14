@@ -32,7 +32,7 @@ import {
 } from '../scripts/developers.mjs';
 import { longDate } from '../scripts/live-search.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG } from '../scripts/live-chrome.mjs';
-import { QUALITY_RUNS, QUALITY_SOURCE, QUALITY_TYPES, latestRun, percent } from '../scripts/assistant-quality.mjs';
+import { QUALITY_KNOWN, QUALITY_OUTCOMES, QUALITY_RUNS, QUALITY_SET_RUNS, QUALITY_SOURCE, QUALITY_TYPES, latestRun, percent } from '../scripts/assistant-quality.mjs';
 
 /** A link to another page of the site, in this bundle's language, with the words given. */
 const pageLink = (file, text) => <a href={livePath(file)}>{text}</a>;
@@ -126,7 +126,7 @@ export function guideValues() {
 const decimal = (value) => value.toLocaleString(CHROME_LOCALE === 'fr' ? 'fr-FR' : 'en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
 
 /** The assistant's results page's parts, in its order. */
-export const QUALITY_PARTS = Object.freeze(['chart', 'runs', 'types', 'method']);
+export const QUALITY_PARTS = Object.freeze(['chart', 'outcomes', 'runs', 'types', 'known', 'method']);
 
 /** How Lex works: its five steps from the publishers to an answer, drawn as a flow, then its parts. */
 export function HowItWorksBody() {
@@ -204,6 +204,7 @@ export function QualityBody() {
           })}
         </ul>
       </section>
+      <QualityOutcomes page={page} />
       <section className="reference-section" aria-labelledby="quality-runs" data-reference-section="runs">
         <h2 id="quality-runs">{page.runsHeading}</h2>
         <div className="table-scroll">
@@ -239,12 +240,69 @@ export function QualityBody() {
           </tbody>
         </table>
       </section>
+      <section className="reference-section" aria-labelledby="quality-known" data-reference-section="known">
+        <h2 id="quality-known">{page.knownHeading}</h2>
+        <ul data-quality-known={QUALITY_KNOWN.length}>{QUALITY_KNOWN.map((key) => <li key={key}>{page.known[key]}</li>)}</ul>
+      </section>
       <section className="reference-section" aria-labelledby="quality-method" data-reference-section="method">
         <h2 id="quality-method">{page.methodHeading}</h2>
         <ul>{Object.entries(page.method).map(([key, text]) => <li key={key}>{text}</li>)}</ul>
         <p><Say template={page.source} values={{ source: <a href={QUALITY_SOURCE} rel="external">{new URL(QUALITY_SOURCE).host + new URL(QUALITY_SOURCE).pathname}</a> }} /></p>
       </section>
     </>
+  );
+}
+
+/** A cost in euros as this page's language writes it, to four decimals: 0.0011 is "0.0011" in English, "0,0011" in French. */
+const euros = (value) => value.toLocaleString(CHROME_LOCALE === 'fr' ? 'fr-FR' : 'en-GB', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+
+/**
+ * The expected-article set's results (the owner's order of 2026-11-13, section D): the latest run's wrong articles (the
+ * headline, whose target is none), its held-out score and its estimated cost per question, then the results by kind of the
+ * latest runs, the test questions and the held-out ones in columns of their own, each run's date in its column's head.
+ */
+function QualityOutcomes({ page }) {
+  const latest = QUALITY_SET_RUNS.at(-1);
+  const named = (template, values) => Object.fromEntries([...template.matchAll(/\{([A-Za-z]+)\}/g)].map(([, name]) => [name, values[name]]));
+  const tile = (key, values) => (
+    <div className="quality-tile" data-quality-tile={key}>
+      <strong>{fillText(page.setTiles[key].value, named(page.setTiles[key].value, values))}</strong>
+      <span>{fillText(page.setTiles[key].label, named(page.setTiles[key].label, values))}</span>
+    </div>
+  );
+  const columns = QUALITY_SET_RUNS.flatMap((run) => [
+    { key: `${run.date}-${run.commit}-dev`, head: fillText(page.outcomeColumns[run.live ? 'dev' : 'devRefused'], { date: longDate(run.date) }), counts: run.dev },
+    { key: `${run.date}-${run.commit}-heldout`, head: fillText(page.outcomeColumns[run.live ? 'heldout' : 'heldoutRefused'], { date: longDate(run.date) }), counts: run.heldout },
+  ]);
+  return (
+    <section className="reference-section" aria-labelledby="quality-outcomes" data-reference-section="outcomes">
+      <h2 id="quality-outcomes">{page.outcomesHeading}</h2>
+      <p>{fillText(page.outcomesIntro, { dev: latest.dev.cases, heldout: latest.heldout.cases })}</p>
+      <div className="quality-tiles">
+        {tile('wrongArticle', { wrong: latest.dev.wrongArticle })}
+        {tile('heldout', { right: latest.heldout.rightArticle, cases: latest.heldout.cases })}
+        {tile('cost', { cost: euros(latest.costEur) })}
+      </div>
+      <div className="table-scroll">
+        <table className="quality-table" data-quality-outcomes={QUALITY_SET_RUNS.length}>
+          <thead>
+            <tr>
+              <th scope="col">{page.outcomeColumns.kind}</th>
+              {columns.map((column) => <th key={column.key} scope="col">{column.head}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {QUALITY_OUTCOMES.map((outcome) => (
+              <tr key={outcome} data-quality-outcome={outcome}>
+                <th scope="row">{page.outcomes[outcome]}</th>
+                {columns.map((column) => <td key={column.key}>{fillText(page.setRow, { count: column.counts[outcome], cases: column.counts.cases })}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {QUALITY_SET_RUNS.some((run) => !run.live) ? <p data-quality-gate="">{page.gateNote}</p> : null}
+    </section>
   );
 }
 

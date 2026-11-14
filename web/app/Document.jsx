@@ -191,14 +191,31 @@ export function SiteHeader({ state, locale, localePage = null }) {
  * The development build's banner said "not a release and not legal advice"; the first half was the build's and went with
  * it, the second is the product's and is said here.
  */
+/**
+ * The pages whose request carries what the reader typed, by their state, and the copy entry that says what goes to the server
+ * (`sent`): said in the footer, not in the page's introduction (the owner's order of 2026-11-13, section C).
+ */
+const SENT_BY_STATE = Object.freeze({
+  'live-home': 'search',
+  'live-search': 'search',
+  'live-dossier': 'dossier',
+  'live-reading': 'reading',
+  'live-history': 'history',
+  'live-compare': 'compare',
+  'live-radar': 'radar',
+  'live-export': 'export',
+});
+
 export function SiteFooter({ state = null, freshness = null, answers = true }) {
   const copy = liveChrome();
   const site = copy.site;
+  const sent = SENT_BY_STATE[state] === undefined ? null : copy[SENT_BY_STATE[state]]?.sent ?? null;
   return (
     <footer className="site-footer">
       <p data-not-advice="">{site.notAdvice}</p>
       <p>{site.authenticity}</p>
       <p>{site.sources}</p>
+      {sent === null ? null : <p data-sent="">{sent}</p>}
       <p>
         <a href={livePath('coverage.html')}>{site.coverage}</a>
       </p>
