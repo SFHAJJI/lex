@@ -4,6 +4,25 @@ Updated 2026-11-14. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The first screens, second round: from Release 9's candidate's screenshots (sole driver, 2026-11-14)
+
+`web/first-screen-2`. Release 9's candidate (`v3-20261114T081556Z-9aaeb1cb87f1`, #1053, zero traffic) passed the owner's
+acceptance checks 7 of 7 at its own address, the two-address check, and every evaluation gate (`-NoPromote`); its
+screenshots at 1366 by 768 (GitHub's runner, `ops/screens`) showed what this slice corrects, by CSS and one reuse:
+- **The header**: at 1366 px the four languages took a row of their own; on wide screens (75rem and more) the site's name
+  is the first row, the menu and the languages share the second, in reading order (grid areas, the markup unchanged).
+- **The top margin** under the header is shorter (1.75rem at most, from 3rem): the earlier change to `main` did not reach
+  the site's pages, whose own rule wins.
+- **The law page**: the act's title at its intended size (the site's `h1` rule outweighed it: two lines at 41 px), and "Date
+  du sinistre" on one line with its field.
+- **An article added or removed whole** is read on the law page in its paragraphs (`quoteParagraphs`, moved from
+  `assistant-panel.mjs` to `law-page.mjs` and re-exported; only white space is dropped at a cut): "Article 62-11 / Actions en
+  cessation ou en interdiction / Les mesures visées…" rather than "62-11Actions … interdictionLes". The compare page keeps
+  its one block.
+- **The answer page**: "La réponse est complète." said smaller and muted; no margin above the panel's heading.
+- Evidence: web `npm run build`; `npm test` 1,542 tests, 1,539 passed, 3 skipped (a new check: the added article in more
+  than one paragraph, every character kept, none added).
+
 ## The first screen at 1366 by 768: the law page, the answer, French dates (sole driver, 2026-11-14)
 
 `web/first-screen`, the owner's order of 2026-11-14 ("judge by screenshot, not by test"; retrieval and the quality gates

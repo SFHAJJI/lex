@@ -125,6 +125,13 @@ test("on the law page an article is named as a reader names it, unchanged ones s
   assert.ok(markup.indexOf('data-status="unchanged"') > markup.indexOf('data-moved'), "the moved articles first");
   const plain = renderToStaticMarkup(h(CompareAnswerView, { outcome }));
   assert.ok(plain.includes("(wording "), "the compare page keeps its digests");
+  // An article added or removed whole is read on the law page in its own paragraphs (2026-11-14), every word kept.
+  const added = comparison.articles.find((article) => article.status === "added");
+  const block = /<div class="wording-diff wording-paragraphs"[^>]*>(.*?)<\/div>/s.exec(markup.slice(markup.indexOf(`data-article="${added.publisherId}"`)))?.[1] ?? "";
+  assert.ok((block.match(/<p>/g) ?? []).length > 1, "in paragraphs");
+  const words = (text) => text.replace(/<span class="visually-hidden"[^>]*>[^<]*<\/span>/g, "").replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/\s+/g, "");
+  assert.equal(words(block), added.wording.parts[0].text.replace(/\s+/g, ""), "every character of the text, none added");
+  assert.ok(!plain.includes("wording-paragraphs"), "the compare page keeps its one block");
   assert.ok(!plain.includes("unchanged since"), "and its own disclosure");
 });
 

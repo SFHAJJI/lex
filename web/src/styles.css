@@ -69,9 +69,6 @@ main {
   gap: 1rem;
   max-inline-size: 48rem;
   padding: clamp(2rem, 8vw, 6rem);
-  /* A short top margin, so a page's first screen at 1366 by 768 holds its content, not empty space (the owner's order of
-     2026-11-14). */
-  padding-block-start: clamp(1.5rem, 3vw, 2.5rem);
 }
 
 .eyebrow {
@@ -461,7 +458,8 @@ blockquote.law {
   min-block-size: auto;
   align-content: start;
   margin-inline: auto;
-  padding-block: clamp(1.5rem, 5vw, 3rem);
+  /* A short top margin, so a page's first screen at 1366 by 768 holds its content (the owner's order of 2026-11-14). */
+  padding-block: clamp(1rem, 2vw, 1.75rem) clamp(1.5rem, 5vw, 3rem);
 }
 
 .site-header ~ main h1 {
@@ -1250,6 +1248,10 @@ summary {
    breaks are kept. */
 .wording-diff {
   white-space: pre-wrap;
+}
+
+.wording-paragraphs > p {
+  margin-block: 0 0.4rem;
 }
 
 .wording-diff del {
@@ -2137,6 +2139,22 @@ main > * {
   font-weight: 600;
 }
 
+.assistant-panel > h2 {
+  margin-block-start: 0;
+}
+
+/* The polite region's line ("La réponse est complète."), said, not shouted. */
+.assistant-status {
+  color: #44554a;
+  font-size: 0.9rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .assistant-status {
+    color: #b8c6bc;
+  }
+}
+
 .assistant-form textarea,
 .home-ask-form textarea {
   box-sizing: border-box;
@@ -2430,10 +2448,11 @@ main > * {
 /* The law page (the owner's order of 2026-11-13, section B): the act's status and counts under its title, and its versions
    as points on a line, oldest first. A version chosen is a filled point with its date in bold, and the button says it is
    pressed (aria-pressed), so the choice is never said by colour alone; colours are the text's own, in both schemes. */
-.law-header h1 {
+.law-header h1,
+.site-header ~ main .law-header h1 {
   margin-block: 0.75rem 0.35rem;
   font-family: "Source Serif 4", Georgia, serif;
-  font-size: clamp(1.6rem, 3.2vw, 2.1rem);
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
   line-height: 1.2;
 }
 
@@ -2509,9 +2528,17 @@ main > * {
   margin-block: 0;
 }
 
-.claim-date input {
+.claim-date label,
+.site-header ~ main .claim-date label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.claim-date input,
+.site-header ~ main .claim-date input:not([type="checkbox"]):not([type="radio"]) {
   inline-size: 8.5rem;
-  margin-inline-start: 0.4rem;
 }
 
 /* The law page's first screen at 1366 by 768 (the owner's order of 2026-11-14): a wider column and a short top margin, so
@@ -2694,6 +2721,31 @@ main:has([data-law-header]) {
 @media (min-width: 1024px) {
   .site-nav > ul {
     flex-wrap: nowrap;
+  }
+}
+
+/* Wide screens (the owner's first screens at 1366 by 768, 2026-11-14): the site's name on the first row, the menu and the
+   languages on the second, in reading order; the languages no longer take a row of their own. */
+@media (min-width: 75rem) {
+  .site-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "brand brand" "nav locales";
+    align-items: center;
+    gap: 0.4rem 1.5rem;
+  }
+
+  .site-brand {
+    grid-area: brand;
+    justify-self: start;
+  }
+
+  .site-nav {
+    grid-area: nav;
+  }
+
+  .site-header .locale-nav {
+    grid-area: locales;
   }
 }
 
