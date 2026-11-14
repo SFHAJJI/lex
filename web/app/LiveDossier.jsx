@@ -25,7 +25,7 @@ import { RefusalCard } from './RefusalCard.jsx';
 import { DOSSIER_LANGUAGES, LIVE_DOSSIER_IDLE, createDossierSession, dossierOutcome } from '../scripts/live-dossier.mjs';
 import { AsPublished, EuropeAnnexes, EuropeForceDates, EuropePublication, FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, TableRegion, inEnglish, refusalCardCopyFor } from './LiveAnswer.jsx';
 import { quotationLanguageTag } from '../scripts/live-reading.mjs';
-import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillText, liveChrome } from '../scripts/live-chrome.mjs';
+import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, displayDate, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { compareQueryOf, currentAddress, isSiteAddress, parseSitePath, permalinkHref } from '../scripts/permalinks.mjs';
 import { answerHandedWith } from '../scripts/v3-client.mjs';
 import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
@@ -35,6 +35,7 @@ import { TodayLine } from './Today.jsx';
 import { Breadcrumbs } from './Breadcrumbs.jsx';
 import { dossierCrumbs } from '../scripts/breadcrumbs.mjs';
 import { LawHeader, LawTimeline } from './LawPage.jsx';
+import { actTitle } from '../scripts/law-page.mjs';
 
 /** The forms' labels and buttons, and this screen's sentences, from the interface copy table. */
 const FORM = liveChrome().form;
@@ -170,7 +171,7 @@ function ForceFacts({ force }) {
   if (force === null) return null;
   const codes = (values) => values.map((value, index) => <Fragment key={value}>{index === 0 ? '' : COMMON.listSeparator}<code>{value}</code></Fragment>);
   const dated = (values) => values.map((value, index) => (
-    <Fragment key={value}>{index === 0 ? '' : COMMON.listSeparator}<time dateTime={value}>{value}</time></Fragment>
+    <Fragment key={value}>{index === 0 ? '' : COMMON.listSeparator}<time dateTime={value}>{displayDate(value)}</time></Fragment>
   ));
   return (
     <section data-force="">
@@ -243,17 +244,17 @@ function RelationRow({ edge, workKey }) {
   const said = publicationDate === null
     ? <Say template={COPY.relationUndated} values={{ act }} />
     : entryIntoForce === null
-      ? <Say template={COPY.relationPublished} values={{ act, published: <time dateTime={publicationDate}>{publicationDate}</time> }} />
+      ? <Say template={COPY.relationPublished} values={{ act, published: <time dateTime={publicationDate}>{displayDate(publicationDate)}</time> }} />
       : <Say template={COPY.relationPublishedEntry} values={{
           act,
-          published: <time dateTime={publicationDate}>{publicationDate}</time>,
-          entry: <time dateTime={entryIntoForce}>{entryIntoForce}</time>,
+          published: <time dateTime={publicationDate}>{displayDate(publicationDate)}</time>,
+          entry: <time dateTime={entryIntoForce}>{displayDate(entryIntoForce)}</time>,
         }} />;
   return (
     <li data-relation-evidence={edge.evidenceSha256}>
       {said}
       {edge.consolidatedBy !== null && edge.consolidatedBy.stableCoordinate.split('/')[2] === workKey ? (
-        <> <Say template={COPY.relationIntegrated} values={{ date: <time dateTime={edge.consolidatedBy.applicabilityDate}>{edge.consolidatedBy.applicabilityDate}</time> }} /></>
+        <> <Say template={COPY.relationIntegrated} values={{ date: <time dateTime={edge.consolidatedBy.applicabilityDate}>{displayDate(edge.consolidatedBy.applicabilityDate)}</time> }} /></>
       ) : edge.consolidatedBy !== null ? (
         <> <Say template={COPY.relationIntegratedOther} values={{ version: <VersionName version={edge.consolidatedBy} /> }} /></>
       ) : edge.consolidatedByIri !== null ? (
@@ -349,7 +350,7 @@ function AmendedAfterBanner({ amendedAfter, relations }) {
       {amendedAfter.acts.length === 1 ? (
         <p>
           <Say template={COPY.amendedAfterOne} values={{
-            date: <time dateTime={first.publicationDate}>{first.publicationDate}</time>,
+            date: <time dateTime={first.publicationDate}>{displayDate(first.publicationDate)}</time>,
             act: <OtherActName other={first.other} />,
           }} />
         </p>
@@ -359,7 +360,7 @@ function AmendedAfterBanner({ amendedAfter, relations }) {
           <ul>
             {amendedAfter.acts.map((act) => (
               <li key={act.actingIri}>
-                <Say template={COPY.amendedAfterAct} values={{ act: <OtherActName other={act.other} />, date: <time dateTime={act.publicationDate}>{act.publicationDate}</time> }} />
+                <Say template={COPY.amendedAfterAct} values={{ act: <OtherActName other={act.other} />, date: <time dateTime={act.publicationDate}>{displayDate(act.publicationDate)}</time> }} />
               </li>
             ))}
           </ul>
@@ -370,7 +371,7 @@ function AmendedAfterBanner({ amendedAfter, relations }) {
           ? COPY.amendedAfterNoConsolidation
           : <Say template={amendedAfter.latestConsolidationIntegrating ? COPY.amendedAfterLatestIntegrating : COPY.amendedAfterLatest} values={{
               version: <VersionName version={latest} />,
-              date: <time dateTime={latestDate}>{latestDate}</time>,
+              date: <time dateTime={latestDate}>{displayDate(latestDate)}</time>,
             }} />}
       </p>
       {amendedAfter.amendingActsIntegrated > 0 ? (
@@ -466,45 +467,18 @@ export function VersionsOverTime({ view, today = null }) {
  * One dossier view, laid out: the work, R72's banner when it is raised, its titles, its held states, today (`today`, the date
  * in Luxembourg the answer was given on, or null), its relations in the publisher's records and what it does not hold.
  */
-/**
- * The act's full record (its titles, every version's dates and links, its catalogue chain and relations, what it does not
- * hold): on the law page one disclosure away, under the act's header and its versions in time (the owner's order of
- * 2026-11-13, section B: a page for a reader, not a table for experts); on the dossier page, as it is.
- */
-function LawRecord({ law, children }) {
-  if (law === null) return <>{children}</>;
-  return (
-    <details className="law-record" data-law-record="">
-      <summary>{COPY.lawRecord}</summary>
-      {children}
-    </details>
-  );
-}
-
 export function DossierView({ view, today = null, law = null }) {
   // The act's own title heads its page when the index holds one (the owner's feedback of 2026-11-10: a reader looks for the
   // act's name, not its key); it is statute text, marked in its language. The work key follows it, as the key a citation uses.
   // At the act's own address (`law`, the owner's order of 2026-11-13, section B) the page is the law page: the act's title
   // without the publisher's version prefix, its status and counts, then its versions in time and their comparison.
   const named = view.titles.find((group) => group.titles.length > 0) ?? null;
-  return (
+  // The act's full record (its titles, every version's dates and links, its catalogue chain and relations, what it does not
+  // hold): on the law page in its one disclosure at the foot, "Technical details" (the owner's order of 2026-11-14: a page
+  // for a reader, not a table for experts), under the span of the versions held, which stays in sight; on the dossier page,
+  // as it is.
+  const record = (
     <>
-      {law !== null
-        ? <LawHeader view={view} today={today} />
-        : named === null
-          ? <h2>{view.workKey}</h2>
-          : (
-            <>
-              <h2><span lang={quotationLanguageTag(named.language)}>{named.titles[0].title}</span></h2>
-              <p data-work-key=""><code>{view.workKey}</code></p>
-            </>
-          )}
-      <AmendedAfterBanner amendedAfter={view.amendedAfter ?? null} relations={view.relations ?? null} />
-      {law === null ? null : <LawTimeline view={view} today={today} contract={law.contract} fetchImpl={law.fetchImpl} />}
-      {/* The span of the versions held, said in one line, stays in sight on the law page; the rest of the record folds. */}
-      {law === null ? null : <p data-history="" id="dossier-states"><StatesSpan view={view} /></p>}
-      {law === null ? null : <TodayLine today={today} />}
-      <LawRecord law={law}>
       <p>
         <Say template={COPY.heldIn} values={{ iri: <code>{view.publisherWorkIri}</code>, languages: view.availableLanguages.join(', ') }} />
       </p>
@@ -537,9 +511,9 @@ export function DossierView({ view, today = null, law = null }) {
             <tr key={state.stateSha256} data-state={state.stateSha256}>
               <td>{state.language}</td>
               <td data-date-role={state.dateRole ?? undefined}>
-                {datedByEntryIntoForce(state) ? <Say template={COPY.entryIntoForceDate} values={{ date: state.applicabilityDate }} /> : state.applicabilityDate}
+                {datedByEntryIntoForce(state) ? <Say template={COPY.entryIntoForceDate} values={{ date: state.applicabilityDate }} /> : displayDate(state.applicabilityDate)}
               </td>
-              <td>{state.nextApplicabilityDate ?? COMMON.noneHeld}</td>
+              <td>{displayDate(state.nextApplicabilityDate) ?? COMMON.noneHeld}</td>
               <td>{state.articleCount}</td>
               <td>{state.articlesNotAdmitted}</td>
               <td><Permalink value={state.permalink} /></td>
@@ -564,7 +538,37 @@ export function DossierView({ view, today = null, law = null }) {
         </ul>
         <p lang={ENGLISH_LANG}>{asSentence(view.scope)}</p>
       </details>
-      </LawRecord>
+    </>
+  );
+  if (law !== null) {
+    return (
+      <>
+        <LawHeader view={view} today={today} />
+        <AmendedAfterBanner amendedAfter={view.amendedAfter ?? null} relations={view.relations ?? null} />
+        <LawTimeline
+          view={view}
+          today={today}
+          contract={law.contract}
+          fetchImpl={law.fetchImpl}
+          foot={<><p data-history="" id="dossier-states"><StatesSpan view={view} /></p><TodayLine today={today} /></>}
+        >
+          {record}
+        </LawTimeline>
+      </>
+    );
+  }
+  return (
+    <>
+      {named === null
+        ? <h2>{view.workKey}</h2>
+        : (
+          <>
+            <h2><span lang={quotationLanguageTag(named.language)}>{named.titles[0].title}</span></h2>
+            <p data-work-key=""><code>{view.workKey}</code></p>
+          </>
+        )}
+      <AmendedAfterBanner amendedAfter={view.amendedAfter ?? null} relations={view.relations ?? null} />
+      {record}
     </>
   );
 }
@@ -604,7 +608,7 @@ export function EuropeDossierView({ view, today = null }) {
           {view.expressions.map((expression) => (
             <tr key={expression.expressionIri} data-pinned-wording={expression.wording.wordingSha256}>
               <td>{expression.language}</td>
-              <td>{expression.wording.wordingDate}</td>
+              <td>{displayDate(expression.wording.wordingDate)}</td>
               <td>{expression.articleCount}</td>
               <td><Permalink value={expression.wording.permalink} /></td>
             </tr>
@@ -719,7 +723,7 @@ export function LiveDossier({ contract, fetchImpl, initial = null }) {
   return (
     <div>
       {/* Where the act shown stands (R48): its publisher, and the act, which is this page; none until one is shown. */}
-      <Breadcrumbs crumbs={outcome.state === 'success' ? dossierCrumbs(outcome.view) : []} />
+      <Breadcrumbs crumbs={outcome.state === 'success' ? dossierCrumbs(outcome.view, { title: atLaw ? lawCrumbTitle(outcome.view) : null }) : []} />
       {atLaw ? null : <form
         role="search"
         onSubmit={(event) => {
@@ -760,6 +764,13 @@ export function LiveDossier({ contract, fetchImpl, initial = null }) {
 }
 
 /** The work a site path's address names, as the API is asked for it, or null. */
+/** The law page's act as its breadcrumb names it: its own title and the language tag of its text, or null for none. */
+function lawCrumbTitle(view) {
+  if (view.publisher !== 'lu-legilux') return null;
+  const named = actTitle(view);
+  return named === null ? null : { title: named.title, lang: quotationLanguageTag(named.language) };
+}
+
 function workOf(pathname) {
   const named = parseSitePath(pathname);
   return named !== null && named.kind === 'work' ? named.identifier : null;

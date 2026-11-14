@@ -275,6 +275,18 @@ const EN = Object.freeze({
     articleHistoryHide: "Hide the history",
     citation: "Art. {article}, {title}, version applicable from {from}",
     lawRecord: "The act's full record: its titles, every version's dates and links, the publisher's records",
+    // The law page's first screen (the owner's order of 2026-11-14): the date of a claim typed as the page writes dates,
+    // the change between the two versions as four numbers, and every technical text behind one disclosure at the bottom.
+    claimDatePlaceholder: "yyyy-mm-dd",
+    claimDateUnread: "Write the date as {example}.",
+    lawTechnical: "Technical details",
+    lawChanges: Object.freeze({
+      added: Object.freeze({ one: "article added", other: "articles added" }),
+      changed: Object.freeze({ one: "article changed", other: "articles changed" }),
+      removed: Object.freeze({ one: "article removed", other: "articles removed" }),
+      unchanged: Object.freeze({ one: "article unchanged", other: "articles unchanged" }),
+    }),
+    historyLine: "{dates}: {wording}",
     notHeldHeading: "What this dossier does not hold",
     // What the dossier does not hold, its scope and how its dates are read, one action away (R51, R28).
     detailsSummary: "Details: what this record does not hold, and how its dates are read",
@@ -1973,6 +1985,16 @@ export function countedEntry(entry, count, locale = CHROME_LOCALE) {
  * its own. A placeholder without a value, or a value without a placeholder, throws: either means the
  * template and the page disagree about what the sentence says.
  */
+/**
+ * A calendar date as the page's language writes it (the owner's order of 2026-11-14: "French date format on every French
+ * page"): 25/11/2025 on a French page, as the API sends it (2025-11-25) on any other; any other value as it is.
+ */
+export function displayDate(value, locale = CHROME_LOCALE) {
+  if (locale !== 'fr' || typeof value !== 'string') return value;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  return match === null ? value : `${match[3]}/${match[2]}/${match[1]}`;
+}
+
 export function fillParts(template, values = {}) {
   const parts = [];
   const used = new Set();
@@ -1985,7 +2007,8 @@ export function fillParts(template, values = {}) {
     if (index % 2 === 0) return append(piece);
     if (!Object.hasOwn(values, piece)) throw new Error(`the template ${JSON.stringify(template)} has no value for {${piece}}`);
     used.add(piece);
-    return append(values[piece]);
+    // A calendar date is written as the page's language writes it (`displayDate`).
+    return append(displayDate(values[piece]));
   });
   const unused = Object.keys(values).filter((name) => !used.has(name));
   if (unused.length > 0) throw new Error(`the template ${JSON.stringify(template)} has no place for ${unused.map((name) => `{${name}}`).join(', ')}`);

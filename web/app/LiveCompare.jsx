@@ -243,6 +243,24 @@ function sameStateTemplate(comparison) {
   return comparison.onlyTextHeld ? COPY.sameTextHeld : COPY.sameTextHeldOfSeveral;
 }
 
+/**
+ * The change between the two versions as four numbers (the owner's order of 2026-11-14): added, changed, removed,
+ * unchanged, each with its noun by the language's plural rule.
+ */
+function ChangeNumbers({ counts }) {
+  const kinds = ['added', 'changed', 'removed', 'unchanged'];
+  return (
+    <ul className="law-changes" data-counts="">
+      {kinds.map((kind) => (
+        <li key={kind} data-change={kind}>
+          <strong>{counts[kind]}</strong>
+          <span>{countedEntry(DOSSIER.lawChanges[kind], counts[kind])}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function Comparison({ comparison, between, hrefOf, onPage, law = null }) {
   const moved = comparison.articles?.filter((row) => row.status !== 'unchanged') ?? [];
   // A change whose wording is on another page of the comparison (the review of #1003, F4) says so.
@@ -250,9 +268,11 @@ function Comparison({ comparison, between, hrefOf, onPage, law = null }) {
   const kept = comparison.articles?.filter((row) => row.status === 'unchanged') ?? [];
   return (
     <section data-comparison={comparison.language}>
-      <h2>{comparison.language}</h2>
-      <Side label={COPY.sideFrom} side={comparison.from} />
-      <Side label={COPY.sideTo} side={comparison.to} />
+      {/* On the law page the two versions are the timeline's, named there; their addresses and digests, and the platform's
+          note, are in its technical details (`CompareTechnical`). */}
+      {law === null ? <h2>{comparison.language}</h2> : null}
+      {law === null ? <Side label={COPY.sideFrom} side={comparison.from} /> : null}
+      {law === null ? <Side label={COPY.sideTo} side={comparison.to} /> : null}
       {/* One state on both dates is said in the page's language and the publisher's clock, never "applied" (R21; the
           reader holds the platform's note to the same sentence): one version's, or, of an act held only as published,
           the one text held and what its publisher dates between the dates (the review of #964). Two states keep the
@@ -265,16 +285,18 @@ function Comparison({ comparison, between, hrefOf, onPage, law = null }) {
           {between === null ? null : <BetweenDates between={between} />}
         </>
       ) : (
-        <p lang={ENGLISH_LANG}>{asSentence(comparison.note)}</p>
+        law === null ? <p lang={ENGLISH_LANG}>{asSentence(comparison.note)}</p> : null
       )}
       {comparison.sameState ? null : (
         <>
-          <p data-counts="">
-            <Say
-              template={COPY.counts}
-              values={{ changed: comparison.counts.changed, added: comparison.counts.added, removed: comparison.counts.removed, unchanged: comparison.counts.unchanged }}
-            />
-          </p>
+          {law === null ? (
+            <p data-counts="">
+              <Say
+                template={COPY.counts}
+                values={{ changed: comparison.counts.changed, added: comparison.counts.added, removed: comparison.counts.removed, unchanged: comparison.counts.unchanged }}
+              />
+            </p>
+          ) : <ChangeNumbers counts={comparison.counts} />}
           <JumpList moved={moved} language={comparison.language} />
           <WordingPages textPage={comparison.textPage} hrefOf={hrefOf} onPage={onPage} />
           {moved.length > 0 ? (
@@ -306,6 +328,17 @@ function Comparison({ comparison, between, hrefOf, onPage, law = null }) {
 export function CompareView({ view, onPage = null, law = null }) {
   // The address of another page of this comparison's wording, or null when its work is no address of this site of an act.
   const hrefOf = (page) => compareQueryOf({ identifier: view.identifier, dateFrom: view.dateFrom, dateTo: view.dateTo, language: view.language ?? '', page });
+  if (law !== null) {
+    // The law page: the act and its two versions are the page's; the comparison's rules and notes are its technical details.
+    return (
+      <>
+        <AsPublished asPublished={view.asPublished} />
+        {view.comparisons.map((comparison) => (
+          <Comparison key={comparison.language} comparison={comparison} between={view.laterVersionsBetween} hrefOf={hrefOf} onPage={onPage} law={law} />
+        ))}
+      </>
+    );
+  }
   return (
     <>
       <p data-compare-summary="">
@@ -333,6 +366,37 @@ export function CompareView({ view, onPage = null, law = null }) {
       {view.textRule === null ? null : <p lang={ENGLISH_LANG}>{asSentence(view.textRule)}</p>}
       <p lang={ENGLISH_LANG}>{asSentence(view.validityConflictRule)}</p>
     </>
+  );
+}
+
+/**
+ * A comparison's technical details, for the law page's one disclosure (the owner's order of 2026-11-14): each compared
+ * version with its address and digest, the platform's note, the languages not compared and the rules, as the compare page
+ * says them.
+ */
+export function CompareTechnical({ view }) {
+  return (
+    <div data-compare-technical="">
+      {view.comparisons.map((comparison) => (
+        <section key={comparison.language} data-comparison-technical={comparison.language}>
+          <Side label={COPY.sideFrom} side={comparison.from} />
+          <Side label={COPY.sideTo} side={comparison.to} />
+          {comparison.sameState ? null : <p lang={ENGLISH_LANG}>{asSentence(comparison.note)}</p>}
+        </section>
+      ))}
+      {view.languagesNotCompared.length > 0 ? (
+        <ul data-not-compared={view.languagesNotCompared.length}>
+          {view.languagesNotCompared.map((entry) => (
+            <li key={entry.language}>
+              <Say template={COPY.notCompared} values={{ language: entry.language, reason: inEnglish(entry.reason), bound: COPY.bound[entry.bound] }} />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <p lang={ENGLISH_LANG}>{asSentence(view.wordingRule)}</p>
+      {view.textRule === null ? null : <p lang={ENGLISH_LANG}>{asSentence(view.textRule)}</p>}
+      <p lang={ENGLISH_LANG}>{asSentence(view.validityConflictRule)}</p>
+    </div>
   );
 }
 

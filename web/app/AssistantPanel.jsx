@@ -81,6 +81,12 @@ const isCheck = (block) => block.kind === 'claim' && QUOTE_CHECK_TEMPLATES.inclu
  * date": its history; "what changed": its comparison) and the official source. The quotation's heading claim, which names the
  * act by its address, and the claims for checking it are one action away (R51). Every block of the group is drawn.
  */
+/** A calendar date as the answer's language writes it: day first in French, 25/11/2025 (the owner's order of 2026-11-14). */
+function dateIn(date, locale) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(date);
+  return locale === 'fr' && match !== null ? `${match[3]}/${match[2]}/${match[1]}` : date;
+}
+
 function QuoteGroup({ group, copy, locale, titles = {} }) {
   const checks = group.blocks.filter(isCheck);
   const quote = group.blocks.find((block) => block.kind === 'quote') ?? null;
@@ -98,7 +104,7 @@ function QuoteGroup({ group, copy, locale, titles = {} }) {
         </p>
         {title === null ? null : <p className="assistant-act" lang={tagOf(title.language)}>{title.title}</p>}
         <Text block={quote} />
-        {typeof quote.from === 'string' ? <p className="assistant-version-badge">{fill(copy.versionBadge, { date: quote.from })}</p> : null}
+        {typeof quote.from === 'string' ? <p className="assistant-version-badge">{fill(copy.versionBadge, { date: dateIn(quote.from, locale) })}</p> : null}
         <p className="assistant-actions">
           {where === null ? null : <a className="assistant-action" href={lawPageHref(where, quote.anchor, 'article', locale)} data-action="other-date">{copy.otherDate}</a>}
           {where === null ? null : <a className="assistant-action" href={lawPageHref(where, quote.anchor, 'changes', locale)} data-action="what-changed">{copy.whatChanged}</a>}
@@ -152,10 +158,10 @@ function Part({ part, locale, copy, titles }) {
 }
 
 /**
- * The panel: the R44 notice above the field, with the preview line while the people's reviews are not done and the
- * processor sentence (the owner's order of 2026-10-28; shown only where the panel is, which is only when the assistant is
- * switched on), the field, the kept context chips, and, once an answer arrives, its plan first,
- * then its label, its notices and its parts. `phase` is 'idle', 'verdict' or 'complete', and says which announcement the
+ * The panel: the field, the kept context chips, and, once an answer arrives, its verdict, its quotations, how Lex found it
+ * and its notices; then R44's notice, with the preview line while the people's reviews are not done (under the answer, the
+ * owner's order of 2026-11-14: nothing between the heading and the question box), and the processor sentence (the owner's
+ * order of 2026-10-28; shown only where the panel is, which is only when the assistant is switched on). `phase` is 'idle', 'verdict' or 'complete', and says which announcement the
  * polite region holds. Nothing here asks the server; the page that will mount the panel, once the assistant is switched on,
  * sends `followUpRequest(question, chips)` and nothing else.
  */
@@ -173,8 +179,6 @@ export function AssistantPanel({ locale, dossier = null, phase = 'idle', chips =
   return (
     <section className="assistant-panel" aria-labelledby="assistant-heading" {...{ [ASSISTANT_PANEL_MARKER]: 'hidden' }}>
       <h2 id="assistant-heading">{copy.heading}</h2>
-      <p className="assistant-notice">{copy.notice}</p>
-      {preview ? <p className="assistant-preview">{copy.preview}</p> : null}
       <form
         className="assistant-form"
         onSubmit={(event) => {
@@ -245,7 +249,10 @@ export function AssistantPanel({ locale, dossier = null, phase = 'idle', chips =
           </p>
         </article>
       )}
-      {/* What the assistant sends and to whom, at the foot of the assistant's page (the owner's order of 2026-11-13, section C). */}
+      {/* R44's notice and the preview line under the answer, the question box first (the owner's order of 2026-11-14); what
+          the assistant sends and to whom at the foot of the assistant's page (the owner's order of 2026-11-13, section C). */}
+      <p className="assistant-notice">{copy.notice}</p>
+      {preview ? <p className="assistant-preview">{copy.preview}</p> : null}
       <p className="assistant-processor">{copy.processor}</p>
     </section>
   );

@@ -1203,6 +1203,7 @@ summary {
   margin: -1px;
   padding: 0;
   overflow: hidden;
+  clip: rect(0 0 0 0);
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
@@ -1253,10 +1254,36 @@ summary {
   text-decoration-thickness: 2px;
 }
 
+/* The owner's order of 2026-11-14: inserted text is highlighted, deleted text tinted, each keeping its line, so neither is
+   said by colour alone; the text's colour is set with its ground, so each pair keeps its contrast in both schemes. */
 .wording-diff ins {
   text-decoration: underline;
   text-decoration-thickness: 2px;
   text-underline-offset: 0.15em;
+  background: #fbe7a1;
+  color: #1d1a10;
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.wording-diff del {
+  background: #f6d9d4;
+  color: #2a1310;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+@media (prefers-color-scheme: dark) {
+  .wording-diff ins {
+    background: #4f4615;
+    color: #fff7d9;
+  }
+
+  .wording-diff del {
+    background: #4f2420;
+    color: #ffe3de;
+  }
 }
 
 .change-nav {
@@ -2386,8 +2413,11 @@ main > * {
 /* The law page (the owner's order of 2026-11-13, section B): the act's status and counts under its title, and its versions
    as points on a line, oldest first. A version chosen is a filled point with its date in bold, and the button says it is
    pressed (aria-pressed), so the choice is never said by colour alone; colours are the text's own, in both schemes. */
-.law-header h2 {
-  margin-block-end: 0.25rem;
+.law-header h1 {
+  margin-block: 0.75rem 0.35rem;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: clamp(1.6rem, 3.2vw, 2.1rem);
+  line-height: 1.2;
 }
 
 .law-facts {
@@ -2400,26 +2430,32 @@ main > * {
   padding: 0.05em 0.6em;
 }
 
+/* The versions on one line (the owner's order of 2026-11-14), sharing the column; an act with more versions than the line
+   holds scrolls along it rather than wrapping. */
 .timeline-dots {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0;
+  flex-wrap: nowrap;
+  gap: 0;
   list-style: none;
-  margin: 0.75rem 0;
-  padding: 0;
+  margin: 0.5rem 0;
+  padding: 0.6rem 0 0.2rem;
+  overflow-x: auto;
 }
 
 .timeline-dots li {
   display: flex;
+  flex: 1 0 auto;
 }
 
 .timeline-dot {
   display: inline-flex;
+  flex: 1 0 auto;
   flex-direction: column;
   align-items: center;
   gap: 0.3rem;
-  min-inline-size: 5.5rem;
-  padding: 0.3rem 0.2rem;
+  min-inline-size: 5.2rem;
+  padding: 0.3rem 0.15rem;
+  white-space: nowrap;
   border: 0;
   border-block-start: 2px solid currentColor;
   background: transparent;
@@ -2453,7 +2489,93 @@ main > * {
 }
 
 .claim-date {
+  margin-block: 0;
+}
+
+.claim-date input {
+  inline-size: 8.5rem;
+  margin-inline-start: 0.4rem;
+}
+
+/* The law page's first screen at 1366 by 768 (the owner's order of 2026-11-14): a wider column and a short top margin, so
+   the title, the status and counts, the versions on one line, the date of a claim and the change in four numbers are seen
+   together. */
+main:has([data-law-header]) {
+  max-inline-size: 64rem;
+  padding-block: 1.25rem 3rem;
+  padding-inline: clamp(1rem, 4vw, 3rem);
+  align-content: start;
+}
+
+.law-timeline > h2 {
+  margin-block: 1rem 0.15rem;
+  font-size: 1.1rem;
+}
+
+.timeline-help {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.law-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.5rem;
+  margin-block: 0.25rem 0.75rem;
+}
+
+.law-choice > p {
+  margin: 0;
+}
+
+/* The change between the two versions as four numbers, side by side. */
+.law-changes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0.5rem 0 1.25rem;
+  padding: 0;
+  list-style: none;
+}
+
+.law-changes li {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+}
+
+.law-changes strong {
+  font-size: 1.6rem;
+  line-height: 1.1;
+}
+
+.law-changes span {
+  font-size: 0.9rem;
+}
+
+@media (max-width: 34rem) {
+  .law-changes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.history-lines {
   margin-block: 0.5rem;
+}
+
+/* The page's one technical disclosure, at its foot. */
+.law-technical {
+  margin-block: 2rem 1rem;
+  padding-block-start: 0.75rem;
+  border-block-start: 1px solid currentColor;
+}
+
+.law-technical > summary {
+  cursor: pointer;
+  font-weight: 600;
 }
 
 .article-actions button {

@@ -17,7 +17,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
 import { HISTORY_LANGUAGES, LIVE_HISTORY_IDLE, createHistorySession } from '../scripts/live-history.mjs';
-import { ENGLISH_LANG, fillCounted, fillText, liveChrome } from '../scripts/live-chrome.mjs';
+import { ENGLISH_LANG, displayDate, fillCounted, fillText, liveChrome } from '../scripts/live-chrome.mjs';
 import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
 import { FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, TableRegion, refusalCardCopyFor } from './LiveAnswer.jsx';
 
@@ -110,15 +110,15 @@ export function HistoryView({ view }) {
                 <td>{row.language}</td>
                 {/* A row dated by its entry into force answers the column as the dossier's does (R21, S7b). */}
                 <td data-date-role={row.dateRole ?? undefined}>
-                  {datedByEntryIntoForce(row) ? fillText(dossier.entryIntoForceDate, { date: row.applicabilityDate }) : row.applicabilityDate}
+                  {datedByEntryIntoForce(row) ? fillText(dossier.entryIntoForceDate, { date: row.applicabilityDate }) : displayDate(row.applicabilityDate)}
                 </td>
-                <td>{row.nextApplicabilityDate ?? COMMON.noneHeld}</td>
+                <td>{displayDate(row.nextApplicabilityDate) ?? COMMON.noneHeld}</td>
                 <td>{row.afterBreak ? `${COPY.wording[kind]}${COMMON.listSeparator}${COPY.afterBreak}` : COPY.wording[kind]}</td>
                 <td>
                   {row.articles
                     .map((article) => (article.validFrom === null
                       ? COPY.ownDateNotStated
-                      : article.validityConflict ? fillText(COPY.ownDateDiffers, { date: article.validFrom }) : article.validFrom))
+                      : article.validityConflict ? fillText(COPY.ownDateDiffers, { date: article.validFrom }) : displayDate(article.validFrom)))
                     .join(COMMON.listSeparator)}
                 </td>
                 <td><Permalink value={row.permalink} /></td>

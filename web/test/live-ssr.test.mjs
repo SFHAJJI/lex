@@ -24,7 +24,7 @@ import { readingOutcome } from "../scripts/live-reading.mjs";
 import { answerHandedWith } from "../scripts/v3-client.mjs";
 import { createLiveServer } from "../scripts/serve-live.mjs";
 import { buildLive } from "../scripts/build-live.mjs";
-import { LIVE_CHROME, fillCounted, fillText } from "../scripts/live-chrome.mjs";
+import { LIVE_CHROME, displayDate, fillCounted, fillText } from "../scripts/live-chrome.mjs";
 import { luxembourgDate } from "../scripts/temporal.mjs";
 import { homePageFailures } from "../scripts/deploy-probe.mjs";
 
@@ -326,7 +326,11 @@ test("the build writes a server renderer per language, which renders the page in
       assert.ok(record > lawPage.indexOf("data-law-timeline") && lawPage.indexOf("<table", record) > record, `${language}: the full record is folded under the versions`);
       assert.ok(lawPage.indexOf('id="dossier-states"') < record && lawPage.indexOf('id="dossier-states"') > 0, `${language}: the span of the versions stays in sight`);
       assert.ok(lawPage.includes("data-law-header") && lawPage.includes("data-law-timeline"), `${language}: an act's page is the law page, rendered by the server`);
-      assert.ok(!/<input[^>]*type="text"/.test(lawPage), `${language}: nothing to type at a law's address`);
+      // No identifier to type at a law's address: its one text field is the date of a claim (the owner's order of 2026-11-14).
+      const fields = [...lawPage.matchAll(/<input[^>]*type="text"[^>]*>/g)].map((match) => match[0]);
+      assert.equal(fields.length, 1, `${language}: one text field at a law's address`);
+      assert.ok(fields[0].includes(`placeholder="${LIVE_CHROME[language].dossier.claimDatePlaceholder}"`), `${language}: the date of a claim`);
+      assert.ok(lawPage.indexOf("data-claim-date") > 0 && lawPage.indexOf("data-claim-date") < lawPage.indexOf(fields[0]), `${language}: in its form`);
       const html = context.lexSsr.render("reading", JSON.stringify(READING), `/${language}${STATE.permalink}`);
       assert.match(html, new RegExp(`^<!doctype html>\\n<html lang="${language}"`), `${language}: a whole page in its language`);
       assert.ok(html.includes(`<link rel="canonical" href="https://law.soufien.lu/${language}/lu-legilux/loi-1991-08-10-n3/fra"/>`), `${language}: the canonical in the page's own language`);
@@ -355,7 +359,7 @@ test("the build writes a server renderer per language, which renders the page in
         acts: fillCounted(copy.home.acts, totals.works, {}, language),
         versions: fillCounted(copy.home.versions, totals.states, {}, language),
         articles: fillCounted(copy.home.articles, totals.articles, {}, language),
-        date: luxembourgDate(history.snapshots_with_text[0].built_at),
+        date: displayDate(luxembourgDate(history.snapshots_with_text[0].built_at), language),
       });
       assert.ok(home.includes(`data-coverage-line="counted" data-built-on="${luxembourgDate(history.snapshots_with_text[0].built_at)}">${line}</p>`), `${language}: ${line}`);
       assert.equal(home.split(`data-not-advice="">${copy.site.notAdvice}</p>`).length - 1, 2, `${language}: R50's sentence under the box and in the footer`);
