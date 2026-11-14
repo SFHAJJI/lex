@@ -271,8 +271,8 @@ function QualityOutcomes({ page }) {
     </div>
   );
   const columns = QUALITY_SET_RUNS.flatMap((run) => [
-    { key: `${run.date}-${run.commit}-dev`, head: fillText(page.outcomeColumns.dev, { date: longDate(run.date) }), counts: run.dev },
-    { key: `${run.date}-${run.commit}-heldout`, head: fillText(page.outcomeColumns.heldout, { date: longDate(run.date) }), counts: run.heldout },
+    { key: `${run.date}-${run.commit}-dev`, head: fillText(page.outcomeColumns[run.live ? 'dev' : 'devRefused'], { date: longDate(run.date) }), counts: run.dev },
+    { key: `${run.date}-${run.commit}-heldout`, head: fillText(page.outcomeColumns[run.live ? 'heldout' : 'heldoutRefused'], { date: longDate(run.date) }), counts: run.heldout },
   ]);
   return (
     <section className="reference-section" aria-labelledby="quality-outcomes" data-reference-section="outcomes">
@@ -301,6 +301,7 @@ function QualityOutcomes({ page }) {
           </tbody>
         </table>
       </div>
+      {QUALITY_SET_RUNS.some((run) => !run.live) ? <p data-quality-gate="">{page.gateNote}</p> : null}
     </section>
   );
 }

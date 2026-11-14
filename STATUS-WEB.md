@@ -4,6 +4,34 @@ Updated 2026-11-14. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Measured by article: lex-eval 0.2, the release gate, the Quality page's right and wrong articles (sole driver, 2026-11-14)
+
+`web/quality-d`, section D of the owner's order of 2026-11-13, with lex-eval 0.2 (github.com/SFHAJJI/lex-eval).
+- **The set**: 56 test questions, each with the act and, for 39, the article its answer must quote: 25 on the 1997
+  insurance-contract law (by concept and by number, French and English, two advice questions), 21 on GDPR, the AI Act and
+  DORA, 10 others. **15 held-out questions**, written before any run, kept outside the repository, never used to tune and
+  scored apart (their file's SHA-256 is in docs/CHANGES.md); a test question identical to a held-out one was dropped.
+- **Results by kind**: right article, wrong article (the headline, target none), not found, wrongly refused; right or wrong
+  behaviour for the cases that expect no article. MLflow logs the harness and serving commits, the data snapshot, the
+  planner's model and prompt version, latency p50/p95, an estimated cost per question (prompt and plan sizes at the
+  deployment's stated price per million tokens), and one trace per question (plan, operations, the search's first hits and
+  best hit, the article chosen).
+- **The gate** (`C:\lex-v3\driver-scripts\promote-with-eval-gate.ps1`): the candidate, at its own address, must quote no
+  wrong article on the insurance suite and fail no question the baseline run passed, besides the quotation, template and
+  error gates; only then does traffic move.
+- **Release 5 on the new set** (2026-11-14, before this work went live): 13 right articles, 3 wrong (2 on the insurance
+  law: the prescription question, dated or not, quoted art. 70; the AI Act's art. 50 asked in French quoted another act's
+  art. 2), 23 not found, 8 refused as advice, 9 right behaviours; held-out 0 of 15 (9 not found, 6 refused as advice);
+  every quotation verified; p50 1.51 s, p95 2.01 s; about 0.0011 EUR a question. The gate fails it, as it should.
+- **Owner's item**: 8 of the test questions and 6 held-out ones are general questions phrased "l'assuré doit-il…" or
+  "l'assureur peut-il…", which the advice boundary's cues (R15, by design person-blind) decline. Narrowing R15 is a legal
+  call, left to the owner; the Quality page lists it as a known failure.
+- **Release 6's candidate** on the same set (refused by the gate, see below): 17 right articles, 1 wrong, 24 not found, 5
+  refused as advice, 9 right behaviours, no regression; held-out 0 of 15. The Quality page shows both runs, the refused one
+  labelled so, and says why a release with a wrong article does not go live.
+- **Section C's last item**, here: what a page sends to the server is said in its footer, not its introduction.
+- **Not done (section E)**: MCP `coverage`'s language aliases and summary by default (they change the coverage answer
+  the home page reads); the Deutsch and Lëtzebuergesch links still lead to their "not yet translated" pages.
 ## Release 6 refused by the evaluation gate: one wrong article; a hit is clearly ahead only on two heading words or the rarest (sole driver, 2026-11-14)
 
 `api/best-hit-strength`. Release 6 (`v3-20261114T013652Z-b34dff943322`: sections A to C) was deployed as a zero-traffic

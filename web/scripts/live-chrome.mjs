@@ -1387,9 +1387,12 @@ const EN = Object.freeze({
     }),
     outcomeColumns: Object.freeze({
       kind: "Result",
-      dev: "Test questions, {date}",
-      heldout: "Held-out questions, {date}",
+      dev: "Test questions: the live release, {date}",
+      heldout: "Held-out questions: the live release, {date}",
+      devRefused: "Test questions: the next release, refused by the gate, {date}",
+      heldoutRefused: "Held-out questions: the next release, refused by the gate, {date}",
     }),
+    gateNote: "A release that quotes a wrong article on the insurance questions, or fails a question the live one answers, does not go live: the next release above was refused for one wrong article, and the fix follows.",
     outcomes: Object.freeze({
       rightArticle: "The right article, quoted",
       wrongArticle: "A wrong article, quoted",

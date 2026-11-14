@@ -1904,9 +1904,12 @@ export const LIVE_CHROME_FR = Object.freeze({
     }),
     outcomeColumns: Object.freeze({
       kind: 'Résultat',
-      dev: 'Questions de test, {date}',
-      heldout: 'Questions réservées, {date}',
+      dev: 'Questions de test : la version en ligne, {date}',
+      heldout: 'Questions réservées : la version en ligne, {date}',
+      devRefused: 'Questions de test : la version suivante, refusée par le contrôle, {date}',
+      heldoutRefused: 'Questions réservées : la version suivante, refusée par le contrôle, {date}',
     }),
+    gateNote: 'Une version qui cite un mauvais article sur les questions d’assurance, ou qui échoue à une question à laquelle la version en ligne répond, n’est pas mise en ligne : la version suivante ci-dessus a été refusée pour un mauvais article, et la correction suit.',
     outcomes: Object.freeze({
       rightArticle: 'Le bon article, cité',
       wrongArticle: 'Un mauvais article, cité',
