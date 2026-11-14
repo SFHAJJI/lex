@@ -21,7 +21,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
 import * as english from "../.react-build/app.mjs";
-import { LIVE_CHROME, REFUSAL_TRANSLATIONS } from "../scripts/live-chrome.mjs";
+import { LIVE_CHROME, REFUSAL_TRANSLATIONS, displayDate } from "../scripts/live-chrome.mjs";
+/** A date as a French page writes it (the owner's order of 2026-11-14: day first). */
+const frDate = (date) => displayDate(date, "fr");
+
 import { historyBeginsHint, nearestAnchorsHint } from "../scripts/live-refusals.mjs";
 
 const require = createRequire(import.meta.url);
@@ -185,7 +188,8 @@ test("an EU refusal on a French page is said in the EU's French words: wordings 
 });
 
 test("a refusal whose card cannot be shown is said in French, the card's English reason marked English and the hint in French", async () => {
-  const history = (payload) => ["The history this index holds for this work begins on {date}.", { date: payload.history_begins }, historyBeginsHint(payload.history_begins)];
+  // The French hint writes its date day first; the English one as the API sends it.
+  const history = (payload) => ["The history this index holds for this work begins on {date}.", { date: frDate(payload.history_begins) }, historyBeginsHint(payload.history_begins)];
   const nearest = (payload) => ["The nearest article ids this index holds are {ids}.", { ids: payload.nearest_anchors.join(", ") }, nearestAnchorsHint(payload.nearest_anchors)];
   const cases = [
     ["reading", "evidence_bundle", "a date before the work's history", "live-reading.mjs", "readingOutcome", "ReadingAnswerView", history],
@@ -281,11 +285,11 @@ test("an EU refusal card offers wordings by their dates, never applicable states
   assert.ok(render(english, "lu-legilux", "Several states of this work apply on that date, and none is chosen.").includes("applicable from 2024-02-01, hash <code>aaaaaaaa</code>, published 2024-01-15"), "a Luxembourg card keeps its words");
 
   const europeFr = render(french, "eu-eurlex", SAID.sentences["This index holds different texts of this EU act for that date, so none is chosen."]);
-  assert.ok(europeFr.includes("libellé du 2024-02-01, empreinte <code>aaaaaaaa</code>, publié le 2024-01-15"), europeFr);
-  assert.ok(europeFr.includes("libellé du 2024-03-01, empreinte <code>bbbbbbbb</code>, date de publication non indiquée par la plateforme"));
+  assert.ok(europeFr.includes("libellé du 01/02/2024, empreinte <code>aaaaaaaa</code>, publié le 15/01/2024"), europeFr);
+  assert.ok(europeFr.includes("libellé du 01/03/2024, empreinte <code>bbbbbbbb</code>, date de publication non indiquée par la plateforme"));
   assert.ok(europeFr.includes(escaped(FR.refusalCard.europeNotes.ambiguous_version)));
   assert.doesNotMatch(unmarked(europeFr), /applicab|s’appliqu|\bversions?\b/i, "nor does it in French");
-  assert.ok(render(french, "lu-legilux", SAID.sentences["Several states of this work apply on that date, and none is chosen."]).includes("applicable à partir du 2024-02-01, empreinte <code>aaaaaaaa</code>, publiée le 2024-01-15"));
+  assert.ok(render(french, "lu-legilux", SAID.sentences["Several states of this work apply on that date, and none is chosen."]).includes("applicable à partir du 01/02/2024, empreinte <code>aaaaaaaa</code>, publiée le 15/01/2024"));
 
   // Each candidate is a permalink as the API mints it, linked under the page's own language (R61), so following one
   // never sends the reader through the redirect to the language their browser prefers.
@@ -309,7 +313,7 @@ test("a list's separators and a label's colon are the table's, so a French page 
   assert.ok(englishLineage.includes("fra: 1 wording run, 1 distinct; deu: 2 wording runs, 2 distinct.") && englishLineage.includes("2024-01-01 (differs from the state&#x27;s); not stated"), englishLineage);
   const frenchLineage = renderToStaticMarkup(h(french.HistoryView, { view: lineage }));
   assert.ok(frenchLineage.includes(`fra${NB}: 1 séquence de libellé, libellés distincts${NB}: 1${NB}; deu${NB}: 2 séquences de libellé, libellés distincts${NB}: 2.`), frenchLineage);
-  assert.ok(frenchLineage.includes(`2024-01-01 (diffère de celle de la version)${NB}; non indiquée`));
+  assert.ok(frenchLineage.includes(`01/01/2024 (diffère de celle de la version)${NB}; non indiquée`));
   assert.ok(frenchLineage.includes('<p lang="en">The wording rule as the platform states it.</p>'));
 
   const search = {
@@ -390,7 +394,7 @@ test("the EU export panel says its sentences in French and marks the platform's 
   assert.ok(panel.includes(`<span lang="en">${escaped(model.rightsRule)}</span>`), "the rights rule is marked English");
   assert.ok(panel.includes(`<span lang="en">${escaped(model.annexesNotServed[0].reason)}</span>`), "an annex's reason is marked English");
   const said = unmarked(panel.replace(/<pre>[\s\S]*?<\/pre>/, ""));
-  assert.ok(said.includes(`(eng, libellé du 2016-04-27)${NB}: `), "an EU item is dated as its wording is, in the reviewed table's French");
+  assert.ok(said.includes(`(eng, libellé du 27/04/2016)${NB}: `), "an EU item is dated as its wording is, in the reviewed table's French");
   assert.ok(said.includes(FR.export.europeRights.split("{acknowledgement}")[0]), "the acknowledgement is introduced in French");
   assert.doesNotMatch(said, /applicab|s’appliqu|\bversions?\b/i, "never as a version that applies");
   const englishOutcome = (await englishModule("live-reading.mjs")).readingOutcome({ state: "success", envelope });

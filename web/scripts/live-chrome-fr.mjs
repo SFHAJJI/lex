@@ -661,6 +661,16 @@ export const LIVE_CHROME_FR = Object.freeze({
     articleHistoryHide: 'Masquer l’historique',
     citation: 'Art. {article}, {title}, version applicable depuis le {from}',
     lawRecord: 'Le dossier complet de l’acte : ses intitulés, les dates et liens de chaque version, les registres de l’éditeur',
+    claimDatePlaceholder: 'jj/mm/aaaa',
+    claimDateUnread: 'Écrivez la date ainsi : {example}.',
+    lawTechnical: 'Détails techniques',
+    lawChanges: Object.freeze({
+      added: Object.freeze({ one: 'article ajouté', other: 'articles ajoutés' }),
+      changed: Object.freeze({ one: 'article modifié', other: 'articles modifiés' }),
+      removed: Object.freeze({ one: 'article supprimé', other: 'articles supprimés' }),
+      unchanged: Object.freeze({ one: 'article inchangé', other: 'articles inchangés' }),
+    }),
+    historyLine: '{dates} : {wording}',
     notHeldHeading: 'Ce que ce dossier ne contient pas',
     detailsSummary: 'Détails : ce que cette fiche ne contient pas, et comment ses dates se lisent',
     euExpressions: Object.freeze({

@@ -39,8 +39,8 @@ function actName(view) {
   return typeof name === 'string' && name.length > 0 ? name : null;
 }
 
-function crumb(part, text, { href = null, code = false, current = false } = {}) {
-  return Object.freeze({ part, text, href: current ? null : href, code, current });
+function crumb(part, text, { href = null, code = false, current = false, lang = null } = {}) {
+  return Object.freeze({ part, text, href: current ? null : href, code, current, lang });
 }
 
 function publisherCrumb(view, copy) {
@@ -59,10 +59,15 @@ export function versionWords(view, version, copy = liveChrome().breadcrumbs) {
  * A dossier's breadcrumbs, from its view (`readDossier`, or the EU dossier's): the publisher, and the act, which is the
  * page. None for a view that names no act.
  */
-export function dossierCrumbs(view, { locale = CHROME_LOCALE } = {}) {
+export function dossierCrumbs(view, { locale = CHROME_LOCALE, title = null } = {}) {
   if (view === null || typeof view !== 'object' || actName(view) === null) return Object.freeze([]);
   const copy = liveChrome(locale).breadcrumbs;
-  return Object.freeze([publisherCrumb(view, copy), crumb('act', actName(view), { code: true, current: true })]);
+  // On the law page the act is named by its own title, as its heading names it (the owner's order of 2026-11-14: no raw
+  // identifier on its first screen): `title` is the act's title and the language tag of its text.
+  const act = title === null
+    ? crumb('act', actName(view), { code: true, current: true })
+    : crumb('act', title.title, { current: true, lang: title.lang });
+  return Object.freeze([publisherCrumb(view, copy), act]);
 }
 
 /**

@@ -43,6 +43,12 @@ export function dossierSearchEngines(initial) {
   return { indexing: 'switch', structuredData: dossierStructuredData({ view: outcome.view, canonical }) };
 }
 
+/** Whether the server's own answer at a law's address is a Luxembourg act's dossier: the page is then the law page. */
+function isLawPage(initial) {
+  const outcome = dossierOutcome(answerHandedWith('dossier', initial.envelope, { contract: LIVE_CONTRACT, objectType: 'work_record' }));
+  return outcome.state === 'success' && outcome.view.publisher === 'lu-legilux';
+}
+
 /**
  * The page: its form in its idle state, as built for `dossier.html`; or, given `initial`, the page at a law's address as
  * the server renders it from its own answer (R67: complete without JavaScript), with that answer in a data block beside
@@ -51,6 +57,9 @@ export function dossierSearchEngines(initial) {
 export function renderLiveDossierPage({ initial = null } = {}) {
   const copy = liveChrome().dossier;
   const searchEngines = initial === null ? { indexing: 'never', structuredData: null } : dossierSearchEngines(initial);
+  // A Luxembourg act's own page is the law page, headed by the act itself (the owner's order of 2026-11-14: no "Dossier"
+  // eyebrow, heading or paragraph on its first screen); the dossier page and a refusal at a law's address keep the page's.
+  const lawPage = initial !== null && isLawPage(initial);
   return renderHydratableDocument(
     <Document
       state="live-dossier"
@@ -63,9 +72,13 @@ export function renderLiveDossierPage({ initial = null } = {}) {
       structuredData={searchEngines.structuredData}
       freshness={initial === null ? null : freshnessFacts(initial.envelope)}
     >
-      <p className="eyebrow">{copy.eyebrow}</p>
-      <h1>{copy.heading}</h1>
-      <p>{copy.intro}</p>
+      {lawPage ? null : (
+        <>
+          <p className="eyebrow">{copy.eyebrow}</p>
+          <h1>{copy.heading}</h1>
+          <p>{copy.intro}</p>
+        </>
+      )}
       <div id={LIVE_DOSSIER_ROOT}>{liveDossierTree(initial)}</div>
       {initial === null ? null : <script type="application/json" id={INITIAL_ANSWER_ID} dangerouslySetInnerHTML={{ __html: jsonInScript(initial.envelope) }} />}
       <script src={livePath('client-live-dossier.js')} defer />

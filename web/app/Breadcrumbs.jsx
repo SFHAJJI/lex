@@ -11,7 +11,7 @@ export function Breadcrumbs({ crumbs }) {
     <nav className="breadcrumbs" aria-label={liveChrome().breadcrumbs.label} data-breadcrumbs={crumbs.map((crumb) => crumb.part).join(' ')}>
       <ol>
         {crumbs.map((crumb) => {
-          const text = crumb.code ? <code>{crumb.text}</code> : crumb.text;
+          const text = crumb.code ? <code>{crumb.text}</code> : crumb.lang ? <span lang={crumb.lang}>{crumb.text}</span> : crumb.text;
           return (
             <li key={crumb.part} data-crumb={crumb.part} aria-current={crumb.current ? 'page' : undefined}>
               {crumb.href === null ? text : <a href={crumb.href}>{text}</a>}

@@ -26,7 +26,10 @@ import { radarOutcome } from "../scripts/live-radar.mjs";
 import { historyOutcome } from "../scripts/live-history.mjs";
 import { renderProvenance } from "../scripts/provenance.mjs";
 import { citationForms } from "../scripts/citation.mjs";
-import { LIVE_CHROME, fillText } from "../scripts/live-chrome.mjs";
+import { LIVE_CHROME, displayDate, fillText } from "../scripts/live-chrome.mjs";
+/** A date as a French page writes it (the owner's order of 2026-11-14: day first). */
+const frDate = (date) => displayDate(date, "fr");
+
 import { exportState, pinKey } from "../scripts/live-export.mjs";
 import { CSV_COLUMNS, exportCsv } from "../scripts/export-build.mjs";
 
@@ -176,7 +179,7 @@ test("the French pages say the entry into force, the missing article and the dos
   state.articles.forEach((article, index) => { article.document_position = index === 0 ? 1 : index + 2; });
   state.missing_articles = [{ from_position: 2, to_position: 2, count: 1, after_publisher_id: state.articles[0].publisher_id, before_publisher_id: state.articles[1].publisher_id }];
   const markup = decode(renderToStaticMarkup(h(french.ReadingAnswerView, { outcome: readingOutcome({ state: "success", envelope }) })));
-  assert.ok(markup.includes(fillText(FR.reading.stateHeadingEntryIntoForce, { work: envelope.result.value.work_key, language: state.language, from: state.applicability_date })), "the French heading");
+  assert.ok(markup.includes(fillText(FR.reading.stateHeadingEntryIntoForce, { work: envelope.result.value.work_key, language: state.language, from: frDate(state.applicability_date) })), "the French heading");
   assert.ok(markup.includes(FR.reading.missingBefore.one), "the French notice");
 });
 
@@ -281,8 +284,8 @@ test("the radar says a row whose state is an act dated by its entry into force a
   assert.ok(!english.replace(/<[^>]+>/g, "").includes(`from ${date}:`), "never a bare from of it");
   const french = await frenchApp();
   const frenchText = decode(renderToStaticMarkup(h(french.RadarAnswerView, { outcome }))).replace(/<[^>]+>/g, "");
-  assert.ok(frenchText.includes(`l’acte tel que publié, daté de son entrée en vigueur le ${date} (éditeur)`), "the row's role, in French");
-  assert.ok(!frenchText.includes(`à partir du ${date}`));
+  assert.ok(frenchText.includes(`l’acte tel que publié, daté de son entrée en vigueur le ${frDate(date)} (éditeur)`), "the row's role, in French");
+  assert.ok(!frenchText.includes(`à partir du ${frDate(date)}`) && !frenchText.includes(`à partir du ${date}`));
   // A row not compared after the act agrees with it (`radar.notComparedAct`; the French review of #987's repair round).
   if (outcome.view.rows[0].reason !== null) {
     assert.ok(frenchText.includes("(éditeur)\u00a0: non comparé\u00a0:"), frenchText);

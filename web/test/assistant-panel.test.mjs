@@ -115,14 +115,18 @@ test('no built page carries the panel or any assistant control', async () => {
   }
 });
 
-test('the panel draws the plan first, two polite announcements and no alert, and the notice above the field', async () => {
+test('the panel draws the plan first, two polite announcements and no alert, and the notice under the answer', async () => {
   const AssistantPanel = await Panel();
   const markup = renderToStaticMarkup(h(AssistantPanel, { locale: 'fr', dossier: drafted(), phase: 'verdict' }));
   assert.ok(markup.includes(`${ASSISTANT_PANEL_MARKER}="hidden"`));
-  assert.ok(markup.indexOf('assistant-notice') < markup.indexOf('assistant-question'), 'R44: the notice sits above the input');
+  // R44's notice, placed by the owner's order of 2026-11-14 under the answer: nothing between the heading and the field.
+  assert.ok(markup.indexOf('assistant-heading') < markup.indexOf('assistant-question'));
+  assert.ok(!markup.slice(markup.indexOf('assistant-heading'), markup.indexOf('assistant-question')).includes('<p'), 'nothing above the field');
+  assert.ok(markup.indexOf('assistant-notice') > markup.indexOf('assistant-answer'), 'R44: the notice sits under the answer');
+  assert.equal((markup.match(/class="assistant-notice"/g) ?? []).length, 1, 'once');
   assert.ok(markup.includes(ASSISTANT_PANEL_COPY.fr.notice));
-  assert.ok(markup.indexOf('assistant-preview') > markup.indexOf('assistant-notice') && markup.indexOf('assistant-preview') < markup.indexOf('assistant-question'),
-    'the preview line sits with the notice, above the field');
+  assert.ok(markup.indexOf('assistant-preview') > markup.indexOf('assistant-notice') && markup.indexOf('assistant-preview') < markup.indexOf('assistant-processor'),
+    'the preview line sits with the notice, above the processor sentence');
   assert.ok(markup.includes(ASSISTANT_PANEL_COPY.fr.preview) && markup.includes(ASSISTANT_PANEL_COPY.fr.processor));
   // The answer card (the owner's order of 2026-11-13, section C, over R45(c)'s plan-first order): the verdict in a word first,
   // then the quotation's card, then how Lex found it (the validated plan and the trace) one action away, then the notices in

@@ -11,7 +11,8 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { CompareAnswerView, LawHeader, LawTimeline } from "../.react-build/app.mjs";
-import { actTitle, actTitleOf, afterClick, articleHeadingOf, articleNumberOf, defaultPair, lawStatus, versionOn, versionsOf, yearOf } from "../scripts/law-page.mjs";
+import { actTitle, actTitleOf, afterClick, articleHeadingOf, articleNumberOf, defaultPair, lawStatus, readClaimDate, versionOn, versionsOf, yearOf } from "../scripts/law-page.mjs";
+import { displayDate } from "../scripts/live-chrome.mjs";
 import { compareOutcome } from "../scripts/live-compare.mjs";
 
 const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
@@ -93,8 +94,13 @@ test("one click reads a version, a second compares the two, and the page opens o
   assert.equal((markup.match(/aria-pressed="true"/g) ?? []).length, 2, "two chosen");
   assert.ok(markup.includes('data-chosen-versions="2021-01-01/2025-11-25"'), markup);
   assert.ok(markup.includes("Compared: the version of 2021-01-01 and the version of 2025-11-25."));
-  assert.ok(markup.includes("Date of the claim") && markup.includes('type="date"'));
-  assert.ok(!/<input[^>]*type="text"/.test(markup), "no identifier to type on the law page");
+  // The date of a claim is typed as a reader writes it (the owner's order of 2026-11-14): its one text field.
+  const fields = markup.match(/<input[^>]*type="text"[^>]*>/g) ?? [];
+  assert.equal(fields.length, 1, "no identifier to type on the law page, only the date of a claim");
+  assert.ok(markup.includes("Date of the claim") && fields[0].includes('placeholder="yyyy-mm-dd"'), fields[0]);
+  // The page's one disclosure at its foot, closed: the technical details, which hold the act's key and its record.
+  assert.match(markup, /<details class="law-technical" data-law-technical=""><summary>Technical details · <code>loi-1997-07-27-n10<\/code><\/summary>/);
+  assert.ok(!markup.slice(0, markup.indexOf("data-law-technical")).replace(/<[^>]+>/g, "").includes("loi-1997-07-27-n10"), "no identifier said above it");
   assert.ok(!markup.includes("data-answer-state"), "the comparison is asked in the browser, not rendered by the server");
 });
 
@@ -139,4 +145,22 @@ test("an article's heading is read from its text as the platform's search reads 
   assert.equal(articleHeadingOf("Art. 15.(1)L’Assemblée générale annuelle se tient"), "", "a paragraph's number first");
   assert.equal(articleHeadingOf("Art. 3.Le présent règlement s’applique aux avocats. Il entre"), "", "a sentence first");
   assert.equal(articleHeadingOf("Le contrat est formé."), "", "no article number");
+});
+
+test("the date of a claim is read as a reader writes it, day first, and a French page writes a date day first", () => {
+  assert.equal(readClaimDate("03/03/2019"), "2019-03-03");
+  assert.equal(readClaimDate(" 3/3/2019 "), "2019-03-03", "one digit and spaces around");
+  assert.equal(readClaimDate("25.11.2025"), "2025-11-25");
+  assert.equal(readClaimDate("25-11-2025"), "2025-11-25");
+  assert.equal(readClaimDate("2019-03-03"), "2019-03-03", "a calendar date as it is");
+  assert.equal(readClaimDate("31/02/2019"), null, "no such day");
+  assert.equal(readClaimDate("03/2019"), null);
+  assert.equal(readClaimDate("hier"), null);
+  assert.equal(readClaimDate(""), null);
+  const versions = versionsOf(insuranceLaw());
+  assert.equal(versions[versionOn(versions, readClaimDate("03/03/2019"))].applicabilityDate, "2018-11-01", "the owner's case, typed");
+  assert.equal(displayDate("2025-11-25", "fr"), "25/11/2025");
+  assert.equal(displayDate("2025-11-25", "en"), "2025-11-25");
+  assert.equal(displayDate("loi-2025-11-25", "fr"), "loi-2025-11-25", "only a whole date");
+  assert.equal(displayDate(null, "fr"), null);
 });

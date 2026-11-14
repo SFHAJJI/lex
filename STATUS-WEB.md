@@ -4,6 +4,35 @@ Updated 2026-11-14. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The first screen at 1366 by 768: the law page, the answer, French dates (sole driver, 2026-11-14)
+
+`web/first-screen`, the owner's order of 2026-11-14 ("judge by screenshot, not by test"; retrieval and the quality gates
+untouched).
+- **The law page's first screen**: the act's title as the page's heading, its status badge and counts, the versions on one
+  line (dates 25/11/2025 on a French page), "Date du sinistre" as a text field read day first (`readClaimDate`; 3/3/2019,
+  03.03.2019 and 2019-03-03 all read), and the change as four numbers (added, changed, removed, unchanged). Gone from it:
+  the "Dossier / Le dossier d'un acte" heading and paragraph, the act's key (in the breadcrumb, under the title and in the
+  comparison's summary line: the breadcrumb now names the act by its title), the "fra" heading and the two permalinks with
+  their digests. The column is wider on the law page (64rem) and its top margin short.
+- **One "Détails techniques" disclosure at the foot**, closed: the act's key, the versions compared with their addresses and
+  digests, the platform's rules and notes in English, and the act's full record. An article's history on the law page is a
+  line per version ("À partir du 01/01/2021, remplacée le 25/11/2025 : libellé inchangé", a link to read it), no table.
+- **Inserted text highlighted** (pale yellow, underline kept; deleted text tinted and struck), in both colour schemes. The
+  hidden words for screen readers ("[inséré : …]") are also clipped the older way (`clip`), for browsers that ignore
+  `clip-path`.
+- **The assistant page**: R44's notice and the preview line move under the answer, the question box first (the owner's
+  order overrides R44's place, not its words; the notice is still on the page once). The question box is set as the home
+  page's (it was the browser's own, in a fixed-width font).
+- **Every page's top margin** is shorter at desktop widths (2.5rem at most, from 6rem), so a first screen holds content.
+- **French dates**: every date a sentence of the copy tables fills is written day first on a French page (`displayDate` in
+  `fillParts`), and so are the dossier's and the history's tables, the relations' dates and the answer's version badge.
+  English pages keep 2025-11-25.
+- Driver decision (reversible): the journey at a law's address still sees the act's key, now in the closed disclosure's
+  summary line at the foot ("Technical details · loi-…"), so the check is unchanged.
+- Evidence: web `npm run build`; `npm test` 1,542 tests, 1,539 passed, 3 skipped (French expectations moved to day-first
+  dates; the law page's one text field is the claim date; new test for the date reader); `eng/verify-v3-tree.ps1` 1,875
+  paths.
+
 ## The demo's polish: the quotation in paragraphs, the buttons after the badge, the law page focused, Release 7 on the Quality page (sole driver, 2026-11-14)
 
 `web/demo-polish`, from Release 7's screenshots (GitHub's runner, `ops/screens`, 57 pictures at 1280, 1024 and 390 px; the

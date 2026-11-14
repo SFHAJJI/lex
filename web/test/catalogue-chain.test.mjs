@@ -25,7 +25,10 @@ import { searchOutcome } from "../scripts/live-search.mjs";
 import { exportState, pinKey } from "../scripts/live-export.mjs";
 import { exportJson } from "../scripts/export-build.mjs";
 import { assertTimeVocabulary } from "../scripts/publisher-vocabulary.mjs";
-import { LIVE_CHROME, entriesOf, fillText } from "../scripts/live-chrome.mjs";
+import { LIVE_CHROME, displayDate, entriesOf, fillText } from "../scripts/live-chrome.mjs";
+/** A date as a French page writes it (the owner's order of 2026-11-14: day first). */
+const frDate = (date) => displayDate(date, "fr");
+
 
 const web = new URL("../", import.meta.url);
 const census = JSON.parse(await readFile(new URL("../schemas/v3-platform/envelope-samples.json", web), "utf8"));
@@ -317,7 +320,7 @@ test("the dossier lists the catalogue's versions held without text and its gaps,
 
   const french = await frenchApp();
   const frenchMarkup = decode(renderToStaticMarkup(h(french.DossierAnswerView, { outcome })));
-  assert.ok(frenchMarkup.includes(fillText(FR.dossier.gap, { from: "2031-01-01", to: "2032-01-01" })));
+  assert.ok(frenchMarkup.includes(fillText(FR.dossier.gap, { from: frDate("2031-01-01"), to: frDate("2032-01-01") })));
   assert.ok(frenchMarkup.includes(FR.dossier.chainNote));
 });
 
@@ -527,7 +530,7 @@ test("an ambiguity names a state its catalogue names no expression of by its coo
   assert.ok(string.includes("data-candidate-unexpressed"));
   const french = await frenchApp();
   const frenchSaid = fillText(FR.refusalCard.candidateUnexpressed, {
-    version: fillText(FR.refusalCard.versions.consolidation, { date: "2003-03-03" }), hash: DIGEST_A.slice(0, 8),
+    version: fillText(FR.refusalCard.versions.consolidation, { date: frDate("2003-03-03") }), hash: DIGEST_A.slice(0, 8),
   });
   assert.ok(decode(renderToStaticMarkup(h(french.RefusalCard, { ...card, copy: FR.refusalCard }))).replace(/<[^>]+>/g, "").includes(frenchSaid));
   // After a version named as the act as published, the French names "cette version", never "elle" (the French review).
@@ -535,7 +538,7 @@ test("an ambiguity names a state its catalogue names no expression of by its coo
   act.payload.candidate_state_kinds = ["as_published", "as_published"];
   act.payload.candidate_date_roles = ["entry_into_force", "applicability_in_file"];
   const frenchAct = decode(renderToStaticMarkup(h(french.RefusalCard, { ...act, copy: FR.refusalCard }))).replace(/<[^>]+>/g, "");
-  assert.ok(frenchAct.includes("l’acte tel que publié, daté de son entrée en vigueur le 2003-03-03 (éditeur), empreinte aaaaaaaa"), frenchAct);
+  assert.ok(frenchAct.includes("l’acte tel que publié, daté de son entrée en vigueur le 03/03/2003 (éditeur), empreinte aaaaaaaa"), frenchAct);
   assert.ok(frenchAct.includes("ne propose aucun lien vers cette version") && !frenchAct.includes("vers elle"));
   assert.ok(frenchAct.includes("(/lu-legilux/loi-2003-03-03-n1/2003-03-03)"), "the coordinate set apart");
 

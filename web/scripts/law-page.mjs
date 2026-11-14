@@ -68,6 +68,25 @@ export function versionOn(versions, date) {
   return -1;
 }
 
+/**
+ * The date of a claim as a reader types it: day first (25/11/2025, 25.11.2025, 25-11-2025, 1/2/2020), or as a calendar date
+ * (2025-11-25); the calendar date it names, or null for anything else, a day that does not exist included.
+ */
+export function readClaimDate(text) {
+  const typed = typeof text === 'string' ? text.trim() : '';
+  let year;
+  let month;
+  let day;
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(typed);
+  const dayFirst = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(typed);
+  if (iso !== null) [, year, month, day] = iso;
+  else if (dayFirst !== null) [, day, month, year] = dayFirst;
+  else return null;
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  if (date.getUTCFullYear() !== Number(year) || date.getUTCMonth() !== Number(month) - 1 || date.getUTCDate() !== Number(day)) return null;
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+}
+
 /** The two versions compared when the page opens: the one before the latest, and the latest; null for one version. */
 export function defaultPair(versions) {
   return versions.length < 2 ? null : Object.freeze([versions.length - 2, versions.length - 1]);
