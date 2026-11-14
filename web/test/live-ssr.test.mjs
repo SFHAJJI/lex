@@ -321,6 +321,9 @@ test("the build writes a server renderer per language, which renders the page in
       value.history_begins = "2020-01-01";
       const lawPage = context.lexSsr.render("dossier", JSON.stringify(answered), `/${language}/lu-legilux/${value.work_key}`);
       assert.ok(lawPage.includes("compare.html?work="), `${language}: the compare link is written`);
+      // The full record (titles, every version's table, relations) one disclosure away, under the header and the versions.
+      const record = lawPage.indexOf("data-law-record");
+      assert.ok(record > lawPage.indexOf("data-law-timeline") && lawPage.indexOf("<table", record) > record, `${language}: the full record is folded under the versions`);
       assert.ok(lawPage.includes("data-law-header") && lawPage.includes("data-law-timeline"), `${language}: an act's page is the law page, rendered by the server`);
       assert.ok(!/<input[^>]*type="text"/.test(lawPage), `${language}: nothing to type at a law's address`);
       const html = context.lexSsr.render("reading", JSON.stringify(READING), `/${language}${STATE.permalink}`);

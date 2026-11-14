@@ -660,6 +660,7 @@ export const LIVE_CHROME_FR = Object.freeze({
     articleHistory: 'Historique de l’article',
     articleHistoryHide: 'Masquer l’historique',
     citation: 'Art. {article}, {title}, version applicable depuis le {from}',
+    lawRecord: 'Le dossier complet de l’acte : ses intitulés, les dates et liens de chaque version, les registres de l’éditeur',
     notHeldHeading: 'Ce que ce dossier ne contient pas',
     detailsSummary: 'Détails : ce que cette fiche ne contient pas, et comment ses dates se lisent',
     euExpressions: Object.freeze({
@@ -1904,12 +1905,14 @@ export const LIVE_CHROME_FR = Object.freeze({
     }),
     outcomeColumns: Object.freeze({
       kind: 'Résultat',
-      dev: 'Questions de test : la version en ligne, {date}',
-      heldout: 'Questions réservées : la version en ligne, {date}',
+      devBefore: 'Questions de test : avant, la version du {date}',
+      heldoutBefore: 'Questions réservées : avant, la version du {date}',
       devRefused: 'Questions de test : la version suivante, refusée par le contrôle, {date}',
       heldoutRefused: 'Questions réservées : la version suivante, refusée par le contrôle, {date}',
+      devLive: 'Questions de test : la version en ligne, {date}',
+      heldoutLive: 'Questions réservées : la version en ligne, {date}',
     }),
-    gateNote: 'Une version qui cite un mauvais article sur les questions d’assurance, ou qui échoue à une question à laquelle la version en ligne répond, n’est pas mise en ligne : la version suivante ci-dessus a été refusée pour un mauvais article, et la correction suit.',
+    gateNote: 'Une version qui cite un mauvais article sur les questions d’assurance, ou qui échoue à une question à laquelle une version antérieure répondait, n’est pas mise en ligne : la version refusée ci-dessus citait un mauvais article ; sa correction est la version en ligne.',
     outcomes: Object.freeze({
       rightArticle: 'Le bon article, cité',
       wrongArticle: 'Un mauvais article, cité',

@@ -274,6 +274,7 @@ const EN = Object.freeze({
     articleHistory: "History of this article",
     articleHistoryHide: "Hide the history",
     citation: "Art. {article}, {title}, version applicable from {from}",
+    lawRecord: "The act's full record: its titles, every version's dates and links, the publisher's records",
     notHeldHeading: "What this dossier does not hold",
     // What the dossier does not hold, its scope and how its dates are read, one action away (R51, R28).
     detailsSummary: "Details: what this record does not hold, and how its dates are read",
@@ -1387,12 +1388,14 @@ const EN = Object.freeze({
     }),
     outcomeColumns: Object.freeze({
       kind: "Result",
-      dev: "Test questions: the live release, {date}",
-      heldout: "Held-out questions: the live release, {date}",
+      devBefore: "Test questions: before, the release of {date}",
+      heldoutBefore: "Held-out questions: before, the release of {date}",
       devRefused: "Test questions: the next release, refused by the gate, {date}",
       heldoutRefused: "Held-out questions: the next release, refused by the gate, {date}",
+      devLive: "Test questions: the release live now, {date}",
+      heldoutLive: "Held-out questions: the release live now, {date}",
     }),
-    gateNote: "A release that quotes a wrong article on the insurance questions, or fails a question the live one answers, does not go live: the next release above was refused for one wrong article, and the fix follows.",
+    gateNote: "A release that quotes a wrong article on the insurance questions, or fails a question an earlier one answered, does not go live: the release refused above quoted one wrong article; its fix is the release live now.",
     outcomes: Object.freeze({
       rightArticle: "The right article, quoted",
       wrongArticle: "A wrong article, quoted",
