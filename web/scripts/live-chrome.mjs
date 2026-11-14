@@ -1363,6 +1363,34 @@ const EN = Object.freeze({
       language: "Language not served",
     }),
     typeRow: "{right} of {cases}",
+    // The expected-article set (the owner's order of 2026-11-13, section D): results by kind, the held-out score, the cost.
+    outcomesHeading: "Right article, wrong article: the latest runs",
+    outcomesIntro: "{dev} test questions, each with the act and article its answer must quote, and {heldout} held-out questions, written before any run and never used to tune the assistant.",
+    setTiles: Object.freeze({
+      wrongArticle: Object.freeze({ value: "{wrong}", label: "answers quoting a wrong article, test questions, latest run (the target is none)" }),
+      heldout: Object.freeze({ value: "{right} of {cases}", label: "held-out questions answered with the right article, latest run" }),
+      cost: Object.freeze({ value: "{cost} €", label: "estimated model cost of a question (from the sizes of the prompt and the plan)" }),
+    }),
+    outcomeColumns: Object.freeze({
+      kind: "Result",
+      dev: "Test questions, {date}",
+      heldout: "Held-out questions, {date}",
+    }),
+    outcomes: Object.freeze({
+      rightArticle: "The right article, quoted",
+      wrongArticle: "A wrong article, quoted",
+      notFound: "Not found: it says so, or asks which article",
+      wronglyRefused: "Refused as advice, though it asks what the law says",
+      rightBehaviour: "Rightly refused, asked back or pointed to the source",
+      wrongBehaviour: "Any other wrong behaviour",
+    }),
+    setRow: "{count} of {cases}",
+    knownHeading: "Known failures",
+    known: Object.freeze({
+      adviceCues: "A question about the general rule phrased \"must the insured...?\" or \"can the insurer...?\" is declined as personal advice: the boundary is kept strict on purpose, and the same question asked as \"what is the time limit for...?\" is answered.",
+      englishOnFrench: "A question in English about a Luxembourg law held only in French finds nothing by its words: the search does not translate.",
+      euConcepts: "Some EU questions asked by concept rather than by article number are not found, or are answered with the official source only.",
+    }),
     methodHeading: "How it is measured",
     method: Object.freeze({
       expected: "Each question has an expected kind of answer: the text, one question back, the official source, or a refusal.",

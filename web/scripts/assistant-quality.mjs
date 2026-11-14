@@ -44,6 +44,26 @@ export const QUALITY_TYPES = Object.freeze([
   Object.freeze({ key: 'language', cases: 1, right: 1 }),
 ]);
 
+/**
+ * The runs on the expected-article set (lex-eval 0.2, the owner's order of 2026-11-13, section D), oldest first: the 56
+ * development questions, each with the act and article an answer must quote, and the 15 held-out questions, fixed before any
+ * run, never tuned against and scored apart. Each run counts its results by kind (`QUALITY_OUTCOMES`), and states the release
+ * measured, the answer times and the cost per question, which is an estimate (the prompt's and the plan's sizes at the
+ * deployment's stated price per million tokens: the site reports no token count).
+ */
+export const QUALITY_OUTCOMES = Object.freeze(['rightArticle', 'wrongArticle', 'notFound', 'wronglyRefused', 'rightBehaviour', 'wrongBehaviour']);
+
+export const QUALITY_SET_RUNS = Object.freeze([
+  Object.freeze({
+    date: '2026-11-14', release: '2026-11-13', commit: '17e2ab50', p50: 1.51, p95: 2.01, costEur: 0.0011,
+    dev: Object.freeze({ cases: 56, rightArticle: 13, wrongArticle: 3, notFound: 23, wronglyRefused: 8, rightBehaviour: 9, wrongBehaviour: 0 }),
+    heldout: Object.freeze({ cases: 15, rightArticle: 0, wrongArticle: 0, notFound: 9, wronglyRefused: 6, rightBehaviour: 0, wrongBehaviour: 0 }),
+  }),
+]);
+
+/** The failures the latest run still shows, each a key whose words are the page's, in the page's order. */
+export const QUALITY_KNOWN = Object.freeze(['adviceCues', 'englishOnFrench', 'euConcepts']);
+
 /** A share as a whole percentage, rounded half up: 14 of 16 is 88. */
 export const percent = (part, whole) => Math.floor((100 * part) / whole + 0.5);
 

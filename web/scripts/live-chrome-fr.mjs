@@ -1888,6 +1888,33 @@ export const LIVE_CHROME_FR = Object.freeze({
       language: 'Langue non servie',
     }),
     typeRow: '{right} sur {cases}',
+    outcomesHeading: 'Bon article, mauvais article : les derniers passages',
+    outcomesIntro: '{dev} questions de test, chacune avec l’acte et l’article que sa réponse doit citer, et {heldout} questions réservées, écrites avant tout passage et jamais utilisées pour régler l’assistant.',
+    setTiles: Object.freeze({
+      wrongArticle: Object.freeze({ value: '{wrong}', label: 'réponses citant un mauvais article, questions de test, dernier passage (l’objectif est aucune)' }),
+      heldout: Object.freeze({ value: '{right} sur {cases}', label: 'questions réservées résolues par le bon article, dernier passage' }),
+      cost: Object.freeze({ value: '{cost} €', label: 'coût estimé du modèle pour une question (d’après la taille de la consigne et du plan)' }),
+    }),
+    outcomeColumns: Object.freeze({
+      kind: 'Résultat',
+      dev: 'Questions de test, {date}',
+      heldout: 'Questions réservées, {date}',
+    }),
+    outcomes: Object.freeze({
+      rightArticle: 'Le bon article, cité',
+      wrongArticle: 'Un mauvais article, cité',
+      notFound: 'Non trouvé : il le dit, ou demande quel article',
+      wronglyRefused: 'Refusé comme un conseil, alors qu’elle demande ce que dit la loi',
+      rightBehaviour: 'Refusée à raison, précision demandée ou source indiquée',
+      wrongBehaviour: 'Tout autre comportement erroné',
+    }),
+    setRow: '{count} sur {cases}',
+    knownHeading: 'Échecs connus',
+    known: Object.freeze({
+      adviceCues: 'Une question sur la règle générale formulée « l’assuré doit-il… ? » ou « l’assureur peut-il… ? » est déclinée comme un conseil personnel : la limite est tenue stricte à dessein, et la même question posée « quel est le délai de… ? » reçoit une réponse.',
+      englishOnFrench: 'Une question en anglais sur une loi luxembourgeoise détenue en français seulement ne trouve rien par ses mots : la recherche ne traduit pas.',
+      euConcepts: 'Certaines questions sur le droit de l’UE posées par notion plutôt que par numéro d’article ne sont pas trouvées, ou reçoivent seulement la source officielle.',
+    }),
     methodHeading: 'Comment c’est mesuré',
     method: Object.freeze({
       expected: 'Chaque question a un type de réponse attendu : le texte, une question en retour, la source officielle ou un refus.',
