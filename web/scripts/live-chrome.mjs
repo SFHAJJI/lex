@@ -249,6 +249,27 @@ const EN = Object.freeze({
     compareWithEarlier: "Compare with the earlier version",
     readOnDateLabel: "Read the act as it stood on a date",
     readOnDateButton: "Read",
+    // The law page (the owner's order of 2026-11-13, section B): the act's status and counts, its versions as points in
+    // time (one click reads a version, a second compares the two), the date of a claim, and each article's actions.
+    lawStatus: Object.freeze({ in_force: "In force", not_yet: "Not yet in force" }),
+    lawArticles: Object.freeze({ one: "{count} article", other: "{count} articles" }),
+    lawVersions: Object.freeze({ one: "{count} version", other: "{count} versions" }),
+    timelineHeading: "The act's versions",
+    timelineHelp: "Choose a version to read it; choose a second one to compare the two.",
+    timelineVersion: "Version of {date}",
+    timelineRead: "Chosen: the version of {from}.",
+    timelineCompared: "Compared: the version of {from} and the version of {to}.",
+    readChosen: "Read this version",
+    claimDateLabel: "Date of the claim",
+    claimDateFound: "On {date}, the version that applied was the one of {from}.",
+    claimDateNone: "No version held applied on {date}.",
+    articleLabel: "Article {number}",
+    articleSource: "Official source",
+    articleCite: "Copy the citation",
+    articleCited: "Citation copied",
+    articleHistory: "History of this article",
+    articleHistoryHide: "Hide the history",
+    citation: "Art. {article}, {title}, version applicable from {from}",
     notHeldHeading: "What this dossier does not hold",
     // What the dossier does not hold, its scope and how its dates are read, one action away (R51, R28).
     detailsSummary: "Details: what this record does not hold, and how its dates are read",
@@ -556,6 +577,12 @@ const EN = Object.freeze({
       one: "{count} unchanged article",
       other: "{count} unchanged articles",
     }),
+    // On the law page, the unchanged articles' disclosure says since when: the earlier version compared.
+    keptSince: Object.freeze({
+      one: "{count} article unchanged since {year}",
+      other: "{count} articles unchanged since {year}",
+    }),
+    rowPlain: "{article}: {status}",
     bound: Object.freeze({ from: "from", to: "to" }),
     notCompared: "{language} is not compared: {reason} ({bound} date).",
     // A changed article's wording, inline (R57): what a screen reader, or a reader without the page's styles, hears around

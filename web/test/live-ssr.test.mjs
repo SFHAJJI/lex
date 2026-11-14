@@ -289,7 +289,11 @@ test("a work's dossier is rendered complete at its address, and a refusal is ren
   const initial = { envelope: dossier, path: "/en/lu-legilux/loi-1991-08-10-n3" };
   const html = renderLiveDossierPage({ initial });
   assert.match(html, /<section data-answer-state="(success|refusal)">/);
-  assert.ok(html.includes('value="/lu-legilux/loi-1991-08-10-n3"'), "the form names the work the address names");
+  // At a law's own address the page is the law page (the owner's order of 2026-11-13, section B): the act is the address's,
+  // and nothing is typed; the dossier page with no act of its own keeps its form.
+  assert.ok(html.includes("<code>/lu-legilux/loi-1991-08-10-n3</code>") || html.includes("<code>loi-1991-08-10-n3</code>"), "the page names the work the address names");
+  assert.ok(!/<input[^>]*type="text"/.test(html), "no identifier to type at a law's address");
+  assert.ok(renderLiveDossierPage().includes('type="text"'), "the dossier page keeps its form");
   assert.equal(rootOf(html, LIVE_DOSSIER_ROOT), renderToString(liveDossierTree(initial)), "hydration changes nothing");
 });
 
