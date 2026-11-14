@@ -59,6 +59,31 @@ public sealed class LuxembourgSearchRankTests
     }
 
     [TestMethod]
+    public void AHeadingThatSharesOneCommonWordWithTheQueryIsCountedAsOneWordNotTheRarest()
+    {
+        // 2026-11-14, Release 6's candidate: "Quand la garantie d'un contrat d'assurance prend-elle effet ?" quoted art. 9, whose
+        // heading holds "assurance" alone, over art. 37 ("Prise d'effet de la garantie"), whose text never repeats the act's
+        // subject. The ranking says how much of the query each heading holds, so the best-hit decision can refuse such a lead.
+        var texts = new FoldedSearchTexts.Builder();
+        (string Work, string Article, string Text)[] articles =
+        [
+            ("loi-1997-07-27-n10", "art_9", "Article 9Proposition d'assurance, police présignée et note de couverture1.La garantie prend effet à la signature du contrat d'assurance."),
+            ("loi-1997-07-27-n10", "art_37", "Article 37Prise d'effet de la garantie1.La garantie prend effet aux date et heure indiquées dans les conditions particulières."),
+            ("loi-1997-07-27-n10", "art_10", "Article 10Information du preneur d'assurance1.Avant la conclusion du contrat d'assurance, l'assureur informe le preneur."),
+            ("loi-1997-07-27-n10", "art_16", "Article 16Preuve et contenu du contrat1.Le contrat d'assurance est prouvé par écrit."),
+        ];
+        var hits = articles.Select((article, index) => new LuxembourgIndexSearchHit(
+            article.Work, "2025-11-25", new string((char)('k' + index), 64), new string((char)('k' + index), 63) + "0", article.Article, null)).ToArray();
+        var numbers = articles.Select(article => texts.Add(article.Text)).ToArray();
+        var ranked = new LuxembourgSearchTexts(hits, numbers, texts.Build()).Rank(null, SearchWords.Terms("garantie d'un contrat d'assurance prend-elle effet"), null);
+        Assert.AreEqual("art_9", ranked[0].Hit.PublisherId, "the only article holding every word");
+        Assert.AreEqual(1, ranked[0].Rank.HeadingWords, "its heading holds one query word, assurance");
+        Assert.IsFalse(ranked[0].Rank.HeadingHoldsRarest, "and not the query's rarest");
+        Assert.AreEqual((2, false), SearchWords.HeadingHolds(0b101, [1.0, 3.0, 2.0]), "two words held, the rarest (the second) not among them");
+        Assert.AreEqual((1, true), SearchWords.HeadingHolds(0b010, [1.0, 3.0, 2.0]));
+    }
+
+    [TestMethod]
     public void AQuestionsWordsRankTheSameArticleFirst()
     {
         Assert.AreEqual("art_44", Ranked("délai de prescription des actions dérivant d'un contrat d'assurance")[0]);

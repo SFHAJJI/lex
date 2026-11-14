@@ -6866,7 +6866,7 @@
           ],
           "decision": "close",
           "hit": null,
-          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds two of the query\u0027s words or its rarest one, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word, or one word that is not the rarest, is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
         },
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
@@ -7244,7 +7244,7 @@
           ],
           "decision": "close",
           "hit": null,
-          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds two of the query\u0027s words or its rarest one, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word, or one word that is not the rarest, is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
         },
         "continue_after": "strict.803fa18997cc0fec7a2aa2af99d10a63e7cbfaf00a317bdd39cb866ad51b73f4.05308b0478c8f6bf9ab81db3514594a5bd4098555db06f5a656ab27130f0d7fb",
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
@@ -7422,7 +7422,7 @@
           ],
           "decision": "close",
           "hit": null,
-          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds two of the query\u0027s words or its rarest one, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word, or one word that is not the rarest, is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
         },
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
@@ -7752,7 +7752,7 @@
           ],
           "decision": "close",
           "hit": null,
-          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds two of the query\u0027s words or its rarest one, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word, or one word that is not the rarest, is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
         },
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
@@ -8175,7 +8175,7 @@
           "candidates": [],
           "decision": "none",
           "hit": null,
-          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds two of the query\u0027s words or its rarest one, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word, or one word that is not the rarest, is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
         },
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
@@ -8302,7 +8302,7 @@
           ],
           "decision": "close",
           "hit": null,
-          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds two of the query\u0027s words or its rarest one, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word, or one word that is not the rarest, is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
         },
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
@@ -8605,7 +8605,7 @@
           "candidates": [],
           "decision": "none",
           "hit": null,
-          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds two of the query\u0027s words or its rarest one, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word, or one word that is not the rarest, is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
         },
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",
@@ -8730,7 +8730,7 @@
             "publisher_id": "026",
             "work_key": "32016R0679"
           },
-          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds two of the query\u0027s words or its rarest one, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word, or one word that is not the rarest, is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
         },
         "consolidations_held": false,
         "continue_after": null,
@@ -9302,7 +9302,7 @@
             "publisher_id": "026",
             "work_key": "32016R0679"
           },
-          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds two of the query\u0027s words or its rarest one, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word, or one word that is not the rarest, is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
         },
         "consolidations_held": false,
         "continue_after": "strict.7ab119a143803f39c2c7bccb41c19504294baa152fdfda20607356624da54a2c",
@@ -9580,7 +9580,7 @@
             "publisher_id": "026",
             "work_key": "32016R0679"
           },
-          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds two of the query\u0027s words or its rarest one, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word, or one word that is not the rarest, is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
         },
         "consolidations_held": false,
         "continue_after": null,
@@ -10083,7 +10083,7 @@
           "candidates": [],
           "decision": "none",
           "hit": null,
-          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds two of the query\u0027s words or its rarest one, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word, or one word that is not the rarest, is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
         },
         "consolidations_held": false,
         "continue_after": null,
@@ -10284,7 +10284,7 @@
           "candidates": [],
           "decision": "none",
           "hit": null,
-          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
+          "rule": "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds the phrase when the next one\u0027s does not; a relaxed hit whose heading holds two of the query\u0027s words or its rarest one, and holds rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word, or one word that is not the rarest, is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)"
         },
         "continue_after": null,
         "corpus_sha256": "\u003Cvaries-per-run\u003E",

@@ -4254,9 +4254,9 @@ internal sealed partial class V3CorpusMount : IDisposable
 
     internal const string SearchBestHitRule =
         "the best hit is the first hit of the ranking when it is clearly ahead: a strict hit that is the only one, or whose heading holds " +
-        "the phrase when the next one's does not; a relaxed hit whose heading holds a query word, and holds rarer words in its heading than " +
-        "the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit whose heading holds no query word is " +
-        "not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)";
+        "the phrase when the next one's does not; a relaxed hit whose heading holds two of the query's words or its rarest one, and holds " +
+        "rarer words in its heading than the next hit, or as rare ones and at least a quarter more in its text; a single relaxed hit " +
+        "whose heading holds no query word, or one word that is not the rarest, is not clearly ahead. Otherwise decision is close (candidates: the first three hits) or none (no hit)";
 
     /// <summary>
     /// The owner's rights ruling (decided by the sole driver under the owner's delegation of 2026-10-02, on the question PR #842

@@ -4,6 +4,22 @@ Updated 2026-11-14. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Release 6 refused by the evaluation gate: one wrong article; a hit is clearly ahead only on two heading words or the rarest (sole driver, 2026-11-14)
+
+`api/best-hit-strength`. Release 6 (`v3-20261114T013652Z-b34dff943322`: sections A to C) was deployed as a zero-traffic
+candidate; its probes passed and the owner's acceptance checks A1 to A3 and B1 to B3 passed at its own address. The new
+gate (`promote-with-eval-gate.ps1`, lex-eval on the candidate) did not promote it, and no traffic moved: the harness
+crashed after its 56 questions (fixed in lex-eval, with a test), and its printed results hold one wrong article on the
+insurance suite, which the gate refuses. On the 56: 17 right articles (Release 5: 13), 1 wrong (3), 24 not found, 5 refused
+as advice (8), 9 right behaviours, no regression; held-out 0 of 15 (9 not found, 6 refused as advice).
+- The wrong article: "Quand la garantie d'un contrat d'assurance prend-elle effet ?" quoted art. 9 ("Proposition
+  d'assurance, police présignée et note de couverture"), whose heading shares one common word with the question; art. 37
+  ("Prise d'effet de la garantie") never repeats the act's subject, so it was no hit.
+- The fix, general: a relaxed hit is clearly ahead only when its heading holds two of the query's words or its rarest
+  (`SearchRank.HeadingWords`, `HeadingHoldsRarest`); otherwise the answer offers the first three. The strict lane is unchanged.
+- Tests: the case on fixture articles shaped as art. 9 and 37; the decision on ranks. Samples rendered again and the
+  base answers recorded again on Linux at bc4cbac5: only the rule's sentence changed.
+
 ## No act's page was rendered by the server since 10 November; the law page now is, and is the law page in the browser too (sole driver, 2026-11-14)
 
 `web/law-page-render`. Found on Release 6's candidate by the acceptance checks over plain HTTP: `/fr/lu-legilux/{work}`
