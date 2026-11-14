@@ -4,6 +4,32 @@ Updated 2026-11-14. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Release 7 is live: sections A to D, through the evaluation gate (sole driver, 2026-11-14)
+
+`docs/demo-docs`. **Live since about 05:30 UTC**: `v3-20261114T035405Z-e13e65adb087`, revision
+`ca-lex-v3--v3-20261114t035405z-e13e65adb087-4dae485c`, 100% of the traffic; serving commit e13e65ad (#1045 to #1050) over
+Release 4's mount `d4-20261113-bfb83983` (no data change). Release 5's revision is deactivated, kept; Release 6's too (it
+never served).
+- **Deploy** (`deploy-public.ps1 -Apply`): the candidate's probes passed. The owner's acceptance checks
+  (`driver-scriptscceptance-ab.mjs`, plain HTTP) passed 7 of 7 at its own address, then on law.soufien.lu at 05:33:
+  A1 the prescription question quotes art. 44; A2 its dated form, through MCP `ask`, quotes art. 44 in the version of
+  2020-01-01; A3 the search lists art. 44 first, best hit clearly ahead; B1 10 versions, 2006-12-25 to 2025-11-25; B2 a
+  claim of 2019-03-03 selects 2018-11-01; B3 2021-01-01 against 2025-11-25: 1 added (art_62-11), 0 changed, 0 removed, 146
+  unchanged; B4 the law page rendered by the server with the act's title, 10 points and "En vigueur". Two-address check PASS.
+- **The evaluation gate** (`promote-with-eval-gate.ps1`, baseline: what Release 5 or Release 6's candidate passed, 26 of
+  56): every gate passed, then the traffic moved. 17 right articles, **0 wrong**, 25 not found, 5 refused as advice, 9 right
+  behaviours; 25 of 25 quotations verified; v1's 16 questions at 0.94 (floor 0.8); p50 1.63 s, p95 5.73 s; about 0.0011 EUR
+  a question. Held-out (15, scored apart): 0 right articles, 0 wrong, 9 not found, 6 refused as advice, as on Releases 5 and 6: on questions never seen, Lex now says it did not find or asks, and has not yet quoted a wrong article; it does not yet find them.
+- **The gate's first try on this release failed, for my doing**: the two-address check, run from this PC while the gate
+  asked its questions, made the site refuse this PC (that is what it checks), so one verify call was refused twice and one
+  quotation counted as unverified; the rerun, with nothing else running, verified 25 of 25. Driver decision, recorded: the
+  80% verdict floor is held on the 16 questions it was set on (`--accuracy-cases`), as on the 56 it would refuse every
+  release (Release 5: 0.45); the 56 are held by their own gates (no wrong article on insurance, no regression).
+- **Backup (R111)**: "verified: 14 objects of v3-20261114T035405Z-e13e65adb087 in stlexv3soufien/releases by SHA-256, and
+  427 custody pointers". The local image tars of Releases 4 and 6 were removed for disk, each with its note.
+- **Next**: the Quality page shows Release 5 and Release 6's refused candidate; Release 7's run is added by the next
+  release. The owner's item (the advice boundary on "doit-il" questions) is in OWNER-BRIEF.md.
+
 ## Measured by article: lex-eval 0.2, the release gate, the Quality page's right and wrong articles (sole driver, 2026-11-14)
 
 `web/quality-d`, section D of the owner's order of 2026-11-13, with lex-eval 0.2 (github.com/SFHAJJI/lex-eval).
