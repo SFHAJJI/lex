@@ -304,6 +304,25 @@ test("the build writes a server renderer per language, which renders the page in
     for (const language of ["en", "fr"]) {
       const context = vm.createContext({ TextEncoder });
       vm.runInContext(await readFile(join(destination, "ssr", `${language}.js`), "utf8"), context);
+      // A work's dossier at its own address, an answer: the law page, rendered by the server in a context that holds no
+      // URL or URLSearchParams, as the server's engine holds none (2026-11-14: the dossier's compare links threw there, so
+      // no act's page was rendered by the server from 2026-11-10 to Release 6).
+      // The sample act holds one version; an earlier one is added (its own date, digest, permalink and coordinate), so the
+      // page writes the compare link that threw.
+      const answered = structuredClone(census.envelopes.find((entry) => entry.operation === "dossier" && entry.envelope.result?.value?.publisher === "lu-legilux").envelope);
+      const value = answered.result.value;
+      const later = value.states[0];
+      const earlierDigest = "e".repeat(64);
+      const earlier = { ...later, applicability_date: "2020-01-01", next_applicability_date: later.applicability_date, applicable_to: later.applicability_date,
+        applicable_to_source: "publisher", in_file_date: "2020-01-01", state_sha256: earlierDigest,
+        permalink: `/lu-legilux/${value.work_key}/2020-01-01--${earlierDigest}/${later.language}`, stable_coordinate: `/lu-legilux/${value.work_key}/2020-01-01` };
+      value.states = [earlier, later];
+      value.state_count = 2;
+      value.history_begins = "2020-01-01";
+      const lawPage = context.lexSsr.render("dossier", JSON.stringify(answered), `/${language}/lu-legilux/${value.work_key}`);
+      assert.ok(lawPage.includes("compare.html?work="), `${language}: the compare link is written`);
+      assert.ok(lawPage.includes("data-law-header") && lawPage.includes("data-law-timeline"), `${language}: an act's page is the law page, rendered by the server`);
+      assert.ok(!/<input[^>]*type="text"/.test(lawPage), `${language}: nothing to type at a law's address`);
       const html = context.lexSsr.render("reading", JSON.stringify(READING), `/${language}${STATE.permalink}`);
       assert.match(html, new RegExp(`^<!doctype html>\\n<html lang="${language}"`), `${language}: a whole page in its language`);
       assert.ok(html.includes(`<link rel="canonical" href="https://law.soufien.lu/${language}/lu-legilux/loi-1991-08-10-n3/fra"/>`), `${language}: the canonical in the page's own language`);

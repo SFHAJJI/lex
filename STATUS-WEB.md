@@ -4,6 +4,19 @@ Updated 2026-11-14. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## No act's page was rendered by the server since 10 November; the law page now is, and is the law page in the browser too (sole driver, 2026-11-14)
+
+`web/law-page-render`. Found on Release 6's candidate by the acceptance checks over plain HTTP: `/fr/lu-legilux/{work}`
+arrived as the dossier form, as built, on the candidate and on the live Release 5. The server's page renderer holds no
+`URLSearchParams`, which `compareQueryOf` used for the dossier's "compare with the earlier version" links (added on
+2026-11-10), so every act with two versions or more threw there and was served as built (R67's page without JavaScript
+lost); and the law page switched on only for a page the server rendered, so in the browser it never showed.
+- `compareQueryOf` form-encodes without `URLSearchParams`, byte for byte as it did (`formEncoded`).
+- The dossier at a law's address is the law page once the page is in the browser too, even when the server served it as built.
+- Test first: `live-ssr.test.mjs` renders an answered dossier with two versions through the build's server renderer, in a
+  context holding no `URL` or `URLSearchParams`; it failed with "URLSearchParams is not defined" on the old code and passes.
+  Checked by hand on the live 1997 law's dossier: rendered in 31 ms, its real title, 10 points.
+
 ## The answer card, one box on the home page, the menu in five words, the changes page on a year (sole driver, 2026-11-14)
 
 `web/answer-card`, section C of the owner's order of 2026-11-13 (French interface; fonts and colours kept).

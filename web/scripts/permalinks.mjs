@@ -434,8 +434,17 @@ export function compareQueryOf({ identifier, dateFrom, dateTo, language = '', pa
   if (work === null || !isCalendarDate(dateFrom) || !isCalendarDate(dateTo)) return null;
   if (language !== '' && !COMPARE_QUERY_LANGUAGES.includes(language)) return null;
   const paged = Number.isInteger(page) && page >= 2 && page <= MAXIMUM_COMPARE_PAGE;
-  const query = new URLSearchParams({ work, from: dateFrom, to: dateTo, ...(language === '' ? {} : { language }), ...(paged ? { page: String(page) } : {}) });
-  return `?${query.toString()}`;
+  const fields = [['work', work], ['from', dateFrom], ['to', dateTo], ...(language === '' ? [] : [['language', language]]), ...(paged ? [['page', String(page)]] : [])];
+  return `?${fields.map(([name, value]) => `${formEncoded(name)}=${formEncoded(value)}`).join('&')}`;
+}
+
+/**
+ * A value form-encoded as `URLSearchParams` writes it (application/x-www-form-urlencoded: a space is `+`, and every byte but
+ * an ASCII letter, a digit and `*-._` is `%HH`), without `URLSearchParams`, which the server's page renderer does not hold
+ * (2026-11-14: a dossier's compare links threw there, so no act's page was rendered by the server since 2026-11-10).
+ */
+export function formEncoded(value) {
+  return encodeURIComponent(value).replace(/%20/g, '+').replace(/[!'()~]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
 /**
