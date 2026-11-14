@@ -32,3 +32,14 @@ test("the Quality page shows the latest wrong articles, the held-out score, the 
   for (const key of QUALITY_KNOWN) assert.ok(html.includes(copy.known[key].slice(0, 30)), key);
   assert.ok(html.indexOf('data-reference-section="outcomes"') < html.indexOf('data-reference-section="runs"'));
 });
+
+test("what a page sends to the server is said in its footer, not in its introduction (section C)", async () => {
+  const app = await import("../.react-build/app.mjs");
+  const { LIVE_CHROME: TABLE } = await import("../scripts/live-chrome.mjs");
+  for (const [key, html] of [["dossier", app.renderLiveDossierPage()], ["compare", app.renderLiveComparePage()]]) {
+    const entry = TABLE.en[key];
+    const footer = html.slice(html.indexOf("<footer"), html.indexOf("</footer>"));
+    assert.ok(footer.includes(`<p data-sent="">`) && footer.includes(entry.sent.slice(0, 40)), `${key}: in the footer`);
+    assert.ok(!entry.intro.includes("go to this server") && !entry.intro.includes("goes to this server"), `${key}: not in its introduction`);
+  }
+});
