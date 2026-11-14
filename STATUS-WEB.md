@@ -48,6 +48,9 @@ and moved the traffic. Acceptance on the live site 7 of 7; Release 7 deactivated
   Release 10 (`20261114-r10-promote-2`) and the held-out run against the live Release 10 (`20261114-r10-live`: 0 of 15,
   9 not found, 6 refused as advice), copied from their `run.json` and `results.jsonl`; the live `coverage` answer's
   totals and text yield. `assistant-quality.mjs` (hand-copied figures) and its test are gone with the Quality page.
+- **A past date** (`web/law-at-date`, #1056): the dated home example's answer reads the law at 1 January 2020, and its
+  "N versions depuis YYYY" now opens the act's page at that date (`#on-2020-01-01`: the date in the field, the version that
+  applied then read); an answer read today keeps the article's history.
 - Tests: the web suite 1545, 1542 pass, 3 skipped; `answer-view.test.mjs` new; the answer, home, law page, language and
   reference page tests rewritten to the new layout (no gate or check loosened: each asserts the new screen's content);
   the shared site paths table renames the two pages (`V3WebRoot` tests 30 of 30); `verify-v3-tree` passes.

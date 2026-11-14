@@ -93,6 +93,14 @@ test('the answer says the sentence that answers, one line that cites it, three w
   const untitled = renderToStaticMarkup(h(AssistantPanel, { locale: 'fr', dossier: answer(), phase: 'complete', question }));
   assert.ok(!untitled.includes('class="assistant-act"'), 'no act line without a title');
   assert.ok(untitled.includes('Les versions de l’acte'), 'the versions, uncounted');
+  // An answer that read the law at a past date leads to the act's page at that date (the owner's order of 2026-11-14,
+  // evening: one example opens a law page at a past date); today's reading, to the article's history.
+  const dated = answer();
+  dated.parts[0].blocks[0] = { ...dated.parts[0].blocks[0], facts: [{ kind: 'calendar_date', name: 'date', value: '2020-01-01' }] };
+  dated.trace = { ...dated.trace, today: '2026-11-14' };
+  const past = renderToStaticMarkup(h(AssistantPanel, { locale: 'fr', dossier: dated, phase: 'complete', titles, question }));
+  assert.ok(past.includes(`href="/fr${WORK}#on-2020-01-01" data-action="versions"`), 'the law page at 1 January 2020');
+  assert.ok(past.includes('au 01/01/2020'), 'the date it was read at');
   // In English, a French quotation says it is the original French text.
   const english = renderToStaticMarkup(h(AssistantPanel, { locale: 'en', dossier: { ...answer(), answer_locale: 'en' }, phase: 'complete', question }));
   assert.ok(english.includes('The quote is the original French text.'));

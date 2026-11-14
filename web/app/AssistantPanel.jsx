@@ -111,7 +111,16 @@ function AnswerSentence({ quote, question }) {
  * the full article one action away: the quotation in its paragraphs, the version it is from, its other claims and the claims
  * for checking it. Every block of the group is drawn.
  */
-function QuoteGroup({ group, copy, locale, titles = {}, question = null, lead = false }) {
+/**
+ * Where "N versions since YYYY" leads: a Luxembourg act's law page at the date the answer read the law, when that date is
+ * before today (`#on-…`: the page opens on the version that applied then); else at the article's history.
+ */
+function versionsHref(where, anchor, at, today, locale) {
+  if (where.publisher === 'lu-legilux' && typeof at === 'string' && typeof today === 'string' && at < today) return `/${locale}${where.address}#on-${at}`;
+  return lawPageHref(where, anchor, 'article', locale);
+}
+
+function QuoteGroup({ group, copy, locale, titles = {}, question = null, lead = false, today = null }) {
   const [open, setOpen] = useState(false);
   const checks = group.blocks.filter(isCheck);
   const quote = group.blocks.find((block) => block.kind === 'quote') ?? null;
@@ -138,7 +147,7 @@ function QuoteGroup({ group, copy, locale, titles = {}, question = null, lead = 
             {copy.fullArticle}
           </button>
           {where === null ? null : (
-            <a href={lawPageHref(where, quote.anchor, 'article', locale)} data-action="versions">
+            <a href={versionsHref(where, quote.anchor, at, today, locale)} data-action="versions">
               {act?.versions > 0 ? fill(act.versions === 1 ? copy.versionsOne : copy.versionsSince, { count: act.versions, year: act.since }) : copy.lawPage}
             </a>
           )}
@@ -172,13 +181,13 @@ function QuoteGroup({ group, copy, locale, titles = {}, question = null, lead = 
  * others, the same article in the other held language, one action away). Every block of the part is drawn; a part that
  * quotes nothing has its sentences under the work (`NoQuote`).
  */
-function Part({ part, locale, copy, titles, question, first }) {
+function Part({ part, locale, copy, titles, question, first, today = null }) {
   const { lead, groups } = quoteGroups(part.blocks);
   const { shown, other } = groupsForLocale(groups, locale);
   return (
     <section className="assistant-part" data-verdict={part.verdict}>
       {lead.map((block, at) => <Block block={block} key={at} />)}
-      {shown.map((group, at) => <QuoteGroup group={group} copy={copy} locale={locale} titles={titles} question={question} lead={first && at === 0} key={at} />)}
+      {shown.map((group, at) => <QuoteGroup group={group} copy={copy} locale={locale} titles={titles} question={question} lead={first && at === 0} today={today} key={at} />)}
       {other.length === 0 ? null : (
         <details className="assistant-other-languages">
           <summary>{copy.otherLanguages}</summary>
@@ -345,7 +354,7 @@ export function AssistantPanel({ locale, dossier = null, phase = 'idle', chips =
           {/* No article found (the owner's order of 2026-11-14, evening): one sentence and the search on the question's words;
               the server's own sentences for it (what was searched, the official site) are drawn in the work. */}
           {pointed ? null : view.parts.map((part, at) => (
-            <Part part={part} locale={locale} copy={copy} titles={titles} question={question} first={at === 0} key={part.partId} />
+            <Part part={part} locale={locale} copy={copy} titles={titles} question={question} first={at === 0} today={view.trace.today ?? null} key={part.partId} />
           ))}
           {search === null ? null : <p className="answer-links"><a href={search} data-action="keyword-search">{copy.keywordSearch}</a></p>}
           <hr className="answer-rule" />
