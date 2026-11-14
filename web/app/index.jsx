@@ -36,8 +36,8 @@ export {
   renderLivePrivacyPage, renderLiveTermsPage,
 } from './LegalPage.jsx';
 export {
-  DEVELOPERS_PARTS, QUALITY_PARTS, DevelopersBody, Glossary, GuideBody, HelpBody, guideValues, helpValues, renderLiveDevelopersPage, renderLiveGuidePage,
-  renderLiveHelpPage, renderLiveHowItWorksPage, renderLiveQualityPage, renderLiveReferencePage,
+  DEVELOPERS_PARTS, DECISION_GROUPS, DevelopersBody, Glossary, GuideBody, HelpBody, guideValues, helpValues, renderLiveDevelopersPage, renderLiveGuidePage,
+  renderLiveHelpPage, renderLiveDecisionsPage, renderLiveEvidencePage, renderLiveReferencePage,
 } from './ReferencePages.jsx';
 export { LiveSearch, SEARCH_VARIANTS, SearchAnswerView, SearchResultsView, SearchWorkResolution } from './LiveSearch.jsx';
 export { LIVE_SEARCH_ROOT, LiveSearchRoot, liveSearchTree, renderLiveSearchPage } from './live-search-page.jsx';

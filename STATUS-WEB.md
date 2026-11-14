@@ -4,6 +4,54 @@ Updated 2026-11-14. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The final look: one idea per screen, Decisions and Evidence, every figure measured (sole driver, 2026-11-14)
+
+`web/final-release`, the owner's order of 2026-11-14, evening ("visual and editorial only"; no change to retrieval, the
+planner, the validator or any gate). Release 10 went live first, on the owner's yes: the promotion gate's first run refused
+it on one question (`ins-subrogation-fr`: the model planned the act's dossier instead of the article, a variance of the
+model, which Release 10 does not change: no server code differs from Release 7); the rerun passed every gate (17 right
+articles, 0 wrong, 25 not found, 5 refused as advice, 9 right behaviours, every quotation verified, p50 1.52 s, p95 2.29 s)
+and moved the traffic. Acceptance on the live site 7 of 7; Release 7 deactivated; the backup copied (verified below).
+- **The look** (`styles.css`, last block): a white ground, the one green accent, one sans-serif face for every heading,
+  the name and the figures, the serif only for quoted law; no eyebrow line on any page, no tagline, no boxes in boxes.
+- **The menu** (`Document.jsx`): the name, then Decisions and Evidence, then the languages whose pages are complete (French
+  and English: `LocaleNav.jsx`; German and Luxembourgish keep their page that says `localization_unavailable`, which no
+  switch names). Texts, Changes and the screens moved to the footer (`footer-nav`), Developers with the reference pages.
+- **Home** (`LiveHome.jsx`, assistant on): a one-line headline; one row with the question, the date (typed day first,
+  `readClaimDate`; empty is today) and the button; three example questions, each a test-set question word for word that
+  the release gate answered with the right article in the page's language (French: the prescription question, the same at
+  1 January 2020, the GDPR's art. 5; English: the GDPR's arts. 5 and 33, the AI Act's art. 50; the English set has no dated
+  question); one grey line with the acts and articles the coverage answer counts. With the assistant off, the page is as it
+  was (the search box, the examples and the links the journeys walk).
+- **The answer** (`AssistantPanel.jsx`, `answer-view.mjs`): the question on one line; the sentence of the quotation that
+  shares the most of the question's words, in the serif, its own characters only (cut at its paragraph and its stop), the
+  words it adds to the question marked when they are few (art. 44: "trois ans"); one line with the article, its heading
+  once, the act's own title and the date the law was read at; three links (the full article, one action away; "N versions
+  depuis YYYY" from the act's dossier, to its law page; the official source); in English, "The quote is the original French
+  text." Under a rule, "Show the work", closed: four boxes (the version read; the plan in plain words, the only model call;
+  the plan's search asked again for how many articles it matched, and how many were kept; each quotation asked of
+  `verify`, as lex-eval checks it), then the time measured in the browser, the estimated cost per question of the latest
+  test run, and the raw plan with the trace. The verdict word and "La réponse est complète." are read, not shown. No
+  article found: one sentence ("Aucun article ne peut être cité…, et Lex ne devine pas.") and the search on the plan's
+  words; the server's own sentences under the work.
+- **The law page**: the instruction sentence and the four count tiles went; the comparison is one sentence ("1 article
+  ajouté, 146 articles inchangés.", only the kinds it counts); the date field says what it does ("Afficher la version
+  applicable le"; the driver's acceptance check B4 now reads that label and the field, not the old words).
+- **Decisions** (`decisions.html`, replacing How it works): seven cards in four groups, a gain and a cost each, a grey line
+  for the incident or open problem; every figure from the records below. **Evidence** (`evidence.html`, replacing Quality):
+  the five counts of the test set, the held-out line, the gate's rule, every question one by one (an e-mail address in the
+  masking question is shown masked), how a question is answered and how a version goes live as rows of six boxes (the
+  model and the owner in the accent), what is held and missing, and the cost and speed per question. Not built: a monthly
+  budget and the month's spend (the server keeps them in memory and serves neither), and the three closest acts on "not
+  found" (no operation finds them without a new search rule).
+- **Measured, never typed** (`write-evaluation-record.mjs`, `write-coverage-record.mjs`): the release gate's run of
+  Release 10 (`20261114-r10-promote-2`) and the held-out run against the live Release 10 (`20261114-r10-live`: 0 of 15,
+  9 not found, 6 refused as advice), copied from their `run.json` and `results.jsonl`; the live `coverage` answer's
+  totals and text yield. `assistant-quality.mjs` (hand-copied figures) and its test are gone with the Quality page.
+- Tests: the web suite 1545, 1542 pass, 3 skipped; `answer-view.test.mjs` new; the answer, home, law page, language and
+  reference page tests rewritten to the new layout (no gate or check loosened: each asserts the new screen's content);
+  the shared site paths table renames the two pages (`V3WebRoot` tests 30 of 30); `verify-v3-tree` passes.
+
 ## The first screens, second round: from Release 9's candidate's screenshots (sole driver, 2026-11-14)
 
 `web/first-screen-2`. Release 9's candidate (`v3-20261114T081556Z-9aaeb1cb87f1`, #1053, zero traffic) passed the owner's

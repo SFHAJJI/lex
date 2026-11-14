@@ -30,8 +30,8 @@ import {
   renderLiveDevelopersPage,
   renderLiveGuidePage,
   renderLiveHelpPage,
-  renderLiveHowItWorksPage,
-  renderLiveQualityPage,
+  renderLiveDecisionsPage,
+  renderLiveEvidencePage,
 } from "../.react-build/app.mjs";
 import { readDevelopersContracts } from "../scripts/developers-contracts.mjs";
 import { LIVE_CHROME, REFUSAL_TRANSLATIONS, countedEntry, entriesOf, fillCounted, fillParts, fillText, liveChrome } from "../scripts/live-chrome.mjs";
@@ -62,8 +62,8 @@ const PAGES = {
   cookies: renderLiveCookiesPage,
   // The reference pages every footer links (How Lex works, the assistant's results, Get help, How to read Lex, Developers:
   // `reference-pages.mjs`).
-  howItWorks: renderLiveHowItWorksPage,
-  quality: renderLiveQualityPage,
+  decisions: renderLiveDecisionsPage,
+  evidence: renderLiveEvidencePage,
   help: renderLiveHelpPage,
   guide: renderLiveGuidePage,
   developers: () => renderLiveDevelopersPage({ developers: DEVELOPERS }),
@@ -71,7 +71,7 @@ const PAGES = {
 const DEVELOPERS = await readDevelopersContracts();
 
 /** The legal pages and the reference pages, which ask nothing and carry no form. */
-const LEGAL = new Set(["legalNotice", "privacy", "terms", "accessibility", "cookies", "howItWorks", "quality", "help", "guide", "developers"]);
+const LEGAL = new Set(["legalNotice", "privacy", "terms", "accessibility", "cookies", "decisions", "evidence", "help", "guide", "developers"]);
 
 // React escapes an apostrophe in text; the table holds the text itself.
 const escaped = (text) => text.replaceAll("&", "&amp;").replaceAll("'", "&#x27;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
@@ -84,7 +84,7 @@ test("every live page renders its chrome from the table", () => {
     const entry = copy[key];
     assert.ok(html.includes(`<title>${escaped(entry.title)} - Lex</title>`), `${key}: title`);
     // The site around the screen: its name, its menu, and the statements every page carries (no development banner).
-    for (const text of [copy.site.brand, copy.site.tagline, copy.site.skip, copy.site.search, copy.site.reading, copy.site.dossier, copy.site.history, copy.site.compare, copy.site.radar, copy.site.export, copy.site.coverage, copy.site.notAdvice, copy.site.authenticity, copy.site.sources]) {
+    for (const text of [copy.site.brand, copy.site.skip, copy.site.menuDecisions, copy.site.menuEvidence, copy.site.menuTexts, copy.site.reading, copy.site.dossier, copy.site.history, copy.site.compare, copy.site.radar, copy.site.export, copy.site.coverage, copy.site.notAdvice, copy.site.authenticity, copy.site.sources]) {
       assert.ok(html.includes(escaped(text)), `${key}: the site says ${JSON.stringify(text.slice(0, 40))}`);
     }
     assert.ok(!html.includes("development build"), `${key}: no development banner`);
@@ -95,9 +95,12 @@ test("every live page renders its chrome from the table", () => {
     assert.ok(html.includes(`<p>${escaped(quiet ? copy.freshness.noAnswer : copy.freshness.asBuilt)}</p>`), `${key}: the freshness strip as built`);
     assert.ok(!html.includes(escaped(quiet ? copy.freshness.asBuilt : copy.freshness.noAnswer)), `${key}: only that strip`);
     assert.ok(!html.includes("staleness-banner"), `${key}: no staleness banner as built`);
-    assert.ok(html.includes(`<p class="eyebrow">${escaped(entry.eyebrow)}</p>`), `${key}: eyebrow`);
+    // The home page, Decisions and Evidence carry no eyebrow line (the owner's order of 2026-11-14, evening), and the two
+    // pages no introduction; every other page its table's eyebrow, heading and introduction.
+    if (["home", "decisions", "evidence"].includes(key)) assert.ok(!html.includes('<p class="eyebrow">'), `${key}: no eyebrow`);
+    else assert.ok(html.includes(`<p class="eyebrow">${escaped(entry.eyebrow)}</p>`), `${key}: eyebrow`);
     assert.ok(html.includes(`<h1>${escaped(entry.heading)}</h1>`), `${key}: heading`);
-    assert.ok(html.includes(`<p>${escaped(entry.intro)}</p>`), `${key}: introduction`);
+    if (!["decisions", "evidence"].includes(key)) assert.ok(html.includes(`<p>${escaped(entry.intro)}</p>`), `${key}: introduction`);
   }
 });
 

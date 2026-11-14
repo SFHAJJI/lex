@@ -34,11 +34,17 @@ export function localeHref(code, page = null) {
   return page === null ? localeHome(code) : `/${code}/${page}`;
 }
 
+/**
+ * The interface languages the switch shows (the owner's order of 2026-11-14, evening): only those whose pages are complete,
+ * the reviewed ones. German and Luxembourgish keep their page that says they are not (`localeHref`), which no switch names.
+ */
+const SHOWN_LOCALES = Object.freeze(LOCALES.filter((locale) => REVIEWED_CHROME_LOCALES.includes(locale.code)));
+
 export function LocaleNav({ current = 'en', page = null }) {
   return (
     <nav aria-label={liveChrome().shell.localeNav} className="locale-nav" data-locale-nav="">
       <ul>
-        {LOCALES.map((locale) => (
+        {SHOWN_LOCALES.map((locale) => (
           <li key={locale.code}>
             {/* The name is in its own language (lang); the destination's language is hrefLang, which for an
                 unreviewed language is English, the page that says so (review of #797). */}

@@ -264,17 +264,24 @@ function sameStateTemplate(comparison) {
  * The change between the two versions as four numbers (the owner's order of 2026-11-14): added, changed, removed,
  * unchanged, each with its noun by the language's plural rule.
  */
+/**
+ * The comparison in one sentence (the owner's order of 2026-11-14, evening): each kind of change it counts, the kinds it
+ * counts none of left out ("1 article ajouté, 146 articles inchangés."), every count the comparison's own.
+ */
 function ChangeNumbers({ counts }) {
   const kinds = ['added', 'changed', 'removed', 'unchanged'];
+  const said = kinds.filter((kind) => counts[kind] > 0);
+  const shown = said.length === 0 ? ['unchanged'] : said;
   return (
-    <ul className="law-changes" data-counts="">
-      {kinds.map((kind) => (
-        <li key={kind} data-change={kind}>
-          <strong>{counts[kind]}</strong>
-          <span>{countedEntry(DOSSIER.lawChanges[kind], counts[kind])}</span>
-        </li>
+    <p className="law-changes" data-counts={kinds.map((kind) => `${kind}:${counts[kind]}`).join(' ')}>
+      {shown.map((kind, at) => (
+        <span key={kind} data-change={kind}>
+          {at === 0 ? '' : ', '}
+          <strong>{counts[kind]}</strong> {countedEntry(DOSSIER.lawChanges[kind], counts[kind])}
+        </span>
       ))}
-    </ul>
+      .
+    </p>
   );
 }
 

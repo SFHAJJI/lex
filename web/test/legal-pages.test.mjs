@@ -97,7 +97,7 @@ test("the five legal pages are built under each interface language, with the sit
         // With no script to point them at the same page once loaded, the language links name it as built.
         const nav = html.slice(html.indexOf('data-locale-nav=""'), html.indexOf("</nav>", html.indexOf('data-locale-nav=""')));
         assert.deepEqual([...nav.matchAll(/<a href="([^"]+)" lang="([a-z]+)"/g)].map((match) => [match[2], match[1]]), [
-          ["en", `/en/${page.file}`], ["fr", `/fr/${page.file}`], ["de", "/locale-de.html"], ["lb", "/locale-lb.html"],
+          ["en", `/en/${page.file}`], ["fr", `/fr/${page.file}`],
         ], `${label}: its language links`);
         // The site around it, the footer listing the five with this one current.
         assert.ok(html.includes('data-live="lex-v3-live-mount"') && html.includes(escaped(copy.site.notAdvice)), `${label}: the site's header and footer`);

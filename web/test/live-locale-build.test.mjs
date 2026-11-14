@@ -162,7 +162,8 @@ test("the product build writes every page in French under /fr/, in the French ta
 
       // The French table's chrome: the page's own entries, its first state, the shell's.
       assert.ok(html.includes(`<title>${escaped(fillText(french.shell.title, { title: french[key].title }))}</title>`), `fr/${page} has the French title`);
-      for (const text of [french[key].eyebrow, french[key].heading, french[key].intro, french.shell.localeNav, french.site.tagline, french.site.menu, french.site.notAdvice, french.site.authenticity, french.site.sources]) {
+      // The home page carries no eyebrow line (the owner's order of 2026-11-14, evening).
+      for (const text of [...(key === "home" ? [] : [french[key].eyebrow]), french[key].heading, french[key].intro, french.shell.localeNav, french.site.menuDecisions, french.site.menu, french.site.notAdvice, french.site.authenticity, french.site.sources]) {
         assert.ok(html.includes(escaped(text)), `fr/${page} says ${JSON.stringify(text.slice(0, 50))}`);
       }
       const first = state === "loading" ? french.coverage.loading : french[formKey].idle;

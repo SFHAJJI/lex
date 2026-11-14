@@ -14,7 +14,7 @@
 // processor may keep) is in the legal pages' tables (live-chrome.mjs, live-chrome-fr.mjs: privacy.sections.assistant).
 
 import { readDossier } from './dossier-answer.mjs';
-import { actTitle } from './law-page.mjs';
+import { actTitle, versionsOf, yearOf } from './law-page.mjs';
 
 export const ASSISTANT_PANEL = 'hidden';
 
@@ -74,6 +74,46 @@ export const ASSISTANT_PANEL_COPY = Object.freeze({
     whatChanged: 'What changed',
     officialSource: 'Official source',
     howFound: 'How Lex found this',
+    // The answer screen (the owner's order of 2026-11-14, evening).
+    answerHeadingLabel: 'Answer: {label}',
+    asOf: 'as of {date}',
+    fullArticle: 'Full article',
+    versionsSince: '{count} versions since {year}',
+    versionsOne: 'One version, from {year}',
+    lawPage: 'The act’s versions',
+    originalFrench: 'The quote is the original French text.',
+    notFound: 'No article can be quoted for this question, and Lex does not guess.',
+    keywordSearch: 'Search these words in the texts',
+    showWork: 'Show the work',
+    workDocument: 'Document',
+    workQuestion: 'Question',
+    workRetrieval: 'Retrieval',
+    workAnswer: 'Answer',
+    workModel: 'the only model call',
+    workCode: 'code, no model',
+    documentLine: 'The version applicable from {date}, as published',
+    documentNone: 'No text was read',
+    planDate: 'As of {date}: ',
+    planSearch: 'search for “{query}” in the {language} text',
+    planArticle: 'read article {number}',
+    planDossier: 'open the act’s versions',
+    planOther: 'run {operation}',
+    planThen: ', then ',
+    planNothing: 'no operation to run',
+    languageFra: 'French',
+    languageEng: 'English',
+    languageDeu: 'German',
+    retrievalLine: 'Articles matched: {matched}; kept: {kept}',
+    retrievalMore: 'Articles matched: more than {matched}; kept: {kept}',
+    retrievalDirect: 'Article read by its number; kept: {kept}',
+    retrievalPending: 'Counting…',
+    retrievalNone: 'No search run',
+    checkLine: 'Quotes matching the published text’s digest: {verified} of {quotes}',
+    checkNone: 'Nothing quoted, nothing to check',
+    checkPending: 'Checking…',
+    workTime: 'Time: {seconds} s',
+    workCost: 'Cost: about {cost} € a question',
+    rawPlan: 'Raw plan',
   }),
   fr: Object.freeze({
     heading: 'Assistant',
@@ -107,6 +147,45 @@ export const ASSISTANT_PANEL_COPY = Object.freeze({
     whatChanged: 'Ce qui a changé',
     officialSource: 'Source officielle',
     howFound: 'Comment Lex a trouvé',
+    answerHeadingLabel: 'Réponse : {label}',
+    asOf: 'au {date}',
+    fullArticle: 'Article complet',
+    versionsSince: '{count} versions depuis {year}',
+    versionsOne: 'Une version, de {year}',
+    lawPage: 'Les versions de l’acte',
+    originalFrench: 'La citation est le texte original en français.',
+    notFound: 'Aucun article ne peut être cité pour cette question, et Lex ne devine pas.',
+    keywordSearch: 'Chercher ces mots dans les textes',
+    showWork: 'Voir le travail',
+    workDocument: 'Document',
+    workQuestion: 'Question',
+    workRetrieval: 'Recherche',
+    workAnswer: 'Réponse',
+    workModel: 'le seul appel au modèle',
+    workCode: 'code, sans modèle',
+    documentLine: 'La version applicable depuis le {date}, telle que publiée',
+    documentNone: 'Aucun texte lu',
+    planDate: 'Au {date} : ',
+    planSearch: 'chercher « {query} » dans le texte en {language}',
+    planArticle: 'lire l’article {number}',
+    planDossier: 'ouvrir les versions de l’acte',
+    planOther: 'exécuter {operation}',
+    planThen: ', puis ',
+    planNothing: 'aucune opération à exécuter',
+    languageFra: 'français',
+    languageEng: 'anglais',
+    languageDeu: 'allemand',
+    retrievalLine: 'Articles trouvés : {matched} ; gardés : {kept}',
+    retrievalMore: 'Articles trouvés : plus de {matched} ; gardés : {kept}',
+    retrievalDirect: 'Article lu par son numéro ; gardés : {kept}',
+    retrievalPending: 'Décompte…',
+    retrievalNone: 'Aucune recherche lancée',
+    checkLine: 'Citations conformes à l’empreinte du texte publié : {verified} sur {quotes}',
+    checkNone: 'Rien de cité, rien à vérifier',
+    checkPending: 'Vérification…',
+    workTime: 'Temps : {seconds} s',
+    workCost: 'Coût : environ {cost} € par question',
+    rawPlan: 'Plan brut',
   }),
 });
 
@@ -196,8 +275,11 @@ export async function actTitlesOf(dossier, fetchImpl) {
         body: JSON.stringify({ operation_id: 'dossier', parameters: { identifier: address } }),
       });
       const envelope = await response.json();
-      const named = actTitle(readDossier(envelope?.result?.value));
-      if (named !== null) titles[address] = named;
+      const dossierView = readDossier(envelope?.result?.value);
+      const named = actTitle(dossierView);
+      // With the act's versions in one language, counted, and the year of the first (the answer's "N versions since YYYY").
+      const versions = versionsOf(dossierView);
+      if (named !== null) titles[address] = Object.freeze({ ...named, versions: versions.length, since: yearOf(versions[0]?.applicabilityDate) });
     } catch {
       // No title: the card names no act.
     }

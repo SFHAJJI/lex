@@ -951,20 +951,20 @@
       "file": "en/cookies.html"
     },
     {
-      "path": "/fr/how-it-works.html",
+      "path": "/fr/decisions.html",
       "page": null,
       "redirect": null,
       "moved": null,
       "render": null,
-      "file": "fr/how-it-works.html"
+      "file": "fr/decisions.html"
     },
     {
-      "path": "/fr/quality.html",
+      "path": "/fr/evidence.html",
       "page": null,
       "redirect": null,
       "moved": null,
       "render": null,
-      "file": "fr/quality.html"
+      "file": "fr/evidence.html"
     },
     {
       "path": "/fr/help.html",
@@ -998,20 +998,20 @@
       "file": "fr/developers.html"
     },
     {
-      "path": "/en/how-it-works.html",
+      "path": "/en/decisions.html",
       "page": null,
       "redirect": null,
       "moved": null,
       "render": null,
-      "file": "en/how-it-works.html"
+      "file": "en/decisions.html"
     },
     {
-      "path": "/en/quality.html",
+      "path": "/en/evidence.html",
       "page": null,
       "redirect": null,
       "moved": null,
       "render": null,
-      "file": "en/quality.html"
+      "file": "en/evidence.html"
     },
     {
       "path": "/en/help.html",

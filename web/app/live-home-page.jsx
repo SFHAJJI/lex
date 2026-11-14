@@ -39,7 +39,6 @@ export function renderLiveHomePage({ facts = null, freshness = null } = {}) {
       indexing={facts?.coverage?.state === 'counted' ? 'switch' : 'never'}
       freshness={freshness}
     >
-      <p className="eyebrow">{copy.eyebrow}</p>
       {/* Outside the root, the page is the page as built whatever the answer says (the deploy probe holds it byte for byte,
           `homePageFailures`): what depends on the assistant's switch is said inside the root (`LiveHome.jsx`). */}
       <h1>{copy.heading}</h1>

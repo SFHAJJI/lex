@@ -32,7 +32,8 @@ import {
 } from '../scripts/developers.mjs';
 import { longDate } from '../scripts/live-search.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG } from '../scripts/live-chrome.mjs';
-import { QUALITY_KNOWN, QUALITY_OUTCOMES, QUALITY_RUNS, QUALITY_SET_RUNS, QUALITY_SOURCE, QUALITY_TYPES, latestRun, percent } from '../scripts/assistant-quality.mjs';
+import { EVALUATION_RECORD } from '../scripts/evaluation-record.mjs';
+import { COVERAGE_RECORD } from '../scripts/coverage-record.mjs';
 
 /** A link to another page of the site, in this bundle's language, with the words given. */
 const pageLink = (file, text) => <a href={livePath(file)}>{text}</a>;
@@ -125,185 +126,178 @@ export function guideValues() {
 /** A number as this page's language writes it: 1.92 is "1.92" in English, "1,92" in French. */
 const decimal = (value) => value.toLocaleString(CHROME_LOCALE === 'fr' ? 'fr-FR' : 'en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
 
-/** The assistant's results page's parts, in its order. */
-export const QUALITY_PARTS = Object.freeze(['chart', 'outcomes', 'runs', 'types', 'known', 'method']);
+/** A count as this page's language writes it: 1 234 in French, 1,234 in English. */
+const count = (value) => value.toLocaleString(CHROME_LOCALE === 'fr' ? 'fr-FR' : 'en-GB');
 
-/** How Lex works: its five steps from the publishers to an answer, drawn as a flow, then its parts. */
-export function HowItWorksBody() {
-  const copy = liveChrome();
-  const page = copy.howItWorks;
+/** A number of seconds as this page's language writes it, to one decimal: 1.52 is "1,5" in French. */
+const decimal1 = (value) => value.toLocaleString(CHROME_LOCALE === 'fr' ? 'fr-FR' : 'en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/** A cost as this page's language writes it, to three decimals: 0.001 is "0,001" in French. */
+const decimal3 = (value) => value.toLocaleString(CHROME_LOCALE === 'fr' ? 'fr-FR' : 'en-GB', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+
+/**
+ * The figures the Decisions and Evidence pages print, each a test run's (`evaluation-record.mjs`) or the coverage answer's
+ * (`coverage-record.mjs`) own; a sum is of a run's own counts (the questions that call for an article, those left without one).
+ */
+export function measured() {
+  const dev = EVALUATION_RECORD.dev;
+  const heldout = EVALUATION_RECORD.heldout;
+  return {
+    cases: count(dev.cases),
+    right: count(dev.rightArticle),
+    wrong: count(dev.wrongArticle),
+    notFound: count(dev.notFound),
+    wronglyRefused: count(dev.wronglyRefused),
+    rightBehaviour: count(dev.rightBehaviour),
+    expecting: count(dev.rightArticle + dev.wrongArticle + dev.notFound + dev.wronglyRefused),
+    unanswered: count(dev.notFound + dev.wronglyRefused),
+    heldoutRight: count(heldout.rightArticle),
+    heldoutCases: count(heldout.cases),
+    heldoutDate: heldout.date,
+    devDate: dev.date,
+    cost: decimal3(dev.costEur),
+    typical: decimal1(dev.p50),
+    slow: decimal1(dev.p95),
+    model: dev.modelDeployment,
+    acts: count(COVERAGE_RECORD.works),
+    versions: count(COVERAGE_RECORD.states),
+    articles: count(COVERAGE_RECORD.articles),
+    catalogued: count(COVERAGE_RECORD.versionsCatalogued),
+    withText: count(COVERAGE_RECORD.versionsWithText),
+    withoutText: count(COVERAGE_RECORD.versionsCatalogued - COVERAGE_RECORD.versionsWithText),
+    share: Math.floor((100 * COVERAGE_RECORD.versionsWithText) / COVERAGE_RECORD.versionsCatalogued + 0.5),
+    files: count(COVERAGE_RECORD.files),
+    withheld: count(COVERAGE_RECORD.filesWithheld),
+    builtOn: COVERAGE_RECORD.builtOn,
+  };
+}
+
+/** A template filled with the figures it names, of all `values` (`fillText` takes no value a template has no place for). */
+const say = (template, values) => fillText(template, Object.fromEntries([...template.matchAll(/\{([A-Za-z]+)\}/g)].map(([, name]) => [name, values[name]])));
+
+/** The groups of decision cards, each a key and its cards' keys, in the page's order (the owner's order of 2026-11-14). */
+export const DECISION_GROUPS = Object.freeze([
+  Object.freeze({ key: 'answering', cards: Object.freeze(['codeWrites', 'notFound']) }),
+  Object.freeze({ key: 'search', cards: Object.freeze(['words', 'oneCall']) }),
+  Object.freeze({ key: 'data', cards: Object.freeze(['dated', 'licence']) }),
+  Object.freeze({ key: 'built', cards: Object.freeze(['agent']) }),
+]);
+
+/**
+ * Decisions: cards in four groups, each a decision's title, one line of what it gains and one of what it costs, and where
+ * there is one, a grey line naming the incident or the open problem behind it. No paragraph: every figure is measured.
+ */
+export function DecisionsBody() {
+  const page = liveChrome().decisions;
+  const values = measured();
   return (
     <>
-      <p className="eyebrow">{page.eyebrow}</p>
       <h1>{page.heading}</h1>
-      <p>{page.intro}</p>
-      <figure className="flow" data-flow={Object.keys(page.flow).length}>
-        <figcaption>{page.flowLabel}</figcaption>
-        <ol>
-          {Object.values(page.flow).map((step) => (
-            <li key={step.title}>
-              <strong>{step.title}</strong>
-              <span>{step.text}</span>
+      {DECISION_GROUPS.map((group) => (
+        <section className="decision-group" aria-labelledby={`decisions-${group.key}`} data-reference-section={group.key} key={group.key}>
+          <h2 id={`decisions-${group.key}`}>{page.groups[group.key]}</h2>
+          <ul className="decision-cards">
+            {group.cards.map((key) => {
+              const card = page.cards[key];
+              return (
+                <li className="decision-card" data-decision={key} key={key}>
+                  <h3>{card.title}</h3>
+                  <p><strong>{page.gain}</strong> {say(card.gain, values)}</p>
+                  <p><strong>{page.cost}</strong> {say(card.cost, values)}</p>
+                  {card.note === undefined ? null : <p className="decision-note">{say(card.note, values)}</p>}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
+    </>
+  );
+}
+
+/** A row of boxes (a flow): each a step's words, the one in the accent colour marked (`accent`). */
+function Flow({ name, steps, accent }) {
+  return (
+    <ol className="flow-boxes" data-flow={name}>
+      {Object.entries(steps).map(([key, text]) => (
+        <li key={key} className={key === accent ? 'flow-accent' : undefined} data-step={key}>{text}</li>
+      ))}
+    </ol>
+  );
+}
+
+/**
+ * Evidence: five blocks and no paragraph. The test questions' five counts, the held-out line, the gate's rule and every
+ * question; how one question is answered and how a version goes live, each as a row of boxes; what is held and missing; cost
+ * and speed. Every figure is a run's or the coverage answer's own.
+ */
+export function EvidenceBody() {
+  const page = liveChrome().evidence;
+  const values = measured();
+  const dev = EVALUATION_RECORD.dev;
+  const tiles = [
+    ['right', dev.rightArticle],
+    ['wrong', dev.wrongArticle],
+    ['notFound', dev.notFound],
+    ['wronglyRefused', dev.wronglyRefused],
+    ['rightBehaviour', dev.rightBehaviour],
+  ];
+  return (
+    <>
+      <h1>{page.heading}</h1>
+      <section className="evidence-block" aria-labelledby="evidence-quality" data-reference-section="quality">
+        <h2 id="evidence-quality">{say(page.qualityHeading, values)}</h2>
+        <ul className="evidence-counts">
+          {tiles.map(([key, value]) => (
+            <li key={key} data-count={key} className={key === 'wrong' ? 'count-accent' : undefined}>
+              <strong>{count(value)}</strong>
+              <span>{page.counts[key]}</span>
             </li>
           ))}
-        </ol>
-      </figure>
-      <Sections
-        pageKey="howItWorks"
-        sections={page.sections}
-        values={{
-          qualityPage: pageLink(referencePage('quality').file, copy.quality.title),
-          coveragePage: pageLink('coverage.html', copy.coverage.title),
-        }}
-      />
-    </>
-  );
-}
-
-/**
- * The assistant's measured results (`assistant-quality.mjs`): the latest run's four figures, the share answered as expected
- * run by run as bars drawn to one scale (0 to 100%), every run in a table, the latest by kind of question, and how it is
- * measured. Every figure is a recorded run's.
- */
-export function QualityBody() {
-  const page = liveChrome().quality;
-  const latest = latestRun();
-  // Each of a tile's two texts is filled with the values it names, out of the tile's.
-  const named = (template, values) => Object.fromEntries([...template.matchAll(/\{([A-Za-z]+)\}/g)].map(([, name]) => [name, values[name]]));
-  const tile = (key, values) => (
-    <div className="quality-tile" data-quality-tile={key}>
-      <strong>{fillText(page.tiles[key].value, named(page.tiles[key].value, values))}</strong>
-      <span>{fillText(page.tiles[key].label, named(page.tiles[key].label, values))}</span>
-    </div>
-  );
-  return (
-    <>
-      <p className="eyebrow">{page.eyebrow}</p>
-      <h1>{page.heading}</h1>
-      <p>{page.intro}</p>
-      <div className="quality-tiles">
-        {tile('right', { percent: percent(latest.right, latest.cases), right: latest.right, cases: latest.cases })}
-        {tile('verified', { verified: latest.verified, quotes: latest.quotes })}
-        {tile('same', { same: latest.sameVerdict, cases: latest.cases })}
-        {tile('speed', { typical: decimal(latest.p50), most: decimal(latest.p95) })}
-      </div>
-      <section className="reference-section" aria-labelledby="quality-chart" data-reference-section="chart">
-        <h2 id="quality-chart">{page.chartHeading}</h2>
-        <ul className="quality-bars" data-quality-bars={QUALITY_RUNS.length}>
-          {QUALITY_RUNS.map((run) => {
-            const share = percent(run.right, run.cases);
-            return (
-              <li key={run.date}>
-                <span className="quality-bar-label">{fillText(page.chartLabel, { date: longDate(run.date), percent: share, right: run.right, cases: run.cases })}</span>
-                <svg className="quality-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-                  <rect className="quality-bar-track" x="0" y="0" width="100" height="6" />
-                  <rect className="quality-bar-fill" x="0" y="0" width={share} height="6" />
-                </svg>
-              </li>
-            );
-          })}
+        </ul>
+        <ul className="evidence-lines">
+          <li data-heldout="">{say(page.heldout, values)}</li>
+          <li>{page.gateRule}</li>
+          <li>
+            <details className="evidence-questions">
+              <summary>{say(page.everyQuestion, values)}</summary>
+              <table className="quality-table">
+                <tbody>
+                  {dev.questions.map((question) => (
+                    <tr key={question.id} data-outcome={question.outcome}>
+                      <th scope="row" lang={question.language}>{question.question.replace(/[^\s@]+@[^\s@,]+/gu, page.maskedEmail)}</th>
+                      <td>{page.outcomes[question.outcome] ?? question.outcome}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+          </li>
         </ul>
       </section>
-      <QualityOutcomes page={page} />
-      <section className="reference-section" aria-labelledby="quality-runs" data-reference-section="runs">
-        <h2 id="quality-runs">{page.runsHeading}</h2>
-        <div className="table-scroll">
-          <table className="quality-table">
-            <thead>
-              <tr>{['date', 'right', 'verified', 'same', 'time', 'found'].map((column) => <th key={column} scope="col">{page.columns[column]}</th>)}</tr>
-            </thead>
-            <tbody>
-              {QUALITY_RUNS.map((run) => (
-                <tr key={run.date}>
-                  <th scope="row">{longDate(run.date)}</th>
-                  <td>{fillText(page.typeRow, { right: run.right, cases: run.cases })}</td>
-                  <td>{fillText(page.typeRow, { right: run.verified, cases: run.quotes })}</td>
-                  <td>{fillText(page.typeRow, { right: run.sameVerdict, cases: run.cases })}</td>
-                  <td>{fillText(page.tiles.speed.value, { typical: decimal(run.p50) })}</td>
-                  <td>{page.findings[run.finding]}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <section className="evidence-block" aria-labelledby="evidence-question" data-reference-section="question">
+        <h2 id="evidence-question">{page.questionHeading}</h2>
+        <Flow name="question" steps={page.questionSteps} accent="plan" />
+        <p className="evidence-line">{say(page.modelLine, values)}</p>
       </section>
-      <section className="reference-section" aria-labelledby="quality-types" data-reference-section="types">
-        <h2 id="quality-types">{page.typesHeading}</h2>
-        <table className="quality-table">
-          <tbody>
-            {QUALITY_TYPES.map((type) => (
-              <tr key={type.key} data-quality-type={type.key}>
-                <th scope="row">{page.types[type.key]}</th>
-                <td>{fillText(page.typeRow, { right: type.right, cases: type.cases })}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <section className="evidence-block" aria-labelledby="evidence-release" data-reference-section="release">
+        <h2 id="evidence-release">{page.releaseHeading}</h2>
+        <Flow name="release" steps={page.releaseSteps} accent="owner" />
       </section>
-      <section className="reference-section" aria-labelledby="quality-known" data-reference-section="known">
-        <h2 id="quality-known">{page.knownHeading}</h2>
-        <ul data-quality-known={QUALITY_KNOWN.length}>{QUALITY_KNOWN.map((key) => <li key={key}>{page.known[key]}</li>)}</ul>
+      <section className="evidence-block" aria-labelledby="evidence-coverage" data-reference-section="coverage">
+        <h2 id="evidence-coverage">{page.coverageHeading}</h2>
+        <ul className="evidence-lines">
+          <li data-coverage-held="">{say(page.held, values)}</li>
+          <li data-coverage-missing="">{say(page.missing, values)}</li>
+        </ul>
       </section>
-      <section className="reference-section" aria-labelledby="quality-method" data-reference-section="method">
-        <h2 id="quality-method">{page.methodHeading}</h2>
-        <ul>{Object.entries(page.method).map(([key, text]) => <li key={key}>{text}</li>)}</ul>
-        <p><Say template={page.source} values={{ source: <a href={QUALITY_SOURCE} rel="external">{new URL(QUALITY_SOURCE).host + new URL(QUALITY_SOURCE).pathname}</a> }} /></p>
+      <section className="evidence-block" aria-labelledby="evidence-cost" data-reference-section="cost">
+        <h2 id="evidence-cost">{page.costHeading}</h2>
+        <ul className="evidence-lines">
+          <li data-cost-question="">{say(page.perQuestion, values)}</li>
+        </ul>
       </section>
     </>
-  );
-}
-
-/** A cost in euros as this page's language writes it, to four decimals: 0.0011 is "0.0011" in English, "0,0011" in French. */
-const euros = (value) => value.toLocaleString(CHROME_LOCALE === 'fr' ? 'fr-FR' : 'en-GB', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
-
-/**
- * The expected-article set's results (the owner's order of 2026-11-13, section D): the latest run's wrong articles (the
- * headline, whose target is none), its held-out score and its estimated cost per question, then the results by kind of the
- * latest runs, the test questions and the held-out ones in columns of their own, each run's date in its column's head.
- */
-function QualityOutcomes({ page }) {
-  const latest = QUALITY_SET_RUNS.at(-1);
-  const named = (template, values) => Object.fromEntries([...template.matchAll(/\{([A-Za-z]+)\}/g)].map(([, name]) => [name, values[name]]));
-  const tile = (key, values) => (
-    <div className="quality-tile" data-quality-tile={key}>
-      <strong>{fillText(page.setTiles[key].value, named(page.setTiles[key].value, values))}</strong>
-      <span>{fillText(page.setTiles[key].label, named(page.setTiles[key].label, values))}</span>
-    </div>
-  );
-  const stateKey = { before: 'Before', refused: 'Refused', live: 'Live' };
-  const columns = QUALITY_SET_RUNS.flatMap((run) => [
-    { key: `${run.date}-${run.commit}-dev`, head: fillText(page.outcomeColumns[`dev${stateKey[run.state]}`], { date: longDate(run.release) }), counts: run.dev },
-    { key: `${run.date}-${run.commit}-heldout`, head: fillText(page.outcomeColumns[`heldout${stateKey[run.state]}`], { date: longDate(run.release) }), counts: run.heldout },
-  ]);
-  return (
-    <section className="reference-section" aria-labelledby="quality-outcomes" data-reference-section="outcomes">
-      <h2 id="quality-outcomes">{page.outcomesHeading}</h2>
-      <p>{fillText(page.outcomesIntro, { dev: latest.dev.cases, heldout: latest.heldout.cases })}</p>
-      <div className="quality-tiles">
-        {tile('wrongArticle', { wrong: latest.dev.wrongArticle })}
-        {tile('heldout', { right: latest.heldout.rightArticle, cases: latest.heldout.cases })}
-        {tile('cost', { cost: euros(latest.costEur) })}
-      </div>
-      <div className="table-scroll">
-        <table className="quality-table" data-quality-outcomes={QUALITY_SET_RUNS.length}>
-          <thead>
-            <tr>
-              <th scope="col">{page.outcomeColumns.kind}</th>
-              {columns.map((column) => <th key={column.key} scope="col">{column.head}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {QUALITY_OUTCOMES.map((outcome) => (
-              <tr key={outcome} data-quality-outcome={outcome}>
-                <th scope="row">{page.outcomes[outcome]}</th>
-                {columns.map((column) => <td key={column.key}>{fillText(page.setRow, { count: column.counts[outcome], cases: column.counts.cases })}</td>)}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {QUALITY_SET_RUNS.some((run) => run.state === 'refused') ? <p data-quality-gate="">{page.gateNote}</p> : null}
-    </section>
   );
 }
 
@@ -741,7 +735,7 @@ export function renderLiveReferencePage(pageKey, { developers = null, live = nul
   const page = referencePage(pageKey);
   if (page === undefined) throw new Error(`${JSON.stringify(pageKey)} is none of the reference pages: ${REFERENCE_PAGES.map((one) => one.key).join(', ')}`);
   if (live !== null && pageKey !== 'developers') throw new Error(`only the Developers page is rendered from an answer, not ${pageKey}`);
-  const body = { howItWorks: <HowItWorksBody />, quality: <QualityBody />, help: <HelpBody />, guide: <GuideBody />, developers: <DevelopersBody model={developers} live={live} /> }[pageKey];
+  const body = { decisions: <DecisionsBody />, evidence: <EvidenceBody />, help: <HelpBody />, guide: <GuideBody />, developers: <DevelopersBody model={developers} live={live} /> }[pageKey];
   return renderDocument(
     <Document
       state={page.state}
@@ -757,8 +751,8 @@ export function renderLiveReferencePage(pageKey, { developers = null, live = nul
   );
 }
 
-export const renderLiveHowItWorksPage = () => renderLiveReferencePage('howItWorks');
-export const renderLiveQualityPage = () => renderLiveReferencePage('quality');
+export const renderLiveDecisionsPage = () => renderLiveReferencePage('decisions');
+export const renderLiveEvidencePage = () => renderLiveReferencePage('evidence');
 export const renderLiveHelpPage = () => renderLiveReferencePage('help');
 export const renderLiveGuidePage = () => renderLiveReferencePage('guide');
 export const renderLiveDevelopersPage = ({ developers, live = null } = {}) => renderLiveReferencePage('developers', { developers, live });
