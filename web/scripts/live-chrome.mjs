@@ -763,6 +763,12 @@ const EN = Object.freeze({
     radar: "Changes",
     export: "Export",
     coverage: "What this site holds",
+    // The menu (the owner's order of 2026-11-13, section C): five entries, the other screens under Developers.
+    menuAssistant: "Assistant",
+    menuTexts: "Texts",
+    menuQuality: "Quality",
+    menuHowItWorks: "How it works",
+    menuDevelopers: "Developers",
     notAdvice: "Lex shows the published text of the law. It does not tell you whether or how it applies to your situation and is not legal advice.",
     authenticity: "Consolidated texts have no legal effect: the authentic texts are those published in the Journal officiel du Grand-Duché de Luxembourg (Mémorial A) and in the Official Journal of the European Union.",
     sources: "The texts come from Legilux and from the Publications Office of the European Union, as this site holds them; every quote names its official source.",
@@ -837,6 +843,12 @@ const EN = Object.freeze({
       fourth: "Can my insurer refuse to pay my claim?",
     }),
     askNote: "The last one is a question about a personal situation: the assistant declines it and says where to get help.",
+    // The date chip beside the question box (the owner's order of 2026-11-13, section C): today unless a date is chosen; a
+    // date chosen is said in the question sent, as a reader would write it, so the planner reads it as the question's date.
+    dateChipToday: "As of: today",
+    dateChipLabel: "As of",
+    dateChipOn: "As of: {date}",
+    askedOn: "{question} (as of {date})",
     searchHeading: "Search a law",
     searchScopeSummary: "What the search covers",
     trustHeading: "Why you can rely on it",

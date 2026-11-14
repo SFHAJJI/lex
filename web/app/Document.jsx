@@ -22,7 +22,7 @@ import { INTERFACE_LANGUAGES, lawPageLinks } from '../scripts/permalinks.mjs';
 import { jsonInScript } from '../scripts/initial-answer.mjs';
 import { CANONICAL_HOST } from '../scripts/routes.mjs';
 import { LEGAL_PAGES } from '../scripts/legal-pages.mjs';
-import { REFERENCE_PAGES } from '../scripts/reference-pages.mjs';
+import { REFERENCE_PAGES, referencePage } from '../scripts/reference-pages.mjs';
 import { FreshnessStripSlot, StalenessBannerSlot } from './Freshness.jsx';
 
 /** The marker that says, in the DOM, that nothing on this page is law. */
@@ -52,6 +52,20 @@ export const LIVE_MARKER = 'lex-v3-live-mount';
  * reaches reading, the dossier, history and compare from here (review of #955). The search entry is the home page, so it
  * is current only there; search.html is the same screen under its own title.
  */
+/**
+ * The menu a reader sees (the owner's order of 2026-11-13, section C): the assistant (the home page, assistant-first), the
+ * texts (the search, and a law's reading and dossier), the changes, the assistant's test results and how Lex works; every
+ * other screen under Developers, one disclosure away, so the menu holds one line at 1024 pixels.
+ */
+const MAIN_MENU = Object.freeze([
+  Object.freeze({ key: 'menuAssistant', page: 'index.html', states: Object.freeze(['live-home', 'live-assistant']) }),
+  Object.freeze({ key: 'menuTexts', page: 'search.html', states: Object.freeze(['live-search', 'live-reading', 'live-dossier']) }),
+  // The changes, opened on the last twelve months (`LAST_TWELVE_MONTHS_HASH`).
+  Object.freeze({ key: 'radar', page: 'radar.html', hash: '#last-12-months', states: Object.freeze(['live-radar']) }),
+  Object.freeze({ key: 'menuQuality', page: referencePage('quality').file, states: Object.freeze([referencePage('quality').state]) }),
+  Object.freeze({ key: 'menuHowItWorks', page: referencePage('howItWorks').file, states: Object.freeze([referencePage('howItWorks').state]) }),
+]);
+
 const MENU = Object.freeze([
   Object.freeze({ key: 'search', page: 'index.html', states: Object.freeze(['live-home']) }),
   Object.freeze({ key: 'reading', page: 'reading.html', states: Object.freeze(['live-reading']) }),
@@ -138,13 +152,28 @@ export function SiteHeader({ state, locale, localePage = null }) {
       </a>
       <nav aria-label={site.menu} className="site-nav">
         <ul>
-          {MENU.map((entry) => (
+          {MAIN_MENU.map((entry) => (
             <li key={entry.key}>
-              <a href={entry.page === 'index.html' ? localeHome(CHROME_LOCALE) : livePath(entry.page)} aria-current={entry.states.includes(state) ? 'page' : undefined}>
+              <a href={entry.page === 'index.html' ? localeHome(CHROME_LOCALE) : `${livePath(entry.page)}${entry.hash ?? ''}`} aria-current={entry.states.includes(state) ? 'page' : undefined}>
                 {site[entry.key]}
               </a>
             </li>
           ))}
+          <li className="nav-more">
+            <details>
+              <summary>{site.menuDevelopers}</summary>
+              <ul>
+                {MENU.map((entry) => (
+                  <li key={entry.key}>
+                    <a href={entry.page === 'index.html' ? localeHome(CHROME_LOCALE) : livePath(entry.page)} aria-current={entry.key !== 'search' && entry.key !== 'radar' && entry.states.includes(state) ? 'page' : undefined}>
+                      {site[entry.key]}
+                    </a>
+                  </li>
+                ))}
+                <li><a href={livePath(referencePage('developers').file)} aria-current={state === referencePage('developers').state ? 'page' : undefined}>{liveChrome().developers.title}</a></li>
+              </ul>
+            </details>
+          </li>
         </ul>
       </nav>
       <LocaleNav current={locale} page={localePage} />

@@ -68,6 +68,21 @@ export function invalidAnswerSentence(reason) {
  * yyyy-mm-dd, a work identifier only when one is given (sent as typed), and a language only when one
  * is chosen. Nothing else is sent.
  */
+/**
+ * The window the changes page opens on (the owner's order of 2026-11-13, section C): the last twelve months to `today`, the
+ * same day a year before (the 28th of February for the 29th); null when `today` is no calendar date.
+ */
+/** The hash the menu opens the changes page with, so it shows the last twelve months on load. */
+export const LAST_TWELVE_MONTHS_HASH = "#last-12-months";
+
+export function lastTwelveMonths(today) {
+  if (!isCalendarDate(today)) return null;
+  const [year, month, day] = today.split("-").map(Number);
+  const earlier = month === 2 && day === 29 ? 28 : day;
+  const from = `${String(year - 1).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(earlier).padStart(2, "0")}`;
+  return { dateFrom: from, dateTo: today };
+}
+
 export function radarParameters({ dateFrom, dateTo, identifier = "", language = "" }) {
   if (!isCalendarDate(dateFrom) || !isCalendarDate(dateTo)) {
     throw new Error("a change radar needs two calendar dates, written yyyy-mm-dd");

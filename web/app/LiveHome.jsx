@@ -87,8 +87,25 @@ const assistantHref = (question) => `${livePath('assistant')}${askFragment(quest
  * assistant switched on (R52): it opens the assistant's page with the question asked, and lists example questions, each asked
  * on the live site before it was listed, each a link that asks it.
  */
+/** A calendar date as a question writes it, day first ("03/03/2019"), which the assistant's intake reads as a date. */
+export function writtenDate(date) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(date);
+  return match === null ? '' : `${match[3]}/${match[2]}/${match[1]}`;
+}
+
+/** The question the box sends: the reader's, and the date chosen on the chip said in it, when one is (`COPY.askedOn`). */
+export function questionAsked(question, date) {
+  const asked = question.trim();
+  if (asked.length === 0) return '';
+  const written = writtenDate(date);
+  return written === '' ? asked : fillText(COPY.askedOn, { question: asked, date: written });
+}
+
 export function HomeAsk({ questions = Object.values(COPY.askExamples) }) {
   const [question, setQuestion] = useState('');
+  // The date chip (the owner's order of 2026-11-13, section C): "as of today" until a date is chosen.
+  const [date, setDate] = useState('');
+  const [choosing, setChoosing] = useState(false);
   return (
     <section className="home-ask" aria-labelledby="home-ask-heading" data-home-ask="">
       <h2 id="home-ask-heading">{COPY.askHeading}</h2>
@@ -96,12 +113,24 @@ export function HomeAsk({ questions = Object.values(COPY.askExamples) }) {
         className="home-ask-form"
         onSubmit={(event) => {
           event.preventDefault();
-          const asked = question.trim();
+          const asked = questionAsked(question, date);
           if (asked.length > 0) window.location.assign(assistantHref(asked));
         }}
       >
         <label htmlFor="home-ask-question">{COPY.askLabel}</label>
         <textarea id="home-ask-question" name="question" rows={2} maxLength={1000} value={question} onChange={(event) => setQuestion(event.target.value)} />
+        <p className="home-date-chip" data-date-chip={date === '' ? 'today' : date}>
+          {choosing ? (
+            <label>
+              {COPY.dateChipLabel}{' '}
+              <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+            </label>
+          ) : (
+            <button type="button" className="date-chip" aria-expanded="false" onClick={() => setChoosing(true)}>
+              {date === '' ? COPY.dateChipToday : fillText(COPY.dateChipOn, { date })}
+            </button>
+          )}
+        </p>
         <button type="submit">{COPY.askSubmit}</button>
       </form>
       <p>{COPY.askTry}</p>
@@ -175,18 +204,21 @@ export function LiveHome({ contract, fetchImpl, facts = null, examples = HOME_EX
     <>
       {assistant ? <p className="home-lede">{COPY.ledeAsk}</p> : null}
       {assistant ? <HomeAsk /> : null}
-      <section className="home-search" aria-labelledby={assistant ? 'home-search-heading' : undefined} data-home-search="">
-        {/* Its heading only beside the question box; alone, the box and the sentence under it stay on a phone's first screen (R47). */}
-        {assistant ? <h2 id="home-search-heading">{COPY.searchHeading}</h2> : null}
-        <LiveSearch contract={contract} fetchImpl={fetchImpl} variant="home" today={facts?.today ?? null} />
-      </section>
+      {/* One box (the owner's order of 2026-11-13, section C): with the assistant on, the question box is the home page's, and
+          the search is the search page's (the menu's "Texts"); with it off, the search box is the home page's only box (R47). */}
+      {assistant ? null : (
+        <section className="home-search" data-home-search="">
+          <LiveSearch contract={contract} fetchImpl={fetchImpl} variant="home" today={facts?.today ?? null} />
+        </section>
+      )}
       <HomeTrust assistant={assistant} />
       <section className="home-about" data-home-about="">
         <h2>{COPY.aboutHeading}</h2>
         <p>{COPY.intro}</p>
       </section>
       <CoverageLine line={line} today={today} />
-      <HomeExamples line={line} record={examples} />
+      {/* The example citations go with the search box they fill (R47): beside the question box, the example questions stand. */}
+      {assistant ? null : <HomeExamples line={line} record={examples} />}
       <HomeLinks assistant={assistant} />
     </>
   );

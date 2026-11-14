@@ -57,13 +57,21 @@ function citationOf(row, view, version) {
   return fillText(COPY.citation, { article: articleNumberOf(row.publisherId), title: named?.title ?? view.workKey, from: version.applicabilityDate });
 }
 
-/** One article's actions on the law page: its official source, its citation to copy, its history asked in place. */
-function ArticleActions({ row, language, view, version, contract, fetchImpl }) {
+/**
+ * One article's actions on the law page: its official source, its citation to copy, its history asked in place (at once when
+ * `openHistory`, as an answer's "see at another date" asks it).
+ */
+function ArticleActions({ row, language, view, version, contract, fetchImpl, openHistory = false }) {
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState(null);
   const session = useRef(null);
   useEffect(() => () => session.current?.cancel(), []);
   const identifier = `/lu-legilux/${view.workKey}`;
+  useEffect(() => {
+    if (!openHistory || contract === undefined) return;
+    if (session.current === null) session.current = createHistorySession({ contract, fetchImpl, onOutcome: setHistory });
+    session.current.ask({ identifier, anchor: row.publisherId, language });
+  }, [openHistory]);
   const toggleHistory = () => {
     if (history !== null) {
       session.current?.cancel();
@@ -97,8 +105,28 @@ function ArticleActions({ row, language, view, version, contract, fetchImpl }) {
  * The act's versions in time and the comparison of the two chosen (one click reads a version, a second compares the two;
  * the latest with the one before it when the page opens), and the date of a claim, which chooses the version that applied.
  */
+/**
+ * The article an answer's card opened the page at, from the address's hash: `#article-{id}` (its history) or `#changes-{id}`
+ * (the comparison, at that article); null for any other.
+ */
+export function focusOf(hash) {
+  const match = /^#(article|changes)-(.+)$/u.exec(typeof hash === 'string' ? hash : '');
+  if (match === null) return null;
+  try {
+    return Object.freeze({ kind: match[1], anchor: decodeURIComponent(match[2]) });
+  } catch {
+    return null;
+  }
+}
+
 export function LawTimeline({ view, today = null, contract, fetchImpl }) {
   const versions = versionsOf(view);
+  // The article an answer's card opened the page at (`focusOf`), read once the page is in the browser: the server renders
+  // no hash, so hydration changes nothing it rendered.
+  const [focus, setFocus] = useState(null);
+  useEffect(() => {
+    setFocus(focusOf(globalThis.location?.hash));
+  }, []);
   const start = defaultPair(versions);
   const [selection, setSelection] = useState(() => (start === null
     ? { read: Math.max(0, versions.length - 1), other: null }
@@ -125,6 +153,17 @@ export function LawTimeline({ view, today = null, contract, fetchImpl }) {
     session.current.ask({ identifier, dateFrom: read.applicabilityDate, dateTo: other.applicabilityDate, language: read.language });
   }, [selection.read, selection.other]);
 
+  // "What changed" at one article: once the comparison is drawn, its row is opened (an unchanged one is one disclosure away)
+  // and brought into view.
+  useEffect(() => {
+    if (focus?.kind !== 'changes' || outcome?.state !== 'success') return;
+    const row = globalThis.document?.querySelector?.(`[data-article="${CSS.escape(focus.anchor)}"]`);
+    if (!row) return;
+    const disclosure = row.closest('details');
+    if (disclosure) disclosure.open = true;
+    row.scrollIntoView({ block: 'start' });
+  }, [focus, outcome]);
+
   if (versions.length === 0) return null;
   const claimIndex = claimDate === '' ? null : versionOn(versions, claimDate);
   const law = {
@@ -132,8 +171,16 @@ export function LawTimeline({ view, today = null, contract, fetchImpl }) {
       <ArticleActions row={row} language={language} view={view} version={other ?? read} contract={contract} fetchImpl={fetchImpl} />
     ),
   };
+  const latest = versions.at(-1);
   return (
     <section className="law-timeline" data-law-timeline={versions.length} aria-labelledby="law-timeline">
+      {focus?.kind === 'article' ? (
+        // "See at another date": the article's own history, asked at once, above the act's versions.
+        <section className="law-focus" data-law-focus={focus.anchor} aria-labelledby="law-focus">
+          <h3 id="law-focus">{fillText(COPY.articleLabel, { number: articleNumberOf(focus.anchor) })}</h3>
+          <ArticleActions row={{ publisherId: focus.anchor }} language={latest.language} view={view} version={latest} contract={contract} fetchImpl={fetchImpl} openHistory />
+        </section>
+      ) : null}
       <h3 id="law-timeline">{COPY.timelineHeading}</h3>
       <p>{COPY.timelineHelp}</p>
       <ol className="timeline-dots">

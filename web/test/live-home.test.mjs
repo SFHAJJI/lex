@@ -342,7 +342,10 @@ test("with the assistant on, the home page opens with its question box and examp
   const main = mainOf(renderLiveHomePage({ facts: on }));
   assert.ok(main.includes('data-home-ask=""'), "the question box");
   assert.equal(main.search(/<(input|select|textarea|button)\b/), main.indexOf('<textarea id="home-ask-question"'), "its field is the first control");
-  assert.ok(main.indexOf('data-home-ask=""') < main.indexOf('data-home-search=""'), "then the search");
+  // One box (the owner's order of 2026-11-13, section C): the search is the search page's, and its example citations with it.
+  assert.ok(!main.includes('data-home-search=""'), "no second box");
+  assert.ok(!main.includes('data-home-examples='), "no example citations beside the question box");
+  assert.ok(main.includes('data-date-chip="today"') && main.includes(EN.home.dateChipToday), "the date chip, today until a date is chosen");
   const examples = [...main.matchAll(/<a href="([^"]+)" data-home-ask-example="">([^<]+)<\/a>/g)].map(([, href, text]) => [href, text]);
   assert.deepEqual(examples.map(([, text]) => text), Object.values(EN.home.askExamples).map(escaped), "every example question, in the table's order");
   for (const [href, text] of examples) {

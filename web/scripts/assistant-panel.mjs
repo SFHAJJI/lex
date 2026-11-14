@@ -13,6 +13,9 @@
 // the processor sentence under the notice. The privacy notice's own section on the assistant (its processor and what that
 // processor may keep) is in the legal pages' tables (live-chrome.mjs, live-chrome-fr.mjs: privacy.sections.assistant).
 
+import { readDossier } from './dossier-answer.mjs';
+import { actTitle } from './law-page.mjs';
+
 export const ASSISTANT_PANEL = 'hidden';
 
 /** The assistant's page under each interface language, served only while the server reports the assistant on (V3WebRoot). */
@@ -59,6 +62,18 @@ export const ASSISTANT_PANEL_COPY = Object.freeze({
     announceComplete: 'The answer is complete.',
     failed: 'The assistant could not answer this question; search, reading and the other operations do not depend on it.',
     rateLimited: 'Many questions were asked from this connection in a short time; ask again in a minute.',
+    // The answer card (the owner's order of 2026-11-13, section C): the verdict in a word, the article and its heading, the
+    // act's title, the quotation, the version it is from, and three ways on.
+    verdictFound: 'Found',
+    verdictNotFound: 'Not found',
+    verdictOutOfScope: 'Out of scope',
+    articleLine: 'Article {number}',
+    articleLineHeading: 'Article {number}: {heading}',
+    versionBadge: 'Version applicable from {date}',
+    otherDate: 'See at another date',
+    whatChanged: 'What changed',
+    officialSource: 'Official source',
+    howFound: 'How Lex found this',
   }),
   fr: Object.freeze({
     heading: 'Assistant',
@@ -82,6 +97,16 @@ export const ASSISTANT_PANEL_COPY = Object.freeze({
     announceComplete: 'La réponse est complète.',
     failed: 'L’assistant n’a pas pu répondre à cette question ; la recherche, la lecture et les autres opérations ne dépendent pas de l’assistant.',
     rateLimited: 'Beaucoup de questions ont été posées depuis cette connexion en peu de temps ; reposez la vôtre dans une minute.',
+    verdictFound: 'Trouvé',
+    verdictNotFound: 'Pas trouvé',
+    verdictOutOfScope: 'Hors périmètre',
+    articleLine: 'Article {number}',
+    articleLineHeading: 'Article {number} : {heading}',
+    versionBadge: 'Version applicable depuis le {date}',
+    otherDate: 'Voir à une autre date',
+    whatChanged: 'Ce qui a changé',
+    officialSource: 'Source officielle',
+    howFound: 'Comment Lex a trouvé',
   }),
 });
 
@@ -156,6 +181,57 @@ export function quoteParagraphs(text) {
   }
   paragraphs.push(text.slice(from));
   return paragraphs.map((paragraph) => paragraph.trim()).filter((paragraph) => paragraph.length > 0);
+}
+
+/** The copy key of the verdict in a word (the answer card's first line): found, not found, or out of scope. */
+export function verdictWordKey(verdict) {
+  if (verdict === 'answer' || verdict === 'answer_with_enrichment') return 'verdictFound';
+  return verdict === 'refuse' ? 'verdictOutOfScope' : 'verdictNotFound';
+}
+
+/** The act a quotation is from, by its article permalink's first two segments: its publisher, its work and its address. */
+export function quoteWork(quote) {
+  const match = /^\/(lu-legilux|eu-eurlex)\/([^/]+)\//u.exec(typeof quote?.article_permalink === 'string' ? quote.article_permalink : '');
+  return match === null ? null : Object.freeze({ publisher: match[1], work: match[2], address: `/${match[1]}/${match[2]}` });
+}
+
+/**
+ * The act's own page in `locale`, at one article: a Luxembourg act's law page with the article's history ("article") or the
+ * comparison at that article ("changes"), as its hash names them (`LawPage.jsx`); an EU act's page as it is.
+ */
+export function lawPageHref(where, anchor, kind, locale) {
+  const base = `/${locale}${where.address}`;
+  return where.publisher === 'lu-legilux' && typeof anchor === 'string' ? `${base}#${kind}-${encodeURIComponent(anchor)}` : base;
+}
+
+/**
+ * The own titles of the Luxembourg acts an answer quotes, by their address: each act's dossier, asked once, read
+ * (`readDossier`) and titled as the law page titles it (`actTitle`). An act whose dossier cannot be read keeps no title, and
+ * its card names no act: never an address in its place.
+ */
+export async function actTitlesOf(dossier, fetchImpl) {
+  const addresses = [...new Set((dossier?.parts ?? [])
+    .flatMap((part) => part.blocks ?? [])
+    .filter((block) => block?.kind === 'quote')
+    .map(quoteWork)
+    .filter((where) => where !== null && where.publisher === 'lu-legilux')
+    .map((where) => where.address))];
+  const titles = {};
+  await Promise.all(addresses.map(async (address) => {
+    try {
+      const response = await fetchImpl('/api/v3/dossier', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ operation_id: 'dossier', parameters: { identifier: address } }),
+      });
+      const envelope = await response.json();
+      const named = actTitle(readDossier(envelope?.result?.value));
+      if (named !== null) titles[address] = named;
+    } catch {
+      // No title: the card names no act.
+    }
+  }));
+  return titles;
 }
 
 /** The panel's copy in a locale it holds, or a thrown error: it never falls back to another language (R43). */

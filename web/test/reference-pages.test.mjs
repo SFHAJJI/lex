@@ -130,7 +130,10 @@ test("the three reference pages are built under each interface language, with th
           label: escaped(copy.reference.menu),
           links: REFERENCE_PAGES.map((other) => [`/${language}/${other.file}`, escaped(copy[other.key].title), other.key === page.key]),
         }], `${label}: the three pages in its footer, itself current`);
-        assert.equal((html.match(/aria-current="page"/g) ?? []).length, 1, `${label}: no menu entry is current but itself`);
+        // Itself and nothing else is current: in its footer, and in the menu when the menu names it (the owner's order of
+        // 2026-11-13, section C: "Quality" and "How it works" are menu entries).
+        const current = [...html.matchAll(/<a href="([^"]+)" aria-current="page"/g)].map(([, href]) => href);
+        assert.ok(current.length >= 1 && current.every((href) => href === `/${language}/${page.file}`), `${label}: no menu entry is current but itself (${current.join(", ")})`);
         assert.ok(html.includes(`<p>${escaped(copy.freshness.noAnswer)}</p>`), `${label}: its strip carries no answer`);
         // Each part under its heading, in the table's order.
         const parts = page.key === "developers" ? [...app.DEVELOPERS_PARTS] : page.key === "quality" ? [...app.QUALITY_PARTS] : Object.keys(entry.sections);

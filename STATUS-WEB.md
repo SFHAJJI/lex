@@ -4,6 +4,32 @@ Updated 2026-11-14. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The answer card, one box on the home page, the menu in five words, the changes page on a year (sole driver, 2026-11-14)
+
+`web/answer-card`, section C of the owner's order of 2026-11-13 (French interface; fonts and colours kept).
+- **The answer card**, in the owner's order: the verdict in a word (Trouvé, Pas trouvé, Hors périmètre) beside the answer's
+  own label; "Article 44 : Délai de prescription" (the heading read from the article's text as the search reads it); the
+  act's own title, asked of its dossier once per act (never its address: the quotation's heading claim, which names the act
+  by address, is one action away with the checks); the quotation in its paragraphs; "Version applicable depuis le {date}";
+  then "Voir à une autre date" (the law page at the article's history, `#article-{id}`), "Ce qui a changé" (the law page's
+  comparison, opened and scrolled to the article, `#changes-{id}`) and "Source officielle".
+- **"Comment Lex a trouvé"**, collapsed: the validated plan and the trace. Driver decision: this moves the plan from first
+  (R45(c)) to one action away, as the owner's order asks; the plan is still drawn on every answer and its test holds where.
+- **One disclaimer line** under the answer: the answer's notices, in one paragraph. The processor sentence ("what is sent
+  to whom") is at the foot of the assistant's page, under the answer.
+- **Home**: with the assistant on, one question box and its date chip ("À la date du : aujourd'hui"; a date chosen is said
+  in the question sent, "(à la date du 03/03/2019)", which the intake reads as the question's date); no second search box
+  and no example citations (the search is the menu's "Textes"); the example questions stay. With it off, unchanged.
+- **Menu**: Assistant, Textes, Modifications, Qualité, Comment ça marche, then "Développeurs", a disclosure holding the
+  other screens (search, reading, dossier, history, compare, export, coverage, the Developers page); one line from 1024 px.
+- **Modifications**, opened from the menu (`radar.html#last-12-months`), fills in the last twelve months to today in
+  Luxembourg and asks them once loaded; opened bare, it is the form (driver decision: CI's journey holds that a page asks
+  the API only when the reader submits, and its first run on this slice failed on a page that asked on its own).
+- **Not done**: the "what is sent to the server" sentence inside each page's introduction stays there (only the assistant's
+  moved); the journeys check the new menu on GitHub's runner.
+- **Review of #1047** (Codex): CHANGES REQUESTED, one finding: no CI had run (the PR was opened against `web/law-page`, and
+  retargeting it to `v3/integration` does not start CI); pushed again so CI runs on the PR.
+
 ## The law page: an act's own page with its versions in time, compared at a click (sole driver, 2026-11-14)
 
 `web/law-page`, section B of the owner's order of 2026-11-13 ("the law page, the centre of the demo"). The act's readable
