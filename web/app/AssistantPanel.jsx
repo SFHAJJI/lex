@@ -250,7 +250,6 @@ function TheWork({ view, copy, locale, work, children = null }) {
         {work?.seconds === undefined || work?.seconds === null ? null : <span data-work-time="">{fill(copy.workTime, { seconds: decimal(work.seconds, locale, 1) })}</span>}
         <span data-work-cost="">{fill(copy.workCost, { cost: decimal(EVALUATION_RECORD.dev.costEur, locale, 3) })}</span>
       </p>
-      {children}
       <details className="assistant-how">
         <summary>{copy.rawPlan}</summary>
         <ol className="assistant-plan">
@@ -262,6 +261,7 @@ function TheWork({ view, copy, locale, work, children = null }) {
         </ol>
         <pre className="assistant-trace">{JSON.stringify(view.trace, null, 2)}</pre>
       </details>
+      {children}
     </details>
   );
 }
@@ -351,14 +351,16 @@ export function AssistantPanel({ locale, dossier = null, phase = 'idle', chips =
           <hr className="answer-rule" />
           <TheWork view={view} copy={copy} locale={locale} work={work}>
             {pointed ? view.parts.map((part) => <Part part={part} locale={locale} copy={copy} titles={titles} question={question} first={false} key={part.partId} />) : null}
+            {/* The answer's notices (R33, R50), in one line in the work: the model's part is what the work shows; the preview
+                notice, word for word the panel's preview line, is said once, by the panel, when it shows that line. */}
+            <p className="assistant-disclaimer">
+              {view.notices.filter((notice) => !(preview && notice.template_id === 'notice.preview')).map((notice, at) => (
+                <span className="assistant-model-notice" data-template={notice.template_id} key={notice.template_id}>
+                  {at === 0 ? '' : ' '}{notice.text}
+                </span>
+              ))}
+            </p>
           </TheWork>
-          <p className="assistant-disclaimer">
-            {view.notices.map((notice, at) => (
-              <span className="assistant-model-notice" data-template={notice.template_id} key={notice.template_id}>
-                {at === 0 ? '' : ' '}{notice.text}
-              </span>
-            ))}
-          </p>
         </article>
       )}
       {/* R44's notice and the preview line under the answer, the question box first (the owner's order of 2026-11-14); what

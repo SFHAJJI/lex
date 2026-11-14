@@ -31,6 +31,9 @@ test('with no sentence sharing the question\'s words, the first full sentence is
   assert.ok(joined(sentence).startsWith('Personal data shall be:'), joined(sentence));
   for (const part of sentence.parts) assert.ok(gdpr.includes(part.text.trim()), `${part.text} is the quotation's`);
   assert.equal(answerSentence('Article 1er', 'Que dit l’article 1er ?'), null, 'no sentence, nothing shown');
+  // The EU's texts run the number and the heading together, with spaces: the heading is no sentence of the text.
+  const spaced = 'Article 5 Principles relating to processing of personal data 1. Personal data shall be: (a) processed lawfully, fairly and in a transparent manner in relation to the data subject;';
+  assert.ok(joined(answerSentence(spaced, 'What does article 5 of the GDPR say?')).startsWith('Personal data shall be:'));
 });
 
 test('a word is compared without its accents, its case and its elided article; the words that say nothing are left out', () => {

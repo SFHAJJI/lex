@@ -35,10 +35,14 @@ export function sentencesOf(text) {
   return quoteParagraphs(text).flatMap((paragraph) => paragraph.split(/(?<=[.;])\s+(?=\p{Lu})/u)).map((sentence) => sentence.replace(LEADING_NUMBER, '')).filter((sentence) => sentence.length > 0);
 }
 
-/** The sentences of a quotation that are its text: neither its number ("Article 44") nor its heading (`articleHeadingOf`). */
+/**
+ * The sentences of a quotation that are its text: neither its number ("Article 44") nor its heading (`articleHeadingOf`),
+ * nor a number and heading run together ("Article 5 Principles relating to processing of personal data"): a sentence of the
+ * text ends on its stop, a colon, a semicolon or a closing mark; a heading does not.
+ */
 function textSentencesOf(text) {
   const heading = articleHeadingOf(text);
-  return sentencesOf(text).filter((sentence) => sentence !== heading && !/^Art(?:icle|\.)?\s*[\w-]+\.?$/iu.test(sentence));
+  return sentencesOf(text).filter((sentence) => sentence !== heading && !/^Art(?:icle|\.)?\s*[\w-]+\.?$/iu.test(sentence) && /[.;:!?)»”"’]$/u.test(sentence));
 }
 
 const wordCount = (text) => [...String(text).matchAll(WORD)].length;

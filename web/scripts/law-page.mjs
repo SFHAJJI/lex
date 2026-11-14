@@ -102,10 +102,14 @@ export function afterClick(selection, index) {
   return Object.freeze({ read: Math.min(selection.read, index), other: Math.max(selection.read, index) });
 }
 
-/** An article's number as a citation writes it: "44" for "art_44", "62-11" for "art_62-11"; the id itself otherwise. */
+/**
+ * An article's number as a citation writes it: "44" for "art_44", "62-11" for "art_62-11", "5" for an EU act's "005"; the
+ * id itself otherwise.
+ */
 export function articleNumberOf(publisherId) {
   const match = /^art_(.+)$/u.exec(publisherId);
-  return match === null ? publisherId : match[1];
+  if (match !== null) return match[1];
+  return /^\d+$/u.test(publisherId) ? String(Number(publisherId)) : publisherId;
 }
 
 /** The most characters a heading holds, as the platform's SearchWords.HeadingMaxCharacters. */

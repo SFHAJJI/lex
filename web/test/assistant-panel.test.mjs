@@ -138,6 +138,7 @@ test('the panel draws the plan first, two polite announcements and no alert, and
   assert.match(markup, /<details class="assistant-how"><summary>Plan brut<\/summary><ol class="assistant-plan">/, 'the validated plan, one action away');
   assert.ok(markup.indexOf('assistant-how') < markup.indexOf('assistant-disclaimer'), 'the notices under the answer');
   assert.equal((markup.match(/class="assistant-disclaimer"/g) ?? []).length, 1, 'in one line');
+  assert.equal(markup.split(ASSISTANT_PANEL_COPY.fr.preview).length - 1, 1, 'the preview line said once');
   assert.ok(markup.lastIndexOf('assistant-processor') > markup.indexOf('assistant-disclaimer'), 'what is sent, at the foot');
   assert.match(markup, /role="status" aria-live="polite" aria-atomic="true">Réponse : D’après le texte officiel\.</, 'one announcement at the verdict');
   assert.doesNotMatch(markup, /role="alert"|aria-live="assertive"/, 'an answer is never announced as an alert');
