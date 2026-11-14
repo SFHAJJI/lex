@@ -4,6 +4,28 @@ Updated 2026-11-14. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## The law page: an act's own page with its versions in time, compared at a click (sole driver, 2026-11-14)
+
+`web/law-page`, section B of the owner's order of 2026-11-13 ("the law page, the centre of the demo"). The act's readable
+address (`/fr/lu-legilux/{work}`), reached from the search's act titles, is now the law page; the dossier page with no act of
+its own keeps its form.
+- **Header**: the act's own title, never the publisher's "Version consolidée applicable au …" prefix (the live dossier's
+  heading on 13 November), a status in words ("En vigueur", "Pas encore en vigueur"), and the latest version's article count
+  and the version count. The search's act titles drop the same prefix.
+- **Versions in time** (`LawTimeline`): a point per version, oldest first, in the latest version's language. A click chooses a
+  version to read ("Lire cette version"); a click on a second compares the two, the earlier first; the page opens comparing
+  the latest with the one before it. "Date du sinistre" chooses the version that applied on that date.
+- **The comparison** is the compare page's own (`diff`, word by word): the counts, then the changed, added and removed
+  articles with the inserted words underlined and the deleted ones struck through, then the unchanged ones one disclosure
+  away, "N articles inchangés depuis {year}" (the earlier version's year). On the law page an article is "Article 44", with
+  no digests (they stay on the compare page), and each has its official source (the version's ELI), "Copier la citation"
+  ("Art. 44, {title}, version applicable depuis le {date}") and "Historique de l'article" (`article_history`, in place).
+- **Nothing to type**: no identifier box at a law's address; a law's address whose answer is a refusal still names the act.
+- **Acceptance on `loi-1997-07-27-n10`**, held by `law-page.test.mjs` on the live dossier's dates and counts: 10 versions,
+  2006-12-25 to 2025-11-25; a claim of 2019-03-03 chooses the version of 2018-11-01; the page opens on 2021-01-01 against
+  2025-11-25. The live `diff` of those two (asked 2026-11-14): 1 added (art_62-11), 0 changed, 0 removed, 146 unchanged.
+- **Copy**: 19 dossier keys and 2 compare keys, English and French in the same order, the French with its no-break spaces.
+
 ## Search ranks by words, headings first, and the assistant quotes a hit alone only when it is clearly ahead (sole driver, 2026-11-14)
 
 `api/search-words-ranked`, section A of the owner's order of 2026-11-13 ("correctness of the assistant"). Observed live on
