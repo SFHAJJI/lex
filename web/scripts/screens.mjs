@@ -27,9 +27,15 @@ const PAGES = [
   ["fr-assistant-rgpd-5", `/fr/assistant${ask("Que dit l'article 5 du RGPD ?")}`],
   ["en-assistant-ai-act-50", `/en/assistant${ask("What does Article 50 of the AI Act say?")}`],
   ["en-assistant-insurer", `/en/assistant${ask("Can my insurer refuse to pay my claim?")}`],
+  // Release 7 (the owner's order of 2026-11-13): the answer card for a concept question, the law page at that article (its
+  // two buttons), and the changes page as the menu opens it.
+  ["fr-assistant-prescription", `/fr/assistant${ask("Quel est le délai de prescription des actions dérivant d'un contrat d'assurance ?")}`],
+  ["fr-law-page-article-44", "/fr/lu-legilux/loi-1997-07-27-n10#article-art_44"],
+  ["fr-law-page-changes-44", "/fr/lu-legilux/loi-1997-07-27-n10#changes-art_44"],
+  ["fr-radar-12-months", "/fr/radar.html#last-12-months"],
 ];
 const QUESTIONS = [];
-const WIDTHS = [["desktop", 1280, 800, false], ["phone", 390, 844, true]];
+const WIDTHS = [["desktop", 1280, 800, false], ["menu-1024", 1024, 768, false], ["phone", 390, 844, true]];
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });
