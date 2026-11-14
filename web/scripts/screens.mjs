@@ -1,5 +1,5 @@
-// Screenshots of the live site for the driver's design review (2026-11-13): each page at a desktop and a phone width, after
-// its answers load, saved as PNG. Runs only on GitHub's runners (never on the driver's PC: no local browser). Asks the public
+// Screenshots of the live site for the driver's design review (2026-11-13; the owner's first screens of 2026-11-14), after
+// their answers load, saved as PNG. Runs only on GitHub's runners (never on the driver's PC: no local browser). Asks the public
 // site what any reader may ask; the assistant is asked the questions listed here, as a reader would ask them.
 // Usage: node web/scripts/screens.mjs <origin> <out directory>
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
@@ -11,31 +11,24 @@ const [origin = "https://law.soufien.lu", out = "screens"] = process.argv.slice(
 console.log(`origin ${origin}`);
 const q = (text, lang) => `#q=${encodeURIComponent(text)}&lang=${lang}`;
 const ask = (text) => `#q=${encodeURIComponent(text)}`;
-const PAGES = [
-  ["fr-home", "/fr/"],
-  ["en-home", "/en/"],
-  ["fr-how-it-works", "/fr/how-it-works.html"],
-  ["en-how-it-works", "/en/how-it-works.html"],
-  ["fr-quality", "/fr/quality.html"],
-  ["en-quality", "/en/quality.html"],
-  ["en-search-ai-act", `/en/search.html${q("AI Act", "eng")}`],
-  ["fr-search-rgpd", `/fr/search.html${q("RGPD", "fra")}`],
-  ["fr-search-insurance-article", `/fr/search.html${q("article 1er de la loi du 27 juillet 1997 sur le contrat d'assurance", "fra")}`],
-  ["fr-dossier-insurance-1997", "/fr/lu-legilux/loi-1997-07-27-n10"],
-  ["en-dossier-ai-act", "/en/eu-eurlex/32024R1689"],
-  ["fr-assistant-insurance-1997", `/fr/assistant${ask("Que dit l'article 1er de la loi du 27 juillet 1997 sur le contrat d'assurance ?")}`],
-  ["fr-assistant-rgpd-5", `/fr/assistant${ask("Que dit l'article 5 du RGPD ?")}`],
-  ["en-assistant-ai-act-50", `/en/assistant${ask("What does Article 50 of the AI Act say?")}`],
-  ["en-assistant-insurer", `/en/assistant${ask("Can my insurer refuse to pay my claim?")}`],
-  // Release 7 (the owner's order of 2026-11-13): the answer card for a concept question, the law page at that article (its
-  // two buttons), and the changes page as the menu opens it.
-  ["fr-assistant-prescription", `/fr/assistant${ask("Quel est le délai de prescription des actions dérivant d'un contrat d'assurance ?")}`],
-  ["fr-law-page-article-44", "/fr/lu-legilux/loi-1997-07-27-n10#article-art_44"],
-  ["fr-law-page-changes-44", "/fr/lu-legilux/loi-1997-07-27-n10#changes-art_44"],
-  ["fr-radar-12-months", "/fr/radar.html#last-12-months"],
+// The owner's order of 2026-11-14: the first screen of three pages at 1366 by 768, judged by screenshot (home, an answer,
+// the law page); each also whole at 1366 (the law page under three screens), and the three on a phone.
+// [name, path, width, height, mobile, whole page]
+const PRESCRIPTION = ask("Quel est le délai de prescription des actions dérivant d'un contrat d'assurance ?");
+const LAW = "/lu-legilux/loi-1997-07-27-n10";
+const SHOTS = [
+  ["1-fr-home--1366x768", "/fr/", 1366, 768, false, false],
+  ["2-fr-answer-prescription--1366x768", `/fr/assistant${PRESCRIPTION}`, 1366, 768, false, false],
+  ["3-fr-law-page--1366x768", `/fr${LAW}`, 1366, 768, false, false],
+  ["fr-home--1366-whole", "/fr/", 1366, 768, false, true],
+  ["fr-answer-prescription--1366-whole", `/fr/assistant${PRESCRIPTION}`, 1366, 768, false, true],
+  ["fr-law-page--1366-whole", `/fr${LAW}`, 1366, 768, false, true],
+  ["en-law-page--1366x768", `/en${LAW}`, 1366, 768, false, false],
+  ["fr-law-page-changes-44--1366x768", `/fr${LAW}#changes-art_44`, 1366, 768, false, false],
+  ["fr-home--phone", "/fr/", 390, 844, true, false],
+  ["fr-answer-prescription--phone", `/fr/assistant${PRESCRIPTION}`, 390, 844, true, false],
+  ["fr-law-page--phone", `/fr${LAW}`, 390, 844, true, false],
 ];
-const QUESTIONS = [];
-const WIDTHS = [["desktop", 1280, 800, false], ["menu-1024", 1024, 768, false], ["phone", 390, 844, true]];
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(out, { recursive: true });
@@ -51,13 +44,23 @@ try {
   await session.send("Runtime.enable", {}, sessionId);
   const evaluate = async (expression) =>
     (await session.send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }, sessionId)).result?.value;
-  const shoot = async (name, width, mobile) => {
-    const height = Math.min(7000, Math.max(800, Number(await evaluate("document.documentElement.scrollHeight")) || 800));
-    await session.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile }, sessionId);
-    await settle(500);
-    const { data } = await session.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true }, sessionId);
+  // A first screen is the viewport as it opens; a whole page, its full height. Each is reported with the page's height and
+  // any English in sight (an element marked English that is not inside a closed disclosure).
+  const shoot = async (name, width, height, mobile, whole) => {
+    const tall = Number(await evaluate("document.documentElement.scrollHeight")) || height;
+    const english = await evaluate(`(() => {
+      const seen = [...document.querySelectorAll('main [lang="en"]')].filter((node) => node.getClientRects().length > 0);
+      return seen.length + (seen.length === 0 ? '' : ': ' + seen.slice(0, 4).map((node) => node.textContent.trim().slice(0, 50)).join(' | '));
+    })()`);
+    if (whole) {
+      await session.send("Emulation.setDeviceMetricsOverride", { width, height: Math.min(9000, Math.max(height, tall)), deviceScaleFactor: 1, mobile }, sessionId);
+      await settle(500);
+    } else {
+      await evaluate("window.scrollTo(0, 0)");
+    }
+    const { data } = await session.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: whole }, sessionId);
     await writeFile(join(out, `${name}.png`), Buffer.from(data, "base64"));
-    report.push(`${name}.png ${width}x${height}`);
+    report.push(`${name}.png ${width}x${whole ? tall : height}; page height ${tall} px (${(tall / height).toFixed(2)} screens); English in sight ${english}`);
   };
   const open = async (path, width, height, mobile) => {
     await session.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile }, sessionId);
@@ -70,36 +73,12 @@ try {
     // An assistant page asks its question once loaded: give the answer time to arrive.
     await settle(path.includes("/assistant#") ? 15000 : 6000);
   };
-  for (const [label, width, height, mobile] of WIDTHS) {
-    for (const [name, path] of PAGES) {
-      try {
-        await open(path, width, height, mobile);
-        await shoot(`${name}--${label}`, width, mobile);
-      } catch (error) {
-        report.push(`${name}--${label} FAILED ${error.message}`);
-      }
-    }
-  }
-  for (const [name, path, question] of QUESTIONS) {
-    for (const [label, width, height, mobile] of WIDTHS) {
-      try {
-        await open(path, width, height, mobile);
-        const asked = await evaluate(`(() => {
-          const field = document.querySelector('#assistant-question');
-          if (!field) return 'no field';
-          Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(field, ${JSON.stringify(question)});
-          field.dispatchEvent(new Event('input', { bubbles: true }));
-          const button = field.form?.querySelector('button[type=submit]');
-          if (!button) return 'no button';
-          button.click();
-          return 'asked';
-        })()`);
-        await settle(15000);
-        await shoot(`${name}--${label}`, width, mobile);
-        report.push(`  ${name}--${label}: ${asked}`);
-      } catch (error) {
-        report.push(`${name}--${label} FAILED ${error.message}`);
-      }
+  for (const [name, path, width, height, mobile, whole] of SHOTS) {
+    try {
+      await open(path, width, height, mobile);
+      await shoot(name, width, height, mobile, whole);
+    } catch (error) {
+      report.push(`${name} FAILED ${error.message}`);
     }
   }
 } finally {
