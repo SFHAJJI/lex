@@ -11,7 +11,7 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { CompareAnswerView, LawHeader, LawTimeline } from "../.react-build/app.mjs";
-import { actTitle, actTitleOf, afterClick, articleHeadingOf, articleNumberOf, defaultPair, lawStatus, readClaimDate, versionOn, versionsOf, yearOf } from "../scripts/law-page.mjs";
+import { actTitle, actTitleOf, afterClick, articleHeadingOf, articleNumberOf, defaultPair, lawStatus, onDateOf, readClaimDate, versionOn, versionsOf, yearOf } from "../scripts/law-page.mjs";
 import { displayDate } from "../scripts/live-chrome.mjs";
 import { compareOutcome } from "../scripts/live-compare.mjs";
 
@@ -108,6 +108,11 @@ test("on the law page an article is named as a reader names it, unchanged ones s
   assert.equal(articleNumberOf("art_62-11"), "62-11");
   assert.equal(articleNumberOf("annexe_1"), "annexe_1");
   assert.equal(articleNumberOf("005"), "5", "an EU act's article number, as a citation writes it");
+  // The law page opened at a date (an answer that read the law at a past date): the date its hash names, a real day only.
+  assert.equal(onDateOf("#on-2020-01-01"), "2020-01-01");
+  assert.equal(onDateOf("#on-2020-02-30"), null, "no such day");
+  assert.equal(onDateOf("#article-art_44"), null);
+  assert.equal(onDateOf(undefined), null);
   assert.equal(yearOf("2021-01-01"), "2021");
   const row = answers.sampled.filter((sample) => sample.operation === "diff")[1];
   const envelope = structuredClone(census.envelopes.find((candidate) => candidate.operation === "diff" && candidate.scenario.startsWith("the state on one date against the state on the same date")).envelope);
