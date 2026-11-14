@@ -2465,3 +2465,110 @@ main > * {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* The answer card (the owner's order of 2026-11-13, section C): the verdict in a word, the article and its heading, the act's
+   title, the quotation, the version it is from as a badge, and three ways on set as buttons; the notices in one small line
+   under the answer. Colours are the text's own, in both schemes; nothing is said by colour alone. */
+.assistant-verdict {
+  font-size: 1.1em;
+}
+
+.assistant-article {
+  margin-block: 0.75rem 0;
+  font-weight: 700;
+}
+
+.assistant-act {
+  margin-block: 0.15rem 0.5rem;
+  font-family: Georgia, serif;
+  font-style: italic;
+}
+
+.assistant-version-badge {
+  display: inline-block;
+  margin-block: 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 0.1em 0.7em;
+  font-size: 0.9em;
+}
+
+.assistant-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 0.5rem;
+}
+
+.assistant-action {
+  border: 1px solid currentColor;
+  border-radius: 0.4rem;
+  padding: 0.3em 0.8em;
+  text-decoration: none;
+}
+
+.assistant-action:hover,
+.assistant-action:focus-visible {
+  text-decoration: underline;
+}
+
+.assistant-disclaimer {
+  margin-block-start: 1rem;
+  font-size: 0.85em;
+}
+
+/* The menu (the owner's order of 2026-11-13, section C): five entries on one line from 1024 pixels, every other screen under
+   Developers, a disclosure that opens over the page in the page's own colours, in both schemes. */
+.site-nav li {
+  white-space: nowrap;
+}
+
+.site-nav .nav-more {
+  position: relative;
+}
+
+.site-nav .nav-more summary {
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.site-nav .nav-more details[open] > ul {
+  position: absolute;
+  inset-inline-end: 0;
+  z-index: 10;
+  display: grid;
+  gap: 0.25rem;
+  min-inline-size: 14rem;
+  margin-block-start: 0.4rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid currentColor;
+  border-radius: 0.4rem;
+  background: #f4f1e8;
+}
+
+@media (prefers-color-scheme: dark) {
+  .site-nav .nav-more details[open] > ul {
+    background: #111713;
+  }
+}
+
+@media (min-width: 1024px) {
+  .site-nav > ul {
+    flex-wrap: nowrap;
+  }
+}
+
+/* The date chip beside the question box (the owner's order of 2026-11-13, section C). */
+.home-date-chip {
+  margin-block: 0.4rem;
+}
+
+.date-chip {
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 0.2em 0.8em;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
