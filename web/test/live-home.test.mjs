@@ -309,17 +309,14 @@ test("the assistant's entry exists only while the server reports the assistant o
   assert.deepEqual(readHomeFactsValue(JSON.parse(JSON.stringify(off))), off, "the facts read back are the same facts");
   assert.equal(readHomeFactsValue({ ...off, assistant: "on" }), null, "a flag that is not exactly true is not the facts");
 
-  // On: the server's coverage answer carries the flag, the facts carry `assistant: true`, and the links gain one entry, to the
-  // assistant's page, by the panel's own name for it.
+  // On: the server's coverage answer carries the flag, the facts carry `assistant: true`, and the page is the question box
+  // (the owner's order of 2026-11-14, evening): its examples ask the assistant's page, and no list of links stands beside it.
   const on = homeFacts(coverageAt("2026-10-15T10:00:00.0000000Z", (value) => ({ ...value, assistant: { state: "on", operation_id: "ask", page: "assistant", preview: true } })), LIVE_CONTRACT);
   assert.equal(on.assistant, true);
   assert.deepEqual(readHomeFactsValue(JSON.parse(JSON.stringify(on))), on);
   const html = renderLiveHomePage({ facts: on });
-  const links = /<nav aria-label="([^"]*)" class="home-links" data-home-links="">([\s\S]*?)<\/nav>/.exec(html);
-  const entries = [...links[2].matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map(([, href, text]) => [href, text]);
-  assert.deepEqual(entries.at(-1), ["/en/assistant", "Assistant"], "one more link, last, to the assistant's page");
-  assert.equal(entries.length, 5);
-  assert.ok(html.includes('data-home-assistant=""'));
+  assert.ok(html.includes('data-home-ask=""') && html.includes('href="/en/assistant#q='), "the question box, whose examples ask the assistant");
+  assert.ok(!html.includes('data-home-links=""'), "no list of links beside it");
   // And the same facts without the flag render the page without it: the flag is the only difference.
   const { assistant, ...without } = on;
   assert.equal(assistant, true);
@@ -341,11 +338,17 @@ test("with the assistant on, the home page opens with its question box and examp
   const on = homeFacts(coverageAt("2026-10-15T10:00:00.0000000Z", (value) => ({ ...value, assistant: { state: "on", operation_id: "ask", page: "assistant", preview: true } })), LIVE_CONTRACT);
   const main = mainOf(renderLiveHomePage({ facts: on }));
   assert.ok(main.includes('data-home-ask=""'), "the question box");
-  assert.equal(main.search(/<(input|select|textarea|button)\b/), main.indexOf('<textarea id="home-ask-question"'), "its field is the first control");
+  assert.equal(main.search(/<(input|select|textarea|button)\b/), main.indexOf('<input id="home-ask-question"'), "its field is the first control");
+  // One row (the owner's order of 2026-11-14, evening): the question, the date, the button, in that order, and nothing else.
+  const form = /<form class="home-ask-form">([\s\S]*?)<\/form>/.exec(main)[1];
+  assert.deepEqual([...form.matchAll(/<(input|button)\b[^>]*>/g)].map(([tag]) => /id="home-ask-question"/.test(tag) ? "question" : /<button/.test(tag) ? "button" : "date"), ["question", "date", "button"]);
+  assert.ok(form.includes(`placeholder="${escaped(EN.home.askPlaceholder)}"`) && form.includes(`placeholder="${escaped(EN.home.datePlaceholder)}"`));
+  assert.ok(main.includes('class="coverage-line coverage-short"'), "one grey line with the counts");
+  assert.ok(!main.includes('data-home-trust') && !main.includes('data-home-about') && !main.includes('data-home-links'), "nothing else");
   // One box (the owner's order of 2026-11-13, section C): the search is the search page's, and its example citations with it.
   assert.ok(!main.includes('data-home-search=""'), "no second box");
   assert.ok(!main.includes('data-home-examples='), "no example citations beside the question box");
-  assert.ok(main.includes('data-date-chip="today"') && main.includes(EN.home.dateChipToday), "the date chip, today until a date is chosen");
+  assert.ok(main.includes('data-date-chip="today"') && main.includes(EN.home.dateChipLabel), "the date, today until a date is typed");
   const examples = [...main.matchAll(/<a href="([^"]+)" data-home-ask-example="">([^<]+)<\/a>/g)].map(([, href, text]) => [href, text]);
   assert.deepEqual(examples.map(([, text]) => text), Object.values(EN.home.askExamples).map(escaped), "every example question, in the table's order");
   for (const [href, text] of examples) {
@@ -353,11 +356,13 @@ test("with the assistant on, the home page opens with its question box and examp
     const unescaped = href.replaceAll("&#x27;", "'").replaceAll("&amp;", "&");
     assert.equal(decodeURIComponent(unescaped.slice("/en/assistant#q=".length)), Object.values(EN.home.askExamples).find((question) => escaped(question) === text).replace(/[  ]/g, " "));
   }
-  assert.ok(main.includes('href="/en/how-it-works.html"') && main.includes('href="/en/quality.html"'), "how Lex works, and the assistant's results");
-  // Off, none of it: no box, no example question, no results page (R52), and How Lex works still linked.
+  // Decisions and Evidence are the menu's (the header), not the page's.
+  const page = renderLiveHomePage({ facts: on });
+  assert.ok(page.includes('href="/en/decisions.html"') && page.includes('href="/en/evidence.html"'), "the decisions and the evidence, in the menu");
+  // Off, none of it: no box, no example question, no evidence link in the page (R52), and the decisions still linked.
   for (const html of [rendered(COVERAGE), renderLiveHomePage()]) {
     const off = mainOf(html);
-    assert.doesNotMatch(off, /data-home-ask|\/en\/quality\.html/);
-    assert.ok(off.includes('href="/en/how-it-works.html"'));
+    assert.doesNotMatch(off, /data-home-ask|\/en\/evidence\.html/);
+    assert.ok(off.includes('href="/en/decisions.html"'));
   }
 });

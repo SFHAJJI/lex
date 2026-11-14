@@ -53,17 +53,20 @@ export const LIVE_MARKER = 'lex-v3-live-mount';
  * is current only there; search.html is the same screen under its own title.
  */
 /**
- * The menu a reader sees (the owner's order of 2026-11-13, section C): the assistant (the home page, assistant-first), the
- * texts (the search, and a law's reading and dossier), the changes, the assistant's test results and how Lex works; every
- * other screen under Developers, one disclosure away, so the menu holds one line at 1024 pixels.
+ * The menu a reader sees (the owner's order of 2026-11-14, evening): the two pages that say how Lex is built and how well it
+ * answers, Decisions and Evidence; the logo leads home (the question box), and the texts, the changes and Developers are in
+ * the footer.
  */
 const MAIN_MENU = Object.freeze([
-  Object.freeze({ key: 'menuAssistant', page: 'index.html', states: Object.freeze(['live-home', 'live-assistant']) }),
+  Object.freeze({ key: 'menuDecisions', page: referencePage('decisions').file, states: Object.freeze([referencePage('decisions').state]) }),
+  Object.freeze({ key: 'menuEvidence', page: referencePage('evidence').file, states: Object.freeze([referencePage('evidence').state]) }),
+]);
+
+/** The footer's way to the site's screens: the texts (the search, and a law's reading and dossier) and the changes. */
+const FOOTER_MENU = Object.freeze([
   Object.freeze({ key: 'menuTexts', page: 'search.html', states: Object.freeze(['live-search', 'live-reading', 'live-dossier']) }),
   // The changes, opened on the last twelve months (`LAST_TWELVE_MONTHS_HASH`).
   Object.freeze({ key: 'radar', page: 'radar.html', hash: '#last-12-months', states: Object.freeze(['live-radar']) }),
-  Object.freeze({ key: 'menuQuality', page: referencePage('quality').file, states: Object.freeze([referencePage('quality').state]) }),
-  Object.freeze({ key: 'menuHowItWorks', page: referencePage('howItWorks').file, states: Object.freeze([referencePage('howItWorks').state]) }),
 ]);
 
 const MENU = Object.freeze([
@@ -148,32 +151,16 @@ export function SiteHeader({ state, locale, localePage = null }) {
       <a className="skip-link" href="#main">{site.skip}</a>
       <a className="site-brand" href={localeHome(CHROME_LOCALE)}>
         <span className="site-name">{site.brand}</span>
-        <span className="site-tagline">{site.tagline}</span>
       </a>
       <nav aria-label={site.menu} className="site-nav">
         <ul>
           {MAIN_MENU.map((entry) => (
             <li key={entry.key}>
-              <a href={entry.page === 'index.html' ? localeHome(CHROME_LOCALE) : `${livePath(entry.page)}${entry.hash ?? ''}`} aria-current={entry.states.includes(state) ? 'page' : undefined}>
+              <a href={livePath(entry.page)} aria-current={entry.states.includes(state) ? 'page' : undefined}>
                 {site[entry.key]}
               </a>
             </li>
           ))}
-          <li className="nav-more">
-            <details>
-              <summary>{site.menuDevelopers}</summary>
-              <ul>
-                {MENU.map((entry) => (
-                  <li key={entry.key}>
-                    <a href={entry.page === 'index.html' ? localeHome(CHROME_LOCALE) : livePath(entry.page)} aria-current={entry.key !== 'search' && entry.key !== 'radar' && entry.states.includes(state) ? 'page' : undefined}>
-                      {site[entry.key]}
-                    </a>
-                  </li>
-                ))}
-                <li><a href={livePath(referencePage('developers').file)} aria-current={state === referencePage('developers').state ? 'page' : undefined}>{liveChrome().developers.title}</a></li>
-              </ul>
-            </details>
-          </li>
         </ul>
       </nav>
       <LocaleNav current={locale} page={localePage} />
@@ -216,9 +203,21 @@ export function SiteFooter({ state = null, freshness = null, answers = true }) {
       <p>{site.authenticity}</p>
       <p>{site.sources}</p>
       {sent === null ? null : <p data-sent="">{sent}</p>}
-      <p>
-        <a href={livePath('coverage.html')}>{site.coverage}</a>
-      </p>
+      <nav aria-label={site.footerMenu} className="footer-nav" data-footer-nav="">
+        <ul>
+          {FOOTER_MENU.map((entry) => (
+            <li key={entry.key}>
+              <a href={`${livePath(entry.page)}${entry.hash ?? ''}`} aria-current={entry.states.includes(state) ? 'page' : undefined}>{site[entry.key]}</a>
+            </li>
+          ))}
+          <li><a href={livePath('coverage.html')}>{site.coverage}</a></li>
+          {MENU.filter((entry) => !['search', 'radar', 'coverage'].includes(entry.key)).map((entry) => (
+            <li key={entry.key}>
+              <a href={livePath(entry.page)} aria-current={entry.states.includes(state) ? 'page' : undefined}>{site[entry.key]}</a>
+            </li>
+          ))}
+        </ul>
+      </nav>
       <nav aria-label={copy.reference.menu} className="reference-nav" data-reference-nav="">
         <ul>
           {REFERENCE_PAGES.map((page) => (

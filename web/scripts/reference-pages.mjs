@@ -18,10 +18,10 @@ import { INTERFACE_LANGUAGES } from "./permalinks.mjs";
 
 /** The three pages: each one's chrome section, its file under each interface language, and its state, in the footer's order. */
 export const REFERENCE_PAGES = Object.freeze([
-  // How Lex works and the assistant's measured results (2026-11-13, the owner's choice: the site says how it is built and
-  // how well its assistant answers).
-  Object.freeze({ key: "howItWorks", file: "how-it-works.html", state: "live-how-it-works" }),
-  Object.freeze({ key: "quality", file: "quality.html", state: "live-quality" }),
+  // The decisions Lex is built on, and the evidence of how well it answers (the owner's order of 2026-11-14, evening: they
+  // replace "How it works" and "Quality").
+  Object.freeze({ key: "decisions", file: "decisions.html", state: "live-decisions" }),
+  Object.freeze({ key: "evidence", file: "evidence.html", state: "live-evidence" }),
   Object.freeze({ key: "help", file: "help.html", state: "live-help" }),
   Object.freeze({ key: "guide", file: "how-to-read.html", state: "live-guide" }),
   Object.freeze({ key: "developers", file: "developers.html", state: "live-developers" }),

@@ -77,19 +77,23 @@ const NUMBERS_ALLOWED = Object.freeze({
   "reading.disclosure.lu_rights_publisher_catalogue_only_other_identity_licensed_otherwise": ["4", "0"],
   // R77's record of an act the catalogue licenses CC BY 4.0 and Lex has not acquired: the licence's version.
   "refusalCard.catalogue.reasons.catalogue_cc_by_not_acquired": ["4", "0"],
-  // The home page's example questions (2026-11-13), each a citation of the article it asks about: the 1997 insurance contract
-  // law's article 1er, the GDPR's article 5, the AI Act's article 50.
-  "home.askExamples.first": ["1", "27", "1997"],
-  "home.askExamples.second": ["5"],
+  // The home page's example questions (the owner's order of 2026-11-14, evening), each a question of the test set asked word
+  // for word: in French, the dated one's date ("au 1er janvier 2020") and the GDPR's article 5; in English, the GDPR's
+  // articles 5 and 33 and the AI Act's article 50. Citations and a date, not counts.
+  "home.askExamples.second": ["1", "2020"],
+  "home.askExamples.third": ["5"],
+  // (The English table's examples, keyed alike, are listed under the English table's own entries below.)
+  // Decisions: the incident behind "not found rather than a guess", named by the two articles and the dates it was seen and
+  // fixed (a citation and two dates, not counts; every count on the page is a run's, filled in its placeholder).
+  "decisions.cards.notFound.note": ["70", "44", "13", "11", "2026", "14", "11", "2026"],
+});
+
+/** The English table's own entries that differ from the French table's (the example questions, in English). */
+const ENGLISH_ALLOWED = Object.freeze({
+  "home.askExamples.first": ["5"],
+  "home.askExamples.second": ["33"],
   "home.askExamples.third": ["50"],
-  // How Lex works: the model's name, and the digest's algorithm, as the citation generator names it.
-  "howItWorks.sections.question.list.plan": ["4", "1"],
-  "howItWorks.sections.trust.list.verified": ["256"],
-  // The assistant's results page: the 95th percentile of answer times, the run's accuracy floor (a gate's threshold, not a
-  // count), and the year of the law a run found missed.
-  "quality.tiles.speed.label": ["95"],
-  "quality.method.gates": ["80"],
-  "quality.findings.insurance": ["1997"],
+  "decisions.cards.notFound.note": ["70", "44", "2026", "11", "13", "2026", "11", "14"],
 });
 
 const TABLES = Object.freeze([
@@ -116,11 +120,14 @@ test("no user-facing string of the live pages carries a pack figure (R11)", () =
 });
 
 test("the interface tables say a number only where the allowlist names it: a citation of law or a statistical label, never a count", () => {
-  for (const table of [LIVE_CHROME.en, LIVE_CHROME.fr]) {
+  // The example questions differ by language (each table's are test questions in its own language); every other entry is
+  // allowed alike in both.
+  const english = { ...Object.fromEntries(Object.entries(NUMBERS_ALLOWED).filter(([path]) => !path.startsWith("home.askExamples."))), ...ENGLISH_ALLOWED };
+  for (const [table, allowed] of [[LIVE_CHROME.en, english], [LIVE_CHROME.fr, NUMBERS_ALLOWED]]) {
     const said = Object.fromEntries(entriesOf(table)
       .map(([path, text]) => [path, text.replace(/\{[A-Za-z]+\}/g, "").match(/\d+/g)])
       .filter(([, numbers]) => numbers !== null));
-    assert.deepEqual(said, NUMBERS_ALLOWED, "a number in copy is a count only as a served field, filled in its template's placeholder (R11)");
+    assert.deepEqual(said, allowed, "a number in copy is a count only as a served field, filled in its template's placeholder (R11)");
   }
   for (const [where, entries] of TABLES.slice(2)) {
     for (const [path, text] of entries) assert.doesNotMatch(text.replace(/\{[A-Za-z]+\}/g, ""), /\d/, `${where}, ${path}: ${text}`);
@@ -147,7 +154,7 @@ test("no live page, as built or rendered from the census answers, says a pack fi
     maintenance: renderLiveMaintenancePage(),
     ...Object.fromEntries(["legalNotice", "privacy", "terms", "accessibility", "cookies"].map((key) => [key, renderLiveLegalPage(key)])),
     // The three reference pages, the Developers page generated from the contracts, whose counts it says as served fields.
-    ...Object.fromEntries(["howItWorks", "quality", "help", "guide"].map((key) => [key, renderLiveReferencePage(key)])),
+    ...Object.fromEntries(["decisions", "evidence", "help", "guide"].map((key) => [key, renderLiveReferencePage(key)])),
     developers: renderLiveReferencePage("developers", { developers }),
   };
   for (const [name, html] of Object.entries(pages)) {

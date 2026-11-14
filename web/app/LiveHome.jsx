@@ -32,6 +32,7 @@ import { useLuxembourgToday } from './Today.jsx';
 import { HOME_EXAMPLES, exampleHref, examplesShown } from '../scripts/home-examples.mjs';
 import { citationLang } from '../scripts/citation.mjs';
 import { askFragment } from '../scripts/ask-fragment.mjs';
+import { readClaimDate } from '../scripts/law-page.mjs';
 
 const COPY = liveChrome().home;
 
@@ -39,7 +40,7 @@ const COPY = liveChrome().home;
  * The coverage line: the answer's counts and its index's build date, with today beside it when the index is older (`today`,
  * the date in Luxembourg, or null), or the coverage page's sentence for no mount.
  */
-export function CoverageLine({ line, today = null }) {
+export function CoverageLine({ line, today = null, short = false }) {
   if (line === null || line.state === 'unavailable') return null;
   if (line.state === 'unmounted') return <p className="coverage-line" data-coverage-line="unmounted">{refusalSentence(UNMOUNTED_SENTENCE)}</p>;
   const counts = {
@@ -48,6 +49,15 @@ export function CoverageLine({ line, today = null }) {
     articles: fillCounted(COPY.articles, line.articles),
   };
   const older = indexOlderThanToday(line.builtOn, today);
+  // Beside the question box (the owner's order of 2026-11-14, evening): one grey line, the acts and articles held and the
+  // index's date, every figure the coverage answer's.
+  if (short && line.builtOn !== null) {
+    return (
+      <p className="coverage-line coverage-short" data-coverage-line="counted" data-built-on={line.builtOn}>
+        {fillText(COPY.coverageShort, { acts: counts.acts, articles: counts.articles, date: line.builtOn })}
+      </p>
+    );
+  }
   return (
     <p className="coverage-line" data-coverage-line="counted" data-built-on={line.builtOn ?? ''} data-today={older ? today : undefined}>
       {line.builtOn === null
@@ -87,6 +97,12 @@ const assistantHref = (question) => `${livePath('assistant')}${askFragment(quest
  * assistant switched on (R52): it opens the assistant's page with the question asked, and lists example questions, each asked
  * on the live site before it was listed, each a link that asks it.
  */
+/**
+ * An example question as it is asked: the test set's own words, whose apostrophes are straight; the page shows it in its own
+ * typography (the French table's apostrophes are typographic).
+ */
+export const exampleAsked = (example) => example.replace(/’/gu, "'");
+
 /** A calendar date as a question writes it, day first ("03/03/2019"), which the assistant's intake reads as a date. */
 export function writtenDate(date) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(date);
@@ -103,45 +119,38 @@ export function questionAsked(question, date) {
 
 export function HomeAsk({ questions = Object.values(COPY.askExamples) }) {
   const [question, setQuestion] = useState('');
-  // The date chip (the owner's order of 2026-11-13, section C): "as of today" until a date is chosen.
-  const [date, setDate] = useState('');
-  const [choosing, setChoosing] = useState(false);
+  // The date (the owner's order of 2026-11-14, evening: one row, the question, the date and the button): today while it is
+  // empty; else the calendar date typed, day first (`readClaimDate`), or null while it names none.
+  const [dateText, setDateText] = useState('');
+  const date = dateText.trim() === '' ? '' : readClaimDate(dateText);
   return (
     <section className="home-ask" aria-labelledby="home-ask-heading" data-home-ask="">
-      <h2 id="home-ask-heading">{COPY.askHeading}</h2>
+      <h2 id="home-ask-heading" className="visually-hidden">{COPY.askHeading}</h2>
       <form
         className="home-ask-form"
         onSubmit={(event) => {
           event.preventDefault();
+          if (date === null) return;
           const asked = questionAsked(question, date);
           if (asked.length > 0) window.location.assign(assistantHref(asked));
         }}
       >
-        <label htmlFor="home-ask-question">{COPY.askLabel}</label>
-        <textarea id="home-ask-question" name="question" rows={2} maxLength={1000} value={question} onChange={(event) => setQuestion(event.target.value)} />
-        <p className="home-date-chip" data-date-chip={date === '' ? 'today' : date}>
-          {choosing ? (
-            <label>
-              {COPY.dateChipLabel}{' '}
-              <input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
-            </label>
-          ) : (
-            <button type="button" className="date-chip" aria-expanded="false" onClick={() => setChoosing(true)}>
-              {date === '' ? COPY.dateChipToday : fillText(COPY.dateChipOn, { date })}
-            </button>
-          )}
-        </p>
+        <label htmlFor="home-ask-question" className="visually-hidden">{COPY.askLabel}</label>
+        <input id="home-ask-question" name="question" type="text" maxLength={1000} placeholder={COPY.askPlaceholder} value={question} onChange={(event) => setQuestion(event.target.value)} />
+        <label className="home-date" data-date-chip={date === '' ? 'today' : date ?? 'unread'}>
+          <span>{COPY.dateChipLabel}</span>
+          <input type="text" inputMode="numeric" autoComplete="off" spellCheck={false} size={10} placeholder={COPY.datePlaceholder} value={dateText} onChange={(event) => setDateText(event.target.value)} />
+        </label>
         <button type="submit">{COPY.askSubmit}</button>
       </form>
-      <p>{COPY.askTry}</p>
-      <ul className="home-ask-examples">
+      {date === null ? <p className="home-date-unread" role="status">{COPY.dateUnread}</p> : null}
+      <ul className="home-ask-examples" aria-label={COPY.askTry}>
         {questions.map((example) => (
           <li key={example}>
-            <a href={assistantHref(example)} data-home-ask-example="">{example}</a>
+            <a href={assistantHref(exampleAsked(example))} data-home-ask-example="">{example}</a>
           </li>
         ))}
       </ul>
-      <p className="home-ask-note">{COPY.askNote}</p>
     </section>
   );
 }
@@ -164,8 +173,8 @@ export function HomeTrust({ assistant = false }) {
         ))}
       </ul>
       <p className="home-trust-links">
-        <a href={livePath(referencePage('howItWorks').file)}>{COPY.howItWorksLink}</a>
-        {assistant ? <a href={livePath(referencePage('quality').file)}>{COPY.qualityLink}</a> : null}
+        <a href={livePath(referencePage('decisions').file)}>{liveChrome().decisions.title}</a>
+        {assistant ? <a href={livePath(referencePage('evidence').file)}>{liveChrome().evidence.title}</a> : null}
       </p>
     </section>
   );
@@ -200,25 +209,29 @@ export function LiveHome({ contract, fetchImpl, facts = null, examples = HOME_EX
   const today = useLuxembourgToday(facts?.today ?? null);
   // The page as built asks for its coverage line once loaded; a page the server rendered carries it.
   useEffect(() => (facts === null ? startHomeCoverage({ contract, fetchImpl, onLine: setLine, onAssistant: setAssistant }) : undefined), []);
+  // With the assistant on (the owner's order of 2026-11-14, evening): the question box, its date and its button on one row,
+  // three example questions, and the coverage line, and nothing else. With it off, the search box is the home page's only box
+  // (R47), with what Lex is, its example searches and the pages a reader starts from.
+  if (assistant) {
+    return (
+      <>
+        <HomeAsk />
+        <CoverageLine line={line} today={today} short />
+      </>
+    );
+  }
   return (
     <>
-      {assistant ? <p className="home-lede">{COPY.ledeAsk}</p> : null}
-      {assistant ? <HomeAsk /> : null}
-      {/* One box (the owner's order of 2026-11-13, section C): with the assistant on, the question box is the home page's, and
-          the search is the search page's (the menu's "Texts"); with it off, the search box is the home page's only box (R47). */}
-      {assistant ? null : (
-        <section className="home-search" data-home-search="">
-          <LiveSearch contract={contract} fetchImpl={fetchImpl} variant="home" today={facts?.today ?? null} />
-        </section>
-      )}
+      <section className="home-search" data-home-search="">
+        <LiveSearch contract={contract} fetchImpl={fetchImpl} variant="home" today={facts?.today ?? null} />
+      </section>
       <HomeTrust assistant={assistant} />
       <section className="home-about" data-home-about="">
         <h2>{COPY.aboutHeading}</h2>
         <p>{COPY.intro}</p>
       </section>
       <CoverageLine line={line} today={today} />
-      {/* The example citations go with the search box they fill (R47): beside the question box, the example questions stand. */}
-      {assistant ? null : <HomeExamples line={line} record={examples} />}
+      <HomeExamples line={line} record={examples} />
       <HomeLinks assistant={assistant} />
     </>
   );

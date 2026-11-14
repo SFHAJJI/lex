@@ -61,7 +61,7 @@ const referenceLinks = (html) => [...footerOf(html).matchAll(/<nav aria-label="(
 const render = (key) => app.renderLiveReferencePage(key, { developers: DEVELOPERS });
 
 /** The chrome table's sections the three pages say. */
-const SECTIONS = /^(?:reference|help|guide|developers)\./;
+const SECTIONS = /^(?:reference|help|guide|developers|decisions|evidence)\./;
 
 // The C# the registry and the API's routes are declared in, read as `refusal-registry-parity.test.mjs` reads it: every
 // extraction is checked for plausibility, so a parse that found nothing never agrees with an empty page.
@@ -110,7 +110,14 @@ test("the three reference pages are built under each interface language, with th
         const entry = copy[page.key];
         assert.match(html, new RegExp(`^<!doctype html>\\n<html lang="${language}" data-product-line="lex-v3" data-preview-state="${page.state}"`), `${label}: labelled ${language}`);
         assert.ok(html.includes(`<title>${escaped(entry.title)} - Lex</title>`), `${label}: its title`);
-        assert.ok(html.includes(`<p class="eyebrow">${escaped(entry.eyebrow)}</p>`) && html.includes(`<h1>${escaped(entry.heading)}</h1>`) && html.includes(`<p>${escaped(entry.intro)}</p>`), `${label}: its eyebrow, heading and introduction`);
+        // Decisions and Evidence (the owner's order of 2026-11-14, evening): a heading and no paragraph above their blocks; the
+        // other pages their eyebrow, heading and introduction.
+        if (page.key === "decisions" || page.key === "evidence") {
+          assert.ok(html.includes(`<h1>${escaped(entry.heading)}</h1>`) && !html.includes('<p class="eyebrow">'), `${label}: its heading, no eyebrow`);
+          assert.ok(!/<main id="main"><h1>[^<]*<\/h1><p>/.test(html), `${label}: no paragraph under its heading`);
+        } else {
+          assert.ok(html.includes(`<p class="eyebrow">${escaped(entry.eyebrow)}</p>`) && html.includes(`<h1>${escaped(entry.heading)}</h1>`) && html.includes(`<p>${escaped(entry.intro)}</p>`), `${label}: its eyebrow, heading and introduction`);
+        }
         // Readable without scripts: it ships none and asks nothing; never indexed, whatever the release's switch says (R67).
         assert.ok(!html.includes("<script") && !html.includes("<form"), `${label}: no script, no form`);
         assert.deepEqual(html.match(/<meta name="robots"[^>]*\/>/g), [NEVER_INDEXED_META], `${label}: never indexed`);
@@ -122,7 +129,7 @@ test("the three reference pages are built under each interface language, with th
         ], `${label}: the same page in each language`);
         const nav = html.slice(html.indexOf('data-locale-nav=""'), html.indexOf("</nav>", html.indexOf('data-locale-nav=""')));
         assert.deepEqual([...nav.matchAll(/<a href="([^"]+)" lang="([a-z]+)"/g)].map((match) => [match[2], match[1]]), [
-          ["en", `/en/${page.file}`], ["fr", `/fr/${page.file}`], ["de", "/locale-de.html"], ["lb", "/locale-lb.html"],
+          ["en", `/en/${page.file}`], ["fr", `/fr/${page.file}`],
         ], `${label}: its language links`);
         // The site around it, the footer listing the three with this one current, and no answer in its freshness strip.
         assert.ok(html.includes('data-live="lex-v3-live-mount"') && html.includes(escaped(copy.site.notAdvice)), `${label}: the site's header and footer`);
@@ -136,7 +143,10 @@ test("the three reference pages are built under each interface language, with th
         assert.ok(current.length >= 1 && current.every((href) => href === `/${language}/${page.file}`), `${label}: no menu entry is current but itself (${current.join(", ")})`);
         assert.ok(html.includes(`<p>${escaped(copy.freshness.noAnswer)}</p>`), `${label}: its strip carries no answer`);
         // Each part under its heading, in the table's order.
-        const parts = page.key === "developers" ? [...app.DEVELOPERS_PARTS] : page.key === "quality" ? [...app.QUALITY_PARTS] : Object.keys(entry.sections);
+        const parts = page.key === "developers" ? [...app.DEVELOPERS_PARTS]
+          : page.key === "decisions" ? app.DECISION_GROUPS.map((group) => group.key)
+          : page.key === "evidence" ? ["quality", "question", "release", "coverage", "cost"]
+          : Object.keys(entry.sections);
         assert.deepEqual([...mainOf(html).matchAll(/data-reference-section="([a-z]+)"/gi)].map((match) => match[1]), page.key === "guide" ? [...parts, "glossary"] : parts, `${label}: its parts`);
         // No page of the site gives a contact: no e-mail address, no mail or telephone link, no postcode, in any bytes.
         assert.deepEqual(shownOnPage(html), [], `${label}: shows none of what the owner's decision keeps off the site`);

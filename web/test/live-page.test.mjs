@@ -188,7 +188,7 @@ test("the live build writes its own directory, embeds the contract and nothing e
   }
 });
 
-test("every live page offers the interface languages, each named in itself; an unreviewed one leads to localization_unavailable", async () => {
+test("every live page offers the interface languages whose pages are complete, each named in itself; an unreviewed one keeps its page that says localization_unavailable", async () => {
   for (const render of [renderLiveCoveragePage, renderLiveSearchPage, renderLiveReadingPage, renderLiveExportPage]) {
     const html = render();
     const start = html.indexOf('<nav aria-label="Interface language"');
@@ -199,9 +199,10 @@ test("every live page offers the interface languages, each named in itself; an u
       // pages, English for the page that says a language is not reviewed (review of #797). Each reviewed language's
       // link leads to its own root as built; the page points it at the same page in that language once it has loaded.
       ["/fr/", "fr", "fr", "Français"],
-      ["/locale-de.html", "de", "en", "Deutsch"],
-      ["/locale-lb.html", "lb", "en", "Lëtzebuergesch"],
+      // German and Luxembourgish are not named (the owner's order of 2026-11-14, evening: the switch shows only the
+      // languages whose pages are complete); their pages, built below, still say localization_unavailable.
     ]);
+    assert.ok(!nav.includes("locale-de.html") && !nav.includes("locale-lb.html"), "no unreviewed language in the switch");
     assert.match(nav, /lang="en" hrefLang="en" aria-current="true" data-same-document="en">English/, "the page's own language is the current one");
     assert.equal([...nav.matchAll(/data-same-document="([a-z]+)"/g)].map((m) => m[1]).join(","), "en,fr", "only a reviewed language is pointed at the same page in it");
   }

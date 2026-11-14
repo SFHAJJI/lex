@@ -2773,3 +2773,577 @@ main:has([data-law-header]) {
   cursor: pointer;
   font-weight: 600;
 }
+
+/* ------------------------------------------------------------------------------------------------------------------------
+   The final look (the owner's order of 2026-11-14, evening): a white ground, one accent (the green), one sans-serif face
+   everywhere and the serif for quoted law alone; no eyebrow line, no tagline, no box inside a box. Set last, so it holds over
+   the rules above; the dark scheme keeps its own ground.
+   ------------------------------------------------------------------------------------------------------------------------ */
+@media (prefers-color-scheme: light) {
+  :root,
+  :root body {
+    background: #ffffff;
+  }
+
+  :root .site-header ~ main form input:not([type="checkbox"]):not([type="radio"]),
+  :root .site-header ~ main form select,
+  :root .assistant-form textarea {
+    background: #ffffff;
+  }
+}
+
+/* One face: the chrome's headings, the name, the figures and the act's title in the sans-serif; quoted law keeps the serif. */
+:root :is(h1, h2, h3, h4, .site-name, .quality-tile strong, .assistant-act),
+:root .site-header ~ main :is(h1, h2, h3, h4),
+:root .site-header ~ main .law-header h1 {
+  font-family: Inter, system-ui, sans-serif;
+  font-style: normal;
+}
+
+:root .site-header ~ main h1 {
+  font-size: clamp(1.5rem, 2.6vw, 2.1rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* No eyebrow line over a heading, on any page. */
+:root .eyebrow {
+  display: none;
+}
+
+/* The header on one line: the name at the start; Decisions, Evidence and the languages at the end. */
+:root .site-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5rem 1.75rem;
+  padding: 0.75rem clamp(1rem, 4vw, 2.5rem);
+  border-block-end: 1px solid #e3e6e1;
+}
+
+:root .site-brand {
+  margin-inline-end: auto;
+}
+
+:root .site-name {
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+:root .site-nav a {
+  color: inherit;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+:root .site-nav a:hover,
+:root .site-nav a:focus-visible,
+:root .site-nav a[aria-current="page"] {
+  color: #1f4d33;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+:root .site-header .locale-nav a {
+  color: #5c665f;
+}
+
+:root .site-header .locale-nav a[aria-current="true"] {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+/* The footer: small and grey, its links on lines that wrap. */
+:root .site-footer {
+  border-block-start: 1px solid #e3e6e1;
+  color: #5c665f;
+}
+
+.site-footer .footer-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ---- Home: the headline, the one row (question, date, button), three examples, one grey line, centred in the screen. ---- */
+:root main:has([data-home-ask]) {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-block-size: calc(100vh - 4.2rem);
+  max-inline-size: 56rem;
+  padding-block: 2rem;
+}
+
+:root main:has([data-home-ask]) > h1 {
+  margin: 0 0 1.25rem;
+  font-size: clamp(1.6rem, 3.1vw, 2.4rem);
+}
+
+:root .home-ask {
+  display: grid;
+  gap: 0.9rem;
+  border: 0;
+  padding: 0;
+  background: none;
+}
+
+:root .site-header ~ main form.home-ask-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.5rem;
+  max-inline-size: none;
+}
+
+:root .site-header ~ main form.home-ask-form input#home-ask-question {
+  flex: 1 1 20rem;
+  min-inline-size: 0;
+  padding: 0.8rem 0.95rem;
+  border: 1px solid #9aa59c;
+  border-radius: 8px;
+  font-size: 1.05rem;
+}
+
+:root .site-header ~ main form.home-ask-form label.home-date {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-inline: 0.75rem 0.4rem;
+  border: 1px solid #9aa59c;
+  border-radius: 8px;
+  color: #5c665f;
+  font-size: 0.9rem;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+:root .site-header ~ main form.home-ask-form label.home-date input {
+  inline-size: 7rem;
+  padding: 0.5rem 0.2rem;
+  border: 0;
+  background: transparent;
+  color: #17211b;
+  font-size: 1rem;
+}
+
+:root .site-header ~ main form.home-ask-form button[type="submit"] {
+  padding: 0.8rem 1.6rem;
+  border-radius: 8px;
+}
+
+:root .home-ask-examples {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+:root .home-ask-examples a {
+  display: inline;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: #1f4d33;
+  text-decoration: underline;
+  text-decoration-color: #9fb3a5;
+  text-underline-offset: 4px;
+}
+
+:root .home-ask-examples a::before {
+  content: "→ ";
+  text-decoration: none;
+}
+
+:root .coverage-short {
+  margin: 1.5rem 0 0;
+  color: #6b746e;
+  font-size: 0.9rem;
+}
+
+.home-date-unread {
+  margin: 0;
+  color: #8a2f22;
+  font-size: 0.9rem;
+}
+
+/* ---- The answer: the question on one line, the sentence that answers, one line that cites it, three links, the work. ---- */
+:root .site-header ~ main form.assistant-form {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0.5rem;
+  max-inline-size: none;
+}
+
+:root .assistant-form textarea {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  block-size: 2.9rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid #9aa59c;
+  border-radius: 8px;
+  font-size: 1rem;
+  line-height: 1.4;
+  resize: none;
+}
+
+:root .site-header ~ main form.assistant-form button[type="submit"] {
+  border-radius: 8px;
+}
+
+.answer-sentence {
+  margin: 1.75rem 0 0.9rem;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: clamp(1.35rem, 2.3vw, 1.8rem);
+  line-height: 1.45;
+}
+
+.answer-sentence mark {
+  padding: 0 0.12em;
+  border-radius: 3px;
+  background: #d8eddf;
+  color: inherit;
+}
+
+.answer-cite {
+  margin: 0 0 0.6rem;
+  color: #3d4741;
+  font-size: 0.95rem;
+}
+
+:root .answer-cite .assistant-article {
+  margin: 0;
+  font-weight: 700;
+}
+
+.answer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.4rem;
+  margin: 0 0 0.6rem;
+}
+
+.answer-links a,
+.link-button {
+  color: #1f4d33;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.answer-note,
+.answer-message {
+  margin: 0 0 0.5rem;
+  color: #6b746e;
+  font-size: 0.9rem;
+}
+
+.answer-none {
+  margin: 1.75rem 0 0.9rem;
+  font-size: 1.3rem;
+  line-height: 1.45;
+}
+
+.answer-article {
+  margin-block: 0.75rem;
+}
+
+.answer-rule {
+  margin: 1.5rem 0 0.75rem;
+  border: 0;
+  border-block-start: 1px solid #e3e6e1;
+}
+
+.answer-work > summary,
+.answer-work .assistant-how > summary {
+  color: #1f4d33;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.work-boxes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 0.6rem;
+  padding: 0;
+  list-style: none;
+}
+
+.work-boxes li {
+  display: grid;
+  align-content: start;
+  gap: 0.35rem;
+  padding: 0.8rem;
+  border: 1px solid #d5ddd6;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.work-boxes strong {
+  color: #1f4d33;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.work-boxes small {
+  color: #6b746e;
+  font-size: 0.8rem;
+}
+
+.work-boxes .work-model {
+  border-color: #1f4d33;
+  box-shadow: inset 0 0 0 1px #1f4d33;
+}
+
+.work-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin: 0 0 0.5rem;
+  color: #5c665f;
+  font-size: 0.85rem;
+}
+
+:root .assistant-disclaimer,
+:root .assistant-notice,
+:root .assistant-preview,
+:root .assistant-processor {
+  color: #6b746e;
+  font-size: 0.8rem;
+}
+
+/* ---- The law page: the comparison in one sentence, no tiles. ---- */
+:root .law-changes {
+  display: block;
+  margin: 0.75rem 0 1rem;
+  font-size: 1.05rem;
+}
+
+:root .law-changes strong {
+  font-size: inherit;
+}
+
+:root .law-changes span {
+  font-size: inherit;
+}
+
+/* ---- Decisions: cards in four groups. ---- */
+:root main:has(.decision-group),
+:root main:has(.evidence-block) {
+  max-inline-size: 64rem;
+}
+
+.decision-group {
+  margin-block: 1.6rem 0;
+}
+
+:root .site-header ~ main .decision-group h2,
+:root .site-header ~ main .evidence-block h2 {
+  margin: 0 0 0.7rem;
+  color: #1f4d33;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.decision-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+  gap: 0.9rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.decision-card {
+  display: grid;
+  align-content: start;
+  gap: 0.45rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid #d5ddd6;
+  border-radius: 10px;
+}
+
+:root .site-header ~ main .decision-card h3 {
+  margin: 0 0 0.15rem;
+  font-size: 1.05rem;
+  line-height: 1.35;
+}
+
+.decision-card p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.decision-card strong {
+  color: #1f4d33;
+}
+
+:root .decision-card .decision-note {
+  color: #6b746e;
+  font-size: 0.85rem;
+}
+
+/* ---- Evidence: five blocks, counts in a row, two flows of boxes. ---- */
+.evidence-block {
+  margin-block: 1.75rem 0;
+}
+
+.evidence-counts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0 0 0.8rem;
+  padding: 0;
+  list-style: none;
+}
+
+.evidence-counts li {
+  display: grid;
+  align-content: start;
+  gap: 0.2rem;
+  padding: 0.8rem;
+  border: 1px solid #d5ddd6;
+  border-radius: 10px;
+}
+
+.evidence-counts strong {
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.evidence-counts span {
+  color: #3d4741;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.evidence-counts .count-accent strong {
+  color: #1f4d33;
+}
+
+.evidence-lines {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: #3d4741;
+}
+
+.evidence-questions > summary {
+  color: #1f4d33;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.flow-boxes {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.flow-boxes li {
+  padding: 0.75rem;
+  border: 1px solid #d5ddd6;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.flow-boxes .flow-accent {
+  border-color: #1f4d33;
+  background: #1f4d33;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.evidence-line {
+  margin: 0;
+  color: #6b746e;
+  font-size: 0.85rem;
+}
+
+/* Phone width: the rows of boxes wrap, nothing scrolls sideways. */
+@media (max-width: 60rem) {
+  .flow-boxes {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .evidence-counts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 48rem) {
+  .work-boxes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 30rem) {
+  .work-boxes,
+  .flow-boxes,
+  .evidence-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  :root .site-header ~ main form.assistant-form {
+    flex-wrap: wrap;
+  }
+
+  :root .site-header ~ main form.home-ask-form label.home-date {
+    flex: 1 1 auto;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .answer-sentence mark {
+    background: #2f5a3f;
+  }
+
+  .answer-links a,
+  .link-button,
+  .answer-work > summary,
+  .work-boxes strong,
+  .decision-card strong,
+  .evidence-questions > summary,
+  :root .home-ask-examples a,
+  :root .site-header ~ main .decision-group h2,
+  :root .site-header ~ main .evidence-block h2 {
+    color: #7fd3a3;
+  }
+
+  .flow-boxes .flow-accent {
+    border-color: #7fd3a3;
+    background: #7fd3a3;
+    color: #111713;
+  }
+}
