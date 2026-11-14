@@ -97,7 +97,7 @@ test("one click reads a version, a second compares the two, and the page opens o
   // The date of a claim is typed as a reader writes it (the owner's order of 2026-11-14): its one text field.
   const fields = markup.match(/<input[^>]*type="text"[^>]*>/g) ?? [];
   assert.equal(fields.length, 1, "no identifier to type on the law page, only the date of a claim");
-  assert.ok(markup.includes("Date of the claim") && fields[0].includes('placeholder="yyyy-mm-dd"'), fields[0]);
+  assert.ok(markup.includes("Show the version that applied on") && fields[0].includes('placeholder="yyyy-mm-dd"'), fields[0]);
   // The page's one disclosure at its foot, closed: the technical details, which hold the act's key and its record.
   assert.match(markup, /<details class="law-technical" data-law-technical=""><summary>Technical details · <code>loi-1997-07-27-n10<\/code><\/summary>/);
   assert.ok(!markup.slice(0, markup.indexOf("data-law-technical")).replace(/<[^>]+>/g, "").includes("loi-1997-07-27-n10"), "no identifier said above it");
@@ -132,6 +132,16 @@ test("on the law page an article is named as a reader names it, unchanged ones s
   const words = (text) => text.replace(/<span class="visually-hidden"[^>]*>[^<]*<\/span>/g, "").replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/\s+/g, "");
   assert.equal(words(block), added.wording.parts[0].text.replace(/\s+/g, ""), "every character of the text, none added");
   assert.ok(!plain.includes("wording-paragraphs"), "the compare page keeps its one block");
+  // The comparison in one sentence (the owner's order of 2026-11-14, evening): each kind it counts, the kinds it counts none
+  // of left out, every count the comparison's own; no tiles.
+  const counts = comparison.counts;
+  const sentence = /<p class="law-changes" data-counts="([^"]*)">(.*?)<\/p>/s.exec(markup);
+  assert.ok(sentence !== null, "one sentence");
+  assert.equal(sentence[1], ["added", "changed", "removed", "unchanged"].map((kind) => `${kind}:${counts[kind]}`).join(" "));
+  const said = [...sentence[2].matchAll(/data-change="([a-z]+)"/g)].map((match) => match[1]);
+  const counted = ["added", "changed", "removed", "unchanged"].filter((kind) => counts[kind] > 0);
+  assert.deepEqual(said, counted.length === 0 ? ["unchanged"] : counted, "only the kinds it counts");
+  assert.ok(!markup.includes("<li data-change="), "no tiles");
   assert.ok(!plain.includes("unchanged since"), "and its own disclosure");
 });
 

@@ -248,8 +248,8 @@ export function LawTimeline({ view, today = null, contract, fetchImpl, foot = nu
           <ArticleActions row={{ publisherId: focus.anchor }} language={latest.language} view={view} version={latest} contract={contract} fetchImpl={fetchImpl} openHistory />
         </section>
       ) : null}
-      <h2 id="law-timeline">{COPY.timelineHeading}</h2>
-      <p className="timeline-help">{COPY.timelineHelp}</p>
+      {/* The timeline's heading is for a screen reader; the instruction sentence went (the owner's order of 2026-11-14, evening). */}
+      <h2 id="law-timeline" className="visually-hidden">{COPY.timelineHeading}</h2>
       <ol className="timeline-dots">
         {versions.map((version, index) => {
           const chosen = index === selection.read || index === selection.other;
