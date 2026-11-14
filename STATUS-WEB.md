@@ -22,7 +22,9 @@ updates this file, not STATUS.md.
   and no example citations (the search is the menu's "Textes"); the example questions stay. With it off, unchanged.
 - **Menu**: Assistant, Textes, Modifications, Qualité, Comment ça marche, then "Développeurs", a disclosure holding the
   other screens (search, reading, dossier, history, compare, export, coverage, the Developers page); one line from 1024 px.
-- **Modifications** opens on the last twelve months to today in Luxembourg and asks them once loaded.
+- **Modifications**, opened from the menu (`radar.html#last-12-months`), fills in the last twelve months to today in
+  Luxembourg and asks them once loaded; opened bare, it is the form (driver decision: CI's journey holds that a page asks
+  the API only when the reader submits, and its first run on this slice failed on a page that asked on its own).
 - **Not done**: the "what is sent to the server" sentence inside each page's introduction stays there (only the assistant's
   moved); the journeys check the new menu on GitHub's runner.
 - **Review of #1047** (Codex): CHANGES REQUESTED, one finding: no CI had run (the PR was opened against `web/law-page`, and

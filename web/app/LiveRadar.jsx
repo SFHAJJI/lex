@@ -14,7 +14,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 
 import { RefusalCard } from './RefusalCard.jsx';
-import { LIVE_RADAR_IDLE, RADAR_LANGUAGES, createRadarSession, lastTwelveMonths } from '../scripts/live-radar.mjs';
+import { LAST_TWELVE_MONTHS_HASH, LIVE_RADAR_IDLE, RADAR_LANGUAGES, createRadarSession, lastTwelveMonths } from '../scripts/live-radar.mjs';
 import { ENGLISH_LANG, fillCounted, liveChrome } from '../scripts/live-chrome.mjs';
 import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
 import { FailureFrame, LiveAnswer, Permalink, Say, StatusSentence, refusalCardCopyFor } from './LiveAnswer.jsx';
@@ -176,11 +176,12 @@ export function LiveRadar({ contract, fetchImpl }) {
 
   useEffect(() => () => session.current.cancel(), []);
 
-  // The page opens on the last twelve months' changes (the owner's order of 2026-11-13, section C): once this browser knows
-  // today in Luxembourg, the window is filled and asked, once; the server renders the empty form, so hydration changes nothing.
+  // Opened from the menu (`#last-12-months`, the owner's order of 2026-11-13, section C), the page shows the last twelve
+  // months' changes: once this browser knows today in Luxembourg, the window is filled and asked, once. Opened bare, it is the
+  // form, asked only when the reader submits. The hash is never sent; the server renders the empty form either way.
   const opened = useRef(false);
   useEffect(() => {
-    if (opened.current || today === null) return;
+    if (opened.current || today === null || globalThis.location?.hash !== LAST_TWELVE_MONTHS_HASH) return;
     const opening = lastTwelveMonths(today);
     if (opening === null) return;
     opened.current = true;

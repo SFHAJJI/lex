@@ -60,7 +60,8 @@ export const LIVE_MARKER = 'lex-v3-live-mount';
 const MAIN_MENU = Object.freeze([
   Object.freeze({ key: 'menuAssistant', page: 'index.html', states: Object.freeze(['live-home', 'live-assistant']) }),
   Object.freeze({ key: 'menuTexts', page: 'search.html', states: Object.freeze(['live-search', 'live-reading', 'live-dossier']) }),
-  Object.freeze({ key: 'radar', page: 'radar.html', states: Object.freeze(['live-radar']) }),
+  // The changes, opened on the last twelve months (`LAST_TWELVE_MONTHS_HASH`).
+  Object.freeze({ key: 'radar', page: 'radar.html', hash: '#last-12-months', states: Object.freeze(['live-radar']) }),
   Object.freeze({ key: 'menuQuality', page: referencePage('quality').file, states: Object.freeze([referencePage('quality').state]) }),
   Object.freeze({ key: 'menuHowItWorks', page: referencePage('howItWorks').file, states: Object.freeze([referencePage('howItWorks').state]) }),
 ]);
@@ -153,7 +154,7 @@ export function SiteHeader({ state, locale, localePage = null }) {
         <ul>
           {MAIN_MENU.map((entry) => (
             <li key={entry.key}>
-              <a href={entry.page === 'index.html' ? localeHome(CHROME_LOCALE) : livePath(entry.page)} aria-current={entry.states.includes(state) ? 'page' : undefined}>
+              <a href={entry.page === 'index.html' ? localeHome(CHROME_LOCALE) : `${livePath(entry.page)}${entry.hash ?? ''}`} aria-current={entry.states.includes(state) ? 'page' : undefined}>
                 {site[entry.key]}
               </a>
             </li>

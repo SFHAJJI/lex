@@ -72,6 +72,9 @@ export function invalidAnswerSentence(reason) {
  * The window the changes page opens on (the owner's order of 2026-11-13, section C): the last twelve months to `today`, the
  * same day a year before (the 28th of February for the 29th); null when `today` is no calendar date.
  */
+/** The hash the menu opens the changes page with, so it shows the last twelve months on load. */
+export const LAST_TWELVE_MONTHS_HASH = "#last-12-months";
+
 export function lastTwelveMonths(today) {
   if (!isCalendarDate(today)) return null;
   const [year, month, day] = today.split("-").map(Number);
