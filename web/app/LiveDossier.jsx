@@ -676,6 +676,7 @@ export function LiveDossier({ contract, fetchImpl, initial = null }) {
     const work = workOf(window.location.pathname);
     if (work === null) return;
     setIdentifier(work);
+    setAtLaw(true);
     session.current.ask({ identifier: work, language: '' });
   }, []);
 
@@ -688,8 +689,9 @@ export function LiveDossier({ contract, fetchImpl, initial = null }) {
   };
 
   // At a law's own address the page is the law page (the owner's order of 2026-11-13, section B): nothing to type, the act is
-  // the address's. The form stays on the dossier page, which has no act of its own.
-  const atLaw = initial !== null && workOf(initial.path) !== null;
+  // the address's. The form stays on the dossier page, which has no act of its own. A law's address the server served as built
+  // (its render failed, or was not admitted) is known once the page is in the browser, and is the law page from then on.
+  const [atLaw, setAtLaw] = useState(() => initial !== null && workOf(initial.path) !== null);
   return (
     <div>
       {/* Where the act shown stands (R48): its publisher, and the act, which is this page; none until one is shown. */}
@@ -725,7 +727,7 @@ export function LiveDossier({ contract, fetchImpl, initial = null }) {
         <button type="submit">{FORM.submit.dossier}</button>
       </form>}
       {/* A law's address whose answer is no dossier still names the act it asked, since no form shows it. */}
-      {atLaw && outcome.state !== 'success' ? <p data-work-key=""><code>{workOf(initial.path)}</code></p> : null}
+      {atLaw && outcome.state !== 'success' && identifier !== '' ? <p data-work-key=""><code>{identifier}</code></p> : null}
       <LiveAnswer>
         <DossierAnswerView outcome={outcome} onRetry={retry} law={atLaw ? { contract, fetchImpl } : null} />
       </LiveAnswer>
