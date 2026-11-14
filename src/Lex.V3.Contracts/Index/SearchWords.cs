@@ -303,12 +303,43 @@ public static class SearchWords
     /// <summary>The mask of a query's first <paramref name="count"/> words: an article of the word lane holds every one.</summary>
     public static long EveryWord(int count) => count >= MaxWords ? long.MaxValue : (1L << count) - 1;
 
+    /// <summary>
+    /// What a heading holds of a query's words (<paramref name="mask"/>, one bit a word): how many, and whether the rarest of
+    /// the query's words (by <paramref name="rarity"/>, the first of equals) is one of them.
+    /// </summary>
+    public static (int Words, bool Rarest) HeadingHolds(long mask, IReadOnlyList<double> rarity)
+    {
+        ArgumentNullException.ThrowIfNull(rarity);
+        var words = 0;
+        for (var word = 0; word < rarity.Count; word++)
+        {
+            if ((mask & (1L << word)) != 0)
+            {
+                words++;
+            }
+        }
+
+        var rarest = -1;
+        for (var word = 0; word < rarity.Count; word++)
+        {
+            if (rarest < 0 || rarity[word] > rarity[rarest])
+            {
+                rarest = word;
+            }
+        }
+
+        return (words, rarest >= 0 && (mask & (1L << rarest)) != 0);
+    }
+
     /// <summary>A word's rarity among <paramref name="population"/> articles of which <paramref name="holding"/> hold it.</summary>
     public static double Rarity(int population, int holding) => Math.Log((population + 1.0) / (holding + 1.0)) + 1.0;
 }
 
-/// <summary>An article's rank for a query (<see cref="SearchWords.Rule"/>): the rarity its heading holds, then its text.</summary>
-public readonly record struct SearchRank(double Heading, double Text, bool PhraseInHeading)
+/// <summary>
+/// An article's rank for a query (<see cref="SearchWords.Rule"/>): the rarity its heading holds, then its text; and, for the
+/// best-hit decision, how many query words its heading holds and whether the query's rarest word is one of them.
+/// </summary>
+public readonly record struct SearchRank(double Heading, double Text, bool PhraseInHeading, int HeadingWords = 0, bool HeadingHoldsRarest = false)
 {
     /// <summary>Greater first: the heading's rarity, then the text's.</summary>
     public static int Compare(SearchRank left, SearchRank right)

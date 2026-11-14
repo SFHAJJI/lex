@@ -257,7 +257,10 @@ internal sealed partial class V3CorpusMount
         }
         else
         {
-            ahead = top.Rank.Heading > 0 && (next is null
+            // A heading that shares one common word with the query is no evidence (2026-11-14: "Quand la garantie d'un contrat
+            // d'assurance prend-elle effet ?" quoted art. 9, whose heading holds "assurance" alone): it must hold two of the
+            // query's words, or its rarest.
+            ahead = top.Rank.Heading > 0 && (top.Rank.HeadingWords >= 2 || top.Rank.HeadingHoldsRarest) && (next is null
                 || top.Rank.Heading > next.Value.Rank.Heading
                 || (top.Rank.Heading.Equals(next.Value.Rank.Heading) && top.Rank.Text >= 1.25 * next.Value.Rank.Text));
         }

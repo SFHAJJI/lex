@@ -317,7 +317,8 @@ internal sealed partial class V3CorpusMount
             if (wantRelaxed && forms.Length > 0 && inText == every)
             {
                 relaxedKeys.Add(key);
-                europeRanks[("relaxed", key)] = new SearchRank(Sum(inHeadingMask), Sum(inText), false);
+                var (headingWords, headingHoldsRarest) = SearchWords.HeadingHolds(inHeadingMask, rarity);
+                europeRanks[("relaxed", key)] = new SearchRank(Sum(inHeadingMask), Sum(inText), false, headingWords, headingHoldsRarest);
             }
         }
 

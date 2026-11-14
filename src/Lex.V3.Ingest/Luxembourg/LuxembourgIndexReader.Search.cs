@@ -238,7 +238,8 @@ internal sealed class LuxembourgSearchTexts
             {
                 if (inText == every)
                 {
-                    ranks[text] = new SearchRank(Sum(inHeading), Sum(inText), false);
+                    var (headingWords, headingHoldsRarest) = SearchWords.HeadingHolds(inHeading, rarity);
+                    ranks[text] = new SearchRank(Sum(inHeading), Sum(inText), false, headingWords, headingHoldsRarest);
                 }
             }
         }
