@@ -29,6 +29,8 @@ export function renderLiveNotFoundPage() {
       shell="ask"
       density={skinFor('ask').density}
       banner="live"
+      layout="v4"
+      prose
     >
       <p className="eyebrow">{copy.eyebrow}</p>
       <h1>{copy.heading}</h1>

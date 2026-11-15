@@ -85,6 +85,8 @@ export function renderLiveLegalPage(pageKey) {
       shell="ask"
       density={skinFor('ask').density}
       banner="live"
+      layout="v4"
+      prose
       localePage={page.file}
       answers={false}
     >

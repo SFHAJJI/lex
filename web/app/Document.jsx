@@ -94,7 +94,7 @@ export function FindIcon() {
  * search page after "#", which opens the text itself when the words name one), the menu with the current page marked, the
  * languages.
  */
-export function V4Header({ state, locale, localePage = null }) {
+export function V4Header({ state, locale, localePage = null, script = true }) {
   const site = liveChrome().site;
   return (
     <header className="site-header lx-header" data-live={LIVE_MARKER}>
@@ -102,13 +102,21 @@ export function V4Header({ state, locale, localePage = null }) {
       <a className="site-brand lx-wordmark" href={localeHome(CHROME_LOCALE)}>
         <span className="site-name">{site.brand}</span>
       </a>
-      {/* No action and no name (R109): the header's script takes the words to the search page after "#". */}
-      <form className="lx-find" role="search" data-header-find="">
-        <FindIcon />
-        <label className="lx-visually-hidden" htmlFor="lx-find-q">{site.findLabel}</label>
-        <input id="lx-find-q" type="search" placeholder={site.findPlaceholder} autoComplete="off" />
-        <button className="lx-visually-hidden" type="submit">{site.findSubmit}</button>
-      </form>
+      {/* No action and no name (R109): the header's script takes the words to the search page after "#". A page that ships no
+          script (the legal pages, the maintenance page) leads to the home page's field instead. */}
+      {script ? (
+        <form className="lx-find" role="search" data-header-find="">
+          <FindIcon />
+          <label className="lx-visually-hidden" htmlFor="lx-find-q">{site.findLabel}</label>
+          <input id="lx-find-q" type="search" placeholder={site.findPlaceholder} autoComplete="off" />
+          <button className="lx-visually-hidden" type="submit">{site.findSubmit}</button>
+        </form>
+      ) : (
+        <a className="lx-find lx-find-link" href={localeHome(CHROME_LOCALE)}>
+          <FindIcon />
+          <span>{site.findPlaceholder}</span>
+        </a>
+      )}
       <nav aria-label={site.menu} className="site-nav lx-nav">
         <ul>
           {V4_MENU.map((entry) => (
@@ -349,6 +357,9 @@ export function Document({
   layout = null,
   // Whether the page carries the assistant dock beside its content (V4 only): Home, the text page, Changes.
   dock = false,
+  // Whether the page's content is the earlier pages' (Trust and Coverage, the legal pages, the 404 and maintenance pages):
+  // the V4 frame gives it a plain reading measure and type (`.lx-prose`).
+  prose = false,
   children,
 }) {
   // Each axis names itself. Both guards used to raise the same sentence, so a test feeding an
@@ -420,12 +431,12 @@ export function Document({
       </head>
       {banner === 'live' && layout === 'v4' ? (
         <body className="lx-body">
-          <V4Header state={state} locale={locale} localePage={localePage} />
-          <script src={livePath('client-live-header.js')} defer />
+          <V4Header state={state} locale={locale} localePage={localePage} script={answers} />
+          {answers ? <script src={livePath('client-live-header.js')} defer /> : null}
           <StalenessBannerSlot facts={freshness} />
           <div className={dock ? 'lx-frame lx-frame-docked' : 'lx-frame'}>
             <div className="lx-scroll" data-lx-scroll="">
-              <main id="main" className="lx-main">{children}</main>
+              <main id="main" className={prose ? 'lx-main lx-prose' : 'lx-main'}>{children}</main>
               <SiteFooter state={state} freshness={freshness} answers={answers} v4 />
             </div>
             {dock ? (

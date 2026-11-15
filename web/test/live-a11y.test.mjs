@@ -149,7 +149,8 @@ test("no form on a live page takes a personal fact: only the declared fields, ea
   const form = liveChrome().form;
   const declared = new Set([form.workIdentifier, form.workIdentifierOptional, form.phrase, form.date, form.from, form.to, form.articleId, form.language]);
   for (const [name, render] of Object.entries(PAGES)) {
-    const markup = render().replaceAll("<!-- -->", "");
+    // The V4 header's find field (the owner's brief of 2026-11-15) takes no personal fact: a phrase, kept after "#" (R109).
+    const markup = render().replaceAll("<!-- -->", "").replace(/<form[^>]*data-header-find=""[\s\S]*?<\/form>/, "");
     const forms = [...markup.matchAll(/<form[\s\S]*?<\/form>/g)].map((match) => match[0]);
     if (name === "coverage") {
       assert.equal(forms.length, 0, "Trust and Coverage asks nothing of the reader");

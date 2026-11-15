@@ -3502,6 +3502,24 @@ html[data-layout="v4"] .site-footer nav ul { display: flex; flex-wrap: wrap; gap
 html[data-layout="v4"] .site-footer a { color: var(--lx-muted); }
 
 
+html[data-layout="v4"] .lx-find-link { text-decoration: none; color: var(--lx-faint); }
+html[data-layout="v4"] .lx-find-link span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* The earlier pages' content in the V4 frame (Trust and Coverage, the legal pages, the 404 and maintenance pages). */
+html[data-layout="v4"] .lx-prose { box-sizing: border-box; max-width: 920px; padding: 40px 56px 24px; font-size: 15.5px; line-height: 1.55; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-prose .eyebrow { margin: 0 0 6px; font-size: 13px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-prose h1 { margin: 0 0 12px; font-family: var(--lx-serif); font-weight: 500; font-size: 36px; line-height: 1.15; letter-spacing: -0.01em; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-prose h2 { margin: 32px 0 10px; font-family: var(--lx-serif); font-weight: 600; font-size: 22px; line-height: 1.25; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-prose h3 { margin: 22px 0 8px; font-family: var(--lx-sans); font-weight: 600; font-size: 16px; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-prose p, html[data-layout="v4"] .lx-prose li { max-width: 72ch; }
+html[data-layout="v4"] .lx-prose p { margin: 0 0 12px; }
+html[data-layout="v4"] .lx-prose a { color: var(--lx-ink); text-decoration: underline; text-underline-offset: 3px; }
+html[data-layout="v4"] .lx-prose table { border-collapse: collapse; margin: 12px 0 20px; font-size: 14px; }
+html[data-layout="v4"] .lx-prose th, html[data-layout="v4"] .lx-prose td { padding: 7px 12px 7px 0; border-bottom: 1px solid var(--lx-line); text-align: left; vertical-align: top; }
+html[data-layout="v4"] .lx-prose th { font-weight: 600; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-prose code, html[data-layout="v4"] .lx-prose pre { font-family: var(--lx-mono); font-size: 13px; }
+html[data-layout="v4"] .lx-prose input:not([type="checkbox"]):not([type="radio"]) { height: 44px; box-sizing: border-box; padding: 0 11px; border: 1px solid var(--lx-field); border-radius: 6px; font: inherit; font-size: 14.5px; color: var(--lx-ink); background: #FFFFFF; }
+html[data-layout="v4"] .lx-prose button { height: 44px; padding: 0 16px; border: 0; border-radius: 6px; font: inherit; font-size: 14px; font-weight: 600; color: #FFFFFF; background: var(--lx-ink); cursor: pointer; }
+html[data-layout="v4"] .lx-prose section, html[data-layout="v4"] .lx-prose article { margin: 0; padding: 0; border: 0; background: none; box-shadow: none; }
 /* == v4: shell end == */
 
 
@@ -3634,6 +3652,11 @@ html[data-layout="v4"] .lx-compare-inline p { margin: 0; }
 html[data-layout="v4"] .lx-novisible { margin: 0; padding: 12px 14px; border-radius: 6px; background: var(--lx-panel); font-size: 14.5px; }
 
 
+/* With a mouse, the article list keeps the mockup's compact rows; on a touch screen every row stays 44 px tall (R62). */
+@media (pointer: fine) {
+  html[data-layout="v4"] .lx-list li > a { min-block-size: 0; }
+  html[data-layout="v4"] .lx-cite summary { min-block-size: 0; }
+}
 /* == v4: text page end == */
 
 
