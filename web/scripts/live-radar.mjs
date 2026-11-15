@@ -508,10 +508,14 @@ export function createChangesSession({ contract, fetchImpl, onState, onTitle = (
 
   const session = {
     /** Asks a period's latest window; false, and an `invalid_request` state, when the period is not two dates in order. */
-    open(next) {
+    open(next, { force = false } = {}) {
+      // The same period asked again while it is in flight or held (a submit and a change of field for one period: the
+      // journeys' J8 saw the window asked twice) is not asked again; a retry asks it anew.
+      const same = period !== null && next?.from === period.from && next?.to === period.to;
+      if (!force && same && (views.length > 0 || (controller !== null && !controller.signal.aborted))) return true;
       controller?.abort();
       controller = null;
-      lastAction = () => session.open(next);
+      lastAction = () => session.open(next, { force: true });
       if (!isCalendarDate(next?.from) || !isCalendarDate(next?.to) || next.from > next.to) {
         emit({ state: "invalid_request", ...englishStatement("A period is two calendar dates, the first not after the second.") });
         return false;
@@ -527,7 +531,11 @@ export function createChangesSession({ contract, fetchImpl, onState, onTitle = (
       settle(askWindow(windows[0], own.signal), own, (outcome) => {
         views = [outcome.view];
         emit({ ...outcome, view: mergedView(views, period) });
-      }, (outcome) => emit(outcome));
+      }, (outcome) => {
+        // A failed period is asked again when the reader asks it again.
+        if (controller === own) controller = null;
+        emit(outcome);
+      });
       return true;
     },
     /** Asks the next window back; false when no window is left or no period is shown. */
