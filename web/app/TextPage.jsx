@@ -43,8 +43,13 @@ export function typedDate(value) {
   return check.getUTCFullYear() === y && check.getUTCMonth() === m - 1 && check.getUTCDate() === d ? date : null;
 }
 
+/**
+ * A copy template filled with the values it has a place for: a value it names nowhere is left out rather than refused (one
+ * template of a pair, "in force today" and "applicable until", names fewer places than the other).
+ */
+const fill = (template, values = {}) => fillText(template, Object.fromEntries(Object.entries(values).filter(([name]) => template.includes(`{${name}}`))));
 const grouped = (count) => count.toLocaleString(CHROME_LOCALE === 'fr' ? 'fr-FR' : 'en-GB');
-const counted = (entry, count, values = {}) => fillText(countedEntry(entry, count), { ...values, count: grouped(count) });
+const counted = (entry, count, values = {}) => fill(countedEntry(entry, count), { ...values, count: grouped(count) });
 
 /** The language a text is read in: a Luxembourg text in French; an EU act in the interface's language when held. */
 function readingLanguage(publisher, available) {
@@ -127,10 +132,10 @@ function Axis({ versions, today, width, read, compare, pending, onMark }) {
         const x = geometry.at(version.date);
         const isSelected = selected.has(version.date);
         const label = version.first
-          ? fillText(copy.markFirst, { date: numericDate(version.date) })
+          ? fill(copy.markFirst, { date: numericDate(version.date) })
           : !version.textHeld
-            ? fillText(copy.markNotHeld, { date: numericDate(version.date) })
-            : fillText(countedEntry(copy.markLabel, version.bar ?? 0), { date: numericDate(version.date), count: grouped(version.bar ?? 0) });
+            ? fill(copy.markNotHeld, { date: numericDate(version.date) })
+            : fill(countedEntry(copy.markLabel, version.bar ?? 0), { date: numericDate(version.date), count: grouped(version.bar ?? 0) });
         const kind = version.first ? 'first' : !version.textHeld ? 'notheld' : (version.bar ?? 0) === 0 ? 'zero' : 'bar';
         const h = kind === 'bar' ? height(version.bar) : 0;
         return (
@@ -191,17 +196,17 @@ function ReadArticle({ entry, article, parts, versions, changedDates, identifier
   const previous = last ? versions[versions.findIndex((v) => v.date === last) - 1]?.date ?? null : null;
   let sentence = null;
   if (versions.length > 1 && changedDates !== null) {
-    if (last === null) sentence = fillText(copy.sameAll, { count: grouped(versions.length), date: numericDate(versions[0].date) });
+    if (last === null) sentence = fill(copy.sameAll, { count: grouped(versions.length), date: numericDate(versions[0].date) });
   }
   return (
     <article className={highlighted ? 'lx-article lx-article-highlighted' : 'lx-article'} id={`article-${entry.id}`} data-article={entry.id} aria-labelledby={`article-${entry.id}-number`}>
       <div className="lx-margin">
-        <span className="lx-margin-number" id={`article-${entry.id}-number`}>{fillText(copy.articleShort, { number })}</span>
+        <span className="lx-margin-number" id={`article-${entry.id}-number`}>{fill(copy.articleShort, { number })}</span>
         <Strip versions={versions} changedDates={changedDates ?? []} />
         {sentence ? <span>{sentence}</span> : null}
         {last && previous ? (
           <a className="lx-margin-changed" href={textHref({ identifier, from: previous, to: last, article: entry.id })} onClick={(event) => { event.preventDefault(); onCompareOn(previous, last, entry.id); }}>
-            {fillText(copy.changedOn, { date: numericDate(last) })}
+            {fill(copy.changedOn, { date: numericDate(last) })}
           </a>
         ) : null}
         {article ? <SourceAndCitation article={article} version={version} /> : null}
@@ -234,14 +239,14 @@ export function CompareArticle({ row, versions, changedDates, compare, view, ind
   })();
   const toNext = versions[versions.findIndex((v) => v.date === toVersion?.date) + 1]?.date ?? null;
   const later = (changedDates ?? []).filter((date) => date > compare.to);
-  const rightNote = later.length === 0 && toNext === null ? copy.inForceToday : later.length === 0 ? copy.inForceToday : fillText(copy.appliedUntil, { date: numericDate(later[0]) });
-  const leftNote = fillText(copy.inPlaceFrom, { date: numericDate(inPlaceFrom) });
+  const rightNote = later.length === 0 && toNext === null ? copy.inForceToday : later.length === 0 ? copy.inForceToday : fill(copy.appliedUntil, { date: numericDate(later[0]) });
+  const leftNote = fill(copy.inPlaceFrom, { date: numericDate(inPlaceFrom) });
   void fromIndex;
   let body;
   if (row.status === 'added') {
-    body = <p className="lx-muted">{fillText(copy.addedArticle, { date: numericDate(compare.to) })}</p>;
+    body = <p className="lx-muted">{fill(copy.addedArticle, { date: numericDate(compare.to) })}</p>;
   } else if (row.status === 'removed') {
-    body = <p className="lx-muted">{fillText(copy.removedArticle, { date: numericDate(compare.to) })}</p>;
+    body = <p className="lx-muted">{fill(copy.removedArticle, { date: numericDate(compare.to) })}</p>;
   } else if (fromText !== null && toText !== null && sameVisibleWording(fromText, toText)) {
     body = <p className="lx-novisible">{copy.noVisible}</p>;
   } else {
@@ -250,16 +255,16 @@ export function CompareArticle({ row, versions, changedDates, compare, view, ind
   const rows = before && after ? alignParagraphs(before.paragraphs, after.paragraphs) : null;
   const strip = changedDates ?? [];
   const sentence = strip.length === 1
-    ? fillText(copy.changedOnce, { versions: grouped(versions.length), date: numericDate(strip[0]) })
-    : strip.length > 1 ? fillText(copy.changedTimes, { versions: grouped(versions.length), count: grouped(strip.length), date: numericDate(strip.at(-1)) }) : null;
+    ? fill(copy.changedOnce, { versions: grouped(versions.length), date: numericDate(strip[0]) })
+    : strip.length > 1 ? fill(copy.changedTimes, { versions: grouped(versions.length), count: grouped(strip.length), date: numericDate(strip.at(-1)) }) : null;
   const run = (r, i) => (r.kind === 'removed' ? <del key={i}>{r.text}</del> : r.kind === 'added' ? <ins key={i}>{r.text}</ins> : <span key={i}>{r.text}</span>);
   return (
     <section className="lx-compare-article" aria-labelledby="lx-compare-heading">
       <div className="lx-compare-head">
         <div>
           <div className="lx-compare-title">
-            <span className="lx-compare-number">{fillText(copy.articleShort, { number: labelOf(id) })}</span>
-            {heading ? <h2 id="lx-compare-heading" lang={textLang}>{heading}</h2> : <h2 id="lx-compare-heading" className="lx-visually-hidden">{fillText(copy.articleShort, { number: labelOf(id) })}</h2>}
+            <span className="lx-compare-number">{fill(copy.articleShort, { number: labelOf(id) })}</span>
+            {heading ? <h2 id="lx-compare-heading" lang={textLang}>{heading}</h2> : <h2 id="lx-compare-heading" className="lx-visually-hidden">{fill(copy.articleShort, { number: labelOf(id) })}</h2>}
           </div>
           <div className="lx-compare-sub">
             <Strip versions={versions} changedDates={strip} />
@@ -267,9 +272,9 @@ export function CompareArticle({ row, versions, changedDates, compare, view, ind
           </div>
         </div>
         <span className="lx-compare-nav">
-          <span className="lx-muted">{fillText(copy.changedOfTotal, { index: grouped(index + 1), count: grouped(total) })}</span>
+          <span className="lx-muted">{fill(copy.changedOfTotal, { index: grouped(index + 1), count: grouped(total) })}</span>
           {index > 0 ? <a href="#" onClick={(event) => { event.preventDefault(); onStep(-1); }}>{copy.previous}</a> : null}
-          {index < total - 1 ? <a className="lx-strong" href="#" onClick={(event) => { event.preventDefault(); onStep(1); }}>{fillText(copy.next, { number: labelOf(null, 1) })}</a> : null}
+          {index < total - 1 ? <a className="lx-strong" href="#" onClick={(event) => { event.preventDefault(); onStep(1); }}>{fill(copy.next, { number: labelOf(null, 1) })}</a> : null}
         </span>
       </div>
       {body}
@@ -284,8 +289,8 @@ export function CompareArticle({ row, versions, changedDates, compare, view, ind
           </div>
         ) : (
           <div className="lx-compare-grid">
-            <div className="lx-compare-col-head"><div className="lx-strong">{fillText(copy.versionOf, { date: numericDate(compare.from) })}</div><div className="lx-muted">{leftNote}</div></div>
-            <div className="lx-compare-col-head"><div className="lx-strong">{fillText(copy.versionOf, { date: numericDate(compare.to) })}</div><div className="lx-muted">{rightNote}</div></div>
+            <div className="lx-compare-col-head"><div className="lx-strong">{fill(copy.versionOf, { date: numericDate(compare.from) })}</div><div className="lx-muted">{leftNote}</div></div>
+            <div className="lx-compare-col-head"><div className="lx-strong">{fill(copy.versionOf, { date: numericDate(compare.to) })}</div><div className="lx-muted">{rightNote}</div></div>
             {rows.flatMap((r, i) => {
               const marker = (p) => (p?.marker ? `${p.marker} ` : '');
               if (r.kind === 'same') return [<p key={`l${i}`} className="lx-cmp-p" lang={textLang}>{marker(r.left)}{r.left.text}</p>, <p key={`r${i}`} className="lx-cmp-p" lang={textLang}>{marker(r.right)}{r.right.text}</p>];
@@ -317,6 +322,14 @@ function interleave(diff) {
     r += 1;
   }
   return out;
+}
+
+/**
+ * The page's status, said to a screen reader (a polite live region present from the first render): loading, the text's
+ * title once it is read, or that it could not be loaded. `data-answer-state` names the state for the journeys.
+ */
+function Status({ state, message }) {
+  return <p className="lx-visually-hidden" role="status" aria-live="polite" data-answer-state={state}>{message}</p>;
 }
 
 /** The page. `fetchImpl` is injectable for the tests; `now` fixes today. */
@@ -566,11 +579,12 @@ export function TextPage({ contract, fetchImpl, now = null }) {
   // ----- Rendering -----
 
   if (load.state === 'none') {
-    return <div className="lx-text lx-text-message"><p>{copy.none}</p></div>;
+    return <div className="lx-text lx-text-message"><Status state="refusal" message="" /><p>{copy.none}</p></div>;
   }
   if (load.state === 'failed') {
     return (
-      <div className="lx-text lx-text-message" role="alert">
+      <div className="lx-text lx-text-message">
+        <Status state="transport_failure" message={copy.failed} />
         <p>{copy.failed}</p>
         <button type="button" className="lx-button" onClick={() => { setText(null); setLoad({ state: 'loading' }); setAddress(textStateOf(window.location.search)); }}>{copy.retry}</button>
       </div>
@@ -579,6 +593,7 @@ export function TextPage({ contract, fetchImpl, now = null }) {
   if (text === null || (load.state === 'loading' && compare === null)) {
     return (
       <div className="lx-text" aria-busy="true">
+        <Status state="loading" message={copy.loading} />
         <div className="lx-text-top">
           <p className="lx-muted">{copy.loading}</p>
           <div className="lx-axis-box" ref={axisBox} />
@@ -637,12 +652,13 @@ export function TextPage({ contract, fetchImpl, now = null }) {
 
   const facts = isEurope
     ? `${counted(copy.articles, text.articleCount ?? contents.length)} ${copy.oneVersion}.`
-    : `${counted(copy.articles, text.articleCount ?? contents.length)} ${fillText(countedEntry(copy.versionsHeld, versions.length), { ...(countedEntry(copy.versionsHeld, versions.length).includes('{count}') ? { count: grouped(versions.length) } : {}), first: numericDate(versions[0]?.date) })}`;
+    : `${counted(copy.articles, text.articleCount ?? contents.length)} ${fill(countedEntry(copy.versionsHeld, versions.length), { ...(countedEntry(copy.versionsHeld, versions.length).includes('{count}') ? { count: grouped(versions.length) } : {}), first: numericDate(versions[0]?.date) })}`;
   const until = readVersion?.until ?? null;
   const beforeFirst = !isEurope && versions.length > 0 && readDate < versions[0].date;
 
   return (
     <div className={compare ? 'lx-text lx-text-compare' : 'lx-text'} data-text-page="" data-mode={compare ? 'compare' : 'read'}>
+      <Status state="success" message={text.title ?? ''} />
       <div className="lx-text-top">
         <div className="lx-text-head">
           <div className="lx-text-titles">
@@ -660,7 +676,7 @@ export function TextPage({ contract, fetchImpl, now = null }) {
         <div className="lx-text-line">
           {compare ? (
             <span data-compare-summary="">
-              {fillText(copy.comparing, {
+              {fill(copy.comparing, {
                 from: numericDate(compare.from),
                 to: numericDate(compare.to),
                 summary: counts
@@ -674,12 +690,12 @@ export function TextPage({ contract, fetchImpl, now = null }) {
               })}
             </span>
           ) : beforeFirst ? (
-            <span>{fillText(copy.beforeFirst, { date: numericDate(versions[0].date) })} <a href="#" onClick={(e) => { e.preventDefault(); go({ date: versions[0].date }); }}>{fillText(copy.openFirst, { date: numericDate(versions[0].date) })}</a></span>
+            <span>{fill(copy.beforeFirst, { date: numericDate(versions[0].date) })} <a href="#" onClick={(e) => { e.preventDefault(); go({ date: versions[0].date }); }}>{fill(copy.openFirst, { date: numericDate(versions[0].date) })}</a></span>
           ) : isEurope ? (
-            <span>{fillText(copy.versionOf, { date: numericDate(versions[0]?.date) })}</span>
+            <span>{fill(copy.versionOf, { date: numericDate(versions[0]?.date) })}</span>
           ) : (
             <span>
-              {fillText(until ? copy.readingUntil : copy.readingToday, { date: '\u0000', until: numericDate(until) }).split('\u0000').flatMap((part, i) => (i === 0 ? [part] : [<strong className="lx-date" key="d">{numericDate(readVersion?.date)}</strong>, part]))}
+              {fill(until ? copy.readingUntil : copy.readingToday, until ? { date: '\u0000', until: numericDate(until) } : { date: '\u0000' }).split('\u0000').flatMap((part, i) => (i === 0 ? [part] : [<strong className="lx-date" key="d">{numericDate(readVersion?.date)}</strong>, part]))}
               {' '}{pending ? copy.pickSecond : copy.barsHint}
             </span>
           )}
@@ -726,13 +742,13 @@ export function TextPage({ contract, fetchImpl, now = null }) {
             </div>
             {compare ? (
               <span className="lx-segmented" role="group" aria-label={copy.filterLabel}>
-                <button type="button" aria-pressed="false" onClick={() => go({ from: null, to: null, date: compare.to })}>{fillText(copy.allArticles, { count: grouped(counts ? counts.changed + counts.added + counts.removed + counts.unchanged : contents.length) })}</button>
-                <button type="button" aria-pressed="true">{fillText(copy.changedArticles, { count: grouped(changedRows.length) })}</button>
+                <button type="button" aria-pressed="false" onClick={() => go({ from: null, to: null, date: compare.to })}>{fill(copy.allArticles, { count: grouped(counts ? counts.changed + counts.added + counts.removed + counts.unchanged : contents.length) })}</button>
+                <button type="button" aria-pressed="true">{fill(copy.changedArticles, { count: grouped(changedRows.length) })}</button>
               </span>
             ) : isEurope ? null : (
               <span className="lx-segmented" role="group" aria-label={copy.filterLabel}>
-                <button type="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>{fillText(copy.allArticles, { count: grouped(text.articleCount ?? contents.length) })}</button>
-                <button type="button" aria-pressed={filter === 'changed'} onClick={() => setFilter('changed')} disabled={!diffsDone}>{fillText(copy.changedArticles, { count: diffsDone ? grouped(changedList.size) : '…' })}</button>
+                <button type="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>{fill(copy.allArticles, { count: grouped(text.articleCount ?? contents.length) })}</button>
+                <button type="button" aria-pressed={filter === 'changed'} onClick={() => setFilter('changed')} disabled={!diffsDone}>{fill(copy.changedArticles, { count: diffsDone ? grouped(changedList.size) : '…' })}</button>
               </span>
             )}
             {compare || isEurope ? null : <p className="lx-list-hint">{copy.yearHint}</p>}
