@@ -326,3 +326,26 @@ test("a session asks when told, says a request it will not send, and a new reque
   assert.deepEqual(aborted, ["2024-01-02", "2024-01-03"]);
   assert.deepEqual(later, ["loading", "loading"]);
 });
+
+test("two periods ending on the same day ask their latest window once (the journeys' J8: the window was asked twice)", async () => {
+  const radar = envelopeOf("changes_in_period", "a window holding");
+  const { calls, fetchImpl } = routing({
+    changes_in_period: ({ date_from: from, date_to: to }) => {
+      const answer = structuredClone(radar);
+      Object.assign(answer.result.value, { requested_date_from: from, requested_date_to: to, window_from: from, window_to: to });
+      return answer;
+    },
+  });
+  const states = [];
+  const session = createChangesSession({ contract, fetchImpl, onState: (state) => states.push(state) });
+  session.open({ from: "2024-01-05", to: "2024-02-03" });
+  session.open({ from: "2024-01-05", to: "2024-02-03" });
+  session.open({ from: "2023-06-01", to: "2024-02-03" });
+  await settle();
+  assert.deepEqual(calls.map((call) => [call.parameters.date_from, call.parameters.date_to]), [["2024-01-05", "2024-02-03"]], "the latest window, asked once");
+  assert.equal(states.at(-1).outcome.state, "success");
+  session.retry();
+  await settle();
+  assert.equal(calls.length, 2, "a retry asks anew");
+  session.cancel();
+});

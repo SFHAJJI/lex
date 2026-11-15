@@ -509,10 +509,20 @@ export function createChangesSession({ contract, fetchImpl, onState, onTitle = (
   const session = {
     /** Asks a period's latest window; false, and an `invalid_request` state, when the period is not two dates in order. */
     open(next, { force = false } = {}) {
-      // The same period asked again while it is in flight or held (a submit and a change of field for one period: the
-      // journeys' J8 saw the window asked twice) is not asked again; a retry asks it anew.
-      const same = period !== null && next?.from === period.from && next?.to === period.to;
-      if (!force && same && (views.length > 0 || (controller !== null && !controller.signal.aborted))) return true;
+      // A period whose latest window is the one in flight or held (the same period asked twice, or two periods ending on
+      // the same day: the journeys' J8 saw that window asked twice) does not ask it again: the period is taken over and the
+      // held window shown for it. A retry asks anew.
+      if (!force && period !== null && isCalendarDate(next?.from) && isCalendarDate(next?.to) && next.from <= next.to && windows.length > 0) {
+        const first = windowsOf({ from: next.from, to: next.to })[0];
+        const inFlight = controller !== null && !controller.signal.aborted && views.length === 0;
+        if (first.from === windows[0].from && first.to === windows[0].to && asked === 1 && (views.length > 0 || inFlight)) {
+          period = { from: next.from, to: next.to };
+          windows = windowsOf(period);
+          lastAction = () => session.open(next, { force: true });
+          if (views.length > 0) emit({ state: "success", view: mergedView(views, period), context: null });
+          return true;
+        }
+      }
       controller?.abort();
       controller = null;
       lastAction = () => session.open(next, { force: true });
