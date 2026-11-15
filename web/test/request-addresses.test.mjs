@@ -117,6 +117,13 @@ const PINNED = Object.freeze({
   // address, the version's date and the article's id the platform minted, in the query, never a word the reader typed.
   "app/LiveSearch.jsx: a navigation: window.location.replace(href);": "the text page: a law's address, a date and an article id",
   "app/LiveDossier.jsx: a form's own submit: <form method=\"get\" action={readable} data-read-on-date=\"\">": "a law's readable address, which the platform mints, and a calendar date from a date field, in the query",
+  // The assistant dock (the owner's brief of 2026-11-15): every page carries it (`Document.jsx`), so every page's code holds
+  // it. It asks the API only through `askV3` (the question in the body); after an answer or an exact reference it opens the
+  // text page at `textHref(...)`, which writes a law's address, a date and an article id, each of its shape or left out: never
+  // a word the reader typed.
+  "app/AssistantDock.jsx: a navigation: window.location.assign(href);": "the text page: a law's address, a date and an article id (`textHref`)",
+  // The old assistant page's act titles (`actTitlesOf`), which the dock's module carries: an act's address, in the body.
+  "scripts/assistant-panel.mjs: fetch: const response = await fetchImpl('/api/v3/dossier', {": "the API, an act's address in the body",
 });
 
 test("every place the pages' code could send a request or change an address is pinned, with why it carries no word", () => {

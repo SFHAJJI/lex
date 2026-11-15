@@ -14,7 +14,8 @@
 // processor may keep) is in the legal pages' tables (live-chrome.mjs, live-chrome-fr.mjs: privacy.sections.assistant).
 
 import { readDossier } from './dossier-answer.mjs';
-import { actTitle, versionsOf, yearOf } from './law-page.mjs';
+import { actTitle, articleNumberOf, versionsOf, yearOf } from './law-page.mjs';
+import { executionOf, maskedCount, numericDate, plannedOperations, searchStepOf } from './answer-view.mjs';
 
 export const ASSISTANT_PANEL = 'hidden';
 
@@ -39,8 +40,7 @@ export const BLOCK_KINDS = Object.freeze(['claim', 'quote', 'question_span', 're
 /** At most two follow-up context chips travel with a new question (R35, R45(e)); earlier question text never does. */
 export const MAXIMUM_CONTEXT_CHIPS = 2;
 
-export const ASSISTANT_PANEL_COPY = Object.freeze({
-  en: Object.freeze({
+const PANEL_EN = /* @__PURE__ */ Object.freeze({
     heading: 'Assistant',
     notice:
       'This is an automated assistant that shows published legal texts. It does not give legal advice or apply the law to your situation. Do not type names, health details or other personal details.',
@@ -120,8 +120,104 @@ export const ASSISTANT_PANEL_COPY = Object.freeze({
     workRegistry: 'MLflow registry: {model}, version {version}',
     // No version of the build that answered is in this page's copy of the registry: it is registered when it is put live.
     workRegistryNone: 'MLflow registry: {model} (this build is registered when it is put live)',
-  }),
-  fr: Object.freeze({
+    // The docked assistant (the owner's brief of 2026-11-15, sections 5 and 6; the mockup's V1Home, V2Read, V3Compare and
+    // V4Changes): its header, its first screen, the answer card, the five stages of the work and the states of section 6.
+    dockPreview: 'preview, not legal advice',
+    dockHide: 'Hide',
+    dockOpen: 'Open the assistant',
+    dockIntro: 'Ask in French or English. Lex finds the article, quotes it word for word, and opens the text at that place.',
+    // The three examples, as the brief checked them live on 15/11/2026, each with its caption.
+    dockExampleOne: "Quel est le délai de prescription d'un contrat d'assurance ?",
+    dockExampleOneCaption: 'a question in your own words',
+    dockExampleTwo: "Loi du 27 juillet 1997 sur le contrat d'assurance, article 38, 1er juin 2012",
+    dockExampleTwoCaption: 'a citation with a date, opened by code with no model call',
+    dockExampleThree: 'What does Article 5 of the GDPR say?',
+    dockExampleThreeCaption: 'an article of an EU regulation',
+    dockDoes: 'What it does.',
+    dockDoesText: 'One AI model call plans the search. Code checks the plan, runs it and writes the answer from the text.',
+    dockDoesNot: 'What it does not do.',
+    dockDoesNotText: 'It gives no advice on your situation, and when it does not find the article it says so.',
+    dockHowLink: 'How an answer is built, with the measured results',
+    dockStays: 'Your conversation stays here while you move between pages.',
+    dockAgainAnswer: 'Answered from article {number}. Open the answer again',
+    dockAgainOpened: 'Opened at article {number} by code. Open it again',
+    dockAgain: 'Open the answer again',
+    dockQuestionLabel: 'Your question',
+    dockPlaceholder: 'Ask a question',
+    dockPlaceholderAnother: 'Ask another question',
+    dockPlaceholderText: 'Ask about a text',
+    dockAsk: 'Ask',
+    dockLoadingSearch: 'Reading your words…',
+    dockLoadingAsk: 'Planning the search and reading the text…',
+    dockFailure: 'The assistant could not be reached.',
+    dockTryAgain: 'Try again',
+    dockOpenedLabel: 'Opened by code, no model call',
+    dockOpenedLine: 'Article {number} of the {title}, as it read on {date}.',
+    dockOpenedLineNoTitle: 'Article {number}, as it read on {date}.',
+    dockOpenedText: 'The {title}, as it read on {date}.',
+    dockVerdictToday: 'From the official text, as it reads today',
+    dockVerdictOn: 'From the official text, as it read on {date}',
+    dockNotes: '{count} notes',
+    dockNotesOne: '1 note',
+    dockNotesHeading: 'Notes on this quote',
+    dockCite: 'Article {number} of the {title}.',
+    dockCiteNoTitle: 'Article {number}.',
+    dockWholeOpen: 'The whole article is open on the left.',
+    dockWholeLink: 'Open the whole article',
+    dockStripSame: 'Same wording in all {count} versions held',
+    dockStripOne: 'One version held',
+    dockStripChanged: 'Wording changed on {date}',
+    dockBuilt: 'How this answer was built',
+    dockBuiltFoot: '{seconds} s, about €{cost}',
+    dockBuiltCost: 'about €{cost}',
+    dockStageMasking: 'Masking',
+    dockStagePlanner: 'Planner',
+    dockStageValidator: 'Validator',
+    dockStageExecution: 'Execution',
+    dockStageComposer: 'Composer',
+    dockTagCode: 'code',
+    dockTagModel: 'AI model',
+    dockMaskNone: 'nothing to mask',
+    dockMaskOne: 'one identifier masked before the model',
+    dockMaskSome: '{count} identifiers masked before the model',
+    dockOpSearch: 'search',
+    dockOpRead: 'read the article',
+    dockOpText: 'read the text',
+    dockOpVersions: 'list the versions',
+    dockOpHistory: 'read the article’s history',
+    dockOpCompare: 'compare two versions',
+    dockOpOther: 'run {operation}',
+    dockOpThen: ', then ',
+    dockPlanNone: 'no operation planned',
+    dockValidatorAccepted: 'plan accepted, nothing repaired',
+    dockExecRead: 'art. {number} read as of {date}',
+    dockExecNoSingle: 'search run, no single article to read',
+    dockExecRefused: '{operation} answered with a refusal',
+    dockExecNone: 'no operation run',
+    dockExecRan: '{count} operations run',
+    dockComposerOne: 'quote identical to the text',
+    dockComposerSome: '{count} quotes identical to the text',
+    dockComposerNone: 'nothing quoted, every sentence from a template',
+    dockPlanNote: 'The model plans; it never writes the answer.',
+    dockSeePlan: 'See the plan',
+    dockHidePlan: 'Hide the plan',
+    dockPlanHeading: 'The plan, as returned',
+    dockStepsHeading: 'The steps run, as returned',
+    dockNotFound: 'Lex did not find an article for these words.',
+    dockSearched: 'Words searched: “{words}”',
+    dockFindByName: 'Find a text by name',
+    dockFindInLaw: 'Find in this law',
+    dockClarify: 'Your words are in more than one text. Which one do you mean?',
+    dockChoice: 'Article {number}, {heading}',
+    dockChoiceBare: 'Article {number}',
+    dockChoicesPending: 'Reading the titles…',
+    dockAdvice: 'Lex shows the text of the law; it does not say what applies to your situation.',
+    dockAdviceExample: 'A question it can answer:',
+    dockOff: 'The assistant is switched off. The texts, their versions and compare keep working: they use no model.',
+    dockCouldNot: 'The assistant could not answer this question: its planner failed, its plan was refused, or this month’s spending cap is reached. The texts, their versions and compare keep working: they use no model.',
+});
+
+const PANEL_FR = /* @__PURE__ */ Object.freeze({
     heading: 'Assistant',
     notice:
       'Ceci est un assistant automatisé qui montre des textes juridiques publiés. Il ne donne pas de conseil juridique et n’applique pas le droit à votre situation. N’écrivez ni noms, ni données de santé, ni autres données personnelles.',
@@ -197,8 +293,103 @@ export const ASSISTANT_PANEL_COPY = Object.freeze({
     workPlanner: 'Planificateur : {planner}',
     workRegistry: 'Registre MLflow : {model}, version {version}',
     workRegistryNone: 'Registre MLflow : {model} (ce déploiement est enregistré à sa mise en service)',
-  }),
+    dockPreview: 'aperçu, pas un conseil juridique',
+    dockHide: 'Masquer',
+    dockOpen: 'Ouvrir l’assistant',
+    dockIntro: 'Posez votre question en français ou en anglais. Lex trouve l’article, le cite mot pour mot et ouvre le texte à cet endroit.',
+    dockExampleOne: 'Quel est le délai de prescription d’un contrat d’assurance ?',
+    dockExampleOneCaption: 'une question avec vos mots',
+    dockExampleTwo: 'Loi du 27 juillet 1997 sur le contrat d’assurance, article 38, 1er juin 2012',
+    dockExampleTwoCaption: 'une citation avec une date, ouverte par le code sans appel au modèle',
+    dockExampleThree: 'Que dit l’article 5 du RGPD ?',
+    dockExampleThreeCaption: 'un article d’un règlement de l’UE',
+    dockDoes: 'Ce qu’il fait.',
+    dockDoesText: 'Un appel à un modèle d’IA planifie la recherche. Le code vérifie le plan, l’exécute et écrit la réponse à partir du texte.',
+    dockDoesNot: 'Ce qu’il ne fait pas.',
+    dockDoesNotText: 'Il ne donne aucun conseil sur votre situation et, quand il ne trouve pas l’article, il le dit.',
+    dockHowLink: 'Comment une réponse est construite, avec les résultats mesurés',
+    dockStays: 'Votre conversation reste ici pendant que vous passez d’une page à l’autre.',
+    dockAgainAnswer: 'Réponse tirée de l’article {number}. Rouvrir la réponse',
+    dockAgainOpened: 'Article {number} ouvert par le code. Le rouvrir',
+    dockAgain: 'Rouvrir la réponse',
+    dockQuestionLabel: 'Votre question',
+    dockPlaceholder: 'Posez une question',
+    dockPlaceholderAnother: 'Posez une autre question',
+    dockPlaceholderText: 'Posez une question sur un texte',
+    dockAsk: 'Demander',
+    dockLoadingSearch: 'Lecture de vos mots…',
+    dockLoadingAsk: 'Planification de la recherche et lecture du texte…',
+    dockFailure: 'L’assistant n’a pas pu être joint.',
+    dockTryAgain: 'Réessayer',
+    dockOpenedLabel: 'Ouvert par le code, sans appel au modèle',
+    dockOpenedLine: 'Article {number}, {title}, tel qu’il se lisait le {date}.',
+    dockOpenedLineNoTitle: 'Article {number}, tel qu’il se lisait le {date}.',
+    dockOpenedText: '{title}, tel qu’il se lisait le {date}.',
+    dockVerdictToday: 'D’après le texte officiel, tel qu’il se lit aujourd’hui',
+    dockVerdictOn: 'D’après le texte officiel, tel qu’il se lisait le {date}',
+    dockNotes: '{count} notes',
+    dockNotesOne: '1 note',
+    dockNotesHeading: 'Notes sur cette citation',
+    dockCite: 'Article {number}, {title}.',
+    dockCiteNoTitle: 'Article {number}.',
+    dockWholeOpen: 'L’article entier est ouvert à gauche.',
+    dockWholeLink: 'Ouvrir l’article entier',
+    dockStripSame: 'Même texte dans les {count} versions détenues',
+    dockStripOne: 'Une seule version détenue',
+    dockStripChanged: 'Texte modifié le {date}',
+    dockBuilt: 'Comment cette réponse a été construite',
+    dockBuiltFoot: '{seconds} s, environ {cost} €',
+    dockBuiltCost: 'environ {cost} €',
+    dockStageMasking: 'Masquage',
+    dockStagePlanner: 'Planificateur',
+    dockStageValidator: 'Validateur',
+    dockStageExecution: 'Exécution',
+    dockStageComposer: 'Rédaction',
+    dockTagCode: 'code',
+    dockTagModel: 'modèle d’IA',
+    dockMaskNone: 'rien à masquer',
+    dockMaskOne: 'un identifiant masqué avant le modèle',
+    dockMaskSome: '{count} identifiants masqués avant le modèle',
+    dockOpSearch: 'chercher',
+    dockOpRead: 'lire l’article',
+    dockOpText: 'lire le texte',
+    dockOpVersions: 'lister les versions',
+    dockOpHistory: 'lire l’historique de l’article',
+    dockOpCompare: 'comparer deux versions',
+    dockOpOther: 'exécuter {operation}',
+    dockOpThen: ', puis ',
+    dockPlanNone: 'aucune opération planifiée',
+    dockValidatorAccepted: 'plan accepté, rien de réparé',
+    dockExecRead: 'art. {number} lu au {date}',
+    dockExecNoSingle: 'recherche faite, pas d’article unique à lire',
+    dockExecRefused: '{operation} a répondu par un refus',
+    dockExecNone: 'aucune opération exécutée',
+    dockExecRan: '{count} opérations exécutées',
+    dockComposerOne: 'citation identique au texte',
+    dockComposerSome: '{count} citations identiques au texte',
+    dockComposerNone: 'rien de cité, chaque phrase tirée d’une formule fixe',
+    dockPlanNote: 'Le modèle planifie ; il n’écrit jamais la réponse.',
+    dockSeePlan: 'Voir le plan',
+    dockHidePlan: 'Masquer le plan',
+    dockPlanHeading: 'Le plan, tel que renvoyé',
+    dockStepsHeading: 'Les étapes exécutées, telles que renvoyées',
+    dockNotFound: 'Lex n’a pas trouvé d’article pour ces mots.',
+    dockSearched: 'Mots cherchés : « {words} »',
+    dockFindByName: 'Trouver un texte par son nom',
+    dockFindInLaw: 'Chercher dans cette loi',
+    dockClarify: 'Vos mots figurent dans plus d’un texte. Lequel visez-vous ?',
+    dockChoice: 'Article {number}, {heading}',
+    dockChoiceBare: 'Article {number}',
+    dockChoicesPending: 'Lecture des titres…',
+    dockAdvice: 'Lex montre le texte de la loi ; il ne dit pas ce qui s’applique à votre situation.',
+    dockAdviceExample: 'Une question à laquelle il peut répondre :',
+    dockOff: 'L’assistant est désactivé. Les textes, leurs versions et la comparaison fonctionnent toujours : ils n’utilisent aucun modèle.',
+    dockCouldNot: 'L’assistant n’a pas pu répondre à cette question : son planificateur a échoué, son plan a été refusé ou le plafond de dépenses du mois est atteint. Les textes, leurs versions et la comparaison fonctionnent toujours : ils n’utilisent aucun modèle.',
 });
+
+// One line, so the pseudo-locale scan can swap the tables as it swaps the chrome's (`live-chrome-scan.test.mjs`); pure, so a
+// bundle that draws neither panel nor dock (the preview build's) carries none of their words.
+export const ASSISTANT_PANEL_COPY = /* @__PURE__ */ Object.freeze({ en: PANEL_EN, fr: PANEL_FR });
 
 export { ASK_FRAGMENT_MAX, askFragment, readAskFragment } from './ask-fragment.mjs';
 
@@ -437,4 +628,180 @@ export function askOutcome(envelope, locale) {
     return { dossier: null, sentence: value.sentences[locale] };
   }
   return { dossier: null, sentence: copy.failed };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// The docked assistant (the owner's brief of 2026-11-15, sections 5 and 6): what it makes of an ask answer, and the five
+// stages of the work it draws from the answer's trace. Pure functions; the dock (`AssistantDock.jsx`) asks and draws.
+
+/**
+ * The turn an ask answer makes (`askV3`'s result): `{ kind, dossier, servingCommit, sentence }`. A dossier is checked
+ * (`validateDossier`) before it is kept; an answer that quotes nothing is "not found"; a refuse is the advice boundary; the
+ * switched-off card (the question not read) is told from the card of a question the assistant could not answer (read: the
+ * planner failed, its plan was refused, a gate failed, or the month's cap is reached, which the API does not tell apart).
+ */
+export function dockTurnOf(asked, locale) {
+  if (asked?.state !== 'success' && asked?.state !== 'refusal') return Object.freeze({ kind: 'failure' });
+  const envelope = asked.envelope;
+  const commit = envelope?.context?.commits?.serving_runtime_source_commit;
+  const servingCommit = typeof commit === 'string' ? commit : null;
+  const kept = (dossier, kind = null) => {
+    try {
+      const view = validateDossier(dossier);
+      return Object.freeze({ kind: kind ?? dossierKind(view), dossier, servingCommit });
+    } catch {
+      return Object.freeze({ kind: kind ?? 'failure', dossier: null, servingCommit });
+    }
+  };
+  if (asked.state === 'refusal') {
+    const code = envelope?.refusal?.code;
+    if (code === 'rate_limited') return Object.freeze({ kind: 'rate' });
+    if (code === 'advice_boundary') return kept(envelope.refusal.helpful_payload?.answer_dossier ?? null, 'advice');
+    return Object.freeze({ kind: 'couldnot' });
+  }
+  const value = envelope?.result?.value;
+  if (envelope?.result?.object_type === 'answer_dossier') return kept(value);
+  if (value?.presentation_result === 'localization_unavailable') {
+    const sentence = value?.sentences?.[locale];
+    return Object.freeze({ kind: 'locale', sentence: typeof sentence === 'string' ? sentence : null });
+  }
+  if (value?.presentation_result === 'assistant_v3_unavailable') return Object.freeze({ kind: value.question_read === true ? 'couldnot' : 'off' });
+  return Object.freeze({ kind: 'failure' });
+}
+
+/** The kind of a checked answer: clarify, the advice boundary (a refuse), an answer when it quotes the law, else not found. */
+export function dossierKind(view) {
+  if (view.verdict === 'clarify') return 'clarify';
+  if (view.verdict === 'refuse') return 'advice';
+  return view.parts.some((part) => part.blocks.some((block) => block.kind === 'quote')) ? 'answer' : 'notfound';
+}
+
+/** The quotation the answer card shows: the first in the interface's held language, else the first. Null when none. */
+export function leadQuote(dossier, locale) {
+  const quotes = (dossier?.parts ?? []).flatMap((part) => part.blocks ?? []).filter((block) => block?.kind === 'quote');
+  return quotes.find((quote) => quote.language === QUOTE_LANGUAGE[locale]) ?? quotes[0] ?? null;
+}
+
+/** The notes of a quotation (its disclosures' sentences, as the server wrote them), else every disclosure of the answer. */
+export function quoteNotes(dossier, quote) {
+  const disclosures = (dossier?.parts ?? []).flatMap((part) => part.blocks ?? []).filter((block) => block?.kind === 'disclosure' && typeof block.claim?.text === 'string');
+  const own = disclosures.filter((block) => block.object === quote?.quote_id);
+  return (own.length > 0 ? own : disclosures).map((block) => block.claim.text);
+}
+
+/** The date an answer read the law at: its quotation heading's `date` fact, else the step that read the article. */
+export function answerDate(dossier, quote) {
+  const heading = (dossier?.parts ?? []).flatMap((part) => part.blocks ?? [])
+    .find((block) => block?.kind === 'claim' && block.template_id === 'law.quote_heading' && block.facts?.some((fact) => fact?.name === 'anchor' && fact.value === quote?.anchor));
+  const fact = heading?.facts?.find((candidate) => candidate?.name === 'date' && candidate?.kind === 'calendar_date');
+  return typeof fact?.value === 'string' ? fact.value : executionOf(dossier?.trace).read?.date ?? null;
+}
+
+/**
+ * The candidates of a clarify, as its actions name them (the text, the article, the date), at most five, each once: the
+ * dock draws each by the text's title and the article's heading, never by its address.
+ */
+export function clarifyCandidates(dossier) {
+  const seen = new Set();
+  const candidates = [];
+  for (const block of (dossier?.parts ?? []).flatMap((part) => part.blocks ?? [])) {
+    const parameters = block?.kind === 'action' ? block.parameters : null;
+    if (typeof parameters?.identifier !== 'string') continue;
+    const key = `${parameters.identifier}|${parameters.article ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    candidates.push(Object.freeze({
+      identifier: parameters.identifier,
+      article: typeof parameters.article === 'string' ? parameters.article : null,
+      date: typeof parameters.date === 'string' ? parameters.date : null,
+    }));
+  }
+  return Object.freeze(candidates.slice(0, 5));
+}
+
+/** The words the answer's search looked for (its trace's search step), else the question. */
+export function searchedWords(dossier, question) {
+  return searchStepOf(dossier?.trace)?.query ?? question ?? '';
+}
+
+/** The plan in a few words, from its operations (`plannedOperations`): "search, then read the article". */
+function planLine(trace, copy) {
+  const said = plannedOperations(trace).map(({ operation, followUp }) => {
+    if (operation === 'search') return copy.dockOpSearch;
+    if (operation === 'evidence_bundle') return followUp ? copy.dockOpRead : copy.dockOpText;
+    if (operation === 'as_of') return copy.dockOpText;
+    if (operation === 'dossier' || operation === 'timeline') return copy.dockOpVersions;
+    if (operation === 'article_history') return copy.dockOpHistory;
+    if (operation === 'diff') return copy.dockOpCompare;
+    return fill(copy.dockOpOther, { operation });
+  });
+  return said.length === 0 ? copy.dockPlanNone : said.join(copy.dockOpThen);
+}
+
+/** What the steps ran, in one line: the article read and its date, else why none was read. */
+function executionLine(trace, copy) {
+  const run = executionOf(trace);
+  if (run.read !== null) return fill(copy.dockExecRead, { number: articleNumberOf(run.read.article), date: numericDate(run.read.date ?? trace?.today ?? '') });
+  if (run.refused !== null) return fill(copy.dockExecRefused, { operation: run.refused });
+  if (run.fired === 0) return copy.dockExecNone;
+  const searched = (trace?.steps ?? []).some((step) => step?.operation_id === 'search' && step?.fired !== false);
+  if (run.unfired > 0 && searched) return copy.dockExecNoSingle;
+  return fill(copy.dockExecRan, { count: run.fired });
+}
+
+/**
+ * The five stages of an answer's work (the brief's section 5), each `{ key, name, line, model }`: masking, the planner (the
+ * one AI model call), the validator, the execution and the composer, each line read from the trace and the answer's gates.
+ */
+export function stageRows(dossier, locale) {
+  const copy = panelCopy(locale);
+  const trace = dossier?.trace ?? {};
+  const masked = maskedCount(trace.question ?? '');
+  const quotes = Number.isInteger(dossier?.gates?.quotes)
+    ? dossier.gates.quotes
+    : (dossier?.parts ?? []).flatMap((part) => part.blocks ?? []).filter((block) => block?.kind === 'quote').length;
+  const masking = masked === 0 ? copy.dockMaskNone : masked === 1 ? copy.dockMaskOne : fill(copy.dockMaskSome, { count: masked });
+  const composer = quotes === 0 ? copy.dockComposerNone : quotes === 1 ? copy.dockComposerOne : fill(copy.dockComposerSome, { count: quotes });
+  return Object.freeze([
+    Object.freeze({ key: 'masking', name: copy.dockStageMasking, line: masking, model: false }),
+    Object.freeze({ key: 'planner', name: copy.dockStagePlanner, line: planLine(trace, copy), model: true }),
+    Object.freeze({ key: 'validator', name: copy.dockStageValidator, line: copy.dockValidatorAccepted, model: false }),
+    Object.freeze({ key: 'execution', name: copy.dockStageExecution, line: executionLine(trace, copy), model: false }),
+    Object.freeze({ key: 'composer', name: copy.dockStageComposer, line: composer, model: false }),
+  ]);
+}
+
+/** A number of seconds or euros as the dock writes it in `locale` (1,6 in French, 1.6 in English). */
+export function dockDecimal(value, locale, digits) {
+  return Number(value).toLocaleString(locale === 'fr' ? 'fr-FR' : 'en-GB', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+/**
+ * The work's foot: the answer's duration as the page measured it (the trace holds none) and its cost, which the trace does
+ * not hold either: the latest test run's average cost of an answer (`EVALUATION_RECORD`), said as "about".
+ */
+export function builtFoot(seconds, costEur, locale) {
+  const copy = panelCopy(locale);
+  const cost = dockDecimal(costEur, locale, 3);
+  return typeof seconds === 'number' && Number.isFinite(seconds)
+    ? fill(copy.dockBuiltFoot, { seconds: dockDecimal(seconds, locale, 1), cost })
+    : fill(copy.dockBuiltCost, { cost });
+}
+
+/** The strip's sentence: the same wording in all N versions held, one version held, or the date it last changed. */
+export function stripSentence(strip, locale) {
+  const copy = panelCopy(locale);
+  if (strip.changedOn !== null) return fill(copy.dockStripChanged, { date: numericDate(strip.changedOn) });
+  return strip.ticks.length === 1 ? copy.dockStripOne : fill(copy.dockStripSame, { count: strip.ticks.length });
+}
+
+/** The three examples of the dock's first screen, in `locale`'s table: each question, its caption and its language. */
+export function dockExamples(locale) {
+  const copy = panelCopy(locale);
+  const languages = locale === 'fr' ? ['fr', 'fr', 'fr'] : ['fr', 'fr', 'en'];
+  return Object.freeze([
+    Object.freeze({ question: copy.dockExampleOne, caption: copy.dockExampleOneCaption, lang: languages[0] }),
+    Object.freeze({ question: copy.dockExampleTwo, caption: copy.dockExampleTwoCaption, lang: languages[1] }),
+    Object.freeze({ question: copy.dockExampleThree, caption: copy.dockExampleThreeCaption, lang: languages[2] }),
+  ]);
 }
