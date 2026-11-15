@@ -805,6 +805,11 @@ const EN = Object.freeze({
     menuDecisions: "Decisions",
     menuEvidence: "How it works",
     menuAsk: "Ask",
+    // The V4 header (the owner's brief of 2026-11-15): one field that finds a text by its name or number, and the dock.
+    findLabel: "Find a text",
+    findPlaceholder: "Find a text by name or number",
+    findSubmit: "Find",
+    dock: "Assistant",
     footerMenu: "The texts and the tools",
     notAdvice: "Lex shows the published text of the law. It does not tell you whether or how it applies to your situation and is not legal advice.",
     authenticity: "Consolidated texts have no legal effect: the authentic texts are those published in the Journal officiel du Grand-Duché de Luxembourg (Mémorial A) and in the Official Journal of the European Union.",

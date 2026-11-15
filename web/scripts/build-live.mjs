@@ -82,6 +82,8 @@ async function buildPages(destination, { card, developers, locale, buildTag = ""
   // The assistant page's script, which the server serves only while the assistant is switched on (V3WebRoot); its page is
   // never built as a file: the server renders it then, and only then (`live-assistant-page.jsx`).
   await cp(await bundleClient("app/client-live-assistant-entry.jsx", `client-live-assistant${suffix}.js`, options), new URL("client-live-assistant.js", out));
+  // The assistant dock's script (the owner's brief of 2026-11-15): every page that carries the dock loads it beside its own.
+  await cp(await bundleClient("app/client-live-dock-entry.jsx", `client-live-dock${suffix}.js`, options), new URL("client-live-dock.js", out));
   const { bundleServerRenderer } = await import("./react-build.mjs");
   await mkdir(new URL("ssr/", destination), { recursive: true });
   // The renderer is handed the Developers page's contracts as data, since it reads nothing (`ssr-entry.jsx`).

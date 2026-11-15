@@ -1,0 +1,76 @@
+// The text page's address (the owner's brief of 2026-11-15, section 3): one page per text, standing at the text's own
+// address under an interface language (`/fr/lu-legilux/loi-1997-07-27-n10`, `/en/eu-eurlex/32016R0679`), which the
+// server already renders (the dossier page, `V3WebRoot.SitePageFor`), its state in the query so that every state is a link
+// that can be copied and reopened:
+//
+//   date     the version read, as the date the reader asked for (yyyy-mm-dd); none is today
+//   article  the article open, by the publisher's id the API names it with (`art_44`)
+//   from, to the two versions compared (yyyy-mm-dd each): compare mode
+//   view     `inline` for compare mode's "In one text"; none is side by side
+//
+// The server ignores this query on a work's address (it renders the dossier), so the page reads it once loaded.
+
+import { europeWorkSegment, INTERFACE_LANGUAGES } from './permalinks.mjs';
+import { CHROME_LOCALE } from './live-chrome.mjs';
+
+const DATE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/u;
+const ARTICLE = /^[^\s/?#]{1,120}$/u;
+
+/** The site path of a text, by the identifier the API names it with (`/lu-legilux/{work}` or an EU CELEX), or null. */
+export function textPath(identifier) {
+  if (typeof identifier !== 'string' || identifier.length === 0) return null;
+  if (/^\/lu-legilux\/[^/?#]+$/u.test(identifier)) return identifier;
+  if (/^\/eu-eurlex\/[^/?#]+$/u.test(identifier)) return identifier;
+  if (/^[0-9A-Za-z][0-9A-Za-z()._/-]*$/u.test(identifier)) return `/eu-eurlex/${europeWorkSegment(identifier)}`;
+  return null;
+}
+
+/**
+ * The text page's link for a state, under `locale`'s path: the text, and any of the version's date, the article, the compare
+ * pair and the view. A value that is not of its shape is left out, never written. Null when the identifier names no text.
+ */
+export function textHref({ identifier, date = null, article = null, from = null, to = null, view = null }, locale = CHROME_LOCALE) {
+  const path = textPath(identifier);
+  if (path === null || !INTERFACE_LANGUAGES.includes(locale)) return null;
+  const query = new URLSearchParams();
+  const compare = typeof from === 'string' && DATE.test(from) && typeof to === 'string' && DATE.test(to);
+  if (!compare && typeof date === 'string' && DATE.test(date)) query.set('date', date);
+  if (compare) {
+    query.set('from', from);
+    query.set('to', to);
+  }
+  if (typeof article === 'string' && ARTICLE.test(article)) query.set('article', article);
+  if (compare && view === 'inline') query.set('view', 'inline');
+  const search = query.toString();
+  return `/${locale}${path}${search === '' ? '' : `?${search}`}`;
+}
+
+/** The state a text page's query names (`location.search`), each value null when absent or not of its shape. */
+export function textStateOf(search) {
+  const query = new URLSearchParams(typeof search === 'string' ? search : '');
+  const date = query.get('date');
+  const article = query.get('article');
+  const from = query.get('from');
+  const to = query.get('to');
+  const compare = from !== null && DATE.test(from) && to !== null && DATE.test(to);
+  return Object.freeze({
+    date: date !== null && DATE.test(date) ? date : null,
+    article: article !== null && ARTICLE.test(article) ? article : null,
+    from: compare ? from : null,
+    to: compare ? to : null,
+    view: compare && query.get('view') === 'inline' ? 'inline' : 'side',
+  });
+}
+
+/**
+ * The events the text page and the assistant dock speak to each other with, on `window` (both are on the same page, each
+ * its own React root):
+ *
+ *   lex:open  detail { identifier, date, article, highlight }   the dock asks the page to open a text at an article; a text
+ *             page standing at that text calls preventDefault() and opens it in place; otherwise the dock navigates to
+ *             textHref(detail).
+ *   lex:dock  detail { collapsed }                               the text page asks the dock to fold to its tab (compare mode)
+ *             or to open again.
+ */
+export const OPEN_EVENT = 'lex:open';
+export const DOCK_EVENT = 'lex:dock';

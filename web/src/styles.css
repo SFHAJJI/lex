@@ -3417,3 +3417,131 @@ main:has([data-law-header]) {
     background: #2f5a3f;
   }
 }
+
+/* ==========================================================================================================================
+   V4 front end (the owner's brief of 2026-11-15, the validated mockup V1Home, V2Read, V3Compare, V4Changes, V5How).
+   Every V4 rule is scoped under html[data-layout="v4"] or an lx- class, so the pages not yet rebuilt keep their look.
+   Fonts self-hosted (font-src 'self'): Spectral 400/500/600 for law text and titles, IBM Plex Sans (variable) for the
+   interface, IBM Plex Mono for plans and data; latin and latin-ext only, as above. SIL Open Font License 1.1.
+   No inline style attributes anywhere (style-src 'self'): every rule lives here.
+   ========================================================================================================================== */
+@font-face { font-family: 'Spectral'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/spectral-400-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Spectral'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/spectral-400-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Spectral'; font-style: normal; font-weight: 500; font-display: swap; src: url('/fonts/spectral-500-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Spectral'; font-style: normal; font-weight: 500; font-display: swap; src: url('/fonts/spectral-500-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Spectral'; font-style: normal; font-weight: 600; font-display: swap; src: url('/fonts/spectral-600-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Spectral'; font-style: normal; font-weight: 600; font-display: swap; src: url('/fonts/spectral-600-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 100 700; font-display: swap; src: url('/fonts/ibm-plex-sans-var-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 100 700; font-display: swap; src: url('/fonts/ibm-plex-sans-var-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/ibm-plex-mono-400-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/ibm-plex-mono-400-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+
+/* The brief's tokens (section 2). Brand green only for the wordmark, Ask, the question bubble and the AI model tag; time
+   indigo only for versions, dates, the axis and compare. */
+:root {
+  --lx-ink: #1B2420;
+  --lx-muted: #5C6761;
+  --lx-faint: #69736D;
+  --lx-line: #DDE2DE;
+  --lx-line-soft: #ECEFEC;
+  --lx-field: #C5CCC7;
+  --lx-panel: #F3F5F4;
+  --lx-chip: #E6EAE7;
+  --lx-green: #1F4A33;
+  --lx-indigo: #3F3CBB;
+  --lx-indigo-light: #A9A8E0;
+  --lx-indigo-tint: #ECECFB;
+  --lx-selected: #E9ECF9;
+  --lx-tick: #CDD3CF;
+  --lx-quote: #FFF3C4;
+  --lx-added-ink: #14532D;
+  --lx-added-bg: #DDF2E3;
+  --lx-removed-ink: #8C1D18;
+  --lx-removed-bg: #FBE4E1;
+  --lx-serif: 'Spectral', Georgia, serif;
+  --lx-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --lx-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --lx-dock-width: 384px;
+}
+
+/* == v4: shell (driver: header, frame, dock slot, footer) == */
+html[data-layout="v4"] { color: var(--lx-ink); background: #FFFFFF; font-family: var(--lx-sans); }
+html[data-layout="v4"] body.lx-body { margin: 0; min-height: 100vh; background: #FFFFFF; color: var(--lx-ink); font: 15px/1.45 var(--lx-sans); }
+html[data-layout="v4"] .lx-visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+html[data-layout="v4"] a { color: inherit; text-underline-offset: 3px; }
+html[data-layout="v4"] :focus-visible { outline: 2px solid var(--lx-indigo); outline-offset: 2px; }
+/* The header: 56 px, the wordmark, the find field, the menu, the languages (V1Home to V5How). */
+html[data-layout="v4"] .lx-header { position: relative; z-index: 3; box-sizing: border-box; height: 56px; display: flex; align-items: center; gap: 28px; margin: 0; padding: 0 32px; border-bottom: 1px solid var(--lx-line); background: #FFFFFF; color: var(--lx-ink); box-shadow: none; }
+html[data-layout="v4"] .lx-header .lx-wordmark { display: inline-flex; align-items: center; text-decoration: none; color: var(--lx-green); }
+html[data-layout="v4"] .lx-header .lx-wordmark .site-name { font-family: var(--lx-serif); font-weight: 600; font-size: 27px; line-height: 1; letter-spacing: -0.01em; color: var(--lx-green); }
+html[data-layout="v4"] .lx-find { flex: 0 1 400px; min-width: 160px; height: 36px; box-sizing: border-box; display: flex; align-items: center; gap: 9px; margin: 0; padding: 0 12px; border: 1px solid var(--lx-field); border-radius: 6px; background: #FFFFFF; color: var(--lx-muted); font-size: 14px; }
+html[data-layout="v4"] .lx-find:focus-within { border-color: var(--lx-indigo); }
+html[data-layout="v4"] .lx-find-icon { flex: 0 0 auto; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-find input { flex: 1 1 auto; min-width: 0; height: 100%; box-sizing: border-box; margin: 0; padding: 0; border: 0; outline: none; background: transparent; font: inherit; font-size: 14px; color: var(--lx-ink); box-shadow: none; }
+html[data-layout="v4"] .lx-find input::placeholder { color: var(--lx-faint); opacity: 1; }
+html[data-layout="v4"] .lx-find input::-webkit-search-cancel-button { display: none; }
+html[data-layout="v4"] .lx-nav { margin-left: auto; }
+html[data-layout="v4"] .lx-nav ul { display: flex; gap: 26px; margin: 0; padding: 0; list-style: none; }
+html[data-layout="v4"] .lx-nav a { display: block; padding: 17px 0 15px; border-bottom: 2px solid transparent; color: var(--lx-muted); font-size: 14.5px; font-weight: 500; line-height: 1.45; text-decoration: none; }
+html[data-layout="v4"] .lx-nav a:hover { color: var(--lx-ink); }
+html[data-layout="v4"] .lx-nav a[aria-current="page"] { border-bottom-color: var(--lx-green); color: var(--lx-ink); font-weight: 600; }
+html[data-layout="v4"] .lx-header .locale-nav ul { display: flex; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: 13.5px; }
+html[data-layout="v4"] .lx-header .locale-nav a { color: var(--lx-faint); text-decoration: none; text-transform: none; font-weight: 400; }
+html[data-layout="v4"] .lx-header .locale-nav a[aria-current="true"] { color: var(--lx-ink); font-weight: 600; }
+/* The frame: the page's own column scrolls under the header; the dock keeps its place beside it, full height. */
+html[data-layout="v4"] .lx-frame { display: flex; height: calc(100vh - 56px); min-height: 0; }
+html[data-layout="v4"] .lx-scroll { flex: 1 1 auto; min-width: 0; overflow-y: auto; overflow-x: hidden; }
+html[data-layout="v4"] .lx-main { display: block; box-sizing: border-box; max-width: none; margin: 0; padding: 0; background: #FFFFFF; }
+html[data-layout="v4"] .lx-dock { flex: 0 0 var(--lx-dock-width); width: var(--lx-dock-width); box-sizing: border-box; min-height: 0; display: flex; flex-direction: column; background: var(--lx-panel); border-left: 1px solid var(--lx-line); }
+html[data-layout="v4"] .lx-dock-root { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+html[data-layout="v4"] .lx-dock[data-collapsed="true"] { flex-basis: 48px; width: 48px; }
+/* The footer, quiet, under the page's own column. */
+html[data-layout="v4"] .site-footer { box-sizing: border-box; margin: 48px 0 0; padding: 20px 56px 28px; border-top: 1px solid var(--lx-line); background: #FFFFFF; color: var(--lx-muted); font-size: 12.5px; line-height: 1.5; }
+html[data-layout="v4"] .site-footer p { max-width: 880px; margin: 0 0 6px; }
+html[data-layout="v4"] .site-footer nav ul { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 8px 0 0; padding: 0; list-style: none; }
+html[data-layout="v4"] .site-footer a { color: var(--lx-muted); }
+
+
+/* == v4: shell end == */
+
+
+
+/* == v4: text page (driver) == */
+
+
+/* == v4: text page end == */
+
+
+
+/* == v4: home and search results (agent) == */
+
+
+/* == v4: home and search results end == */
+
+
+
+/* == v4: changes (agent) == */
+
+
+/* == v4: changes end == */
+
+
+
+/* == v4: how it works and decisions (agent) == */
+
+
+/* == v4: how it works and decisions end == */
+
+
+
+/* == v4: assistant dock (agent) == */
+
+
+/* == v4: assistant dock end == */
+
+
+
+/* == v4: phone width (driver, last) == */
+
+
+/* == v4: phone width end == */
