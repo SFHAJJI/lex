@@ -1324,7 +1324,8 @@ test("on the two-state mount journey J3 compares two different states and journe
   assert.ok(compare.texts.includes("art_7: changed"), "the amended article is named as changed");
   assert.ok(compare.texts.includes("1 changed, 0 added, 0 removed"));
   assert.equal(radar.step.operation, "changes_in_period");
-  assert.deepEqual(radar.step.body.parameters, { date_from: READING_DATE, date_to: "2025-01-01", limit: 200 });
+  // V4 Changes asks the period in windows of 30 days, the latest first: the later version is in the first, 03/12/2024 to 01/01/2025.
+  assert.deepEqual(radar.step.body.parameters, { date_from: "2024-12-03", date_to: "2025-01-01", limit: 200 });
   assert.deepEqual(radar.step.typed, ["01/02/2024", "01/01/2025"], "the two dates typed day first");
   // V4 Changes: the later version's row, "See what changed", linking the text page comparing it with the version before.
   assert.ok(radar.texts.includes("1 article changed") && radar.texts.includes("See what changed"), "the change said in words");

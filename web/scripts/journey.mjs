@@ -116,7 +116,7 @@ import { exampleHref } from "./home-examples.mjs";
 import { liveChrome } from "./live-chrome.mjs";
 import { fetchWithinLimit } from "./within-limit.mjs";
 import { textHref } from "./text-address.mjs";
-import { countsSentence, numericDate } from "./live-radar.mjs";
+import { countsSentence, numericDate, windowsOf } from "./live-radar.mjs";
 
 /**
  * The V4 front end (the owner's brief of 2026-11-15): every V4 page carries the header's "Find a text" form first
@@ -2763,7 +2763,9 @@ export function twoStateExpectations(journeyMount) {
   const radar = Object.freeze({
     ...JOURNEY_STEPS.radar,
     typed: Object.freeze([numericDate(first), numericDate(later)]),
-    body: Object.freeze({ operation_id: "changes_in_period", parameters: Object.freeze({ date_from: first, date_to: later, limit: 200 }) }),
+    // V4 Changes asks a period in windows of 30 days, the latest first (`windowsOf`): the later version, on the period's
+    // last day, is in the first window, which is the request the step holds.
+    body: Object.freeze({ operation_id: "changes_in_period", parameters: Object.freeze({ date_from: windowsOf({ from: first, to: later })[0].from, date_to: later, limit: 200 }) }),
   });
   const counts = "1 changed, 0 added, 0 removed";
   return [

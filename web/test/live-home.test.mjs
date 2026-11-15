@@ -8,6 +8,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { SEARCH_EXACT_REFERENCE_2026_11_15 } from "../scripts/search-exact-reference-record.mjs";
 import { homePageParts, withoutFreshness } from "../scripts/deploy-probe.mjs";
 import { createElement as h } from "react";
 import { renderToStaticMarkup, renderToString } from "react-dom/server";
@@ -35,7 +36,7 @@ const envelopeOf = (operation, scenarioStart = "") => structuredClone(census.env
 const COVERAGE = envelopeOf("coverage");
 const READING = envelopeOf("evidence_bundle", "the work on its state's date");
 const EN = liveChrome("en");
-const EXACT_REFERENCE = JSON.parse(await readFile(new URL("./fixtures-live/search-exact-reference-2026-11-15.json", import.meta.url), "utf8"));
+const EXACT_REFERENCE = SEARCH_EXACT_REFERENCE_2026_11_15;
 
 const escaped = (text) => text.replaceAll("&", "&amp;").replaceAll("'", "&#x27;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
 const mainOf = (html) => html.slice(html.indexOf("<main"), html.indexOf("</main>"));
