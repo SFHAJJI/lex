@@ -86,14 +86,15 @@ test("every live page renders its chrome from the table", () => {
     const html = render();
     const entry = copy[key];
     assert.ok(html.includes(`<title>${escaped(entry.title)} - Lex</title>`), `${key}: title`);
-    // A V4 page (the owner's brief of 2026-11-15) carries the V4 header (the name, the find field, Changes, Decisions, How it
-    // works) and the footer's statements; the forms it replaces are not linked. Its own words are its screen's, not an
+    // The site around the screen: its name, its menu, and the statements every page carries (no development banner).
+    // A V4 page (the owner's brief of 2026-11-15, section 3) has the V4 header (the name, the find field, Changes, Decisions
+    // and How it works) and its footer links none of the forms the text page replaces; its own words are its screen's, not an
     // eyebrow, heading and introduction.
     const v4 = html.includes('data-layout="v4"');
-    const siteTexts = v4
-      ? [copy.site.brand, copy.site.skip, copy.site.findLabel, copy.site.findPlaceholder, copy.site.radar, copy.site.menuDecisions, copy.site.menuEvidence, copy.site.coverage, copy.site.notAdvice, copy.site.authenticity, copy.site.sources]
-      : null;
-    for (const text of siteTexts ?? [copy.site.brand, copy.site.skip, copy.site.menuDecisions, copy.site.menuEvidence, copy.site.menuTexts, copy.site.reading, copy.site.dossier, copy.site.history, copy.site.compare, copy.site.radar, copy.site.export, copy.site.coverage, copy.site.notAdvice, copy.site.authenticity, copy.site.sources]) {
+    const said = v4
+      ? [copy.site.brand, copy.site.skip, copy.site.findPlaceholder, copy.site.menuDecisions, copy.site.menuEvidence, copy.site.radar, copy.site.coverage, copy.site.notAdvice, copy.site.authenticity, copy.site.sources]
+      : [copy.site.brand, copy.site.skip, copy.site.menuDecisions, copy.site.menuEvidence, copy.site.menuTexts, copy.site.reading, copy.site.dossier, copy.site.history, copy.site.compare, copy.site.radar, copy.site.export, copy.site.coverage, copy.site.notAdvice, copy.site.authenticity, copy.site.sources];
+    for (const text of said) {
       assert.ok(html.includes(escaped(text)), `${key}: the site says ${JSON.stringify(text.slice(0, 40))}`);
     }
     assert.ok(!html.includes("development build"), `${key}: no development banner`);

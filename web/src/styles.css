@@ -3677,6 +3677,115 @@ html[data-layout="v4"] .lx-novisible { margin: 0; padding: 12px 14px; border-rad
 
 /* == v4: how it works and decisions (agent) == */
 
+/* How it works (V5How): the first screen is the recorded answer's six stages on the left and the 400 px panel on the right;
+   Release 13's parts under it in two columns. Decisions: each decision a row, its gain and its cost side by side. */
+html[data-layout="v4"] .lx-how h1, html[data-layout="v4"] .lx-dec h1 { margin: 0; font-family: var(--lx-serif); font-weight: 500; font-size: 36px; line-height: 1.15; letter-spacing: -0.01em; color: var(--lx-ink); overflow-wrap: normal; }
+html[data-layout="v4"] .lx-how code, html[data-layout="v4"] .lx-dec code { font-family: var(--lx-mono); font-size: 0.9em; }
+html[data-layout="v4"] .lx-how-first { display: flex; align-items: stretch; }
+html[data-layout="v4"] .lx-how-flow { flex: 1 1 auto; min-width: 0; box-sizing: border-box; padding: 40px 48px 32px 56px; }
+html[data-layout="v4"] .lx-how-intro { margin: 10px 0 0; max-width: 640px; font-size: 15.5px; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-how-bubble { display: inline-block; margin: 22px 0 18px; padding: 9px 13px; font-size: 14.5px; color: #FFFFFF; background: var(--lx-green); border-radius: 12px 12px 12px 3px; }
+html[data-layout="v4"] .lx-how-stages { margin: 0; padding: 0; list-style: none; }
+html[data-layout="v4"] .lx-how-stage, html[data-layout="v4"] .lx-how-answer { display: flex; gap: 18px; margin: 0; padding: 18px 0; border-top: 1px solid var(--lx-line); }
+html[data-layout="v4"] .lx-how-n { flex: 0 0 26px; font-family: var(--lx-serif); font-size: 24px; line-height: 1.1; color: var(--lx-faint); }
+html[data-layout="v4"] .lx-how-name { flex: 0 0 170px; }
+html[data-layout="v4"] .lx-how-name h2 { margin: 0; padding-bottom: 6px; font-family: var(--lx-sans); font-size: 16px; font-weight: 600; line-height: 1.45; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-how-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; background: var(--lx-chip); color: var(--lx-muted); font-size: 12px; font-weight: 500; line-height: 1.45; white-space: nowrap; }
+html[data-layout="v4"] .lx-how-tag-model { background: var(--lx-green); color: #FFFFFF; }
+html[data-layout="v4"] .lx-how-body { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 14.5px; line-height: 1.5; }
+html[data-layout="v4"] .lx-how-body > p { margin: 0; }
+html[data-layout="v4"] .lx-how-record { margin: 8px 0 0; padding: 10px 12px; background: var(--lx-panel); border: 0; border-radius: 6px; font-family: var(--lx-mono); font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-how-record code { font-family: inherit; font-size: inherit; background: none; padding: 0; overflow-wrap: anywhere; }
+html[data-layout="v4"] .lx-how-answer { border-top: 2px solid var(--lx-ink); }
+html[data-layout="v4"] .lx-how-answer-label { flex: 0 0 170px; margin: 0; font-size: 16px; font-weight: 600; }
+html[data-layout="v4"] .lx-how-answer a { font-weight: 600; text-underline-offset: 3px; }
+/* The panel: what the test questions measure, then the decisions with what each costs. */
+html[data-layout="v4"] .lx-how-panel { flex: 0 0 400px; width: 400px; box-sizing: border-box; padding: 40px 40px 32px 36px; background: var(--lx-panel); border-left: 1px solid var(--lx-line); }
+html[data-layout="v4"] .lx-how-panel h2 { margin: 0; font-family: var(--lx-sans); font-size: 16px; font-weight: 600; line-height: 1.45; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-how-panel section + section h2 { margin: 34px 0 10px; }
+html[data-layout="v4"] .lx-how-when { margin: 4px 0 14px; font-size: 13.5px; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-how-bar { display: block; width: 100%; max-width: 324px; height: auto; }
+html[data-layout="v4"] .lx-how-bar-part[data-outcome="right"] { fill: #1F4A33; }
+html[data-layout="v4"] .lx-how-bar-part[data-outcome="wrong"] { fill: #B3261E; }
+html[data-layout="v4"] .lx-how-bar-part[data-outcome="notFound"] { fill: #C9D1CC; }
+html[data-layout="v4"] .lx-how-bar-part[data-outcome="wronglyRefused"] { fill: #E3B23C; }
+html[data-layout="v4"] .lx-how-bar-part[data-outcome="rightBehaviour"] { fill: #8FA79A; }
+html[data-layout="v4"] .lx-how-bar-count { fill: var(--lx-ink); font-family: var(--lx-sans); font-size: 13px; font-weight: 600; }
+html[data-layout="v4"] .lx-how-bar-count[data-outcome="right"], html[data-layout="v4"] .lx-how-bar-count[data-outcome="wrong"] { fill: #FFFFFF; }
+html[data-layout="v4"] .lx-how-legend { margin: 0; padding: 12px 0 0; list-style: none; }
+html[data-layout="v4"] .lx-how-legend li { display: flex; align-items: baseline; gap: 10px; padding: 3px 0; font-size: 14px; }
+html[data-layout="v4"] .lx-how-legend li::before { content: ''; flex: 0 0 10px; height: 10px; align-self: center; border-radius: 2px; background: #C9D1CC; }
+html[data-layout="v4"] .lx-how-legend li[data-count="right"]::before { background: #1F4A33; }
+html[data-layout="v4"] .lx-how-legend li[data-count="wrong"]::before { background: #B3261E; }
+html[data-layout="v4"] .lx-how-legend li[data-count="wronglyRefused"]::before { background: #E3B23C; }
+html[data-layout="v4"] .lx-how-legend li[data-count="rightBehaviour"]::before { background: #8FA79A; }
+html[data-layout="v4"] .lx-how-legend strong { flex: 0 0 22px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+html[data-layout="v4"] .lx-how-heldout { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--lx-line); font-size: 13.5px; line-height: 1.5; }
+html[data-layout="v4"] .lx-how-cost { margin: 10px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-how-decisions { margin: 0; padding: 0; list-style: none; }
+html[data-layout="v4"] .lx-how-decisions li > a { display: block; padding: 11px 0; border-top: 1px solid var(--lx-line); color: var(--lx-ink); text-decoration: none; }
+html[data-layout="v4"] .lx-how-decisions a:hover .lx-how-decision-title { text-decoration: underline; text-underline-offset: 3px; }
+html[data-layout="v4"] .lx-how-decision-title { display: block; font-size: 14.5px; font-weight: 600; line-height: 1.35; }
+html[data-layout="v4"] .lx-how-decision-cost { display: block; font-size: 13px; line-height: 1.4; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-how-all { margin: 0; padding: 12px 0; border-top: 1px solid var(--lx-line); font-size: 13.5px; font-weight: 600; }
+html[data-layout="v4"] .lx-how-all a { text-underline-offset: 3px; }
+/* Under the first screen: Release 13's parts, two columns, Spectral headings, thin rules. */
+html[data-layout="v4"] .lx-how-more { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 36px 56px; box-sizing: border-box; max-width: 1254px; padding: 40px 56px 0; border-top: 1px solid var(--lx-line); }
+html[data-layout="v4"] .lx-how-block { min-width: 0; margin: 0; scroll-margin-top: 16px; }
+html[data-layout="v4"] .lx-how-wide { grid-column: 1 / -1; }
+html[data-layout="v4"] .lx-how-block h2 { margin: 0 0 12px; font-family: var(--lx-serif); font-weight: 500; font-size: 24px; line-height: 1.2; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-how-lines { margin: 0; padding: 0; list-style: none; }
+html[data-layout="v4"] .lx-how-lines li { margin: 0 0 8px; font-size: 14.5px; line-height: 1.55; }
+html[data-layout="v4"] .lx-how-line { margin: 10px 0 0; font-size: 14.5px; line-height: 1.55; }
+html[data-layout="v4"] .lx-how-card { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 32px; margin: 0; }
+html[data-layout="v4"] .lx-how-card > div { padding: 12px 0; border-top: 1px solid var(--lx-line); }
+html[data-layout="v4"] .lx-how-card dt { margin: 0 0 4px; font-size: 14.5px; font-weight: 600; }
+html[data-layout="v4"] .lx-how-card dd { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--lx-ink); overflow-wrap: normal; word-break: normal; }
+html[data-layout="v4"] .lx-how-lane { margin: 0 0 8px; font-size: 13.5px; font-weight: 600; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-how-steps { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; padding: 0; list-style: none; }
+html[data-layout="v4"] .lx-how-step { flex: 1 1 0; min-width: 140px; box-sizing: border-box; padding: 9px 12px; border: 1px solid var(--lx-line); border-radius: 6px; background: #FFFFFF; font-size: 13.5px; line-height: 1.4; }
+html[data-layout="v4"] .lx-how-step[data-accent] { border: 1px solid var(--lx-ink); font-weight: 600; }
+html[data-layout="v4"] .lx-how-steps[data-flow="question"] .lx-how-step[data-accent] { border-color: var(--lx-green); background: var(--lx-green); color: #FFFFFF; }
+html[data-layout="v4"] .lx-how-fold { margin: 4px 0 12px; }
+html[data-layout="v4"] .lx-how-fold summary { display: list-item; padding: 8px 0; font-size: 14.5px; font-weight: 600; cursor: pointer; }
+html[data-layout="v4"] .lx-how-table-scroll { overflow-x: auto; max-width: 100%; }
+html[data-layout="v4"] .lx-how-table { width: 100%; border-collapse: collapse; margin: 6px 0 0; font-size: 13.5px; line-height: 1.45; }
+html[data-layout="v4"] .lx-how-table th, html[data-layout="v4"] .lx-how-table td { padding: 7px 12px 7px 0; border-bottom: 1px solid var(--lx-line); text-align: left; vertical-align: baseline; }
+html[data-layout="v4"] .lx-how-table thead th { font-weight: 600; color: var(--lx-muted); border-bottom-color: var(--lx-field); }
+html[data-layout="v4"] .lx-how-table tbody th { font-weight: 500; }
+html[data-layout="v4"] .lx-how-table .registry-champion th, html[data-layout="v4"] .lx-how-table .registry-champion td { font-weight: 600; background: var(--lx-panel); }
+html[data-layout="v4"] .lx-how-questions th { font-weight: 400; }
+html[data-layout="v4"] .lx-how-questions td { white-space: nowrap; color: var(--lx-muted); }
+/* Decisions: the groups, each decision a row of its title, its gain and its cost. */
+html[data-layout="v4"] .lx-dec { box-sizing: border-box; max-width: 1180px; padding: 40px 56px 0; }
+html[data-layout="v4"] .lx-dec-group { margin: 32px 0 0; }
+html[data-layout="v4"] .lx-dec-group h2 { margin: 0 0 6px; font-family: var(--lx-serif); font-weight: 500; font-size: 24px; line-height: 1.2; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-dec-list { margin: 0; padding: 0; list-style: none; }
+html[data-layout="v4"] .lx-dec-item { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 4fr) minmax(0, 4fr); gap: 4px 32px; margin: 0; padding: 16px 0; border-top: 1px solid var(--lx-line); scroll-margin-top: 16px; }
+html[data-layout="v4"] .lx-dec-item:target { background: var(--lx-panel); }
+html[data-layout="v4"] .lx-dec-item h3 { grid-column: 1; grid-row: 1 / span 2; margin: 0; font-family: var(--lx-sans); font-size: 16px; font-weight: 600; line-height: 1.4; overflow-wrap: normal; }
+html[data-layout="v4"] .lx-dec-gain, html[data-layout="v4"] .lx-dec-cost { margin: 0; font-size: 14.5px; line-height: 1.5; }
+html[data-layout="v4"] .lx-dec-gain { grid-column: 2; grid-row: 1; }
+html[data-layout="v4"] .lx-dec-cost { grid-column: 3; grid-row: 1; }
+html[data-layout="v4"] .lx-dec-gain strong, html[data-layout="v4"] .lx-dec-cost strong { display: block; font-size: 12.5px; font-weight: 600; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-dec-note { grid-column: 2 / -1; grid-row: 2; margin: 6px 0 0; font-size: 13px; line-height: 1.45; color: var(--lx-muted); }
+/* Narrower than the first screen's two columns: the panel goes under the stages, and every grid becomes one column. */
+@media (max-width: 960px) {
+  html[data-layout="v4"] .lx-how-first { flex-direction: column; }
+  html[data-layout="v4"] .lx-how-panel { flex: 0 0 auto; width: auto; border-left: 0; border-top: 1px solid var(--lx-line); }
+  html[data-layout="v4"] .lx-how-more, html[data-layout="v4"] .lx-how-card { grid-template-columns: minmax(0, 1fr); }
+  html[data-layout="v4"] .lx-dec-item { grid-template-columns: minmax(0, 1fr); }
+  html[data-layout="v4"] .lx-dec-item h3, html[data-layout="v4"] .lx-dec-gain, html[data-layout="v4"] .lx-dec-cost, html[data-layout="v4"] .lx-dec-note { grid-column: 1; grid-row: auto; }
+}
+@media (max-width: 560px) {
+  html[data-layout="v4"] .lx-how-flow { padding: 24px 16px; }
+  html[data-layout="v4"] .lx-how-panel { padding: 24px 16px; }
+  html[data-layout="v4"] .lx-how-more, html[data-layout="v4"] .lx-dec { padding: 24px 16px 0; }
+  html[data-layout="v4"] .lx-how-stage, html[data-layout="v4"] .lx-how-answer { flex-wrap: wrap; gap: 6px 12px; }
+  html[data-layout="v4"] .lx-how-name, html[data-layout="v4"] .lx-how-answer-label { flex: 1 1 auto; }
+  html[data-layout="v4"] .lx-how-body { flex: 1 1 100%; }
+  html[data-layout="v4"] .lx-how h1, html[data-layout="v4"] .lx-dec h1 { font-size: 28px; }
+}
 
 /* == v4: how it works and decisions end == */
 
