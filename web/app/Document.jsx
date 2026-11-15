@@ -90,8 +90,9 @@ export function FindIcon() {
 }
 
 /**
- * The V4 header (V1Home to V5How): the wordmark, the field that finds a text (a plain form to the search page, which opens
- * the text itself when the words name one: no script needed), the menu with the current page marked, the languages.
+ * The V4 header (V1Home to V5How): the wordmark, the field that finds a text (the header's script takes the words to the
+ * search page after "#", which opens the text itself when the words name one), the menu with the current page marked, the
+ * languages.
  */
 export function V4Header({ state, locale, localePage = null }) {
   const site = liveChrome().site;
@@ -101,10 +102,11 @@ export function V4Header({ state, locale, localePage = null }) {
       <a className="site-brand lx-wordmark" href={localeHome(CHROME_LOCALE)}>
         <span className="site-name">{site.brand}</span>
       </a>
-      <form className="lx-find" role="search" action={livePath('search.html')} method="get" data-header-find="">
+      {/* No action and no name (R109): the header's script takes the words to the search page after "#". */}
+      <form className="lx-find" role="search" data-header-find="">
         <FindIcon />
         <label className="lx-visually-hidden" htmlFor="lx-find-q">{site.findLabel}</label>
-        <input id="lx-find-q" name="q" type="search" placeholder={site.findPlaceholder} autoComplete="off" />
+        <input id="lx-find-q" type="search" placeholder={site.findPlaceholder} autoComplete="off" />
         <button className="lx-visually-hidden" type="submit">{site.findSubmit}</button>
       </form>
       <nav aria-label={site.menu} className="site-nav lx-nav">
@@ -419,6 +421,7 @@ export function Document({
       {banner === 'live' && layout === 'v4' ? (
         <body className="lx-body">
           <V4Header state={state} locale={locale} localePage={localePage} />
+          <script src={livePath('client-live-header.js')} defer />
           <StalenessBannerSlot facts={freshness} />
           <div className={dock ? 'lx-frame lx-frame-docked' : 'lx-frame'}>
             <div className="lx-scroll" data-lx-scroll="">
