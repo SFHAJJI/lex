@@ -130,6 +130,9 @@ ${tokenCss()}`, "utf8");
     await mkdir(new URL(path.slice(0, path.lastIndexOf("/") + 1), destination), { recursive: true });
     await writeFile(new URL(path, destination), bytes);
   }
+  // The API's OpenAPI 3.1 description, generated from the same contracts as the Developers page (`openapi.mjs`).
+  const { OPENAPI_FILE, openApiDocument } = await import("./openapi.mjs");
+  await writeFile(new URL(OPENAPI_FILE, destination), `${JSON.stringify(openApiDocument(developers), null, 2)}\n`, "utf8");
   await buildPages(destination, { card, developers, locale: "en", buildTag, examples });
   // The card as JSON at its stable route, for machines (36 s6): the same card the page renders.
   const { CARD_ROUTE } = await import("./evaluation-card.mjs");

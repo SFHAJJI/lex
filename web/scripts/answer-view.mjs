@@ -148,3 +148,29 @@ export function dateFor(date, locale) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(String(date));
   return match !== null && locale === 'fr' ? `${match[3]}/${match[2]}/${match[1]}` : String(date);
 }
+
+/** A planner's identifier as a reader reads it: "gpt-4.1-mini · prompt a625e51e" for "azure-openai/gpt-4.1-mini/prompt-a625e51e3b58". */
+export function plannerName(plannerId) {
+  const match = /^[^/]+\/([^/]+)\/prompt-([0-9a-f]{8})/u.exec(String(plannerId ?? ''));
+  return match === null ? String(plannerId ?? '') : `${match[1]} · prompt ${match[2]}`;
+}
+
+/** A build's commit as an envelope names it (`context.commits.serving_runtime_source_commit`): forty hex digits. */
+const COMMIT = /^[0-9a-f]{40}$/u;
+
+/**
+ * The model registry's version that evaluated the very build and planner an answer ran on (the owner's order of 2026-11-15,
+ * MLflow visible in the app). A planner alone names none: versions of different builds and gate results share one (the
+ * review of #1060). So only the versions tagged with both the answer's planner (its trace's `planner_id`) and the build its
+ * envelope names (`servingCommit`); among them the champion, else the latest whose gates passed, else the latest. Null when
+ * either is not named or no version evaluated both: a build is registered when it is put live, after its pages are built,
+ * so the build serving the answer may not be in this page's copy of the registry, and the work then names no version.
+ */
+export function registryVersionFor(registry, plannerId, servingCommit) {
+  if (typeof plannerId !== 'string' || plannerId.length === 0 || typeof servingCommit !== 'string' || !COMMIT.test(servingCommit)) return null;
+  const same = (registry?.versions ?? []).filter((version) => version.tags?.planner_id === plannerId && version.tags?.serving_commit === servingCommit);
+  if (same.length === 0) return null;
+  return same.find((version) => (version.aliases ?? []).includes('champion'))
+    ?? same.filter((version) => version.tags?.gates === 'passed').at(-1)
+    ?? same.at(-1);
+}

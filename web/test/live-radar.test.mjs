@@ -14,6 +14,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { FailureFrame, LiveRadar, RadarAnswerView, RefusalCard, renderLiveRadarPage } from "../.react-build/app.mjs";
 import { LIVE_RADAR_IDLE, createRadarSession, loadLiveRadar, radarOutcome, radarParameters } from "../scripts/live-radar.mjs";
+import { actNameOf } from "../scripts/act-names.mjs";
 
 /** A refusal's card as the screen shows it: one about this service (R60) inside the failure panel, under its line; any other alone. */
 const asShown = (outcome, card) => renderToStaticMarkup(h(FailureFrame, { outcome }, h("lex-card"))).replace("<lex-card></lex-card>", card);
@@ -98,6 +99,34 @@ test("a two-state radar lists the later state as compared with its baseline", ()
   const [, later] = answer.changes;
   assert.ok(markup.includes(`wording changed from the state of 2024-02-01 (baseline <a href="/en${later.baseline.permalink}"><code>${later.baseline.permalink}</code></a>): 1 changed, 1 added, 1 removed, 47 unchanged`),
     "the baseline a row was compared with is named by its permalink");
+});
+
+test("the rows are said in words: each act by its name and linked to its page, the rows counted, a compared row's comparison linked", () => {
+  const row = answers.sampled.filter((sample) => sample.operation === "changes_in_period")[1];
+  const envelope = structuredClone(envelopeOf("a window holding"));
+  envelope.result.value = withDigests(row.answer);
+  const outcome = radarOutcome({ state: "success", envelope });
+  assert.equal(outcome.state, "success", outcome.sentence);
+  const markup = view(outcome);
+  const [first, later] = outcome.view.rows;
+  assert.equal(first.workKey, "loi-1991-08-10-n3");
+  assert.ok(markup.includes(`<a href="/en/lu-legilux/${first.workKey}" data-act-name="${first.workKey}">Law of 1991-08-10</a>`), "the act is named by its kind and date, and linked to its page");
+  assert.ok(markup.includes("<p data-radar-tally=\"\">In this list, wording changed: 1; same wording: 0; first version held, so nothing to compare: 1; not compared for another reason: 0.</p>"),
+    "the rows are counted from the rows shown");
+  const compare = `/en/compare.html?work=%2Flu-legilux%2F${later.workKey}&amp;from=${later.baseline.applicabilityDate}&amp;to=${later.state.applicabilityDate}&amp;language=${later.state.language}`;
+  assert.ok(markup.includes(`<a href="${compare}" data-compare-link="">Compare the two versions</a>`), "the compared row links its comparison");
+  assert.equal([...markup.matchAll(/data-compare-link/g)].length, 1, "a row that is not compared links none");
+  assert.ok(markup.includes(", French, from ") && !markup.includes(", fra, "), "the language is said in words");
+  assert.ok(markup.includes("<p data-caveat=\"\">A version row does not by itself assert a wording change, legal effect, or entry into force.</p>"));
+
+  assert.equal(actNameOf("loi-2025-10-29-a477", "fr"), "Loi du 29/10/2025");
+  assert.equal(actNameOf("rgd-2016-09-01-n3", "fr"), "Règlement grand-ducal du 01/09/2016");
+  assert.equal(actNameOf("rgd-2016-09-01-n3", "en"), "Grand-ducal regulation of 2016-09-01");
+  assert.equal(actNameOf("code-procedure_civile", "fr"), "Nouveau Code de procédure civile");
+  assert.equal(actNameOf("code-travail", "en"), "Labour Code");
+  assert.equal(actNameOf("loi-2025-13-45-a1", "en"), null, "no date, no name");
+  assert.equal(actNameOf("ami-2025-10-29-a1", "en"), null, "a kind this table does not name");
+  assert.equal(actNameOf("code-unknown", "en"), null);
 });
 
 test("an uncompared row names the states it could not choose between, or the baseline it would not compare with", () => {

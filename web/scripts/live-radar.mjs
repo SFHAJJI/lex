@@ -36,6 +36,26 @@ export const LIVE_RADAR_REFUSAL_SENTENCES = Object.freeze({
 });
 
 export const LIVE_RADAR_IDLE = liveChrome().radar.idle;
+
+/**
+ * The caveat the API sends with every radar, in its own words (`V3CorpusMount.ChangesInPeriodCaveat`): the page says it in
+ * its own language (`radar.caveat`) when the answer's is this one, and says any other as the API wrote it, marked English.
+ */
+export const RADAR_PLATFORM_CAVEAT = "a version row does not by itself assert a wording change, legal effect, or entry into force";
+
+/**
+ * The rows in words (the owner's order of 2026-11-15, "Changes made readable"): how many of the rows shown changed their
+ * wording, kept it, are the first version held (nothing to compare), or are not compared for another reason.
+ */
+export function radarTally(rows) {
+  const tally = { changed: 0, unchanged: 0, first: 0, other: 0 };
+  for (const row of rows) {
+    if (row.reason === null) tally[row.wordingChanged ? "changed" : "unchanged"] += 1;
+    else if (row.reason === "first_held_state") tally.first += 1;
+    else tally.other += 1;
+  }
+  return tally;
+}
 export const LIVE_RADAR_LOADING = liveChrome().common.loading;
 
 const UNEXPECTED = "The change radar was refused with {code}.";

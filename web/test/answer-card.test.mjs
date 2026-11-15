@@ -132,6 +132,16 @@ test('the work, closed: four boxes, the model said once, the time, the cost and 
   assert.ok(!named.includes('Articles trouvés'));
   // One line under the answer, the notices folded behind it.
   assert.match(markup, /<details class="assistant-notices" data-assistant-notices=""><summary>Phase d’essai, non examinée par un avocat\. Pas un conseil juridique\.<\/summary><p class="assistant-notice">/);
+  // The registry's version is named only for the very build and planner that answered (the review of #1060).
+  const { REGISTRY_RECORD } = await import('../scripts/registry-record.mjs');
+  const champion = REGISTRY_RECORD.versions.find((version) => version.aliases.includes('champion'));
+  const ranOn = { ...dossier, trace: { ...dossier.trace, planner_id: champion.tags.planner_id } };
+  const registered = renderToStaticMarkup(h(AssistantPanel, { locale: 'fr', dossier: ranOn, phase: 'complete', work, servingCommit: champion.tags.serving_commit }));
+  assert.ok(registered.includes(`data-registry-version="${champion.version}">Registre MLflow : ${REGISTRY_RECORD.model}, version ${champion.version}</a>`));
+  for (const servingCommit of [null, 'f'.repeat(40)]) {
+    const unregistered = renderToStaticMarkup(h(AssistantPanel, { locale: 'fr', dossier: ranOn, phase: 'complete', work, servingCommit }));
+    assert.ok(unregistered.includes(`data-registry-version="">Registre MLflow : ${REGISTRY_RECORD.model} (ce déploiement est enregistré à sa mise en service)</a>`), `no version for ${servingCommit}`);
+  }
 });
 
 test('the verdict word, the act a quotation is from and the law page at one article', () => {

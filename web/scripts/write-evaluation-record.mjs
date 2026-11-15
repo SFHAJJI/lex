@@ -39,6 +39,8 @@ function runOf(dir) {
     wrongBehaviour: metric('outcome.wrong_behaviour'),
     quotes: metric('quotes'),
     quoteVerifiedRate: metric('quote_verified_rate'),
+    replaySameVerdict: metric('replay_same_verdict_rate'),
+    replaySamePlan: metric('replay_same_plan_rate'),
     p50: metric('latency_p50_s'),
     p95: metric('latency_p95_s'),
     costEur: metric('cost_eur_per_question_estimate'),
@@ -54,12 +56,13 @@ function questionsOf(dir, casesFile) {
   return readFileSync(join(dir, 'results.jsonl'), 'utf8').split('\n').filter((line) => line.trim() !== '').map((line) => JSON.parse(line)).map((result) => {
     const question = cases.get(result.id);
     if (typeof question !== 'string') throw new Error(`${dir}: ${result.id} is in no case of ${casesFile}`);
-    return { id: result.id, question, language: languageOf(question), outcome: result.outcome };
+    return { id: result.id, question, language: languageOf(question), verdict: result.verdict, outcome: result.outcome };
   });
 }
 
 const casesFile = process.argv[4] ?? 'C:/lex-v3/lex-eval/cases/lex-assistant-v2.jsonl';
-const record = { dev: { ...runOf(devDir), questions: questionsOf(devDir, casesFile) }, heldout: runOf(heldoutDir) };
+const heldoutCases = process.argv[5] ?? 'C:/lex-v3/lex-eval-heldout/heldout-v1.jsonl';
+const record = { dev: { ...runOf(devDir), questions: questionsOf(devDir, casesFile) }, heldout: { ...runOf(heldoutDir), questions: questionsOf(heldoutDir, heldoutCases) } };
 const target = fileURLToPath(new URL('./evaluation-record.mjs', import.meta.url));
 writeFileSync(target, [
   '// Written by scripts/write-evaluation-record.mjs from two lex-eval runs\' run.json (the test questions\', the held-out',

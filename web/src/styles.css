@@ -3366,3 +3366,54 @@ main:has([data-law-header]) {
     color: #111713;
   }
 }
+
+/* ---- How it works (the owner's order of 2026-11-15): the system card, the lanes, the API example, the MLflow registry. ---- */
+:root .system-card {
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+}
+
+:root .system-card .decision-card h3 {
+  font-size: 0.95rem;
+}
+
+.lane-label {
+  margin: 0.4rem 0 0.2rem;
+  color: #5c665f;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.api-call {
+  margin: 0.25rem 0 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 8px;
+  background: #0f1a14;
+  color: #d8e6dc;
+  font: 0.8rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.registry-table td,
+.registry-table th {
+  white-space: nowrap;
+}
+
+:root .registry-table .registry-champion {
+  background: #d8eddf;
+  font-weight: 600;
+}
+
+.evidence-block {
+  scroll-margin-top: 1rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .lane-label {
+    color: #b8c6bc;
+  }
+
+  :root .registry-table .registry-champion {
+    background: #2f5a3f;
+  }
+}

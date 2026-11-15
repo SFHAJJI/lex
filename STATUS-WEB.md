@@ -1,8 +1,50 @@
 # Lex V3 status: the web lane
 
-Updated 2026-11-14. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
+Updated 2026-11-15. The web lane's progress, split out of STATUS.md (which keeps the heads, the owner's open
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
+
+## How it works: the offer's three proofs on the site; Changes made readable (sole driver, 2026-11-15)
+
+`web/how-it-works`, the owner's order of 2026-11-15 (the Foyer offer asks to document AI/data APIs, to supervise and
+improve AI systems, and to keep a model registry such as MLflow; the owner said yes to a nightly check at about 3 EUR a
+month, to linking the two public repositories, and to "make mlflow visible somewhere in the app"). No change to retrieval,
+the planner, the validator or any gate; the freeze of 2026-11-14 is lifted for this one release on that order.
+- **The MLflow registry**: lex-eval registers every evaluation as a version of the model `lex-assistant`, tagged with the
+  planner id, the serving commit, the snapshot and whether the gates passed; the alias `champion` moves only when they pass.
+  Release 12 was registered twice on 2026-11-15 against the live site: version 6 failed its gates (`lu-masked-email`, the
+  planner timed out once: `assistant_v3_unavailable`), version 7 (`20261115-r12-live-register-2`) passed them (17 right
+  articles of 56, 0 wrong, 25 not found, 5 refused as advice, 9 right behaviours, quotations 1.000, the same verdict on
+  replay 94.6 %, the same plan 66.7 %, p50 1.44 s, p95 3.24 s) and is the champion. `promote-with-eval-gate.ps1` now passes
+  `--register` on every promotion. `python -m lex_eval.export_registry` exports the registry, and
+  `scripts/write-registry-record.mjs` copies the export into `registry-record.mjs`: never typed by hand.
+- **How it works** (`/{lang}/evidence.html`, the menu's last entry, replacing Preuves): a system card (use, not for, the
+  model, oversight, quality, cost), the architecture (a question's path, a release's path), one answer's trace, the API
+  (every operation, a curl call, the OpenAPI file), the registry table (every version, the champion marked, its tags,
+  links to the code), supervision (the outside monitor, the nightly check, the limits), the improvement loop with dates,
+  quality, coverage, incidents, safeguards, limits and how it was built. Every figure is a record's.
+- **Each answer names the MLflow version of its very build**: "Show the work" says the planner (`gpt-4.1-mini · prompt
+  a625e51e`) and links "MLflow registry: lex-assistant, version 7" to the registry table, only when the registry holds a
+  version tagged with both the answer's planner and the build its envelope names (`context.commits`); else it links the
+  registry with no version ("this build is registered when it is put live"). The review of #1060 (Codex, should-fix,
+  reproduced): versions 1 to 4 share one planner over three builds, so a planner alone named a version the answer may not
+  have run on. A build is registered at its promotion, after its pages are built, so a release's own answers name no
+  version until the next build carries the record; the registry table and `mlflow ui` show it.
+- **The API documented**: `/openapi.json`, OpenAPI 3.1 generated at build time from the operation registry and the
+  published schemas (`scripts/openapi.mjs`; the test compares the served file with the generator).
+- **The nightly check** (lex-eval `.github/workflows/nightly.yml`, 03:17 UTC): the 56 questions and the 16 accuracy
+  questions against the live site with the release gates; a failure opens an issue. The two repositories are public and
+  linked from the page.
+- **The menu**: Ask, Texts, Changes, Decisions, How it works (FR: Demander, Textes, Modifications, Décisions, Comment ça
+  marche).
+- **Changes made readable**: each row names its act in words from its key (`act-names.mjs`: "Loi du 29/10/2025",
+  "Code du travail"; any other key is shown as it is) and links its page; the language in words; the rows counted above the
+  list (wording changed, same wording, first version held, not compared for another reason); each compared row links the
+  comparison of its two versions; the API's caveat in French on French pages (`RADAR_PLATFORM_CAVEAT`; another caveat is
+  still shown as the API wrote it, marked English). No extra request: on the live site the last twelve months list 197
+  rows of 190 acts, and asking 190 titles would pass the 60 requests a minute an address may send.
+- Driver decisions (reversible): the act's date is written as the page writes dates, never with a month's name (the
+  explicit-date rule, `live-a11y.test.mjs`); act names live under `common.actNames`.
 
 ## Release 12 is live; the code is frozen until the interview (sole driver, 2026-11-14)
 

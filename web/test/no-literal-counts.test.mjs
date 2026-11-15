@@ -86,6 +86,20 @@ const NUMBERS_ALLOWED = Object.freeze({
   // Decisions: the incident behind "not found rather than a guess", named by the two articles and the dates it was seen and
   // fixed (a citation and two dates, not counts; every count on the page is a run's, filled in its placeholder).
   "decisions.cards.notFound.note": ["70", "44", "13", "11", "2026", "14", "11", "2026"],
+  // How Lex works (the owner's order of 2026-11-15): the OpenAPI version, the model's monthly cap in the code (a limit, not a
+  // count), the processor's retention period, and the dated incidents and improvements, named by their dates, articles and
+  // releases. Every count on the page is a run's, the registry's or the coverage answer's, filled in its placeholder.
+  "evidence.apiDocumented": ["3", "1"],
+  "evidence.apiOpenApi": ["3", "1"],
+  "evidence.card.cost.text": ["20"],
+  "evidence.supLimits": ["20"],
+  "evidence.safeguards.mask": ["30"],
+  "evidence.improvement.first": ["11", "11", "13", "11", "1", "5"],
+  "evidence.improvement.incident": ["13", "11", "70", "44", "14", "11"],
+  "evidence.improvement.gate": ["14", "11", "57", "15", "11"],
+  "evidence.incidents.art70": ["13", "11", "2026", "70", "44", "14", "11"],
+  "evidence.incidents.release6": ["14", "11", "2026", "6"],
+  "evidence.incidents.release11": ["14", "11", "2026", "11", "57", "37", "12"],
 });
 
 /** The English table's own entries that differ from the French table's (the example questions, in English). */
