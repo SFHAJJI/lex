@@ -218,8 +218,8 @@ function planWords(trace, copy, locale) {
  * happened for this question and one grey line saying whether the model or code did it; under them, the time it took, the
  * estimated cost of a question (the latest test run's), and the raw plan: the plan's sentences and the trace (R45(c), R32).
  */
-function TheWork({ view, copy, locale, work, children = null }) {
-  const registry = registryVersionFor(REGISTRY_RECORD, view.trace.planner_id);
+function TheWork({ view, copy, locale, work, servingCommit = null, children = null }) {
+  const registry = registryVersionFor(REGISTRY_RECORD, view.trace.planner_id, servingCommit);
   const quotes = view.parts.flatMap((part) => part.blocks.filter((block) => block.kind === 'quote'));
   const first = quotes[0] ?? null;
   const document = first === null ? copy.documentNone : fill(copy.documentLine, { date: dateFor(first.from ?? '', locale) });
@@ -263,11 +263,16 @@ function TheWork({ view, copy, locale, work, children = null }) {
         {work?.seconds === undefined || work?.seconds === null ? null : <span data-work-time="">{fill(copy.workTime, { seconds: decimal(work.seconds, locale, 1) })}</span>}
         <span data-work-cost="">{fill(copy.workCost, { cost: decimal(EVALUATION_RECORD.dev.costEur, locale, 3) })}</span>
       </p>
-      {/* The planner this answer ran on, and its version in the MLflow model registry (the owner's order of 2026-11-15). */}
+      {/* The planner this answer ran on, and the MLflow model registry's version of the build that answered (the owner's order
+          of 2026-11-15): named only when the registry holds that very build and planner (the review of #1060). */}
       {typeof view.trace.planner_id === 'string' ? (
         <p className="work-foot" data-work-planner={view.trace.planner_id}>
           <span>{fill(copy.workPlanner, { planner: plannerName(view.trace.planner_id) })}</span>
-          {registry === null ? null : (
+          {registry === null ? (
+            <a href={`/${locale}/evidence.html#registry`} data-registry-version="">
+              {fill(copy.workRegistryNone, { model: REGISTRY_RECORD.model })}
+            </a>
+          ) : (
             <a href={`/${locale}/evidence.html#registry`} data-registry-version={registry.version}>
               {fill(copy.workRegistry, { model: REGISTRY_RECORD.model, version: registry.version })}
             </a>
@@ -308,9 +313,9 @@ function searchHref(view, question, locale) {
  * notice, with the preview line while the people's reviews are not done, and the processor sentence (the owner's order of
  * 2026-10-28; shown only where the panel is, which is only when the assistant is switched on). `phase` is 'idle', 'verdict'
  * or 'complete', and says which announcement the polite region holds. Nothing here asks the server; the page sends
- * `askRequest(question)` and hands back what it learnt (`question`, `work`).
+ * `askRequest(question)` and hands back what it learnt (`question`, `work`, `servingCommit`: the build that answered).
  */
-export function AssistantPanel({ locale, dossier = null, phase = 'idle', chips = [], preview = true, message = null, prefill = null, titles = {}, question = null, work = null, onSubmit = () => {}, onRemoveChip = () => {} }) {
+export function AssistantPanel({ locale, dossier = null, phase = 'idle', chips = [], preview = true, message = null, prefill = null, titles = {}, question = null, work = null, servingCommit = null, onSubmit = () => {}, onRemoveChip = () => {} }) {
   const copy = panelCopy(locale);
   const field = useRef(null);
   // A question the page's address asks (`#q=…`) is shown in the field it is asked from.
@@ -373,7 +378,7 @@ export function AssistantPanel({ locale, dossier = null, phase = 'idle', chips =
           ))}
           {search === null ? null : <p className="answer-links"><a href={search} data-action="keyword-search">{copy.keywordSearch}</a></p>}
           <hr className="answer-rule" />
-          <TheWork view={view} copy={copy} locale={locale} work={work}>
+          <TheWork view={view} copy={copy} locale={locale} work={work} servingCommit={servingCommit}>
             {pointed ? view.parts.map((part) => <Part part={part} locale={locale} copy={copy} titles={titles} question={question} first={false} key={part.partId} />) : null}
             {/* The answer's notices (R33, R50), in one line in the work: the model's part is what the work shows; the preview
                 notice, word for word the panel's preview line, is said once, by the panel, when it shows that line. */}
@@ -447,6 +452,7 @@ export function LiveAssistant({ locale, fetchImpl = (...args) => globalThis.fetc
   const [message, setMessage] = useState(null);
   const [asked, setAsked] = useState(null);
   const [work, setWork] = useState(null);
+  const [servingCommit, setServingCommit] = useState(null);
   const submit = async (question) => {
     if (typeof question !== 'string' || question.trim().length === 0) return;
     setPhase('idle');
@@ -470,6 +476,7 @@ export function LiveAssistant({ locale, fetchImpl = (...args) => globalThis.fetc
 
     setAsked(question);
     setDossier(outcome.dossier);
+    setServingCommit(outcome.servingCommit ?? null);
     setTitles({});
     setPhase('verdict');
     setTimeout(() => setPhase('complete'), 0);
@@ -486,5 +493,5 @@ export function LiveAssistant({ locale, fetchImpl = (...args) => globalThis.fetc
     setPrefill(fragment);
     submit(fragment);
   }, []);
-  return <AssistantPanel locale={locale} dossier={dossier} phase={phase} message={message} prefill={prefill} titles={titles} question={asked} work={work} onSubmit={submit} />;
+  return <AssistantPanel locale={locale} dossier={dossier} phase={phase} message={message} prefill={prefill} titles={titles} question={asked} work={work} servingCommit={servingCommit} onSubmit={submit} />;
 }

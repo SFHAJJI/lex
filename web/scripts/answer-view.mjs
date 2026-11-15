@@ -155,12 +155,22 @@ export function plannerName(plannerId) {
   return match === null ? String(plannerId ?? '') : `${match[1]} · prompt ${match[2]}`;
 }
 
+/** A build's commit as an envelope names it (`context.commits.serving_runtime_source_commit`): forty hex digits. */
+const COMMIT = /^[0-9a-f]{40}$/u;
+
 /**
- * The model registry's version an answer ran on (the owner's order of 2026-11-15, MLflow visible in the app): among the
- * registered versions whose planner is the answer's, the champion when it is one of them, else the latest; null for none.
+ * The model registry's version that evaluated the very build and planner an answer ran on (the owner's order of 2026-11-15,
+ * MLflow visible in the app). A planner alone names none: versions of different builds and gate results share one (the
+ * review of #1060). So only the versions tagged with both the answer's planner (its trace's `planner_id`) and the build its
+ * envelope names (`servingCommit`); among them the champion, else the latest whose gates passed, else the latest. Null when
+ * either is not named or no version evaluated both: a build is registered when it is put live, after its pages are built,
+ * so the build serving the answer may not be in this page's copy of the registry, and the work then names no version.
  */
-export function registryVersionFor(registry, plannerId) {
-  const same = (registry?.versions ?? []).filter((version) => version.tags?.planner_id === plannerId);
+export function registryVersionFor(registry, plannerId, servingCommit) {
+  if (typeof plannerId !== 'string' || plannerId.length === 0 || typeof servingCommit !== 'string' || !COMMIT.test(servingCommit)) return null;
+  const same = (registry?.versions ?? []).filter((version) => version.tags?.planner_id === plannerId && version.tags?.serving_commit === servingCommit);
   if (same.length === 0) return null;
-  return same.find((version) => (version.aliases ?? []).includes('champion')) ?? same.at(-1);
+  return same.find((version) => (version.aliases ?? []).includes('champion'))
+    ?? same.filter((version) => version.tags?.gates === 'passed').at(-1)
+    ?? same.at(-1);
 }

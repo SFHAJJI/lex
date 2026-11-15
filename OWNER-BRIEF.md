@@ -12,7 +12,8 @@ STATUS-WEB.md and STATUS-DATA.md; the acceptance list is LAUNCH-CONTRACT.md.
 - What Release 13 adds:
   - "How it works" replaces "Preuves" in the menu: what Lex is for and not for, how a question travels, the API, the
     MLflow model registry, the nightly check, how it improved, quality, limits, and links to the two public repositories.
-  - Each answer's "Show the work" names the model version that planned it and links to the registry.
+  - Each answer's "Show the work" names the model that planned it and links to the registry. It names the registry's
+    version number only when that exact build is registered; a build registers itself when it goes live.
   - The API is described in a standard file anyone can load: law.soufien.lu/openapi.json.
   - The menu: Ask, Texts, Changes, Decisions, How it works.
   - The Changes page names each law in words ("Loi du 29/10/2025"), counts the rows, links "Compare the two versions",

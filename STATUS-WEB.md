@@ -23,8 +23,13 @@ the planner, the validator or any gate; the freeze of 2026-11-14 is lifted for t
   (every operation, a curl call, the OpenAPI file), the registry table (every version, the champion marked, its tags,
   links to the code), supervision (the outside monitor, the nightly check, the limits), the improvement loop with dates,
   quality, coverage, incidents, safeguards, limits and how it was built. Every figure is a record's.
-- **Each answer names its MLflow version**: "Show the work" says the planner (`gpt-4.1-mini · prompt a625e51e`) and links
-  "MLflow registry: lex-assistant, version 7" to the registry table.
+- **Each answer names the MLflow version of its very build**: "Show the work" says the planner (`gpt-4.1-mini · prompt
+  a625e51e`) and links "MLflow registry: lex-assistant, version 7" to the registry table, only when the registry holds a
+  version tagged with both the answer's planner and the build its envelope names (`context.commits`); else it links the
+  registry with no version ("this build is registered when it is put live"). The review of #1060 (Codex, should-fix,
+  reproduced): versions 1 to 4 share one planner over three builds, so a planner alone named a version the answer may not
+  have run on. A build is registered at its promotion, after its pages are built, so a release's own answers name no
+  version until the next build carries the record; the registry table and `mlflow ui` show it.
 - **The API documented**: `/openapi.json`, OpenAPI 3.1 generated at build time from the operation registry and the
   published schemas (`scripts/openapi.mjs`; the test compares the served file with the generator).
 - **The nightly check** (lex-eval `.github/workflows/nightly.yml`, 03:17 UTC): the 56 questions and the 16 accuracy

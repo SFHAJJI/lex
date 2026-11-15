@@ -118,6 +118,8 @@ export const ASSISTANT_PANEL_COPY = Object.freeze({
     rawPlan: 'Raw plan',
     workPlanner: 'Planner: {planner}',
     workRegistry: 'MLflow registry: {model}, version {version}',
+    // No version of the build that answered is in this page's copy of the registry: it is registered when it is put live.
+    workRegistryNone: 'MLflow registry: {model} (this build is registered when it is put live)',
   }),
   fr: Object.freeze({
     heading: 'Assistant',
@@ -194,6 +196,7 @@ export const ASSISTANT_PANEL_COPY = Object.freeze({
     rawPlan: 'Plan brut',
     workPlanner: 'Planificateur : {planner}',
     workRegistry: 'Registre MLflow : {model}, version {version}',
+    workRegistryNone: 'Registre MLflow : {model} (ce déploiement est enregistré à sa mise en service)',
   }),
 });
 
@@ -422,9 +425,13 @@ export function askRequest(question) {
 export function askOutcome(envelope, locale) {
   const copy = panelCopy(locale);
   const value = envelope?.result?.value;
-  if (envelope?.result?.object_type === 'answer_dossier' && value?.schema === DOSSIER_SCHEMA) return { dossier: value };
+  // The build that answered, as the envelope names it, so the work can name the registry's version of that very build
+  // (`registryVersionFor`; the review of #1060); null when it names none.
+  const commit = envelope?.context?.commits?.serving_runtime_source_commit;
+  const servingCommit = typeof commit === 'string' ? commit : null;
+  if (envelope?.result?.object_type === 'answer_dossier' && value?.schema === DOSSIER_SCHEMA) return { dossier: value, servingCommit };
   const payload = envelope?.refusal?.helpful_payload;
-  if (envelope?.refusal?.code === 'advice_boundary' && payload?.answer_dossier?.schema === DOSSIER_SCHEMA) return { dossier: payload.answer_dossier };
+  if (envelope?.refusal?.code === 'advice_boundary' && payload?.answer_dossier?.schema === DOSSIER_SCHEMA) return { dossier: payload.answer_dossier, servingCommit };
   if (envelope?.refusal?.code === 'rate_limited') return { dossier: null, sentence: copy.rateLimited };
   if (value?.presentation_result === 'localization_unavailable' && typeof value?.sentences?.[locale] === 'string') {
     return { dossier: null, sentence: value.sentences[locale] };

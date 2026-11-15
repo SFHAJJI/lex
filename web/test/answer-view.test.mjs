@@ -114,13 +114,32 @@ test('How it works shows the MLflow registry as MLflow holds it, the stability, 
   for (const href of Object.values(PUBLIC_LINKS)) assert.ok(page.includes(`href="${href}" rel="external"`), href);
 });
 
-test('an answer names its planner and the MLflow registry version it ran on, the champion first', async () => {
+test('an answer names the MLflow registry version of its very build and planner, and none when the registry lacks that build', async () => {
   const { REGISTRY_RECORD } = await import('../scripts/registry-record.mjs');
   const { plannerName, registryVersionFor } = await import('../scripts/answer-view.mjs');
+  const { askOutcome } = await import('../scripts/assistant-panel.mjs');
   assert.equal(plannerName('azure-openai/gpt-4.1-mini/prompt-a625e51e3b58'), 'gpt-4.1-mini · prompt a625e51e');
   const champion = REGISTRY_RECORD.versions.find((version) => version.aliases.includes('champion'));
-  assert.equal(registryVersionFor(REGISTRY_RECORD, champion.tags.planner_id).version, champion.version);
-  assert.equal(registryVersionFor(REGISTRY_RECORD, 'azure-openai/gpt-4.1-mini/prompt-00000000'), null);
-  const shared = REGISTRY_RECORD.versions.filter((version) => version.tags.planner_id === REGISTRY_RECORD.versions[0].tags.planner_id);
-  if (!shared.some((version) => version.aliases.includes('champion'))) assert.equal(registryVersionFor(REGISTRY_RECORD, shared[0].tags.planner_id).version, shared.at(-1).version, 'else the latest');
+  assert.equal(registryVersionFor(REGISTRY_RECORD, champion.tags.planner_id, champion.tags.serving_commit).version, champion.version);
+  // The review of #1060: a planner alone is shared by versions of different builds and gate results, so it names none.
+  const first = REGISTRY_RECORD.versions[0];
+  const sharing = REGISTRY_RECORD.versions.filter((version) => version.tags.planner_id === first.tags.planner_id);
+  assert.ok(new Set(sharing.map((version) => version.tags.serving_commit)).size > 1, 'the record holds one planner over several builds');
+  assert.equal(registryVersionFor(REGISTRY_RECORD, first.tags.planner_id), null, 'no build named, no version');
+  assert.equal(registryVersionFor(REGISTRY_RECORD, first.tags.planner_id, 'f'.repeat(40)), null, 'a build the registry does not hold');
+  assert.equal(registryVersionFor(REGISTRY_RECORD, 'azure-openai/gpt-4.1-mini/prompt-00000000', champion.tags.serving_commit), null, 'a planner it does not hold');
+  assert.equal(registryVersionFor(REGISTRY_RECORD, first.tags.planner_id, first.tags.serving_commit.slice(0, 8)), null, 'a short commit names no build');
+  for (const version of REGISTRY_RECORD.versions) {
+    const named = registryVersionFor(REGISTRY_RECORD, version.tags.planner_id, version.tags.serving_commit);
+    assert.equal(named.tags.planner_id, version.tags.planner_id);
+    assert.equal(named.tags.serving_commit, version.tags.serving_commit, `version ${version.version}: the version named evaluated the same build`);
+  }
+  // One build evaluated twice, its gates failing once and passing once: the passing one (here the champion) is named.
+  const twice = REGISTRY_RECORD.versions.filter((version) => version.tags.serving_commit === champion.tags.serving_commit && version.tags.planner_id === champion.tags.planner_id);
+  if (twice.length > 1) assert.equal(registryVersionFor(REGISTRY_RECORD, champion.tags.planner_id, champion.tags.serving_commit).tags.gates, 'passed');
+  // The build is read from the envelope that carries the answer.
+  const dossier = { schema: 'lex-v3-answer-dossier/1' };
+  const commit = champion.tags.serving_commit;
+  assert.equal(askOutcome({ context: { commits: { serving_runtime_source_commit: commit } }, result: { object_type: 'answer_dossier', value: dossier } }, 'en').servingCommit, commit);
+  assert.equal(askOutcome({ context: {}, result: { object_type: 'answer_dossier', value: dossier } }, 'en').servingCommit, null);
 });
