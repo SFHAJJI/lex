@@ -1205,7 +1205,7 @@ const EN = Object.freeze({
       }),
       nothingElse: Object.freeze({
         heading: "No cookies, no trackers, no other sites",
-        cookies: "The site sets no cookie and writes nothing to your browser's storage (see the {cookiesPage}). It loads nothing from another site: no audience measurement, no advertising, and no fonts, scripts or images from elsewhere.",
+        cookies: "The site sets no cookie. It keeps one thing in your browser: your conversation with the assistant, in this tab's session storage, so that it stays while you move between pages; your browser deletes it when you close the tab, and the stored copy is sent nowhere (see the {cookiesPage}). It loads nothing from another site: no audience measurement, no advertising, and no fonts, scripts or images from elsewhere.",
         links: "Links to the publishers' sites, such as Legilux and EUR-Lex, are ordinary links. If you follow one, your browser asks that site directly, under that site's own privacy notice; Lex asks your browser not to tell it which page you came from.",
       }),
       named: Object.freeze({
@@ -1307,12 +1307,12 @@ const EN = Object.freeze({
     intro: "Lex sets no cookie.",
     sections: Object.freeze({
       none: Object.freeze({
-        heading: "No cookie, no browser storage",
-        text: "This site sets no cookie, neither its own nor anyone else's, and writes nothing to your browser's storage. It loads nothing from other sites, so no other site can set one through it. That is why it asks you for no consent.",
+        heading: "No cookie; the assistant's conversation kept in this tab only",
+        text: "This site sets no cookie, neither its own nor anyone else's. It writes one thing to your browser's storage: your conversation with the assistant, in this tab's session storage, so that it stays while you move between pages. Your browser deletes it when you close the tab, and the stored copy is sent nowhere. It loads nothing from other sites, so no other site can set one through it. That is why it asks you for no consent.",
       }),
       checked: Object.freeze({
         heading: "How this is checked",
-        text: "Automated tests fail if a page of the site sets a cookie, writes to the browser's storage or asks another site for anything, and each release is checked, before it serves readers, for any answer that sets a cookie.",
+        text: "Automated tests fail if a page of the site sets a cookie, writes anything to the browser's storage but the assistant's conversation in the tab's session storage, or asks another site for anything, and each release is checked, before it serves readers, for any answer that sets a cookie.",
       }),
     }),
   }),

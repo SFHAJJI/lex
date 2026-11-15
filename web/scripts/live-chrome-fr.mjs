@@ -1727,7 +1727,7 @@ export const LIVE_CHROME_FR = Object.freeze({
       }),
       nothingElse: Object.freeze({
         heading: 'Ni cookie, ni traceur, ni autre site',
-        cookies: 'Le site ne dépose aucun cookie et n’écrit rien dans le stockage de votre navigateur (voir la {cookiesPage}). Il ne charge rien depuis un autre site : ni mesure d’audience, ni publicité, ni police de caractères, script ou image provenant d’ailleurs.',
+        cookies: 'Le site ne dépose aucun cookie. Il garde une seule chose dans votre navigateur : votre conversation avec l’assistant, dans le stockage de session de cet onglet, pour qu’elle demeure pendant que vous passez d’une page à l’autre ; votre navigateur l’efface quand vous fermez l’onglet, et cette copie n’est envoyée nulle part (voir la {cookiesPage}). Il ne charge rien depuis un autre site : ni mesure d’audience, ni publicité, ni police de caractères, script ou image provenant d’ailleurs.',
         links: 'Les liens vers les sites des éditeurs, comme Legilux et EUR-Lex, sont des liens ordinaires. Si vous en suivez un, votre navigateur s’adresse directement à ce site, selon la politique de protection des données propre à celui-ci ; Lex demande à votre navigateur de ne pas indiquer à ce site de quelle page vous venez.',
       }),
       named: Object.freeze({
@@ -1823,12 +1823,12 @@ export const LIVE_CHROME_FR = Object.freeze({
     intro: 'Lex ne dépose aucun cookie.',
     sections: Object.freeze({
       none: Object.freeze({
-        heading: 'Aucun cookie, aucun stockage dans le navigateur',
-        text: 'Ce site ne dépose aucun cookie, ni le sien ni celui d’un tiers, et n’écrit rien dans le stockage de votre navigateur. Il ne charge rien depuis d’autres sites, si bien qu’aucun autre site ne peut en déposer par son intermédiaire. C’est pourquoi il ne vous demande aucun consentement.',
+        heading: 'Aucun cookie ; la conversation avec l’assistant gardée dans cet onglet seulement',
+        text: 'Ce site ne dépose aucun cookie, ni le sien ni celui d’un tiers. Il écrit une seule chose dans le stockage de votre navigateur : votre conversation avec l’assistant, dans le stockage de session de cet onglet, pour qu’elle demeure pendant que vous passez d’une page à l’autre. Votre navigateur l’efface quand vous fermez l’onglet, et cette copie n’est envoyée nulle part. Il ne charge rien depuis d’autres sites, si bien qu’aucun autre site ne peut en déposer par son intermédiaire. C’est pourquoi il ne vous demande aucun consentement.',
       }),
       checked: Object.freeze({
         heading: 'Comment cela est vérifié',
-        text: 'Des tests automatisés échouent si une page du site dépose un cookie, écrit dans le stockage du navigateur ou demande quoi que ce soit à un autre site, et, avant chaque mise en production, il est vérifié qu’aucune réponse du nouveau déploiement ne dépose de cookie.',
+        text: 'Des tests automatisés échouent si une page du site dépose un cookie, écrit dans le stockage du navigateur autre chose que la conversation avec l’assistant dans le stockage de session de l’onglet, ou demande quoi que ce soit à un autre site, et, avant chaque mise en production, il est vérifié qu’aucune réponse du nouveau déploiement ne dépose de cookie.',
       }),
     }),
   }),
