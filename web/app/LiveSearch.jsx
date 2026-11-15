@@ -1052,7 +1052,9 @@ export function FindResults({ contract, fetchImpl }) {
   }, []);
   const query = view.query ?? '';
   return (
-    <div className="lx-find-results" data-find-state={view.state}>
+    // A polite live region the server renders before any answer, so a screen reader hears the answer (the launch contract's
+    // screen-reader path; the journeys hold it).
+    <div className="lx-find-results" aria-live="polite" data-find-state={view.state}>
       <h1 className="lx-find-heading">{COPY.findHeading}</h1>
       {view.state === 'idle' ? <p className="lx-find-status">{COPY.findIdle}</p> : null}
       {view.state === 'unread' ? <p className="lx-find-status" role="status">{COPY.findUnread}</p> : null}
@@ -1069,6 +1071,8 @@ export function FindResults({ contract, fetchImpl }) {
           {view.outcome?.state === 'refusal' && typeof view.outcome.sentence === 'string' ? <StatusSentence outcome={view.outcome} /> : null}
           <p className="lx-find-status">{fillText(COPY.findNone, { query })}</p>
           <p className="lx-find-hint">{COPY.findHint}</p>
+          {/* No text found is not evidence that the law does not exist (journey J2), said as the refusal card says it. */}
+          <p className="lx-find-hint" data-absence-note="">{liveChrome().refusalCard.absenceNote}</p>
         </div>
       ) : null}
       {view.state === 'rows' && view.rows.length > 0 ? (

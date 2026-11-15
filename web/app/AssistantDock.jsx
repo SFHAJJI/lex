@@ -578,10 +578,12 @@ export function AssistantDock({ locale = CHROME_LOCALE, page = null, fetchImpl =
     setRestored(true);
   }, []);
 
-  // Kept on every change; the turn a navigation opens a text for (`leaving`) stays named until the page goes.
+  // Kept on every change; the turn a navigation opens a text for (`leaving`) stays named until the page goes. Nothing is
+  // written while there is nothing to keep (no turn, the dock not hidden): a page the reader only reads writes no storage
+  // (the journeys hold every page to it).
   const leaving = useRef(null);
   useEffect(() => {
-    if (restored) writeMemory({ turns, hidden, arrival: leaving.current });
+    if (restored && (turns.length > 0 || hidden)) writeMemory({ turns, hidden, arrival: leaving.current });
   }, [restored, turns, hidden]);
 
   // The text page folds the dock to its tab in compare mode and opens it again after (`lex:dock`).
