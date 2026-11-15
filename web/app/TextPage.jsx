@@ -20,6 +20,7 @@ import {
 } from '../scripts/text-page.mjs';
 import { todayInLuxembourg } from '../scripts/temporal.mjs';
 import { FindIcon } from './Document.jsx';
+import { actNameOf } from '../scripts/act-names.mjs';
 
 export const LIVE_TEXT_ROOT = 'live-text-root';
 
@@ -384,7 +385,9 @@ export function TextPage({ contract, fetchImpl, now = null }) {
         if (!live) return;
         if (changes.state === 'success') versions = versionsOf(changes.envelope.result.value);
       }
-      const title = publisher === 'eu-eurlex' ? europeTitle(value, language) : ownTitleOf(value);
+      // The text's own title; with none held, the act's name from its key (a dated law, a code), never its identifier.
+      const title = (publisher === 'eu-eurlex' ? europeTitle(value, language) : ownTitleOf(value))
+        ?? actNameOf(address.identifier.replace(/^\/lu-legilux\//u, ''));
       setText({ identifier: address.identifier, publisher, title, language, versions, contents: null, articleCount: null, euDate: null });
       setPages(new Map());
       setDiffs([]);
