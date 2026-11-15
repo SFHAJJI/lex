@@ -107,7 +107,6 @@ const ENGLISH_ALLOWED = Object.freeze({
   "home.askExamples.first": ["5"],
   "home.askExamples.second": ["33"],
   "home.askExamples.third": ["50"],
-  "decisions.cards.notFound.note": ["70", "44", "2026", "11", "13", "2026", "11", "14"],
 });
 
 const TABLES = Object.freeze([
