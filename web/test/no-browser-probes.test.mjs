@@ -211,7 +211,8 @@ test("--no-browser probes the image over HTTP, every probe that needs no browser
     assert.equal(report.browserProbes, NO_BROWSER);
     assert.equal(report.browserProbes, "skipped: --no-browser");
     assert.deepEqual(report.stepsNotWalked, realMountSteps(mount.report).map(([name]) => `${name}, with the real mount`));
-    assert.equal(report.stepsNotWalked.length, 19, "the 13 screens, J1, J2, J5 and the three EU steps");
+    // V4's search page has no CELEX field: on a real mount the EU dossier and reading are walked, not an EU search.
+    assert.equal(report.stepsNotWalked.length, 18, "the 13 screens, J1, J2, J5 and the two EU steps");
     assert.ok(report.stepsNotWalked.includes("eu reading, with the real mount"));
 
     // The API's journeys, J6 to J8, through REST and MCP; the real mount's first permalinks of its log verified.

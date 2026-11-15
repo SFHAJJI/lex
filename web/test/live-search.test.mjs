@@ -12,6 +12,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -35,7 +36,7 @@ import { OUTSIDE_EU_POPULATION_SENTENCE } from "../scripts/live-refusals.mjs";
 import { OFFICIAL_SEARCH_PAGES } from "../scripts/live-failure.mjs";
 import { publisherSourceUri } from "../scripts/routes.mjs";
 import { liveChrome } from "../scripts/live-chrome.mjs";
-import { SEARCH_SEARCHED_SAID, specificationJourneyExpectations } from "../scripts/journey.mjs";
+import { ABSENCE_NOTE, NO_HIT_PHRASE, specificationJourneyExpectations } from "../scripts/journey.mjs";
 
 /** A refusal's card as the screen shows it: one about this service (R60) inside the failure panel, under its line; any other alone. */
 const asShown = (outcome, card) => renderToStaticMarkup(h(FailureFrame, { outcome }, h("lex-card"))).replace("<lex-card></lex-card>", card);
@@ -243,14 +244,18 @@ test("a search with no hit is the plain no-hit card: what ran, that only the phr
   assert.ok(shown.includes("0 passages with the phrase, in 0 acts."));
 });
 
-test("the J2 walk expects the no-hit card's own sentences: what the page shows is what the walk reads (the review of #1005)", () => {
+test("the J2 walk expects the V4 search page's own sentences: what the page shows is what the walk reads (the review of #1005)", () => {
+  // V4 (the brief, section 5): no text found is one sentence naming the words, a hint and the absence note, each the copy
+  // table's entry the search page draws (`FindResults`), so the walk reads what the page says.
   const [, j2] = specificationJourneyExpectations().find(([name]) => name.startsWith("J2"));
-  const shown = text(view(searchOutcome({ state: "success", envelope: envelopeOf(NO_HIT) })));
-  // The population line counts the journey's own fixture mount, which this census is not.
-  for (const said of j2.texts.filter((entry) => entry !== SEARCH_SEARCHED_SAID)) {
-    assert.ok(shown.includes(said), `the no-hit card shows ${JSON.stringify(said)}`);
+  const copy = liveChrome("en").search;
+  assert.deepEqual(j2.texts, [copy.findNone.replace("{query}", NO_HIT_PHRASE), copy.findHint, ABSENCE_NOTE]);
+  assert.ok(liveChrome("en").refusalCard.absenceNote.includes(ABSENCE_NOTE), "the absence note the page draws says it");
+  const source = readFileSync(new URL("../app/LiveSearch.jsx", import.meta.url), "utf8");
+  const results = source.slice(source.indexOf("export function FindResults"));
+  for (const drawn of ["fillText(COPY.findNone, { query })", "{COPY.findHint}", "{liveChrome().refusalCard.absenceNote}"]) {
+    assert.ok(results.includes(drawn), `the search page draws ${drawn}`);
   }
-  assert.ok(j2.texts.includes(liveChrome("en").search.exactOnly), "the walk reads the matching rule whole, from the table");
 });
 
 test("an EU work's no-hit card says the reference and the titles were not run, and counts the act's wordings, no Luxembourg population", () => {

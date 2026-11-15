@@ -495,6 +495,23 @@ export const EU_DOSSIER_STEP = Object.freeze({
   body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: EU_SEARCH_IDENTIFIER }) }),
 });
 
+/**
+ * The EU search in V4 (the search page has no field for a CELEX nor a language): the GDPR asked by its citation in the
+ * header's "Find a text" field, the words in the request's body alone. Held to what the API answers that very request
+ * (`fromApi`): on the fixture mount (Luxembourg only) its refusal, said by the search page with its code, or its answer.
+ */
+export const EU_CITATION = "règlement (UE) 2016/679";
+export const EU_FIND_STEP = Object.freeze({
+  path: "/en/search.html",
+  form: HEADER_FIND_FORM,
+  find: true,
+  resultsAt: RESULTS_PATH,
+  historyAdded: 1,
+  operation: "search",
+  typed: EU_CITATION,
+  body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: EU_CITATION, language: "fra", mode: "strict" }) }),
+});
+
 /** The date the EU reading asks: the GDPR's Formex act date, the date of the one wording an EU index holds of it. */
 export const EU_READING_DATE = "2016-04-27";
 
@@ -738,10 +755,11 @@ export function journeyVerdict(observed, expected) {
     if (header("referrer-policy") !== "no-referrer") failures.push(`the page arrived with Referrer-Policy ${header("referrer-policy")}`);
     if (header("x-content-type-options") !== "nosniff") failures.push("the page arrived without nosniff");
   }
-  // The V4 search page names no code in its main flow (the brief, section 9): a refusal is said as its own sentence, in the
-  // page's status line and in place of any list (`.lx-find-none [role=status]`), the one the page's view gives that answer.
+  // The V4 search page prints no code in its main flow (the brief, section 9): a refusal that is a failure of the service is
+  // said in R60's failure panel, in its own sentence, with a retry, the panel naming the code it was refused with
+  // (`data-failure`), and no list beside it.
   if (step.find === true && expected.state === "refusal") {
-    if (observed.findRefusal !== true) failures.push(`the search page does not say the refusal ${expected.refusalCode} in its own sentence (${observed.findRefusal ?? "not observed"})`);
+    if (observed.findRefusal !== expected.refusalCode) failures.push(`the search page's failure panel names ${observed.findRefusal ?? "no refusal"}, not ${expected.refusalCode}`);
   } else if (expected.state === "refusal" && !observed.text.includes(expected.refusalCode)) {
     failures.push(`the page does not name the refusal ${expected.refusalCode}`);
   }
@@ -1420,10 +1438,11 @@ const ANSWER_LIVE_REGION = "document.querySelector('[data-answer-state], [data-f
 export const ANSWER_STATE = `(() => {
   const earlier = document.querySelector('[data-answer-state]')?.dataset.answerState;
   if (earlier) return earlier;
-  const find = document.querySelector('[data-find-state]')?.dataset.findState;
+  const results = document.querySelector('[data-find-state]');
+  const find = results?.dataset.findState;
   if (find === 'rows') return 'success';
   if (find === 'none') return document.querySelector('.lx-find-none [role=status]') === null ? 'not_opened' : 'refusal';
-  if (find === 'failed') return 'transport_failure';
+  if (find === 'failed') return results.dataset.findOutcome ?? 'transport_failure';
   if (find === 'unread') return 'address_unread';
   if (find) return 'loading';
   if (document.querySelector('[data-text-page]') !== null) return 'success';
@@ -1560,7 +1579,7 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
     if (step.retry === true) {
       const asked = () => requests.filter((request) => new URL(request.url).pathname.startsWith("/api/")).length;
       const before = asked();
-      if (!(await evaluate("document.querySelector('[data-live-answer] [data-failure] [data-retry]') !== null"))) retried = "absent";
+      if (!(await evaluate("document.querySelector('[data-live-answer] [data-failure] [data-retry], [data-find-state] [data-failure] [data-retry]') !== null"))) retried = "absent";
       else if (keyboard) {
         retried = "absent";
         for (let tab = 0; tab < 30; tab += 1) {
@@ -1575,15 +1594,15 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
           }
         }
       } else {
-        await evaluate("document.querySelector('[data-live-answer] [data-failure] [data-retry]').click()");
+        await evaluate("document.querySelector('[data-live-answer] [data-failure] [data-retry], [data-find-state] [data-failure] [data-retry]').click()");
         retried = "pressed";
       }
       while (retried === "pressed" && Date.now() < deadline) {
-        const state = await evaluate("document.querySelector('[data-answer-state]')?.dataset.answerState ?? null");
+        const state = (await evaluate(ANSWER_STATE).catch(() => null)) ?? null;
         if (asked() > before && state !== null && state !== "loading") retried = "reached";
         else await new Promise((resolve) => setTimeout(resolve, 100));
       }
-      answerState = await evaluate("document.querySelector('[data-answer-state]')?.dataset.answerState ?? null");
+      answerState = (await evaluate(ANSWER_STATE).catch(() => null)) ?? null;
     }
     // Let a late request or log line arrive before the observation is closed (a page asking its own first screen: until it
     // settles).
@@ -1665,7 +1684,7 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
       // V4: where the answer's links lead, the elements it must show, and a search page's refusal said in its own sentence.
       links: await evaluate("[...document.querySelectorAll('main a[href]')].map((node) => node.getAttribute('href'))"),
       present: await evaluate(`${JSON.stringify(step.present ?? [])}.filter((selector) => document.querySelector(selector) !== null)`),
-      findRefusal: await evaluate("document.querySelector('[data-find-state=none] .lx-find-none [role=status]') !== null && document.querySelector('.lx-find-list') === null"),
+      findRefusal: await evaluate("document.querySelector('.lx-find-list') === null ? (document.querySelector('[data-find-state=failed] [data-failure]')?.dataset.failure ?? document.querySelector('[data-find-state=none] [data-find-refusal]')?.dataset.findRefusal ?? null) : 'a list of texts'"),
       emptyAnswer: await evaluate("document.querySelector('[data-live-answer] [data-no-row], [data-live-answer] [data-no-hit]') !== null"),
       quotes: await evaluate("[...document.querySelectorAll('[data-live-answer] [data-article]')].filter((node) => node.querySelector('blockquote') !== null).map((node) => ({ article: node.dataset.article, codes: [...node.querySelectorAll('code')].map((code) => code.textContent.trim()) }))"),
     };
@@ -2008,12 +2027,11 @@ export const NOT_FOUND_STEP = Object.freeze({
 export const NOT_FOUND_SAID = "There is no page at this address";
 
 /**
- * A search with no mount, retried: the page shows the failure panel for `no_corpus_mounted`, the retry is pressed once, and
- * the page asks the very same request again and shows the same refusal (R60). The V4 search page says a refusal in one
- * sentence with no retry (the brief, section 5: "no match: one sentence and a hint"), so the retry is held where the
- * failure panel still stands: the 404 page's search.
+ * The search step with no mount, retried: the page shows the failure panel for `no_corpus_mounted` (V4: in place of the
+ * texts, in its own sentence), the retry is pressed once, and the page asks the very same request again and shows the same
+ * refusal (R60).
  */
-export const RETRIED_SEARCH_STEP = Object.freeze({ ...NOT_FOUND_STEP, retry: true });
+export const RETRIED_SEARCH_STEP = Object.freeze({ ...JOURNEY_STEPS.search, retry: true });
 
 /**
  * The search page opened at an address that keeps a search after "#" (R109; the plan's item 3.5), as a reader opens a link
@@ -2934,8 +2952,9 @@ async function main(argv) {
       results.push([`${walk.name}, with the fixture mount`, await runWalk(apiOutput, mount, walk, { servedByApi, keyboard, homeExamples }, browser, liveRoot)]);
     }
     // The EU steps: the fixture mount holds no EU index, so the EU work is refused for the EU corpus.
-    // (The EU search step is not run: the V4 search page has no field for an EU act's CELEX nor a language to choose, by the
-    // brief's design; the EU index's refusal is held on the EU dossier step, and an EU act's title by the search's rows.)
+    // The V4 EU search: the GDPR by its citation in the header's field (the search page has no CELEX field nor a language to
+    // choose, by the brief's design), held to the API's own answer to that request.
+    results.push(["eu search, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, homeExamples, step: EU_FIND_STEP, fromApi: true }, browser, liveRoot)]);
     results.push(["eu dossier, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, homeExamples, ...EU_DOSSIER_ON_FIXTURE }, browser, liveRoot)]);
   }
   // Journeys J6, J7 and J8 at the API (no page asks the contained assistant or MCP, or polls events), on the
