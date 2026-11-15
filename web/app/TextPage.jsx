@@ -483,8 +483,12 @@ export function TextPage({ contract, fetchImpl, now = null }) {
   }, [text?.identifier, compare?.from, compare?.to]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The dock folds to its tab in compare mode (V3Compare) and opens again when reading.
+  // The dock's own script may attach after this page's: the fold is said again once it has had time to listen.
   useEffect(() => {
-    window.dispatchEvent(new CustomEvent(DOCK_EVENT, { detail: { collapsed: compare !== null } }));
+    const say = () => window.dispatchEvent(new CustomEvent(DOCK_EVENT, { detail: { collapsed: compare !== null } }));
+    say();
+    const later = [setTimeout(say, 800), setTimeout(say, 2500)];
+    return () => later.forEach(clearTimeout);
   }, [compare !== null]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The assistant opens an article here when it is this text's (`lex:open`).
