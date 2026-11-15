@@ -59,6 +59,8 @@ export { CompareAnswerView, CompareView, LiveCompare } from './LiveCompare.jsx';
 export { LIVE_COMPARE_ROOT, liveCompareTree, renderLiveComparePage } from './live-compare-page.jsx';
 export { LiveRadar, RadarAnswerView, RadarView } from './LiveRadar.jsx';
 export { LIVE_RADAR_ROOT, liveRadarTree, renderLiveRadarPage } from './live-radar-page.jsx';
+export { liveTextTree, renderLiveTextPage } from './live-text-page.jsx';
+export { LIVE_TEXT_ROOT, TextPage, numericDate, typedDate } from './TextPage.jsx';
 export { ExportAnswerView, ExportPanel, ExportPreview, LiveExport } from './LiveExport.jsx';
 export { LIVE_EXPORT_ROOT, liveExportTree, renderLiveExportPage } from './live-export-page.jsx';
 export {

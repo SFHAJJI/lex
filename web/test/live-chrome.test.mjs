@@ -20,6 +20,7 @@ import {
   renderLiveMaintenancePage,
   renderLiveNotFoundPage,
   renderLiveRadarPage,
+  renderLiveTextPage,
   renderLiveReadingPage,
   renderLiveSearchPage,
   renderLiveLegalNoticePage,
@@ -51,6 +52,8 @@ const PAGES = {
   compare: renderLiveComparePage,
   radar: renderLiveRadarPage,
   export: renderLiveExportPage,
+  // The text page (the owner's brief of 2026-11-15): V4, one page per text.
+  text: renderLiveTextPage,
   // The 404 page and the maintenance page (R60) carry the site's header and footer like every page.
   notFound: renderLiveNotFoundPage,
   maintenance: renderLiveMaintenancePage,
@@ -83,8 +86,14 @@ test("every live page renders its chrome from the table", () => {
     const html = render();
     const entry = copy[key];
     assert.ok(html.includes(`<title>${escaped(entry.title)} - Lex</title>`), `${key}: title`);
-    // The site around the screen: its name, its menu, and the statements every page carries (no development banner).
-    for (const text of [copy.site.brand, copy.site.skip, copy.site.menuDecisions, copy.site.menuEvidence, copy.site.menuTexts, copy.site.reading, copy.site.dossier, copy.site.history, copy.site.compare, copy.site.radar, copy.site.export, copy.site.coverage, copy.site.notAdvice, copy.site.authenticity, copy.site.sources]) {
+    // A V4 page (the owner's brief of 2026-11-15) carries the V4 header (the name, the find field, Changes, Decisions, How it
+    // works) and the footer's statements; the forms it replaces are not linked. Its own words are its screen's, not an
+    // eyebrow, heading and introduction.
+    const v4 = html.includes('data-layout="v4"');
+    const siteTexts = v4
+      ? [copy.site.brand, copy.site.skip, copy.site.findLabel, copy.site.findPlaceholder, copy.site.radar, copy.site.menuDecisions, copy.site.menuEvidence, copy.site.coverage, copy.site.notAdvice, copy.site.authenticity, copy.site.sources]
+      : null;
+    for (const text of siteTexts ?? [copy.site.brand, copy.site.skip, copy.site.menuDecisions, copy.site.menuEvidence, copy.site.menuTexts, copy.site.reading, copy.site.dossier, copy.site.history, copy.site.compare, copy.site.radar, copy.site.export, copy.site.coverage, copy.site.notAdvice, copy.site.authenticity, copy.site.sources]) {
       assert.ok(html.includes(escaped(text)), `${key}: the site says ${JSON.stringify(text.slice(0, 40))}`);
     }
     assert.ok(!html.includes("development build"), `${key}: no development banner`);
@@ -95,6 +104,7 @@ test("every live page renders its chrome from the table", () => {
     assert.ok(html.includes(`<p>${escaped(quiet ? copy.freshness.noAnswer : copy.freshness.asBuilt)}</p>`), `${key}: the freshness strip as built`);
     assert.ok(!html.includes(escaped(quiet ? copy.freshness.asBuilt : copy.freshness.noAnswer)), `${key}: only that strip`);
     assert.ok(!html.includes("staleness-banner"), `${key}: no staleness banner as built`);
+    if (v4) continue;
     // The home page, Decisions and Evidence carry no eyebrow line (the owner's order of 2026-11-14, evening), and the two
     // pages no introduction; every other page its table's eyebrow, heading and introduction.
     if (["home", "decisions", "evidence"].includes(key)) assert.ok(!html.includes('<p class="eyebrow">'), `${key}: no eyebrow`);
@@ -109,6 +119,8 @@ test("every form's labels and button come from the table", () => {
   for (const [key, render] of Object.entries(PAGES)) {
     // Trust and Coverage asks with no form, and the maintenance page and the legal pages ask nothing.
     if (key === "coverage" || key === "maintenance" || LEGAL.has(key)) continue;
+    // A V4 page asks through its own controls, not the old forms (the owner's brief of 2026-11-15).
+    if (render().includes('data-layout="v4"')) continue;
     // The home page is the search screen under the site's introduction, and the 404 page offers it: its form is search's.
     const formKey = key === "home" || key === "notFound" ? "search" : key;
     // A page rendered for hydration marks text boundaries with empty comments; they are not text.

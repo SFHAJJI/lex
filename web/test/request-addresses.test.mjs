@@ -38,7 +38,7 @@ const WEB = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ENTRIES = [
   "client-live-home-entry.jsx", "client-live-entry.jsx", "client-live-search-entry.jsx", "client-live-dossier-entry.jsx",
   "client-live-reading-entry.jsx", "client-live-history-entry.jsx", "client-live-compare-entry.jsx", "client-live-radar-entry.jsx",
-  "client-live-export-entry.jsx", "client-live-header-entry.jsx", "client-live-dock-entry.jsx",
+  "client-live-export-entry.jsx", "client-live-header-entry.jsx", "client-live-text-entry.jsx", "client-live-dock-entry.jsx",
 ].map((name) => join(WEB, "app", name));
 
 /** The web's own files an entry imports, transitively (packages are not the site's code). */
@@ -106,6 +106,9 @@ const PINNED = Object.freeze({
   // R57: a comparison asked of an act named by this site's address is written into the compare page's own query, so it can be
   // shared and read without JavaScript: a law's address and two dates (`compareQueryOf`), never a word.
   "app/LiveCompare.jsx: the page's address: if (session.current.ask(request) && search !== null) replacePageAddress(window, { search });": "a law's address and two dates, in the query",
+  // The text page (2026-11-15) writes its state into its own address: a law's identifier, dates and an article's id in the
+  // query (`textHref`), never a word a reader typed.
+  "app/TextPage.jsx: the history: if (href !== null) window.history.replaceState(window.history.state, '', href);": "the text page's own address: a law, dates and an article id",
   // The V4 header's find field (2026-11-15): the search page, the words after "#" (`searchFragment`), never in the query.
   "app/client-live-header-entry.jsx: a navigation: if (address !== null) window.location.assign(address);": "the search page, the words after #",
   "app/LiveDossier.jsx: a form's own submit: <form method=\"get\" action={readable} data-read-on-date=\"\">": "a law's readable address, which the platform mints, and a calendar date from a date field, in the query",

@@ -52,6 +52,8 @@ const PAGES = Object.freeze([
   ["live-compare-page", "renderLiveComparePage", "compare.html", "client-live-compare-entry.jsx", "client-live-compare.js"],
   ["live-radar-page", "renderLiveRadarPage", "radar.html", "client-live-radar-entry.jsx", "client-live-radar.js"],
   ["live-export-page", "renderLiveExportPage", "export.html", "client-live-export-entry.jsx", "client-live-export.js"],
+  // The text page (the owner's brief of 2026-11-15): one page per text, its versions, its articles, two versions compared.
+  ["live-text-page", "renderLiveTextPage", "text.html", "client-live-text-entry.jsx", "client-live-text.js"],
 ]);
 
 /**

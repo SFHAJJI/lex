@@ -1,14 +1,14 @@
-// The text page's address (the owner's brief of 2026-11-15, section 3): one page per text, standing at the text's own
-// address under an interface language (`/fr/lu-legilux/loi-1997-07-27-n10`, `/en/eu-eurlex/32016R0679`), which the
-// server already renders (the dossier page, `V3WebRoot.SitePageFor`), its state in the query so that every state is a link
-// that can be copied and reopened:
+// The text page's address (the owner's brief of 2026-11-15, section 3): one page per text, `text.html` under an interface
+// language, its state in the query so that every state is a link that can be copied and reopened:
 //
+//   text     the text, by the identifier the API names it with (`/lu-legilux/loi-1997-07-27-n10`, or an EU CELEX)
 //   date     the version read, as the date the reader asked for (yyyy-mm-dd); none is today
 //   article  the article open, by the publisher's id the API names it with (`art_44`)
 //   from, to the two versions compared (yyyy-mm-dd each): compare mode
 //   view     `inline` for compare mode's "In one text"; none is side by side
 //
-// The server ignores this query on a work's address (it renders the dossier), so the page reads it once loaded.
+// None of these is a word a reader typed (R109): a law's identifier, dates and an article's id. The old addresses (a law's
+// own address, the reading, history and compare pages) forward here once their script runs.
 
 import { europeWorkSegment, INTERFACE_LANGUAGES } from './permalinks.mjs';
 import { CHROME_LOCALE } from './live-chrome.mjs';
@@ -25,14 +25,17 @@ export function textPath(identifier) {
   return null;
 }
 
+/** The text page's file under each interface language. */
+export const TEXT_PAGE = 'text.html';
+
 /**
  * The text page's link for a state, under `locale`'s path: the text, and any of the version's date, the article, the compare
  * pair and the view. A value that is not of its shape is left out, never written. Null when the identifier names no text.
  */
 export function textHref({ identifier, date = null, article = null, from = null, to = null, view = null }, locale = CHROME_LOCALE) {
-  const path = textPath(identifier);
-  if (path === null || !INTERFACE_LANGUAGES.includes(locale)) return null;
+  if (textPath(identifier) === null || !INTERFACE_LANGUAGES.includes(locale)) return null;
   const query = new URLSearchParams();
+  query.set('text', identifier);
   const compare = typeof from === 'string' && DATE.test(from) && typeof to === 'string' && DATE.test(to);
   if (!compare && typeof date === 'string' && DATE.test(date)) query.set('date', date);
   if (compare) {
@@ -41,19 +44,20 @@ export function textHref({ identifier, date = null, article = null, from = null,
   }
   if (typeof article === 'string' && ARTICLE.test(article)) query.set('article', article);
   if (compare && view === 'inline') query.set('view', 'inline');
-  const search = query.toString();
-  return `/${locale}${path}${search === '' ? '' : `?${search}`}`;
+  return `/${locale}/${TEXT_PAGE}?${query.toString()}`;
 }
 
 /** The state a text page's query names (`location.search`), each value null when absent or not of its shape. */
 export function textStateOf(search) {
   const query = new URLSearchParams(typeof search === 'string' ? search : '');
+  const text = query.get('text');
   const date = query.get('date');
   const article = query.get('article');
   const from = query.get('from');
   const to = query.get('to');
   const compare = from !== null && DATE.test(from) && to !== null && DATE.test(to);
   return Object.freeze({
+    identifier: text !== null && textPath(text) !== null ? text : null,
     date: date !== null && DATE.test(date) ? date : null,
     article: article !== null && ARTICLE.test(article) ? article : null,
     from: compare ? from : null,
