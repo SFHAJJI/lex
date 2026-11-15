@@ -81,7 +81,7 @@ test("each rule the radar states about itself is refused when broken, with that 
     ["candidates on a first held state", first, (a) => { a.changes[0].candidates = [permalinkLike(a, "a"), permalinkLike(a, "b")]; }, /names no candidate states for first_held_state/],
     ["rows out of date order", both, (a) => { a.changes.reverse(); }, /publisher date order/],
     ["a truncated page without its next date", both, (a) => { a.truncated = true; }, /exactly when it is truncated/],
-    ["a population that is not the page's", both, (a) => { a.population.versions_in_window = 3; }, /counts 3 versions in the window, and the untruncated page holds 2/],
+    ["a population counting fewer versions than the page lists", both, (a) => { a.population.versions_in_window = 1; }, /counts 1 versions in the window, and the untruncated page holds 2/],
     ["an overlap flag against the dates", both, (a) => { a.population.window_overlaps_what_is_held = false; }, /window meets the held dates/],
     ["a missing member", both, (a) => { delete later(a).state.permalink; }, /does not carry permalink/],
     ["a digest the census left unfilled", both, (a) => { a.index_sha256 = PLACEHOLDER; }, /index_sha256 is not a SHA-256 digest/],

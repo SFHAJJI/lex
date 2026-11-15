@@ -108,7 +108,8 @@ test("every live page renders its chrome from the table", () => {
     if (v4) continue;
     // The home page, Decisions and Evidence carry no eyebrow line (the owner's order of 2026-11-14, evening), and the two
     // pages no introduction; every other page its table's eyebrow, heading and introduction.
-    if (["home", "decisions", "evidence"].includes(key)) assert.ok(!html.includes('<p class="eyebrow">'), `${key}: no eyebrow`);
+    // Changes (the owner's brief of 2026-11-15, V4Changes) has none either: its title and the sentence under it.
+    if (["home", "decisions", "evidence", "radar"].includes(key)) assert.ok(!html.includes('<p class="eyebrow">'), `${key}: no eyebrow`);
     else assert.ok(html.includes(`<p class="eyebrow">${escaped(entry.eyebrow)}</p>`), `${key}: eyebrow`);
     assert.ok(html.includes(`<h1>${escaped(entry.heading)}</h1>`), `${key}: heading`);
     if (!["decisions", "evidence"].includes(key)) assert.ok(html.includes(`<p>${escaped(entry.intro)}</p>`), `${key}: introduction`);
@@ -130,7 +131,11 @@ test("every form's labels and button come from the table", () => {
     assert.ok(html.includes(`<option value="">${escaped(form.anyLanguage)}</option>`) || html.includes(`<option value="" selected="">${escaped(form.anyLanguage)}</option>`) || formKey === "search", `${key}: the blank language option`);
     assert.ok(html.includes(`${escaped(form.language)} <select`), `${key}: the language label`);
   }
-  assert.ok(renderLiveRadarPage().replaceAll("<!-- -->", "").includes(`${escaped(form.workIdentifierOptional)} <input`), "radar's optional identifier");
+  const changes = renderLiveRadarPage().replaceAll("<!-- -->", "");
+  const { radar } = liveChrome("en");
+  assert.ok(changes.includes(`<label>${escaped(radar.from)} <input`) && changes.includes(`<label>${escaped(radar.to)} <input`), "the period's two dates");
+  assert.ok(changes.includes(`<button class="lx-visually-hidden" type="submit">${escaped(radar.showPeriod)}</button>`), "the period's submit button");
+  assert.ok(!changes.includes(escaped(form.workIdentifierOptional)) && !changes.includes("<select"), "Changes asks for no identifier and no language");
   assert.ok(renderLiveHistoryPage().replaceAll("<!-- -->", "").includes(`${escaped(form.articleId)} <input`), "history's article id");
   assert.ok(renderLiveSearchPage().replaceAll("<!-- -->", "").includes(`${escaped(form.phrase)} <input`), "search's phrase");
 });
