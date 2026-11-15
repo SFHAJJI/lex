@@ -28,6 +28,18 @@ it works and Decisions, Home and search, the assistant dock), each merged here w
   said "about"; Changes counts its presets back from today (the corpus holds versions to today and beyond).
 - **For the owner (public claims):** the privacy notice and the cookies page now say the dock keeps the conversation in the
   tab's session storage (deleted with the tab, sent nowhere); How it works's heading and the sentences the agent listed.
+- **Builds and what they found (2026-11-15):** the first build (87717151) was stopped when CI's journeys found the bundles
+  sharing minified names on the window (each page now loads three scripts: every client bundle is an IIFE since dd1cea9b);
+  test versions of dd1cea9b and 34f49716 were deployed with no traffic for screenshots and then deactivated; their
+  screenshots and CI found: a class shared by the page body and the article body (lx-article-body), two copy templates
+  filled with a value they have no place for (the text page now fills only what a template names), the reading page
+  throwing before the change dates load, main centred in a full-height box, Changes' French buttons, the clarify card's raw
+  "
+" in amending acts' titles, focus rings on the borderless fields, and the period asked twice. Builds of 372a18ca,
+  546d8c84, 582a85d4 and 60cfbae7 were stopped for those fixes; the candidate is built from b117b3fb.
+- **Journeys:** updated to V4 by an agent (each page's own form, never the header's; Home measured before typing; the text
+  page's own journey; the search page's failure panel restored); the eu search journey now types an EU citation into the
+  header's field and is held to the API's answer.
 
 ## Release 13 is live; the freeze resumes (sole driver, 2026-11-15)
 
