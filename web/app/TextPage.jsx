@@ -334,13 +334,17 @@ export function TextPage({ contract, fetchImpl, now = null }) {
   const [width, setWidth] = useState(900);
   const [copied, setCopied] = useState(false);
   const [highlight, setHighlight] = useState(null);
-  const [typed, setTyped] = useState('');
+  const [typed, setTyped] = useState(null);
+  const [diffsTried, setDiffsTried] = useState(false);
   const axisBox = useRef(null);
   const today = now ?? todayInLuxembourg();
 
   // The query, once hydrated (the server render and the first render are the loading state).
   useEffect(() => {
-    setAddress(textStateOf(window.location.search));
+    const state = textStateOf(window.location.search);
+    setAddress(state);
+    // The article a link opens is marked, as the assistant's answer opens it (the brief, section 5).
+    if (state.article !== null && state.from === null) setHighlight(state.article);
   }, []);
 
   /** Writes the state into the page's own address (a law's identifier, dates and an article id: never a word). */
@@ -384,6 +388,7 @@ export function TextPage({ contract, fetchImpl, now = null }) {
       setText({ identifier: address.identifier, publisher, title, language, versions, contents: null, articleCount: null, euDate: null });
       setPages(new Map());
       setDiffs([]);
+      setDiffsTried(false);
     })();
     return () => { live = false; };
   }, [address, ask, text, today]);
@@ -458,6 +463,7 @@ export function TextPage({ contract, fetchImpl, now = null }) {
         for (const answer of batch) if (answer.state === 'success') results.push(answer.envelope.result.value);
         setDiffs([...results]);
       }
+      if (live) setDiffsTried(true);
     })();
     return () => { live = false; };
   }, [text?.identifier, load.state]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -524,7 +530,7 @@ export function TextPage({ contract, fetchImpl, now = null }) {
   });
 
   const index = useMemo(() => changeIndex(diffs), [diffs]);
-  const diffsDone = text !== null && text.publisher === 'lu-legilux' && diffs.length >= text.versions.filter((v) => !v.first && v.previous && (v.bar ?? 0) + (v.removed ?? 0) > 0).slice(-DIFF_CAP).length;
+  const diffsDone = text !== null && text.publisher === 'lu-legilux' && diffsTried || text !== null && text.publisher === 'lu-legilux' && diffs.length >= text.versions.filter((v) => !v.first && v.previous && (v.bar ?? 0) + (v.removed ?? 0) > 0).slice(-DIFF_CAP).length;
   const articlesById = useMemo(() => {
     const map = new Map();
     for (const articles of pages.values()) for (const article of articles) map.set(article.publisher_id, article);
@@ -664,12 +670,8 @@ export function TextPage({ contract, fetchImpl, now = null }) {
             <span>{fillText(copy.versionOf, { date: numericDate(versions[0]?.date) })}</span>
           ) : (
             <span>
-              {pending ? copy.pickSecond : (
-                <>
-                  {fillText(until ? copy.readingUntil : copy.readingToday, { date: '\u0000', until: numericDate(until) }).split('\u0000').flatMap((part, i) => (i === 0 ? [part] : [<strong className="lx-date" key="d">{numericDate(readVersion?.date)}</strong>, part]))}
-                  {' '}{copy.barsHint}
-                </>
-              )}
+              {fillText(until ? copy.readingUntil : copy.readingToday, { date: '\u0000', until: numericDate(until) }).split('\u0000').flatMap((part, i) => (i === 0 ? [part] : [<strong className="lx-date" key="d">{numericDate(readVersion?.date)}</strong>, part]))}
+              {' '}{pending ? copy.pickSecond : copy.barsHint}
             </span>
           )}
           <span className="lx-text-controls">
@@ -683,9 +685,9 @@ export function TextPage({ contract, fetchImpl, now = null }) {
               </>
             ) : isEurope ? null : (
               <>
-                <form className="lx-showon" onSubmit={(e) => { e.preventDefault(); const date = typedDate(typed); if (date) { setPending(null); go({ date }); } }}>
+                <form className="lx-showon" onSubmit={(e) => { e.preventDefault(); const date = typedDate(typed ?? ''); if (date) { setPending(null); setTyped(null); go({ date }); } }}>
                   <label htmlFor="lx-showon-date">{copy.showOn}</label>
-                  <input id="lx-showon-date" type="text" inputMode="numeric" autoComplete="off" value={typed || numericDate(readDate)} onChange={(e) => setTyped(e.target.value)} />
+                  <input id="lx-showon-date" type="text" inputMode="numeric" autoComplete="off" value={typed ?? numericDate(readDate)} onChange={(e) => setTyped(e.target.value)} />
                   <button type="submit" className="lx-visually-hidden">{copy.showOnSubmit}</button>
                 </form>
                 {versions.length > 1 ? (
