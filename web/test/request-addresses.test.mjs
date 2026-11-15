@@ -38,7 +38,7 @@ const WEB = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ENTRIES = [
   "client-live-home-entry.jsx", "client-live-entry.jsx", "client-live-search-entry.jsx", "client-live-dossier-entry.jsx",
   "client-live-reading-entry.jsx", "client-live-history-entry.jsx", "client-live-compare-entry.jsx", "client-live-radar-entry.jsx",
-  "client-live-export-entry.jsx",
+  "client-live-export-entry.jsx", "client-live-dock-entry.jsx",
 ].map((name) => join(WEB, "app", name));
 
 /** The web's own files an entry imports, transitively (packages are not the site's code). */
@@ -107,6 +107,16 @@ const PINNED = Object.freeze({
   // shared and read without JavaScript: a law's address and two dates (`compareQueryOf`), never a word.
   "app/LiveCompare.jsx: the page's address: if (session.current.ask(request) && search !== null) replacePageAddress(window, { search });": "a law's address and two dates, in the query",
   "app/LiveDossier.jsx: a form's own submit: <form method=\"get\" action={readable} data-read-on-date=\"\">": "a law's readable address, which the platform mints, and a calendar date from a date field, in the query",
+  // The assistant dock (the owner's brief of 2026-11-15): every page carries it (`Document.jsx`), so every page's code holds
+  // it. It asks the API only through `askV3` (the question in the body); after an answer or an exact reference it opens the
+  // text page at `textHref(...)`, which writes a law's address, a date and an article id, each of its shape or left out: never
+  // a word the reader typed.
+  "app/AssistantDock.jsx: a navigation: window.location.assign(href);": "the text page: a law's address, a date and an article id (`textHref`)",
+  // The old assistant page's act titles (`actTitlesOf`), which the dock's module carries: an act's address, in the body.
+  "scripts/assistant-panel.mjs: fetch: const response = await fetchImpl('/api/v3/dossier', {": "the API, an act's address in the body",
+  // The V4 header's "Find a text" field (the driver's, `Document.jsx`), pinned as found on the dock's base: a GET form to
+  // search.html, so its words would travel in the query; the driver settles it against R109 (said in the dock's report).
+  "app/Document.jsx: a form's own submit: <form className=\"lx-find\" role=\"search\" action={livePath('search.html')} method=\"get\" data-header-find=\"\">": "the driver's header field, found on the base (reported against R109)",
 });
 
 test("every place the pages' code could send a request or change an address is pinned, with why it carries no word", () => {

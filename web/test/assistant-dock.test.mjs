@@ -413,7 +413,7 @@ test('the readings: dd/mm/yyyy, the first sentence, the masked runs, an exact re
 
 test('every word the dock shows comes from its copy tables or from the answer (the pseudo-locale scan)', async () => {
   const table = fileURLToPath(new URL('scripts/assistant-panel.mjs', web));
-  const line = 'export const ASSISTANT_PANEL_COPY = Object.freeze({ en: PANEL_EN, fr: PANEL_FR });';
+  const line = 'export const ASSISTANT_PANEL_COPY = /* @__PURE__ */ Object.freeze({ en: PANEL_EN, fr: PANEL_FR });';
   const pseudo = `
 const __pseudoText = (text) => text.split(/(\\{[A-Za-z]+\\})/).map((part, index) => (index % 2 === 1 ? part
   : part.replace(/[A-Za-z]/g, (letter) => String.fromCodePoint(letter.codePointAt(0) + 0xfee0)))).join('');
@@ -460,5 +460,21 @@ export const ASSISTANT_PANEL_COPY = Object.freeze({ en: __pseudo(PANEL_EN), fr: 
     // The example questions are the table's too, and come out swapped; what is left is the answer's own data.
     for (const value of data.sort((a, b) => b.length - a.length)) said = said.replaceAll(value, ' ');
     assert.doesNotMatch(said, /[A-Za-z]{2,}/u, `${name}: ${said.match(/[^\s]*[A-Za-z]{2,}[^\s]*/u)?.[0]} is shown and is not from the table`);
+  }
+});
+
+// --- In the shell ------------------------------------------------------------------------------------------------------------
+
+test("in the shell's dock slot: the dock's first screen inside #lx-dock-root, the dock's script beside it, the same tree the entry hydrates", async () => {
+  const { Document } = await import(pathToFileURL(await bundle('app/Document.jsx', 'assistant-dock-shell-test.mjs')).href);
+  const { liveDockTree, LIVE_DOCK_ROOT } = await dock();
+  for (const state of ['live-home', 'live-text', 'live-radar']) {
+    const html = renderToStaticMarkup(h(Document, { state, title: 'Lex', banner: 'live', layout: 'v4', dock: true }, h('p', null, 'page')));
+    const slot = html.indexOf(`<div id="${LIVE_DOCK_ROOT}" class="lx-dock-root" data-dock-page="${state}">`);
+    assert.ok(slot > 0, `${state}: the dock's root`);
+    assert.ok(html.includes(`<div id="${LIVE_DOCK_ROOT}" class="lx-dock-root" data-dock-page="${state}">${renderToStaticMarkup(liveDockTree(state))}</div>`), `${state}: the tree the entry hydrates`);
+    assert.ok(html.includes('src="/en/client-live-dock.js"'));
+    assert.ok(html.slice(slot).includes('id="lx-dock-q"') && !html.includes('style='), `${state}: the field, and no inline style`);
+    forms(html.slice(slot, html.indexOf('</aside>', slot)));
   }
 });

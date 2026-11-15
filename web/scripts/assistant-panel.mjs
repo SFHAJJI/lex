@@ -40,7 +40,7 @@ export const BLOCK_KINDS = Object.freeze(['claim', 'quote', 'question_span', 're
 /** At most two follow-up context chips travel with a new question (R35, R45(e)); earlier question text never does. */
 export const MAXIMUM_CONTEXT_CHIPS = 2;
 
-const PANEL_EN = Object.freeze({
+const PANEL_EN = /* @__PURE__ */ Object.freeze({
     heading: 'Assistant',
     notice:
       'This is an automated assistant that shows published legal texts. It does not give legal advice or apply the law to your situation. Do not type names, health details or other personal details.',
@@ -217,7 +217,7 @@ const PANEL_EN = Object.freeze({
     dockCouldNot: 'The assistant could not answer this question: its planner failed, its plan was refused, or this month’s spending cap is reached. The texts, their versions and compare keep working: they use no model.',
 });
 
-const PANEL_FR = Object.freeze({
+const PANEL_FR = /* @__PURE__ */ Object.freeze({
     heading: 'Assistant',
     notice:
       'Ceci est un assistant automatisé qui montre des textes juridiques publiés. Il ne donne pas de conseil juridique et n’applique pas le droit à votre situation. N’écrivez ni noms, ni données de santé, ni autres données personnelles.',
@@ -387,8 +387,9 @@ const PANEL_FR = Object.freeze({
     dockCouldNot: 'L’assistant n’a pas pu répondre à cette question : son planificateur a échoué, son plan a été refusé ou le plafond de dépenses du mois est atteint. Les textes, leurs versions et la comparaison fonctionnent toujours : ils n’utilisent aucun modèle.',
 });
 
-// One line, so the pseudo-locale scan can swap the tables as it swaps the chrome's (`live-chrome-scan.test.mjs`).
-export const ASSISTANT_PANEL_COPY = Object.freeze({ en: PANEL_EN, fr: PANEL_FR });
+// One line, so the pseudo-locale scan can swap the tables as it swaps the chrome's (`live-chrome-scan.test.mjs`); pure, so a
+// bundle that draws neither panel nor dock (the preview build's) carries none of their words.
+export const ASSISTANT_PANEL_COPY = /* @__PURE__ */ Object.freeze({ en: PANEL_EN, fr: PANEL_FR });
 
 export { ASK_FRAGMENT_MAX, askFragment, readAskFragment } from './ask-fragment.mjs';
 

@@ -563,7 +563,8 @@ export function AssistantDock({ locale = CHROME_LOCALE, page = null, fetchImpl =
   latest.current = turns;
   const copy = panelCopy(locale);
   const fetchRef = useRef(fetchImpl);
-  fetchRef.current = fetchImpl ?? ((...args) => globalThis.fetch(...args));
+  // Undefined in a page: `askV3` then asks with the browser's own fetch (the one way the site asks the API, `v3-client.mjs`).
+  fetchRef.current = fetchImpl;
 
   // After hydration: the conversation kept in this tab, and whether the reader hid the dock. The turn the dock opened a text
   // for is drawn in full on the page it opened (`arrival`); any other page shows the conversation as kept.
@@ -577,8 +578,10 @@ export function AssistantDock({ locale = CHROME_LOCALE, page = null, fetchImpl =
     setRestored(true);
   }, []);
 
+  // Kept on every change; the turn a navigation opens a text for (`leaving`) stays named until the page goes.
+  const leaving = useRef(null);
   useEffect(() => {
-    if (restored) writeMemory({ turns, hidden, arrival: null });
+    if (restored) writeMemory({ turns, hidden, arrival: leaving.current });
   }, [restored, turns, hidden]);
 
   // The text page folds the dock to its tab in compare mode and opens it again after (`lex:dock`).
@@ -588,11 +591,14 @@ export function AssistantDock({ locale = CHROME_LOCALE, page = null, fetchImpl =
     return () => window.removeEventListener(DOCK_EVENT, listener);
   }, []);
 
-  // The aside the dock stands in narrows to the tab while it is folded (the shell's `.lx-dock[data-collapsed="true"]`).
+  // The aside the dock stands in (`aside[data-dock]`, the shell's) narrows to the tab while it is folded: the shell's
+  // `.lx-dock[data-collapsed="true"]` is 48 px wide; unfolded, the attribute is removed.
   const collapsed = hidden || folded;
   useEffect(() => {
-    const aside = document.getElementById(LIVE_DOCK_ROOT)?.closest('.lx-dock');
-    if (aside) aside.setAttribute('data-collapsed', collapsed ? 'true' : 'false');
+    const aside = document.querySelector('aside[data-dock]');
+    if (aside === null) return;
+    if (collapsed) aside.setAttribute('data-collapsed', 'true');
+    else aside.removeAttribute('data-collapsed');
   }, [collapsed]);
 
   // Keyboard focus follows the fold: to the tab when the dock folds, to the field when it opens.
@@ -642,6 +648,7 @@ export function AssistantDock({ locale = CHROME_LOCALE, page = null, fetchImpl =
     if (handled) return;
     const href = textHref(detail, locale);
     if (href === null) return;
+    leaving.current = id;
     writeMemory({ turns: nextTurns, hidden, arrival: id });
     window.location.assign(href);
   }, [hidden, locale]);
