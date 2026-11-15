@@ -4028,6 +4028,10 @@ html[data-layout="v4"] .lx-dock-tab-label { writing-mode: vertical-rl; font-size
   html[data-layout="v4"] .lx-article { flex-direction: column; gap: 8px; }
   html[data-layout="v4"] .lx-margin { flex: 0 0 auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
   html[data-layout="v4"] .lx-cite-panel { width: auto; }
+  /* Home on a phone (R47): the field stays on the first screen under the header. */
+  html[data-layout="v4"] .lx-home-headline { font-size: 27px; line-height: 1.12; }
+  html[data-layout="v4"] .lx-home-lede { margin-top: 8px; font-size: 14.5px; line-height: 1.45; }
+  html[data-layout="v4"] .lx-home-find { margin-top: 14px; height: 48px; }
   /* Compare stacks the old wording above the new. */
   html[data-layout="v4"] .lx-compare-head { flex-direction: column; }
   html[data-layout="v4"] .lx-compare-nav { margin-left: 0; }
