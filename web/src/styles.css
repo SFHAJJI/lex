@@ -3739,7 +3739,8 @@ html[data-layout="v4"] .lx-segment[aria-pressed="true"] { background: #FFFFFF; c
 html[data-layout="v4"] .lx-date-field label { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13.5px; font-weight: 400; color: var(--lx-muted); }
 html[data-layout="v4"] .lx-date-field input { width: 108px; height: 36px; box-sizing: border-box; margin: 0; padding: 0 11px; border: 1px solid var(--lx-field); border-radius: 6px; background: #FFFFFF; font: inherit; font-size: 15px; color: var(--lx-ink); font-variant-numeric: tabular-nums; box-shadow: none; }
 html[data-layout="v4"] .lx-date-field input::placeholder { color: var(--lx-faint); opacity: 1; }
-html[data-layout="v4"] .lx-date-field input:focus { border-color: var(--lx-indigo); outline: none; }
+html[data-layout="v4"] .lx-date-field input:focus { border-color: var(--lx-indigo); }
+html[data-layout="v4"] .lx-date-field input:focus-visible { outline: 2px solid var(--lx-indigo); outline-offset: 2px; }
 html[data-layout="v4"] .lx-date-field input[aria-invalid="true"] { border-color: var(--lx-removed-ink); }
 html[data-layout="v4"] .lx-changes-bad { margin: 8px 0 0; font-size: 13.5px; color: var(--lx-removed-ink); }
 /* The title filter and the switch. */
