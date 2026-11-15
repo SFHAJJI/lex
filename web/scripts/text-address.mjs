@@ -34,27 +34,38 @@ export const TEXT_PAGE = 'text.html';
  */
 export function textHref({ identifier, date = null, article = null, from = null, to = null, view = null }, locale = CHROME_LOCALE) {
   if (textPath(identifier) === null || !INTERFACE_LANGUAGES.includes(locale)) return null;
-  const query = new URLSearchParams();
-  query.set('text', identifier);
+  // Written by hand, not with URLSearchParams: the API's server renderer runs in an engine that has none (as on 2026-11-14).
+  const parts = [`text=${encodeURIComponent(identifier)}`];
   const compare = typeof from === 'string' && DATE.test(from) && typeof to === 'string' && DATE.test(to);
-  if (!compare && typeof date === 'string' && DATE.test(date)) query.set('date', date);
-  if (compare) {
-    query.set('from', from);
-    query.set('to', to);
-  }
-  if (typeof article === 'string' && ARTICLE.test(article)) query.set('article', article);
-  if (compare && view === 'inline') query.set('view', 'inline');
-  return `/${locale}/${TEXT_PAGE}?${query.toString()}`;
+  if (!compare && typeof date === 'string' && DATE.test(date)) parts.push(`date=${date}`);
+  if (compare) parts.push(`from=${from}`, `to=${to}`);
+  if (typeof article === 'string' && ARTICLE.test(article)) parts.push(`article=${encodeURIComponent(article)}`);
+  if (compare && view === 'inline') parts.push('view=inline');
+  return `/${locale}/${TEXT_PAGE}?${parts.join('&')}`;
 }
 
 /** The state a text page's query names (`location.search`), each value null when absent or not of its shape. */
 export function textStateOf(search) {
-  const query = new URLSearchParams(typeof search === 'string' ? search : '');
-  const text = query.get('text');
-  const date = query.get('date');
-  const article = query.get('article');
-  const from = query.get('from');
-  const to = query.get('to');
+  // Read by hand too (no URLSearchParams in the server renderer's engine); a value that does not decode is absent.
+  const query = new Map();
+  for (const pair of String(typeof search === 'string' ? search : '').replace(/^\?/u, '').split('&')) {
+    if (pair.length === 0) continue;
+    const at = pair.indexOf('=');
+    const key = at < 0 ? pair : pair.slice(0, at);
+    let value = at < 0 ? '' : pair.slice(at + 1);
+    try {
+      value = decodeURIComponent(value.replaceAll('+', ' '));
+    } catch {
+      continue;
+    }
+    if (!query.has(key)) query.set(key, value);
+  }
+  const get = (key) => (query.has(key) ? query.get(key) : null);
+  const text = get('text');
+  const date = get('date');
+  const article = get('article');
+  const from = get('from');
+  const to = get('to');
   const compare = from !== null && DATE.test(from) && to !== null && DATE.test(to);
   return Object.freeze({
     identifier: text !== null && textPath(text) !== null ? text : null,
@@ -62,7 +73,7 @@ export function textStateOf(search) {
     article: article !== null && ARTICLE.test(article) ? article : null,
     from: compare ? from : null,
     to: compare ? to : null,
-    view: compare && query.get('view') === 'inline' ? 'inline' : 'side',
+    view: compare && get('view') === 'inline' ? 'inline' : 'side',
   });
 }
 

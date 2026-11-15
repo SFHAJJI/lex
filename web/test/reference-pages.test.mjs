@@ -121,11 +121,12 @@ test("the three reference pages are built under each interface language, with th
           assert.ok(html.includes(`<p class="eyebrow">${escaped(entry.eyebrow)}</p>`) && html.includes(`<h1>${escaped(entry.heading)}</h1>`) && html.includes(`<p>${escaped(entry.intro)}</p>`), `${label}: its eyebrow, heading and introduction`);
         }
         // Readable without scripts: it ships none and asks nothing; never indexed, whatever the release's switch says (R67). A V4
-        // page (How it works, Decisions) carries the V4 header's find field, a plain GET form to the search page, and no other.
+        // page (How it works, Decisions) asks nothing either: its header's find field, on a page that ships no script, leads to
+        // the home page's field (a link, no form; R109).
         const v4 = ["decisions", "evidence"].includes(page.key);
         assert.equal(html.includes('data-layout="v4"'), v4, `${label}: ${v4 ? "the V4 layout" : "its own look"}`);
-        const forms = [...html.matchAll(/<form\b[^>]*>/g)].map(([tag]) => tag);
-        assert.ok(!html.includes("<script") && (v4 ? forms.length === 1 && forms[0].includes('data-header-find=""') && !mainOf(html).includes("<form") : forms.length === 0), `${label}: no script, no form`);
+        const forms = [...html.matchAll(/<form[^>]*>/g)].map(([tag]) => tag);
+        assert.ok(!html.includes("<script") && forms.length === 0, `${label}: no script, no form`);
         assert.deepEqual(html.match(/<meta name="robots"[^>]*\/>/g), [NEVER_INDEXED_META], `${label}: never indexed`);
         assert.ok(!html.includes('rel="canonical"'), `${label}: names no canonical address`);
         assert.deepEqual([...html.matchAll(/<link rel="alternate" hrefLang="([^"]+)" href="([^"]+)"\/>/g)].map((match) => [match[1], match[2]]), [
