@@ -115,6 +115,34 @@ import { luxembourgDate } from "./temporal.mjs";
 import { exampleHref } from "./home-examples.mjs";
 import { liveChrome } from "./live-chrome.mjs";
 import { fetchWithinLimit } from "./within-limit.mjs";
+import { textHref } from "./text-address.mjs";
+import { countsSentence, numericDate } from "./live-radar.mjs";
+
+/**
+ * The V4 front end (the owner's brief of 2026-11-15): every V4 page carries the header's "Find a text" form first
+ * (`form[data-header-find]`, `client-live-header.js`), which takes the words to the search page after "#". A step types into
+ * its page's own form (`step.form`), never the header's unless it names it: an earlier page's form is the first search form
+ * that is not the header's.
+ */
+export const PAGE_FORM = "form[role=search]:not([data-header-find])";
+export const HEADER_FIND_FORM = "form[data-header-find]";
+export const HOME_FIND_FORM = "form[data-home-find]";
+export const CHANGES_FORM = "form.lx-changes-period";
+
+/** Where the V4 header's field and Home's field take the words (after "#", R109). */
+export const RESULTS_PATH = "/en/search.html";
+
+/** The requests a V4 page may need to show its first screen (FRONT-END-AGENTS rule 8: about 15). */
+export const PAGE_BUDGET = 15;
+
+/** What V4 Home asks by itself once loaded: its coverage line as built, the recent changes, their titles, the six timelines. */
+export const HOME_OWN_OPERATIONS = Object.freeze(["coverage", "changes_in_period", "dossier", "timeline"]);
+
+/** What the V4 text page asks by itself as it opens a text: its dossier, its versions, the version read, and their wording. */
+export const TEXT_OWN_OPERATIONS = Object.freeze(["dossier", "changes_in_period", "evidence_bundle", "timeline", "diff", "article_history"]);
+
+/** The usual citation of the fixture act's art_15, which the exact-reference phase opens at 2024-02-01 (`V3AnswerSamplesTests`). */
+export const REFERENCE_TYPED = "Art. 15 de la loi du 10 août 1991, dans sa version applicable au 1er février 2024";
 
 /** The origin the site's head links name (`Document.jsx`, `head-links.mjs`), whatever server a journey runs against. */
 const SITE_ORIGIN = `https://${CANONICAL_HOST}`;
@@ -168,7 +196,8 @@ export function endAddressesOf(step, todays) {
   return [...new Set(todays.map((today) => {
     const parameters = bodyOn(step.body ?? null, today)?.parameters ?? {};
     if (step.operation === "search" && step.typed !== undefined && step.notFound !== true && hash === null) {
-      return `${path}${searchFragment({ query: parameters.query, language: parameters.language, identifier: parameters.identifier ?? "", date: parameters.date ?? "" })}`;
+      // A V4 field takes the words to the search page (`resultsAt`); an earlier page kept them in its own address.
+      return `${step.resultsAt ?? path}${searchFragment({ query: parameters.query, language: parameters.language, identifier: parameters.identifier ?? "", date: parameters.date ?? "" })}`;
     }
     if (step.operation === "diff" && step.typed !== undefined && query === null && hash === null) {
       const comparison = compareQueryOf({ identifier: parameters.identifier, dateFrom: parameters.date_from, dateTo: parameters.date_to, language: parameters.language ?? "" });
@@ -246,18 +275,30 @@ export function journeyStepsFor({ identifier, date, anchor, language = READING_L
   const placeholder = `${identifier}/${date}--${"0".repeat(64)}/${language}`;
   return Object.freeze({
   coverage: Object.freeze({ path: "/en/coverage.html", operation: "coverage", body: null }),
-  // The home page at the language's root (R47, R61): the search, from the front door, at today's date in Luxembourg (R13).
+  // V4 Home at the language's root (R47, R61; the brief, section 5): the reader types into Home's one field, which takes the
+  // words to the search page after "#" (R109; one history entry, the reader's navigation), and the search page asks them in a
+  // request's body. Home asks its own first screen as it loads (`ownAsks`): never the typed words. V4 lists texts by title and
+  // prints no citation in the main flow (the brief, section 9), so the step no longer `cites`; the text page cites.
   home: Object.freeze({
     path: "/en/",
-    cites: true,
+    form: HOME_FIND_FORM,
+    find: true,
     frontDoor: true,
+    resultsAt: RESULTS_PATH,
+    historyAdded: 1,
+    ownAsks: Object.freeze({ operations: HOME_OWN_OPERATIONS, atMost: PAGE_BUDGET }),
     operation: "search",
     typed: SEARCH_PHRASE,
-    body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: SEARCH_PHRASE, language: "fra", mode: "strict", date: TODAY_IN_LUXEMBOURG }) }),
+    body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: SEARCH_PHRASE, language: "fra", mode: "strict" }) }),
   }),
+  // The V4 search page has no form of its own: the reader types into the header's "Find a text" field, which writes the words
+  // after "#" on this same page (one history entry, the reader's), and the page asks them.
   search: Object.freeze({
     path: "/en/search.html",
-    cites: true,
+    form: HEADER_FIND_FORM,
+    find: true,
+    resultsAt: RESULTS_PATH,
+    historyAdded: 1,
     operation: "search",
     typed: SEARCH_PHRASE,
     body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: SEARCH_PHRASE, language: "fra", mode: "strict" }) }),
@@ -289,14 +330,21 @@ export function journeyStepsFor({ identifier, date, anchor, language = READING_L
       parameters: Object.freeze({ identifier: identifier, date_from: date, date_to: date }),
     }),
   }),
+  // V4 Changes (the brief, section 5): the page asks the last 30 days by itself once it knows today, counted back from the
+  // newest version held (`ownAsks`, and the rows' titles); once it has answered (`settle`), the reader types the two dates
+  // day first into From and To and presses Enter, which asks that period (limit 200), then turns off "Hide new versions where
+  // no article changed" to see every new version. Rows link to the text page (`links`), never a permalink (section 9).
   radar: Object.freeze({
     path: "/en/radar.html",
-    cites: true,
+    form: CHANGES_FORM,
+    settle: true,
+    ownAsks: Object.freeze({ operations: Object.freeze(["changes_in_period", "dossier"]), atMost: PAGE_BUDGET }),
     operation: "changes_in_period",
-    typed: Object.freeze([date, date]),
+    typed: Object.freeze([numericDate(date), numericDate(date)]),
+    then: Object.freeze({ click: "input[role=switch]", key: " ", until: "[data-live-answer] li.lx-change" }),
     body: Object.freeze({
       operation_id: "changes_in_period",
-      parameters: Object.freeze({ date_from: date, date_to: date }),
+      parameters: Object.freeze({ date_from: date, date_to: date, limit: 200 }),
     }),
   }),
   export: Object.freeze({
@@ -447,6 +495,23 @@ export const EU_DOSSIER_STEP = Object.freeze({
   body: Object.freeze({ operation_id: "dossier", parameters: Object.freeze({ identifier: EU_SEARCH_IDENTIFIER }) }),
 });
 
+/**
+ * The EU search in V4 (the search page has no field for a CELEX nor a language): the GDPR asked by its citation in the
+ * header's "Find a text" field, the words in the request's body alone. Held to what the API answers that very request
+ * (`fromApi`): on the fixture mount (Luxembourg only) its refusal, said by the search page with its code, or its answer.
+ */
+export const EU_CITATION = "règlement (UE) 2016/679";
+export const EU_FIND_STEP = Object.freeze({
+  path: "/en/search.html",
+  form: HEADER_FIND_FORM,
+  find: true,
+  resultsAt: RESULTS_PATH,
+  historyAdded: 1,
+  operation: "search",
+  typed: EU_CITATION,
+  body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: EU_CITATION, language: "fra", mode: "strict" }) }),
+});
+
 /** The date the EU reading asks: the GDPR's Formex act date, the date of the one wording an EU index holds of it. */
 export const EU_READING_DATE = "2016-04-27";
 
@@ -566,20 +631,32 @@ export function journeyVerdict(observed, expected) {
   for (const text of expected.texts ?? []) {
     if (!observed.text.includes(text)) failures.push(`the page does not show "${text}"`);
   }
-  const ends = endAddressesOf(step, todaysOf(observed));
+  // A search that opens a text ends on the text page (`opens`: the search page replaces its own address with it).
+  const ends = expected.state === "success" && typeof step.opens === "string" ? [step.opens] : endAddressesOf(step, todaysOf(observed));
   if (observed.location !== undefined && !ends.some((end) => observed.location === `${expected.origin}${end}`)) {
     failures.push(`the page ended at ${observed.location}, not at ${ends.map((end) => `${expected.origin}${end}`).join(" or ")}`);
   }
+  // The links the answer must offer (V4: a row's link to the text page at that version, `textHref`).
+  for (const href of expected.links ?? []) {
+    if (!(observed.links ?? []).includes(href)) failures.push(`the page links no ${href} (it links ${JSON.stringify((observed.links ?? []).slice(0, 8))})`);
+  }
+  // The elements the answer must show (V4: the text page and the article the address names).
+  for (const selector of expected.present ?? step.present ?? []) {
+    if (!(observed.present ?? []).includes(selector)) failures.push(`the page shows no ${selector}`);
+  }
   if (observed.history !== undefined) {
-    if (observed.history.atEnd !== observed.history.atLoad) {
-      failures.push(`the page changed the history from ${observed.history.atLoad} entries to ${observed.history.atEnd}`);
+    // Exactly the entries the reader's own navigation adds (a V4 field going to the search page: one), never more.
+    const added = step.historyAdded ?? 0;
+    if (observed.history.atEnd !== observed.history.atLoad + added) {
+      failures.push(`the page changed the history from ${observed.history.atLoad} entries to ${observed.history.atEnd}${added === 0 ? "" : `, not by ${added}`}`);
     }
     if (observed.history.state !== "null") failures.push(`the page wrote history state: ${observed.history.state}`);
   }
   if (observed.cookie !== undefined && observed.cookie !== "") failures.push(`the page set a cookie: ${observed.cookie}`);
   // The answer is written into a polite live region that exists before it arrives, so a screen reader
   // hears it (the launch contract's screen-reader path).
-  if (observed.liveRegion !== undefined) {
+  // (A search that opened a text ends on the text page, a page of its own, not an answer written into this one.)
+  if (observed.liveRegion !== undefined && !(expected.state === "success" && typeof step.opens === "string")) {
     if (observed.liveRegion.atLoad !== "polite") failures.push(`the answer's region at load is ${observed.liveRegion.atLoad === null ? "in no live region" : `aria-live=${observed.liveRegion.atLoad}`}, not polite`);
     if (observed.liveRegion.atEnd !== "polite") failures.push(`the answer arrived ${observed.liveRegion.atEnd === null ? "outside any live region" : `in aria-live=${observed.liveRegion.atEnd}`}, not a polite one`);
   }
@@ -678,12 +755,17 @@ export function journeyVerdict(observed, expected) {
     if (header("referrer-policy") !== "no-referrer") failures.push(`the page arrived with Referrer-Policy ${header("referrer-policy")}`);
     if (header("x-content-type-options") !== "nosniff") failures.push("the page arrived without nosniff");
   }
-  if (expected.state === "refusal" && !observed.text.includes(expected.refusalCode)) {
+  // The V4 search page prints no code in its main flow (the brief, section 9): a refusal that is a failure of the service is
+  // said in R60's failure panel, in its own sentence, with a retry, the panel naming the code it was refused with
+  // (`data-failure`), and no list beside it.
+  if (step.find === true && expected.state === "refusal") {
+    if (observed.findRefusal !== expected.refusalCode) failures.push(`the search page's failure panel names ${observed.findRefusal ?? "no refusal"}, not ${expected.refusalCode}`);
+  } else if (expected.state === "refusal" && !observed.text.includes(expected.refusalCode)) {
     failures.push(`the page does not name the refusal ${expected.refusalCode}`);
   }
   // The code the page's refusal card shows, not a mention of it anywhere on the page (review of #834).
   const shownCodes = Array.isArray(observed.refusalCodes) ? observed.refusalCodes : null;
-  if (expected.state === "refusal" && shownCodes !== null && !(shownCodes.length === 1 && shownCodes[0] === expected.refusalCode)) {
+  if (step.find !== true && expected.state === "refusal" && shownCodes !== null && !(shownCodes.length === 1 && shownCodes[0] === expected.refusalCode)) {
     failures.push(`the page's refusal card shows ${JSON.stringify(shownCodes)}, not ${expected.refusalCode}`);
   }
   if (expected.mustRefuse !== undefined) {
@@ -720,10 +802,56 @@ export function journeyVerdict(observed, expected) {
   if (step.retry === true && observed.retried !== "reached") {
     failures.push(`the failure panel's retry was not pressed and settled (${observed.retried ?? "not observed"})`);
   }
-  const toApi = observed.requests.filter((request) => new URL(request.url).pathname.startsWith("/api/"));
+  const allToApi = observed.requests.filter((request) => new URL(request.url).pathname.startsWith("/api/"));
   const asks = (expected.mustRender === true ? 0 : 1) + (step.retry === true ? 1 : 0) + (step.then?.asks ?? 0);
+  // A V4 page asks its own first screen as it loads (`ownAsks`: Home's coverage line, recent changes and timelines; Changes'
+  // last 30 days and titles; the text page a search opens). Those are held apart: each an operation the page is built to ask,
+  // POST with no query string, its body naming its own operation and never a word typed (R109), at most `atMost` of them.
+  // Every other request is the step's own, held as before: exactly `asks`, each with exactly the step's body.
+  const ownAsks = step.ownAsks ?? null;
+  const typedWords = step.typed === undefined ? [] : [step.typed].flat();
+  const wantedBodies = step.body === null || step.body === undefined ? [] : [...new Set(todaysOf(observed).map((today) => JSON.stringify(bodyOn(step.body, today))))];
+  const bodyOf = (request) => {
+    try {
+      return JSON.parse(request.postData ?? "");
+    } catch {
+      return null;
+    }
+  };
+  const isStepRequest = (request) => ownAsks === null || wantedBodies.includes(JSON.stringify(bodyOf(request)));
+  const toApi = allToApi.filter(isStepRequest);
+  const pageOwn = allToApi.filter((request) => !isStepRequest(request));
+  if (ownAsks !== null) {
+    const operations = [...ownAsks.operations, ...(step.opens === undefined ? [] : TEXT_OWN_OPERATIONS)];
+    const atMost = ownAsks.atMost + (step.opens === undefined ? 0 : PAGE_BUDGET);
+    if (pageOwn.length > atMost) failures.push(`the page asked ${pageOwn.length} requests of its own, more than ${atMost}`);
+    for (const request of pageOwn) {
+      const url = new URL(request.url);
+      const operation = url.pathname.startsWith("/api/v3/") ? url.pathname.slice("/api/v3/".length) : null;
+      if (url.origin !== expected.origin) failures.push(`an API request left the page's origin: ${request.url}`);
+      if (url.search !== "" || operation === null || !operations.includes(operation)) failures.push(`the page asked ${request.url}, which is none of its own requests (${operations.join(", ")}) nor the step's`);
+      const body = bodyOf(request);
+      if (body?.operation_id !== operation) failures.push(`the API request to ${url.pathname} carried the body ${request.postData ?? "not observed"}`);
+      for (const words of typedWords) {
+        if ((request.postData ?? "").includes(words) || request.url.includes(encodeURIComponent(words))) failures.push(`the page's own request ${request.url} carried the typed words "${words}"`);
+      }
+      if (request.method !== "POST") failures.push(`an API request used ${request.method}`);
+    }
+  }
+  for (const operation of step.mustAsk ?? []) {
+    if (!pageOwn.some((request) => new URL(request.url).pathname === `/api/v3/${operation}`)) failures.push(`the page never asked ${operation}`);
+  }
   if (toApi.length !== asks) {
-    failures.push(`the page made ${toApi.length} requests to the API, not exactly ${["none", "one", "two"][asks]}`);
+    failures.push(`the page made ${toApi.length} requests to the API${ownAsks === null ? "" : ` with the step's body (${wantedBodies.join(" or ")})`}, not exactly ${["none", "one", "two"][asks]}`);
+  }
+  for (const request of [...toApi, ...pageOwn]) {
+    const valueOf = (name) => Object.entries(request.headers ?? {}).find(([key]) => key.toLowerCase() === name)?.[1] ?? "";
+    if (!toApi.includes(request)) {
+      // A page's own request carries no referrer and no cookie either.
+      if (request.headersSent !== true) failures.push("the headers the API request was sent with were not observed");
+      if (valueOf("referer") !== "") failures.push("the API request carried a referrer");
+      if (valueOf("cookie") !== "") failures.push("the API request carried a cookie");
+    }
   }
   for (const request of toApi) {
     const url = new URL(request.url);
@@ -758,6 +886,10 @@ export function journeyVerdict(observed, expected) {
     const url = new URL(request.url);
     if (url.protocol === "data:") continue;
     if (url.origin !== expected.origin) failures.push(`the page reached another origin: ${request.url}`);
+    // R109: a word typed reaches no address a server sees (a V4 field navigates with the words after "#", never in a query).
+    if (typedWords.some((words) => words !== "" && (url.search.includes(encodeURIComponent(words)) || safeDecode(url.search).includes(words)))) {
+      failures.push(`a request carried the typed words in its address: ${request.url}`);
+    }
     if (!url.pathname.startsWith("/api/") && request.method !== "GET") {
       failures.push(`the page sent ${request.method} for an asset: ${request.url}`);
     }
@@ -808,6 +940,15 @@ export function processRecordFailures(record, { typed = [], userAgent = null } =
   return failures;
 }
 
+/** A query string decoded, or as it is when it does not decode. */
+function safeDecode(text) {
+  try {
+    return decodeURIComponent(text.replaceAll("+", " "));
+  } catch {
+    return text;
+  }
+}
+
 /** The days a run was in, in Luxembourg: at its start and at its end (once when they are one), or now for a record with none. */
 function todaysOf(observed) {
   return Array.isArray(observed.todays) && observed.todays.length > 0 ? observed.todays : [todayInLuxembourgAt(Date.now())];
@@ -822,6 +963,8 @@ export function frontDoorOf(bytes) {
     facts: bytes.includes('id="lex-home-facts"'),
     // The example searches the page lists (R47): each link's address and the article it says it opens, in order.
     examples: [...bytes.matchAll(/<a href="([^"]*)" data-home-example="([^"]*)"/g)].map(([, href, opens]) => ({ href: href.replaceAll("&amp;", "&"), opens })),
+    // V4 Home's starting texts (the brief, section 5): each a link to the text page, as the server rendered it.
+    startTexts: [...bytes.matchAll(/<a class="lx-home-text" href="([^"]*)" data-start-text="([^"]*)"/g)].map(([, href, identifier]) => ({ href: href.replaceAll("&amp;", "&"), identifier })),
   };
 }
 
@@ -838,6 +981,26 @@ export function frontDoorFailures(observed, expected) {
   const unmounted = expected.state === "refusal" && expected.refusalCode === "no_corpus_mounted";
   const line = unmounted ? "unmounted" : "counted";
   if (door.coverageLine !== line) failures.push(`the home page's coverage line is ${door.coverageLine ?? "absent"}, not ${line}`);
+  if (expected.step?.find === true) {
+    // V4 Home (the brief, section 5): no date field (its field finds a text; the text page's "Show the law on" asks a date),
+    // and no example searches (the dock's examples are the brief's three questions). In their place: the starting texts the
+    // server renders, each a link to the text page for that text (`textHref`), and the box first and in view on a phone.
+    const texts = door.startTexts ?? [];
+    if (texts.length === 0) failures.push("the home page lists no starting text");
+    for (const text of texts) {
+      const href = textHref({ identifier: text.identifier }, "en");
+      if (text.href !== href) failures.push(`the starting text ${text.identifier} links ${text.href}, not ${href}`);
+    }
+    const screen = observed.firstScreen;
+    if (screen === undefined || screen === null || typeof screen.height !== "number") failures.push("the home page was not measured at a small phone's size");
+    else {
+      if (screen.inputFirst !== true) failures.push("the search box is not the first control of the home page's content");
+      if (!(typeof screen.input === "number" && screen.input <= screen.height)) failures.push(`the search box ends at ${screen.input} px, below the first ${screen.height} px`);
+      // R50's sentence stands on every V4 page, in its footer (no longer under the box: the brief's V1Home).
+      if (screen.notAdvice !== true) failures.push("the home page does not say what Lex is not");
+    }
+    return failures;
+  }
   if (!todaysOf(observed).includes(door.dateField)) {
     failures.push(`the home page's date field holds ${JSON.stringify(door.dateField)}, not today in Luxembourg (${todaysOf(observed).join(" or ")})`);
   }
@@ -1029,8 +1192,8 @@ export async function startApi(apiOutput, mount, webRoot = null, { linkMount = f
 }
 
 /** Sets the form's select to a value as a pointer would: the value, then the change event the page listens for. */
-const chooseInSelect = (value) => `(() => {
-  const select = document.querySelector('form[role=search] select');
+const chooseInSelect = (value, form = PAGE_FORM) => `(() => {
+  const select = document.querySelector(${JSON.stringify(`${form} select`)});
   Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, ${JSON.stringify(value)});
   select.dispatchEvent(new Event('change', { bubbles: true }));
   return select.value;
@@ -1040,17 +1203,20 @@ const chooseInSelect = (value) => `(() => {
  * A form step's action: once hydrated, type into the form's text fields in order (one text, or one per
  * field), choose the option a step names in the form's select, and submit it.
  */
-async function typeAndSubmit(session, sessionId, evaluate, deadline, typed, chosen) {
+async function typeAndSubmit(session, sessionId, evaluate, deadline, typed, chosen, form = PAGE_FORM) {
   while (Date.now() < deadline && (await evaluate("document.documentElement.dataset.hydrated ?? null")) === null) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   const texts = Array.isArray(typed) ? typed : [typed];
+  // The form's text fields (a V4 page's field may hold a value already, as Changes' dates do: selected, so the typing
+  // replaces it, as a reader's does).
+  const fields = `[...document.querySelectorAll(${JSON.stringify(`${form} input`)})].filter((input) => ['text', 'search'].includes(input.type))`;
   for (const [index, text] of texts.entries()) {
-    await evaluate(`document.querySelectorAll('form[role=search] input')[${index}].focus()`);
+    await evaluate(`(() => { const field = ${fields}[${index}]; field.focus(); field.select(); })()`);
     await session.send("Input.insertText", { text }, sessionId);
   }
-  if (chosen !== undefined) await evaluate(chooseInSelect(chosen.value));
-  await evaluate("document.querySelector('form[role=search] button[type=submit]').click()");
+  if (chosen !== undefined) await evaluate(chooseInSelect(chosen.value, form));
+  await evaluate(`document.querySelector(${JSON.stringify(`${form} button[type=submit]`)}).click()`);
 }
 
 const KEYS = Object.freeze({ Tab: { code: "Tab", vk: 9 }, Enter: { code: "Enter", vk: 13, text: String.fromCharCode(13) }, " ": { code: "Space", vk: 32, text: " " } });
@@ -1082,14 +1248,15 @@ const COUNT_CHARACTER_KEYS = `(() => {
   document.addEventListener('keydown', (event) => { if ([...event.key].length === 1) window.__journeyCharacterKeys += 1; }, true);
 })()`;
 
-/** What has focus, and whether it shows a focus indicator (an outline or a shadow). */
-const FOCUSED = `(() => {
+/** What has focus, and whether it shows a focus indicator (an outline or a shadow); `inForm`: inside the step's form. */
+const focusedIn = (form) => `(() => {
   const el = document.activeElement;
   if (!el || el === document.body) return null;
   const style = getComputedStyle(el);
   const ring = (parseFloat(style.outlineWidth) > 0 && style.outlineStyle !== 'none') || (style.boxShadow !== 'none' && style.boxShadow !== '');
-  return { tag: el.tagName.toLowerCase(), type: el.getAttribute('type'), inForm: el.closest('form[role=search]') !== null, pin: el.matches('input[data-pin]'), label: (el.labels?.[0]?.textContent ?? el.textContent ?? '').trim().slice(0, 40), ring };
+  return { tag: el.tagName.toLowerCase(), type: el.getAttribute('type'), inForm: el.closest(${JSON.stringify(form)}) !== null, pin: el.matches('input[data-pin]'), label: (el.labels?.[0]?.textContent ?? el.textContent ?? '').trim().slice(0, 40), ring };
 })()`;
+const FOCUSED = focusedIn(PAGE_FORM);
 
 /**
  * The keyboard path through a form step: from the top of the page, Tab until each of the form's text
@@ -1100,7 +1267,8 @@ const FOCUSED = `(() => {
  * it. Every focus stop on the way is recorded with whether it shows a focus indicator, and the page
  * counts the character keys it received.
  */
-async function keyboardTypeAndSubmit(session, sessionId, evaluate, deadline, typed, chosen) {
+async function keyboardTypeAndSubmit(session, sessionId, evaluate, deadline, typed, chosen, form = PAGE_FORM) {
+  const FOCUSED = focusedIn(form);
   while (Date.now() < deadline && (await evaluate("document.documentElement.dataset.hydrated ?? null")) === null) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
@@ -1248,18 +1416,58 @@ const REFLOW = `(() => {
  * top of the page: whether the search box is the first control of the page's content, and where it and the sentence under
  * it end, against the window's height.
  */
-const FIRST_SCREEN = `(() => {
+const firstScreen = (step) => `(() => {
   window.scrollTo(0, 0);
   const main = document.querySelector('main');
   const first = main?.querySelector('input, select, textarea, button') ?? null;
-  const box = main?.querySelector('form[role=search] input[type=search]') ?? null;
+  const box = main?.querySelector(${JSON.stringify(step.find === true ? `${step.form} input` : "form[role=search] input[type=search]")}) ?? null;
   const statement = main?.querySelector('[data-not-advice]') ?? null;
+  const said = [...document.querySelectorAll('[data-not-advice]')].some((node) => node.textContent.trim() === ${JSON.stringify(NOT_ADVICE_SAID)});
   const bottom = (el) => (el === null ? null : Math.round(el.getBoundingClientRect().bottom));
-  return { height: window.innerHeight, inputFirst: first !== null && first === box, input: bottom(box), statement: bottom(statement) };
+  return { height: window.innerHeight, inputFirst: first !== null && first === box, input: bottom(box), statement: bottom(statement), notAdvice: said };
 })()`;
 
-/** The politeness of the live region the answer is written into, or null when it is in none. */
-const ANSWER_LIVE_REGION = "document.querySelector('[data-answer-state]')?.closest('[aria-live]')?.getAttribute('aria-live') ?? null";
+/** The politeness of the live region the answer is written into (V4's search page: its results), or null when it is in none. */
+const ANSWER_LIVE_REGION = "document.querySelector('[data-answer-state], [data-find-state]')?.closest('[aria-live]')?.getAttribute('aria-live') ?? null";
+
+/**
+ * The state a page's answer is in: an earlier page's `data-answer-state`; V4's search page's `data-find-state` (its texts
+ * listed, `rows`, is an answer; `none` with the refusal's own sentence is a refusal; `failed` a transport failure); and the
+ * V4 text page a search opens, an answer once it shows the text. Null while none is shown (a page between two documents too).
+ */
+export const ANSWER_STATE = `(() => {
+  const earlier = document.querySelector('[data-answer-state]')?.dataset.answerState;
+  if (earlier) return earlier;
+  const results = document.querySelector('[data-find-state]');
+  const find = results?.dataset.findState;
+  if (find === 'rows') return 'success';
+  if (find === 'none') return document.querySelector('.lx-find-none [role=status]') === null ? 'not_opened' : 'refusal';
+  if (find === 'failed') return results.dataset.findOutcome ?? 'transport_failure';
+  if (find === 'unread') return 'address_unread';
+  if (find) return 'loading';
+  if (document.querySelector('[data-text-page]') !== null) return 'success';
+  return null;
+})()`;
+
+/**
+ * Until the page has settled: its answer in a terminal state (or none shown) and no new request to the API for 700 ms, or
+ * the deadline.
+ */
+async function settled(evaluate, askedApi, deadline) {
+  let count = -1;
+  let since = Date.now();
+  while (Date.now() < deadline) {
+    const state = (await evaluate(ANSWER_STATE).catch(() => null)) ?? null;
+    const now = askedApi();
+    if (now !== count) {
+      count = now;
+      since = Date.now();
+    } else if (state !== "loading" && state !== "idle" && Date.now() - since >= 700) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
 
 async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
   const profile = await mkdtemp(join(tmpdir(), "lex-journey-cdp-"));
@@ -1319,13 +1527,28 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
     const historyAtLoad = await evaluate("history.length");
     const liveRegionAtLoad = await evaluate(ANSWER_LIVE_REGION);
     let keys;
-    if (step.typed !== undefined && keyboard) keys = await keyboardTypeAndSubmit(session, sessionId, evaluate, deadline, step.typed, step.chosen);
-    else if (step.typed !== undefined) await typeAndSubmit(session, sessionId, evaluate, deadline, step.typed, step.chosen);
+    const askedApi = () => requests.filter((request) => new URL(request.url).pathname.startsWith("/api/")).length;
+    // A page that asks by itself as it loads (V4 Changes) is let answer, and settle, before the reader types: its state
+    // terminal and no new request for a moment, as a reader reads the list before choosing dates.
+    if (step.settle === true) await settled(evaluate, askedApi, deadline);
+    const before = askedApi();
+    if (step.typed !== undefined && keyboard) keys = await keyboardTypeAndSubmit(session, sessionId, evaluate, deadline, step.typed, step.chosen, step.form ?? PAGE_FORM);
+    else if (step.typed !== undefined) await typeAndSubmit(session, sessionId, evaluate, deadline, step.typed, step.chosen, step.form ?? PAGE_FORM);
     let answerState = null;
     while (Date.now() < deadline) {
-      answerState = await evaluate("document.querySelector('[data-answer-state]')?.dataset.answerState ?? null");
+      answerState = (await evaluate(ANSWER_STATE).catch(() => null)) ?? null;
+      // A settled page held an answer before the reader typed: the one that counts is the answer to what was typed.
+      if (step.settle === true && step.typed !== undefined && askedApi() <= before) answerState = null;
+      // A search that opens a text goes on to the text page: wait for it.
+      if (answerState === "opening") answerState = null;
       if (answerState !== null && answerState !== "loading" && answerState !== "idle") break;
       await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    // The text page a search opens is an answer once it shows the article it was opened at.
+    if (step.until !== undefined && answerState === "success") {
+      while (Date.now() < deadline && (await evaluate(`document.querySelector(${JSON.stringify(step.until)}) !== null`).catch(() => false)) !== true) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
     }
     // A step that acts on the answer (the export composer's pin) acts only on a success, and must
     // reach its state before the deadline.
@@ -1356,7 +1579,7 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
     if (step.retry === true) {
       const asked = () => requests.filter((request) => new URL(request.url).pathname.startsWith("/api/")).length;
       const before = asked();
-      if (!(await evaluate("document.querySelector('[data-live-answer] [data-failure] [data-retry]') !== null"))) retried = "absent";
+      if (!(await evaluate("document.querySelector('[data-live-answer] [data-failure] [data-retry], [data-find-state] [data-failure] [data-retry]') !== null"))) retried = "absent";
       else if (keyboard) {
         retried = "absent";
         for (let tab = 0; tab < 30; tab += 1) {
@@ -1371,18 +1594,20 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
           }
         }
       } else {
-        await evaluate("document.querySelector('[data-live-answer] [data-failure] [data-retry]').click()");
+        await evaluate("document.querySelector('[data-live-answer] [data-failure] [data-retry], [data-find-state] [data-failure] [data-retry]').click()");
         retried = "pressed";
       }
       while (retried === "pressed" && Date.now() < deadline) {
-        const state = await evaluate("document.querySelector('[data-answer-state]')?.dataset.answerState ?? null");
+        const state = (await evaluate(ANSWER_STATE).catch(() => null)) ?? null;
         if (asked() > before && state !== null && state !== "loading") retried = "reached";
         else await new Promise((resolve) => setTimeout(resolve, 100));
       }
-      answerState = await evaluate("document.querySelector('[data-answer-state]')?.dataset.answerState ?? null");
+      answerState = (await evaluate(ANSWER_STATE).catch(() => null)) ?? null;
     }
-    // Let a late request or log line arrive before the observation is closed.
+    // Let a late request or log line arrive before the observation is closed (a page asking its own first screen: until it
+    // settles).
     await new Promise((resolve) => setTimeout(resolve, 500));
+    if (step.ownAsks !== undefined) await settled(evaluate, askedApi, deadline);
     const observed = {
       answerState,
       text: await evaluate("document.body.innerText"),
@@ -1456,6 +1681,10 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
       })()`)),
       // Every quotation the answer shows, with what its article's element prints beside it.
       paint: await evaluate(PAINT_ONLY),
+      // V4: where the answer's links lead, the elements it must show, and a search page's refusal said in its own sentence.
+      links: await evaluate("[...document.querySelectorAll('main a[href]')].map((node) => node.getAttribute('href'))"),
+      present: await evaluate(`${JSON.stringify(step.present ?? [])}.filter((selector) => document.querySelector(selector) !== null)`),
+      findRefusal: await evaluate("document.querySelector('.lx-find-list') === null ? (document.querySelector('[data-find-state=failed] [data-failure]')?.dataset.failure ?? document.querySelector('[data-find-state=none] [data-find-refusal]')?.dataset.findRefusal ?? null) : 'a list of texts'"),
       emptyAnswer: await evaluate("document.querySelector('[data-live-answer] [data-no-row], [data-live-answer] [data-no-hit]') !== null"),
       quotes: await evaluate("[...document.querySelectorAll('[data-live-answer] [data-article]')].filter((node) => node.querySelector('blockquote') !== null).map((node) => ({ article: node.dataset.article, codes: [...node.querySelectorAll('code')].map((code) => code.textContent.trim()) }))"),
     };
@@ -1468,7 +1697,7 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
     // A measurement that could not be taken fails the run (`journeyVerdict`), never passes it.
     observed.reflow = (await evaluate(REFLOW)) ?? { failed: true };
     // The home page at a small phone's size (R47): the window is now 320 by 640.
-    if (step.frontDoor === true) observed.firstScreen = await evaluate(FIRST_SCREEN);
+    if (step.frontDoor === true) observed.firstScreen = await evaluate(firstScreen(step));
     observed.todays = [...new Set([todayAtStart, todayInLuxembourgAt(Date.now())])];
     return observed;
   } finally {
@@ -1575,6 +1804,11 @@ export async function run(apiOutput, mount, expected, browser, liveRoot) {
   const pageOrigin = live === null ? api.origin : await listen(live);
   try {
     const observed = await observe(browser, pageOrigin, expected.step, { keyboard: expected.keyboard === true });
+    // A V4 field that takes the words to the search page: the region the answer is written into is that page's, which the
+    // server renders before any answer (the region at load is read from its bytes, as a reader with no script receives them).
+    if (expected.step.resultsAt !== undefined && expected.step.path.split("#")[0] !== expected.step.resultsAt) {
+      observed.liveRegion = { ...observed.liveRegion, atLoad: liveRegionInBytes(await (await fetch(`${pageOrigin}${expected.step.resultsAt}`)).text()) };
+    }
     const fileEvents = await api.fileWatch.stop();
     const changedFiles = await api.changedFiles();
     observed.api = { startup: api.output().slice(0, api.outputAtStart), output: api.output().slice(api.outputAtStart), changedFiles, fileEvents };
@@ -1598,6 +1832,12 @@ export async function run(apiOutput, mount, expected, browser, liveRoot) {
   }
 }
 
+/** The politeness of the live region a page's bytes render around its answer's state (`data-find-state`), or null. */
+export function liveRegionInBytes(bytes) {
+  const tag = /<[a-z]+[^>]*\sdata-find-state="[^"]*"[^>]*>/.exec(bytes)?.[0] ?? null;
+  return tag === null ? null : (/\saria-live="([a-z]+)"/.exec(tag)?.[1] ?? null);
+}
+
 /**
  * The steps against a real mount (`--real-mount`): each page is held to what the API answers its
  * request, and to every invariant a run checks. The coverage page must name the mounted corpus and
@@ -1615,7 +1855,7 @@ export function realMountSteps(report, held = null) {
     ["J5, a law not held", UNKNOWN_LAW_STEP],
   ];
   return report.europeIndex
-    ? [...steps, ["eu search", EU_SEARCH_STEP], ["eu dossier", EU_DOSSIER_STEP], ["eu reading", EU_READING_STEP]]
+    ? [...steps, ["eu dossier", EU_DOSSIER_STEP], ["eu reading", EU_READING_STEP]]
     : steps;
 }
 
@@ -1772,14 +2012,24 @@ export const AS_PUBLISHED_SAID = "As published; may have been amended since; no 
  * interface. Both servers answer it with the 404 page, status 404, which offers the home page's search: the step searches
  * from it, as the home page's step does, and must end in that answer (or, with no mount, the refusal every request gets).
  */
-export const NOT_FOUND_STEP = Object.freeze({ ...JOURNEY_STEPS.home, path: "/en/no-such-page", notFound: true, frontDoor: false });
+export const NOT_FOUND_STEP = Object.freeze({
+  path: "/en/no-such-page",
+  notFound: true,
+  cites: true,
+  operation: "search",
+  typed: SEARCH_PHRASE,
+  // The 404 page keeps the earlier home form (`LiveSearch`, its date field at today): typed into it, never the V4 header's.
+  form: PAGE_FORM,
+  body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: SEARCH_PHRASE, language: "fra", mode: "strict", date: TODAY_IN_LUXEMBOURG }) }),
+});
 
 /** What the 404 page says above its search: there is no page at the address. */
 export const NOT_FOUND_SAID = "There is no page at this address";
 
 /**
- * The search step with no mount, retried: the page shows the failure panel for `no_corpus_mounted`, the retry is pressed
- * once, and the page asks the very same request again and shows the same refusal (R60).
+ * The search step with no mount, retried: the page shows the failure panel for `no_corpus_mounted` (V4: in place of the
+ * texts, in its own sentence), the retry is pressed once, and the page asks the very same request again and shows the same
+ * refusal (R60).
  */
 export const RETRIED_SEARCH_STEP = Object.freeze({ ...JOURNEY_STEPS.search, retry: true });
 
@@ -1789,16 +2039,46 @@ export const RETRIED_SEARCH_STEP = Object.freeze({ ...JOURNEY_STEPS.search, retr
  * body alone, and stays at that address.
  */
 export const KEPT_SEARCH_STEP = Object.freeze({
-  path: `/en/search.html${searchFragment({ query: SEARCH_PHRASE, language: "fra" })}`,
-  cites: true,
+  path: `/en/search.html${searchFragment({ query: REFERENCE_TYPED, language: "fra" })}`,
+  find: true,
   operation: "search",
-  body: JOURNEY_STEPS.search.body,
+  // V4 (the brief, section 5): the words are an exact reference that opens, so the page goes straight to the text page at
+  // that article and that version's date, replacing its own address (no history entry); the text page asks its own.
+  opens: textHref({ identifier: DOSSIER_IDENTIFIER, date: READING_DATE, article: HISTORY_ANCHOR }, "en"),
+  ownAsks: Object.freeze({ operations: Object.freeze([]), atMost: 0 }),
+  until: `[data-text-page] [data-article="${HISTORY_ANCHOR}"]`,
+  present: Object.freeze(["[data-text-page]", `[data-text-page] [data-article="${HISTORY_ANCHOR}"]`]),
+  mustAsk: Object.freeze(["dossier", "evidence_bundle"]),
+  body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: REFERENCE_TYPED, language: "fra", mode: "strict" }) }),
 });
 
-/** The runs of the site's own addresses on the fixture mount (the plan's item 3.5): a search kept in the address. */
+/**
+ * The V4 text page opened at an article (the brief, section 4): `text.html?text=…&article=art_15`, nothing typed. It asks the
+ * text's dossier, its versions (`changes_in_period`) and the version applying today with its contents, at that article
+ * (`evidence_bundle`, the step's own request), each in a request's body; and shows the text and that article.
+ */
+export const TEXT_PAGE_STEP = Object.freeze({
+  path: `/en/text.html?text=${encodeURIComponent(DOSSIER_IDENTIFIER)}&article=${HISTORY_ANCHOR}`,
+  operation: "evidence_bundle",
+  ownAsks: Object.freeze({ operations: TEXT_OWN_OPERATIONS, atMost: PAGE_BUDGET }),
+  until: `[data-text-page] [data-article="${HISTORY_ANCHOR}"]`,
+  present: Object.freeze(["[data-text-page] h1", `[data-text-page] [data-article="${HISTORY_ANCHOR}"]`]),
+  mustAsk: Object.freeze(["dossier", "changes_in_period"]),
+  body: Object.freeze({
+    operation_id: "evidence_bundle",
+    parameters: Object.freeze({ identifier: DOSSIER_IDENTIFIER, date: TODAY_IN_LUXEMBOURG, language: READING_LANGUAGE, contents: true, article: HISTORY_ANCHOR }),
+  }),
+});
+
+/**
+ * The runs of the site's own addresses on the fixture mount (the plan's item 3.5): a search kept in the address, which in V4
+ * opens the text page the reference names; and the text page itself at an article.
+ */
 export function addressExpectations() {
-  const searchTexts = [SEARCH_FOUND_SAID, SEARCH_SEARCHED_SAID, SEARCH_VERSION_SAID, "art_15", "The best hits first, in the stated ranking."];
-  return [["a search kept in the address", { step: KEPT_SEARCH_STEP, state: "success", texts: searchTexts }]];
+  return [
+    ["a search kept in the address", { step: KEPT_SEARCH_STEP, state: "success" }],
+    ["the text page at an article", { step: TEXT_PAGE_STEP, state: "success" }],
+  ];
 }
 
 /**
@@ -1821,32 +2101,35 @@ export function failurePageExpectations() {
  */
 export function fixtureMountExpectations(journeyMount) {
   const { coverage, home, search, dossier, reading, history, compare, radar, export: exporting, address, permalink, stale, current } = JOURNEY_STEPS;
-  const searchTexts = [SEARCH_FOUND_SAID, SEARCH_SEARCHED_SAID, SEARCH_VERSION_SAID, "art_15", "The best hits first, in the stated ranking.", NOT_ADVICE_SAID];
-  // The home page's search is dated today, which the fixture's one state (2024-02-01) applies on; its coverage line counts the
-  // fixture's one work, one state and 49 articles.
-  const homeTexts = [
-    ...searchTexts,
-    "Only Luxembourg acts were searched. For each, the version whose publisher dates cover",
-    "An act held only as published is searched as published, and may have been amended since.",
-    // What the search covers, one action away under its summary (2026-11-13); the summary is what a reader sees first.
-    "What the search covers",
-    "This site holds 1 act of Luxembourg law, in 1 version with 49 articles, as of the index built on",
-  ];
+  // V4's search page lists the texts the words find, by their own title, each a link to the text page (the brief, section 5);
+  // it shows no passage, no count of passages and no citation. The fixture's index holds no title of its one act (its
+  // dossier is headed by its key), so the act the four passages are in is listed by no title: the page says that no text
+  // matches, with its hint, and R50's sentence stands in its footer. (The passages and their citations are held on the
+  // earlier pages' runs that remain: the 404 page's search below, the reading, the permalink.)
+  const find = liveChrome("en").search;
+  const searchTexts = [find.findHeading, fillQuery(find.findNone, SEARCH_PHRASE), find.findHint, NOT_ADVICE_SAID];
   return [
     ["coverage", { step: coverage, state: "success", corpusSha256: journeyMount.corpus_sha256, indexSha256: journeyMount.index_sha256 }],
-    ["home", { step: home, state: "success", texts: homeTexts }],
-    ["search", { step: search, state: "success", texts: [...searchTexts, "Only Luxembourg acts were searched, with no date: every version this site holds was searched"] }],
+    ["home", { step: home, state: "success", texts: searchTexts }],
+    ["search", { step: search, state: "success", texts: searchTexts }],
     ["dossier", { step: dossier, state: "success", texts: [journeyMount.work_key, "1 state, from 2024-02-01 to 2024-02-01.", "Details: what this record does not hold, and how its dates are read", AS_PUBLISHED_SAID] }],
     ["reading", { step: reading, state: "success", texts: ["the state applying from 2024-02-01", "49 articles quoted", "Art. 15.", "Text served under agreed_same_run_cc_by", AS_PUBLISHED_SAID, NOT_ADVICE_SAID] }],
     ["history", { step: history, state: "success", texts: [`${HISTORY_ANCHOR} in loi-1991-08-10-n3`, "Carried by 1 held state, from 2024-02-01", "first held wording"] }],
     ["compare", { step: compare, state: "success", texts: [`loi-1991-08-10-n3: ${READING_DATE} against ${READING_DATE}.`, `Both dates select the one text held, the act as published, applicable from ${READING_DATE} (publisher); later versions are not held.`, AS_PUBLISHED_SAID] }],
-    ["radar", { step: radar, state: "success", texts: [`${READING_DATE} to ${READING_DATE}: 1 state of 1 work, of 1 held.`, "not compared: the first state this index holds"] }],
+    // V4 Changes: the fixture's one version, its first held, shown once the switch hides nothing; its row says why it is not
+    // compared, and links to the text page at that version (`textHref`), never a permalink (the brief, section 9).
+    ["radar", { step: radar, state: "success", texts: [numericDate(READING_DATE), liveChrome("en").radar.reason.first_held_state, liveChrome("en").radar.readVersion], links: [textHref({ identifier: DOSSIER_IDENTIFIER, date: READING_DATE }, "en")] }],
     ["export", { step: exporting, state: "success", texts: ["3 articles pinned: 3 exported with text, 0 excluded.", EXPORT_WATERMARK, "Text served under agreed_same_run_cc_by."] }],
     ["address", { step: address, state: "success", texts: [journeyMount.work_key, "1 state, from 2024-02-01 to 2024-02-01."] }],
     ["permalink", { step: permalink, state: "success", texts: ["the state applying from 2024-02-01", "49 articles quoted", "Art. 15.", "Text served under agreed_same_run_cc_by", NOT_ADVICE_SAID] }],
     ["stale", { step: stale, state: "refusal", refusalCode: "pinned_digest_mismatch", texts: ["which is not the version this site holds for that date; the version it holds is"] }],
     ["current", { step: current, state: "success", texts: ["Quoted from loi-1991-08-10-n3, fra, the state applying from 2024-02-01.", "The whole act at this version", "49 articles quoted", NOT_ADVICE_SAID] }],
   ];
+}
+
+/** A copy table's sentence with the words searched in it (`{query}`). */
+function fillQuery(template, query) {
+  return template.replace("{query}", query);
 }
 
 /** The line a failure panel says first (R60), as the English pages say it. */
@@ -1896,7 +2179,11 @@ export const PRE_HISTORY_READING_STEP = preHistoryStepFor(DOSSIER_IDENTIFIER, PR
 export const NO_HIT_PHRASE = "combien de jours de congé j'ai le droit quand mon père est décédé";
 export const NO_HIT_SEARCH_STEP = Object.freeze({
   path: "/en/search.html",
-  cites: true,
+  // V4: typed into the header's "Find a text" field, the one field of the search page (`JOURNEY_STEPS.search`).
+  form: HEADER_FIND_FORM,
+  find: true,
+  resultsAt: RESULTS_PATH,
+  historyAdded: 1,
   operation: "search",
   typed: NO_HIT_PHRASE,
   body: Object.freeze({ operation_id: "search", parameters: Object.freeze({ query: NO_HIT_PHRASE, language: "fra", mode: "strict" }) }),
@@ -1936,7 +2223,9 @@ export function specificationJourneyExpectations() {
     ["J1, a date before the history", { step: EARLY_READING_STEP, state: "refusal", refusalCode: "no_version_for_date", texts: [NO_EARLIER_STATE, "2024-02-01"] }],
     // The plain no-hit card (the plan's item 4.5): what was searched, that only exact matching ran, the population searched and
     // the publishers' own search pages, above the absence note.
-    ["J2, a question no article carries", { step: NO_HIT_SEARCH_STEP, state: "success", nothingToCite: true, texts: ["0 passages with the phrase, in 0 acts.", "What was searched", liveChrome("en").search.runText, liveChrome("en").search.exactOnly, SEARCH_SEARCHED_SAID, "Legilux search, for Luxembourg law", "EUR-Lex advanced search, for EU law", absence] }],
+    // V4 (the brief, section 5: "no match: one sentence and a hint"): the sentence names the words searched, the hint how to
+    // find a text, and the absence note stays beside it (journey J2: no hit is not evidence that the law does not exist).
+    ["J2, a question no article carries", { step: NO_HIT_SEARCH_STEP, state: "success", nothingToCite: true, texts: [fillQuery(liveChrome("en").search.findNone, NO_HIT_PHRASE), liveChrome("en").search.findHint, absence] }],
     ["J5, a law not held", { step: UNKNOWN_LAW_STEP, state: "refusal", refusalCode: "out_of_corpus_scope", texts: [LIVE_DOSSIER_REFUSAL_SENTENCES.out_of_corpus_scope, UNKNOWN_LAW_WHO_TO_ASK, UNKNOWN_LAW_OFFICIAL_PLACE, absence] }],
   ];
 }
@@ -2201,20 +2490,26 @@ export const WALKS = Object.freeze([
     journey: "J6",
     name: "J6, a question, the not-legal-advice line and Get help",
     start: "/en/",
+    // V4: the question typed into Home's one field goes to the search page (its one request, the words in its body); Get help
+    // is in every V4 page's footer, among the reference pages, under R50's sentence.
+    form: HOME_FIND_FORM,
     typed: ADVICE_QUESTION,
-    link: '[data-home-links] a[href="/en/help.html"]',
+    link: '[data-reference-nav] a[href="/en/help.html"]',
     to: "/en/help.html",
     texts: Object.freeze([NOT_ADVICE_SAID, "ask a lawyer or another adviser of your choice", "What Lex does not do", "Where the official texts are"]),
     apiRequests: 1,
+    ownAsks: Object.freeze({ operations: HOME_OWN_OPERATIONS, atMost: PAGE_BUDGET }),
   }),
   Object.freeze({
     journey: "J7",
     name: "J7, the Developers page from the home page, held to the API",
     start: "/en/",
-    link: '[data-home-links] a[href="/en/developers.html"]',
+    // V4: the Developers page is in every V4 page's footer, among the reference pages.
+    link: '[data-reference-nav] a[href="/en/developers.html"]',
     to: "/en/developers.html",
     texts: Object.freeze(["The Lex API, for programs and AI agents", "Two ways in, one answer", "The operations"]),
     apiRequests: 0,
+    ownAsks: Object.freeze({ operations: HOME_OWN_OPERATIONS, atMost: PAGE_BUDGET }),
   }),
 ]);
 
@@ -2243,7 +2538,7 @@ async function observeWalk(browser, pageOrigin, walk, { keyboard = false } = {})
     session.on((message) => {
       if (message.sessionId !== sessionId) return;
       if (message.method === "Network.requestWillBeSent") {
-        requests.push({ url: message.params.request.url, method: message.params.request.method, type: message.params.type ?? null });
+        requests.push({ url: message.params.request.url, method: message.params.request.method, type: message.params.type ?? null, postData: message.params.request.postData });
       } else if (message.method === "Runtime.consoleAPICalled") {
         consoleMessages.push(message.params.args.map((arg) => arg.value ?? arg.description ?? "").join(" "));
       } else if (message.method === "Log.entryAdded") {
@@ -2269,15 +2564,22 @@ async function observeWalk(browser, pageOrigin, walk, { keyboard = false } = {})
     let keys;
     let answerState = null;
     if (walk.typed !== undefined) {
-      if (keyboard) keys = await keyboardTypeAndSubmit(session, sessionId, evaluate, deadline, walk.typed);
-      else await typeAndSubmit(session, sessionId, evaluate, deadline, walk.typed);
+      if (keyboard) keys = await keyboardTypeAndSubmit(session, sessionId, evaluate, deadline, walk.typed, undefined, walk.form ?? PAGE_FORM);
+      else await typeAndSubmit(session, sessionId, evaluate, deadline, walk.typed, undefined, walk.form ?? PAGE_FORM);
       while (Date.now() < deadline) {
-        answerState = await evaluate("document.querySelector('[data-answer-state]')?.dataset.answerState ?? null");
+        answerState = (await evaluate(ANSWER_STATE).catch(() => null)) ?? null;
         if (answerState !== null && answerState !== "loading" && answerState !== "idle") break;
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
     }
-    const notAdvice = await evaluate("[...document.querySelectorAll('main [data-not-advice]')].map((node) => node.textContent.trim())");
+    // A page that asks its own first screen (V4 Home) is let settle before the link is followed, so what following it asks
+    // is the link's alone.
+    if (walk.ownAsks !== undefined) {
+      const asked = () => requests.filter((request) => new URL(request.url).pathname.startsWith("/api/")).length;
+      await settled(evaluate, asked, Date.now() + ANSWER_DEADLINE_MS);
+    }
+    // R50's sentence: under the box on an earlier home page, in every V4 page's footer.
+    const notAdvice = await evaluate(`[...document.querySelectorAll(${JSON.stringify(walk.ownAsks === undefined ? "main [data-not-advice]" : "[data-not-advice]")})].map((node) => node.textContent.trim())`);
     const before = requests.length;
     // The link followed as the reader follows it: clicked, or reached by Tab and pressed with Enter.
     let followedBy = "absent";
@@ -2326,8 +2628,21 @@ async function observeWalk(browser, pageOrigin, walk, { keyboard = false } = {})
 export function walkFailures(observed, walk, destination) {
   const failures = [];
   const toApi = (request) => new URL(request.url).pathname.startsWith("/api/") || new URL(request.url).pathname === "/mcp";
-  const apiRequests = observed.requests.filter(toApi);
+  // A start page that asks its own first screen (V4 Home, `ownAsks`): those requests held apart, each one of its own
+  // operations with no query string and none carrying the typed words; the walk's own are the rest (J6's search).
+  const own = (request) => {
+    if (walk.ownAsks === undefined) return false;
+    const url = new URL(request.url);
+    const operation = url.pathname.startsWith("/api/v3/") ? url.pathname.slice("/api/v3/".length) : null;
+    return operation !== null && url.search === "" && walk.ownAsks.operations.includes(operation) && !(walk.typed !== undefined && (request.postData ?? "").includes(walk.typed));
+  };
+  const pageOwn = observed.requests.filter((request) => toApi(request) && own(request));
+  if (walk.ownAsks !== undefined && pageOwn.length > walk.ownAsks.atMost) failures.push(`the start page asked ${pageOwn.length} requests of its own, more than ${walk.ownAsks.atMost}`);
+  const apiRequests = observed.requests.filter((request) => toApi(request) && !own(request));
   if (apiRequests.length !== walk.apiRequests) failures.push(`the walk asked the API ${apiRequests.length} times, not ${walk.apiRequests}`);
+  if (walk.typed !== undefined && walk.ownAsks !== undefined && !apiRequests.every((request) => new URL(request.url).pathname === "/api/v3/search" && (request.postData ?? "").includes(walk.typed))) {
+    failures.push("the walk's request was not the search of the words typed, in its body");
+  }
   const asked = observed.requestsAfterFollowing.filter(toApi);
   if (asked.length > 0) failures.push(`following the link asked the API: ${asked.map((request) => request.url).join(", ")}`);
   if (walk.typed !== undefined) {
@@ -2437,13 +2752,15 @@ export function twoStateExpectations(journeyMount) {
   });
   const radar = Object.freeze({
     ...JOURNEY_STEPS.radar,
-    typed: Object.freeze([first, later]),
-    body: Object.freeze({ operation_id: "changes_in_period", parameters: Object.freeze({ date_from: first, date_to: later }) }),
+    typed: Object.freeze([numericDate(first), numericDate(later)]),
+    body: Object.freeze({ operation_id: "changes_in_period", parameters: Object.freeze({ date_from: first, date_to: later, limit: 200 }) }),
   });
   const counts = "1 changed, 0 added, 0 removed";
   return [
     ["J3, two states compared", { step: compare, state: "success", texts: [`${journeyMount.work_key.split("/").pop()}: ${first} against ${later}.`, counts, `${amended}: changed`] }],
-    ["J8, the period's change on the radar", { step: radar, state: "success", texts: [`wording changed from the state of ${first}`, `: ${counts}`] }],
+    // V4 Changes: the later version's row, its counts in words and "See what changed", the text page comparing it with the
+    // version before (`textHref` with from and to).
+    ["J8, the period's change on the radar", { step: radar, state: "success", texts: [numericDate(later), countsSentence({ added: 0, changed: 1, removed: 0, identical: 0 }), liveChrome("en").radar.seeWhatChanged], links: [textHref({ identifier: DOSSIER_IDENTIFIER, from: first, to: later }, "en")] }],
   ];
 }
 
@@ -2635,7 +2952,9 @@ async function main(argv) {
       results.push([`${walk.name}, with the fixture mount`, await runWalk(apiOutput, mount, walk, { servedByApi, keyboard, homeExamples }, browser, liveRoot)]);
     }
     // The EU steps: the fixture mount holds no EU index, so the EU work is refused for the EU corpus.
-    results.push(["eu search, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, homeExamples, ...EU_SEARCH_ON_FIXTURE }, browser, liveRoot)]);
+    // The V4 EU search: the GDPR by its citation in the header's field (the search page has no CELEX field nor a language to
+    // choose, by the brief's design), held to the API's own answer to that request.
+    results.push(["eu search, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, homeExamples, step: EU_FIND_STEP, fromApi: true }, browser, liveRoot)]);
     results.push(["eu dossier, with the fixture mount", await run(apiOutput, mount, { servedByApi, keyboard, homeExamples, ...EU_DOSSIER_ON_FIXTURE }, browser, liveRoot)]);
   }
   // Journeys J6, J7 and J8 at the API (no page asks the contained assistant or MCP, or polls events), on the

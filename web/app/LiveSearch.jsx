@@ -79,7 +79,7 @@ import { readSearchFragment, searchFragment } from '../scripts/search-address.mj
 import { todayAt } from '../scripts/initial-answer.mjs';
 import { replacePageAddress } from './page-address.mjs';
 import { TodayHint, useLuxembourgToday } from './Today.jsx';
-import { OFFICIAL_SEARCH_PAGES } from '../scripts/live-failure.mjs';
+import { OFFICIAL_SEARCH_PAGES, isFailure } from '../scripts/live-failure.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillCounted, fillText, liveChrome, livePath } from '../scripts/live-chrome.mjs';
 import { articlePermalink, europeWorkSegment, permalinkHref } from '../scripts/permalinks.mjs';
 import { datedByEntryIntoForce } from '../scripts/date-role.mjs';
@@ -1025,6 +1025,9 @@ export function FindResults({ contract, fetchImpl }) {
           return;
         }
         if (outcome.state === 'success') return setView({ state: 'rows', query: request.query, rows: findRows(outcome.view) });
+        // A failure of the service (R60: no corpus mounted, the server unreachable, a timeout) is no "no match": it is said in
+        // the failure panel, in its own sentence, with a retry.
+        if (isFailure(outcome)) return setView({ state: 'failed', query: request.query, outcome });
         if (outcome.state === 'refusal' || outcome.state === 'not_opened') return setView({ state: 'none', query: request.query, outcome });
         return setView({ state: 'failed', query: request.query });
       },
@@ -1052,23 +1055,32 @@ export function FindResults({ contract, fetchImpl }) {
   }, []);
   const query = view.query ?? '';
   return (
-    <div className="lx-find-results" data-find-state={view.state}>
+    // A polite live region the server renders before any answer, so a screen reader hears the answer (the launch contract's
+    // screen-reader path; the journeys hold it).
+    <div className="lx-find-results" aria-live="polite" data-find-state={view.state} data-find-outcome={view.state === 'failed' ? view.outcome?.state : undefined}>
       <h1 className="lx-find-heading">{COPY.findHeading}</h1>
       {view.state === 'idle' ? <p className="lx-find-status">{COPY.findIdle}</p> : null}
       {view.state === 'unread' ? <p className="lx-find-status" role="status">{COPY.findUnread}</p> : null}
       {view.state === 'loading' ? <p className="lx-find-status" role="status">{COPY.findLoading}</p> : null}
       {view.state === 'opening' ? <p className="lx-find-status" role="status">{COPY.findOpening}</p> : null}
-      {view.state === 'failed' ? (
+      {view.state === 'failed' && view.outcome !== undefined ? (
+        <FailureFrame outcome={view.outcome} onRetry={() => asked.current !== null && ask(asked.current)}>
+          {typeof view.outcome.sentence === 'string' ? <StatusSentence outcome={view.outcome} /> : <p className="lx-find-status" role="status">{COPY.findFailed}</p>}
+        </FailureFrame>
+      ) : null}
+      {view.state === 'failed' && view.outcome === undefined ? (
         <div className="lx-find-failed" role="status">
           <p className="lx-find-status">{COPY.findFailed}</p>
           <button type="button" className="lx-find-retry" onClick={() => asked.current !== null && ask(asked.current)}>{COPY.findRetry}</button>
         </div>
       ) : null}
       {view.state === 'none' || (view.state === 'rows' && view.rows.length === 0) ? (
-        <div className="lx-find-none" role="status">
+        <div className="lx-find-none" role="status" data-find-refusal={view.outcome?.state === 'refusal' ? view.outcome.code : undefined}>
           {view.outcome?.state === 'refusal' && typeof view.outcome.sentence === 'string' ? <StatusSentence outcome={view.outcome} /> : null}
           <p className="lx-find-status">{fillText(COPY.findNone, { query })}</p>
           <p className="lx-find-hint">{COPY.findHint}</p>
+          {/* No text found is not evidence that the law does not exist (journey J2), said as the refusal card says it. */}
+          <p className="lx-find-hint" data-absence-note="">{liveChrome().refusalCard.absenceNote}</p>
         </div>
       ) : null}
       {view.state === 'rows' && view.rows.length > 0 ? (

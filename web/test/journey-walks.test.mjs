@@ -9,8 +9,8 @@ import { readFile } from "node:fs/promises";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { HomeLinks, renderLiveDevelopersPage, renderLiveHelpPage } from "../.react-build/app.mjs";
-import { MCP_PROTOCOL_VERSION, NOT_ADVICE_SAID, WALKS, developersPageFailures, pageAsksNothing, walkFailures } from "../scripts/journey.mjs";
+import { SiteFooter, renderLiveDevelopersPage, renderLiveHelpPage } from "../.react-build/app.mjs";
+import { ADVICE_QUESTION, MCP_PROTOCOL_VERSION, NOT_ADVICE_SAID, WALKS, developersPageFailures, pageAsksNothing, walkFailures } from "../scripts/journey.mjs";
 import { readDevelopersContracts } from "../scripts/developers-contracts.mjs";
 
 const census = JSON.parse(await readFile(new URL("../../schemas/v3-platform/envelope-samples.json", import.meta.url), "utf8"));
@@ -28,7 +28,9 @@ const walked = (walk, change = {}) => ({
   text: walk.texts.join("\n"),
   requests: [
     { url: "http://127.0.0.1:1/en/", method: "GET" },
-    ...(walk.apiRequests === 1 ? [{ url: "http://127.0.0.1:1/api/v3/search", method: "POST" }] : []),
+    // V4 Home asks its own first screen as it loads (`ownAsks`), never the words typed.
+    { url: "http://127.0.0.1:1/api/v3/changes_in_period", method: "POST", postData: JSON.stringify({ operation_id: "changes_in_period", parameters: { date_from: "2026-10-17", date_to: "2026-11-15", limit: 200 } }) },
+    ...(walk.apiRequests === 1 ? [{ url: "http://127.0.0.1:1/api/v3/search", method: "POST", postData: JSON.stringify({ operation_id: "search", parameters: { query: walk.typed, language: "fra", mode: "strict" } }) }] : []),
     { url: `http://127.0.0.1:1${walk.to}`, method: "GET" },
   ],
   requestsAfterFollowing: [{ url: `http://127.0.0.1:1${walk.to}`, method: "GET" }],
@@ -37,15 +39,19 @@ const walked = (walk, change = {}) => ({
   ...change,
 });
 
-test("J6 walks from the home page's box to Get help, and J7 from the home page to the Developers page, by links the home page holds", () => {
+test("J6 walks from the home page's box to Get help, and J7 from the home page to the Developers page, by links every V4 page's footer holds", () => {
   assert.deepEqual(WALKS.map((walk) => walk.journey), ["J6", "J7"]);
-  const links = renderToStaticMarkup(h(HomeLinks));
+  // V4: Get help and Developers are in the footer's reference pages, under R50's sentence, on Home and on the search page.
+  const footer = renderToStaticMarkup(h(SiteFooter, { state: "live-home", v4: true }));
+  assert.ok(footer.includes(`<p data-not-advice="">${NOT_ADVICE_SAID}</p>`), "the footer says what Lex is not");
   for (const walk of WALKS) {
     const href = /a\[href="([^"]+)"\]/.exec(walk.link)[1];
-    assert.ok(walk.link.startsWith("[data-home-links] "), `${walk.journey} follows one of the home page's links`);
-    assert.ok(links.includes(`<a href="${href}">`), `${walk.journey}: the home page links ${href}`);
+    assert.ok(walk.link.startsWith("[data-reference-nav] "), `${walk.journey} follows one of the footer's reference links`);
+    assert.ok(new RegExp(`<nav[^>]*data-reference-nav=""><ul>.*<a href="${href.replaceAll(".", "\.")}"`).test(footer), `${walk.journey}: the footer links ${href}`);
     assert.equal(href, walk.to);
   }
+  assert.equal(J6.form, "form[data-home-find]", "J6 types the question into Home's own field");
+  assert.equal(J6.typed, ADVICE_QUESTION);
   // Each page says the words its walk looks for, asks nothing and is kept out of search engines.
   for (const [walk, page] of [[J6, HELP], [J7, DEVELOPERS]]) {
     const text = page.replace(/<[^>]+>/g, "").replaceAll("&#x27;", "'").replaceAll("&quot;", '"').replaceAll("&amp;", "&");
@@ -60,7 +66,14 @@ test("J6 walks from the home page's box to Get help, and J7 from the home page t
 test("a walk fails when the page asks the server, ends elsewhere, loses its words, logs, or the home page's search or sentence is missing", () => {
   const help = { status: 200, bytes: HELP };
   const fails = (change, destination = help, walk = J6) => walkFailures(walked(walk, change), walk, destination);
-  assert.match(fails({ requests: [...walked(J6).requests, { url: "http://127.0.0.1:1/api/v3/coverage", method: "POST" }] }).join(), /asked the API 2 times, not 1/);
+  assert.match(fails({ requests: [...walked(J6).requests, { url: "http://127.0.0.1:1/api/v3/ask", method: "POST" }] }).join(), /asked the API 2 times, not 1/);
+  // Home's own requests: none may carry the words typed, nor exceed its budget; the walk's one request is the search of them.
+  const leaked = { url: "http://127.0.0.1:1/api/v3/timeline", method: "POST", postData: JSON.stringify({ operation_id: "timeline", parameters: { identifier: ADVICE_QUESTION } }) };
+  assert.match(fails({ requests: [...walked(J6).requests, leaked] }).join(), /asked the API 2 times, not 1/);
+  const own = walked(J6).requests[1];
+  assert.match(fails({ requests: [...walked(J6).requests, ...Array.from({ length: 15 }, () => own)] }).join(), /asked 16 requests of its own, more than 15/);
+  const searched = walked(J6).requests.map((request) => (request.url.endsWith("/search") ? { ...request, postData: JSON.stringify({ operation_id: "search", parameters: { query: "x" } }) } : request));
+  assert.match(fails({ requests: searched }).join(), /was not the search of the words typed/);
   assert.match(fails({ requestsAfterFollowing: [{ url: "http://127.0.0.1:1/api/v3/coverage" }] }).join(), /following the link asked the API/);
   assert.match(fails({ location: "/en/" }).join(), /ended at \/en\/, not \/en\/help\.html/);
   assert.match(fails({ followedBy: "absent" }).join(), /was not reached/);
