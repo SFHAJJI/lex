@@ -38,7 +38,8 @@ import {
   validateDossier,
 } from '../scripts/assistant-panel.mjs';
 import { articleHeadingOf, articleNumberOf } from '../scripts/law-page.mjs';
-import { answerSentence, dateFor, quoteVerifies, searchCount, searchStepOf, stepsRun } from '../scripts/answer-view.mjs';
+import { answerSentence, dateFor, plannerName, quoteVerifies, registryVersionFor, searchCount, searchStepOf, stepsRun } from '../scripts/answer-view.mjs';
+import { REGISTRY_RECORD } from '../scripts/registry-record.mjs';
 import { searchFragment } from '../scripts/search-address.mjs';
 import { EVALUATION_RECORD } from '../scripts/evaluation-record.mjs';
 
@@ -218,6 +219,7 @@ function planWords(trace, copy, locale) {
  * estimated cost of a question (the latest test run's), and the raw plan: the plan's sentences and the trace (R45(c), R32).
  */
 function TheWork({ view, copy, locale, work, children = null }) {
+  const registry = registryVersionFor(REGISTRY_RECORD, view.trace.planner_id);
   const quotes = view.parts.flatMap((part) => part.blocks.filter((block) => block.kind === 'quote'));
   const first = quotes[0] ?? null;
   const document = first === null ? copy.documentNone : fill(copy.documentLine, { date: dateFor(first.from ?? '', locale) });
@@ -261,6 +263,17 @@ function TheWork({ view, copy, locale, work, children = null }) {
         {work?.seconds === undefined || work?.seconds === null ? null : <span data-work-time="">{fill(copy.workTime, { seconds: decimal(work.seconds, locale, 1) })}</span>}
         <span data-work-cost="">{fill(copy.workCost, { cost: decimal(EVALUATION_RECORD.dev.costEur, locale, 3) })}</span>
       </p>
+      {/* The planner this answer ran on, and its version in the MLflow model registry (the owner's order of 2026-11-15). */}
+      {typeof view.trace.planner_id === 'string' ? (
+        <p className="work-foot" data-work-planner={view.trace.planner_id}>
+          <span>{fill(copy.workPlanner, { planner: plannerName(view.trace.planner_id) })}</span>
+          {registry === null ? null : (
+            <a href={`/${locale}/evidence.html#registry`} data-registry-version={registry.version}>
+              {fill(copy.workRegistry, { model: REGISTRY_RECORD.model, version: registry.version })}
+            </a>
+          )}
+        </p>
+      ) : null}
       <details className="assistant-how">
         <summary>{copy.rawPlan}</summary>
         <ol className="assistant-plan">

@@ -36,7 +36,7 @@ export {
   renderLivePrivacyPage, renderLiveTermsPage,
 } from './LegalPage.jsx';
 export {
-  DEVELOPERS_PARTS, DECISION_GROUPS, DevelopersBody, Glossary, GuideBody, HelpBody, guideValues, helpValues, renderLiveDevelopersPage, renderLiveGuidePage,
+  DEVELOPERS_PARTS, DECISION_GROUPS, HOW_IT_WORKS_PARTS, PUBLIC_LINKS, DevelopersBody, Glossary, GuideBody, HelpBody, guideValues, helpValues, renderLiveDevelopersPage, renderLiveGuidePage,
   renderLiveHelpPage, renderLiveDecisionsPage, renderLiveEvidencePage, renderLiveReferencePage,
 } from './ReferencePages.jsx';
 export { LiveSearch, SEARCH_VARIANTS, SearchAnswerView, SearchResultsView, SearchWorkResolution } from './LiveSearch.jsx';

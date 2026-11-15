@@ -116,6 +116,8 @@ export const ASSISTANT_PANEL_COPY = Object.freeze({
     workTime: 'Time: {seconds} s',
     workCost: 'Cost: about {cost} € a question',
     rawPlan: 'Raw plan',
+    workPlanner: 'Planner: {planner}',
+    workRegistry: 'MLflow registry: {model}, version {version}',
   }),
   fr: Object.freeze({
     heading: 'Assistant',
@@ -190,6 +192,8 @@ export const ASSISTANT_PANEL_COPY = Object.freeze({
     workTime: 'Temps : {seconds} s',
     workCost: 'Coût : environ {cost} € par question',
     rawPlan: 'Plan brut',
+    workPlanner: 'Planificateur : {planner}',
+    workRegistry: 'Registre MLflow : {model}, version {version}',
   }),
 });
 

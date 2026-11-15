@@ -27,13 +27,16 @@ import { REFERENCE_PAGES, glossaryRows, referencePage } from '../scripts/referen
 import {
   CLIENT_LIMIT, KEY_SET_PATH, LIVE_EXAMPLE_REQUEST, MAXIMUM_REQUEST_BYTES, MCP_ENDPOINT, MCP_INSTRUCTIONS, MCP_METHODS, MCP_PROTOCOL_VERSION,
   PRESENTATION_RESULTS, PREVIOUS_REGISTRY_SCHEMA, REGISTRY_VERSION_SINCE, REPLAY_GUARANTEES, REPLAY_TESTS, RETENTION_NIGHTLY_DAYS,
-  TRANSPORT_PROBLEMS, TRANSPORT_PROBLEM_SCHEMA, liveAnswerText, liveExamples, liveNextExamples, liveRestExample, mcpClientExample,
+  REST_PREFIX, TRANSPORT_PROBLEMS, TRANSPORT_PROBLEM_SCHEMA, liveAnswerText, liveExamples, liveNextExamples, liveRestExample, mcpClientExample,
   mcpExample, parameterSchemaText, restExample,
 } from '../scripts/developers.mjs';
 import { longDate } from '../scripts/live-search.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG } from '../scripts/live-chrome.mjs';
 import { EVALUATION_RECORD } from '../scripts/evaluation-record.mjs';
 import { COVERAGE_RECORD } from '../scripts/coverage-record.mjs';
+import { REGISTRY_RECORD } from '../scripts/registry-record.mjs';
+import { OPENAPI_FILE, OPENAPI_ORIGIN } from '../scripts/openapi.mjs';
+import { plannerName } from '../scripts/answer-view.mjs';
 
 /** A link to another page of the site, in this bundle's language, with the words given. */
 const pageLink = (file, text) => <a href={livePath(file)}>{text}</a>;
@@ -227,36 +230,179 @@ function Flow({ name, steps, accent }) {
   );
 }
 
+/** A share as a whole percentage, rounded half up: 0.946 is 95. */
+const percentOf = (rate) => Math.floor(100 * rate + 0.5);
+
+/** The public addresses the page links to: the code, the harness, the monitor's and the nightly check's runs. */
+export const PUBLIC_LINKS = Object.freeze({
+  code: 'https://github.com/SFHAJJI/lex',
+  harness: 'https://github.com/SFHAJJI/lex-eval',
+  registryCode: 'https://github.com/SFHAJJI/lex-eval/blob/main/src/lex_eval/run.py',
+  monitor: 'https://github.com/SFHAJJI/lex/actions/workflows/v3-monitor.yml',
+  nightly: 'https://github.com/SFHAJJI/lex-eval/actions/workflows/nightly.yml',
+});
+
+/** The test question the page offers to try, in the page's language: one the release gate saw answered with the right article. */
+const TRY_QUESTION = Object.freeze({
+  fr: "Quel est le délai de prescription des actions dérivant d'un contrat d'assurance ?",
+  en: 'What does article 5 of the GDPR say?',
+});
+
+/** The registry's figures the page prints (`registry-record.mjs`, MLflow's own export). */
+function registryValues() {
+  const versions = REGISTRY_RECORD.versions;
+  const champion = REGISTRY_RECORD.aliases.champion ?? null;
+  const accuracyOf = (number) => versions.find((version) => version.version === number)?.metrics?.verdict_accuracy ?? null;
+  return {
+    registryModel: REGISTRY_RECORD.model,
+    mlflowVersion: REGISTRY_RECORD.mlflow_version,
+    registryVersions: count(versions.length),
+    alias: 'champion',
+    champion: champion === null ? '–' : String(champion),
+    runs: count(REGISTRY_RECORD.runs_logged),
+    firstPercent: accuracyOf(1) === null ? '–' : String(percentOf(accuracyOf(1))),
+    fifthPercent: accuracyOf(5) === null ? '–' : String(percentOf(accuracyOf(5))),
+  };
+}
+
+/** A calendar date as this page's language writes it: 25/11/2025 in French, 2025-11-25 in English. */
+const pageDate = (iso) => (CHROME_LOCALE === 'fr' && /^\d{4}-\d{2}-\d{2}/u.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : iso.slice(0, 10));
+
+
+/** The model registry, as MLflow holds it: one row a version, the champion marked. */
+function RegistryTable({ page }) {
+  const columns = ['version', 'registered', 'planner', 'code', 'data', 'result', 'gates'];
+  return (
+    <div className="table-scroll">
+      <table className="quality-table registry-table" data-registry-versions={REGISTRY_RECORD.versions.length}>
+        <thead><tr>{columns.map((column) => <th key={column} scope="col">{page.registryColumns[column]}</th>)}</tr></thead>
+        <tbody>
+          {REGISTRY_RECORD.versions.map((version) => {
+            const champion = version.aliases.includes('champion');
+            const metrics = version.metrics;
+            const result = typeof metrics.outcome_right_article === 'number'
+              ? say(page.registryArticles, { right: count(metrics.outcome_right_article), wrong: count(metrics.outcome_wrong_article ?? 0), cases: count(metrics.cases) })
+              : say(page.registryVerdicts, { percent: String(percentOf(metrics.verdict_accuracy ?? 0)), cases: count(metrics.cases ?? 0) });
+            return (
+              <tr key={version.version} data-registry-version={version.version} className={champion ? 'registry-champion' : undefined}>
+                <th scope="row">{champion ? `${version.version} · champion` : version.version}</th>
+                <td>{pageDate(version.created)}</td>
+                <td>{plannerName(version.tags.planner_id)}</td>
+                <td><code>{String(version.tags.serving_commit ?? '').slice(0, 8)}</code></td>
+                <td><code>{String(version.tags.snapshot_id ?? '').replace(/^corpus-/u, '').slice(0, 8)}</code></td>
+                <td>{result}</td>
+                <td>{page.registryGates[version.tags.gates] ?? version.tags.gates}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** One titled block of the page, its heading's id derived from its key. */
+function Block({ id, heading, children }) {
+  return (
+    <section className="evidence-block" aria-labelledby={`how-${id}`} data-reference-section={id} id={id}>
+      <h2 id={`how-${id}`}>{heading}</h2>
+      {children}
+    </section>
+  );
+}
+
+/** The parts of How it works, in its order (the reference pages' test reads them). */
+export const HOW_IT_WORKS_PARTS = Object.freeze(['card', 'architecture', 'trace', 'api', 'registry', 'supervision', 'improvement', 'quality', 'coverage', 'incidents', 'safeguards', 'limits', 'built']);
+
 /**
- * Evidence: five blocks and no paragraph. The test questions' five counts, the held-out line, the gate's rule and every
- * question; how one question is answered and how a version goes live, each as a row of boxes; what is held and missing; cost
- * and speed. Every figure is a run's or the coverage answer's own.
+ * How Lex works (the owner's order of 2026-11-15; at evidence.html): a system card on the first screen; the architecture;
+ * one answer traced; the API; the model registry as MLflow holds it; supervision; improvement with its dates; the evaluation;
+ * what Lex holds; incidents, safeguards and limits; how it is built. No paragraph: lines, boxes and tables. Every figure is a
+ * test run's, the registry's, the coverage answer's or the code's.
  */
 export function EvidenceBody() {
   const page = liveChrome().evidence;
-  const values = measured();
   const dev = EVALUATION_RECORD.dev;
-  const tiles = [
-    ['right', dev.rightArticle],
-    ['wrong', dev.wrongArticle],
-    ['notFound', dev.notFound],
-    ['wronglyRefused', dev.wronglyRefused],
-    ['rightBehaviour', dev.rightBehaviour],
-  ];
+  const heldout = EVALUATION_RECORD.heldout;
+  const noPlan = heldout.questions.filter((question) => question.verdict === 'assistant_v3_unavailable').length;
+  const values = {
+    ...measured(),
+    ...registryValues(),
+    sameVerdict: String(percentOf(dev.replaySameVerdict)),
+    samePlan: String(percentOf(dev.replaySamePlan)),
+    heldoutRefused: count(heldout.questions.filter((question) => question.outcome === 'wrongly_refused').length),
+    heldoutNoPlan: count(noPlan),
+    heldoutNotFound: count(heldout.questions.filter((question) => question.outcome === 'not_found').length - noPlan),
+    perMinute: count(CLIENT_LIMIT.apiPerMinute),
+    inFlight: count(CLIENT_LIMIT.apiInFlight),
+    artifacts: [...new Set(REGISTRY_RECORD.versions.flatMap((version) => version.artifacts))].join(', '),
+  };
+  values.model = dev.modelDeployment;
+  const tiles = [['right', dev.rightArticle], ['wrong', dev.wrongArticle], ['notFound', dev.notFound], ['wronglyRefused', dev.wronglyRefused], ['rightBehaviour', dev.rightBehaviour]];
+  const question = TRY_QUESTION[CHROME_LOCALE] ?? TRY_QUESTION.en;
+  const external = (href, text) => <a href={href} rel="external">{text}</a>;
   return (
     <>
       <h1>{page.heading}</h1>
-      <section className="evidence-block" aria-labelledby="evidence-quality" data-reference-section="quality">
-        <h2 id="evidence-quality">{say(page.qualityHeading, values)}</h2>
+      <Block id="card" heading={page.cardHeading}>
+        <ul className="decision-cards system-card">
+          {Object.entries(page.card).map(([key, item]) => (
+            <li className="decision-card" data-card={key} key={key}><h3>{item.title}</h3><p>{say(item.text, values)}</p></li>
+          ))}
+        </ul>
+      </Block>
+      <Block id="architecture" heading={page.architectureHeading}>
+        <p className="lane-label">{page.questionLane}</p>
+        <Flow name="question" steps={page.questionSteps} accent="plan" />
+        <p className="evidence-line">{say(page.modelLine, values)}</p>
+        <p className="lane-label">{page.releaseLane}</p>
+        <Flow name="release" steps={page.releaseSteps} accent="owner" />
+        <p className="evidence-line">{page.hosting}</p>
+      </Block>
+      <Block id="trace" heading={page.traceHeading}>
+        <ul className="evidence-lines">
+          <li>{page.traceLine}</li>
+          {/* The Ask page, which is the home page: a page built ahead of time never links the assistant's own page, which is
+              served only while the assistant is on (R52). */}
+          <li><a href={`/${CHROME_LOCALE}/`} data-try-question="">{page.traceTry}</a> · <span lang={CHROME_LOCALE === 'fr' ? 'fr' : 'en'}>{question}</span></li>
+        </ul>
+      </Block>
+      <Block id="api" heading={page.apiHeading}>
+        <ul className="evidence-lines">
+          <li>{page.apiDoors}</li>
+          <li>{page.apiDocumented} <a href={livePath(referencePage('developers').file)}>{page.apiDevelopers}</a> · <a href={`/${OPENAPI_FILE}`} data-openapi="">{page.apiOpenApi}</a></li>
+          <li>{page.apiCall}</li>
+        </ul>
+        <pre className="api-call"><code>{`curl -X POST ${OPENAPI_ORIGIN}${REST_PREFIX}ask \\\n  -H 'content-type: application/json' \\\n  -d '{"operation_id":"ask","parameters":{"question":"${question.replace(/'/gu, "'\\''")}"}}'`}</code></pre>
+      </Block>
+      <Block id="registry" heading={page.registryHeading}>
+        <ul className="evidence-lines">
+          <li data-registry-model="">{say(page.registryModel, { ...values, model: values.registryModel, versions: values.registryVersions })}</li>
+        </ul>
+        <RegistryTable page={page} />
+        <ul className="evidence-lines">
+          <li>{say(page.registryTags, values)}</li>
+          <li>{external(PUBLIC_LINKS.registryCode, page.registryCode)}</li>
+        </ul>
+      </Block>
+      <Block id="supervision" heading={page.supervisionHeading}>
+        <ul className="evidence-lines">
+          <li>{page.supAvailability} {external(PUBLIC_LINKS.monitor, page.supAvailabilityLink)}</li>
+          <li>{say(page.supNightly, values)} {external(PUBLIC_LINKS.nightly, page.supNightlyLink)}</li>
+          <li>{say(page.supLimits, values)}</li>
+        </ul>
+      </Block>
+      <Block id="improvement" heading={page.improvementHeading}>
+        <ul className="evidence-lines">{Object.entries(page.improvement).map(([key, line]) => <li key={key}>{say(line, values)}</li>)}</ul>
+      </Block>
+      <Block id="quality" heading={say(page.qualityHeading, values)}>
         <ul className="evidence-counts">
           {tiles.map(([key, value]) => (
-            <li key={key} data-count={key} className={key === 'wrong' ? 'count-accent' : undefined}>
-              <strong>{count(value)}</strong>
-              <span>{page.counts[key]}</span>
-            </li>
+            <li key={key} data-count={key} className={key === 'wrong' ? 'count-accent' : undefined}><strong>{count(value)}</strong><span>{page.counts[key]}</span></li>
           ))}
         </ul>
         <ul className="evidence-lines">
+          <li data-stability="">{say(page.stability, values)}</li>
           <li data-heldout="">{say(page.heldout, values)}</li>
           <li>{page.gateRule}</li>
           <li>
@@ -264,10 +410,10 @@ export function EvidenceBody() {
               <summary>{say(page.everyQuestion, values)}</summary>
               <table className="quality-table">
                 <tbody>
-                  {dev.questions.map((question) => (
-                    <tr key={question.id} data-outcome={question.outcome}>
-                      <th scope="row" lang={question.language}>{question.question.replace(/[^\s@]+@[^\s@,]+/gu, page.maskedEmail)}</th>
-                      <td>{page.outcomes[question.outcome] ?? question.outcome}</td>
+                  {dev.questions.map((one) => (
+                    <tr key={one.id} data-outcome={one.outcome}>
+                      <th scope="row" lang={one.language}>{one.question.replace(/[^\s@]+@[^\s@,]+/gu, page.maskedEmail)}</th>
+                      <td>{page.outcomes[one.outcome] ?? one.outcome}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -275,29 +421,29 @@ export function EvidenceBody() {
             </details>
           </li>
         </ul>
-      </section>
-      <section className="evidence-block" aria-labelledby="evidence-question" data-reference-section="question">
-        <h2 id="evidence-question">{page.questionHeading}</h2>
-        <Flow name="question" steps={page.questionSteps} accent="plan" />
-        <p className="evidence-line">{say(page.modelLine, values)}</p>
-      </section>
-      <section className="evidence-block" aria-labelledby="evidence-release" data-reference-section="release">
-        <h2 id="evidence-release">{page.releaseHeading}</h2>
-        <Flow name="release" steps={page.releaseSteps} accent="owner" />
-      </section>
-      <section className="evidence-block" aria-labelledby="evidence-coverage" data-reference-section="coverage">
-        <h2 id="evidence-coverage">{page.coverageHeading}</h2>
+      </Block>
+      <Block id="coverage" heading={page.coverageHeading}>
         <ul className="evidence-lines">
           <li data-coverage-held="">{say(page.held, values)}</li>
           <li data-coverage-missing="">{say(page.missing, values)}</li>
         </ul>
-      </section>
-      <section className="evidence-block" aria-labelledby="evidence-cost" data-reference-section="cost">
-        <h2 id="evidence-cost">{page.costHeading}</h2>
+      </Block>
+      <Block id="incidents" heading={page.incidentsHeading}>
+        <ul className="evidence-lines">{Object.entries(page.incidents).map(([key, line]) => <li key={key}>{line}</li>)}</ul>
+      </Block>
+      <Block id="safeguards" heading={page.safeguardsHeading}>
+        <ul className="evidence-lines">{Object.entries(page.safeguards).map(([key, line]) => <li key={key}>{say(line, values)}</li>)}</ul>
+      </Block>
+      <Block id="limits" heading={page.limitsHeading}>
+        <ul className="evidence-lines">{Object.entries(page.limits).map(([key, line]) => <li key={key}>{say(line, values)}</li>)}</ul>
+      </Block>
+      <Block id="built" heading={page.builtHeading}>
         <ul className="evidence-lines">
-          <li data-cost-question="">{say(page.perQuestion, values)}</li>
+          <li>{external(PUBLIC_LINKS.code, page.builtCode)} · {external(PUBLIC_LINKS.harness, page.builtEval)}</li>
+          <li>{page.builtCi}</li>
+          <li>{page.builtRelease}</li>
         </ul>
-      </section>
+      </Block>
     </>
   );
 }

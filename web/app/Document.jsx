@@ -58,16 +58,17 @@ export const LIVE_MARKER = 'lex-v3-live-mount';
  * the footer.
  */
 const MAIN_MENU = Object.freeze([
+  // The owner's order of 2026-11-15: ask, then the user's two tools (the texts, the changes) up from the footer, then the
+  // decisions and how Lex works.
+  Object.freeze({ key: 'menuAsk', page: 'index.html', states: Object.freeze(['live-home', 'live-assistant']) }),
+  Object.freeze({ key: 'menuTexts', page: 'search.html', states: Object.freeze(['live-search', 'live-reading', 'live-dossier']) }),
+  Object.freeze({ key: 'radar', page: 'radar.html', hash: '#last-12-months', states: Object.freeze(['live-radar']) }),
   Object.freeze({ key: 'menuDecisions', page: referencePage('decisions').file, states: Object.freeze([referencePage('decisions').state]) }),
   Object.freeze({ key: 'menuEvidence', page: referencePage('evidence').file, states: Object.freeze([referencePage('evidence').state]) }),
 ]);
 
-/** The footer's way to the site's screens: the texts (the search, and a law's reading and dossier) and the changes. */
-const FOOTER_MENU = Object.freeze([
-  Object.freeze({ key: 'menuTexts', page: 'search.html', states: Object.freeze(['live-search', 'live-reading', 'live-dossier']) }),
-  // The changes, opened on the last twelve months (`LAST_TWELVE_MONTHS_HASH`).
-  Object.freeze({ key: 'radar', page: 'radar.html', hash: '#last-12-months', states: Object.freeze(['live-radar']) }),
-]);
+/** The footer's way to the site's screens: the texts and the changes went up to the menu on 2026-11-15; the others stay. */
+const FOOTER_MENU = Object.freeze([]);
 
 const MENU = Object.freeze([
   Object.freeze({ key: 'search', page: 'index.html', states: Object.freeze(['live-home']) }),
@@ -156,7 +157,7 @@ export function SiteHeader({ state, locale, localePage = null }) {
         <ul>
           {MAIN_MENU.map((entry) => (
             <li key={entry.key}>
-              <a href={livePath(entry.page)} aria-current={entry.states.includes(state) ? 'page' : undefined}>
+              <a href={entry.page === 'index.html' ? localeHome(CHROME_LOCALE) : `${livePath(entry.page)}${entry.hash ?? ''}`} aria-current={entry.states.includes(state) ? 'page' : undefined}>
                 {site[entry.key]}
               </a>
             </li>

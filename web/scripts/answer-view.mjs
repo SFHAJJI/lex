@@ -148,3 +148,19 @@ export function dateFor(date, locale) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(String(date));
   return match !== null && locale === 'fr' ? `${match[3]}/${match[2]}/${match[1]}` : String(date);
 }
+
+/** A planner's identifier as a reader reads it: "gpt-4.1-mini · prompt a625e51e" for "azure-openai/gpt-4.1-mini/prompt-a625e51e3b58". */
+export function plannerName(plannerId) {
+  const match = /^[^/]+\/([^/]+)\/prompt-([0-9a-f]{8})/u.exec(String(plannerId ?? ''));
+  return match === null ? String(plannerId ?? '') : `${match[1]} · prompt ${match[2]}`;
+}
+
+/**
+ * The model registry's version an answer ran on (the owner's order of 2026-11-15, MLflow visible in the app): among the
+ * registered versions whose planner is the answer's, the champion when it is one of them, else the latest; null for none.
+ */
+export function registryVersionFor(registry, plannerId) {
+  const same = (registry?.versions ?? []).filter((version) => version.tags?.planner_id === plannerId);
+  if (same.length === 0) return null;
+  return same.find((version) => (version.aliases ?? []).includes('champion')) ?? same.at(-1);
+}

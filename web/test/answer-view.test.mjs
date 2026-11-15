@@ -91,3 +91,36 @@ test('Decisions and Evidence print the recorded runs\' and the coverage answer\'
   assert.equal((evidence.match(/class="flow-accent"/g) ?? []).length, 2, 'the model and the owner, each in the accent colour');
   assert.ok(!/@example\.com/.test(evidence), 'no e-mail address on the page');
 });
+
+test('How it works shows the MLflow registry as MLflow holds it, the stability, and the held-out set accounted for', async () => {
+  const { REGISTRY_RECORD } = await import('../scripts/registry-record.mjs');
+  const { HOW_IT_WORKS_PARTS, PUBLIC_LINKS } = await import('../.react-build/app.mjs');
+  const page = renderLiveReferencePage('evidence');
+  assert.deepEqual([...page.matchAll(/data-reference-section="([a-z]+)"/g)].map((match) => match[1]), [...HOW_IT_WORKS_PARTS]);
+  // One row a registered version, in order; the champion the alias names.
+  assert.deepEqual([...page.matchAll(/data-registry-version="(\d+)"/g)].map((match) => Number(match[1])), REGISTRY_RECORD.versions.map((version) => version.version));
+  const champion = REGISTRY_RECORD.aliases.champion;
+  assert.match(page, new RegExp(`data-registry-version="${champion}" class="registry-champion"><th scope="row">${champion} · champion</th>`));
+  assert.ok(page.includes(`Registered model lex-assistant in MLflow ${REGISTRY_RECORD.mlflow_version}: ${REGISTRY_RECORD.versions.length} versions; the alias champion on version ${champion}`));
+  // The stability and the held-out set, from the runs; the three kinds of held-out miss add up to the misses.
+  const dev = EVALUATION_RECORD.dev;
+  assert.ok(page.includes(`the same verdict ${Math.floor(100 * dev.replaySameVerdict + 0.5)} % of the time and the same plan ${Math.floor(100 * dev.replaySamePlan + 0.5)} %`));
+  const heldout = EVALUATION_RECORD.heldout;
+  const said = /(\d+) refused by the advice rule, (\d+) not found, (\d+) with no plan from the model/.exec(page);
+  assert.ok(said !== null, 'the held-out misses, by kind');
+  assert.equal(Number(said[1]) + Number(said[2]) + Number(said[3]), heldout.cases - heldout.rightArticle - heldout.wrongArticle);
+  // The API's description, the public code and the two schedules, linked.
+  assert.ok(page.includes('href="/openapi.json" data-openapi=""'));
+  for (const href of Object.values(PUBLIC_LINKS)) assert.ok(page.includes(`href="${href}" rel="external"`), href);
+});
+
+test('an answer names its planner and the MLflow registry version it ran on, the champion first', async () => {
+  const { REGISTRY_RECORD } = await import('../scripts/registry-record.mjs');
+  const { plannerName, registryVersionFor } = await import('../scripts/answer-view.mjs');
+  assert.equal(plannerName('azure-openai/gpt-4.1-mini/prompt-a625e51e3b58'), 'gpt-4.1-mini · prompt a625e51e');
+  const champion = REGISTRY_RECORD.versions.find((version) => version.aliases.includes('champion'));
+  assert.equal(registryVersionFor(REGISTRY_RECORD, champion.tags.planner_id).version, champion.version);
+  assert.equal(registryVersionFor(REGISTRY_RECORD, 'azure-openai/gpt-4.1-mini/prompt-00000000'), null);
+  const shared = REGISTRY_RECORD.versions.filter((version) => version.tags.planner_id === REGISTRY_RECORD.versions[0].tags.planner_id);
+  if (!shared.some((version) => version.aliases.includes('champion'))) assert.equal(registryVersionFor(REGISTRY_RECORD, shared[0].tags.planner_id).version, shared.at(-1).version, 'else the latest');
+});

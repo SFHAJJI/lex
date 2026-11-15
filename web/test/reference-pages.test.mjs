@@ -32,6 +32,7 @@ import {
 import { OUT_OF_SCOPE_HOSTS } from "../scripts/routes.mjs";
 import { sitePageFor } from "../scripts/permalinks.mjs";
 import { readDevelopersContracts, readPlatformSchemas } from "../scripts/developers-contracts.mjs";
+import { OPENAPI_FILE, openApiDocument } from "../scripts/openapi.mjs";
 import { SHOWN_NOWHERE, shownOnPage } from "../scripts/legal-pages.mjs";
 import { LIVE_CHROME, entriesOf, fillCounted, liveChrome } from "../scripts/live-chrome.mjs";
 import { assertTimeVocabulary } from "../scripts/publisher-vocabulary.mjs";
@@ -145,7 +146,7 @@ test("the three reference pages are built under each interface language, with th
         // Each part under its heading, in the table's order.
         const parts = page.key === "developers" ? [...app.DEVELOPERS_PARTS]
           : page.key === "decisions" ? app.DECISION_GROUPS.map((group) => group.key)
-          : page.key === "evidence" ? ["quality", "question", "release", "coverage", "cost"]
+          : page.key === "evidence" ? [...app.HOW_IT_WORKS_PARTS]
           : Object.keys(entry.sections);
         assert.deepEqual([...mainOf(html).matchAll(/data-reference-section="([a-z]+)"/gi)].map((match) => match[1]), page.key === "guide" ? [...parts, "glossary"] : parts, `${label}: its parts`);
         // No page of the site gives a contact: no e-mail address, no mail or telephone link, no postcode, in any bytes.
@@ -189,6 +190,10 @@ test("the three reference pages are built under each interface language, with th
           const bytes = Buffer.from(await answer.arrayBuffer());
           const schema = schemas.find((one) => publishedSchemaPath(one.file) === path);
           assert.ok(schema !== undefined && bytes.equals(schema.bytes), `${href}: the schema's bytes`);
+        } else if (path === `/${OPENAPI_FILE}`) {
+          // The API's OpenAPI description (How it works links it): JSON, the document the generator writes.
+          assert.equal(answer.headers.get("content-type"), "application/json; charset=utf-8", `${href}: JSON`);
+          assert.deepEqual(await answer.json(), openApiDocument(await readDevelopersContracts()), `${href}: the generated description`);
         } else {
           assert.equal(answer.headers.get("content-type"), "text/html; charset=utf-8", `${href}: a page`);
           if (REFERENCE_PAGE_PATHS.includes(path)) assert.equal(answer.headers.get("x-robots-tag"), "noindex", `${href}: kept out of search engines`);
