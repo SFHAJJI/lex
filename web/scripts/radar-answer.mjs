@@ -267,7 +267,11 @@ export function readChanges(answer) {
       requireOwn(populationValue, 'window_overlaps_what_is_held', 'population'), 'population.window_overlaps_what_is_held'),
   });
   if (!truncated) {
-    if (population.versionsInWindow !== rows.length) {
+    // On index 9 a state served under another of the same wording on its own date is that state's row, not one of its own
+    // (`V3CorpusMount`, the review of #987, F6): the population counts it, the page lists it once. So an untruncated page
+    // holds at most the versions counted, never more (the live answer for 2026-08-04 to 2031-12-31 counted 145 and listed
+    // 143 on 2026-11-15).
+    if (rows.length > population.versionsInWindow) {
       throw new Error(`the population counts ${population.versionsInWindow} versions in the window, and the untruncated page holds ${rows.length}`);
     }
     if (population.worksInWindow !== new Set(rows.map((row) => row.workKey)).size) {

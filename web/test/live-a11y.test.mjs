@@ -78,6 +78,10 @@ const TODAY_WITH_ITS_DATE = /\b(?:Today in Luxembourg: |today in Luxembourg is |
 const withoutTodayAndItsDate = (text) => text.replace(TODAY_WITH_ITS_DATE, "");
 const NUMERIC_NOT_ISO = /\b\d{1,2}[./]\d{1,2}[./]\d{2,4}\b/;
 const ISO = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
+// The owner's brief of 2026-11-15 (section 9: "Dates are dd/mm/yyyy"): the V4 pages write a date day first in both
+// languages. That one form is explicit (two-digit day and month, four-digit year) and is held below to a calendar date;
+// every other local numeric form (3/8/26, 03.08.2026) is still refused.
+const DAY_FIRST = /\b(\d{2})\/(\d{2})\/(\d{4})\b/g;
 
 /**
  * A render without the publisher's own words: its quotations (an article quoted whole, and a search result's extract, the
@@ -101,9 +105,13 @@ test("every date a live screen shows is an explicit calendar date, never relativ
   for (const [label, text] of texts) {
     assert.doesNotMatch(withoutTodayAndItsDate(text), RELATIVE, `${label} says a date relative to now`);
     assert.doesNotMatch(text, MONTHS, `${label} names a month rather than writing the date`);
-    assert.doesNotMatch(text, NUMERIC_NOT_ISO, `${label} writes a date in a local numeric format`);
+    assert.doesNotMatch(text.replace(DAY_FIRST, ""), NUMERIC_NOT_ISO, `${label} writes a date in a local numeric format`);
     for (const [date, year, month, day] of text.matchAll(ISO)) {
       const parsed = new Date(`${date}T00:00:00Z`);
+      assert.ok(!Number.isNaN(parsed.valueOf()) && parsed.getUTCFullYear() === Number(year) && parsed.getUTCMonth() + 1 === Number(month) && parsed.getUTCDate() === Number(day), `${label}: ${date} is not a calendar date`);
+    }
+    for (const [date, day, month, year] of text.matchAll(DAY_FIRST)) {
+      const parsed = new Date(`${year}-${month}-${day}T00:00:00Z`);
       assert.ok(!Number.isNaN(parsed.valueOf()) && parsed.getUTCFullYear() === Number(year) && parsed.getUTCMonth() + 1 === Number(month) && parsed.getUTCDate() === Number(day), `${label}: ${date} is not a calendar date`);
     }
   }
@@ -147,10 +155,14 @@ test("every quotation is the publisher's whole article text: bracket tables and 
 
 test("no form on a live page takes a personal fact: only the declared fields, each labelled from the table", () => {
   const form = liveChrome().form;
-  const declared = new Set([form.workIdentifier, form.workIdentifierOptional, form.phrase, form.date, form.from, form.to, form.articleId, form.language]);
+  // The Changes page's period is two dates too (the owner's brief of 2026-11-15, V4Changes), labelled "from" and "to".
+  const declared = new Set([form.workIdentifier, form.workIdentifierOptional, form.phrase, form.date, form.from, form.to, form.articleId, form.language, liveChrome().radar.from, liveChrome().radar.to]);
   for (const [name, render] of Object.entries(PAGES)) {
     const markup = render().replaceAll("<!-- -->", "");
-    const forms = [...markup.matchAll(/<form[\s\S]*?<\/form>/g)].map((match) => match[0]);
+    // The V4 header's "Find a text" (the driver's shell, every V4 page): one search field, a plain form to the search page.
+    const header = [...markup.matchAll(/<form [^>]*data-header-find=""[\s\S]*?<\/form>/g)].map((match) => match[0]);
+    for (const find of header) assert.deepEqual(find.match(/<(input|select|textarea)\b[^>]*>/g).map((control) => /type="search"/.test(control)), [true], `${name}: the header's find is one search field`);
+    const forms = [...markup.matchAll(/<form[\s\S]*?<\/form>/g)].map((match) => match[0]).filter((one) => !one.includes('data-header-find=""'));
     if (name === "coverage") {
       assert.equal(forms.length, 0, "Trust and Coverage asks nothing of the reader");
       continue;

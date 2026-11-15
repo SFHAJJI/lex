@@ -635,50 +635,67 @@ const EN = Object.freeze({
     nextPage: "Next page of the wording",
   }),
   radar: Object.freeze({
-    title: "Radar",
-    eyebrow: "Radar",
-    heading: "The change radar",
-    intro: "The publisher-dated states of Luxembourg works that this server holds in a window of dates, each with the state it replaced and whether its wording changed.",
+    // The Changes page (the owner's brief of 2026-11-15, V4Changes): one row per new version of a text in a period.
+    title: "Changes",
+    heading: "What changed in Luxembourg law",
+    intro: "Every text whose wording changed in the period you choose. Open one to see the old and the new wording side by side.",
     // What this page sends to the server, said in the footer (the owner's order of 2026-11-13, section C).
-    sent: "The dates and any identifier go to this server in the request and nowhere else, and this page keeps nothing.",
-    idle: "Type two dates to list the publisher-dated states in that window.",
-    summary: "{from} to {to}: {states} of {works}, of {held} held.",
-    states: Object.freeze({
-      one: "{count} state",
-      other: "{count} states",
+    sent: "The dates of the period, and the texts whose titles this page shows, go to this server in the requests and nowhere else; the title filter stays in this page, and this page keeps nothing.",
+    // The period: four presets as one segmented control, then the two dates, written day first.
+    period: "Period",
+    presets: Object.freeze({ last30: "Last {days} days", thisYear: "This year", lastYear: "{year}", dates: "Choose dates" }),
+    from: "from",
+    to: "to",
+    datePlaceholder: "dd/mm/yyyy",
+    showPeriod: "Show this period",
+    badDates: "Type two dates as dd/mm/yyyy, the first not after the second.",
+    // The date the presets count back from: the newest date the corpus holds a version of when it is before today.
+    countedFrom: "The periods count back from {date}, the newest date Lex holds a version of.",
+    countedFromToday: "The periods count back from today in Luxembourg, {date}.",
+    filterLabel: "Filter by title",
+    filterPlaceholder: "Only texts whose title contains…",
+    hideUnchanged: "Hide new versions where no article changed",
+    // A row: the articles added, changed, removed and identical, the non-zero ones only, the first naming the articles.
+    counts: Object.freeze({
+      added: Object.freeze({ one: "{count} article added", other: "{count} articles added" }),
+      changed: Object.freeze({ one: "{count} article changed", other: "{count} articles changed" }),
+      removed: Object.freeze({ one: "{count} article removed", other: "{count} articles removed" }),
+      unchanged: Object.freeze({ one: "{count} article identical", other: "{count} articles identical" }),
     }),
-    works: Object.freeze({
-      one: "{count} work",
-      other: "{count} works",
+    countsNext: Object.freeze({
+      added: Object.freeze({ one: "{count} added", other: "{count} added" }),
+      changed: Object.freeze({ one: "{count} changed", other: "{count} changed" }),
+      removed: Object.freeze({ one: "{count} removed", other: "{count} removed" }),
+      unchanged: Object.freeze({ one: "{count} identical", other: "{count} identical" }),
     }),
-    noRow: "No held state is dated in this window.",
-    // The rows in words, counted from the rows shown (the owner's order of 2026-11-15, "Changes made readable").
-    tally: "In this list, wording changed: {changed}; same wording: {unchanged}; first version held, so nothing to compare: {first}; not compared for another reason: {other}.",
-    // A compared row's link to the comparison of its two versions, on the compare page.
-    compareLink: "Compare the two versions",
+    countsJoin: "{first}, {next}",
+    noArticleChanged: "No article changed",
+    seeWhatChanged: "See what changed",
+    readVersion: "Read this version",
+    // A row whose version is an act dated by its entry into force, said as that (R21; the review of #987).
+    entryIntoForce: "The act as published, dated by its entry into force on {date} (publisher).",
+    // Why a new version is not compared with the one before it (shown when the switch is off).
+    reason: Object.freeze({
+      first_held_state: "The first version of this text Lex holds: nothing to compare it with",
+      ambiguous_version: "Several versions of this text bear this date: not compared",
+      ambiguous_baseline: "Several versions of this text cover the day before: not compared",
+      profiles_differ: "This version and the one before were read under different rules: not compared",
+      no_held_baseline: "Lex does not hold the text of the version before it: nothing to compare it with",
+    }),
+    titleLoading: "Title loading",
+    untitled: "A text whose title Lex does not hold",
+    noChange: "No text changed its wording between {from} and {to}.",
+    noVersion: "Lex holds no new version between {from} and {to}.",
+    noMatch: "No text shown has a title holding these words.",
+    windowMisses: "Lex holds versions from {first} to {last}; this period is outside them.",
+    showEarlier: "Show earlier changes",
+    loadingEarlier: "Loading earlier changes…",
+    earlierFailed: "The earlier changes could not be loaded.",
+    tryAgain: "Try again",
+    allShown: "Every change of this period is shown.",
+    cut: "This period holds more versions than this page lists at once; choose a shorter period to see them all.",
     // The platform's caveat, in the page's language (`RADAR_PLATFORM_CAVEAT`); another caveat is shown as the API says it.
     caveat: "A version row does not by itself assert a wording change, legal effect, or entry into force.",
-    windowMisses: "This window does not meet what this index holds.",
-    windowMissesRange: "This window does not meet what this index holds, from {first} to {last}.",
-    row: "{work}, {language}, from {from}: {verdict}. {permalink}",
-    // A row whose state is an act dated by its entry into force, said as that (R21; the review of #987), as History says it.
-    rowEntryIntoForce: "{work}, {language}, the act as published, dated by its entry into force on {from} (publisher): {verdict}. {permalink}",
-    wording: Object.freeze({ changed: "wording changed", unchanged: "wording unchanged" }),
-    compared: "{wording} from the state of {date}{baseline}: {changed} changed, {added} added, {removed} removed, {unchanged} unchanged",
-    notCompared: "not compared: {reason}{named}",
-    // The same after a row naming the act as published (`rowEntryIntoForce`), a twin for a language that agrees it with "act".
-    notComparedAct: "not compared: {reason}{named}",
-    reason: Object.freeze({
-      first_held_state: "the first state this index holds for the work and language, so there is nothing to compare it with",
-      ambiguous_version: "several states of the work cover this date, so none is compared",
-      ambiguous_baseline: "several states apply on the date before it, so no baseline is chosen",
-      profiles_differ: "this state and its baseline were read under different rule profiles, so they are not compared",
-      no_held_baseline: "the day before it is covered by no state whose text this site holds, so there is no baseline",
-    }),
-    named: "({label} {permalinks})",
-    baseline: "baseline",
-    candidates: "candidates",
-    truncated: "The rows stop before {date}; a next request starts there.",
   }),
   export: Object.freeze({
     title: "Export composer",

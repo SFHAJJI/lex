@@ -3521,7 +3521,64 @@ html[data-layout="v4"] .site-footer a { color: var(--lx-muted); }
 
 
 /* == v4: changes (agent) == */
-
+/* The Changes page (V4Changes, the left column): the title, the period, the filter and the switch, then one row per new
+   version of a text, newest first. */
+html[data-layout="v4"] .lx-changes { box-sizing: border-box; padding: 40px 56px 0; }
+html[data-layout="v4"] .lx-changes > h1 { margin: 0; font-family: var(--lx-serif); font-weight: 500; font-size: 36px; line-height: 1.15; letter-spacing: -0.01em; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-changes > p { margin: 10px 0 0; max-width: 640px; font-size: 15.5px; line-height: 1.45; color: var(--lx-muted); }
+/* The period: the four presets as one segmented control, then the two dates. */
+html[data-layout="v4"] .lx-changes-period { margin: 24px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 14px 18px; }
+html[data-layout="v4"] .lx-segmented { flex: 0 0 auto; min-width: 380px; display: flex; padding: 2px; background: var(--lx-chip); border-radius: 6px; font-size: 13px; }
+html[data-layout="v4"] .lx-segment { flex: 1 1 0; margin: 0; padding: 4px 10px; border: 0; border-radius: 4px; background: transparent; color: var(--lx-muted); font: inherit; font-size: 13px; font-weight: 400; line-height: 1.45; text-align: center; white-space: nowrap; cursor: pointer; box-shadow: none; }
+html[data-layout="v4"] .lx-segment:hover { color: var(--lx-ink); }
+html[data-layout="v4"] .lx-segment[aria-pressed="true"] { background: #FFFFFF; color: var(--lx-ink); font-weight: 600; }
+html[data-layout="v4"] .lx-date-field label { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13.5px; font-weight: 400; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-date-field input { width: 108px; height: 36px; box-sizing: border-box; margin: 0; padding: 0 11px; border: 1px solid var(--lx-field); border-radius: 6px; background: #FFFFFF; font: inherit; font-size: 15px; color: var(--lx-ink); font-variant-numeric: tabular-nums; box-shadow: none; }
+html[data-layout="v4"] .lx-date-field input::placeholder { color: var(--lx-faint); opacity: 1; }
+html[data-layout="v4"] .lx-date-field input:focus { border-color: var(--lx-indigo); outline: none; }
+html[data-layout="v4"] .lx-date-field input[aria-invalid="true"] { border-color: var(--lx-removed-ink); }
+html[data-layout="v4"] .lx-changes-bad { margin: 8px 0 0; font-size: 13.5px; color: var(--lx-removed-ink); }
+/* The title filter and the switch. */
+html[data-layout="v4"] .lx-changes-filters { margin: 14px 0 0; padding: 0 0 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; }
+html[data-layout="v4"] .lx-changes-filter { flex: 0 1 380px; min-width: 220px; height: 36px; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 0 11px; border: 1px solid var(--lx-field); border-radius: 6px; background: #FFFFFF; color: var(--lx-muted); font-size: 14px; }
+html[data-layout="v4"] .lx-changes-filter:focus-within { border-color: var(--lx-indigo); }
+html[data-layout="v4"] .lx-changes-filter input { flex: 1 1 auto; min-width: 0; height: 100%; box-sizing: border-box; margin: 0; padding: 0; border: 0; outline: none; background: transparent; font: inherit; font-size: 14px; color: var(--lx-ink); box-shadow: none; }
+html[data-layout="v4"] .lx-changes-filter input::placeholder { color: var(--lx-faint); opacity: 1; }
+html[data-layout="v4"] .lx-changes-filter input::-webkit-search-cancel-button { display: none; }
+html[data-layout="v4"] .lx-switch { position: relative; display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 400; color: var(--lx-ink); cursor: pointer; }
+html[data-layout="v4"] .lx-switch-box { flex: 0 0 auto; }
+html[data-layout="v4"] .lx-switch-frame { fill: #FFFFFF; stroke: var(--lx-field); stroke-width: 1.5; }
+html[data-layout="v4"] .lx-switch-on .lx-switch-frame { fill: var(--lx-indigo); stroke: var(--lx-indigo); }
+html[data-layout="v4"] .lx-switch-tick { stroke: #FFFFFF; }
+html[data-layout="v4"] .lx-switch input:focus-visible + .lx-switch-box { outline: 2px solid var(--lx-indigo); outline-offset: 2px; border-radius: 4px; }
+html[data-layout="v4"] .lx-changes-anchor { margin: -8px 0 14px; font-size: 13px; color: var(--lx-muted); }
+/* The rows: the date in indigo, the text's own title in Spectral, the articles in words, "See what changed". */
+html[data-layout="v4"] .lx-changes .live-answer { margin: 0; padding: 0; border: 0; background: transparent; }
+html[data-layout="v4"] .lx-changes-list { margin: 0; padding: 0; list-style: none; }
+html[data-layout="v4"] .lx-change { display: flex; align-items: baseline; gap: 24px; margin: 0; padding: 15px 0; border-top: 1px solid var(--lx-line); }
+html[data-layout="v4"] .lx-change-date { flex: 0 0 92px; font-size: 14px; font-weight: 600; color: var(--lx-indigo); font-variant-numeric: tabular-nums; }
+html[data-layout="v4"] .lx-change-body { flex: 1 1 auto; min-width: 0; }
+html[data-layout="v4"] .lx-change-title { display: block; font-family: var(--lx-serif); font-size: 19px; font-weight: 500; line-height: 1.3; color: var(--lx-ink); overflow-wrap: anywhere; }
+html[data-layout="v4"] .lx-change-title-loading { width: min(420px, 80%); height: 18px; margin: 3px 0 4px; border-radius: 4px; background: var(--lx-line-soft); }
+html[data-layout="v4"] .lx-change-counts { display: block; margin-top: 2px; font-size: 13.5px; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-change-note { display: block; margin-top: 2px; font-size: 13px; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-change-link { flex: 0 0 auto; font-size: 13.5px; font-weight: 600; color: var(--lx-indigo); text-underline-offset: 3px; }
+html[data-layout="v4"] .lx-change-link:hover { color: var(--lx-ink); }
+html[data-layout="v4"] .lx-changes-empty { margin: 0; padding: 16px 0; border-top: 1px solid var(--lx-line); font-size: 14.5px; color: var(--lx-muted); }
+/* "Show earlier changes", a link drawn on a button; then the platform's caveat, one quiet line. */
+html[data-layout="v4"] .lx-changes-more { margin: 0; padding: 16px 0; border-top: 1px solid var(--lx-line); font-size: 14px; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-changes-link-button { margin: 0; padding: 0; border: 0; background: none; color: var(--lx-ink); font: inherit; font-size: 14px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; box-shadow: none; }
+html[data-layout="v4"] .lx-changes-link-button:hover { color: var(--lx-indigo); }
+html[data-layout="v4"] .lx-changes [data-caveat] { margin: 8px 0 0; max-width: none; font-size: 12.5px; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-changes .failure-panel { margin: 0; padding: 16px 0; border-top: 1px solid var(--lx-line); }
+html[data-layout="v4"] .lx-changes [data-answer-state="loading"] p { margin: 0; padding: 16px 0; border-top: 1px solid var(--lx-line); font-size: 14px; color: var(--lx-muted); }
+@media (max-width: 720px) {
+  html[data-layout="v4"] .lx-changes { padding: 24px 16px 0; }
+  html[data-layout="v4"] .lx-changes > h1 { font-size: 28px; }
+  html[data-layout="v4"] .lx-segmented { min-width: 0; flex: 1 1 100%; }
+  html[data-layout="v4"] .lx-change { flex-wrap: wrap; gap: 4px 16px; }
+  html[data-layout="v4"] .lx-change-date { flex-basis: 100%; }
+}
 
 /* == v4: changes end == */
 

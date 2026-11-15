@@ -84,7 +84,13 @@ test("every live page renders its chrome from the table", () => {
     const entry = copy[key];
     assert.ok(html.includes(`<title>${escaped(entry.title)} - Lex</title>`), `${key}: title`);
     // The site around the screen: its name, its menu, and the statements every page carries (no development banner).
-    for (const text of [copy.site.brand, copy.site.skip, copy.site.menuDecisions, copy.site.menuEvidence, copy.site.menuTexts, copy.site.reading, copy.site.dossier, copy.site.history, copy.site.compare, copy.site.radar, copy.site.export, copy.site.coverage, copy.site.notAdvice, copy.site.authenticity, copy.site.sources]) {
+    // A V4 page (the owner's brief of 2026-11-15) carries the V4 header (the find field, Changes, Decisions, How it works)
+    // and links no form page: the text page replaces them.
+    const v4 = /<html[^>]* data-layout="v4"/.test(html);
+    const siteWords = v4
+      ? [copy.site.brand, copy.site.skip, copy.site.findLabel, copy.site.radar, copy.site.menuDecisions, copy.site.menuEvidence, copy.site.coverage, copy.site.notAdvice, copy.site.authenticity, copy.site.sources]
+      : [copy.site.brand, copy.site.skip, copy.site.menuDecisions, copy.site.menuEvidence, copy.site.menuTexts, copy.site.reading, copy.site.dossier, copy.site.history, copy.site.compare, copy.site.radar, copy.site.export, copy.site.coverage, copy.site.notAdvice, copy.site.authenticity, copy.site.sources];
+    for (const text of siteWords) {
       assert.ok(html.includes(escaped(text)), `${key}: the site says ${JSON.stringify(text.slice(0, 40))}`);
     }
     assert.ok(!html.includes("development build"), `${key}: no development banner`);
@@ -97,7 +103,8 @@ test("every live page renders its chrome from the table", () => {
     assert.ok(!html.includes("staleness-banner"), `${key}: no staleness banner as built`);
     // The home page, Decisions and Evidence carry no eyebrow line (the owner's order of 2026-11-14, evening), and the two
     // pages no introduction; every other page its table's eyebrow, heading and introduction.
-    if (["home", "decisions", "evidence"].includes(key)) assert.ok(!html.includes('<p class="eyebrow">'), `${key}: no eyebrow`);
+    // Changes (the owner's brief of 2026-11-15, V4Changes) has none either: its title and the sentence under it.
+    if (["home", "decisions", "evidence", "radar"].includes(key)) assert.ok(!html.includes('<p class="eyebrow">'), `${key}: no eyebrow`);
     else assert.ok(html.includes(`<p class="eyebrow">${escaped(entry.eyebrow)}</p>`), `${key}: eyebrow`);
     assert.ok(html.includes(`<h1>${escaped(entry.heading)}</h1>`), `${key}: heading`);
     if (!["decisions", "evidence"].includes(key)) assert.ok(html.includes(`<p>${escaped(entry.intro)}</p>`), `${key}: introduction`);
@@ -107,8 +114,9 @@ test("every live page renders its chrome from the table", () => {
 test("every form's labels and button come from the table", () => {
   const { form } = liveChrome("en");
   for (const [key, render] of Object.entries(PAGES)) {
-    // Trust and Coverage asks with no form, and the maintenance page and the legal pages ask nothing.
-    if (key === "coverage" || key === "maintenance" || LEGAL.has(key)) continue;
+    // Trust and Coverage asks with no form, and the maintenance page and the legal pages ask nothing. Changes asks a period
+    // (the owner's brief of 2026-11-15, V4Changes), checked below: no language, no identifier.
+    if (key === "coverage" || key === "maintenance" || key === "radar" || LEGAL.has(key)) continue;
     // The home page is the search screen under the site's introduction, and the 404 page offers it: its form is search's.
     const formKey = key === "home" || key === "notFound" ? "search" : key;
     // A page rendered for hydration marks text boundaries with empty comments; they are not text.
@@ -117,7 +125,11 @@ test("every form's labels and button come from the table", () => {
     assert.ok(html.includes(`<option value="">${escaped(form.anyLanguage)}</option>`) || html.includes(`<option value="" selected="">${escaped(form.anyLanguage)}</option>`) || formKey === "search", `${key}: the blank language option`);
     assert.ok(html.includes(`${escaped(form.language)} <select`), `${key}: the language label`);
   }
-  assert.ok(renderLiveRadarPage().replaceAll("<!-- -->", "").includes(`${escaped(form.workIdentifierOptional)} <input`), "radar's optional identifier");
+  const changes = renderLiveRadarPage().replaceAll("<!-- -->", "");
+  const { radar } = liveChrome("en");
+  assert.ok(changes.includes(`<label>${escaped(radar.from)} <input`) && changes.includes(`<label>${escaped(radar.to)} <input`), "the period's two dates");
+  assert.ok(changes.includes(`<button class="lx-visually-hidden" type="submit">${escaped(radar.showPeriod)}</button>`), "the period's submit button");
+  assert.ok(!changes.includes(escaped(form.workIdentifierOptional)) && !changes.includes("<select"), "Changes asks for no identifier and no language");
   assert.ok(renderLiveHistoryPage().replaceAll("<!-- -->", "").includes(`${escaped(form.articleId)} <input`), "history's article id");
   assert.ok(renderLiveSearchPage().replaceAll("<!-- -->", "").includes(`${escaped(form.phrase)} <input`), "search's phrase");
 });
