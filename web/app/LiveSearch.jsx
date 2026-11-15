@@ -77,7 +77,7 @@ import {
 import { FIND_ROWS_SHOWN, findRows, openedHref } from '../scripts/find-results.mjs';
 import { readSearchFragment, searchFragment } from '../scripts/search-address.mjs';
 import { todayAt } from '../scripts/initial-answer.mjs';
-import { replacePageAddress } from './page-address.mjs';
+import { replacePageAddress, writeLanguageLinks } from './page-address.mjs';
 import { TodayHint, useLuxembourgToday } from './Today.jsx';
 import { OFFICIAL_SEARCH_PAGES, isFailure } from '../scripts/live-failure.mjs';
 import { CHROME_LOCALE, ENGLISH_LANG, countedEntry, fillCounted, fillText, liveChrome, livePath } from '../scripts/live-chrome.mjs';
@@ -1035,6 +1035,8 @@ export function FindResults({ contract, fetchImpl }) {
   };
   useEffect(() => {
     const read = () => {
+      // The language menu leads to the same search in the other language (R61): its links keep the words after "#".
+      writeLanguageLinks(window.document, window.location);
       const fragment = readSearchFragment(window.location.hash, { work: false });
       if (fragment.state === 'none') return;
       if (fragment.state === 'refused') {

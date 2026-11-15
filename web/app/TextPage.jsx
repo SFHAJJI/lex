@@ -206,7 +206,7 @@ function ReadArticle({ entry, article, parts, versions, changedDates, identifier
         ) : null}
         {article ? <SourceAndCitation article={article} version={version} /> : null}
       </div>
-      <div className="lx-body" lang={article?.language === 'eng' ? 'en' : 'fr'}>
+      <div className="lx-article-body" lang={article?.language === 'eng' ? 'en' : 'fr'}>
         {parts?.heading ? <h2>{parts.heading}</h2> : null}
         {article && parts ? <Paragraphs parts={parts} /> : entry.textHeld === false ? <p className="lx-without-text">{copy.withoutText}</p> : <p className="lx-skeleton" aria-hidden="true" />}
       </div>
@@ -637,7 +637,7 @@ export function TextPage({ contract, fetchImpl, now = null }) {
 
   const facts = isEurope
     ? `${counted(copy.articles, text.articleCount ?? contents.length)} ${copy.oneVersion}.`
-    : `${counted(copy.articles, text.articleCount ?? contents.length)} ${fillText(countedEntry(copy.versionsHeld, versions.length), { count: grouped(versions.length), first: numericDate(versions[0]?.date) })}`;
+    : `${counted(copy.articles, text.articleCount ?? contents.length)} ${fillText(countedEntry(copy.versionsHeld, versions.length), { ...(countedEntry(copy.versionsHeld, versions.length).includes('{count}') ? { count: grouped(versions.length) } : {}), first: numericDate(versions[0]?.date) })}`;
   const until = readVersion?.until ?? null;
   const beforeFirst = !isEurope && versions.length > 0 && readDate < versions[0].date;
 

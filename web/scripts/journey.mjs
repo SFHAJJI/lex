@@ -1524,6 +1524,16 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
     while (Date.now() < deadline && (await evaluate("document.readyState")) !== "complete") {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
+    // V4 Home's first screen (R47) is measured on Home itself, before the reader types: its field takes the words to the
+    // search page, so the page the step ends at is no longer Home.
+    let frontScreen = null;
+    if (step.frontDoor === true && step.resultsAt !== undefined) {
+      await session.send("Emulation.setDeviceMetricsOverride", { width: REFLOW_WIDTH, height: 640, deviceScaleFactor: 1, mobile: false }, sessionId);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      frontScreen = await evaluate(firstScreen(step));
+      await session.send("Emulation.clearDeviceMetricsOverride", {}, sessionId);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
     const historyAtLoad = await evaluate("history.length");
     const liveRegionAtLoad = await evaluate(ANSWER_LIVE_REGION);
     let keys;
@@ -1697,7 +1707,7 @@ async function observe(browser, pageOrigin, step, { keyboard = false } = {}) {
     // A measurement that could not be taken fails the run (`journeyVerdict`), never passes it.
     observed.reflow = (await evaluate(REFLOW)) ?? { failed: true };
     // The home page at a small phone's size (R47): the window is now 320 by 640.
-    if (step.frontDoor === true) observed.firstScreen = await evaluate(firstScreen(step));
+    if (step.frontDoor === true) observed.firstScreen = frontScreen ?? await evaluate(firstScreen(step));
     observed.todays = [...new Set([todayAtStart, todayInLuxembourgAt(Date.now())])];
     return observed;
   } finally {
