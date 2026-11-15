@@ -4041,3 +4041,13 @@ html[data-layout="v4"] .lx-dock-tab-label { writing-mode: vertical-rl; font-size
 
 
 /* == v4: phone width end == */
+/* Every V4 field shows where the keyboard's focus is (WCAG 2.4.7; the journeys' keyboard path): the fields drawn borderless
+   inside their box (the header's and Home's "Find a text", Find in this law, the dock's question, the Changes filter) set
+   no outline of their own, so the focus ring is drawn here, last in the cascade. */
+html[data-layout="v4"] input:focus-visible,
+html[data-layout="v4"] textarea:focus-visible,
+html[data-layout="v4"] select:focus-visible {
+  outline: 2px solid var(--lx-indigo);
+  outline-offset: 2px;
+}
+
