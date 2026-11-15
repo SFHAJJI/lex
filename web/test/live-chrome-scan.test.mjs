@@ -32,6 +32,7 @@ import { build } from "esbuild";
 
 import { europeEnvelope } from "../scripts/europe-bundle-sample.mjs";
 import { ACCESSIBILITY_LAW, CNPD_SITE, EURLEX_ACKNOWLEDGEMENT } from "../scripts/legal-pages.mjs";
+import { HOME_TEXTS_RECORD } from "../scripts/home-texts-record.mjs";
 
 const require = createRequire(import.meta.url);
 const { createElement: h } = require("react");
@@ -132,7 +133,10 @@ const legalPages = (app) => ({
 const LEGAL_DATA = [CNPD_SITE.text, EURLEX_ACKNOWLEDGEMENT, ACCESSIBILITY_LAW];
 /** The refusal codes no operation sends, which the evaluation card's scope names from the refusal census (`not_produced`). */
 const UNSENT_CODES = JSON.parse(await readFile(new URL("../schemas/v3-platform/refusal-payload-samples.json", web), "utf8")).not_produced;
+// The V4 Home's six starting texts (2026-11-15) are the release's record of the API's answers (`home-texts-record.mjs`): their
+// titles are the publisher's, data as an answer's are; an EU act's usual name is the table's.
 const dataOfPage = (name, app) => (name === "coverage" ? dataOf(withoutVerdicts(app.CENSUS_EVALUATION_CARD), UNSENT_CODES)
+  : name === "home" ? dataOf(HOME_TEXTS_RECORD.texts.map((text) => text.title ?? null))
   : Object.hasOwn(legalPages(app), name) ? dataOf(LEGAL_DATA) : []);
 
 /**

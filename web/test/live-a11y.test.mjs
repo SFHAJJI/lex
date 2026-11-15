@@ -167,6 +167,22 @@ test("no form on a live page takes a personal fact: only the declared fields, ea
       assert.equal(forms.length, 0, "Trust and Coverage asks nothing of the reader");
       continue;
     }
+    // A V4 page (the owner's brief of 2026-11-15) carries the header's find field, and Home its own: each a field labelled
+    // by its `for`, from the table (the site's or Home's "Find a text"), text only.
+    if (markup.includes('data-layout="v4"')) {
+      const v4Declared = new Set([liveChrome().site.findLabel, liveChrome().home.findLabel]);
+      assert.ok(forms.length >= 1 && forms[0].includes("data-header-find"), `${name}: the header's field first`);
+      for (const one of forms) {
+        const controls = [...one.matchAll(/<label[^>]*for="([^"]+)"[^>]*>([^<]*)<\/label><input id="([^"]+)"([^>]*)>/g)];
+        assert.equal(controls.length, (one.match(/<(input|select|textarea)\b/g) ?? []).length, `${name}: every control has its label`);
+        for (const [, target, label, id, attributes] of controls) {
+          assert.equal(target, id, `${name}: "${label}" labels its own field`);
+          assert.ok(v4Declared.has(decode(label).trim()), `${name}: "${label}" is a declared field`);
+          assert.match(attributes, /type="(text|search)"/, `${name}: "${label}" is text`);
+        }
+      }
+      continue;
+    }
     assert.equal(forms.length, 1, `${name}: one form`);
     const controls = [...forms[0].matchAll(/<label>([^<]*?)\s*<(input|select|textarea)([^>]*)>/g)];
     assert.ok(controls.length > 0, `${name}: the form's controls are labelled`);

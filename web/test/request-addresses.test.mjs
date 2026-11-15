@@ -111,6 +111,11 @@ const PINNED = Object.freeze({
   "app/TextPage.jsx: the history: if (href !== null) window.history.replaceState(window.history.state, '', href);": "the text page's own address: a law, dates and an article id",
   // The V4 header's find field (2026-11-15): the search page, the words after "#" (`searchFragment`), never in the query.
   "app/client-live-header-entry.jsx: a navigation: if (address !== null) window.location.assign(address);": "the search page, the words after #",
+  // The V4 Home's find field (2026-11-15): the same, the search page with the words after "#" (`findHref`, `searchFragment`).
+  "app/LiveHome.jsx: a navigation: if (address !== null) window.location.assign(address);": "the search page, the words after #",
+  // The V4 search results (2026-11-15): an exact reference that opens goes to the text page (`openedHref`, `textHref`): a law's
+  // address, the version's date and the article's id the platform minted, in the query, never a word the reader typed.
+  "app/LiveSearch.jsx: a navigation: window.location.replace(href);": "the text page: a law's address, a date and an article id",
   "app/LiveDossier.jsx: a form's own submit: <form method=\"get\" action={readable} data-read-on-date=\"\">": "a law's readable address, which the platform mints, and a calendar date from a date field, in the query",
 });
 

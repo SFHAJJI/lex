@@ -18,7 +18,7 @@ import { readFile } from "node:fs/promises";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { LiveHome } from "../.react-build/app.mjs";
+import { HomeExamples, LiveHome } from "../.react-build/app.mjs";
 import {
   HOME_EXAMPLES, HOME_EXAMPLES_AT_MOST, HOME_EXAMPLES_SCHEMA, deriveHomeExamples, exampleHref, examplesShown, readHomeExamplesValue,
 } from "../scripts/home-examples.mjs";
@@ -194,10 +194,12 @@ test("a record is held to its shape, and a page shows its examples only over the
   assert.equal(coverageLineOf({ state: "refusal", code: "no_corpus_mounted" }).indexSha256, undefined);
 });
 
-test("the home page lists the examples under its coverage line, each a link to the search page with the search in its address", async () => {
+test("the example searches are each a link to the search page with the search in its address; the V4 Home's column lists none (2026-11-15)", async () => {
   const record = await deriveHomeExamples({ ask: census_ask((parameters) => opensArticle(parameters.query, "art_1er", "1")).ask, contract, today: TODAY, admitted: ADMITTED });
   const facts = homeFacts(COVERAGE, contract);
-  const html = renderToStaticMarkup(h(LiveHome, { contract, facts, examples: record }));
+  // The V4 Home (the owner's brief of 2026-11-15): the examples are in the dock, not in Home's column.
+  assert.doesNotMatch(renderToStaticMarkup(h(LiveHome, { contract, facts, examples: record })), /data-home-examples/);
+  const html = renderToStaticMarkup(h(HomeExamples, { line: facts.coverage, record }));
   const copy = LIVE_CHROME.en.home;
   const [example] = record.examples;
   const href = exampleHref(example, "en");
@@ -207,8 +209,6 @@ test("the home page lists the examples under its coverage line, each a link to t
   assert.ok(section, html);
   assert.ok(section[1].includes(`<h2 id="home-examples-heading">${copy.examplesHeading}</h2>`));
   assert.ok(section[1].includes(`<a href="${href.replaceAll("&", "&amp;")}" data-home-example="${example.opens}" lang="fr">${example.query}</a>`), section[1]);
-  assert.ok(html.indexOf('data-coverage-line="counted"') < html.indexOf("data-home-examples"), "under the coverage line");
-  assert.ok(html.indexOf("data-home-examples") < html.indexOf("data-home-links"), "before the links");
 
   for (const [name, shown] of [
     ["no corpus mounted", renderToStaticMarkup(h(LiveHome, { contract, facts: homeFacts(UNMOUNTED, contract), examples: record }))],
@@ -236,9 +236,9 @@ test("a build handed the record compiles it into the home page's bundles: the se
       const context = vm.createContext({ TextEncoder });
       vm.runInContext(await readFile(join(destination, "ssr", `${language}.js`), "utf8"), context);
       const html = context.lexSsr.render("home", JSON.stringify(COVERAGE), `/${language}/`);
-      const href = exampleHref(record.examples[0], language).replaceAll("&", "&amp;");
-      assert.ok(html.includes(`<h2 id="home-examples-heading">${LIVE_CHROME[language].home.examplesHeading}</h2>`), `${language}: the heading`);
-      assert.ok(html.includes(`href="${href}"`), `${language}: the example's link`);
+      // The V4 Home (2026-11-15): rendered by the server, its examples in the dock and none in its column.
+      assert.ok(html.includes('<div class="lx-home">') && html.includes("data-start-text="), `${language}: the V4 Home, rendered by the server`);
+      assert.doesNotMatch(html, /data-home-examples/, `${language}: no example in the column`);
       assert.doesNotMatch(context.lexSsr.render("home", JSON.stringify(UNMOUNTED), `/${language}/`), /data-home-examples/, `${language}: no mount, no example`);
       assert.doesNotMatch(await readFile(join(destination, language, "index.html"), "utf8"), /data-home-examples/, `${language}: the page as built shows none until its coverage answer`);
     }
@@ -252,7 +252,8 @@ test("the journeys and the image probe hold a served home page to its examples, 
   const { examplesListed, homeExampleFailures } = await import("../scripts/home-examples-run.mjs");
   const record = await deriveHomeExamples({ ask: census_ask((parameters) => opensArticle(parameters.query, "art_1er", "1")).ask, contract, today: TODAY, admitted: ADMITTED });
   const facts = homeFacts(COVERAGE, contract);
-  const page = (examples, language = "en") => `<main>${renderToStaticMarkup(h(LiveHome, { contract, facts, examples }))}</main>`.replaceAll("/en/search.html", `/${language}/search.html`);
+  // A page that lists the examples (the earlier home page's list, `HomeExamples`): the probes read any page's list.
+  const page = (examples, language = "en") => `<main>${examples === null ? "" : renderToStaticMarkup(h(HomeExamples, { line: facts.coverage, record: examples }))}</main>`.replaceAll("/en/search.html", `/${language}/search.html`);
   const [example] = record.examples;
   assert.deepEqual(examplesListed(page(record)), [{ href: exampleHref(example, "en"), opens: example.opens }]);
   assert.deepEqual(frontDoorOf(page(record)).examples, examplesListed(page(record)));

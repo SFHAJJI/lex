@@ -72,7 +72,9 @@ import {
   indexOlderThanToday,
   languageName,
   longDate,
+  startLiveSearch,
 } from '../scripts/live-search.mjs';
+import { FIND_ROWS_SHOWN, findRows, openedHref } from '../scripts/find-results.mjs';
 import { readSearchFragment, searchFragment } from '../scripts/search-address.mjs';
 import { todayAt } from '../scripts/initial-answer.mjs';
 import { replacePageAddress } from './page-address.mjs';
@@ -969,6 +971,117 @@ export function LiveSearch({ contract, fetchImpl, variant = 'search', today = nu
       <LiveAnswer>
         <SearchAnswerView outcome={outcome} onNextPage={(after) => session.current.next(after)} onRetry={() => session.current.retry()} />
       </LiveAnswer>
+    </div>
+  );
+}
+
+/**
+ * A count in the page's language, grouped as the language groups it (6,001; 6 001).
+ */
+const grouped = (count) => count.toLocaleString(CHROME_LOCALE === 'fr' ? 'fr-FR' : 'en-GB');
+
+/** A text's title marked in its own language. */
+export const titleLang = (language) => {
+  // Always said, on a page of the same language too: a title is the law's words, whose dates are the law's to write.
+  return language === 'fra' ? 'fr' : language === 'eng' ? 'en' : language === 'deu' ? 'de' : undefined;
+};
+
+/** One matching text: its title (Spectral), its kind, a link to the text page. */
+function FindRow({ row }) {
+  return (
+    <li>
+      <a className="lx-find-row" href={row.href} data-find-row={row.kind}>
+        <span className="lx-find-row-title"><span lang={titleLang(row.titleLanguage)}>{row.title}</span></span>
+        <span className="lx-find-row-kind">{COPY.findKind[row.kind] ?? COPY.findKind.eu}</span>
+      </a>
+    </li>
+  );
+}
+
+/**
+ * The V4 search results (the owner's brief of 2026-11-15, section 5): the words come after "#" (R109: the header's field
+ * and Home's write them there, `searchFragment`), and are asked of `search` in a request's body, never in an address. An
+ * exact reference that opens goes straight to the text page at that article and date (`openedHref`, no model call);
+ * otherwise the matching texts by title (`findRows`), or one sentence and a hint. A new search typed in the header's field
+ * while on this page changes only the fragment: the page asks it again.
+ */
+export function FindResults({ contract, fetchImpl }) {
+  const [view, setView] = useState({ state: 'idle' });
+  const cancel = useRef(null);
+  const asked = useRef(null);
+  const ask = (request) => {
+    cancel.current?.();
+    asked.current = request;
+    setView({ state: 'loading', query: request.query });
+    cancel.current = startLiveSearch({
+      contract,
+      fetchImpl,
+      request,
+      onOutcome: (outcome) => {
+        const href = outcome.state === 'opens' ? openedHref(outcome.view) : null;
+        if (href !== null) {
+          setView({ state: 'opening', query: request.query });
+          window.location.replace(href);
+          return;
+        }
+        if (outcome.state === 'success') return setView({ state: 'rows', query: request.query, rows: findRows(outcome.view) });
+        if (outcome.state === 'refusal' || outcome.state === 'not_opened') return setView({ state: 'none', query: request.query, outcome });
+        return setView({ state: 'failed', query: request.query });
+      },
+    });
+  };
+  useEffect(() => {
+    const read = () => {
+      const fragment = readSearchFragment(window.location.hash, { work: false });
+      if (fragment.state === 'none') return;
+      if (fragment.state === 'refused') {
+        setView({ state: 'unread' });
+        return;
+      }
+      // The header's field shows the words searched, as the reader typed them.
+      const field = document.getElementById('lx-find-q');
+      if (field !== null && field.value.trim() === '') field.value = fragment.request.query;
+      ask(fragment.request);
+    };
+    read();
+    window.addEventListener('hashchange', read);
+    return () => {
+      window.removeEventListener('hashchange', read);
+      cancel.current?.();
+    };
+  }, []);
+  const query = view.query ?? '';
+  return (
+    <div className="lx-find-results" data-find-state={view.state}>
+      <h1 className="lx-find-heading">{COPY.findHeading}</h1>
+      {view.state === 'idle' ? <p className="lx-find-status">{COPY.findIdle}</p> : null}
+      {view.state === 'unread' ? <p className="lx-find-status" role="status">{COPY.findUnread}</p> : null}
+      {view.state === 'loading' ? <p className="lx-find-status" role="status">{COPY.findLoading}</p> : null}
+      {view.state === 'opening' ? <p className="lx-find-status" role="status">{COPY.findOpening}</p> : null}
+      {view.state === 'failed' ? (
+        <div className="lx-find-failed" role="status">
+          <p className="lx-find-status">{COPY.findFailed}</p>
+          <button type="button" className="lx-find-retry" onClick={() => asked.current !== null && ask(asked.current)}>{COPY.findRetry}</button>
+        </div>
+      ) : null}
+      {view.state === 'none' || (view.state === 'rows' && view.rows.length === 0) ? (
+        <div className="lx-find-none" role="status">
+          {view.outcome?.state === 'refusal' && typeof view.outcome.sentence === 'string' ? <StatusSentence outcome={view.outcome} /> : null}
+          <p className="lx-find-status">{fillText(COPY.findNone, { query })}</p>
+          <p className="lx-find-hint">{COPY.findHint}</p>
+        </div>
+      ) : null}
+      {view.state === 'rows' && view.rows.length > 0 ? (
+        <>
+          <p className="lx-find-status" role="status">{fillText(countedEntry(COPY.findCount, view.rows.length), { count: grouped(view.rows.length), query })}</p>
+          <ul className="lx-find-list">
+            {view.rows.slice(0, FIND_ROWS_SHOWN).map((row) => <FindRow key={row.key} row={row} />)}
+          </ul>
+          {view.rows.length > FIND_ROWS_SHOWN ? (
+            <p className="lx-find-more">{fillText(countedEntry(COPY.findMore, view.rows.length - FIND_ROWS_SHOWN), { count: grouped(view.rows.length - FIND_ROWS_SHOWN) })}</p>
+          ) : null}
+        </>
+      ) : null}
     </div>
   );
 }

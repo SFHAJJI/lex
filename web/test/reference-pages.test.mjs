@@ -230,13 +230,11 @@ test("every live page's footer links the three reference pages, none of them cur
   for (const [name, html] of Object.entries(pages)) {
     assert.deepEqual(referenceLinks(html), [{ label: copy.reference.menu, links: REFERENCE_PAGES.map((page) => [`/en/${page.file}`, escaped(copy[page.key].title), false]) }], name);
   }
-  const links = /<nav aria-label="[^"]*" class="home-links" data-home-links="">([\s\S]*?)<\/nav>/.exec(pages.home);
-  assert.deepEqual([...links[1].matchAll(/<a href="([^"]+)">([^<]+)<\/a>/g)].map(([, href, text]) => [href, text]), [
-    ["/en/radar.html", copy.site.radar],
-    ["/en/coverage.html", copy.coverage.title],
-    ["/en/developers.html", copy.developers.title],
-    ["/en/help.html", copy.help.title],
-  ], "the specification's list: Changes, Coverage and trust, Developers and Get help");
+  // The V4 Home (2026-11-15): Changes in the menu and under "Changed recently", the coverage page under its line, Developers
+  // and Get help in the footer: the specification's list, each still one click from Home.
+  for (const href of ["/en/radar.html", "/en/coverage.html", "/en/developers.html", "/en/help.html"]) {
+    assert.ok(pages.home.includes(`href="${href}"`), `the home page links ${href}`);
+  }
 });
 
 test("the Developers page is the registry's: every operation, refusal code, verdict and envelope member, in order, each with its words in both languages", () => {

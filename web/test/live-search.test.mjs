@@ -85,10 +85,13 @@ test("the server renders the form in its idle state, and asks nothing", () => {
   const page = renderLiveSearchPage();
   assert.match(page, /<script src="\/en\/client-live-search.js" defer=""><\/script>/);
   assert.match(page, /id="live-search-root"/);
-  const form = page.slice(page.indexOf('<form role="search"'), page.indexOf("</form>"));
-  assert.ok(form.length > 0);
-  assert.doesNotMatch(form, /\sname=/, "no control is named, so a submit the browser performs before hydration sends nothing (review of #772)");
-  assert.ok(form.includes("Work identifier (optional)"), "the form offers to search within one work, which is how an EU work is searched");
+  // The V4 search page (the owner's brief of 2026-11-15) has no form of its own: the header's field brings the words after
+  // "#", and no form asks for an identifier anywhere. The header's form names no control either (R109).
+  const forms = page.match(/<form\b[^>]*>[\s\S]*?<\/form>/g) ?? [];
+  assert.equal(forms.length, 1, "the header's field alone");
+  assert.match(forms[0], /data-header-find=""/);
+  assert.doesNotMatch(forms[0], /\sname=/, "no control is named, so a submit the browser performs before hydration sends nothing (review of #772)");
+  assert.ok(!page.includes("Work identifier (optional)"), "no field asks for an identifier");
 });
 
 test("the request carries the phrase as typed, the language, the strict lane and the work if one is named, and nothing else", () => {

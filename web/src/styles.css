@@ -3662,7 +3662,63 @@ html[data-layout="v4"] .lx-novisible { margin: 0; padding: 12px 14px; border-rad
 
 
 /* == v4: home and search results (agent) == */
-
+/* Home (V1Home, its left column): the headline, the find field, six starting texts on one scale, the newest changes, the
+   coverage line. Every rule is the mockup's, read from its inline styles. */
+html[data-layout="v4"] .lx-home,
+html[data-layout="v4"] .lx-find-results { box-sizing: border-box; padding: 32px 56px 0; color: var(--lx-ink); font: 15px/1.45 var(--lx-sans); }
+html[data-layout="v4"] .lx-home ul,
+html[data-layout="v4"] .lx-find-results ul { margin: 0; padding: 0; list-style: none; }
+html[data-layout="v4"] .lx-home li > a,
+html[data-layout="v4"] .lx-find-results li > a { min-block-size: 0; min-inline-size: 0; }
+html[data-layout="v4"] .lx-home-headline { max-width: 600px; margin: 0; font-family: var(--lx-serif); font-weight: 500; font-size: 42px; line-height: 1.1; letter-spacing: -0.015em; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-home-lede { max-width: 600px; margin: 14px 0 0; font-size: 16.5px; line-height: 1.5; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-home-find { max-width: 720px; height: 54px; box-sizing: border-box; display: flex; align-items: center; gap: 12px; margin: 26px 0 0; padding: 0 8px 0 16px; border: 1.5px solid var(--lx-ink); border-radius: 8px; background: #FFFFFF; }
+html[data-layout="v4"] .lx-home-find:focus-within { border-color: var(--lx-indigo); }
+html[data-layout="v4"] .lx-home-find .lx-find-icon { color: var(--lx-ink); }
+html[data-layout="v4"] .lx-home-find input { flex: 1 1 auto; min-width: 0; min-block-size: 0; min-inline-size: 0; height: 100%; box-sizing: border-box; margin: 0; padding: 0; border: 0; outline: none; background: transparent; box-shadow: none; font: inherit; font-size: 16px; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-home-find input::placeholder { color: var(--lx-faint); opacity: 1; }
+html[data-layout="v4"] .lx-home-find button,
+html[data-layout="v4"] .lx-find-retry { flex: 0 0 auto; min-block-size: 0; min-inline-size: 0; height: 38px; margin: 0; padding: 0 18px; border: 0; border-radius: 6px; background: var(--lx-ink); color: #FFFFFF; font: inherit; font-size: 14.5px; font-weight: 600; line-height: 1; cursor: pointer; }
+html[data-layout="v4"] .lx-home-start-head { display: flex; align-items: flex-end; gap: 20px; margin: 30px 0 0; padding-bottom: 8px; }
+html[data-layout="v4"] .lx-home-start-head h2,
+html[data-layout="v4"] .lx-home-recent-head h2 { flex: 1 1 auto; margin: 0; font-family: var(--lx-sans); font-size: 15px; font-weight: 600; line-height: 1.45; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-home-start-head h2 span { padding-left: 8px; font-weight: 400; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-home-scale-cell { flex: 0 0 300px; }
+html[data-layout="v4"] .lx-home-count-cell { flex: 0 0 104px; font-size: 13px; color: var(--lx-muted); text-align: right; }
+html[data-layout="v4"] .lx-home-years,
+html[data-layout="v4"] .lx-home-marks { display: block; }
+html[data-layout="v4"] .lx-home-year { fill: var(--lx-faint); font-family: var(--lx-sans); font-size: 11.5px; }
+html[data-layout="v4"] .lx-home-axis { stroke: var(--lx-line); stroke-width: 1; }
+html[data-layout="v4"] .lx-home-tick { fill: var(--lx-indigo); fill-opacity: 0.72; }
+html[data-layout="v4"] .lx-home-one { fill: #FFFFFF; stroke: var(--lx-indigo); stroke-width: 2; }
+html[data-layout="v4"] .lx-home-text { display: flex; align-items: center; gap: 20px; padding: 10px 0; border-top: 1px solid var(--lx-line); color: var(--lx-ink); text-decoration: none; }
+html[data-layout="v4"] .lx-home-text-name { flex: 1 1 auto; min-width: 0; }
+html[data-layout="v4"] .lx-home-text-title,
+html[data-layout="v4"] .lx-find-row-title { display: block; font-family: var(--lx-serif); font-size: 18.5px; font-weight: 500; line-height: 1.25; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-home-text-origin,
+html[data-layout="v4"] .lx-find-row-kind { display: block; font-size: 13px; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-home-text:hover .lx-home-text-title,
+html[data-layout="v4"] .lx-home-change:hover .lx-home-change-title,
+html[data-layout="v4"] .lx-find-row:hover .lx-find-row-title { text-decoration: underline; text-underline-offset: 3px; }
+html[data-layout="v4"] .lx-home-recent-head { display: flex; align-items: baseline; margin: 24px 0 0; padding-bottom: 8px; }
+html[data-layout="v4"] .lx-home-recent-head a { font-size: 13.5px; color: var(--lx-ink); text-underline-offset: 3px; }
+html[data-layout="v4"] .lx-home-change { display: flex; align-items: baseline; gap: 20px; padding: 8px 0; border-top: 1px solid var(--lx-line); color: var(--lx-ink); text-decoration: none; }
+html[data-layout="v4"] .lx-home-change-date { flex: 0 0 86px; font-size: 13.5px; font-weight: 600; color: var(--lx-indigo); font-variant-numeric: tabular-nums; }
+html[data-layout="v4"] .lx-home-change-title { flex: 1 1 auto; min-width: 0; font-family: var(--lx-serif); font-size: 17px; line-height: 1.3; }
+html[data-layout="v4"] .lx-home-change-counts { flex: 0 0 auto; font-size: 13px; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-home-recent-status { margin: 0; padding: 8px 0; border-top: 1px solid var(--lx-line); font-size: 13.5px; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-home-holds { margin: 0; padding-top: 12px; border-top: 1px solid var(--lx-line); font-size: 13.5px; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-home-holds a { color: var(--lx-ink); text-underline-offset: 3px; }
+/* The search results: the heading, one sentence, the texts by title, each a row like Home's starting texts. */
+html[data-layout="v4"] .lx-find-heading { max-width: 720px; margin: 0; font-family: var(--lx-serif); font-weight: 500; font-size: 32px; line-height: 1.15; letter-spacing: -0.01em; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-find-results p { max-width: 720px; margin: 14px 0 0; }
+html[data-layout="v4"] .lx-find-status { font-size: 15px; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-find-hint,
+html[data-layout="v4"] .lx-find-more { font-size: 14px; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-find-list { max-width: 880px; margin-top: 18px; }
+html[data-layout="v4"] .lx-find-row { display: block; padding: 10px 0; border-top: 1px solid var(--lx-line); color: var(--lx-ink); text-decoration: none; }
+html[data-layout="v4"] .lx-find-list li:last-child .lx-find-row { border-bottom: 1px solid var(--lx-line); }
+html[data-layout="v4"] .lx-find-failed .lx-find-retry { margin-top: 12px; }
 
 /* == v4: home and search results end == */
 

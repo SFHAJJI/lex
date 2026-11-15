@@ -457,7 +457,9 @@ test("no live page says synthetic in its text, since a live page may stand over 
     const html = render();
     const text = html.slice(html.indexOf("<body")).replace(/<[^>]+>/g, " ");
     assert.doesNotMatch(text, /synthetic/i, `${name}: the visible text never calls the page synthetic`);
-    assert.match(html, /<div class="live-answer" aria-live="polite" data-live-answer=""><section data-answer-state="(idle|loading)">/,
+    // The V4 search results (2026-11-15) say their idle sentence; each later state is said in a status line.
+    if (name === "search") assert.match(html, /<div class="lx-find-results" data-find-state="idle"><h1 class="lx-find-heading">[^<]+<\/h1><p class="lx-find-status">/, `${name}: the idle state, rendered by the server`);
+    else assert.match(html, /<div class="live-answer" aria-live="polite" data-live-answer=""><section data-answer-state="(idle|loading)">/,
       `${name}: the answer's live region is rendered by the server, before any answer arrives`);
     assert.match(html, new RegExp(`data-live="${LIVE_MARKER}"`), `${name}: under the live banner`);
   }

@@ -79,6 +79,12 @@ const LEGAL = new Set(["legalNotice", "privacy", "terms", "accessibility", "cook
 // React escapes an apostrophe in text; the table holds the text itself.
 const escaped = (text) => text.replaceAll("&", "&amp;").replaceAll("'", "&#x27;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
 
+/** The V4 pages (the owner's brief of 2026-11-15) and what each opens with, from its table: its heading and its sentence. */
+const V4_OPENINGS = {
+  home: (entry) => [`<h1 class="lx-home-headline">${escaped(entry.headline)}</h1>`, `<p class="lx-home-lede">${escaped(entry.lede)}</p>`],
+  search: (entry) => [`<h1 class="lx-find-heading">${escaped(entry.findHeading)}</h1>`, `<p class="lx-find-status">${escaped(entry.findIdle)}</p>`],
+};
+
 test("every live page renders its chrome from the table", () => {
   const copy = liveChrome("en");
   assert.deepEqual(Object.keys(copy).filter((key) => !["form", "common", "shell", "site", "breadcrumbs", "freshness", "card", "refusalCard", "coverageAnswer", "failure", "citation", "legal", "reference"].includes(key)).sort(), Object.keys(PAGES).sort(), "one entry per live page, the forms, the page shell, the site around it, its breadcrumbs and its freshness strip, the evaluation and refusal cards, the coverage answer, the failure panel, what the screens share, the citation generator's words, what the legal pages share and what the reference pages share");
@@ -105,11 +111,15 @@ test("every live page renders its chrome from the table", () => {
     assert.ok(html.includes(`<p>${escaped(quiet ? copy.freshness.noAnswer : copy.freshness.asBuilt)}</p>`), `${key}: the freshness strip as built`);
     assert.ok(!html.includes(escaped(quiet ? copy.freshness.asBuilt : copy.freshness.noAnswer)), `${key}: only that strip`);
     assert.ok(!html.includes("staleness-banner"), `${key}: no staleness banner as built`);
-    if (v4) continue;
     // The home page, Decisions and Evidence carry no eyebrow line (the owner's order of 2026-11-14, evening), and the two
     // pages no introduction; every other page its table's eyebrow, heading and introduction.
-    // Changes (the owner's brief of 2026-11-15, V4Changes) has none either: its title and the sentence under it.
-    if (["home", "decisions", "evidence", "radar"].includes(key)) assert.ok(!html.includes('<p class="eyebrow">'), `${key}: no eyebrow`);
+    if (v4) {
+      // A V4 page opens with its own heading and sentence, from its table, and no eyebrow.
+      assert.ok(!html.includes('<p class="eyebrow">'), `${key}: no eyebrow`);
+      for (const opening of V4_OPENINGS[key]?.(entry) ?? []) assert.ok(html.includes(opening), `${key}: ${opening}`);
+      continue;
+    }
+    if (["home", "decisions", "evidence"].includes(key)) assert.ok(!html.includes('<p class="eyebrow">'), `${key}: no eyebrow`);
     else assert.ok(html.includes(`<p class="eyebrow">${escaped(entry.eyebrow)}</p>`), `${key}: eyebrow`);
     assert.ok(html.includes(`<h1>${escaped(entry.heading)}</h1>`), `${key}: heading`);
     if (!["decisions", "evidence"].includes(key)) assert.ok(html.includes(`<p>${escaped(entry.intro)}</p>`), `${key}: introduction`);
@@ -127,6 +137,19 @@ test("every form's labels and button come from the table", () => {
     const formKey = key === "home" || key === "notFound" ? "search" : key;
     // A page rendered for hydration marks text boundaries with empty comments; they are not text.
     const html = render().replaceAll("<!-- -->", "");
+    // The V4 pages: the header's field, and on Home its own find field, each labelled and its button named from the table;
+    // the search page has no form of its own (the brief: no form asking for an identifier anywhere).
+    if (V4_OPENINGS[key] !== undefined) {
+      const { site, home } = liveChrome("en");
+      assert.ok(html.includes(`<label class="lx-visually-hidden" for="lx-find-q">${escaped(site.findLabel)}</label>`), `${key}: the header's field`);
+      if (key === "home") {
+        assert.ok(html.includes(`<label class="lx-visually-hidden" for="lx-home-find-q">${escaped(home.findLabel)}</label>`), `${key}: the find field's label`);
+        assert.ok(html.includes(`<button type="submit">${escaped(home.findSubmit)}</button>`), `${key}: the find button`);
+      } else {
+        assert.equal((html.match(/<form\b/g) ?? []).length, 1, `${key}: the header's form alone`);
+      }
+      continue;
+    }
     assert.ok(html.includes(`<button type="submit">${escaped(form.submit[formKey])}</button>`), `${key}: the submit button`);
     assert.ok(html.includes(`<option value="">${escaped(form.anyLanguage)}</option>`) || html.includes(`<option value="" selected="">${escaped(form.anyLanguage)}</option>`) || formKey === "search", `${key}: the blank language option`);
     assert.ok(html.includes(`${escaped(form.language)} <select`), `${key}: the language label`);
@@ -137,7 +160,8 @@ test("every form's labels and button come from the table", () => {
   assert.ok(changes.includes(`<button class="lx-visually-hidden" type="submit">${escaped(radar.showPeriod)}</button>`), "the period's submit button");
   assert.ok(!changes.includes(escaped(form.workIdentifierOptional)) && !changes.includes("<select"), "Changes asks for no identifier and no language");
   assert.ok(renderLiveHistoryPage().replaceAll("<!-- -->", "").includes(`${escaped(form.articleId)} <input`), "history's article id");
-  assert.ok(renderLiveSearchPage().replaceAll("<!-- -->", "").includes(`${escaped(form.phrase)} <input`), "search's phrase");
+  // The V4 search page (2026-11-15) has no form of its own: the header's field brings the words, and nothing asks an identifier.
+  assert.ok(!renderLiveSearchPage().replaceAll("<!-- -->", "").includes(`${escaped(form.workIdentifierOptional)} <input`), "the search page asks for no identifier");
 });
 
 test("the French table has the English table's exact shape, and reaches the pages through the chrome table alone", async () => {
