@@ -6,7 +6,9 @@ import {
   alignParagraphs, articleNumberOf, articleParts, axisGeometry, changeIndex, cleanTitle, ownTitleOf, sameVisibleWording, versionAt, versionsOf, wordDiff,
 } from "../scripts/text-page.mjs";
 import { textHref, textStateOf } from "../scripts/text-address.mjs";
-import { numericDate, renderLiveTextPage, typedDate } from "../.react-build/app.mjs";
+import { CompareArticle, numericDate, renderLiveTextPage, typedDate } from "../.react-build/app.mjs";
+import { createElement as h } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 const ART_44 = "Article 44Délai de prescription1.Le délai de prescription de toute action dérivant du contrat d'assurance est de trois ans.Le délai court à partir du jour de l'événement qui donne ouverture à l'action.2.Sous réserve de dispositions légales particulières, l'action se prescrit par cinq ans.3.L'action récursoire de l'assureur contre l'assuré se prescrit par trois ans.";
 const ART_38_2011 = "Article 38Durée des obligationsLa durée du contrat est fixée par les parties.Toutefois, et sauf pour les assurances sur la vie et l'assurance maladie, le preneur d'assurance a le droit de résilier le contrat chaque année à l'échéance de la prime annuelle, ou, à défaut à la date anniversaire de la prise d'effet du contrat, en envoyant une lettre recommandée à l'assureur au moins trois mois avant cette date. Ce droit appartient dans les mêmes conditions à l'assureur.";
@@ -109,4 +111,15 @@ test("the text page as built is the loading state inside the V4 frame, with the 
   assert.ok(html.includes('id="live-text-root"') && html.includes('aria-busy="true"'));
   assert.ok(html.includes('class="lx-dock"') && html.includes("client-live-dock.js") && html.includes("client-live-text.js"));
   assert.ok(!/lu-legilux|art_[0-9]|[0-9a-f]{64}/u.test(html.replace(/<script[\s\S]*?<\/script>/gu, "")), "no address, article id or digest on the page");
+});
+
+test("compared wording is marked in the text's own language, the interface's labels in the page's (the review of #1062)", () => {
+  const row = { publisher_id: "art_38", status: "changed", from: [{ text: ART_38_2011 }], to: [{ text: ART_38_2013 }] };
+  const versions = [{ date: "2011-04-16" }, { date: "2013-03-01" }];
+  for (const textLang of ["fr", "en"]) {
+    const markup = renderToStaticMarkup(h(CompareArticle, { row, versions, changedDates: ["2013-03-01"], compare: { from: "2011-04-16", to: "2013-03-01" }, view: "side", index: 0, total: 1, onStep: () => {}, labelOf: () => "38", textLang }));
+    const paragraphs = [...markup.matchAll(/<p class="lx-cmp-p[^"]*" lang="([a-z]+)">/g)].map((m) => m[1]);
+    assert.ok(paragraphs.length >= 4 && paragraphs.every((lang) => lang === textLang), `${textLang}: ${paragraphs}`);
+    assert.ok(!/class="lx-compare-grid" lang=/.test(markup), "the grid's column labels are the interface's");
+  }
 });

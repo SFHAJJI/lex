@@ -169,7 +169,7 @@ function SourceAndCitation({ article, version }) {
   return (
     <details className="lx-cite">
       <summary>{liveChrome().text.sourceAndCitation}</summary>
-      <div className="lx-cite-panel" lang="en">
+      <div className="lx-cite-panel">
         <dl>
           {article?.official_source ? (<><dt>{copy.official}</dt><dd><a href={article.official_source} rel="noopener noreferrer">{article.official_source}</a></dd></>) : null}
           {version ? (<><dt>{copy.version}</dt><dd>{numericDate(version.date)}</dd></>) : null}
@@ -214,7 +214,7 @@ function ReadArticle({ entry, article, parts, versions, changedDates, identifier
 }
 
 /** One changed article in compare mode (V3Compare): its two wordings side by side or in one text, paragraph by paragraph. */
-function CompareArticle({ row, versions, changedDates, compare, view, index, total, onStep, labelOf }) {
+export function CompareArticle({ row, versions, changedDates, compare, view, index, total, onStep, labelOf, textLang = 'fr' }) {
   const copy = liveChrome().text;
   if (row === null) return <p className="lx-muted">{copy.compareLoading}</p>;
   const id = row.publisher_id;
@@ -258,7 +258,7 @@ function CompareArticle({ row, versions, changedDates, compare, view, index, tot
         <div>
           <div className="lx-compare-title">
             <span className="lx-compare-number">{fillText(copy.articleShort, { number: labelOf(id) })}</span>
-            {heading ? <h2 id="lx-compare-heading" lang="fr">{heading}</h2> : <h2 id="lx-compare-heading" className="lx-visually-hidden">{fillText(copy.articleShort, { number: labelOf(id) })}</h2>}
+            {heading ? <h2 id="lx-compare-heading" lang={textLang}>{heading}</h2> : <h2 id="lx-compare-heading" className="lx-visually-hidden">{fillText(copy.articleShort, { number: labelOf(id) })}</h2>}
           </div>
           <div className="lx-compare-sub">
             <Strip versions={versions} changedDates={strip} />
@@ -274,7 +274,7 @@ function CompareArticle({ row, versions, changedDates, compare, view, index, tot
       {body}
       {rows && body === null ? (
         view === 'inline' ? (
-          <div className="lx-compare-inline" lang="fr">
+          <div className="lx-compare-inline" lang={textLang}>
             {rows.map((r, i) => (
               <p key={i} className={r.kind === 'added' ? 'lx-block-added' : r.kind === 'removed' ? 'lx-block-removed' : undefined}>
                 {r.kind === 'changed' ? [...r.diff.left.filter((x) => x.kind !== 'same').length ? interleave(r.diff) : [r.right.text]] : r.kind === 'removed' ? <del>{r.left.text}</del> : r.kind === 'added' ? <ins>{r.right.text}</ins> : r.left.text}
@@ -282,15 +282,15 @@ function CompareArticle({ row, versions, changedDates, compare, view, index, tot
             ))}
           </div>
         ) : (
-          <div className="lx-compare-grid" lang="fr">
+          <div className="lx-compare-grid">
             <div className="lx-compare-col-head"><div className="lx-strong">{fillText(copy.versionOf, { date: numericDate(compare.from) })}</div><div className="lx-muted">{leftNote}</div></div>
             <div className="lx-compare-col-head"><div className="lx-strong">{fillText(copy.versionOf, { date: numericDate(compare.to) })}</div><div className="lx-muted">{rightNote}</div></div>
             {rows.flatMap((r, i) => {
               const marker = (p) => (p?.marker ? `${p.marker} ` : '');
-              if (r.kind === 'same') return [<p key={`l${i}`} className="lx-cmp-p">{marker(r.left)}{r.left.text}</p>, <p key={`r${i}`} className="lx-cmp-p">{marker(r.right)}{r.right.text}</p>];
-              if (r.kind === 'changed') return [<p key={`l${i}`} className="lx-cmp-p">{marker(r.left)}{r.diff.left.map(run)}</p>, <p key={`r${i}`} className="lx-cmp-p">{marker(r.right)}{r.diff.right.map(run)}</p>];
-              if (r.kind === 'added') return [<p key={`l${i}`} className="lx-cmp-none">{copy.notInVersion}</p>, <p key={`r${i}`} className="lx-cmp-p lx-block-added">{marker(r.right)}{r.right.text}</p>];
-              return [<p key={`l${i}`} className="lx-cmp-p lx-block-removed">{marker(r.left)}{r.left.text}</p>, <p key={`r${i}`} className="lx-cmp-none">{copy.notInVersion}</p>];
+              if (r.kind === 'same') return [<p key={`l${i}`} className="lx-cmp-p" lang={textLang}>{marker(r.left)}{r.left.text}</p>, <p key={`r${i}`} className="lx-cmp-p" lang={textLang}>{marker(r.right)}{r.right.text}</p>];
+              if (r.kind === 'changed') return [<p key={`l${i}`} className="lx-cmp-p" lang={textLang}>{marker(r.left)}{r.diff.left.map(run)}</p>, <p key={`r${i}`} className="lx-cmp-p" lang={textLang}>{marker(r.right)}{r.diff.right.map(run)}</p>];
+              if (r.kind === 'added') return [<p key={`l${i}`} className="lx-cmp-none">{copy.notInVersion}</p>, <p key={`r${i}`} className="lx-cmp-p lx-block-added" lang={textLang}>{marker(r.right)}{r.right.text}</p>];
+              return [<p key={`l${i}`} className="lx-cmp-p lx-block-removed" lang={textLang}>{marker(r.left)}{r.left.text}</p>, <p key={`r${i}`} className="lx-cmp-none">{copy.notInVersion}</p>];
             })}
           </div>
         )
@@ -590,6 +590,8 @@ export function TextPage({ contract, fetchImpl, now = null }) {
 
   const versions = text.versions;
   const isEurope = text.publisher === 'eu-eurlex';
+  // The statute's language, apart from the interface's (the launch contract): French for Luxembourg, the wording read for the EU.
+  const textLang = text.language === 'eng' ? 'en' : text.language === 'deu' ? 'de' : 'fr';
   const contents = text.contents ?? [];
   const labelById = new Map(contents.map((item) => [item.id, item.number]));
   const comparison = compareAnswer?.comparisons?.[0] ?? null;
@@ -641,7 +643,7 @@ export function TextPage({ contract, fetchImpl, now = null }) {
       <div className="lx-text-top">
         <div className="lx-text-head">
           <div className="lx-text-titles">
-            <h1 lang={text.language === 'eng' ? 'en' : 'fr'}>{text.title ?? ''}</h1>
+            <h1 lang={textLang}>{text.title ?? ''}</h1>
             <p className="lx-muted">
               {isEurope ? copy.kindEu : copy.kindLu} {compare ? copy.compareHint : facts}
               {isEurope ? ` ${copy.euDate}` : ''}
@@ -735,11 +737,11 @@ export function TextPage({ contract, fetchImpl, now = null }) {
           <ul>
             {shown.map((item) => (
               <li key={item.id}>
-                <a href={textHref(compare ? { identifier: text.identifier, from: compare.from, to: compare.to, article: item.id } : { identifier: text.identifier, date: address.date, article: item.id })} lang="fr"
+                <a href={textHref(compare ? { identifier: text.identifier, from: compare.from, to: compare.to, article: item.id } : { identifier: text.identifier, date: address.date, article: item.id })} 
                   aria-current={(compare ? compareRow?.publisher_id : address.article) === item.id ? 'true' : undefined}
                   onClick={(e) => { e.preventDefault(); select(item.id); }}>
                   <span className="lx-list-number">{item.number}</span>
-                  <span className="lx-list-heading">{headingOf(item.id)}</span>
+                  <span className="lx-list-heading" lang={textLang}>{headingOf(item.id)}</span>
                   <span className="lx-list-years">{compare ? '' : yearsOf(item.id)}</span>
                 </a>
               </li>
@@ -770,6 +772,7 @@ export function TextPage({ contract, fetchImpl, now = null }) {
                       return labelById.get(target) ?? articleNumberOf(target);
                     }}
                     onStep={(step) => go({ article: changedRows[compareIndex + step]?.publisher_id ?? null })}
+                    textLang={textLang}
                   />
                 )
           ) : (
