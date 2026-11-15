@@ -4,6 +4,29 @@ Updated 2026-11-15. The web lane's progress, split out of STATUS.md (which keeps
 items and the pointers) by the standing order of 2026-10-01 13:50 UTC. Every pull request of the web lane
 updates this file, not STATUS.md.
 
+## Release 13 is live; the freeze resumes (sole driver, 2026-11-15)
+
+`docs/release-13-live`.
+- **Release 13** (`v3-20261115T092447Z-38c1a47bac9a`, #1060's head 38c1a47b, the same tree as integration's head bc79a5ac;
+  revision `ca-lex-v3--v3-20261115t092447z-38c1a47bac9a-d5f4861f`), built on Azure from the exact commit (the first build,
+  of e9bcaa57 before the review's repair, was stopped). Acceptance 7 of 7 at its own address; screenshots on the runner
+  (`ops/screens-r13`, How it works at the registry and the API, Changes on the last twelve months); two-address PASS.
+- **The gate on the candidate** (`-NoPromote`): the first run stopped on the harness's 30 s read timeout at
+  `ins-prescription-dated-fr` while the screenshot run asked the same question (a harness crash before any verdict; renamed
+  `gate-r13-harness-timeout.log`; `lu-masked-email` had answered `assistant_v3_unavailable` in it too). The second failed one gate: `lu-masked-email` answered `assistant_v3_unavailable` in
+  1.7 s (the planner failed or its plan was refused once; the same failure as MLflow version 6 on the live Release 12 that
+  morning; asked three times after, it answered 3 of 3; run `20261115-r13-candidate-dev-run1`). The third passed every gate
+  (17 right articles of 56, 0 wrong). The owner was told all three and said yes.
+- **The promotion** (`20261115-r13-promote`): every gate passed (17 right, 0 wrong, 25 not found, 5 refused as advice,
+  9 right behaviours; quotations 1.000; the same verdict on replay 96.4 %, the same plan 71.1 %; p50 1.50 s, p95 1.86 s);
+  registered as lex-assistant version 8, the champion; traffic 100 % on Release 13. Acceptance 7 of 7 on the live site.
+  Release 12 is switched off, kept for rollback, with 10 and 11. The backup is verified, 14 objects by SHA-256; Release
+  12's local image file was removed to make room (its backup verified, a note beside it).
+- Known: `lu-masked-email` answered `assistant_v3_unavailable` in 3 of the 7 runs of 2026-11-15 (Release 12 live twice,
+  Release 13 four times, the nightly once; the planner gives no usable plan for it that time); a timeout in the harness is a crash, not a
+  recorded failure (lex-eval's client, 30 s). Both after the interview. The answers of Release 13 name no registry version
+  (version 8 is registered after its pages were built; the work says the build is registered when it is put live).
+
 ## How it works: the offer's three proofs on the site; Changes made readable (sole driver, 2026-11-15)
 
 `web/how-it-works`, the owner's order of 2026-11-15 (the Foyer offer asks to document AI/data APIs, to supervise and
@@ -13,7 +36,7 @@ the planner, the validator or any gate; the freeze of 2026-11-14 is lifted for t
 - **The MLflow registry**: lex-eval registers every evaluation as a version of the model `lex-assistant`, tagged with the
   planner id, the serving commit, the snapshot and whether the gates passed; the alias `champion` moves only when they pass.
   Release 12 was registered twice on 2026-11-15 against the live site: version 6 failed its gates (`lu-masked-email`, the
-  planner timed out once: `assistant_v3_unavailable`), version 7 (`20261115-r12-live-register-2`) passed them (17 right
+  planner gave no usable plan once: `assistant_v3_unavailable`), version 7 (`20261115-r12-live-register-2`) passed them (17 right
   articles of 56, 0 wrong, 25 not found, 5 refused as advice, 9 right behaviours, quotations 1.000, the same verdict on
   replay 94.6 %, the same plan 66.7 %, p50 1.44 s, p95 3.24 s) and is the champion. `promote-with-eval-gate.ps1` now passes
   `--register` on every promotion. `python -m lex_eval.export_registry` exports the registry, and
