@@ -3535,8 +3535,94 @@ html[data-layout="v4"] .site-footer a { color: var(--lx-muted); }
 
 
 /* == v4: assistant dock (agent) == */
-
-
+/* The dock's content (V1Home, V2Read, V3Compare, V4Changes): the header row, the conversation, the field at the foot. The
+   brief wins over the mockup on colour: brand green only for Ask, the question bubble and the AI model tag. */
+html[data-layout="v4"] .lx-dock-frame,
+html[data-layout="v4"] .lx-dock-inner { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+html[data-layout="v4"] .lx-dock-inner { color: var(--lx-ink); font-family: var(--lx-sans); font-size: 15px; line-height: 1.45; }
+html[data-layout="v4"] .lx-dock-head { position: relative; flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 14px 20px 8px; }
+html[data-layout="v4"] .lx-dock-title { margin: 0; font-family: var(--lx-sans); font-size: 16px; font-weight: 600; line-height: 1.45; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-dock-notice { position: static; }
+html[data-layout="v4"] .lx-dock-notice-summary { display: inline; list-style: none; cursor: pointer; font-size: 12.5px; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-dock-notice-summary::-webkit-details-marker { display: none; }
+html[data-layout="v4"] .lx-dock-notice-summary::marker { content: ''; }
+html[data-layout="v4"] .lx-dock-notice[open] .lx-dock-notice-summary { text-decoration: underline; text-underline-offset: 3px; }
+html[data-layout="v4"] .lx-dock-notice-body { position: absolute; z-index: 4; top: 100%; left: 20px; right: 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; background: #FFFFFF; border: 1px solid var(--lx-line); border-radius: 8px; box-shadow: 0 6px 18px rgba(27, 36, 32, 0.12); font-size: 12.5px; line-height: 1.5; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-dock-notice-body p { margin: 0; }
+html[data-layout="v4"] .lx-dock-hide { margin-left: auto; padding: 4px 6px; font: inherit; font-size: 13px; color: var(--lx-muted); background: none; border: none; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+/* The conversation scrolls inside the dock; the field stays at its foot. */
+html[data-layout="v4"] .lx-dock-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 6px 20px 2px; display: flex; flex-direction: column; gap: 12px; }
+html[data-layout="v4"] .lx-dock-intro { margin: 4px 0 2px; font-size: 14.5px; line-height: 1.5; }
+html[data-layout="v4"] .lx-dock-example { display: block; width: 100%; box-sizing: border-box; padding: 11px 14px; background: #FFFFFF; border: 1px solid var(--lx-line); border-radius: 10px; color: var(--lx-ink); font: inherit; text-align: left; cursor: pointer; }
+html[data-layout="v4"] .lx-dock-example:hover { border-color: var(--lx-field); }
+html[data-layout="v4"] .lx-dock-example-question { display: block; font-size: 14.5px; line-height: 1.4; }
+html[data-layout="v4"] .lx-dock-example-caption { display: block; margin-top: 3px; font-size: 12.5px; line-height: 1.45; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-dock-about { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--lx-line); font-size: 13.5px; line-height: 1.5; color: var(--lx-muted); display: flex; flex-direction: column; gap: 8px; }
+html[data-layout="v4"] .lx-dock-about p { margin: 0; }
+html[data-layout="v4"] .lx-dock-about strong { color: var(--lx-ink); font-weight: 600; }
+html[data-layout="v4"] .lx-dock-link { padding: 0; font: inherit; color: var(--lx-ink); background: none; border: none; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; text-align: left; }
+/* The question, as a bubble; the cards. */
+html[data-layout="v4"] .lx-dock-bubble { margin: 0; align-self: flex-end; max-width: 88%; box-sizing: border-box; padding: 9px 13px; font-size: 14.5px; line-height: 1.4; color: #FFFFFF; background: var(--lx-green); border-radius: 12px 12px 3px 12px; overflow-wrap: anywhere; }
+html[data-layout="v4"] .lx-dock-card { background: #FFFFFF; border: 1px solid var(--lx-line); border-radius: 10px; padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 9px; }
+html[data-layout="v4"] .lx-dock-card-head { display: flex; align-items: baseline; gap: 10px; }
+html[data-layout="v4"] .lx-dock-verdict { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 600; line-height: 1.4; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-dock-notes-toggle { flex: 0 0 auto; font-size: 12.5px; color: var(--lx-muted); white-space: nowrap; }
+html[data-layout="v4"] .lx-dock-notes ul { margin: 0; padding: 0 0 0 16px; font-size: 12.5px; line-height: 1.5; color: var(--lx-muted); display: flex; flex-direction: column; gap: 4px; }
+html[data-layout="v4"] .lx-dock-quote { margin: 0; font-family: var(--lx-serif); font-size: 18.5px; font-weight: 400; line-height: 1.42; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-dock-mark { background: var(--lx-quote); color: inherit; padding: 1px 0; }
+html[data-layout="v4"] .lx-dock-cite { margin: 0; font-size: 13.5px; line-height: 1.4; }
+html[data-layout="v4"] .lx-dock-strip { display: flex; align-items: center; gap: 10px; padding-top: 9px; border-top: 1px solid var(--lx-line-soft); font-size: 13px; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-dock-ticks { display: block; flex: 0 0 auto; max-width: 60%; }
+html[data-layout="v4"] .lx-dock-tick { fill: var(--lx-tick); }
+html[data-layout="v4"] .lx-dock-tick-changed { fill: var(--lx-indigo); }
+html[data-layout="v4"] .lx-dock-strip-line { min-width: 0; }
+html[data-layout="v4"] .lx-dock-lead { margin: 0; font-size: 14.5px; line-height: 1.45; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-dock-words { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--lx-muted); overflow-wrap: anywhere; }
+html[data-layout="v4"] .lx-dock-pending { margin: 0; font-size: 13px; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-dock-actions { margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+html[data-layout="v4"] .lx-dock-action { padding: 6px 12px; font: inherit; font-size: 13.5px; color: var(--lx-ink); background: #FFFFFF; border: 1px solid var(--lx-field); border-radius: 6px; cursor: pointer; }
+html[data-layout="v4"] .lx-dock-action:hover { border-color: var(--lx-muted); }
+html[data-layout="v4"] .lx-dock-choices { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+html[data-layout="v4"] .lx-dock-choice { display: block; width: 100%; box-sizing: border-box; padding: 10px 14px; font: inherit; text-align: left; color: var(--lx-ink); background: #FFFFFF; border: 1px solid var(--lx-line); border-radius: 10px; cursor: pointer; }
+html[data-layout="v4"] .lx-dock-choice:hover { border-color: var(--lx-field); }
+html[data-layout="v4"] .lx-dock-choice-article { display: block; font-size: 14px; line-height: 1.4; }
+html[data-layout="v4"] .lx-dock-choice-title { display: block; margin-top: 3px; font-size: 12.5px; line-height: 1.45; color: var(--lx-muted); }
+/* "How this answer was built": five rows, each tagged code or AI model. */
+html[data-layout="v4"] .lx-dock-built { padding: 12px 16px 10px; gap: 0; }
+html[data-layout="v4"] .lx-dock-built-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-bottom: 6px; }
+html[data-layout="v4"] .lx-dock-built-title { margin: 0; font-family: var(--lx-sans); font-size: 13.5px; font-weight: 600; line-height: 1.45; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-dock-built-foot { flex: 0 0 auto; font-size: 12.5px; color: var(--lx-muted); white-space: nowrap; }
+html[data-layout="v4"] .lx-dock-rows { margin: 0; padding: 0; list-style: none; }
+html[data-layout="v4"] .lx-dock-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; border-top: 1px solid var(--lx-line-soft); font-size: 13px; line-height: 1.35; }
+html[data-layout="v4"] .lx-dock-row-name { flex: 0 0 74px; font-weight: 600; }
+html[data-layout="v4"][lang="fr"] .lx-dock-row-name { flex-basis: 96px; }
+html[data-layout="v4"] .lx-dock-row-line { flex: 1 1 auto; min-width: 0; color: var(--lx-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html[data-layout="v4"] .lx-dock-tag { flex: 0 0 auto; padding: 1px 8px; border-radius: 10px; background: var(--lx-chip); color: var(--lx-muted); font-size: 12px; font-weight: 500; white-space: nowrap; }
+html[data-layout="v4"] .lx-dock-tag-model { background: var(--lx-green); color: #FFFFFF; }
+html[data-layout="v4"] .lx-dock-built-note { margin: 0; padding-top: 7px; border-top: 1px solid var(--lx-line-soft); font-size: 12.5px; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-dock-built-note .lx-dock-link { color: var(--lx-ink); }
+html[data-layout="v4"] .lx-dock-registry { margin: 4px 0 0; font-size: 12px; line-height: 1.45; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-dock-registry .lx-dock-link { color: var(--lx-muted); }
+html[data-layout="v4"] .lx-dock-plan { margin-top: 8px; }
+html[data-layout="v4"] .lx-dock-plan[hidden] { display: none; }
+html[data-layout="v4"] .lx-dock-plan-heading { margin: 8px 0 4px; font-family: var(--lx-sans); font-size: 12.5px; font-weight: 600; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-dock-json { margin: 0; max-height: 280px; overflow: auto; padding: 8px 10px; background: var(--lx-panel); border: 1px solid var(--lx-line-soft); border-radius: 6px; font-family: var(--lx-mono); font-size: 11.5px; line-height: 1.45; color: var(--lx-ink); white-space: pre; }
+/* Loading: the question, then skeleton lines while the search and the plan run. */
+html[data-layout="v4"] .lx-dock-loading-line { margin: 0; font-size: 13.5px; color: var(--lx-muted); }
+html[data-layout="v4"] .lx-dock-skeleton { display: block; height: 10px; border-radius: 4px; background: var(--lx-line-soft); }
+html[data-layout="v4"] .lx-dock-skeleton-short { width: 60%; }
+/* The field at the foot, with the green Ask button. */
+html[data-layout="v4"] .lx-dock-ask { flex: 0 0 auto; margin: 0; padding: 14px 20px 18px; }
+html[data-layout="v4"] .lx-dock-field { display: flex; align-items: center; gap: 8px; height: 46px; box-sizing: border-box; padding: 0 6px 0 14px; background: #FFFFFF; border: 1px solid #B9C1BC; border-radius: 8px; }
+html[data-layout="v4"] .lx-dock-field:focus-within { border-color: var(--lx-indigo); }
+html[data-layout="v4"] .lx-dock-field input { flex: 1 1 auto; min-width: 0; height: 100%; box-sizing: border-box; margin: 0; padding: 0; border: none; outline: none; background: transparent; box-shadow: none; font: inherit; font-size: 14.5px; color: var(--lx-ink); }
+html[data-layout="v4"] .lx-dock-field input::placeholder { color: var(--lx-faint); opacity: 1; }
+html[data-layout="v4"] .lx-dock-submit { flex: 0 0 auto; height: 34px; padding: 0 16px; font: inherit; font-size: 14px; font-weight: 600; color: #FFFFFF; background: var(--lx-green); border: none; border-radius: 6px; cursor: pointer; }
+/* Folded to a narrow tab (V3Compare): the icon and "Open the assistant" written downwards. */
+html[data-layout="v4"] .lx-dock-folded { align-items: center; }
+html[data-layout="v4"] .lx-dock-tab { flex: 1 1 auto; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 16px 0 0; font: inherit; color: var(--lx-ink); background: none; border: none; cursor: pointer; }
+html[data-layout="v4"] .lx-dock-tab-icon { flex: 0 0 auto; }
+html[data-layout="v4"] .lx-dock-tab-label { writing-mode: vertical-rl; font-size: 13.5px; font-weight: 600; }
 /* == v4: assistant dock end == */
 
 
