@@ -22,6 +22,8 @@ const EN_FOUND = ask("What does article 5 of the GDPR say?");
 const DATED = ask("Quel était le délai de prescription des actions dérivant d'un contrat d'assurance au 1er janvier 2020 ?");
 const EN_NONE = ask("What does the GDPR say about the right to data portability?");
 const OPEN_WORK = "document.querySelector('[data-answer-work]') && (document.querySelector('[data-answer-work]').open = true, document.querySelector('[data-answer-work]').scrollIntoView({ block: 'start' }))";
+// A block of How it works brought to the top of the screen, as following its link does.
+const SCROLL_TO_HASH = "document.getElementById(location.hash.slice(1))?.scrollIntoView({ block: 'start' })";
 const SHOTS = [];
 for (const [lang, found, none] of [["fr", FR_FOUND, FR_NONE], ["en", EN_FOUND, EN_NONE]]) {
   SHOTS.push(
@@ -39,6 +41,12 @@ for (const [lang, found, none] of [["fr", FR_FOUND, FR_NONE], ["en", EN_FOUND, E
     [`${lang}-decisions--1366-whole`, `/${lang}/decisions.html`, 1366, 768, false, true, null],
     [`${lang}-evidence--1366-whole`, `/${lang}/evidence.html`, 1366, 768, false, true, null],
     [`${lang}-law-page--1366-whole`, `/${lang}${LAW}`, 1366, 768, false, true, null],
+    // Release 13 (the owner's order of 2026-11-15): How it works at the registry and at the API, the Changes page opened on
+    // the last twelve months, and the menu (on every first screen).
+    [`${lang}-10-how-it-works-registry--1366x768`, `/${lang}/evidence.html#registry`, 1366, 768, false, false, SCROLL_TO_HASH],
+    [`${lang}-11-how-it-works-api--1366x768`, `/${lang}/evidence.html#api`, 1366, 768, false, false, SCROLL_TO_HASH],
+    [`${lang}-12-changes--1366x768`, `/${lang}/radar.html#last-12-months`, 1366, 768, false, false, null],
+    [`${lang}-changes--1366-whole`, `/${lang}/radar.html#last-12-months`, 1366, 768, false, true, null],
   );
 }
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -68,7 +76,7 @@ try {
     if (whole) {
       await session.send("Emulation.setDeviceMetricsOverride", { width, height: Math.min(9000, Math.max(height, tall)), deviceScaleFactor: 1, mobile }, sessionId);
       await settle(500);
-    } else if (!name.includes("work-open")) {
+    } else if (!name.includes("work-open") && !name.includes("how-it-works-")) {
       await evaluate("window.scrollTo(0, 0)");
     }
     const { data } = await session.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: whole }, sessionId);
